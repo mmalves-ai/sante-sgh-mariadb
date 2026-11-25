@@ -5,7 +5,13 @@
 // A faixa nunca é apagada: inativar guarda a linha (ativo = falso) e a trilha. Feriado: o do calendário único do
 // cliente (nacional, da UF, do município e do estabelecimento; ponto facultativo e meio expediente não fecham a sala).
 import { randomUUID } from 'node:crypto';
-import { conferirGradeSala, type FaixaGradeSala, validarFaixaGrade } from '@sgh/dominio-cirurgia';
+import {
+  conferirGradeSala,
+  type FaixaAbertaDoMapa,
+  type FaixaGradeSala,
+  faixasAbertasDoDia,
+  validarFaixaGrade,
+} from '@sgh/dominio-cirurgia';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -31,6 +37,17 @@ const SQL_FAIXAS = `
     FROM grade_sala_cirurgica g
     JOIN sala_cirurgica s ON s.id = g.sala_cirurgica_id
    WHERE g.sala_cirurgica_id = ? AND s.estabelecimento_id = ?`;
+
+// As faixas de todas as salas ativas do estabelecimento (para o mapa pintar a grade aberta do dia).
+const SQL_FAIXAS_DO_ESTABELECIMENTO = `
+  SELECT g.sala_cirurgica_id AS sala, g.id, g.dia_semana, TIME_FORMAT(g.hora_inicio, '%H:%i') AS inicio,
+         TIME_FORMAT(g.hora_fim, '%H:%i') AS fim, DATE_FORMAT(g.vigencia_inicio, '%Y-%m-%d') AS vig_ini,
+         DATE_FORMAT(g.vigencia_fim, '%Y-%m-%d') AS vig_fim, g.vale_feriado, g.especialidade_medica_id,
+         g.profissional_id, g.ativo, g.versao
+    FROM grade_sala_cirurgica g
+    JOIN sala_cirurgica s ON s.id = g.sala_cirurgica_id
+   WHERE s.estabelecimento_id = ? AND s.excluido_em IS NULL
+   ORDER BY g.sala_cirurgica_id, g.dia_semana, g.hora_inicio`;
 
 export interface FaixaLida extends FaixaGradeSala {
   readonly id: number;
@@ -249,6 +266,15 @@ export interface GradeDaSala {
   readonly faixas: readonly FaixaLida[];
 }
 
+/** A grade aberta de cada sala que usa grade, dia a dia (as salas sem faixa ativa não aparecem: não restringem). */
+export interface GradeAbertaDoPeriodo {
+  readonly dias: readonly {
+    readonly dia: string;
+    readonly feriado: boolean;
+    readonly salas: readonly { readonly sala: number; readonly faixas: readonly FaixaAbertaDoMapa[] }[];
+  }[];
+}
+
 export type NucleoGrade = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
 
 export class PortaGradeSalaPropria {
@@ -276,6 +302,39 @@ export class PortaGradeSalaPropria {
         );
         if (!s) return null;
         return { sala, faixas: await faixasDaSala(l, sala, est) };
+      },
+    );
+  }
+
+  /** A grade aberta de `dias` dias (1 a 7) a partir de `inicio`, com o feriado do calendário único. */
+  gradeAberta(c: ContextoPortaM18, inicio: string, dias: number): Promise<GradeAbertaDoPeriodo> {
+    const est = c.estabelecimento;
+    if (est === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    const n7 = Math.min(Math.max(Math.trunc(dias), 1), 7);
+    const datas = [inicio];
+    while (datas.length < n7) datas.push(diaSeguinte(datas[datas.length - 1] ?? inicio));
+    return this.nucleo.lerSomente(
+      { cliente: c.cliente, correlacao: c.correlacao || 'cirurgia' },
+      async (l) => {
+        const porSala = new Map<number, FaixaLida[]>();
+        for (const x of await l.consultar(SQL_FAIXAS_DO_ESTABELECIMENTO, [est])) {
+          const sala = n(x['sala']);
+          porSala.set(sala, [...(porSala.get(sala) ?? []), faixaDe(x)]);
+        }
+        const feriados = new Set(
+          (await lerFeriadosDoPeriodo(l, est, inicio, datas[datas.length - 1] ?? inicio)).map((f) => f.data),
+        );
+        return {
+          dias: datas.map((dia) => ({
+            dia,
+            feriado: feriados.has(dia),
+            salas: [...porSala.entries()].flatMap(([sala, faixas]) => {
+              const abertas = faixasAbertasDoDia(faixas, dia, feriados.has(dia));
+              return abertas === null ? [] : [{ sala, faixas: abertas }];
+            }),
+          })),
+        };
       },
     );
   }

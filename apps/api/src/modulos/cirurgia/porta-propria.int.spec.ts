@@ -195,6 +195,11 @@ beforeAll(async () => {
       "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em) VALUES (?, 930392, 'ativo', ?)",
       [pfPac, agora],
     );
+    // A massa de rodadas antigas pode ter ficado com outro prontuário: o caso de leituras procura por 930392.
+    await e.executar(
+      'UPDATE paciente SET numero_prontuario = 930392 WHERE id = ? AND numero_prontuario <> 930392',
+      [paciente],
+    );
     const prof = async (nome: string) => {
       const pf = await pessoa(nome);
       return g(
@@ -1288,12 +1293,21 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
     await expect(
       porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('19:30'), op(m.est)),
     ).rejects.toThrow(/sala-fechada-na-grade/);
+    // O mapa lê a mesma grade: no feriado a sala tem grade e está fechada (lista vazia).
+    const abertaNa = async () =>
+      (await grade.gradeAberta(ctx(m.est), amanha(), 1)).dias[0]?.salas.find((x) => x.sala === m.sala);
+    expect((await grade.gradeAberta(ctx(m.est), amanha(), 1)).dias[0]?.feriado).toBe(true);
+    expect((await abertaNa())?.faixas).toEqual([]);
     await grade.executar(
       ctx(m.est),
       'cirurgia.gravarFaixaGrade',
       { sala: m.sala, faixa: id, versao: 1, ...faixa, valeFeriado: true },
       op(m.est),
     );
+    expect((await abertaNa())?.faixas).toEqual([
+      { inicio: '19:00', fim: '23:00', especialidade: null, profissional: null },
+    ]);
+    expect((await grade.gradeAberta(ctx(m.outro), amanha(), 1)).dias[0]?.salas).toEqual([]);
     // A agenda confere a grade: fora dela e passando do fim recusa; dentro grava.
     await expect(
       porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar('18:00'), op(m.est)),
@@ -1329,6 +1343,7 @@ describe.skipIf(SEM_BANCO)('portas próprias da anestesia e do bloco seguro (f22
     );
     expect(Number(depois?.['ativo'])).toBe(0);
     expect(Number(depois?.['versao'])).toBe(4);
+    expect(await abertaNa()).toBeUndefined();
     const livre = await porta.executar(
       ctx(m.est),
       'cirurgia.agendarCirurgia',

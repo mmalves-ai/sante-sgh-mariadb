@@ -1,6 +1,6 @@
 // Mapa do dia por sala com o alerta de sobreposição.
 import { describe, expect, it } from 'vitest';
-import { diasDaJanela, montarMapa, ocupacaoDaSala } from './mapa.js';
+import { diasDaJanela, faixasAbertasDoDia, montarMapa, ocupacaoDaSala } from './mapa.js';
 
 describe('mapa cirúrgico', () => {
   const ocup = [
@@ -29,5 +29,37 @@ describe('mapa cirúrgico', () => {
     expect(ocupacaoDaSala([{ topo: 0, altura: 420 }])).toBe(50);
     expect(ocupacaoDaSala([{ topo: -60, altura: 120 }], 600)).toBe(10);
     expect(ocupacaoDaSala([], 0)).toBe(0);
+  });
+});
+
+describe('faixas abertas da grade no mapa (04-CC linha 92)', () => {
+  const base = {
+    vigenciaInicio: '2026-01-01',
+    vigenciaFim: null,
+    valeFeriado: false,
+    especialidade: null,
+    profissional: null,
+    ativo: true,
+  };
+  // 2026-11-03 é terça (ISO 2).
+  const faixas = [
+    { ...base, id: 1, diaSemana: 2, inicio: '13:00', fim: '19:00', profissional: 7 },
+    { ...base, id: 2, diaSemana: 2, inicio: '07:00', fim: '13:00', valeFeriado: true },
+    { ...base, id: 3, diaSemana: 3, inicio: '07:00', fim: '19:00' },
+    { ...base, id: 4, diaSemana: 2, inicio: '19:00', fim: '22:00', ativo: false },
+  ];
+  it('sem faixa ativa não pinta nada (a sala não usa grade)', () => {
+    expect(faixasAbertasDoDia([], '2026-11-03', false)).toBeNull();
+    expect(faixasAbertasDoDia([{ ...faixas[3]! }], '2026-11-03', false)).toBeNull();
+  });
+  it('as faixas do dia em ordem, com a reserva; a inativa fica fora', () => {
+    expect(faixasAbertasDoDia(faixas, '2026-11-03', false)).toEqual([
+      { inicio: '07:00', fim: '13:00', especialidade: null, profissional: null },
+      { inicio: '13:00', fim: '19:00', especialidade: null, profissional: 7 },
+    ]);
+  });
+  it('no feriado só a faixa que vale no feriado; fora da vigência a sala fica fechada', () => {
+    expect(faixasAbertasDoDia(faixas, '2026-11-03', true)?.map((f) => f.inicio)).toEqual(['07:00']);
+    expect(faixasAbertasDoDia(faixas, '2025-11-04', false)).toEqual([]);
   });
 });

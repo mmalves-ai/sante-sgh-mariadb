@@ -2,6 +2,7 @@
 // Salas cirúrgicas e usuários permitidos (ficha do M18, seção 7): `/cirurgia/salas`. As salas com o centro de custo
 // e a contagem de usuários; na sala escolhida, os usuários permitidos (a mesma lista que vale nas duas pontas):
 // incluir e retirar pelo login (cirurgia.definirSalaUsuario). Incluir e alterar a sala é pelo cadastro de domínios.
+// 04-CC linha 92: na mesma sala, a grade de funcionamento (componentes/GradeDaSala.vue, cirurgia.sala.editar).
 import { SanteBotao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
@@ -9,6 +10,7 @@ import { useI18n } from 'vue-i18n';
 import { definirUsuarioDaSala, lerUsuariosDaSala, listarSalas, novaChave } from '../api-cirurgia.js';
 import AvisoCirurgia from '../componentes/AvisoCirurgia.vue';
 import ErroCirurgia from '../componentes/ErroCirurgia.vue';
+import GradeDaSala from '../componentes/GradeDaSala.vue';
 import { usarCirurgia } from '../usar-cirurgia.js';
 
 const { t } = useI18n();
@@ -22,6 +24,9 @@ const usuarios = useQuery({
   enabled: computed(() => sala.value !== null),
 });
 const podeEditar = pode('cirurgia.definirSalaUsuario');
+const nomeDaSala = computed(
+  () => salas.data.value?.find((s) => s.codigo === sala.value)?.nome ?? String(sala.value ?? ''),
+);
 const login = ref('');
 const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
@@ -125,6 +130,7 @@ async function definir(acao: 'incluir' | 'remover', usuario: string): Promise<vo
     </section>
     <p v-if="mensagem" role="status">{{ mensagem }}</p>
     <ErroCirurgia v-if="erro" :erro="erro" />
+    <GradeDaSala v-if="sala !== null" :key="sala" :sala="sala" :nome-sala="nomeDaSala" />
   </section>
 </template>
 

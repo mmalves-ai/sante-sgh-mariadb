@@ -1,6 +1,7 @@
 // Mapa cirúrgico (ficha do M18, seção 4: "Mapa cirúrgico do dia e da semana", 7 dias por consulta). Monta os blocos
 // de cada sala num dia (posição e altura em minutos desde a abertura do mapa), com o alerta de sobreposição (as que o
 // outro sistema gravou) e de data impossível. Sem banco: a API lê a agenda e a tela desenha.
+import { type FaixaGradeSala, faixasDoDia } from './grade-sala.js';
 import { diaDoInstante, minutosAbsolutos, minutosDaHora, somarMinutos } from './tempo.js';
 import { idsSobrepostos, type OcupacaoSala, sobreposicoesNoMapa } from './sobreposicao.js';
 
@@ -83,4 +84,31 @@ export function ocupacaoDaSala(
     0,
   );
   return Math.round((usados / minutosDoTurno) * 1000) / 10;
+}
+
+/** Faixa da grade da sala aberta no dia do mapa (04-CC linha 92): o horário em que a sala atende e a reserva. */
+export interface FaixaAbertaDoMapa {
+  readonly inicio: string;
+  readonly fim: string;
+  readonly especialidade: number | null;
+  readonly profissional: number | null;
+}
+
+/**
+ * As faixas abertas da sala no dia, para o mapa desenhar a grade sob os blocos. Nulo quando a sala não tem nenhuma
+ * faixa ativa (sem grade a agenda não restringe: o mapa não pinta nada); lista vazia quando a sala tem grade e está
+ * fechada no dia (dia sem faixa, fora da vigência ou feriado sem faixa que valha no feriado).
+ */
+export function faixasAbertasDoDia(
+  faixas: readonly FaixaGradeSala[],
+  dia: string,
+  feriado: boolean,
+): FaixaAbertaDoMapa[] | null {
+  if (!faixas.some((f) => f.ativo)) return null;
+  return faixasDoDia(faixas, dia, feriado).map((f) => ({
+    inicio: f.inicio.slice(0, 5),
+    fim: f.fim.slice(0, 5),
+    especialidade: f.especialidade,
+    profissional: f.profissional,
+  }));
 }

@@ -2,6 +2,7 @@
 // telas aparece só como "gravado fora destas telas".
 import { mensagensTextoPadrao } from './i18n-texto-padrao.js';
 import { mensagensGastoSala } from './i18n-gasto-sala.js';
+import { mensagensGradeSala } from './i18n-grade-sala.js';
 import { mensagensCartaoPreferencia } from './i18n-cartao-preferencia.js';
 import { mensagensProcedimentoCirurgico } from './i18n-procedimento-cirurgico.js';
 export const mensagensCirurgia = {
@@ -9,6 +10,8 @@ export const mensagensCirurgia = {
   textosPadrao: mensagensTextoPadrao,
   // F3.4-5, 04-CC L100: gasto de sala do ato (i18n-gasto-sala.ts).
   gastoSala: mensagensGastoSala,
+  // F3.4, 04-CC L92: grade de funcionamento da sala (i18n-grade-sala.ts).
+  gradeSala: mensagensGradeSala,
   // F8, 04-CC L105: cartão de preferência do cirurgião (i18n-cartao-preferencia.ts).
   cartaoPreferencia: mensagensCartaoPreferencia,
   // F3.4, 04-CC L91: cadastro do procedimento cirúrgico (i18n-procedimento-cirurgico.ts).
@@ -230,7 +233,7 @@ export const mensagensCirurgia = {
     voce: 'Você',
     permitida: 'Permitido',
     naoPermitida: 'Não permitido',
-    abrir: 'Usuários da {sala}',
+    abrir: 'Usuários e grade da {sala}',
     usuariosDe: '{sala}: {n} usuário(s) permitido(s)',
     login: 'Login do usuário',
     incluir: 'Incluir usuário',
@@ -240,6 +243,13 @@ export const mensagensCirurgia = {
   },
   recusas: {
     'sala-ocupada': 'A sala está ocupada nesse horário: escolha outro horário ou outra sala.',
+    'sala-fechada-na-grade':
+      'A sala não atende nesse horário pela grade de funcionamento: escolha outro horário, outra sala ou registre a exceção de urgência.',
+    'grade-reservada-cirurgiao': 'A faixa da grade está reservada a outro cirurgião: escolha outro horário.',
+    'grade-reservada-especialidade':
+      'A faixa da grade está reservada a outra especialidade: escolha outro horário.',
+    'grade-faixa-cruzada': 'A faixa cruza com outra faixa ativa da sala no mesmo dia.',
+    'faixa-inexistente': 'A faixa da grade não existe ou já está inativa.',
     'sala-nao-permitida':
       'Você não está entre os usuários permitidos desta sala: peça à coordenação do bloco.',
     'sala-inexistente': 'A sala cirúrgica não existe.',
