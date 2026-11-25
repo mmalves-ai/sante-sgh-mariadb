@@ -7,8 +7,9 @@
 // Sessão real sobre a fonte sintética; as rotas /api/sadt/apoio precisam do banco do cliente, então respondem aqui por
 // um estado SINTÉTICO em memória (o que fica no banco é provado no contrato de efeito apoio-remessa.int.spec.ts e, no
 // retorno do resultado, no porta-propria.int.spec.ts da integração). C1-092: o login é o do pessoal do laboratório, não
-// o do administrador: o biomédico (SINT.BIOMEDICO) tem a opção de interfaceamento da origem e o perfil próprio
-// `laboratorio-apoio`, que concede sadt.apoio.remessa e sadt.apoio.configurar; chega à tela pelo item do menu.
+// o do administrador: o técnico do apoio (SINT.LAB.APOIO), sem opção do menu de origem, recebeu por concessão nominal o
+// perfil próprio `laboratorio-apoio`, que concede sadt.apoio.ler, sadt.apoio.remessa e sadt.apoio.configurar; chega à
+// tela pelo item do menu.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { itemDoMenu, semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher, esperarValor } from './combos.js';
@@ -194,7 +195,7 @@ test.describe('@F3.5-08 @C1-092 remessa ao laboratório de apoio e de-para pela 
       return json(rota, { title: 'Rota sintética não prevista', status: 404 }, 404);
     });
 
-    await entrar(page, 'SINT.BIOMEDICO');
+    await entrar(page, 'SINT.LAB.APOIO');
     await (await itemDoMenu(page, 'Laboratório de apoio')).click();
     await expect(page).toHaveURL(/\/sadt\/laboratorio\/apoio$/);
     await expect(page.getByTestId('tela-laboratorio-apoio')).toBeVisible();

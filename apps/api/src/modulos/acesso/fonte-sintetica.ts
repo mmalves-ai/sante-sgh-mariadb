@@ -1024,8 +1024,6 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       ],
       conselho: true,
     },
-    // C1-092: o biomédico também monta a remessa ao apoio e mantém o de-para (perfil próprio do laboratório de apoio).
-    perfisConcedidos: ['laboratorio-apoio'],
   },
   /**
    * M26: médica radiologista (com conselho): as solicitações (2758, 6233), os resultados e laudos de imagem,
