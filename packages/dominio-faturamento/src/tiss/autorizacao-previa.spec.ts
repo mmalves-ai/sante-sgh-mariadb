@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  casarAutorizacaoComConta,
+  conferirDiagnosticosAutorizacao,
   conferirLimiteOpme,
   conferirPedidoAutorizacao,
   conferirProcedimentoDaOpme,
@@ -9,6 +11,7 @@ import {
   lerRespostaAutorizacao,
   mensagemSolicitacaoAutorizacao,
   type PedidoAutorizacao,
+  normalizarCid,
   podeMudar,
   proximaConsultaAndamento,
 } from './autorizacao-previa.js';
@@ -263,6 +266,52 @@ describe('mensagem SOLICITACAO_PROCEDIMENTOS (TISS 04.03.00)', () => {
     expect(m.xml).toContain('<ans:indicadorOPME>S</ans:indicadorOPME>');
   });
 
+  it('prorrogação da internação válida no XSD, com o anexo de OPME e a guia referenciada', async () => {
+    const m = mensagemSolicitacaoAutorizacao(
+      dados({
+        tipo: 'prorrogacao',
+        numeroGuiaPrincipal: 'SA000123',
+        diarias: 2,
+        indicacaoClinica: 'Evolução sintética que pede mais dias',
+        itens: [
+          { ...item(), opcaoFabricante: null },
+          {
+            ...item({
+              codigoTabela: '19',
+              codigoProcedimento: '70000001',
+              opme: true,
+              registroAnvisa: '80000000001',
+            }),
+            opcaoFabricante: 1,
+          },
+        ],
+      }),
+    );
+    const v = await validarNoXsd(m.bytes, esquemas);
+    expect(v.erros).toEqual([]);
+    expect(m.xml).toContain('<ans:solicitacaoProrrogacao>');
+    expect(m.xml).toContain('<ans:nrGuiaReferenciada>SA000123</ans:nrGuiaReferenciada>');
+    expect(m.xml).toContain('<ans:qtDiariasAdicionais>2</ans:qtDiariasAdicionais>');
+    expect(m.xml).toContain('<ans:anexoClinicoProrrogacao>');
+    // Só diárias, sem procedimento adicional, também é guia válida.
+    const soDiarias = mensagemSolicitacaoAutorizacao(
+      dados({
+        tipo: 'prorrogacao',
+        numeroGuiaPrincipal: 'SA000123',
+        diarias: 3,
+        indicacaoClinica: 'Sintética',
+        itens: [],
+      }),
+    );
+    expect((await validarNoXsd(soDiarias.bytes, esquemas)).erros).toEqual([]);
+    expect(faltasParaMensagem(dados({ tipo: 'prorrogacao', indicacaoClinica: null }))).toEqual(
+      expect.arrayContaining([
+        'número da guia da internação que se prorroga',
+        'indicação clínica da prorrogação',
+      ]),
+    );
+  });
+
   it('lista o que falta e não monta a mensagem incompleta', () => {
     const d = dados({ registroAns: '', solicitante: { ...dados().solicitante, cbo: '' } });
     expect(faltasParaMensagem(d)).toEqual([
@@ -276,5 +325,68 @@ describe('mensagem SOLICITACAO_PROCEDIMENTOS (TISS 04.03.00)', () => {
     expect(faltasParaMensagem(dados({ tipo: 'radioterapia' }))).toContain(
       'tipo sem mensagem eletrônica (use o portal)',
     );
+  });
+});
+
+describe('hipóteses diagnósticas do pedido', () => {
+  const d = (
+    cid: string,
+    x: Partial<{ tempo: number | null; unidadeTempo: 'dia' | 'mes' | 'ano' | null }> = {},
+  ) => ({
+    cid,
+    tipoDoenca: null,
+    tempo: null,
+    unidadeTempo: null,
+    ...x,
+  });
+  it('normaliza a CID-10 e recusa o que não tem a forma', () => {
+    expect(normalizarCid('m17.1')).toBe('M171');
+    expect(normalizarCid('I10')).toBe('I10');
+    expect(normalizarCid('17.1')).toBeNull();
+  });
+  it('internação pede o CID; até quatro, sem repetir, tempo com unidade', () => {
+    expect(conferirDiagnosticosAutorizacao('sp_sadt', [])).toEqual([]);
+    expect(conferirDiagnosticosAutorizacao('internacao', []).map((x) => x.campo)).toEqual(['diagnosticos']);
+    expect(
+      conferirDiagnosticosAutorizacao('internacao', [
+        d('M17.1'),
+        d('I10', { tempo: 2, unidadeTempo: 'ano' }),
+      ]),
+    ).toEqual([]);
+    const campos = conferirDiagnosticosAutorizacao('internacao', [
+      d('M17.1'),
+      d('M171'),
+      d('XX'),
+      d('I10', { tempo: 3 }),
+      d('E11'),
+    ]).map((x) => x.campo);
+    expect(campos).toEqual(
+      expect.arrayContaining(['diagnosticos', 'diagnosticos.1', 'diagnosticos.2', 'diagnosticos.3']),
+    );
+  });
+});
+
+describe('autorização ligada aos itens da conta', () => {
+  it('cobre os itens do mesmo faturável até a quantidade autorizada, sem duplicar ao refazer', () => {
+    const autorizados = [
+      { respostaItem: 10, sequencia: 1, itemFaturavel: 7, quantidadeAutorizada: 3, jaCoberta: 0 },
+      { respostaItem: 11, sequencia: 2, itemFaturavel: null, quantidadeAutorizada: 1, jaCoberta: 0 },
+    ];
+    const conta = [
+      { contaItem: 100, itemFaturavel: 7, quantidade: 2, jaCoberta: 0 },
+      { contaItem: 101, itemFaturavel: 8, quantidade: 1, jaCoberta: 0 },
+      { contaItem: 102, itemFaturavel: 7, quantidade: 2, jaCoberta: 0 },
+    ];
+    const r = casarAutorizacaoComConta(autorizados, conta);
+    expect(r.ligacoes).toEqual([
+      { contaItem: 100, respostaItem: 10, sequencia: 1, quantidadeCoberta: 2 },
+      { contaItem: 102, respostaItem: 10, sequencia: 1, quantidadeCoberta: 1 },
+    ]);
+    expect(r.semCobertura).toEqual([101, 102]);
+    const de_novo = casarAutorizacaoComConta(
+      [{ ...autorizados[0]!, jaCoberta: 3 }],
+      conta.map((c) => ({ ...c, jaCoberta: c.contaItem === 100 ? 2 : c.contaItem === 102 ? 1 : 0 })),
+    );
+    expect(de_novo.ligacoes).toEqual([]);
   });
 });

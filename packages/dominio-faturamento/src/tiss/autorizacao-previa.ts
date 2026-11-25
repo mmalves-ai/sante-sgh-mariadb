@@ -37,8 +37,17 @@ export type SituacaoSolicitacaoAutorizacao =
 export type SituacaoRespostaAutorizacao =
   'autorizado' | 'autorizado_parcial' | 'negado' | 'em_analise' | 'aguardando_documentacao' | 'cancelado';
 
-/** Tipos cuja mensagem eletrônica o hospital monta (guia de solicitação); os demais vão pelo portal ou telefone. */
-export const TIPOS_COM_MENSAGEM: readonly TipoSolicitacaoAutorizacao[] = ['sp_sadt', 'internacao'];
+/**
+ * Tipos cuja mensagem eletrônica o hospital monta (guia de solicitação de SP/SADT, de internação e de prorrogação da
+ * internação); quimioterapia e radioterapia, que pedem o anexo clínico oncológico, vão pelo portal com o canal registrado.
+ */
+export const TIPOS_COM_MENSAGEM: readonly TipoSolicitacaoAutorizacao[] = [
+  'sp_sadt',
+  'internacao',
+  'prorrogacao',
+];
+/** Guias que levam ao menos um procedimento além da OPME (a prorrogação pode pedir só diárias). */
+const TIPOS_COM_PROCEDIMENTO: readonly TipoSolicitacaoAutorizacao[] = ['sp_sadt', 'internacao'];
 /** Tipos que complementam uma guia ou um atendimento já existentes. */
 export const TIPOS_COMPLEMENTARES: readonly TipoSolicitacaoAutorizacao[] = [
   'prorrogacao',
@@ -111,8 +120,15 @@ export function conferirPedidoAutorizacao(p: PedidoAutorizacao): Problema[] {
     if (!p.indicacaoClinica?.trim())
       r.push({ campo: 'indicacaoClinica', mensagem: 'A internação pede a indicação clínica.' });
   }
-  if (p.tipo === 'prorrogacao' && (!p.diarias || p.diarias < 1 || p.diarias > 99))
-    r.push({ campo: 'diarias', mensagem: 'A prorrogação pede as diárias adicionais (1 a 99).' });
+  if (p.tipo === 'prorrogacao') {
+    if (!p.diarias || p.diarias < 1 || p.diarias > 99)
+      r.push({ campo: 'diarias', mensagem: 'A prorrogação pede as diárias adicionais (1 a 99).' });
+    if (!p.indicacaoClinica?.trim())
+      r.push({
+        campo: 'indicacaoClinica',
+        mensagem: 'A prorrogação pede a indicação clínica (o motivo de ficar mais).',
+      });
+  }
   if (p.itens.length === 0) r.push({ campo: 'itens', mensagem: 'O pedido precisa de ao menos um item.' });
   const vistos = new Set<string>();
   p.itens.forEach((i, n) => {
@@ -136,7 +152,7 @@ export function conferirPedidoAutorizacao(p: PedidoAutorizacao): Problema[] {
   if (p.tipo === 'opme' && p.itens.some((i) => !i.opme))
     r.push({ campo: 'itens', mensagem: 'O pedido de OPME só leva itens de OPME.' });
   // A guia de solicitação (SP/SADT e internação) leva ao menos um procedimento; a OPME vai no anexo dele.
-  if (TIPOS_COM_MENSAGEM.includes(p.tipo) && p.itens.length > 0 && !p.itens.some((i) => !i.opme))
+  if (TIPOS_COM_PROCEDIMENTO.includes(p.tipo) && p.itens.length > 0 && !p.itens.some((i) => !i.opme))
     r.push({
       campo: 'itens',
       mensagem: 'A guia leva ao menos um procedimento além da OPME (a OPME vai no anexo do procedimento).',
@@ -388,7 +404,11 @@ export function faltasParaMensagem(d: DadosMensagemSolicitacao): string[] {
     if (!d.tipoInternacao) f.push('tipo de internação');
     if (!d.dataAdmissao) f.push('data provável da admissão');
   }
-  if (!d.itens.some((i) => !i.opme)) f.push('ao menos um procedimento além da OPME');
+  if (d.tipo === 'prorrogacao') {
+    if (!d.numeroGuiaPrincipal?.trim()) f.push('número da guia da internação que se prorroga');
+    if (!d.indicacaoClinica?.trim()) f.push('indicação clínica da prorrogação');
+    if (!d.diarias && !d.itens.some((i) => !i.opme)) f.push('diárias adicionais ou procedimento adicional');
+  } else if (!d.itens.some((i) => !i.opme)) f.push('ao menos um procedimento além da OPME');
   if (d.itens.some((i) => i.opme) && !d.solicitante.telefone)
     f.push('telefone do solicitante (anexo de OPME)');
   return f;
@@ -438,18 +458,21 @@ function procedimentos(d: DadosMensagemSolicitacao): Elemento[] {
     );
 }
 
-function anexoOpme(d: DadosMensagemSolicitacao): Elemento | null {
+function anexoOpme(d: DadosMensagemSolicitacao, nome = 'anexoClinico'): Elemento | null {
   const opme = d.itens.filter((i) => i.opme);
   if (!opme.length) return null;
   return el(
-    'anexoClinico',
+    nome,
     el(
       'solicitacaoOPME',
       el(
         'cabecalhoAnexo',
         el('registroANS', d.registroAns),
         el('numeroGuiaAnexo', `${d.numeroGuia}-O`.slice(0, 20)),
-        el('numeroGuiaReferenciada', d.numeroGuia),
+        el(
+          'numeroGuiaReferenciada',
+          d.tipo === 'prorrogacao' ? (d.numeroGuiaPrincipal ?? d.numeroGuia) : d.numeroGuia,
+        ),
         el('dataSolicitacao', d.data),
       ),
       beneficiario(d),
@@ -547,6 +570,42 @@ function guiaInternacao(d: DadosMensagemSolicitacao): Elemento {
   );
 }
 
+/** Guia de solicitação de prorrogação da internação: diárias adicionais, procedimentos adicionais e o anexo de OPME. */
+function guiaProrrogacao(d: DadosMensagemSolicitacao): Elemento {
+  return el(
+    'solicitacaoProrrogacao',
+    el('registroANS', d.registroAns),
+    el('numeroGuiaPrestador', d.numeroGuia),
+    el('nrGuiaReferenciada', (d.numeroGuiaPrincipal ?? '').slice(0, 20)),
+    el('dadosBeneficiario', el('numeroCarteira', d.carteira)),
+    el('dadosContratadoSolicitante', el('codigoPrestadorNaOperadora', d.codigoPrestador)),
+    el('nomeContratadoSolicitante', d.nomeContratado.slice(0, 70)),
+    el('dadosProfissionalSolicitante', ...profissional(d.solicitante)),
+    el(
+      'dadosInternacao',
+      opcional('qtDiariasAdicionais', d.diarias ? String(d.diarias) : null),
+      el('indicacaoClinica', (d.indicacaoClinica ?? '').slice(0, 500)),
+    ),
+    ...d.itens
+      .filter((i) => !i.opme)
+      .map((i) =>
+        el(
+          'procedimentosAdicionais',
+          el(
+            'procedimento',
+            el('codigoTabela', i.codigoTabela),
+            el('codigoProcedimento', i.codigoProcedimento),
+            el('descricaoProcedimento', i.descricao.slice(0, 150)),
+          ),
+          el('quantidadeSolicitada', String(i.quantidade)),
+        ),
+      ),
+    anexoOpme(d, 'anexoClinicoProrrogacao'),
+    opcional('observacao', corte(d.observacao, 500)),
+    el('dataSolicitacao', d.data),
+  );
+}
+
 /** A mensagem SOLICITACAO_PROCEDIMENTOS com o hash do epílogo; recusa o pedido com faltas. */
 export function mensagemSolicitacaoAutorizacao(d: DadosMensagemSolicitacao): MensagemTiss {
   const faltas = faltasParaMensagem(d);
@@ -566,9 +625,127 @@ export function mensagemSolicitacaoAutorizacao(d: DadosMensagemSolicitacao): Men
   );
   const corpo = el(
     'prestadorParaOperadora',
-    el('solicitacaoProcedimento', d.tipo === 'internacao' ? guiaInternacao(d) : guiaSpSadt(d)),
+    el(
+      'solicitacaoProcedimento',
+      d.tipo === 'internacao'
+        ? guiaInternacao(d)
+        : d.tipo === 'prorrogacao'
+          ? guiaProrrogacao(d)
+          : guiaSpSadt(d),
+    ),
   );
   const hash = hashEpilogo(cabecalho, corpo);
   const xml = serializar(el('mensagemTISS', cabecalho, corpo, el('epilogo', el('hash', hash))));
   return { versao: VERSAO_TISS, tipoTransacao: 'SOLICITACAO_PROCEDIMENTOS', xml, bytes: latin1(xml), hash };
+}
+
+// ── Hipóteses diagnósticas do pedido ──────────────────────────────────────────────────────────────
+
+export interface DiagnosticoPedido {
+  /** Código da CID-10, com ou sem ponto (A00, A00.0 ou A000). */
+  readonly cid: string;
+  readonly tipoDoenca: 'aguda' | 'cronica' | null;
+  readonly tempo: number | null;
+  readonly unidadeTempo: 'dia' | 'mes' | 'ano' | null;
+}
+
+/** O código da CID-10 sem ponto e em maiúsculas (como no catálogo oficial), ou nulo se não tem a forma da CID-10. */
+export function normalizarCid(cid: string): string | null {
+  const c = cid.trim().toUpperCase().replace('.', '');
+  return /^[A-Z]\d{2}[0-9X]?$/.test(c) ? c : null;
+}
+
+/**
+ * As hipóteses diagnósticas do pedido: até quatro (o que a guia de internação comporta), a primeira é a principal,
+ * CID-10 válido e sem repetição, tempo de doença com a unidade. A internação pede ao menos uma (a guia não sai sem CID).
+ */
+export function conferirDiagnosticosAutorizacao(
+  tipo: TipoSolicitacaoAutorizacao,
+  diagnosticos: readonly DiagnosticoPedido[],
+): Problema[] {
+  const r: Problema[] = [];
+  if (tipo === 'internacao' && diagnosticos.length === 0)
+    r.push({
+      campo: 'diagnosticos',
+      mensagem: 'A internação pede ao menos a hipótese diagnóstica principal (CID-10).',
+    });
+  if (diagnosticos.length > 4)
+    r.push({ campo: 'diagnosticos', mensagem: 'A guia comporta até quatro hipóteses diagnósticas.' });
+  const vistos = new Set<string>();
+  diagnosticos.forEach((d, n) => {
+    const campo = `diagnosticos.${n}`;
+    const cid = normalizarCid(d.cid);
+    if (!cid)
+      r.push({ campo, mensagem: `Diagnóstico ${n + 1}: o código não tem a forma da CID-10 (A00 ou A00.0).` });
+    else if (vistos.has(cid)) r.push({ campo, mensagem: `Diagnóstico ${n + 1}: CID repetido.` });
+    if (cid) vistos.add(cid);
+    if ((d.tempo === null) !== (d.unidadeTempo === null))
+      r.push({
+        campo,
+        mensagem: `Diagnóstico ${n + 1}: o tempo de doença vai com a unidade (dias, meses ou anos).`,
+      });
+    if (d.tempo !== null && (!Number.isInteger(d.tempo) || d.tempo < 1 || d.tempo > 999))
+      r.push({ campo, mensagem: `Diagnóstico ${n + 1}: o tempo de doença é inteiro, de 1 a 999.` });
+  });
+  return r;
+}
+
+// ── Ligação da autorização aos itens da conta ─────────────────────────────────────────────────────
+
+export interface ItemAutorizadoParaConta {
+  readonly respostaItem: number;
+  /** Sequência do item na guia (vai à conta como sequencial do item da guia TISS). */
+  readonly sequencia: number;
+  readonly itemFaturavel: number | null;
+  readonly quantidadeAutorizada: number;
+  /** Quanto desta autorização já cobre itens da conta. */
+  readonly jaCoberta: number;
+}
+
+export interface ItemDaContaParaAutorizacao {
+  readonly contaItem: number;
+  readonly itemFaturavel: number;
+  readonly quantidade: number;
+  /** Quanto deste item da conta já está coberto por autorização. */
+  readonly jaCoberta: number;
+}
+
+export interface LigacaoItemConta {
+  readonly contaItem: number;
+  readonly respostaItem: number;
+  readonly sequencia: number;
+  readonly quantidadeCoberta: number;
+}
+
+/**
+ * Casa cada item autorizado com os itens lançados na conta do mesmo item faturável, na ordem do lançamento, até a
+ * quantidade autorizada: o item da conta fica com a autorização que o cobre e o sequencial dele na guia. O que já está
+ * coberto não é coberto de novo (refazer não duplica); o item da conta sem autorização sobra para a auditoria.
+ */
+export function casarAutorizacaoComConta(
+  autorizados: readonly ItemAutorizadoParaConta[],
+  conta: readonly ItemDaContaParaAutorizacao[],
+): { ligacoes: LigacaoItemConta[]; semCobertura: number[] } {
+  const livre = new Map(conta.map((c) => [c.contaItem, Math.max(0, c.quantidade - c.jaCoberta)]));
+  const ligacoes: LigacaoItemConta[] = [];
+  for (const a of autorizados) {
+    if (a.itemFaturavel === null) continue;
+    let resta = Math.max(0, a.quantidadeAutorizada - a.jaCoberta);
+    for (const c of conta) {
+      if (resta <= 0) break;
+      if (c.itemFaturavel !== a.itemFaturavel) continue;
+      const q = Math.min(resta, livre.get(c.contaItem) ?? 0);
+      if (q <= 0) continue;
+      ligacoes.push({
+        contaItem: c.contaItem,
+        respostaItem: a.respostaItem,
+        sequencia: a.sequencia,
+        quantidadeCoberta: q,
+      });
+      livre.set(c.contaItem, (livre.get(c.contaItem) ?? 0) - q);
+      resta -= q;
+    }
+  }
+  const semCobertura = conta.filter((c) => (livre.get(c.contaItem) ?? 0) > 0).map((c) => c.contaItem);
+  return { ligacoes, semCobertura };
 }
