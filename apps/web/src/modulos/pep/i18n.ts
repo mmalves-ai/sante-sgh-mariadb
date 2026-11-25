@@ -9,6 +9,7 @@ import { mensagensResultadosGrupos } from './i18n-resultados-grupos.js';
 import { mensagensFarmacovigilancia } from './i18n-farmacovigilancia.js';
 import { mensagensNotasPaciente } from './i18n-notas-paciente.js';
 import { mensagensTerminologiaClinica } from './i18n-terminologia-clinica.js';
+import { mensagensAvisosRegras } from './i18n-avisos-regras.js';
 import { mensagensProntuarioRestrito } from './i18n-prontuario-restrito.js';
 import { mensagensPedidoVaga } from './i18n-pedido-vaga.js';
 import { mensagensAnotacoesAdministrativas } from './i18n-anotacoes-administrativas.js';
@@ -34,6 +35,8 @@ export const mensagensPep = {
   notas: mensagensNotasPaciente,
   // 09-AREA L84: diagnósticos do paciente com a CID-10 e o conceito clínico equivalente.
   terminologia: mensagensTerminologiaClinica,
+  // 03-PEP L133: central de regras de aviso clínico.
+  avisosRegras: mensagensAvisosRegras,
   restrito: mensagensProntuarioRestrito,
   // 02-AGE linha 53: pedido de vaga do médico no prontuário.
   pedidoVaga: mensagensPedidoVaga,

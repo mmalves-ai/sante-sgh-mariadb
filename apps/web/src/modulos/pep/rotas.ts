@@ -388,6 +388,13 @@ export const rotasPep: RouteRecordRaw[] = [
     component: () => import('./telas/ConfiguracaoSetorProntuarioTela.vue'),
     meta: { permissao: 'pep.admin.ler' },
   },
+  // F3.3 (03-PEP L133): central de regras de aviso clínico (evento, setor, especialidade, destinatários e canal).
+  {
+    path: '/pep/avisos-clinicos/regras',
+    name: 'pep.avisosClinicosRegras',
+    component: () => import('./telas/AvisosClinicosRegrasTela.vue'),
+    meta: { permissao: 'pep.admin.ler' },
+  },
   // F3.3 (L128): grupos comparativos de resultados (exames lado a lado no prontuário).
   {
     path: '/pep/resultados/grupos',

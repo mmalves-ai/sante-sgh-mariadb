@@ -89,7 +89,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-044 (05-SUP linha 29): o item "Central de material esterilizado" do centro cirúrgico entrou à mão (mesmo
 // motivo; F7 vai como fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":466,"M":198,"P":57,"N":211};
+// C2-050 (03-PEP L133): o item "Regras de aviso clínico" da administração do PEP entrou à mão (mesmo motivo); a
+// contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":467,"M":198,"P":57,"N":212};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -224,6 +226,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"pep.administracao-do-pep.grupos-comparativos-de-resultados","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Grupos comparativos de resultados"],"titulo":"Grupos comparativos de resultados","selo":"N","fase":3,"rota":"/pep/resultados/grupos","permissao":"pep.admin.editar"},
   {"id":"pep.administracao-do-pep.secoes-do-sumario-de-alta","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Seções do sumário de alta"],"titulo":"Seções do sumário de alta","selo":"N","fase":3,"rota":"/pep/sumario-alta/secoes","permissao":"pep.admin.ler"},
   {"id":"pep.administracao-do-pep.regras-do-prontuario-por-setor","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Regras do prontuário por setor"],"titulo":"Regras do prontuário por setor","selo":"N","fase":3,"rota":"/pep/prontuario-setor","permissao":"pep.admin.ler"},
+  {"id":"pep.administracao-do-pep.regras-de-aviso-clinico","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Regras de aviso clínico"],"titulo":"Regras de aviso clínico","selo":"N","fase":3,"rota":"/pep/avisos-clinicos/regras","permissao":"pep.admin.ler"},
   {"id":"enfermagem.aprazamento-e-checagem-de-medicamentos-em-tela","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Aprazamento e checagem de medicamentos"],"titulo":"Aprazamento e checagem de medicamentos","selo":"P","fase":2,"rota":"/enfermagem/aprazamento","permissao":"enfermagem.horario.ler"},
   {"id":"enfermagem.checagem-por-codigo-de-barras-pulseira-e-dose","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Checagem por código de barras"],"titulo":"Checagem por código de barras","selo":"N","fase":2,"rota":"/beira-leito/checagem","permissao":"enfermagem.administracao.ler"},
   {"id":"enfermagem.horarios-padrao-de-medicacao-por-unidade","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Horários-padrão de medicação por unidade"],"titulo":"Horários-padrão de medicação por unidade","selo":"M","fase":2,"rota":"/cadastros/prescricao/horarios-padrao","permissao":"pep.gradeHorario.ler"},

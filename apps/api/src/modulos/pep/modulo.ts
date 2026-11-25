@@ -64,6 +64,11 @@ import {
   CadastroCatalogoPrescricaoPropria,
 } from './prescricao-propria-cadastro.js';
 import { NOTAS_PACIENTE, NotasPacienteController } from './notas-paciente.controller.js';
+import { AvisosClinicosRegrasController } from './avisos-clinicos-regras.controller.js';
+import {
+  PORTA_REGRAS_AVISO_CLINICO,
+  PortaRegrasAvisoClinicoPropria,
+} from './avisos-clinicos-regras-propria.js';
 import { NotasPacientePropria } from './notas-paciente-propria.js';
 import { TERMINOLOGIA_CLINICA, TerminologiaClinicaController } from './terminologia-clinica.controller.js';
 import { TerminologiaClinicaPropria } from './terminologia-clinica-propria.js';
@@ -213,6 +218,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       FarmacovigilanciaController,
       PrescricaoCadastroController,
       NotasPacienteController,
+      AvisosClinicosRegrasController,
       TerminologiaClinicaController,
       ObrigatoriedadeDocumentoController,
       CopiaProntuarioBalcaoController,
@@ -289,6 +295,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new TerminologiaClinicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L133: central de regras de aviso clínico (evento, alvos e canal); sem núcleo, 503.
+      {
+        provide: PORTA_REGRAS_AVISO_CLINICO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaRegrasAvisoClinicoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // 03-PEP L102: notas e lembretes livres sobre o paciente; sem núcleo, 503.

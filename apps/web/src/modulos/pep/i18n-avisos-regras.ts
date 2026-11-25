@@ -29,6 +29,9 @@ export const mensagensAvisosRegras = {
   alvo: 'Destinatário',
   incluirAlvo: 'Incluir destinatário',
   remover: 'Remover {nome}',
+  removerCurto: 'Remover',
+  sim: 'Sim',
+  versaoN: 'v{n}',
   alvos: {
     setor: 'Setor',
     especialidade: 'Especialidade',
@@ -49,6 +52,8 @@ export const mensagensAvisosRegras = {
   emitidos: '{avisos} aviso(s) para {destinatarios} destinatário(s).',
   nenhumEmitido: 'Nenhuma regra cobre este evento: ninguém foi avisado.',
   recentes: 'Avisos emitidos recentemente',
+  cientes: 'Cientes',
+  geradoEm: 'Emitido em',
   categorias: {
     acesso_emergencia: 'Acesso de emergência',
     ciclo_tratamento: 'Ciclo de tratamento',
