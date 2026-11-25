@@ -98,7 +98,28 @@ const regraVazia = () => ({
   agrupaItens: false,
   omiteGuiaSemValor: false,
   eletronico: true,
+  identificacao: 'codigo' as NovaRegraApresentacao['identificacaoContratado'],
+  documento: '',
+  numeracao: 'hospital' as NovaRegraApresentacao['numeracaoGuia'],
+  prefixo: '',
+  largura: '8',
+  proximo: '',
+  quebra: 'nao_quebra' as NovaRegraApresentacao['quebraResumoInternacao'],
+  diasCorte: '',
+  spSadt: 'por_atendimento' as NovaRegraApresentacao['geracaoSpSadt'],
   ativa: true,
+});
+// Regras do montador conferidas na hora (o dígito do CNPJ e do CPF é conferido de novo no servidor).
+const errosMontador = computed(() => {
+  const e: Record<string, string> = {};
+  const doc = fr.documento.replace(/\D/g, '');
+  if (fr.identificacao === 'cnpj' && doc.length !== 14) e['documento'] = t('apresentacaoTiss.regra.erroCnpj');
+  if (fr.identificacao === 'cpf' && doc.length !== 11) e['documento'] = t('apresentacaoTiss.regra.erroCpf');
+  if (fr.quebra === 'por_periodo' && !/^\d{1,3}$/.test(fr.diasCorte))
+    e['diasCorte'] = t('apresentacaoTiss.regra.erroDiasCorte');
+  if (fr.proximo && fr.prefixo.trim().length + (Number(fr.largura) || 0) > 20)
+    e['prefixo'] = t('apresentacaoTiss.regra.erroSerie');
+  return e;
 });
 const fr = reactive(regraVazia());
 const editandoRegra = ref(false);
@@ -131,6 +152,15 @@ function editarRegra(r: RegraApresentacaoTela) {
     agrupaItens: r.agrupaItens,
     omiteGuiaSemValor: r.omiteGuiaSemValor,
     eletronico: r.usaFaturamentoEletronico,
+    identificacao: r.identificacaoContratado,
+    documento: (r.identificacaoContratado === 'cpf' ? r.cpfContratado : r.cnpjContratado) ?? '',
+    numeracao: r.numeracaoGuia,
+    prefixo: r.prefixoNumeroGuia ?? '',
+    largura: String(r.larguraNumeroGuia),
+    proximo: r.proximoNumeroGuia === null ? '' : String(r.proximoNumeroGuia),
+    quebra: r.quebraResumoInternacao,
+    diasCorte: r.diasCorteResumo === null ? '' : String(r.diasCorteResumo),
+    spSadt: r.geracaoSpSadt,
     ativa: r.ativo,
   });
   regraEscolhida.value = r.id;
@@ -152,7 +182,8 @@ const errosRegra = computed(() => {
 });
 
 function gravarRegra() {
-  if (fonte.value === null || Object.keys(errosRegra.value).length) return;
+  if (fonte.value === null || Object.keys(errosRegra.value).length || Object.keys(errosMontador.value).length)
+    return;
   const corpo: NovaRegraApresentacao = {
     ...(fr.id !== null && fr.versao !== null ? { id: fr.id, versao: fr.versao } : {}),
     fontePagadoraId: fonte.value,
@@ -166,6 +197,15 @@ function gravarRegra() {
     agrupaItens: fr.agrupaItens,
     omiteGuiaSemValor: fr.omiteGuiaSemValor,
     usaFaturamentoEletronico: fr.eletronico,
+    identificacaoContratado: fr.identificacao,
+    documentoContratado: fr.identificacao === 'codigo' ? null : fr.documento.trim() || null,
+    numeracaoGuia: fr.numeracao,
+    prefixoNumeroGuia: fr.prefixo.trim() || null,
+    larguraNumeroGuia: Number(fr.largura) || 8,
+    proximoNumeroGuia: num(fr.proximo),
+    quebraResumoInternacao: fr.quebra,
+    diasCorteResumo: fr.quebra === 'por_periodo' ? num(fr.diasCorte) : null,
+    geracaoSpSadt: fr.spSadt,
     ativo: fr.ativa,
   };
   void rodar(async () => {
@@ -422,11 +462,90 @@ function encerrarPadrao(p: PadraoApresentacaoTela) {
           ><input v-model="fr.eletronico" type="checkbox" />
           {{ t('apresentacaoTiss.regra.eletronico') }}</label
         >
+        <SanteSelecao
+          id="apt-identificacao"
+          v-model="fr.identificacao"
+          :rotulo="t('apresentacaoTiss.regra.identificacao')"
+          :opcoes="
+            (['codigo', 'cnpj', 'cpf'] as const).map((o) => ({
+              valor: o,
+              rotulo: t(`apresentacaoTiss.regra.identificacoes.${o}`),
+            }))
+          "
+          data-testid="apt-identificacao"
+        />
+        <label v-if="fr.identificacao !== 'codigo'"
+          >{{ t('apresentacaoTiss.regra.documento') }}
+          <input v-model="fr.documento" inputmode="numeric" maxlength="18" data-testid="apt-documento" />
+          <small v-if="errosMontador['documento']" role="alert" data-testid="apt-erro-documento">{{
+            errosMontador['documento']
+          }}</small>
+        </label>
+        <SanteSelecao
+          id="apt-numeracao"
+          v-model="fr.numeracao"
+          :rotulo="t('apresentacaoTiss.regra.numeracao')"
+          :opcoes="
+            (['hospital', 'operadora', 'sequencial_lote'] as const).map((o) => ({
+              valor: o,
+              rotulo: t(`apresentacaoTiss.regra.numeracoes.${o}`),
+            }))
+          "
+          data-testid="apt-numeracao"
+        />
+        <template v-if="fr.numeracao === 'hospital'">
+          <label
+            >{{ t('apresentacaoTiss.regra.prefixo') }}
+            <input v-model="fr.prefixo" maxlength="10" data-testid="apt-prefixo" />
+            <small v-if="errosMontador['prefixo']" role="alert">{{ errosMontador['prefixo'] }}</small>
+          </label>
+          <label
+            >{{ t('apresentacaoTiss.regra.largura') }}
+            <input v-model="fr.largura" inputmode="numeric" maxlength="2" data-testid="apt-largura" />
+          </label>
+          <label
+            >{{ t('apresentacaoTiss.regra.proximo') }}
+            <input v-model="fr.proximo" inputmode="numeric" maxlength="12" data-testid="apt-proximo" />
+          </label>
+        </template>
+        <SanteSelecao
+          id="apt-quebra"
+          v-model="fr.quebra"
+          :rotulo="t('apresentacaoTiss.regra.quebra')"
+          :opcoes="
+            (['nao_quebra', 'por_periodo', 'por_prestador', 'por_limite_itens'] as const).map((o) => ({
+              valor: o,
+              rotulo: t(`apresentacaoTiss.regra.quebras.${o}`),
+            }))
+          "
+          data-testid="apt-quebra"
+        />
+        <label v-if="fr.quebra === 'por_periodo'"
+          >{{ t('apresentacaoTiss.regra.diasCorte') }}
+          <input v-model="fr.diasCorte" inputmode="numeric" maxlength="3" data-testid="apt-dias-corte" />
+          <small v-if="errosMontador['diasCorte']" role="alert">{{ errosMontador['diasCorte'] }}</small>
+        </label>
+        <SanteSelecao
+          id="apt-sp-sadt"
+          v-model="fr.spSadt"
+          :rotulo="t('apresentacaoTiss.regra.spSadt')"
+          :opcoes="
+            (['por_atendimento', 'por_prestador', 'por_procedimento', 'por_data'] as const).map((o) => ({
+              valor: o,
+              rotulo: t(`apresentacaoTiss.regra.spSadts.${o}`),
+            }))
+          "
+          data-testid="apt-sp-sadt"
+        />
         <label><input v-model="fr.ativa" type="checkbox" /> {{ t('apresentacaoTiss.regra.ativa') }}</label>
         <ul v-if="Object.keys(errosRegra).length" role="alert" data-testid="apt-erros-regra">
           <li v-for="(m, k) in errosRegra" :key="k">{{ m }}</li>
         </ul>
-        <button type="submit" :disabled="Object.keys(errosRegra).length > 0" data-testid="apt-gravar-regra">
+        <button
+          type="submit"
+          :disabled="Object.keys(errosRegra).length + Object.keys(errosMontador).length > 0"
+          data-testid="apt-gravar-regra"
+        >
           {{ t('apresentacaoTiss.regra.gravar') }}
         </button>
       </form>

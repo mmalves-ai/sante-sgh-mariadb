@@ -20,6 +20,20 @@ const esquemaRegra = z.object({
   agrupaItens: z.boolean(),
   omiteGuiaSemValor: z.boolean(),
   usaFaturamentoEletronico: z.boolean(),
+  identificacaoContratado: z.enum(['codigo', 'cnpj', 'cpf']).default('codigo'),
+  cnpjContratado: textoN.default(null),
+  cpfContratado: textoN.default(null),
+  numeracaoGuia: z.enum(['hospital', 'operadora', 'sequencial_lote']).default('hospital'),
+  prefixoNumeroGuia: textoN.default(null),
+  larguraNumeroGuia: z.number().default(8),
+  proximoNumeroGuia: idN.default(null),
+  quebraResumoInternacao: z
+    .enum(['nao_quebra', 'por_periodo', 'por_prestador', 'por_limite_itens'])
+    .default('nao_quebra'),
+  diasCorteResumo: idN.default(null),
+  geracaoSpSadt: z
+    .enum(['por_atendimento', 'por_prestador', 'por_procedimento', 'por_data'])
+    .default('por_atendimento'),
   ativo: z.boolean(),
 });
 export type RegraApresentacaoTela = z.infer<typeof esquemaRegra>;
@@ -98,6 +112,15 @@ export interface NovaRegraApresentacao {
   agrupaItens: boolean;
   omiteGuiaSemValor: boolean;
   usaFaturamentoEletronico: boolean;
+  identificacaoContratado: 'codigo' | 'cnpj' | 'cpf';
+  documentoContratado: string | null;
+  numeracaoGuia: 'hospital' | 'operadora' | 'sequencial_lote';
+  prefixoNumeroGuia: string | null;
+  larguraNumeroGuia: number;
+  proximoNumeroGuia: number | null;
+  quebraResumoInternacao: 'nao_quebra' | 'por_periodo' | 'por_prestador' | 'por_limite_itens';
+  diasCorteResumo: number | null;
+  geracaoSpSadt: 'por_atendimento' | 'por_prestador' | 'por_procedimento' | 'por_data';
   ativo: boolean;
 }
 export const gravarRegraApresentacao = (corpo: NovaRegraApresentacao, chave: string) =>
