@@ -126,7 +126,7 @@ export function saldoACompensar(retidos: readonly RetidoSofrido[]): SaldoACompen
  * Confere a compensação do crédito na apuração de uma competência: só entra o retido até ela (crédito de mês futuro
  * não compensa tributo de mês passado) e a soma é positiva.
  */
-export function conferirCompensacao(
+export function conferirCompensacaoSofrida(
   creditos: readonly { readonly competencia: string; readonly valor: number }[],
   competencia: string,
 ): RecusaFinanceiro | null {

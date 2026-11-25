@@ -7,7 +7,7 @@
 // estornada fica marcada como excluída, com o motivo.
 import { centavos } from '@sgh/contratos/regras-financeiro';
 import {
-  conferirCompensacao,
+  conferirCompensacaoSofrida,
   conferirEstornoRetencaoSofrida,
   conferirRetencaoSofrida,
   efeitoRetencaoSofrida,
@@ -329,7 +329,7 @@ const compensarRetencaoSofrida = definirOperacao<CompensacaoSofridaEntrada, Resu
       valor: numero(r['valor_retido']),
       competencia: texto(r['competencia']),
     }));
-    recusar(conferirCompensacao(creditos, e.competencia));
+    recusar(conferirCompensacaoSofrida(creditos, e.competencia));
     const usados = creditos.filter((c) => c.competencia <= e.competencia);
     const valor = totalRetidoSofrido(usados);
     const ja = await tx.uma(

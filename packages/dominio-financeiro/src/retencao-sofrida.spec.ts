@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { type RegraRetencao, sugerirRetencoes } from './retencao-regra.js';
 import {
-  conferirCompensacao,
+  conferirCompensacaoSofrida,
   conferirEstornoRetencaoSofrida,
   conferirRetencaoSofrida,
   efeitoRetencaoSofrida,
@@ -103,9 +103,9 @@ describe('retenção sofrida no recebimento', () => {
 
   it('a compensação só usa o crédito até a competência da apuração', () => {
     const creditos = [{ competencia: '2026-11', valor: 30 }];
-    expect(conferirCompensacao(creditos, '2026-10')?.codigo).toBe('sem-credito');
-    expect(conferirCompensacao(creditos, '2026-11')).toBeNull();
-    expect(conferirCompensacao([], '2026-11')?.codigo).toBe('sem-credito');
-    expect(conferirCompensacao(creditos, '11/2026')?.codigo).toBe('competencia-invalida');
+    expect(conferirCompensacaoSofrida(creditos, '2026-10')?.codigo).toBe('sem-credito');
+    expect(conferirCompensacaoSofrida(creditos, '2026-11')).toBeNull();
+    expect(conferirCompensacaoSofrida([], '2026-11')?.codigo).toBe('sem-credito');
+    expect(conferirCompensacaoSofrida(creditos, '11/2026')?.codigo).toBe('competencia-invalida');
   });
 });
