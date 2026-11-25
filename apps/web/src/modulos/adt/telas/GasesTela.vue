@@ -82,6 +82,10 @@ const hora = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : ''
       <RouterLink :to="{ name: 'adt.gases.regras' }" data-testid="gases-ir-regras">{{
         t('adt.gases.irRegras')
       }}</RouterLink>
+      ·
+      <RouterLink :to="{ name: 'adt.gases.setores' }" data-testid="gases-ir-setores">{{
+        t('adt.gasesSetor.irSetores')
+      }}</RouterLink>
     </p>
     <ErroAdt v-if="usos.isError.value" :erro="usos.error.value" />
     <ErroAdt v-if="erro" :erro="erro" />

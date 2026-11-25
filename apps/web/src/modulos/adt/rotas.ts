@@ -84,6 +84,13 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'convenio.contrato.ler' },
   },
   {
+    // C1-050, 05-SUP L30: consumo de gás do setor sem paciente e apuração por setor e período.
+    path: '/internacao/gases/setores',
+    name: 'adt.gases.setores',
+    component: () => import('./telas/GasesSetorTela.vue'),
+    meta: { permissao: 'enfermagem.dispositivo.ler' },
+  },
+  {
     // F78.04-1, 04-INT L74: formulários numerados da declaração de óbito (lote, uso, extravio, devolução).
     path: '/internacao/controles/formularios-obito',
     name: 'adt.controles.obito',

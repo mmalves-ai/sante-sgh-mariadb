@@ -41,6 +41,8 @@ import { PortaDocumentosInternacao } from './documentos-internacao.js';
 import { RegistrosInternacaoController } from './registros-internacao.controller.js';
 import { GasMedicinalController } from './gas-medicinal.controller.js';
 import { PORTA_GAS_MEDICINAL, PortaGasMedicinalPropria } from './gas-medicinal-propria.js';
+import { PORTA_GAS_SETOR, PortaGasSetorPropria } from './gas-setor-propria.js';
+import { GasSetorController } from './gas-setor.controller.js';
 import { RegulacaoController } from './regulacao.controller.js';
 import { SameController } from './same.controller.js';
 import { SameGuardaController } from './same-guarda.controller.js';
@@ -122,6 +124,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       HigienizacaoController,
       SameController,
       DocumentosInternacaoController,
+      GasSetorController,
       GasMedicinalController,
       SameGuardaController,
       SameTramiteController,
@@ -146,6 +149,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaGasMedicinalPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // C1-050 (05-SUP linha 30): consumo de gás por setor e apuração por setor no banco do cliente; sem núcleo, 503.
+      {
+        provide: PORTA_GAS_SETOR,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaGasSetorPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.9 (04-HOT L126): SAME pelo volume (guarda, local e movimentação pelo tipo da operação); sem núcleo, 503.
