@@ -432,7 +432,7 @@ const situacao = (s: string) =>
           <RouterLink
             v-if="
               d.assinatura.nivel === 'eletronica-avancada' &&
-              d.assinatura.documento !== null &&
+              d.assinatura.naFilaIcp &&
               d.cirurgiao === dados.eu.profissional
             "
             to="/pep/assinaturas"
@@ -453,6 +453,18 @@ const situacao = (s: string) =>
           <ol :data-testid="`descricao-adendos-${d.id}`">
             <li v-for="x in d.adendos" :key="x.sequencia">
               {{ x.registradoEm }} · {{ x.motivo }}: {{ x.texto }}
+              <span :data-testid="`adendo-nivel-${d.id}-${x.sequencia}`">
+                ·
+                {{
+                  t(`cirurgia.descricao.nivel.${x.envelope !== null ? 'icp-brasil' : 'eletronica-avancada'}`)
+                }}
+              </span>
+              <RouterLink
+                v-if="x.envelope === null && x.naFilaIcp && d.cirurgiao === dados.eu.profissional"
+                to="/pep/assinaturas"
+                :data-testid="`adendo-assinar-icp-${d.id}-${x.sequencia}`"
+                >{{ t('cirurgia.descricao.nivel.assinarComCertificado') }}</RouterLink
+              >
             </li>
           </ol>
         </template>

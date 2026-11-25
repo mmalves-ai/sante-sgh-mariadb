@@ -98,8 +98,9 @@ function simular(page: Page) {
           descricaoPecas: null,
           assinadaEm: b['assinar'] ? '2026-11-25 10:30' : null,
           assinatura: b['assinar']
-            ? { nivel: 'eletronica-avancada', documento: 901, envelope: null }
-            : { nivel: null, documento: null, envelope: null },
+            ? // A política do estabelecimento exige ICP-Brasil para o tipo: o documento está na fila do cirurgião.
+              { nivel: 'eletronica-avancada', documento: 901, envelope: null, naFilaIcp: true }
+            : { nivel: null, documento: null, envelope: null, naFilaIcp: false },
           achados: ((b['achados'] as { achado: number }[]) ?? []).map((a) => ({
             achado: a.achado,
             rotulo: 'ACHADO FICTICIO',
@@ -117,6 +118,10 @@ function simular(page: Page) {
           texto: b['texto'],
           motivo: b['motivo'],
           registradoEm: '2026-11-25 11:00',
+          // O adendo tem o seu documento no prontuário, também na fila com certificado.
+          documento: 902 + desc!.adendos.length,
+          envelope: null,
+          naFilaIcp: true,
         });
         desc!.situacao = 'retificada';
         return json(rota, ok('Adendo registrado.', { adendo: 1, descricao: 801 }), 201);
@@ -236,6 +241,9 @@ test.describe('@C2-019 descrição cirúrgica assinada e intercorrências', () =
     await page.getByTestId('adendo-incluir').click();
     await expect(page.getByTestId('descricao-adendos-801')).toContainText('Correção sintética');
     await expect(page.getByTestId('descricao-lida-801')).toContainText('Retificada');
+    // O adendo leva o mesmo nível de assinatura e o atalho para a fila com certificado.
+    await expect(page.getByTestId('adendo-nivel-801-1')).toContainText('eletrônica avançada');
+    await expect(page.getByTestId('adendo-assinar-icp-801-1')).toHaveAttribute('href', /\/pep\/assinaturas$/);
 
     // Intercorrência: o tipo exige conduta e a grave avisa que abre a notificação; o protocolo volta na lista.
     await escolher(page.getByTestId('intercorrencia-tipo'), '41');

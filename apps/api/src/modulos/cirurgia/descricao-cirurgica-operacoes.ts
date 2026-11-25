@@ -193,28 +193,37 @@ async function gravarAchados(tx: TxOperacao, descricao: number, itens: SalvarDes
 
 export const TABELAS_DESCRICAO = ['descricao_cirurgica', 'descricao_cirurgica_achado'] as const;
 
-/** Os tipos de documento que a fila ICP do autor reconhece para o registro cirúrgico (o código, na ordem de escolha). */
-const CODIGOS_TIPO_ICP = ['registro-clinico'] as const;
+/**
+ * O tipo de documento que a fila ICP do autor reconhece para o registro cirúrgico. Todo cliente o recebe pela migração
+ * 08_CC/94_descricao_tipo_documento (com a categoria registro cirúrgico); a política de assinatura do estabelecimento
+ * decide se ele vai à fila com certificado (regra do tipo com nível icp-brasil).
+ */
+export const CODIGO_TIPO_REGISTRO_CIRURGICO = 'registro-clinico';
+
+/** O documento do prontuário que representa um registro do ato (a descrição ou o adendo). */
+interface DocumentoDoAto {
+  readonly origem: 'descricao_cirurgica' | 'descricao_cirurgica_adendo';
+  readonly origemId: number;
+  readonly ato: number;
+  readonly prof: number;
+  readonly titulo: string;
+  readonly conteudo: Readonly<Record<string, unknown>>;
+}
 
 /**
- * A descrição assinada entra no prontuário como documento (linha do tempo do paciente) ligado à origem
- * `descricao_cirurgica`: é por ele que o cirurgião com certificado ICP-Brasil assina na fila de assinaturas (CFM
- * 1.821/2007 e 2.299/2021, SBIS NGS2); sem certificado, vale a assinatura eletrônica avançada com a senha conferida
- * de novo (Lei 14.063/2020). O tipo vem do cadastro do cliente (o código que a fila ICP conhece, ou a categoria
- * registro cirúrgico); sem tipo ou situação cadastrados, a descrição fica só com a eletrônica (devolve null).
+ * Grava no prontuário (linha do tempo do paciente) o documento do cirurgião ligado à origem: é por ele que o cirurgião
+ * com certificado ICP-Brasil assina na fila de assinaturas (CFM 1.821/2007 e 2.299/2021, SBIS NGS2); sem certificado,
+ * vale a assinatura eletrônica avançada com a senha conferida de novo (Lei 14.063/2020). A descrição e cada adendo têm
+ * o seu documento, com o mesmo tipo e o mesmo nível de assinatura. O tipo é o do código que a fila ICP conhece (a
+ * migração o garante); na falta dele (cadastro alterado pelo cliente), o da categoria registro cirúrgico, que entra
+ * na linha do tempo mas não na fila. Sem tipo nem situação "lançado", fica só a eletrônica (devolve null).
  */
-async function documentoDaDescricao(
-  tx: TxOperacao,
-  descricao: number,
-  ato: number,
-  prof: number,
-  e: SalvarDescricaoEntrada,
-): Promise<number | null> {
+async function documentoNoProntuario(tx: TxOperacao, d: DocumentoDoAto): Promise<number | null> {
   const tipo = await tx.uma(
     `SELECT id FROM tipo_documento_clinico
-      WHERE ativo = TRUE AND (codigo IN (?) OR categoria = 'registro_cirurgico')
-      ORDER BY (codigo IN (?)) DESC, (ordem IS NULL), ordem, id LIMIT 1`,
-    [CODIGOS_TIPO_ICP[0], CODIGOS_TIPO_ICP[0]],
+      WHERE ativo = TRUE AND (codigo = ? OR categoria = 'registro_cirurgico')
+      ORDER BY (codigo = ?) DESC, (ordem IS NULL), ordem, id LIMIT 1`,
+    [CODIGO_TIPO_REGISTRO_CIRURGICO, CODIGO_TIPO_REGISTRO_CIRURGICO],
   );
   const situacao = await tx.uma(
     `SELECT id FROM situacao_documento_prontuario WHERE categoria = 'lancado' AND ativo = TRUE
@@ -223,42 +232,37 @@ async function documentoDaDescricao(
   if (!tipo || !situacao) return null;
   const a = await tx.uma(
     'SELECT paciente_id, atendimento_id, inicio_cirurgia_em, entrada_sala_em FROM ato_cirurgico WHERE id = ?',
-    [ato],
+    [d.ato],
   );
   if (!a) return null;
   const [ja] = await tx.consultar(
     `SELECT id FROM documento_prontuario
-      WHERE entidade_origem = 'descricao_cirurgica' AND entidade_origem_id = ? AND numero_versao = 1`,
-    [descricao],
+      WHERE entidade_origem = ? AND entidade_origem_id = ? AND numero_versao = 1`,
+    [d.origem, d.origemId],
   );
   if (ja) return n(ja['id']);
   const agora = new Date();
-  const conteudo = {
-    descricao_tecnica: e.descricaoTecnica,
-    achados: e.achadosTexto,
-    acidentes_intraoperatorios: e.acidentes,
-    sangramento_estimado_ml: e.sangramentoMl,
-    envio_anatomopatologico: e.envioAnatomopatologico,
-    descricao_pecas: e.envioAnatomopatologico ? e.descricaoPecas : null,
-    achados_padrao: e.achados.map((x) => x.achado),
-    assinatura_eletronica: { nivel: 'eletronica-avancada', reautenticacao: true },
-  };
   const documento = await tx.incluir('documento_prontuario', {
     estabelecimento_id: est(tx),
     paciente_id: n(a['paciente_id']),
     atendimento_id: a['atendimento_id'] === null ? null : n(a['atendimento_id']),
     tipo_documento_clinico_id: n(tipo['id']),
     situacao_documento_prontuario_id: n(situacao['id']),
-    entidade_origem: 'descricao_cirurgica',
-    entidade_origem_id: descricao,
-    titulo: 'Descrição cirúrgica',
-    profissional_id: prof,
-    referencia_em: a['inicio_cirurgia_em'] ?? a['entrada_sala_em'] ?? agora,
+    entidade_origem: d.origem,
+    entidade_origem_id: d.origemId,
+    titulo: d.titulo,
+    profissional_id: d.prof,
+    // O adendo entra na linha do tempo quando é registrado; a descrição, no momento do ato.
+    referencia_em:
+      d.origem === 'descricao_cirurgica' ? (a['inicio_cirurgia_em'] ?? a['entrada_sala_em'] ?? agora) : agora,
     lancado_em: agora,
     fechado_em: agora,
     numero_versao: 1,
     confidencial: false,
-    conteudo: JSON.stringify(conteudo),
+    conteudo: JSON.stringify({
+      ...d.conteudo,
+      assinatura_eletronica: { nivel: 'eletronica-avancada', reautenticacao: true },
+    }),
     origem: 'sistema',
   });
   await tx.incluir('documento_prontuario_evento', {
@@ -266,13 +270,39 @@ async function documentoDaDescricao(
     operacao: 'inclusao',
     acao: 'criacao',
     situacao_documento_prontuario_id: n(situacao['id']),
-    profissional_id: prof,
+    profissional_id: d.prof,
     evento_em: agora,
-    dados: JSON.stringify({ origem: 'descricao_cirurgica', nivel: 'eletronica-avancada' }),
+    dados: JSON.stringify({ origem: d.origem, nivel: 'eletronica-avancada' }),
     ocorrido_em: agora,
     usuario_id: n(tx.contexto.usuario),
   });
   return documento;
+}
+
+/** A descrição assinada no prontuário (o texto e os achados que foram assinados). */
+function documentoDaDescricao(
+  tx: TxOperacao,
+  descricao: number,
+  ato: number,
+  prof: number,
+  e: SalvarDescricaoEntrada,
+): Promise<number | null> {
+  return documentoNoProntuario(tx, {
+    origem: 'descricao_cirurgica',
+    origemId: descricao,
+    ato,
+    prof,
+    titulo: 'Descrição cirúrgica',
+    conteudo: {
+      descricao_tecnica: e.descricaoTecnica,
+      achados: e.achadosTexto,
+      acidentes_intraoperatorios: e.acidentes,
+      sangramento_estimado_ml: e.sangramentoMl,
+      envio_anatomopatologico: e.envioAnatomopatologico,
+      descricao_pecas: e.envioAnatomopatologico ? e.descricaoPecas : null,
+      achados_padrao: e.achados.map((x) => x.achado),
+    },
+  });
 }
 
 const salvar = definirOperacao<SalvarDescricaoEntrada, ResultadoOperacao>({
@@ -347,7 +377,12 @@ const salvar = definirOperacao<SalvarDescricaoEntrada, ResultadoOperacao>({
 
 const adendo = definirOperacao<AdendoDescricaoEntrada, ResultadoOperacao>({
   nome: 'cirurgia.adendo-descricao',
-  tabelas: ['descricao_cirurgica', 'descricao_cirurgica_adendo'],
+  tabelas: [
+    'descricao_cirurgica',
+    'descricao_cirurgica_adendo',
+    'documento_prontuario',
+    'documento_prontuario_evento',
+  ],
   entrada: esquemaAdendoDescricao as never,
   async gravar(tx, e) {
     const [linha] = await tx.consultarParaAtualizar(
@@ -373,7 +408,30 @@ const adendo = definirOperacao<AdendoDescricaoEntrada, ResultadoOperacao>({
     });
     if (texto(d['situacao']) === 'assinada')
       await tx.alterar('descricao_cirurgica', e.descricao, n(d['versao']), { situacao: 'retificada' });
-    return { adendo: id, descricao: e.descricao } as ResultadoOperacao;
+    // A retificação entra no prontuário como documento próprio do cirurgião, ligado à descrição, com o mesmo tipo e o
+    // mesmo nível de assinatura (eletrônica avançada já conferida; ICP-Brasil pela fila, como a descrição): CFM
+    // 1.821/2007 e SBIS NGS2. O documento da descrição original não muda.
+    const original = await tx.uma(
+      `SELECT id FROM documento_prontuario
+        WHERE entidade_origem = 'descricao_cirurgica' AND entidade_origem_id = ? AND excluido_em IS NULL
+        ORDER BY numero_versao DESC LIMIT 1`,
+      [e.descricao],
+    );
+    const documento = await documentoNoProntuario(tx, {
+      origem: 'descricao_cirurgica_adendo',
+      origemId: id,
+      ato: n(d['ato_cirurgico_id']),
+      prof: n(conta),
+      titulo: `Adendo à descrição cirúrgica (${n(s?.s) + 1})`,
+      conteudo: {
+        descricao_cirurgica_id: e.descricao,
+        documento_descricao_id: original ? n(original['id']) : null,
+        sequencia: n(s?.s) + 1,
+        texto: e.texto,
+        motivo: e.motivo,
+      },
+    });
+    return { adendo: id, descricao: e.descricao, documento } as ResultadoOperacao;
   },
   alvo: (_e, r) => ({ tabela: 'descricao_cirurgica_adendo', id: n((r as Linha)['adendo']) }),
   trilha: (e) => ({ dados: { descricao: e.descricao }, motivo: e.motivo.slice(0, 500) }),

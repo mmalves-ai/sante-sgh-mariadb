@@ -15,6 +15,27 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import { civil, FUSO_PADRAO, n, nn, textoOuNulo, texto, verdadeiro } from './banco-apoio.js';
 import { OPERACOES_DESCRICAO } from './descricao-cirurgica-operacoes.js';
+import { TIPOS_DOCUMENTO_ICP } from '../assinatura/tipos.js';
+import { CATEGORIAS_ASSINAVEIS } from '../assinatura/aplicacao/regras-assinatura.js';
+
+/**
+ * O documento do prontuário (alias dp) está na fila de assinaturas com certificado do autor, pelas mesmas condições da
+ * fila (assinatura/porta-propria.ts, filaIcp): tipo de negócio que a fila conhece, situação assinável, sem envelope e,
+ * sem tentativa, a política do estabelecimento exigindo ICP-Brasil para o tipo (regra vigente, destino interno, de
+ * qualquer conselho); com tentativa pendente ou em falha, sempre.
+ */
+const SQL_NA_FILA_ICP = `(dp.documento_assinado_id IS NULL
+    AND EXISTS (SELECT 1 FROM tipo_documento_clinico t WHERE t.id = dp.tipo_documento_clinico_id AND t.codigo IN (${TIPOS_DOCUMENTO_ICP.map(() => '?').join(', ')}))
+    AND EXISTS (SELECT 1 FROM situacao_documento_prontuario s WHERE s.id = dp.situacao_documento_prontuario_id
+                 AND s.categoria IN (${CATEGORIAS_ASSINAVEIS.map(() => '?').join(', ')}))
+    AND (EXISTS (SELECT 1 FROM assinatura_icp ai WHERE ai.documento_prontuario_id = dp.id
+                  AND ai.origem_assinatura = 'documento' AND ai.situacao IN ('pendente', 'falha'))
+         OR EXISTS (SELECT 1 FROM regra_politica_assinatura r
+                      JOIN politica_assinatura p ON p.id = r.politica_assinatura_id
+                     WHERE p.tipo_documento_clinico_id = dp.tipo_documento_clinico_id
+                       AND p.estabelecimento_id = dp.estabelecimento_id AND p.ativo AND r.vigente = 1
+                       AND r.nivel = 'icp-brasil' AND r.destino = 'interno')))`;
+const PARAMETROS_NA_FILA_ICP: readonly string[] = [...TIPOS_DOCUMENTO_ICP, ...CATEGORIAS_ASSINAVEIS];
 
 export const PORTA_DESCRICAO_CIRURGICA = Symbol('PORTA_DESCRICAO_CIRURGICA');
 
@@ -42,9 +63,20 @@ export interface DescricaoLida {
     readonly nivel: 'eletronica-avancada' | 'icp-brasil' | null;
     readonly documento: number | null;
     readonly envelope: number | null;
+    /** O documento está na fila de assinaturas com certificado do cirurgião (é quando a tela mostra o atalho). */
+    readonly naFilaIcp: boolean;
   };
   readonly achados: { achado: number; rotulo: string; complemento: string | null }[];
-  readonly adendos: { sequencia: number; texto: string; motivo: string; registradoEm: string | null }[];
+  /** Cada adendo tem o seu documento no prontuário, com o mesmo nível de assinatura da descrição. */
+  readonly adendos: {
+    sequencia: number;
+    texto: string;
+    motivo: string;
+    registradoEm: string | null;
+    documento: number | null;
+    envelope: number | null;
+    naFilaIcp: boolean;
+  }[];
 }
 
 export interface TelaDescricaoCirurgica {
@@ -189,9 +221,20 @@ export class PortaDescricaoCirurgicaPropria implements PortaDescricaoCirurgica {
           [d['id']],
         );
         const adendos = await l.consultar(
-          'SELECT sequencia, texto, motivo, registrado_em FROM descricao_cirurgica_adendo WHERE descricao_cirurgica_id = ? ORDER BY sequencia',
-          [d['id']],
+          `SELECT x.sequencia, x.texto, x.motivo, x.registrado_em, dp.id AS documento,
+                  dp.documento_assinado_id AS envelope, ${SQL_NA_FILA_ICP} AS na_fila
+             FROM descricao_cirurgica_adendo x
+             LEFT JOIN documento_prontuario dp ON dp.entidade_origem = 'descricao_cirurgica_adendo'
+                  AND dp.entidade_origem_id = x.id AND dp.numero_versao = 1 AND dp.excluido_em IS NULL
+            WHERE x.descricao_cirurgica_id = ? ORDER BY x.sequencia`,
+          [...PARAMETROS_NA_FILA_ICP, d['id']],
         );
+        const [filaDaDescricao] = d['documento_prontuario']
+          ? await l.consultar(
+              `SELECT ${SQL_NA_FILA_ICP} AS na_fila FROM documento_prontuario dp WHERE dp.id = ?`,
+              [...PARAMETROS_NA_FILA_ICP, d['documento_prontuario']],
+            )
+          : [];
         descricoes.push({
           id: n(d['id']),
           cirurgiao: n(d['cirurgiao_profissional_id']),
@@ -217,6 +260,7 @@ export class PortaDescricaoCirurgicaPropria implements PortaDescricaoCirurgica {
                   : null,
             documento: nn(d['documento_prontuario']),
             envelope: nn(d['documento_assinado_id']),
+            naFilaIcp: verdadeiro(filaDaDescricao?.['na_fila']),
           },
           achados: achados.map((x) => ({
             achado: n(x['achado_cirurgico_padrao_id']),
@@ -228,6 +272,9 @@ export class PortaDescricaoCirurgicaPropria implements PortaDescricaoCirurgica {
             texto: texto(x['texto']),
             motivo: texto(x['motivo']),
             registradoEm: civil(x['registrado_em'], fuso),
+            documento: nn(x['documento']),
+            envelope: nn(x['envelope']),
+            naFilaIcp: verdadeiro(x['na_fila']),
           })),
         });
       }

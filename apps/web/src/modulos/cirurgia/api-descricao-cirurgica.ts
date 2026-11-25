@@ -30,6 +30,7 @@ const descricao = z.object({
     nivel: z.enum(['eletronica-avancada', 'icp-brasil']).nullable(),
     documento: z.number().nullable(),
     envelope: z.number().nullable(),
+    naFilaIcp: z.boolean(),
   }),
   achados: z.array(z.object({ achado: z.number(), rotulo: z.string(), complemento: z.string().nullable() })),
   adendos: z.array(
@@ -38,6 +39,9 @@ const descricao = z.object({
       texto: z.string(),
       motivo: z.string(),
       registradoEm: z.string().nullable(),
+      documento: z.number().nullable(),
+      envelope: z.number().nullable(),
+      naFilaIcp: z.boolean(),
     }),
   ),
 });

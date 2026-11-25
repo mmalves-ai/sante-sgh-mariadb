@@ -58,16 +58,24 @@ async function limpar(e: Escritor, est: number) {
   const ds = `SELECT id FROM descricao_cirurgica WHERE ato_cirurgico_id IN (${atos})`;
   // O documento do prontuário da descrição assinada e a assinatura ICP dele (prévia, tentativa, eventos) saem antes;
   // o envelope (referido pela descrição) sai depois dela.
-  const docs = `SELECT id FROM documento_prontuario WHERE entidade_origem = 'descricao_cirurgica' AND estabelecimento_id = ?`;
+  const docs = `SELECT id FROM documento_prontuario
+    WHERE entidade_origem IN ('descricao_cirurgica', 'descricao_cirurgica_adendo') AND estabelecimento_id = ?`;
   await e.executar(`DELETE FROM assinatura_icp WHERE documento_prontuario_id IN (${docs})`, [est]);
   await e.executar(`DELETE FROM previa_assinatura WHERE documento_prontuario_id IN (${docs})`, [est]);
   await e.executar(`DELETE FROM documento_prontuario_evento WHERE documento_prontuario_id IN (${docs})`, [
     est,
   ]);
   await e.executar(
-    "DELETE FROM documento_prontuario WHERE entidade_origem = 'descricao_cirurgica' AND estabelecimento_id = ?",
+    `DELETE FROM documento_prontuario
+      WHERE entidade_origem IN ('descricao_cirurgica', 'descricao_cirurgica_adendo') AND estabelecimento_id = ?`,
     [est],
   );
+  // A política de assinatura do estabelecimento sintético (a regra de ICP-Brasil do registro clínico).
+  const politicas = 'SELECT id FROM politica_assinatura WHERE estabelecimento_id = ?';
+  await e.executar(`DELETE FROM regra_politica_assinatura WHERE politica_assinatura_id IN (${politicas})`, [
+    est,
+  ]);
+  await e.executar('DELETE FROM politica_assinatura WHERE estabelecimento_id = ?', [est]);
   await e.executar(`DELETE FROM descricao_cirurgica_adendo WHERE descricao_cirurgica_id IN (${ds})`, [est]);
   await e.executar(`DELETE FROM descricao_cirurgica_achado WHERE descricao_cirurgica_id IN (${ds})`, [est]);
   await e.executar(`DELETE FROM descricao_cirurgica WHERE ato_cirurgico_id IN (${atos})`, [est]);
@@ -284,14 +292,8 @@ async function montar(e: Escritor): Promise<Massa> {
     "INSERT INTO grau_dano (codigo, descricao, ordem, criado_em) VALUES ('grave', 'Grave', 53, ?)",
     [agora],
   );
-  // Tipo de documento que a fila ICP conhece (código do cadastro do cliente) e a situação "lançado" do documento.
-  await g(
-    "SELECT id FROM tipo_documento_clinico WHERE codigo = 'registro-clinico'",
-    [],
-    "INSERT INTO tipo_documento_clinico (codigo, descricao, categoria, criado_em) VALUES ('registro-clinico', 'REGISTRO SINTETICO', 'registro_cirurgico', ?)",
-    [agora],
-  );
-  await e.executar("UPDATE tipo_documento_clinico SET ativo = TRUE WHERE codigo = 'registro-clinico'");
+  // O tipo de documento que a fila ICP conhece ('registro-clinico') NÃO é semeado aqui: vem da migração
+  // 08_CC/94_descricao_tipo_documento, que todo cliente recebe. A situação "lançado" do documento, se faltar.
   await g(
     "SELECT id FROM situacao_documento_prontuario WHERE categoria = 'lancado' AND ativo = TRUE LIMIT 1",
     [],
@@ -317,6 +319,10 @@ async function montar(e: Escritor): Promise<Massa> {
     tipoSemConduta,
   };
 }
+
+/** A coluna JSON vem como texto ou já lida, conforme o driver. */
+const json = (v: unknown): Record<string, unknown> =>
+  (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown>;
 
 const TEXTO = 'Incisão mediana, dissecção por planos, hemostasia rigorosa e síntese por planos.';
 
@@ -441,6 +447,121 @@ describe.skipIf(SEM_BANCO)('descrição cirúrgica e intercorrências (banco pr�
     );
     expect(ads.map((a) => Number(a['sequencia']))).toEqual([1, 2]);
     expect(Number(ads[0]!['usuario_id'])).toBe(m.usuario);
+    // Cada adendo entra no prontuário como documento próprio do cirurgião, ligado ao adendo e à descrição, com o mesmo
+    // tipo assinável da descrição (a fila ICP o reconhece) e o evento de criação; o documento da descrição não muda.
+    const docs = await ler<Record<string, unknown>>(
+      `SELECT dp.titulo, dp.profissional_id, dp.paciente_id, dp.documento_assinado_id, dp.conteudo, t.codigo AS tipo,
+              x.sequencia, (SELECT COUNT(*) FROM documento_prontuario_evento ev WHERE ev.documento_prontuario_id = dp.id) AS eventos
+         FROM descricao_cirurgica_adendo x
+         JOIN documento_prontuario dp ON dp.entidade_origem = 'descricao_cirurgica_adendo' AND dp.entidade_origem_id = x.id
+         JOIN tipo_documento_clinico t ON t.id = dp.tipo_documento_clinico_id
+        WHERE x.descricao_cirurgica_id = ? ORDER BY x.sequencia`,
+      [id],
+    );
+    expect(docs).toHaveLength(2);
+    const [original] = await ler<{ id: number; conteudo: string }>(
+      "SELECT id, conteudo FROM documento_prontuario WHERE entidade_origem = 'descricao_cirurgica' AND entidade_origem_id = ?",
+      [id],
+    );
+    for (const [i, doc] of docs.entries()) {
+      expect({
+        titulo: doc['titulo'],
+        prof: Number(doc['profissional_id']),
+        paciente: Number(doc['paciente_id']),
+        envelope: doc['documento_assinado_id'],
+        tipo: doc['tipo'],
+        eventos: Number(doc['eventos']),
+      }).toEqual({
+        titulo: `Adendo à descrição cirúrgica (${i + 1})`,
+        prof: m.cirurgiao,
+        paciente: m.paciente,
+        envelope: null,
+        tipo: 'registro-clinico',
+        eventos: 1,
+      });
+      const c = json(doc['conteudo']);
+      expect(c).toMatchObject({
+        descricao_cirurgica_id: id,
+        documento_descricao_id: Number(original!.id),
+        sequencia: i + 1,
+        assinatura_eletronica: { nivel: 'eletronica-avancada', reautenticacao: true },
+      });
+    }
+    expect(json(docs[0]!['conteudo'])['texto']).toBe('Dreno tubular à direita.');
+    expect(json(original!.conteudo)['descricao_tecnica']).toBe(TEXTO);
+  });
+
+  it('fila de assinaturas com certificado: a descrição e os adendos entram na fila do cirurgião pela política', async () => {
+    const assinatura = new PortaAssinaturaPropria(nucleo, CLIENTE);
+    const ctxIcp = {
+      rede: 'rede-sintetica',
+      hospital: P,
+      cliente: CLIENTE,
+      estabelecimento: m.est,
+      usuario: m.usuario,
+    } as ContextoAssinatura;
+    const [d] = await ler<{ id: number }>('SELECT id FROM descricao_cirurgica WHERE ato_cirurgico_id = ?', [
+      m.ato,
+    ]);
+    const docs = (
+      await ler<{ id: number }>(
+        `SELECT id FROM documento_prontuario
+          WHERE (entidade_origem = 'descricao_cirurgica' AND entidade_origem_id = ?)
+             OR (entidade_origem = 'descricao_cirurgica_adendo'
+                 AND entidade_origem_id IN (SELECT id FROM descricao_cirurgica_adendo WHERE descricao_cirurgica_id = ?))
+          ORDER BY id`,
+        [d!.id, d!.id],
+      )
+    ).map((x) => Number(x.id));
+    expect(docs).toHaveLength(3);
+    // Os tipos que a política manda assinar com ICP, como a aplicação da fila os calcula (regras vigentes icp-brasil).
+    const tiposIcp = async () =>
+      (await assinatura.politicas(ctxIcp))
+        .filter((r) => r.ativa && r.nivel === 'icp-brasil' && r.destino === 'interno')
+        .map((r) => r.tipoDocumento);
+    const naFila = async () =>
+      (await assinatura.filaIcp(ctxIcp, 'c0396.cirurgiao', 200, await tiposIcp())).itens
+        .map((x) => x.documento)
+        .filter((x) => docs.includes(x))
+        .sort((a, b) => a - b);
+    // Sem política de ICP para o tipo: o documento não está na fila e a tela não mostra o atalho.
+    expect(await naFila()).toEqual([]);
+    let t = (await porta.tela(ctx(), m.ato))!;
+    expect(t.descricoes[0]!.assinatura.naFilaIcp).toBe(false);
+    expect(t.descricoes[0]!.adendos.map((x) => x.naFilaIcp)).toEqual([false, false]);
+    // O estabelecimento exige ICP-Brasil para o registro clínico: a descrição e os dois adendos entram na fila do
+    // cirurgião (pela listagem da própria fila, sem tentativa de assinatura inserida à mão).
+    await assinatura.gravar(
+      ctxIcp,
+      (g) =>
+        g.gravarPolitica({
+          hospital: P,
+          tipoDocumento: 'registro-clinico',
+          conselho: null,
+          destino: 'interno',
+          nivel: 'icp-brasil',
+          politicaIcp: 'AD-RB',
+          idFormaIcp: null,
+          formato: 'pades',
+          ativa: true,
+          justificativa: 'Registro cirúrgico com certificado (sintético)',
+          usuario: 'c0396.cirurgiao',
+        }),
+      null,
+    );
+    expect(await naFila()).toEqual(docs);
+    // A fila de outro login não traz os documentos do cirurgião.
+    expect(
+      (await assinatura.filaIcp(ctxIcp, 'c0396.outro', 200, await tiposIcp())).itens.filter((x) =>
+        docs.includes(x.documento),
+      ),
+    ).toEqual([]);
+    t = (await porta.tela(ctx(), m.ato))!;
+    expect(t.descricoes[0]!.assinatura).toMatchObject({ documento: docs[0], naFilaIcp: true });
+    expect(t.descricoes[0]!.adendos.map((x) => [x.documento, x.naFilaIcp])).toEqual([
+      [docs[1], true],
+      [docs[2], true],
+    ]);
   });
 
   it('intercorrência: grava com sequência e profissional; recusa fora da janela e sem conduta', async () => {
@@ -649,10 +770,12 @@ describe.skipIf(SEM_BANCO)('descrição cirúrgica e intercorrências (banco pr�
       papel: 'autor',
     });
     const t = (await porta.tela(ctx(), m.ato))!;
+    // Assinada com certificado: o documento sai da fila (e a tela tira o atalho).
     expect(t.descricoes[0]!.assinatura).toEqual({
       nivel: 'icp-brasil',
       documento: doc!.id,
       envelope: dp!.envelope,
+      naFilaIcp: false,
     });
     // Concluir de novo não troca o envelope da descrição (uma vez, nunca troca).
     await assinatura.gravar(
