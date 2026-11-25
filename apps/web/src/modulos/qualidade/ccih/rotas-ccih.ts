@@ -35,6 +35,12 @@ export const rotasCcih: RouteRecordRaw[] = [
     meta: { permissao: P.irasLer },
   },
   {
+    path: '/qualidade/ccih/notificacao',
+    name: 'qualidade.ccih.notificacao',
+    component: () => import('./telas/NotificacaoIrasTela.vue'),
+    meta: { permissao: P.irasLer },
+  },
+  {
     path: '/qualidade/ccih/maos-surtos',
     name: 'qualidade.ccih.maos-surtos',
     component: () => import('./telas/MaosSurtosTela.vue'),

@@ -4,6 +4,7 @@
 // Os rótulos do vocabulário (dispositivos, sítios, critérios, motivos, momentos) vêm dos contratos; os textos das
 // recusas, de @sgh/dominio-qualidade (os mesmos da API). Sem nome de sistema antigo (ADR 0023). Sem "|" nem "@".
 import { MENSAGENS_RECUSA_CCIH } from '@sgh/dominio-qualidade';
+import { mensagensCondutasCultura, mensagensNotificacaoIras } from './i18n-notificacao-iras.js';
 
 /** Toda recusa da CCIH (os textos ficam em @sgh/dominio-qualidade, os mesmos da API). */
 export const RECUSAS_CCIH = MENSAGENS_RECUSA_CCIH;
@@ -41,6 +42,7 @@ export const mensagensCcih = {
     precaucoes: 'Precauções',
     maosSurtos: 'Higiene das mãos e surtos',
     culturas: 'Culturas positivas',
+    notificacao: 'Notificação mensal',
   },
   culturas: {
     titulo: 'Análise das culturas positivas',
@@ -388,4 +390,6 @@ export const mensagensCcih = {
   cartao: {
     resumo: '{emVigilancia} em vigilância, {semLiberacao} restritos sem liberação',
   },
+  notificacao: mensagensNotificacaoIras,
+  condutasCultura: mensagensCondutasCultura,
 };

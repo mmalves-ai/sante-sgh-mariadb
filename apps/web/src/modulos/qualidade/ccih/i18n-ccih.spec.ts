@@ -31,6 +31,7 @@ describe('textos da CCIH', () => {
       'culturas',
       'iras',
       'maosSurtos',
+      'notificacao',
       'precaucoes',
       'vigilancia',
     ]);

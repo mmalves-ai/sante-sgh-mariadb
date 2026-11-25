@@ -83,3 +83,15 @@ export const lerAnalisesDoPaciente = (paciente: number) =>
   ler(`${C}/analises${qs({ paciente })}`, z.array(esquemaAnalise));
 export const gravarAnalise = (cultura: number, e: EntradaAnalise, chave: string) =>
   enviar(`${C}/${String(cultura)}/analise`, e, esquemaGravada, chave);
+
+export interface NovaCondutaCultura {
+  readonly codigo: string;
+  readonly descricao: string;
+  readonly classificacaoAplicavel: (typeof CLASSIFICACOES_CULTURA)[number] | null;
+  readonly abreCaso: boolean;
+  readonly indicaPrecaucao: boolean;
+  readonly exigeResposta: boolean;
+}
+/** Cadastra a conduta da análise (o código é único no cliente). */
+export const gravarConduta = (e: NovaCondutaCultura, chave: string) =>
+  enviar(`${C}/condutas`, e, z.object({ id: z.number() }), chave);

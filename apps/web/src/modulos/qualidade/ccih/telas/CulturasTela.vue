@@ -30,11 +30,13 @@ import {
 } from '../api-culturas.js';
 import ErroCcih from '../componentes/ErroCcih.vue';
 import NavCcih from '../componentes/NavCcih.vue';
+import CondutasCultura from '../componentes/CondutasCultura.vue';
 
 const { t } = useI18n();
 const cliente = useQueryClient();
 const podeAnalisar = pode('qualidade.iras.registrar');
 const soPendentes = ref(true);
+const verCondutas = ref(false);
 const fila = useQuery({
   queryKey: ['ccih', 'culturas'],
   queryFn: () => lerCulturas(),
@@ -188,6 +190,13 @@ const descricaoConduta = (a: { conduta: number | null; condutaDescricao: string 
   <section class="tela-agenda" aria-labelledby="ccih-cult-titulo" data-testid="tela-ccih-culturas">
     <h1 id="ccih-cult-titulo">{{ t('ccih.culturas.titulo') }}</h1>
     <NavCcih />
+    <SanteBotao
+      :rotulo="t('ccih.condutasCultura.abrir')"
+      variante="texto"
+      data-testid="culturas-condutas"
+      @acionar="verCondutas = !verCondutas"
+    />
+    <CondutasCultura v-if="verCondutas" :condutas="condutas.data.value ?? []" />
     <p class="secundario">{{ t('ccih.culturas.explicacao') }}</p>
     <label class="linha-ccih"
       ><input v-model="soPendentes" type="checkbox" data-testid="culturas-so-pendentes" />{{
