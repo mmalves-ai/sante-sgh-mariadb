@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { rtfParaTexto, textoCorrido } from './prontuario/rtf.js';
 import {
+  CLASSE_RECEITA,
+  conferirItensDoTipo,
   conferirReceita,
+  corpoDaReceitaEmVias,
+  duracaoEstruturada,
+  itemDaLinha,
+  itensEstruturados,
+  quantidadeNumerica,
+  rtfDaReceitaEmVias,
+  tipoDaClasse,
   linhasDaReceita,
   receituario,
   rtfDaReceita,
-  TIPO_PADRAO_LEGADO,
 } from './receita.js';
 
 const item = {
@@ -28,7 +36,11 @@ describe('receita (regras 6 e 7)', () => {
     const a = receituario('antimicrobiano');
     expect(a).toMatchObject({ vias: 2, validadeDias: 10 });
     expect(a.rodape).toMatch(/assinatura à mão/);
-    expect(TIPO_PADRAO_LEGADO).toEqual({ simples: 1, 'controle-especial': 4, antimicrobiano: 1 });
+    // Classe própria: a de antimicrobiano não vira simples.
+    expect(CLASSE_RECEITA.antimicrobiano).toEqual({ controleEspecial: false, antimicrobiano: true });
+    expect(tipoDaClasse({ controleEspecial: 0, antimicrobiano: 1 })).toBe('antimicrobiano');
+    expect(tipoDaClasse({ controleEspecial: 1, antimicrobiano: 1 })).toBe('controle-especial');
+    expect(tipoDaClasse({ controleEspecial: 0, antimicrobiano: 0 })).toBe('simples');
   });
 
   it('recusa indicar farmácia e caractere fora do CP1252', () => {
@@ -58,5 +70,80 @@ describe('receita (regras 6 e 7)', () => {
     expect(rtf).toContain("A\\'e7\\'e3o");
     expect(textoCorrido(rtfParaTexto(rtf))).toContain('AMOXICILINA 500 mg');
     expect(textoCorrido(rtfParaTexto(rtf))).toContain('Ação');
+  });
+});
+
+describe('itens estruturados da receita (C2-021)', () => {
+  it('quantidade e duração em número, texto impresso preservado', () => {
+    expect(quantidadeNumerica('21 cápsulas')).toBe(21);
+    expect(quantidadeNumerica('1,5 frasco')).toBe(1.5);
+    expect(quantidadeNumerica('duas caixas')).toBe(2);
+    expect(quantidadeNumerica('caixa')).toBeNull();
+    expect(quantidadeNumerica('0')).toBeNull();
+    expect(duracaoEstruturada('7 dias')).toEqual({ valor: 7, unidade: 'dia' });
+    expect(duracaoEstruturada('2 semanas')).toEqual({ valor: 2, unidade: 'semana' });
+    expect(duracaoEstruturada('3 meses')).toEqual({ valor: 3, unidade: 'mes' });
+    expect(duracaoEstruturada('10')).toEqual({ valor: 10, unidade: 'dia' });
+    expect(duracaoEstruturada('até melhorar')).toBeNull();
+    const [e] = itensEstruturados([item]);
+    expect(e).toMatchObject({
+      sequencia: 1,
+      quantidade: 21,
+      quantidadeDescricao: '21 cápsulas',
+      duracao: { valor: 7, unidade: 'dia' },
+      via: 'oral',
+    });
+    const volta = itemDaLinha({
+      medicamento: e!.medicamento,
+      concentracao: e!.concentracao,
+      forma: e!.forma,
+      via: e!.via,
+      posologia: e!.posologia,
+      quantidadeDescricao: e!.quantidadeDescricao,
+      duracao: 7,
+      diasDaUnidade: 1,
+      usoContinuo: false,
+    });
+    expect(volta).toEqual(item);
+  });
+
+  it('receituário certo pelo tipo e pela classe do medicamento', () => {
+    expect(conferirItensDoTipo('simples', [{ ...item, quantidade: 'caixa' }])).toEqual([]);
+    expect(conferirItensDoTipo('controle-especial', [{ ...item, quantidade: 'uma caixa grande' }])).toEqual(
+      [],
+    );
+    expect(conferirItensDoTipo('controle-especial', [{ ...item, quantidade: 'caixa' }])[0]?.campo).toBe(
+      'itens.0.quantidade',
+    );
+    const semDuracao = {
+      medicamento: item.medicamento,
+      concentracao: item.concentracao,
+      forma: item.forma,
+      via: item.via,
+      posologia: item.posologia,
+      quantidade: item.quantidade,
+      usoContinuo: false,
+    };
+    expect(conferirItensDoTipo('antimicrobiano', [semDuracao])[0]?.campo).toBe('itens.0.duracao');
+    expect(conferirItensDoTipo('antimicrobiano', [{ ...semDuracao, usoContinuo: true }])).toEqual([]);
+    const ctrl = [{ sequencia: 1, controlado: true, antimicrobiano: false }];
+    expect(conferirItensDoTipo('simples', [item], ctrl)[0]?.motivo).toMatch(/controle especial/);
+    expect(conferirItensDoTipo('antimicrobiano', [item], ctrl)[0]?.motivo).toMatch(/Portaria 344/);
+    expect(conferirItensDoTipo('controle-especial', [item], ctrl)).toEqual([]);
+    const atb = [{ sequencia: 1, controlado: false, antimicrobiano: true }];
+    expect(conferirItensDoTipo('simples', [item], atb)[0]?.motivo).toMatch(/RDC 471/);
+    expect(conferirItensDoTipo('antimicrobiano', [item], atb)).toEqual([]);
+  });
+
+  it('documento em 2 vias no controle especial e no antimicrobiano; 1 via na simples', () => {
+    const s = corpoDaReceitaEmVias('simples', [item]);
+    expect(s.filter((l) => l.startsWith('1) AMOXICILINA'))).toHaveLength(1);
+    const a = corpoDaReceitaEmVias('antimicrobiano', [item], 'Tomar com água');
+    expect(a.filter((l) => l.startsWith('1) AMOXICILINA'))).toHaveLength(2);
+    expect(a[0]).toMatch(/1ª via: retenção da farmácia/);
+    expect(a.some((l) => /2ª via: paciente/.test(l))).toBe(true);
+    expect(a.at(-1)).toMatch(/Validade de 10 dias/);
+    const rtf = rtfDaReceitaEmVias('controle-especial', [item]);
+    expect(textoCorrido(rtfParaTexto(rtf))).toMatch(/2ª via: paciente/);
   });
 });

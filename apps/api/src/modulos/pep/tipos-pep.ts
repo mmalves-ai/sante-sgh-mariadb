@@ -207,6 +207,7 @@ export const esquemaEmissaoDocumento = z.discriminatedUnion('familia', [
       tipo: z.enum(TIPOS_RECEITA),
       /** Os medicamentos da receita, gravados estruturados em receita_medica_item (C2-021). */
       itens: z.array(esquemaItemReceita).min(1).max(20),
+      orientacoes: textoCp1252(2000).optional(),
       rtf: z.string().min(10).max(2_000_000),
     })
     .strict(),

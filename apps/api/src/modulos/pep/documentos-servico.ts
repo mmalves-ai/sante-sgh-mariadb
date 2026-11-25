@@ -72,6 +72,7 @@ import {
   conferirNovaAlergia,
   manifestacoesDoPedido,
   RecusaHistoricoAlergia,
+  conferirItensDoTipo,
   conferirReceita,
   documentoAtestado,
   documentoExameExterno,
@@ -114,7 +115,6 @@ import {
   textoCorrido,
   textoDoAtestado,
   textoDoSumario,
-  TIPO_PADRAO_LEGADO,
   tipoDoModelo,
   xmlDoAtestado,
   linhasDaCausa,
@@ -1584,7 +1584,7 @@ export class ServicoDocumentos {
     o: OpcoesGravacao,
   ) {
     this.exigirAcao(prof, e.tipo === 'controle-especial' ? 'receita-controlada' : 'receita');
-    const problemas = conferirReceita(e.itens, e.orientacoes);
+    const problemas = [...conferirReceita(e.itens, e.orientacoes), ...conferirItensDoTipo(e.tipo, e.itens)];
     if (problemas.length > 0)
       throw new ErroProblema(
         'entrada-invalida',
@@ -1616,7 +1616,8 @@ export class ServicoDocumentos {
       retratos,
       dataHoraClinica,
       tipo: RECEITA_SGH[e.tipo],
-      tpPadrao: TIPO_PADRAO_LEGADO[e.tipo],
+      itens: e.itens,
+      ...(e.orientacoes?.trim() ? { orientacoes: e.orientacoes.trim() } : {}),
       rtf,
       documento: documentoReceita(cab, linhasReceita.join('\n'), rtf),
       hashConteudo: await hashCanonico({

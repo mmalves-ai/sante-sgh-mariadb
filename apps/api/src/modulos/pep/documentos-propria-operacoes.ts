@@ -37,6 +37,7 @@ import { z } from 'zod';
 import type { ContextoDocs } from './documentos-porta.js';
 import type { NucleoDocumentosPep } from './documentos-porta-propria.js';
 import type { GravacaoDocumentos } from './documentos-propria-painel.js';
+import { gravarItensReceita } from './receita-itens-propria.js';
 import { instanteLocal } from './prescricao-propria-gravacao.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 import {
@@ -62,6 +63,12 @@ export const OPERACOES_PEP_RESTO: readonly string[] = [
 
 /** Sequência de negócio do número da receita (por estabelecimento). */
 export const SEQUENCIA_RECEITA = 'receita_medica';
+/** Tipo do documento da receita → tipo do receituário (classe própria do domínio). */
+const TIPO_DA_RECEITA = {
+  receita: 'simples',
+  'receita-controlada': 'controle-especial',
+  'receita-antimicrobiano': 'antimicrobiano',
+} as const;
 
 const num = (v: unknown): number => Number(v);
 const numOuNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
@@ -892,7 +899,9 @@ export function operacoesDocumentosPropria(
       ctx,
       receita ? 'pep.receita.emitir' : 'pep.atestado.emitir',
       x,
-      receita ? ['receita_medica', 'sequencia_negocio'] : ['documento_emitido', 'documento_emitido_versao'],
+      receita
+        ? ['receita_medica', 'receita_medica_item', 'sequencia_negocio']
+        : ['documento_emitido', 'documento_emitido_versao'],
       async (tx, est) => {
         const s = await sessao(tx, est, x.cbo, true);
         // Mesma ordem da memória: profissional e inscrição da sessão, médico (atestado), depois o CID sem autorização.
@@ -938,9 +947,12 @@ export function operacoesDocumentosPropria(
             numero_vias: Math.min(3, Math.max(1, num(t['numero_vias']))),
             situacao: 'emitida',
             conteudo: x.rtf,
+            orientacoes: x.orientacoes ?? null,
             hash_conteudo: x.hashConteudo,
             origem: 'sistema',
           });
+          // C2-021: cada medicamento também estruturado (receita_medica_item), conferido pela classe do catálogo.
+          await gravarItensReceita(tx, origem, TIPO_DA_RECEITA[x.tipo], x.itens);
           titulo =
             x.tipo === 'receita-controlada'
               ? 'Receita de controle especial'

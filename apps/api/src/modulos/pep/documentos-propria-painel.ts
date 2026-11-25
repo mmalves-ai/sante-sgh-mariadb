@@ -16,9 +16,10 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
-import { situacaoDoPaciente, tiposBaseDoFiltro } from '@sgh/dominio-pep';
+import { rtfDaReceitaEmVias, situacaoDoPaciente, tipoDaClasse, tiposBaseDoFiltro } from '@sgh/dominio-pep';
 import type { ContextoDocs } from './documentos-porta.js';
 import { type NucleoDocumentosPep, recusaPendente } from './documentos-propria-comum.js';
+import { lerItensReceita } from './receita-itens-propria.js';
 import { dataHora, fusoValido } from './registro-propria-comum.js';
 import {
   type CabecalhoDocumentoLido,
@@ -593,7 +594,17 @@ export function lerReceita(
   if (!valido(id)) return Promise.resolve(null);
   return ler(nucleo, cliente, c, 'receita', async (l, est) => {
     const x = await l.uma(`${SQL_RECEITA} AND x.id = ?`, [est.id, id]);
-    return x ? receitaLida(x, est.fuso) : null;
+    if (!x) return null;
+    const d = receitaLida(x, est.fuso);
+    // C2-021: a receita com itens estruturados sai deles, nas vias do receituário (2 no controle especial e no
+    // antimicrobiano); a sem itens (anterior aos itens) segue com o texto gravado.
+    const itens = await lerItensReceita(l, d.id);
+    if (itens.length === 0) return d;
+    const tipo = tipoDaClasse({
+      controleEspecial: x['controle_especial'],
+      antimicrobiano: x['antimicrobiano'],
+    });
+    return { ...d, rtf: rtfDaReceitaEmVias(tipo, itens, textoOuNull(x['orientacoes']) ?? undefined) };
   });
 }
 

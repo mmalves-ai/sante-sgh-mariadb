@@ -7,7 +7,9 @@ import { randomUUID } from 'node:crypto';
 import { ErroOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { catalogoManifestacoes, historicoDaAlergia } from './alergias-historico-propria.js';
+import { rtfDaReceitaEmVias, rtfParaTexto, textoCorrido } from '@sgh/dominio-pep';
 import { operacoesDocumentosPropria } from './documentos-propria-operacoes.js';
+import { lerItensReceita } from './receita-itens-propria.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE_DOCS_RESTO']?.trim() || 'f22_o4';
@@ -17,6 +19,14 @@ const LOGIN = `${P}.medico`;
 const CBO = '225125';
 const HASH = 'b'.repeat(64);
 const DOC = 'x'.repeat(60);
+const ITEM_RX = {
+  medicamento: 'DIPIRONA SINTETICA',
+  posologia: '1 comprimido se dor',
+  quantidade: '10 comprimidos',
+  usoContinuo: false,
+};
+/** Nome do item sintético do catálogo (antimicrobiano), em maiúsculas como o cadastro. */
+const ATB = `${P.toUpperCase()} AMOXICILINA SINTETICA`;
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const x = await e.uma(sel, p);
@@ -109,6 +119,11 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       await e.executar(
         `DELETE x FROM sumario_alta_secao x JOIN sumario_alta s ON s.id = x.sumario_alta_id
           WHERE s.estabelecimento_id IN ${est}`,
+        [P],
+      );
+      await e.executar(
+        `DELETE i FROM receita_medica_item i JOIN receita_medica r ON r.id = i.receita_medica_id
+          WHERE r.estabelecimento_id IN ${est}`,
         [P],
       );
       await e.executar(
@@ -269,6 +284,38 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
         [ids.est],
         "INSERT INTO sequencia_negocio (estabelecimento_id, tipo, prefixo, proximo_valor, criado_em) VALUES (?, 'receita_medica', 'RX-', 1, ?)",
         [ids.est, agora],
+      );
+      // C2-021: tipo de receita de antimicrobiano (2 vias, 10 dias), unidade de duração em dias e um antimicrobiano do
+      // catálogo, todos sintéticos e reaproveitáveis.
+      await garantir(
+        e,
+        'SELECT id FROM tipo_receita WHERE codigo = ?',
+        [`${P}atb`],
+        `INSERT INTO tipo_receita (codigo, descricao, padrao, antimicrobiano, numero_vias, validade_dias, criado_em)
+         VALUES (?, ?, TRUE, TRUE, 2, 10, ?)`,
+        [`${P}atb`, 'Receita de antimicrobiano sintética', agora],
+      );
+      await garantir(
+        e,
+        'SELECT id FROM unidade_duracao_tratamento WHERE ativo = TRUE AND dias_equivalentes = 1 ORDER BY id LIMIT 1',
+        [],
+        'INSERT INTO unidade_duracao_tratamento (codigo, descricao, dias_equivalentes, criado_em) VALUES (?, ?, 1, ?)',
+        [`${P}dia`, 'Dia (sintético)', agora],
+      );
+      const tipoMed = await garantir(
+        e,
+        'SELECT id FROM tipo_item_prescricao WHERE codigo = ?',
+        [`${P}med`],
+        "INSERT INTO tipo_item_prescricao (codigo, descricao, categoria, criado_em) VALUES (?, 'Medicamento sintético', 'medicamento', ?)",
+        [`${P}med`, agora],
+      );
+      await garantir(
+        e,
+        'SELECT id FROM item_prescritivel WHERE codigo = ?',
+        [`${P}amx`],
+        `INSERT INTO item_prescritivel (codigo, descricao, tipo_item_prescricao_id, antimicrobiano, criado_em)
+         VALUES (?, ?, ?, TRUE, ?)`,
+        [`${P}amx`, ATB, tipoMed, agora],
       );
       for (const cat of ['outro', 'receita', 'atestado', 'declaracao', 'sumario', 'laudo'])
         await garantir(
@@ -671,7 +718,13 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
   it('receita: número da sequência, conteúdo na linha e documento do prontuário', async () => {
     const r = await ops()['pep.emitirDocumento']!(
       C(),
-      { ...baseDoc(), familia: 'receita', tipo: 'receita', tpPadrao: 1, rtf: '{\\rtf1 receita sintetica}' },
+      {
+        ...baseDoc(),
+        familia: 'receita',
+        tipo: 'receita',
+        itens: [ITEM_RX],
+        rtf: '{\\rtf1 receita sintetica}',
+      },
       ctx('rx'),
     );
     const l = await uma(
@@ -685,6 +738,127 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     expect(l?.['situacao']).toBe('emitida');
     expect(Number(l?.['validade'])).toBe(1);
     expect(l?.['entidade_origem']).toBe('receita_medica');
+  });
+
+  it('receita de antimicrobiano (C2-021): itens estruturados, item do catálogo, quantidade e duração em número', async () => {
+    const itens = [
+      {
+        medicamento: ATB.toLowerCase(),
+        concentracao: '500 mg',
+        forma: 'cápsula',
+        via: 'oral',
+        posologia: '1 cápsula de 8/8 h',
+        quantidade: '21 cápsulas',
+        duracao: '7 dias',
+        usoContinuo: false,
+      },
+      {
+        medicamento: 'PARACETAMOL SINTETICO',
+        posologia: '1 comprimido se febre',
+        quantidade: 'uma caixa',
+        duracao: '3 dias',
+        usoContinuo: false,
+      },
+    ];
+    const r = await ops()['pep.emitirDocumento']!(
+      C(),
+      {
+        ...baseDoc(),
+        familia: 'receita',
+        tipo: 'receita-antimicrobiano',
+        itens,
+        orientacoes: 'Retornar se piorar',
+        rtf: '{\\rtf1 atb sintetica}',
+      },
+      ctx('rx-atb'),
+    );
+    const rx = await uma(
+      `SELECT t.antimicrobiano, t.controle_especial, r.numero_vias, r.orientacoes FROM receita_medica r
+         JOIN tipo_receita t ON t.id = r.tipo_receita_id WHERE r.id = ?`,
+      [r['origem']],
+    );
+    expect(rx).toMatchObject({ numero_vias: 2, orientacoes: 'Retornar se piorar' });
+    expect(Number(rx?.['antimicrobiano'])).toBe(1);
+    expect(Number(rx?.['controle_especial'])).toBe(0);
+    const ls = await consultar(
+      `SELECT i.sequencia, i.item_prescritivel_id IS NOT NULL AS catalogo, ip.codigo, i.medicamento, i.concentracao,
+              i.forma_farmaceutica, i.via_descricao, i.quantidade, i.quantidade_descricao, i.duracao_tratamento,
+              u.dias_equivalentes, i.uso_continuo, i.origem, i.criado_por IS NOT NULL AS autor
+         FROM receita_medica_item i
+         LEFT JOIN item_prescritivel ip ON ip.id = i.item_prescritivel_id
+         LEFT JOIN unidade_duracao_tratamento u ON u.id = i.duracao_unidade_duracao_tratamento_id
+        WHERE i.receita_medica_id = ? ORDER BY i.sequencia`,
+      [r['origem']],
+    );
+    expect(ls).toHaveLength(2);
+    expect(Number(ls[0]!['sequencia'])).toBe(1);
+    expect(Number(ls[0]!['catalogo'])).toBe(1);
+    expect(ls[0]!['codigo']).toBe(`${P}amx`);
+    expect(ls[0]).toMatchObject({
+      concentracao: '500 mg',
+      forma_farmaceutica: 'cápsula',
+      via_descricao: 'oral',
+      quantidade_descricao: '21 cápsulas',
+      origem: 'sistema',
+    });
+    expect(Number(ls[0]!['quantidade'])).toBe(21);
+    expect(Number(ls[0]!['duracao_tratamento'])).toBe(7);
+    expect(Number(ls[0]!['dias_equivalentes'])).toBe(1);
+    expect(Number(ls[0]!['autor'])).toBe(1);
+    // Fora do catálogo: sem ligação; quantidade por extenso vira número.
+    expect(Number(ls[1]!['catalogo'])).toBe(0);
+    expect(Number(ls[1]!['quantidade'])).toBe(1);
+    expect(Number(ls[1]!['duracao_tratamento'])).toBe(3);
+    // O documento impresso sai dos itens gravados, em 2 vias.
+    const lidos = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, (l) =>
+      lerItensReceita(l, Number(r['origem'])),
+    );
+    expect(lidos.map((i) => i.medicamento)).toEqual([ATB.toLowerCase(), 'PARACETAMOL SINTETICO']);
+    expect(lidos[0]!.duracao).toBe('7 dias');
+    const texto = textoCorrido(
+      rtfParaTexto(rtfDaReceitaEmVias('antimicrobiano', lidos, 'Retornar se piorar')),
+    );
+    expect(texto).toMatch(/1ª via: retenção da farmácia/);
+    expect(texto).toMatch(/2ª via: paciente/);
+    expect(texto.split(ATB.toLowerCase()).length - 1).toBe(2);
+  });
+
+  it('receita (C2-021): antimicrobiano do catálogo na receita simples e controle especial sem quantidade em número recusam sem gravar', async () => {
+    const antes = await uma('SELECT COUNT(*) AS n FROM receita_medica WHERE paciente_id = ?', [ids.paciente]);
+    expect(
+      await codigo(
+        ops()['pep.emitirDocumento']!(
+          C(),
+          {
+            ...baseDoc(),
+            familia: 'receita',
+            tipo: 'receita',
+            itens: [{ ...ITEM_RX, medicamento: ATB }],
+            rtf: '{\\rtf1 recusa sintetica}',
+          },
+          ctx('rx-rec'),
+        ),
+      ),
+    ).toBe('receituario-incompativel');
+    expect(
+      await codigo(
+        ops()['pep.emitirDocumento']!(
+          C(),
+          {
+            ...baseDoc(),
+            familia: 'receita',
+            tipo: 'receita-antimicrobiano',
+            itens: [{ ...ITEM_RX, medicamento: ATB, quantidade: 'caixa' }],
+            rtf: '{\\rtf1 recusa sintetica}',
+          },
+          ctx('rx-rec2'),
+        ),
+      ),
+    ).toBe('receituario-incompativel');
+    const depois = await uma('SELECT COUNT(*) AS n FROM receita_medica WHERE paciente_id = ?', [
+      ids.paciente,
+    ]);
+    expect(Number(depois?.['n'])).toBe(Number(antes?.['n']));
   });
 
   it('atestado: exige os dias; emite com a versão "emissao" e o vínculo ao documento', async () => {
@@ -738,7 +912,13 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
   it('validade da receita: data local da emissão + validade_dias do tipo', async () => {
     const r = await ops()['pep.emitirDocumento']!(
       C(),
-      { ...baseDoc(), familia: 'receita', tipo: 'receita', tpPadrao: 1, rtf: '{\\rtf1 validade sintetica}' },
+      {
+        ...baseDoc(),
+        familia: 'receita',
+        tipo: 'receita',
+        itens: [ITEM_RX],
+        rtf: '{\\rtf1 validade sintetica}',
+      },
       ctx('rxv'),
     );
     const l = await uma(

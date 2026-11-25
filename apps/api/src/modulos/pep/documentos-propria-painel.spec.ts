@@ -298,7 +298,11 @@ describe('receitas, atestados, fichas e fila', () => {
       retratos: { htPaciente: 100, htAtendimento: 9 },
       cbo: '225125',
     });
-    expect(sqls.at(-1)!.sql).toMatch(/x\.estabelecimento_id = \? AND x\.excluido_em IS NULL/);
+    // A receita do estabelecimento, depois os itens estruturados dela (C2-021; sem itens, segue o texto gravado).
+    expect(sqls.at(-2)!.sql).toMatch(/x\.estabelecimento_id = \? AND x\.excluido_em IS NULL/);
+    expect(sqls.at(-1)!.sql).toMatch(
+      /FROM receita_medica_item i[\s\S]*WHERE i\.receita_medica_id = \? AND i\.excluido_em IS NULL/,
+    );
     const [d] = await documentos(nucleo, 'cli', C, 100, 'receita');
     expect(d).toMatchObject({ familia: 'receita', suspenso: true, tpPadrao: TP_PADRAO_CONTROLADA });
   });

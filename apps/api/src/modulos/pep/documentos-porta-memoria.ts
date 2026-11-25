@@ -1452,7 +1452,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
             : x.modeloNome;
         e.legados.push({
           familia: x.familia,
-          tpPadrao: x.familia === 'receita' ? x.tpPadrao : null,
+          tpPadrao: x.familia === 'receita' ? (x.tipo === 'receita-controlada' ? 4 : 1) : null,
           tipo: x.tipo,
           id: origem,
           titulo,
