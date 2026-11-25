@@ -226,7 +226,10 @@ test.describe('auditoria da conta item a item @C1-103', () => {
       /Valor auditado previsto: R\$\s100,00 \(glosa interna R\$\s50,00\)/,
     );
     await page.getByTestId('aud-concluir').click();
-    expect(pedidos.at(-1)?.caminho).toBe(`/api/faturamento/auditorias/${AUDITORIA}/conclusao`);
+    // O pedido só entra em 'pedidos' quando o fetch chega ao page.route: espera o efeito antes de conferir.
+    await expect
+      .poll(() => pedidos.at(-1)?.caminho)
+      .toBe(`/api/faturamento/auditorias/${AUDITORIA}/conclusao`);
     await expect(page.getByTestId('aud-abrir')).toBeVisible();
     await expect(tela).toContainText('com_glosa_interna');
     await expect(tela).toContainText(/R\$\s150,00 → R\$\s100,00/);

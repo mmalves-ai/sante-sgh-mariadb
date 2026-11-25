@@ -17,7 +17,9 @@ import { alvosProtocoloPropria, entradaBuscaAlvo } from './protocolo-alvos-propr
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'F376';
-const CNPJ = '11222333000181';
+// CNPJs sintéticos válidos próprios deste spec (nenhum outro .int.spec usa): a massa não depende do estado do banco.
+const CNPJ = '37603760000101';
+const CNPJ_AUDITORIA = '37603761000148';
 
 async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {
   const l = await e.uma<{ id: number }>(sel, p);
@@ -87,10 +89,13 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
       await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [est]);
     }
     await e.executar(
-      "DELETE x FROM empresa_auditoria_externa x JOIN pessoa_juridica p ON p.id = x.pessoa_juridica_id WHERE p.razao_social LIKE 'F376%'",
-      [],
+      "DELETE x FROM empresa_auditoria_externa x JOIN pessoa_juridica p ON p.id = x.pessoa_juridica_id WHERE p.cnpj IN (?, ?) OR p.razao_social LIKE 'F376%' OR x.codigo LIKE 'F376%'",
+      [CNPJ, CNPJ_AUDITORIA],
     );
-    await e.executar("DELETE FROM pessoa_juridica WHERE razao_social LIKE 'F376%'", []);
+    await e.executar("DELETE FROM pessoa_juridica WHERE cnpj IN (?, ?) OR razao_social LIKE 'F376%'", [
+      CNPJ,
+      CNPJ_AUDITORIA,
+    ]);
   };
 
   beforeAll(async () => {
@@ -273,6 +278,14 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
       );
     });
     s = new ServicoAuditoriaTramite(nucleo, null);
+    // A empresa externa da auditoria nasce aqui, e não no teste do cadastro: cada teste roda sozinho.
+    const emp = await s.gravar('empresa.cadastrar', op(), {
+      cnpj: CNPJ_AUDITORIA,
+      razaoSocial: `${P} AUDITORIA EXTERNA SINTETICA LTDA`,
+      nome: `${P} Auditoria externa`,
+      codigo: `${P}EMPA`,
+    });
+    ids['empresaAud'] = Number(emp['id']);
   });
 
   afterAll(async () => {
@@ -286,7 +299,7 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
 
   it('empresa externa: cadastro pelo CNPJ (pessoa jurídica criada), duplicada recusada, desativada', async () => {
     const r = await s.gravar('empresa.cadastrar', op(), {
-      cnpj: '11.222.333/0001-81',
+      cnpj: '37.603.760/0001-01',
       razaoSocial: `${P} AUDITORIA SINTETICA LTDA`,
       nome: `${P} Auditoria`,
       codigo: `${P}EMP`,
@@ -304,7 +317,7 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
     ).toBe('duplicado');
     expect(
       await codigoDo(
-        s.gravar('empresa.cadastrar', op(), { cnpj: '11222333000182', razaoSocial: `${P} Y`, nome: 'Y' }),
+        s.gravar('empresa.cadastrar', op(), { cnpj: '37603760000102', razaoSocial: `${P} Y`, nome: 'Y' }),
       ),
     ).toBe('entrada-invalida');
   });
@@ -316,7 +329,7 @@ describe.skipIf(SEM_BANCO)('auditoria item a item, protocolo entre setores e gui
     const a = await s.gravar('auditoria.abrir', op(), {
       contaId: ids['conta'],
       modalidade: 'operadora',
-      empresaExternaId: ids['empresa'],
+      empresaExternaId: ids['empresaAud'],
     });
     const aud = Number(a['id']);
     expect(a).toMatchObject({ valorOriginal: 400 });
