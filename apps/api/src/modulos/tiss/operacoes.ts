@@ -566,6 +566,8 @@ function gerarLote(montador: MontadorLoteTiss | null) {
         codigoPrestador: texto(ap.codigoPrestador ?? cfg['codigo_prestador_operadora']).trim(),
         cnes: texto(estab?.['codigo_cnes']).trim(),
         nome: texto(estab?.['nome_fantasia'] ?? estab?.['razao_social']).slice(0, 70),
+        // Contratado por CNPJ ou CPF quando a regra de apresentação da fonte pede (06-FAT linha 30).
+        ...(ap.identificacao ? { identificacao: ap.identificacao } : {}),
       };
       const faltasCadastro = faltasDoPrestador(prestador);
       if (faltasCadastro.length)
