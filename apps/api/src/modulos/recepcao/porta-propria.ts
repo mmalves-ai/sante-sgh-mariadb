@@ -52,6 +52,7 @@ import {
   txt,
   txtOuNull,
 } from './banco.js';
+import { exigirPacienteQueAssina } from '../cadastro/representacao-paciente-propria.js';
 import { operacaoDaRecepcao } from './operacoes.js';
 import { letraDaSituacao, prioridadeDaTela } from './tela-senha.js';
 import type { GravadorRecepcao, PortaRecepcao } from './porta.js';
@@ -1165,13 +1166,16 @@ function gravadorProprio(
       const pa = await e.uma('SELECT id FROM paciente WHERE numero_prontuario = ?', [x.prontuario]);
       if (!pa) throw recusa('paciente-inexistente', 'Prontuário não encontrado.', { campos: ['prontuario'] });
       const sig = await e.uma(
-        "SELECT id FROM tipo_assinante WHERE id = ? AND ativo = TRUE AND papel IN ('paciente', 'responsavel_legal')",
+        "SELECT id, papel FROM tipo_assinante WHERE id = ? AND ativo = TRUE AND papel IN ('paciente', 'responsavel_legal')",
         [x.signatario],
       );
       if (!sig)
         throw recusa('signatario-inexistente', 'Quem assina não está no cadastro.', {
           campos: ['signatario'],
         });
+      // F3.1 (02-CAD linha 4): o menor de idade e o incapaz (condição registrada ou curador vigente) não assinam o
+      // termo por si; o representante assina com o nome dele no termo.
+      if (txt(sig['papel']) === 'paciente') await exigirPacienteQueAssina(e, num(pa['id']));
       if (x.senha !== null) {
         const s = await e.uma('SELECT id FROM senha_emitida WHERE id = ? AND estabelecimento_id = ?', [
           x.senha,

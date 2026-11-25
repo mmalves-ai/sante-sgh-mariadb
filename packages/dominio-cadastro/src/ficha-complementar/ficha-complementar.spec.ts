@@ -212,6 +212,13 @@ describe('responsáveis do paciente', () => {
     ).toEqual([{ pendencia: 'menor-sem-representante', vinculo: null }]);
     expect(
       pendenciasRepresentacao('1950-01-01', [{ id: 2, papel: 'curador', temComprovante: false }], hoje),
+    ).toEqual([
+      // Curador sem a condição de incapacidade registrada (F3.1-02): a ficha pede a condição.
+      { pendencia: 'curatela-sem-incapacidade', vinculo: null },
+      { pendencia: 'comprovante-ausente', vinculo: 2 },
+    ]);
+    expect(
+      pendenciasRepresentacao('1950-01-01', [{ id: 2, papel: 'curador', temComprovante: false }], hoje, true),
     ).toEqual([{ pendencia: 'comprovante-ausente', vinculo: 2 }]);
     expect(pendenciasRepresentacao('1950-01-01', [], hoje)).toEqual([]);
   });

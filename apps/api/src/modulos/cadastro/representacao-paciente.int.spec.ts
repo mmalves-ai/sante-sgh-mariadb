@@ -197,7 +197,18 @@ describe.skipIf(SEM_BANCO)('representação do paciente no banco próprio (f22_o
         return { id: g.id, hash: g.hash, reaproveitado: g.reaproveitado };
       },
       metadado: fora,
-      ler: fora,
+      async ler(_hospital, id) {
+        const r = await armazem.ler(
+          {
+            cliente: CLIENTE_F22,
+            estabelecimento: m!.estabelecimento,
+            usuario: m!.usuario,
+            correlacao: 'f22-0102-repr-arq-ler',
+          },
+          id,
+        );
+        return { metadado: r.metadado, conteudo: r.conteudo };
+      },
       excluir: fora,
       fixarRetencao: fora,
     };
@@ -411,6 +422,41 @@ describe.skipIf(SEM_BANCO)('representação do paciente no banco próprio (f22_o
     expect(
       await contar('SELECT COUNT(*) AS n FROM incapacidade_paciente WHERE paciente_id = ?', [outro]),
     ).toBe(0);
+
+    // O comprovante anexado volta a ser aberto (a recepção confere o documento): o conteúdo e o tipo, pelo registro
+    // do paciente da rota.
+    const doCurador = await repr.lerComprovante(c(), { paciente: adulto, alvo: 'responsavel', id: curador });
+    expect(doCurador).toMatchObject({ arquivo: arq, tipoMime: 'application/pdf' });
+    expect(Buffer.from(PDF).equals(doCurador!.conteudo)).toBe(true);
+    const daCondicao = await repr.lerComprovante(c(), {
+      paciente: adulto,
+      alvo: 'incapacidade',
+      id: incapacidade,
+    });
+    expect(daCondicao?.tipoMime).toBe('application/pdf');
+    expect(Buffer.from(PDF).equals(daCondicao!.conteudo)).toBe(true);
+    // Registro de outro paciente, registro sem comprovante e registro inexistente: nada é devolvido.
+    expect(await repr.lerComprovante(c(), { paciente: outro, alvo: 'responsavel', id: curador })).toBeNull();
+    expect(
+      await repr.lerComprovante(c(), { paciente: outro, alvo: 'incapacidade', id: incapacidade }),
+    ).toBeNull();
+    expect(await repr.lerComprovante(c(), { paciente: adulto, alvo: 'responsavel', id: irma })).toBeNull();
+    expect(await repr.lerComprovante(c(), { paciente: adulto, alvo: 'incapacidade', id: 0 })).toBeNull();
+    // Arquivo de outro paciente: mesmo que o vínculo aponte para ele (ligação feita por fora da regra), não abre.
+    const guardiao = await responsavel(outro, CPF_MAE, 'guardiao_legal', 'MAE');
+    const ligar = (arquivo: number | null) =>
+      nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-repr-fora' }, (e) =>
+        e.executar('UPDATE responsavel_paciente SET comprovante_arquivo_id = ? WHERE id = ?', [
+          arquivo,
+          guardiao,
+        ]),
+      );
+    await ligar(arq);
+    expect(await repr.lerComprovante(c(), { paciente: outro, alvo: 'responsavel', id: guardiao })).toBeNull();
+    await ligar(null);
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f22-0102-repr-fora' }, (e) =>
+      e.executar('DELETE FROM responsavel_paciente WHERE id = ?', [guardiao]),
+    );
   });
 
   it('consentimento: o menor e o incapaz não assinam; assina o representante que a regra escolhe', async () => {
@@ -507,10 +553,30 @@ describe.skipIf(SEM_BANCO)('representação do paciente no banco próprio (f22_o
     expect(lida.incapaz).toBe(false);
     expect(lida.itens).toHaveLength(1);
     expect(lida.itens[0]).toMatchObject({ vigente: false, fim: '2026-01-15' });
-    // Levantada a incapacidade, o paciente volta a assinar e o curador pode ser encerrado (com o levantamento).
-    expect(await codigo(termo(adulto, 1))).toBe('gravou');
+    // Curador vigente sem a incapacidade registrada (o caso de toda curatela anterior ao registro da condição): o
+    // paciente continua sem assinar por si, assina o curador, e a ficha e a abertura pedem o registro da condição.
+    expect(await pendencias(adulto)).toEqual(['curatela-sem-incapacidade']);
+    expect(await repr.alertasDaAbertura(c(), adulto)).toEqual(['curatela-sem-incapacidade']);
+    const antes = await contar('SELECT COUNT(*) AS n FROM consentimento_titular WHERE paciente_id = ?', [
+      adulto,
+    ]);
+    expect(await codigo(termo(adulto, 1))).toBe('paciente-incapaz');
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM consentimento_titular WHERE paciente_id = ?', [adulto]),
+    ).toBe(antes);
+    const peloCurador = await termo(adulto, 2);
+    expect(
+      Number(
+        (await um('SELECT responsavel_paciente_id FROM consentimento_titular WHERE id = ?', [peloCurador]))?.[
+          'responsavel_paciente_id'
+        ],
+      ),
+    ).toBe(curador);
+    // Encerrada a curatela (com o levantamento declarado), o paciente volta a assinar por si.
     expect(await codigo(encerrar(false))).toBe('incapaz-sem-curador');
     expect(await codigo(encerrar(true))).toBe('gravou');
+    expect(await pendencias(adulto)).toEqual([]);
+    expect(await codigo(termo(adulto, 1))).toBe('gravou');
     // A condição encerrada não impede um novo registro (o histórico fica).
     await repr.registrarIncapacidade(
       c(),

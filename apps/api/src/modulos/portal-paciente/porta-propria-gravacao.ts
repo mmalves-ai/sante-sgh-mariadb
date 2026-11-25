@@ -28,6 +28,7 @@ import {
   restricaoUnicaViolada,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { exigirPacienteQueAssina } from '../cadastro/representacao-paciente-propria.js';
 import type { DominiosConsentimento, GravadorPortal } from './porta.js';
 import { ErroPedido, ErroPortal, type RegistroTrilhaPortal, type SituacaoContaPortal } from './tipos.js';
 
@@ -616,6 +617,9 @@ export function gravadorGravacaoPropria(
           'O tipo de termo do consentimento pelo portal não está cadastrado. Procure o hospital.',
         );
       await pacienteDoCadastro(x.idPaciente);
+      // F3.1 (02-CAD linha 4): o menor de idade e o incapaz (condição registrada ou curador vigente) não consentem
+      // por si; o representante consente pelo vínculo do portal.
+      if (signatario === 'paciente') await exigirPacienteQueAssina(tx, x.idPaciente);
       const agora = new Date();
       await garantirSequencia(
         tx,

@@ -5,6 +5,7 @@ import {
   alertasRepresentacao,
   errosIncapacidade,
   pendenciasRepresentacao,
+  recusaAssinaturaDoPaciente,
   recusaEncerramento,
   recusaFimIncapacidade,
   signatarioDoConsentimento,
@@ -118,6 +119,16 @@ describe('abertura do atendimento', () => {
     expect(alertasRepresentacao(ADULTO, [{ ...curador, temComprovante: false }], HOJE, true)).toEqual([]);
     expect(alertasRepresentacao(ADULTO, [], HOJE, false)).toEqual([]);
   });
+
+  it('curatela sem a incapacidade registrada: pendência na ficha e aviso na abertura, até registrar a condição', () => {
+    expect(pendenciasRepresentacao(ADULTO, [curador], HOJE, false)).toEqual([
+      { pendencia: 'curatela-sem-incapacidade', vinculo: null },
+    ]);
+    expect(alertasRepresentacao(ADULTO, [curador], HOJE, false)).toEqual(['curatela-sem-incapacidade']);
+    expect(alertasRepresentacao(ADULTO, [curador], HOJE, true)).toEqual([]);
+    // Outro representante não é curatela: nada a pedir.
+    expect(pendenciasRepresentacao(ADULTO, [mae], HOJE, false)).toEqual([]);
+  });
 });
 
 describe('quem assina o consentimento', () => {
@@ -154,9 +165,29 @@ describe('quem assina o consentimento', () => {
     expect(signatarioDoConsentimento({ ...m, vigentes: [familiar] })).toEqual({
       recusa: 'representante-ausente',
     });
-    expect(signatarioDoConsentimento({ ...m, vigentes: [curador] })).toEqual({
-      recusa: 'representante-ausente',
+    // O menor sob curatela (curador vigente) é representado pelo curador.
+    expect(signatarioDoConsentimento({ ...m, vigentes: [curador] })).toEqual({ recusa: null, vinculo: 7 });
+  });
+
+  it('curador vigente sem a incapacidade registrada: o paciente não assina por si, assina o curador', () => {
+    // Curatela anterior ao registro da condição, ou trazida de outro sistema: `incapaz` vem falso.
+    expect(signatarioDoConsentimento({ ...e, signatario: 'paciente', vigentes: [curador] })).toEqual({
+      recusa: 'paciente-incapaz',
     });
+    expect(
+      signatarioDoConsentimento({ ...e, signatario: 'representante_legal', vigentes: [mae, curador] }),
+    ).toEqual({ recusa: null, vinculo: 7 });
+  });
+
+  it('termo com o nome do representante declarado: só a assinatura do próprio paciente é conferida', () => {
+    expect(recusaAssinaturaDoPaciente(ADULTO, [], HOJE, false)).toBeNull();
+    expect(recusaAssinaturaDoPaciente(ADULTO, [mae, familiar], HOJE, false)).toBeNull();
+    expect(recusaAssinaturaDoPaciente(MENOR, [mae], HOJE, false)).toBe('paciente-menor');
+    expect(recusaAssinaturaDoPaciente(ADULTO, [], HOJE, true)).toBe('paciente-incapaz');
+    expect(recusaAssinaturaDoPaciente(ADULTO, [curador], HOJE, false)).toBe('paciente-incapaz');
+    expect(recusaAssinaturaDoPaciente(MENOR, [curador], HOJE, false)).toBe('paciente-incapaz');
+    // Sem a data de nascimento não há como afirmar a menoridade: o cadastro é que fica pendente.
+    expect(recusaAssinaturaDoPaciente(null, [], HOJE, false)).toBeNull();
   });
 
   it('o adulto capaz com representante cadastrado pode ser representado; sem representante, recusa', () => {

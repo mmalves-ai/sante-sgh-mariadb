@@ -473,6 +473,43 @@ describe.skipIf(SEM_BANCO)(`gravação própria do portal do paciente (MariaDB, 
           vinculo: null,
         }),
       );
+    // F3.1 (02-CAD linha 4): o menor de idade e o incapaz não consentem por si pelo portal (o representante consente
+    // pelo vínculo); nada fica gravado. A data de nascimento e a condição saem no fim.
+    const fora = (sql: string, p: unknown[]) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'portal-b-representacao' }, (e) => e.executar(sql, p));
+    const nascer = (d: string | null) =>
+      fora(
+        'UPDATE pessoa_fisica pf JOIN paciente pa ON pa.pessoa_fisica_id = pf.id SET pf.data_nascimento = ? WHERE pa.id = ?',
+        [d, pac[1]!],
+      );
+    const nascimentoAntes = (
+      await um(
+        `SELECT DATE_FORMAT(pf.data_nascimento, '%Y-%m-%d') AS d FROM paciente pa
+           JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id WHERE pa.id = ?`,
+        [pac[1]!],
+      )
+    )['d'] as string | null;
+    const ha10 = new Date();
+    ha10.setFullYear(ha10.getFullYear() - 10);
+    try {
+      await nascer(ha10.toISOString().slice(0, 10));
+      expect((await falha(reg(3))).codigo).toBe('paciente-menor');
+      await nascer('1980-05-17');
+      await fora(
+        `INSERT INTO incapacidade_paciente (paciente_id, vigencia_inicio, documento_tipo, documento_data, criado_em)
+         VALUES (?, '2025-02-10', 'laudo_medico', '2025-02-10', ?)`,
+        [pac[1]!, new Date()],
+      );
+      expect((await falha(reg(3))).codigo).toBe('paciente-incapaz');
+      expect(
+        Number(
+          (await um('SELECT COUNT(*) AS n FROM consentimento_titular WHERE paciente_id = ?', [pac[1]!]))['n'],
+        ),
+      ).toBe(0);
+    } finally {
+      await fora('DELETE FROM incapacidade_paciente WHERE paciente_id = ?', [pac[1]!]);
+      await nascer(nascimentoAntes);
+    }
     const { id } = await reg(3);
     expect(
       await um(

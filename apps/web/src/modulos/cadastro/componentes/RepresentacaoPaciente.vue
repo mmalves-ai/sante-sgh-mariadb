@@ -24,6 +24,7 @@ import {
   registrarIncapacidade,
   TAMANHO_MAXIMO_COMPROVANTE,
   TIPOS_COMPROVANTE,
+  urlComprovante,
 } from '../api-representacao.js';
 
 const props = defineProps<{ paciente: number }>();
@@ -39,6 +40,10 @@ const { t } = useI18n({
       levantada: 'levantada em {data}',
       processo: 'nº {numero}',
       comprovanteAnexado: 'comprovante anexado',
+      abrirComprovante: 'abrir o comprovante',
+      abrirComprovanteDe: 'Abrir o comprovante de {nome}',
+      anexados: 'Comprovantes anexados',
+      encerrado: 'encerrado',
       anexar: 'Anexar comprovante (PDF ou imagem, até 640 KB)',
       inicio: 'Início da incapacidade',
       documento: 'Documento',
@@ -88,6 +93,10 @@ const semComprovante = computed(() =>
   (responsaveis.data.value?.itens ?? []).filter(
     (r) => r.vigente && !r.temComprovante && COM_COMPROVANTE.includes(r.papel),
   ),
+);
+// Os comprovantes já anexados (inclusive de vínculo encerrado: é o histórico que a recepção confere).
+const comComprovante = computed(() =>
+  (responsaveis.data.value?.itens ?? []).filter((r) => r.temComprovante && COM_COMPROVANTE.includes(r.papel)),
 );
 const vigente = computed(() => incapacidades.data.value?.itens.find((i) => i.vigente) ?? null);
 
@@ -232,7 +241,15 @@ function anexar(ev: Event, alvo: 'responsavel' | 'incapacidade', id: number): vo
         · {{ t('desde', { data: i.inicio ?? '' }) }} ·
         {{ i.vigente ? t('vigente') : t('levantada', { data: i.fim ?? '' }) }}
         <span v-if="i.motivoEncerramento"> · {{ i.motivoEncerramento }}</span>
-        <span v-if="i.temComprovante"> · {{ t('comprovanteAnexado') }}</span>
+        <span v-if="i.temComprovante">
+          · {{ t('comprovanteAnexado') }} (<a
+            :href="urlComprovante(props.paciente, 'incapacidade', i.id)"
+            target="_blank"
+            rel="noopener"
+            :data-testid="`comprovante-incapacidade-${i.id}`"
+            >{{ t('abrirComprovante') }}</a
+          >)
+        </span>
         <label v-else-if="podeEditar && i.vigente">
           {{ t('anexar') }}
           <input
@@ -318,6 +335,25 @@ function anexar(ev: Event, alvo: 'responsavel' | 'incapacidade', id: number): vo
               @change="anexar($event, 'responsavel', r.id)"
             />
           </label>
+        </li>
+      </ul>
+    </template>
+
+    <template v-if="comComprovante.length">
+      <h3>{{ t('anexados') }}</h3>
+      <ul>
+        <li v-for="r in comComprovante" :key="r.id">
+          <strong>{{ r.nome }}</strong> · {{ t(`papeis.${r.papel}`) }}
+          <span v-if="!r.vigente"> · {{ t('encerrado') }}</span>
+          ·
+          <a
+            :href="urlComprovante(props.paciente, 'responsavel', r.id)"
+            target="_blank"
+            rel="noopener"
+            :aria-label="t('abrirComprovanteDe', { nome: r.nome })"
+            :data-testid="`comprovante-responsavel-${r.id}`"
+            >{{ t('abrirComprovante') }}</a
+          >
         </li>
       </ul>
     </template>

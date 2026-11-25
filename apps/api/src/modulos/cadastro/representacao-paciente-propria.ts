@@ -17,6 +17,7 @@ import {
   PAPEIS_COM_COMPROVANTE,
   PAPEIS_RESPONSAVEL,
   type PapelResponsavel,
+  recusaAssinaturaDoPaciente,
   recusaFimIncapacidade,
   type VinculoVigente,
 } from '@sgh/dominio-cadastro';
@@ -128,7 +129,33 @@ export const MENSAGEM_ALERTA_REPRESENTACAO: Record<AlertaRepresentacao, string> 
     'Paciente menor de idade sem representante vigente no cadastro: inclua o responsável legal na ficha.',
   'incapaz-sem-curador':
     'Paciente com incapacidade registrada e sem curador vigente no cadastro: inclua o curador na ficha.',
+  'curatela-sem-incapacidade':
+    'Paciente com curador vigente e sem a incapacidade registrada no cadastro: quem assina é o curador; registre a incapacidade (data e documento) na ficha.',
 };
+
+/** Recusas da assinatura do próprio paciente (o menor de idade e o incapaz são representados). */
+export const MENSAGEM_ASSINATURA_DO_PACIENTE: Record<'paciente-menor' | 'paciente-incapaz', string> = {
+  'paciente-menor':
+    'Paciente menor de idade não assina por si: quem assina é o responsável legal, o guardião ou o tutor.',
+  'paciente-incapaz':
+    'Paciente sob curatela ou com incapacidade registrada não assina por si: quem assina é o curador.',
+};
+
+/**
+ * Termo assinado com o nome do signatário declarado (termo da recepção, consentimento do portal): recusa a assinatura
+ * do próprio paciente menor de idade ou incapaz (condição registrada ou curador vigente). Quem assina como
+ * representante passa: o nome fica no termo, e a falta do representante no cadastro é pendência da ficha e aviso da
+ * abertura, não bloqueio do termo (decisão registrada na F3.1-02, 25/11).
+ */
+export async function exigirPacienteQueAssina(
+  tx: Leitor | TxOperacao,
+  paciente: number,
+  campo = 'signatario',
+): Promise<void> {
+  const s = await situacaoRepresentacao(tx, paciente);
+  const r = recusaAssinaturaDoPaciente(s.nascimento, s.vigentes, s.hoje, s.incapacidade !== null);
+  if (r !== null) throw recusa(r, MENSAGEM_ASSINATURA_DO_PACIENTE[r], { campos: [campo] });
+}
 
 /** O que a abertura do atendimento avisa sobre a representação do paciente (vazio: nada a avisar). */
 export async function alertasRepresentacaoDoPaciente(
@@ -445,6 +472,48 @@ export class RepresentacaoPacientePropria {
 
   encerrarIncapacidade(c: ContextoPorta, e: EntradaLevantamento, t: RegistroTrilhaTela): Promise<number> {
     return this.executar(c, operacaoEncerrarIncapacidade(t) as never, e, t);
+  }
+
+  /**
+   * O comprovante anexado ao vínculo do responsável ou à incapacidade (inclusive os já encerrados: é histórico), para
+   * a recepção conferir o documento. Só o registro deste paciente, e só arquivo enviado como comprovante dele; outro
+   * caso devolve nulo (a rota responde 404, sem dizer se o arquivo existe).
+   */
+  async lerComprovante(
+    c: ContextoPorta,
+    e: { paciente: number; alvo: AlvoComprovante; id: number },
+  ): Promise<{ arquivo: number; tipoMime: string; nome: string; conteudo: Buffer } | null> {
+    const arquivos = this.arquivosDe();
+    if (!arquivos || !c.hospital)
+      throw new ErroOperacao(
+        503,
+        'indisponivel',
+        'Indisponível',
+        'O armazenamento de arquivos não está configurado.',
+      );
+    const tabela = e.alvo === 'responsavel' ? 'responsavel_paciente' : 'incapacidade_paciente';
+    const linha = await this.ler(c, (l) =>
+      l.uma(
+        `SELECT comprovante_arquivo_id FROM ${tabela} WHERE id = ? AND paciente_id = ? AND excluido_em IS NULL`,
+        [e.id, e.paciente],
+      ),
+    );
+    const arquivo = linha?.['comprovante_arquivo_id'];
+    if (arquivo === null || arquivo === undefined) return null;
+    const a = await arquivos.ler(c.hospital, Number(arquivo));
+    if (
+      !a ||
+      a.metadado.finalidade !== FINALIDADE_COMPROVANTE ||
+      a.metadado.entidade !== 'paciente' ||
+      a.metadado.entidadeId !== e.paciente
+    )
+      return null;
+    return {
+      arquivo: a.metadado.id,
+      tipoMime: tipoComprovante(a.conteudo) ?? 'application/octet-stream',
+      nome: a.metadado.nomeOriginal,
+      conteudo: a.conteudo,
+    };
   }
 
   /**

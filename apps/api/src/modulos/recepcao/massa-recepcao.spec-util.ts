@@ -491,6 +491,12 @@ export async function limparMovimento(nucleo: NucleoProprio, m: Massa): Promise<
       `DELETE FROM termo_consentimento_modelo WHERE estabelecimento_id IN (${em}) AND tipos_atendimento IS NOT NULL`,
       ests,
     );
+    // O modelo retirado da recepção (nunca assinado) fica no histórico com o código reservado e sem tipos de
+    // atendimento: o do contrato de efeito (código sintético) sai aqui, senão a segunda rodada esbarra no código.
+    await e.executar(
+      `DELETE FROM termo_consentimento_modelo WHERE estabelecimento_id IN (${em}) AND codigo LIKE '%-sintetico'`,
+      ests,
+    );
     const disp = `SELECT id FROM dispositivo_recepcao WHERE estabelecimento_id IN (${em})`;
     await e.executar(
       `DELETE FROM dispositivo_recepcao_local WHERE dispositivo_recepcao_id IN (${disp})`,

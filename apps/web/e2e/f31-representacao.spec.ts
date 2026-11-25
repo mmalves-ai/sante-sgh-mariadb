@@ -183,6 +183,11 @@ test.describe('Incapacidade do paciente e comprovantes da representação @F31 @
     expect(pedidos).toHaveLength(1);
     await page.getByTestId('anexo-incapacidade-71').setInputFiles(PDF);
     await expect(page.getByTestId('incapacidade-71')).toContainText('comprovante anexado');
+    // O comprovante anexado abre pela rota de leitura do paciente (outra aba).
+    await expect(page.getByTestId('comprovante-incapacidade-71')).toHaveAttribute(
+      'href',
+      `/api/cadastros/pacientes/${PACIENTE}/comprovantes-representacao/incapacidade/71/arquivo`,
+    );
     expect(pedidos[1]).toMatchObject({
       caminho: 'comprovantes-representacao',
       corpo: { alvo: 'incapacidade', id: 71, nome: 'sentenca.pdf' },
@@ -192,6 +197,10 @@ test.describe('Incapacidade do paciente e comprovantes da representação @F31 @
     await expect(page.getByTestId('comprovante-pendente-61')).toContainText('TUTOR SINTETICO');
     await page.getByTestId('anexo-responsavel-61').setInputFiles({ ...PDF, name: 'termo-tutela.pdf' });
     await expect(page.getByTestId('comprovante-pendente-61')).toHaveCount(0);
+    await expect(page.getByTestId('comprovante-responsavel-61')).toHaveAttribute(
+      'href',
+      `/api/cadastros/pacientes/${PACIENTE}/comprovantes-representacao/responsavel/61/arquivo`,
+    );
     expect(pedidos[2]).toMatchObject({
       caminho: 'comprovantes-representacao',
       corpo: { alvo: 'responsavel', id: 61, nome: 'termo-tutela.pdf' },

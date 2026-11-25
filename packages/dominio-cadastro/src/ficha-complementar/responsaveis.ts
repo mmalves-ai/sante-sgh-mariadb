@@ -10,6 +10,10 @@
 //     curatela provisória ou laudo médico): enquanto vigente, o paciente sem curador fica com a pendência
 //     `incapaz-sem-curador`, o curador não é encerrado (o levantamento encerra a condição, com data e motivo) e o
 //     consentimento é assinado pelo curador;
+//   - o curador vigente é, por si, sinal de incapacidade (decisão registrada na F3.1-02, 25/11): mesmo sem a condição
+//     registrada (curatela anterior ao registro da condição, ou trazida de outro sistema), o paciente não assina por
+//     si, assina o curador, e a ficha e a abertura mostram a pendência `curatela-sem-incapacidade` até a condição
+//     ser registrada (ou a curatela ser encerrada com o levantamento);
 //   - as pendências de representação (menor sem representante, incapaz sem curador) valem também fora da ficha: a
 //     abertura do atendimento avisa (nunca bloqueia: a urgência não espera o cadastro) e o consentimento recusa a
 //     assinatura de quem não pode consentir.
@@ -99,7 +103,19 @@ export interface VinculoVigente {
   readonly temComprovante: boolean;
 }
 
-export type Pendencia = 'menor-sem-representante' | 'incapaz-sem-curador' | 'comprovante-ausente';
+export type Pendencia =
+  'menor-sem-representante' | 'incapaz-sem-curador' | 'curatela-sem-incapacidade' | 'comprovante-ausente';
+
+/** Há curador vigente entre os vínculos. */
+export const temCurador = (vigentes: readonly VinculoVigente[]): boolean =>
+  vigentes.some((v) => v.papel === 'curador');
+
+/**
+ * O paciente não responde por si: a incapacidade está registrada e vigente, ou há curador vigente (a curatela só
+ * existe para quem não responde por si, ainda que a condição não tenha sido registrada).
+ */
+export const sobCuratela = (incapaz: boolean, vigentes: readonly VinculoVigente[]): boolean =>
+  incapaz || temCurador(vigentes);
 
 /**
  * Pendências da representação do paciente na data (mostradas na ficha). `incapaz`: a condição de incapacidade do
@@ -117,8 +133,9 @@ export function pendenciasRepresentacao(
     !vigentes.some((v) => PAPEIS_DO_MENOR.includes(v.papel as PapelResponsavel))
   )
     p.push({ pendencia: 'menor-sem-representante', vinculo: null });
-  if (incapaz && !vigentes.some((v) => v.papel === 'curador'))
-    p.push({ pendencia: 'incapaz-sem-curador', vinculo: null });
+  if (incapaz && !temCurador(vigentes)) p.push({ pendencia: 'incapaz-sem-curador', vinculo: null });
+  // Curador sem a condição registrada: a representação vale (o curador assina), e o cadastro pede a condição.
+  if (!incapaz && temCurador(vigentes)) p.push({ pendencia: 'curatela-sem-incapacidade', vinculo: null });
   for (const v of vigentes)
     if (PAPEIS_COM_COMPROVANTE.includes(v.papel as PapelResponsavel) && !v.temComprovante)
       p.push({ pendencia: 'comprovante-ausente', vinculo: v.id });
@@ -200,11 +217,12 @@ export function recusaFimIncapacidade(inicio: string, fim: string, hoje: string)
 
 // ── Representação fora da ficha: abertura do atendimento e consentimento ──
 
-export type AlertaRepresentacao = 'menor-sem-representante' | 'incapaz-sem-curador';
+export type AlertaRepresentacao =
+  'menor-sem-representante' | 'incapaz-sem-curador' | 'curatela-sem-incapacidade';
 
 /**
  * O que a abertura do atendimento avisa (não bloqueia: o paciente é atendido e a recepção regulariza o cadastro):
- * só as pendências de quem representa, não a do comprovante.
+ * só as pendências de quem representa (e a da curatela sem a condição registrada), não a do comprovante.
  */
 export function alertasRepresentacao(
   nascimentoPaciente: string | null,
@@ -222,7 +240,8 @@ export type RecusaSignatario =
 
 /**
  * Quem assina o consentimento. O menor de idade e o incapaz não assinam: assina o representante vigente (do incapaz,
- * o curador; do menor, o responsável legal, o guardião ou o tutor). Devolve o vínculo que assina (nulo: o próprio
+ * o curador; do menor, o responsável legal, o guardião ou o tutor). Incapaz é quem tem a condição registrada ou um
+ * curador vigente (`sobCuratela`). Devolve o vínculo que assina (nulo: o próprio
  * paciente) ou a recusa. `vigentes` vem na ordem de preferência (contato principal primeiro).
  */
 export function signatarioDoConsentimento(e: {
@@ -233,16 +252,31 @@ export function signatarioDoConsentimento(e: {
   readonly hoje: string;
 }): { recusa: RecusaSignatario } | { recusa: null; vinculo: number | null } {
   const menor = menorDeIdade(e.nascimentoPaciente, e.hoje);
+  const incapaz = sobCuratela(e.incapaz, e.vigentes);
   if (e.signatario === 'paciente') {
-    if (e.incapaz) return { recusa: 'paciente-incapaz' };
+    if (incapaz) return { recusa: 'paciente-incapaz' };
     if (menor) return { recusa: 'paciente-menor' };
     return { recusa: null, vinculo: null };
   }
-  if (e.incapaz) {
+  if (incapaz) {
     const curador = e.vigentes.find((v) => v.papel === 'curador');
     return curador ? { recusa: null, vinculo: curador.id } : { recusa: 'curador-ausente' };
   }
   const papeis = menor ? PAPEIS_DO_MENOR : PAPEIS_REPRESENTANTE;
   const r = e.vigentes.find((v) => papeis.includes(v.papel as PapelResponsavel));
   return r ? { recusa: null, vinculo: r.id } : { recusa: 'representante-ausente' };
+}
+
+/**
+ * Recusa da assinatura do próprio paciente num termo em que o representante assina com o nome declarado (termo da
+ * recepção, consentimento do portal): o menor de idade e o incapaz não assinam por si. Nulo: pode assinar.
+ */
+export function recusaAssinaturaDoPaciente(
+  nascimentoPaciente: string | null,
+  vigentes: readonly VinculoVigente[],
+  hoje: string,
+  incapaz: boolean,
+): 'paciente-menor' | 'paciente-incapaz' | null {
+  if (sobCuratela(incapaz, vigentes)) return 'paciente-incapaz';
+  return menorDeIdade(nascimentoPaciente, hoje) ? 'paciente-menor' : null;
 }

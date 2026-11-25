@@ -74,6 +74,10 @@ export const encerrarIncapacidade = (
   corpo: { fim: string; motivo: string },
 ) => gravar(`${P}/${id}/incapacidades/${incapacidade}/encerrar`, corpo);
 
+/** Endereço do comprovante anexado (abre em outra aba; a leitura fica na trilha do paciente). */
+export const urlComprovante = (id: number, alvo: 'responsavel' | 'incapacidade', registro: number): string =>
+  `${P}/${id}/comprovantes-representacao/${alvo}/${registro}/arquivo`;
+
 export const enviarComprovante = (
   id: number,
   corpo: { alvo: 'responsavel' | 'incapacidade'; id: number; conteudo: string; nome: string },

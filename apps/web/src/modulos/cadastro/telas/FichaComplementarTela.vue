@@ -83,6 +83,8 @@ const { t } = useI18n({
         'menor-sem-representante':
           'Paciente menor de idade sem responsável legal, guardião ou tutor vigente.',
         'incapaz-sem-curador': 'Paciente com incapacidade registrada e sem curador vigente.',
+        'curatela-sem-incapacidade':
+          'Paciente com curador vigente e sem a incapacidade registrada: quem assina é o curador; registre a incapacidade (data e documento).',
         'comprovante-ausente': 'Guarda, tutela ou curatela sem o comprovante anexado.',
       },
       erro: {

@@ -4,8 +4,10 @@
 //   POST /api/cadastros/pacientes/:id/incapacidades/:iid/encerrar      levantamento, com data e motivo (nada apagado)
 //   POST /api/cadastros/pacientes/:id/comprovantes-representacao       envia o documento (base64) e liga ao vínculo
 //                                                                      do responsável ou à incapacidade
+//   GET  /api/cadastros/pacientes/:id/comprovantes-representacao/:alvo/:rid/arquivo
+//                                                                      abre o documento anexado (leitura auditada)
 // Toda gravação passa pelo executor (trilha na mesma transação). Só no banco do cliente (sem ele, 503).
-import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Req, Res } from '@nestjs/common';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
@@ -68,6 +70,44 @@ export class RepresentacaoPacienteController {
     const n = idDaRota(p);
     req.sghAlvo = { paciente: n, tabelaAlvo: 'incapacidade_paciente', idAlvo: String(n) };
     return this.rodar(() => this.servico().incapacidades(s.porta, n));
+  }
+
+  @Get('pacientes/:id/comprovantes-representacao/:alvo/:rid/arquivo')
+  @Permissao('cadastro.paciente.ler')
+  @Auditar('cadastro.paciente.lido')
+  async comprovante(
+    @Param('id') p: string,
+    @Param('alvo') alvoRota: string,
+    @Param('rid') rid: string,
+    @Req() req: RequisicaoAutorizada,
+    @Res({ passthrough: true }) res: { header(n: string, v: string): unknown },
+  ): Promise<Buffer> {
+    const s = sessaoDe(req);
+    const n = idDaRota(p);
+    const id = idDaRota(rid);
+    const alvo = alvoRota as AlvoComprovante;
+    const a = ALVOS_COMPROVANTE.includes(alvo)
+      ? await this.rodar(() => this.servico().lerComprovante(s.porta, { paciente: n, alvo, id }))
+      : null;
+    if (!a)
+      throw new ErroProblema(
+        'nao-encontrado',
+        404,
+        'Comprovante não encontrado',
+        'Não há comprovante anexado a este registro do paciente.',
+      );
+    req.sghAlvo = {
+      paciente: n,
+      tabelaAlvo: alvo === 'responsavel' ? 'responsavel_paciente' : 'incapacidade_paciente',
+      idAlvo: String(id),
+      chaveNaturalAlvo: 'documento:comprovante-representacao',
+    };
+    const ext = a.tipoMime === 'application/pdf' ? 'pdf' : a.tipoMime === 'image/png' ? 'png' : 'jpg';
+    res.header('content-type', a.tipoMime);
+    res.header('content-disposition', `inline; filename="comprovante-${alvo}-${id}.${ext}"`);
+    res.header('x-content-type-options', 'nosniff');
+    res.header('cache-control', 'private, no-store');
+    return a.conteudo;
   }
 
   @Post('pacientes/:id/incapacidades')
