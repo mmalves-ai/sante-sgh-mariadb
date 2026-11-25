@@ -97,6 +97,11 @@ import {
   OPERACAO_ALTERAR_HERANCA,
   valoresHerdaveisDoAnterior,
 } from './porta-propria-heranca.js';
+import {
+  lerPadraoAbertura,
+  OPERACAO_DEFINIR_MEU_PADRAO_ABERTURA,
+  OPERACAO_DEFINIR_PADRAO_ABERTURA,
+} from './porta-propria-padrao.js';
 import { solicitanteQueRespondeHoje } from '../cadastro/solicitante-vigente.js';
 import type {
   ContextoAtendimento,
@@ -955,6 +960,7 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
           return {
             heranca: h.marcas,
             herancaEscopo: { estabelecimento: h.estabelecimento, pessoal: h.pessoal },
+            padraoAbertura: await lerPadraoAbertura(l, est, c.usuario),
           };
         })()),
       };
@@ -1031,6 +1037,7 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
       const ult = lista[0];
       return {
         heranca: await lerMarcasHeranca(l, est, c.usuario),
+        padrao: await lerPadraoAbertura(l, est, c.usuario),
         anterior: ult
           ? {
               reg: ult.reg,
@@ -1958,5 +1965,7 @@ const OPERACOES_PROPRIAS: Readonly<Record<string, Operacao<any, ResultadoOperaca
   'atendimento.conduzirNoConsultorio': OPERACAO_CONDUZIR,
   'atendimento.lancarProcedimentoExtra': OPERACAO_LANCAR_EXTRA,
   'atendimento.alterarHeranca': OPERACAO_ALTERAR_HERANCA,
+  'atendimento.definirPadraoAbertura': OPERACAO_DEFINIR_PADRAO_ABERTURA,
+  'atendimento.definirMeuPadraoAbertura': OPERACAO_DEFINIR_MEU_PADRAO_ABERTURA,
   ...OPERACOES_CORRECAO_FICHA,
 };

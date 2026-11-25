@@ -2271,6 +2271,7 @@ motivo_encerramento_atendimento	REC	dominio	F3	Motivos de encerramento do atendi
 motivo_procura_atendimento	REC	dominio	F7	Motivo de procura informado na abertura do atendimento	rodada2:nova	02	1
 ocupacao_guiche	REC	historico	F3	Quem ocupou cada guichê e quando, para chamada e produtividade	F33; SPDATA TBSTATUSGUICHE	02	1
 origem_entrada_atendimento	REC	dominio	F3	Origens do atendimento (demanda espontânea, encaminhado, agendado, transferido)	F30; MV ORI_ATE, USU_ORIGEM	02	2
+padrao_abertura_atendimento	REC	configuracao	F3	Valores habituais da abertura do atendimento (unidade, centro de custo, convênio, especialidade), do estabelecimento e de cada usuário	F3.2, 02-REC linha 31: valores padrão do usuário para o paciente sem atendimento anterior; migração 04_REC/95_padrao_abertura	02	0
 painel_chamada	REC	configuracao	F3	Painel de chamada por local, com tipo, voz, layout e filas exibidas	F33; SPDATA PNCONFIG (5); MV MVPAINEL_CFG_VOZ	02	2
 ponto_recepcao	REC	principal	F3	Recepção ou setor que emite e chama senhas, com texto de impressão e estabelecimento	F33; SPDATA TBRECEPCAO (11); MV FILA_SENHA_MULTI_EMPRESAS*	02	1
 procedencia	REC	dominio	F3	Procedência do paciente (residência, outro serviço, via pública, judicial), com valor padrão	F30; SPDATA TBPROCED, TBPROCEDPADRAO	02	5

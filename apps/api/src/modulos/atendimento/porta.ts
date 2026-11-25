@@ -159,6 +159,8 @@ export interface PortaAtendimento extends PortaGravacaoM18<GravadorSghAtendiment
     /** As marcas da herança em vigor para a sessão, pela chave da regra. */
     heranca: Record<string, boolean>;
     anterior: { reg: number; data: string; valores: Record<string, string | number | null> } | null;
+    /** Os valores habituais da abertura, por escopo (para o que a herança não preencher). */
+    padrao?: import('./porta-propria-padrao.js').PadraoAberturaLido;
     historico: { reg: number; data: string; tipo: string; convenio: string; profissional: string }[];
   }>;
   previaCancelamento(c: ContextoAtendimento, reg: number): Promise<PreviaCancelamentoDados | null>;

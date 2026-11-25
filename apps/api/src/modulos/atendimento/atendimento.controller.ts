@@ -27,6 +27,9 @@
 //   POST /api/atendimento/pacientes/:id/identificar  a identificação: o cadastro de destino (encerra a marca)
 //   GET  /api/atendimento/heranca                    o que a ficha nova copia do atendimento anterior
 //   POST /api/atendimento/heranca                    atendimento.alterarHeranca
+//   GET  /api/atendimento/heranca/padrao             os valores habituais da abertura (estabelecimento e pessoal)
+//   POST /api/atendimento/heranca/padrao             atendimento.definirPadraoAbertura (estabelecimento)
+//   POST /api/atendimento/heranca/padrao/meu         atendimento.definirMeuPadraoAbertura (o usuário da sessão)
 import { createHash } from 'node:crypto';
 import {
   Body,
@@ -47,9 +50,11 @@ import {
   type AtendimentoDetalhe,
   type AtendimentosDia,
   type ConfiguracaoHeranca,
+  type ConfiguracaoPadraoAbertura,
   desfecho as desfechoDe,
   esquemaAbrirAtendimento,
   esquemaAlterarHeranca,
+  esquemaDefinirPadraoAbertura,
   esquemaAlterarAtendimento,
   esquemaAlterarSegurado,
   esquemaCancelarAtendimento,
@@ -132,6 +137,9 @@ export const OPERACOES_AMBULATORIO: Readonly<Record<string, string>> = {
   'atendimento.conduzirNoConsultorio': 'atendimento.fila.conduzir',
   'atendimento.encerrarAtendimento': 'atendimento.atendimento.encerrar',
   'atendimento.alterarHeranca': 'atendimento.heranca.editar',
+  'atendimento.definirPadraoAbertura': 'atendimento.heranca.editar',
+  // Os valores habituais de quem atende: basta poder abrir atendimento.
+  'atendimento.definirMeuPadraoAbertura': 'atendimento.atendimento.abrir',
 };
 /** Operações do pronto atendimento. */
 export const OPERACOES_PA: Readonly<Record<string, string>> = {
@@ -390,6 +398,43 @@ export class AtendimentoController implements OnModuleDestroy {
       'atendimento.alterarHeranca',
       e,
       'Configuração da herança gravada.',
+    ) as Promise<ResultadoAtendimento>;
+  }
+
+  @Get('heranca/padrao')
+  @Permissao('atendimento.atendimento.ler')
+  padraoAbertura(@Req() req: RequisicaoAutorizada): Promise<ConfiguracaoPadraoAbertura> {
+    return this.servico.configuracaoPadraoAbertura(ctx(sessaoDe(req)));
+  }
+
+  @Post('heranca/padrao')
+  @HttpCode(200)
+  @Permissao('atendimento.heranca.editar')
+  @AuditadoNoHandler('atendimento.definirPadraoAbertura pelo executor (trilha na mesma transação)')
+  definirPadraoAbertura(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAtendimento> {
+    const e = corpo(esquemaDefinirPadraoAbertura, b);
+    return this.apoios.ambulatorio.executar(
+      sessaoDe(req),
+      'atendimento.definirPadraoAbertura',
+      e,
+      'Valores habituais do estabelecimento gravados.',
+    ) as Promise<ResultadoAtendimento>;
+  }
+
+  @Post('heranca/padrao/meu')
+  @HttpCode(200)
+  @Permissao('atendimento.atendimento.abrir')
+  @AuditadoNoHandler('atendimento.definirMeuPadraoAbertura pelo executor (trilha na mesma transação)')
+  definirMeuPadraoAbertura(
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ResultadoAtendimento> {
+    const e = corpo(esquemaDefinirPadraoAbertura, b);
+    return this.apoios.ambulatorio.executar(
+      sessaoDe(req),
+      'atendimento.definirMeuPadraoAbertura',
+      e,
+      'Seus valores habituais foram gravados.',
     ) as Promise<ResultadoAtendimento>;
   }
 

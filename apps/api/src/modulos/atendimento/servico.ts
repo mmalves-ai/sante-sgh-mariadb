@@ -8,7 +8,9 @@ import {
   type AtendimentoDetalhe,
   type AtendimentosDia,
   type CartaoPa,
+  CAMPOS_PADRAO_ABERTURA,
   type ConfiguracaoHeranca,
+  type ConfiguracaoPadraoAbertura,
   type EtapaPa,
   ETAPAS_PA,
   type FilaConsultorio,
@@ -30,6 +32,8 @@ import {
   camposHerdados,
   versaoHeranca,
   aplicarHeranca,
+  aplicarPadraoAbertura,
+  resolverPadraoAbertura,
   esperaMinutos,
   horasDeObservacao,
   idadeEmAnos,
@@ -339,12 +343,38 @@ export class ServicoAtendimento {
 
   async historico(c: ContextoAtendimento, paciente: number): Promise<HerancaPaciente> {
     const [r, { hoje }] = await Promise.all([this.porta.historico(c, paciente), this.porta.relogio(c)]);
-    if (!r.anterior) return { paciente, anterior: null, historico: r.historico };
-    const h = aplicarHeranca(r.heranca, r.anterior.valores, hoje);
+    const h = r.anterior ? aplicarHeranca(r.heranca, r.anterior.valores, hoje) : null;
+    // Os valores habituais completam o que a herança deixou vazio (o paciente sem atendimento anterior recebe todos).
+    const p = r.padrao
+      ? aplicarPadraoAbertura(
+          resolverPadraoAbertura(r.padrao.estabelecimento, r.padrao.pessoal),
+          h?.valores ?? {},
+        )
+      : null;
+    const padrao = p && (Object.keys(p.valores).length > 0 || p.avisos.length > 0) ? { padrao: p } : {};
+    if (!r.anterior || !h) return { paciente, anterior: null, historico: r.historico, ...padrao };
     return {
       paciente,
       anterior: { ...r.anterior, herdados: h.valores, avisos: h.avisos },
       historico: r.historico,
+      ...padrao,
+    };
+  }
+
+  /** Os valores habituais da abertura, por escopo, e o que está em vigor para a sessão. */
+  async configuracaoPadraoAbertura(c: ContextoAtendimento): Promise<ConfiguracaoPadraoAbertura> {
+    const p = (await this.porta.apoio(c)).padraoAbertura;
+    const emVigor = resolverPadraoAbertura(p?.estabelecimento ?? null, p?.pessoal ?? null);
+    return {
+      campos: CAMPOS_PADRAO_ABERTURA.map((x) => ({
+        campo: x.campo,
+        rotulo: x.rotulo,
+        estabelecimento: p?.estabelecimento?.[x.campo] ?? null,
+        pessoal: p?.pessoal?.[x.campo] ?? null,
+        emVigor: emVigor.campos[x.campo] ?? null,
+      })),
+      versaoEstabelecimento: p?.versaoEstabelecimento ?? 0,
+      versaoPessoal: p?.versaoPessoal ?? 0,
     };
   }
 
