@@ -1,13 +1,15 @@
 // Leitos de UTI habilitados pelo SUS e diárias de UTI por competência (F7, 06-SUS linha 59). Regras puras:
 //   - o cadastro dos leitos habilitados por tipo de UTI, unidade e vigência: a vigência começa no primeiro dia de uma
 //     competência e termina no último dia de uma competência (ou fica aberta); a quantidade é positiva; duas
-//     habilitações ativas do mesmo tipo e unidade não se sobrepõem. A nova quantidade a partir de uma competência
+//     habilitações ativas do mesmo tipo e unidade não se sobrepõem, nem a de todo o estabelecimento com a de uma unidade
+//     do mesmo tipo (a soma dos leitos do tipo nunca conta o mesmo leito duas vezes). A nova quantidade a partir de uma competência
 //     encerra a habilitação aberta anterior no último dia da competência anterior (um passo só, nada apagado);
 //   - as diárias de UTI da trajetória separadas por competência (cada noite conta na competência do dia em que
 //     começa; a entrada e a saída no mesmo dia contam 1), para guardar a diária por competência;
 //   - a classe da UTI (adulto, pediátrica, neonatal, queimados, coronariana, intermediária) e o nível (I, II, III) pela
 //     descrição do tipo de UTI do SIH (sistema de informações hospitalares do SUS);
-//   - a habilitação vigente do tipo na competência (a diária aponta a habilitação que a cobre).
+//   - a habilitação vigente do tipo na competência e na unidade da passagem, com recuo para a de todo o
+//     estabelecimento (a diária aponta a habilitação que a cobre; sem nenhuma, a diária não é cobrável).
 import { ACOMODACOES_UTI, type PassagemLeito, type UtiDaAcomodacao } from './aih.js';
 
 export interface ProblemaLeitoUti {
@@ -93,14 +95,35 @@ export function conferirHabilitacaoUti(
       campo: 'vigenciaInicio',
       mensagem: `Já há leitos deste tipo e unidade habilitados de ${conflito.vigenciaInicio} a ${conflito.vigenciaFim ?? 'hoje'}.`,
     });
+  // A habilitação de todo o estabelecimento e a de uma unidade, do mesmo tipo, não convivem na mesma vigência.
+  const cruzada = conflito
+    ? undefined
+    : existentes.find(
+        (x) =>
+          x.ativo &&
+          x.id !== proprio &&
+          x.tipo === nova.tipo &&
+          (x.unidade === null) !== (nova.unidade === null) &&
+          sobrepoe(nv, { i: x.vigenciaInicio, f: x.vigenciaFim }),
+      );
+  if (cruzada)
+    p.push({
+      campo: 'unidade',
+      mensagem: `Já há leitos deste tipo habilitados ${cruzada.unidade === null ? 'para todo o estabelecimento' : 'por unidade'} de ${cruzada.vigenciaInicio} a ${cruzada.vigenciaFim ?? 'hoje'}: encerre a vigência antes.`,
+    });
   return { problemas: p, encerrar: p.length ? null : encerrar };
 }
 
-/** A habilitação ativa do tipo que cobre o primeiro dia da competência (AAAAMM); null sem nenhuma. */
+/**
+ * A habilitação ativa do tipo que cobre a competência (AAAAMM) na unidade da passagem: a da própria unidade e, sem
+ * ela, a de todo o estabelecimento; a de outra unidade não cobre. Sem a unidade (null), qualquer uma do tipo. Null
+ * quando nenhuma cobre.
+ */
 export function habilitacaoUtiDaCompetencia(
   lista: readonly HabilitacaoUtiVigencia[],
   tipo: number,
   competencia: string,
+  unidade: number | null = null,
 ): number | null {
   const dia = `${competencia.slice(0, 4)}-${competencia.slice(4, 6)}-01`;
   const fim = ultimoDiaDaCompetencia(dia);
@@ -110,7 +133,8 @@ export function habilitacaoUtiDaCompetencia(
         h.ativo && h.tipo === tipo && sobrepoe({ i: dia, f: fim }, { i: h.vigenciaInicio, f: h.vigenciaFim }),
     )
     .sort((a, b) => a.vigenciaInicio.localeCompare(b.vigenciaInicio) || a.id - b.id);
-  return x[0]?.id ?? null;
+  if (unidade === null) return x[0]?.id ?? null;
+  return (x.find((h) => h.unidade === unidade) ?? x.find((h) => h.unidade === null))?.id ?? null;
 }
 
 // ── Diárias por competência ──────────────────────────────────────────────────────────────────────────
@@ -123,6 +147,8 @@ export interface DiariaUtiCompetencia {
   readonly dataEntrada: string;
   readonly dataSaida: string;
   readonly diarias: number;
+  /** A unidade de internação da passagem (null quando a trajetória não diz). */
+  readonly unidade: number | null;
 }
 
 /**
@@ -138,7 +164,8 @@ export function diariasUtiPorCompetencia(
   const saida: DiariaUtiCompetencia[] = [];
   for (const p of passagens) {
     if (!ACOMODACOES_UTI.has(p.acomodacao)) continue;
-    const u = mapa.get(p.acomodacao);
+    const m = mapa.get(p.acomodacao);
+    const u = m ? { ...m, unidade: p.unidade ?? null } : undefined;
     const fim = p.saida ?? alta;
     if (!u || !fim || !valida(p.entrada) || !valida(fim) || fim < p.entrada) continue;
     if (fim === p.entrada) {

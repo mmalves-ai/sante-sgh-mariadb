@@ -5,6 +5,7 @@ import {
   acaoPermitida,
   aihApresentavel,
   type AihRegistrada,
+  competenciasDaPassagem,
   type ContextoAih,
   diariasUtiDaTrajetoria,
   diasDePermanencia,
@@ -239,6 +240,30 @@ describe('montagem da AIH (fechamento e crítica)', () => {
     const r = montarAih(aih(), internacao(), ctx({ leitosUti: new Map([[2, 0]]) }));
     expect(regras(r)).toContain('uti-nao-habilitada');
     expect(r.criticas.find((c) => c.regra === 'uti-nao-habilitada')?.gravidade).toBe('bloqueante');
+  });
+
+  it('UTI não habilitada pela competência de cada diária e pela unidade da passagem (F7, 06-SUS linha 59)', () => {
+    // Habilitada só em agosto/2025 na unidade 4 (os leitos de hoje não decidem).
+    const pedidas: string[] = [];
+    const utiHabilitada = (tipo: number, competencia: string, unidade: number | null) => {
+      pedidas.push(`${tipo}:${competencia}:${unidade}`);
+      return tipo === 2 && competencia === '202508' && unidade === 4;
+    };
+    const int = internacao({
+      alta: '2025-09-05',
+      passagens: [{ entrada: '2025-08-20', saida: '2025-09-03', acomodacao: 3, unidade: 4 }],
+    });
+    const r = montarAih(aih(), int, ctx({ leitosUti: new Map(), utiHabilitada }));
+    expect(pedidas).toEqual(['2:202508:4', '2:202509:4']);
+    expect(r.criticas.filter((c) => c.regra === 'uti-nao-habilitada').map((c) => c.detalhe)).toEqual([
+      { tipoUti: 2, competencia: '202509' },
+    ]);
+    // Habilitada nas duas: passa, mesmo sem leitos hoje.
+    const ok = montarAih(aih(), int, ctx({ leitosUti: new Map(), utiHabilitada: () => true }));
+    expect(regras(ok)).not.toContain('uti-nao-habilitada');
+    expect(competenciasDaPassagem('2025-08-31', '2025-09-01')).toEqual(['202508']);
+    expect(competenciasDaPassagem('2025-12-31', '2026-02-02')).toEqual(['202512', '202601', '202602']);
+    expect(competenciasDaPassagem('2025-08-20', '2025-08-20')).toEqual(['202508']);
   });
 
   it('identificação e dados mínimos do paciente e o motivo de saída', () => {

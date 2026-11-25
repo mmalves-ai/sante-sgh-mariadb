@@ -56,7 +56,11 @@ describe('cadastro dos leitos de UTI habilitados', () => {
       [],
     );
     expect(conferirHabilitacaoUti({ ...nova, tipo: 2 }, existentes).problemas).toEqual([]);
-    expect(conferirHabilitacaoUti({ ...nova, unidade: 5 }, existentes).problemas).toEqual([]);
+    // Outra unidade (as duas por unidade) não conta.
+    expect(
+      conferirHabilitacaoUti({ ...nova, unidade: 5 }, [h({ id: 1, unidade: 4, vigenciaFim: '2026-06-30' })])
+        .problemas,
+    ).toEqual([]);
     expect(conferirHabilitacaoUti(nova, [h({ id: 1, ativo: false })]).problemas).toEqual([]);
     // Alteração da própria: não conflita consigo nem encerra nada.
     expect(conferirHabilitacaoUti({ ...nova, vigenciaFim: '2026-12-31' }, [h({ id: 3 })], 3)).toEqual({
@@ -78,6 +82,39 @@ describe('cadastro dos leitos de UTI habilitados', () => {
     expect(habilitacaoUtiDaCompetencia(l, 1, '202512')).toBeNull();
     expect(habilitacaoUtiDaCompetencia(l, 9, '202602')).toBeNull();
   });
+
+  it('a habilitação da competência pela unidade da passagem, com recuo para a de todo o estabelecimento', () => {
+    const l = [
+      h({ id: 1, unidade: 10, vigenciaFim: '2026-03-31' }),
+      h({ id: 2, unidade: 20 }),
+      h({ id: 3, unidade: null, vigenciaInicio: '2026-04-01' }),
+    ];
+    expect(habilitacaoUtiDaCompetencia(l, 1, '202602', 20)).toBe(2);
+    expect(habilitacaoUtiDaCompetencia(l, 1, '202602', 10)).toBe(1);
+    // A outra unidade não cobre; sem a da unidade, vale a de todo o estabelecimento da competência.
+    expect(habilitacaoUtiDaCompetencia(l, 1, '202602', 30)).toBeNull();
+    expect(habilitacaoUtiDaCompetencia(l, 1, '202605', 10)).toBe(3);
+    expect(habilitacaoUtiDaCompetencia(l, 1, '202605', 20)).toBe(2);
+  });
+
+  it('a habilitação de todo o estabelecimento não convive com a de uma unidade do mesmo tipo', () => {
+    const porUnidade = [h({ id: 1, unidade: 10, vigenciaFim: '2026-06-30' })];
+    const r = conferirHabilitacaoUti({ ...nova, vigenciaInicio: '2026-03-01' }, porUnidade);
+    expect(r.problemas.map((x) => x.campo)).toEqual(['unidade']);
+    expect(r.encerrar).toBeNull();
+    expect(conferirHabilitacaoUti({ ...nova, vigenciaInicio: '2026-07-01' }, porUnidade).problemas).toEqual(
+      [],
+    );
+    expect(
+      conferirHabilitacaoUti({ ...nova, unidade: 10, vigenciaInicio: '2026-03-01' }, [
+        h({ id: 2 }),
+      ]).problemas.map((x) => x.campo),
+    ).toEqual(['unidade']);
+    // Duas unidades do mesmo tipo convivem; outro tipo e a inativa não contam.
+    expect(conferirHabilitacaoUti({ ...nova, unidade: 20 }, porUnidade).problemas).toEqual([]);
+    expect(conferirHabilitacaoUti({ ...nova, tipo: 2 }, porUnidade).problemas).toEqual([]);
+    expect(conferirHabilitacaoUti(nova, [h({ id: 1, unidade: 10, ativo: false })]).problemas).toEqual([]);
+  });
 });
 
 describe('diárias de UTI por competência', () => {
@@ -88,7 +125,7 @@ describe('diárias de UTI por competência', () => {
 
   it('parte a passagem nos meses que atravessa e a soma bate com a da trajetória', () => {
     const passagens = [
-      { entrada: '2026-01-28', saida: '2026-02-03', acomodacao: 3 },
+      { entrada: '2026-01-28', saida: '2026-02-03', acomodacao: 3, unidade: 4 },
       { entrada: '2026-02-03', saida: null, acomodacao: 1 },
       { entrada: '2026-02-10', saida: '2026-02-10', acomodacao: 17 },
     ];
@@ -101,6 +138,7 @@ describe('diárias de UTI por competência', () => {
         dataEntrada: '2026-01-28',
         dataSaida: '2026-02-01',
         diarias: 4,
+        unidade: 4,
       },
       {
         tipo: 2,
@@ -109,6 +147,7 @@ describe('diárias de UTI por competência', () => {
         dataEntrada: '2026-02-01',
         dataSaida: '2026-02-03',
         diarias: 2,
+        unidade: 4,
       },
       {
         tipo: 5,
@@ -117,6 +156,7 @@ describe('diárias de UTI por competência', () => {
         dataEntrada: '2026-02-10',
         dataSaida: '2026-02-10',
         diarias: 1,
+        unidade: null,
       },
     ]);
     const t = diariasUtiDaTrajetoria(passagens, mapa, '2026-02-20');
@@ -137,6 +177,7 @@ describe('diárias de UTI por competência', () => {
         dataEntrada: '2026-12-30',
         dataSaida: '2027-01-01',
         diarias: 2,
+        unidade: null,
       },
       {
         tipo: 2,
@@ -145,6 +186,7 @@ describe('diárias de UTI por competência', () => {
         dataEntrada: '2027-01-01',
         dataSaida: '2027-01-02',
         diarias: 1,
+        unidade: null,
       },
     ]);
     expect(

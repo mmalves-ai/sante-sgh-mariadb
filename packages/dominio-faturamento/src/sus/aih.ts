@@ -139,6 +139,8 @@ export interface PassagemLeito {
   readonly entrada: string;
   readonly saida: string | null;
   readonly acomodacao: number;
+  /** A unidade de internação da passagem (a habilitação de UTI é por unidade). */
+  readonly unidade?: number | null;
 }
 
 /** O tipo de UTI do SIH e o procedimento da diária por acomodação (parâmetro `faturamento.sus.aih.utiPorAcomodacao`). */
@@ -160,6 +162,21 @@ export function utiPorAcomodacaoDoParametro(texto: string): ReadonlyMap<number, 
 const DIA_MS = 86_400_000;
 const dias = (de: string, ate: string) =>
   Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / DIA_MS);
+
+/**
+ * As competências (AAAAMM) das noites de uma passagem: cada noite conta no mês em que começa; a entrada e a saída no
+ * mesmo dia (ou saída anterior) contam na competência da entrada.
+ */
+export function competenciasDaPassagem(entrada: string, fim: string): string[] {
+  const out = [`${entrada.slice(0, 4)}${entrada.slice(5, 7)}`];
+  let d = entrada;
+  for (;;) {
+    const [a, m] = [Number(d.slice(0, 4)), Number(d.slice(5, 7))];
+    d = m === 12 ? `${a + 1}-01-01` : `${a}-${String(m + 1).padStart(2, '0')}-01`;
+    if (!(d < fim) || out.length > 1200) return out;
+    out.push(`${d.slice(0, 4)}${d.slice(5, 7)}`);
+  }
+}
 
 /**
  * Dias de permanência (D-PERMANENCIA-AIH-51): da internação à alta, o dia da alta não conta; a internação e a alta no
@@ -292,6 +309,11 @@ export interface ContextoAih {
   readonly habilitacoes: ReadonlySet<string>;
   /** Leitos de UTI habilitados por tipo do SIH (soma das quantidades de leitos). */
   readonly leitosUti: ReadonlyMap<number, number>;
+  /**
+   * Se o tipo de UTI do SIH tem leitos habilitados na competência (AAAAMM) e na unidade da passagem. Quando vem, a
+   * crítica de UTI não habilitada é por competência de cada diária (e não pelos leitos de hoje em `leitosUti`).
+   */
+  readonly utiHabilitada?: (tipo: number, competencia: string, unidade: number | null) => boolean;
   readonly utiPorAcomodacao: ReadonlyMap<number, UtiDaAcomodacao>;
   readonly cnsValido: ValidadorCns;
   readonly cidExiste?: (cid: string) => boolean;
@@ -499,8 +521,23 @@ export function montarAih(aih: AihRegistrada, i: InternacaoAih, ctx: ContextoAih
   // As diárias de UTI (regra 6).
   const uti = diariasUtiDaTrajetoria(i.passagens, ctx.utiPorAcomodacao, i.alta);
   for (const a of uti.semTipo) criticas.push(critica('uti-sem-tipo-sih', i, null, { acomodacao: a }));
+  if (ctx.utiHabilitada) {
+    const vistas = new Set<string>();
+    for (const p of i.passagens) {
+      const u = ACOMODACOES_UTI.has(p.acomodacao) ? ctx.utiPorAcomodacao.get(p.acomodacao) : undefined;
+      const fim = p.saida ?? i.alta;
+      if (!u || !fim) continue;
+      for (const competencia of competenciasDaPassagem(p.entrada, fim)) {
+        const chave = `${u.tipo}:${competencia}:${p.unidade ?? ''}`;
+        if (vistas.has(chave)) continue;
+        vistas.add(chave);
+        if (!ctx.utiHabilitada(u.tipo, competencia, p.unidade ?? null))
+          criticas.push(critica('uti-nao-habilitada', i, null, { tipoUti: u.tipo, competencia }));
+      }
+    }
+  }
   for (const d of uti.porTipo) {
-    if ((ctx.leitosUti.get(d.tipo) ?? 0) <= 0)
+    if (!ctx.utiHabilitada && (ctx.leitosUti.get(d.tipo) ?? 0) <= 0)
       criticas.push(critica('uti-nao-habilitada', i, null, { tipoUti: d.tipo }));
     const p = ctx.porCodigo(d.procedimento);
     if (!p?.naCompetencia)
