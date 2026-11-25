@@ -29,6 +29,14 @@ const idOuNulo = (v: unknown) => (v === null || v === undefined ? null : Number(
 const texto = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const verdadeiro = (v: unknown) => v === true || v === 1 || v === '1';
 
+/**
+ * A grade de horário que o aprazamento escolhe (CatalogoPrescricaoPropria.regras): a do bloco, a da unidade ou a do
+ * estabelecimento (sem unidade, bloco nem setor). A grade só de setor nunca é escolhida, e por isso não é oferecida
+ * nem aceita para a grade padrão.
+ */
+const GRADE_RESOLVIDA =
+  '(g.unidade_internacao_id IS NOT NULL OR g.bloco_internacao_id IS NOT NULL OR g.setor_funcional_id IS NULL)';
+
 export const TABELAS_PARAMETROS = ['regra_integracao_prescricao', 'horario_padrao_dose'] as const;
 
 function recusarTodas(rs: readonly RecusaSuprimentos[]): void {
@@ -172,13 +180,21 @@ export function gravadorParametros(tx: TxOperacao, est: number, extras: ExtrasGr
       throw recusa('referencia-inexistente', 'Escolha uma frequência ativa.', { campos: ['frequencia'] });
     if (e.grade !== null) {
       const g = await tx.uma<Linha>(
-        'SELECT id FROM grade_horario_unidade WHERE id = ? AND estabelecimento_id = ? AND ativo',
+        `SELECT id, ${GRADE_RESOLVIDA} AS resolvida FROM grade_horario_unidade g
+          WHERE id = ? AND estabelecimento_id = ? AND ativo`,
         [e.grade, est],
       );
       if (!g)
         throw recusa('referencia-inexistente', 'Escolha uma grade de horário ativa deste estabelecimento.', {
           campos: ['grade'],
         });
+      // A grade só de setor (sem unidade nem bloco) o aprazamento não escolhe: gravada ali, ficaria sem efeito.
+      if (!verdadeiro(g['resolvida']))
+        throw recusa(
+          'grade-sem-aprazamento',
+          'Esta grade é só de um setor e o aprazamento não a usa: escolha a grade da unidade, do bloco ou do estabelecimento.',
+          { campos: ['grade'] },
+        );
     }
     const doses = dosesDaFrequencia({
       dosesPorDia: idOuNulo(f['doses_por_dia']),
@@ -267,7 +283,7 @@ export async function lerParametrosEditaveis(l: Leitor, est: number): Promise<Pa
          LEFT JOIN unidade_internacao ui ON ui.id = g.unidade_internacao_id
          LEFT JOIN bloco_internacao bi ON bi.id = g.bloco_internacao_id
          LEFT JOIN setor_funcional sf ON sf.id = g.setor_funcional_id
-        WHERE g.estabelecimento_id = ? AND g.ativo
+        WHERE g.estabelecimento_id = ? AND g.ativo AND ${GRADE_RESOLVIDA}
         ORDER BY nome LIMIT 1000`,
       [est],
     )

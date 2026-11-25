@@ -12,6 +12,7 @@ import { resolve } from 'node:path';
 import { type ContextoNucleo, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { CatalogoPrescricaoPropria } from '../pep/prescricao-propria-catalogo.js';
 import { PortaFarmaciaPropria } from './porta-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
@@ -34,12 +35,17 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
     outroEst: 0,
     usuario: 0,
     unidade: 0,
+    ua: 0,
+    setor: 0,
+    setorAlheio: 0,
+    gradeSetor: 0,
     farmacia: 0,
     satelite: 0,
     alheio: 0,
     f3x: 0,
     f8h: 0,
     fsn: 0,
+    f12h: 0,
     gradeUnidade: 0,
     gradeAlheia: 0,
   };
@@ -55,6 +61,10 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
       'grade_horario_unidade',
     ])
       await e.executar(`DELETE FROM ${t} WHERE estabelecimento_id IN (?, ?)`, [ids.est, ids.outroEst]);
+    await e.executar(
+      "DELETE FROM pendencia WHERE tipo = 'migracao' AND entidade = 'horario_padrao_medicacao' AND estabelecimento_id IN (?, ?)",
+      [ids.est, ids.outroEst],
+    );
     await limparTrilhaDaMassa(e, { ids: [ids.est, ids.outroEst] });
   };
 
@@ -81,13 +91,13 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
         "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
         ['f36par.teste', 'USUARIO SINTETICO F36PAR', agora],
       );
-      const ua = await garantir(
+      const ua = (ids.ua = await garantir(
         e,
         'SELECT id FROM unidade_assistencial WHERE estabelecimento_id = ? AND codigo = ?',
         [ids.est, `${P}-UA`],
         "INSERT INTO unidade_assistencial (estabelecimento_id, codigo, nome, tipo_unidade, criado_em) VALUES (?, ?, ?, 'internacao', ?)",
         [ids.est, `${P}-UA`, 'UTI SINTETICA', agora],
-      );
+      ));
       ids.unidade = await garantir(
         e,
         'SELECT id FROM unidade_internacao WHERE estabelecimento_id = ? AND codigo = ?',
@@ -118,6 +128,7 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
       ids.f8h = await freq(`${P}-8H`, 'intervalo', 480, null);
       // De 7 em 7 horas: o intervalo não fecha o dia, a frequência não dá número de doses.
       ids.fsn = await freq(`${P}-7H`, 'intervalo', 420, null);
+      ids.f12h = await freq(`${P}-12H`, 'vezes_ao_dia', null, 2);
       const gradeDe = (estab: number, unidade: number | null) =>
         e.inserir(
           `INSERT INTO grade_horario_unidade (estabelecimento_id, tipo_atendimento, unidade_internacao_id, hora_inicio_dia,
@@ -125,6 +136,22 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
           [estab, unidade, agora],
         );
       ids.gradeUnidade = await gradeDe(ids.est, ids.unidade);
+      const setor = (estab: number, codigo: string) =>
+        garantir(
+          e,
+          'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
+          [estab, codigo],
+          "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, 'SETOR SINTETICO F36PAR', 'assistencial', ?)",
+          [estab, codigo, agora],
+        );
+      ids.setor = await setor(ids.est, `${P}-SF`);
+      ids.setorAlheio = await setor(ids.outroEst, `${P}-SFB`);
+      // A grade só de setor (sem unidade nem bloco): o aprazamento não a escolhe.
+      ids.gradeSetor = await e.inserir(
+        `INSERT INTO grade_horario_unidade (estabelecimento_id, tipo_atendimento, setor_funcional_id, hora_inicio_dia,
+                criado_em) VALUES (?, 'internacao', ?, '07:00:00', ?)`,
+        [ids.est, ids.setor, agora],
+      );
       ids.gradeAlheia = await gradeDe(ids.outroEst, null);
     });
     ctx = { cliente: CLIENTE, estabelecimento: ids.est, usuario: ids.usuario, correlacao: 'teste-f36-par' };
@@ -327,9 +354,39 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
     const daUnidade = lidas.find((g) => g.grade === ids.gradeUnidade);
     expect(daUnidade?.horarios.map((h) => h.hora)).toEqual(['08:00', '16:00', '00:00']);
     expect(daUnidade?.frequencia).not.toBeNull();
-    expect((await porta.parametrosEditaveis(ctx)).opcoes.gradesHorario.map((g) => g.id)).toContain(
-      ids.gradeUnidade,
+    const oferecidas = (await porta.parametrosEditaveis(ctx)).opcoes.gradesHorario.map((g) => g.id);
+    expect(oferecidas).toContain(ids.gradeUnidade);
+    // A grade gravada com escopo de unidade é a que o aprazamento escolhe para aquela unidade, com os horários gravados
+    // para 3 doses ao dia (o aprazamento usa a hora em HHMM).
+    const aprazamento = await new CatalogoPrescricaoPropria(nucleo, CLIENTE).regras({
+      cliente: CLIENTE,
+      estabelecimento: null,
+      usuario: null,
+      correlacao: P,
+      rede: 'rede-teste',
+      hospital: P,
+    } as never);
+    expect(aprazamento.porUnidade.get(ids.ua)).toBe(ids.gradeUnidade);
+    const daRegra = aprazamento.regras.find((r) => r.id === ids.gradeUnidade);
+    expect(daRegra?.grade.get(3)).toEqual(['0800', '1600', '0000']);
+    // A grade só de setor não é oferecida nem aceita: gravada ali, ficaria sem efeito no aprazamento.
+    expect(oferecidas).not.toContain(ids.gradeSetor);
+    expect([...aprazamento.porUnidade.values(), ...aprazamento.porBloco.values()]).not.toContain(
+      ids.gradeSetor,
     );
+    expect(
+      codigoDe(
+        await op(
+          'suprimentos.gravarHorariosPadrao',
+          grade(ids.f3x, ids.gradeSetor, '06:00', '14:00', '22:00'),
+        ).catch((e: unknown) => e),
+      ),
+    ).toBe('grade-sem-aprazamento');
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM horario_padrao_dose WHERE grade_horario_unidade_id = ?', [
+        ids.gradeSetor,
+      ]),
+    ).toBe(0);
   });
 
   it('migração 11_SUP/97: copia a grade antiga completa para a unificada, uma vez, sem apagar a antiga', async () => {
@@ -345,6 +402,19 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
           `INSERT INTO horario_padrao_medicacao (estabelecimento_id, frequencia_administracao_id, setor_funcional_id,
                   ordem_dose, horario, ativo, criado_em) VALUES (?, ?, NULL, ?, ?, TRUE, NOW(3))`,
           [ids.outroEst, ids.f8h, ordem, hora],
+        );
+      // Grade de um setor (o aprazamento não escolhe grade só de setor) e grade com horário restrito a dias da semana
+      // (a grade unificada é diária): nenhuma das duas é copiada; cada uma vira UMA pendência de migração.
+      for (const [setor, ordem, hora, dias] of [
+        [ids.setorAlheio, 1, '05:00:00', null],
+        [ids.setorAlheio, 2, '17:00:00', null],
+        [null, 1, '10:00:00', '2,4'],
+        [null, 2, '22:00:00', null],
+      ] as const)
+        await e.executar(
+          `INSERT INTO horario_padrao_medicacao (estabelecimento_id, frequencia_administracao_id, setor_funcional_id,
+                  ordem_dose, horario, dias_semana, ativo, criado_em) VALUES (?, ?, ?, ?, ?, ?, TRUE, NOW(3))`,
+          [ids.outroEst, ids.f12h, setor, ordem, hora, dias],
         );
       // Incompleta (1 de 3 doses): não é copiada.
       await e.executar(
@@ -368,10 +438,25 @@ describe.skipIf(SEM_BANCO)('parâmetros da integração prescrição × estoque 
       ),
     );
     expect(copia.map((r) => r.h)).toEqual(['07:00', '15:00', '23:00']);
+    // Nada de 2 doses ao dia foi copiado: nem a grade do setor, nem a restrita a dias (que não vira diária).
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM horario_padrao_dose WHERE estabelecimento_id = ? AND doses_por_dia = 2',
+        [ids.outroEst],
+      ),
+    ).toBe(0);
+    // Uma pendência de migração por grade não copiada, mesmo rodando duas vezes.
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM pendencia WHERE tipo = 'migracao' AND entidade = 'horario_padrao_medicacao'
+            AND estabelecimento_id = ? AND situacao = 'aberta'`,
+        [ids.outroEst],
+      ),
+    ).toBe(2);
     expect(
       await contar('SELECT COUNT(*) AS n FROM horario_padrao_medicacao WHERE estabelecimento_id = ?', [
         ids.outroEst,
       ]),
-    ).toBe(4);
+    ).toBe(8);
   });
 });

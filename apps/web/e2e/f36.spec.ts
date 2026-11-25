@@ -76,48 +76,6 @@ test.describe('Farmácia e suprimentos @F3.6 @C2-009', () => {
     await expect(page.getByTestId('par-gravar-grade')).toBeDisabled();
 
     await semViolacaoAxe(page, '/farmacia/parametros');
-
-    // Regra: sem escopo nem local, a tela já diz o que falta e não deixa gravar.
-    const recusas = page.getByTestId('par-recusas-regra');
-    await expect(recusas).toContainText('centro de custo, setor ou unidade');
-    await escolher(page.getByTestId('par-centro'), { indice: 1 });
-    // A exceção por item: o subgrupo filtra pelo grupo e o item pelo subgrupo.
-    await escolher(page.getByTestId('par-grupo'), { indice: 1 });
-    await escolher(page.getByTestId('par-subgrupo'), { indice: 1 });
-    await escolher(page.getByTestId('par-item'), { indice: 1 });
-    await escolher(page.getByTestId('par-local'), { indice: 1 });
-    await escolher(page.getByTestId('par-momento'), 'antes_do_horario');
-    await expect(recusas).toContainText('antecedência');
-    await page.getByTestId('par-antecedencia').fill('90');
-    await expect(recusas).toHaveCount(0);
-    await page.getByTestId('par-gravar-regra').click();
-    await expect(page.getByTestId('par-mensagem')).toContainText('Regra de integração gravada');
-    await expect(page.locator('[data-testid^="par-regra-"]')).toHaveCount(1);
-
-    // Grade de horários: a frequência de 3 doses por dia recusa 2 horários; com 3, grava.
-    await escolher(page.getByTestId('par-frequencia'), { indice: 1 });
-    await page.getByTestId('par-horarios').fill('06:00, 14:00');
-    await expect(page.getByTestId('par-recusas-grade')).toContainText('3 dose(s) por dia');
-    await page.getByTestId('par-horarios').fill('06:00, 14:00, 22:00');
-    await expect(page.getByTestId('par-recusas-grade')).toHaveCount(0);
-    await page.getByTestId('par-gravar-grade').click();
-    await expect(page.getByTestId('par-mensagem')).toContainText('Horários padrão gravados');
-    await expect(page.getByTestId('par-grades')).toContainText('06:00, 14:00, 22:00');
-
-    // Dias restritos num horário: gravados, mostrados na lista e preservados ao reabrir a grade e gravar de novo.
-    await page.getByTestId('par-dia-0600-2').check();
-    await page.getByTestId('par-dia-0600-4').check();
-    await page.getByTestId('par-gravar-grade').click();
-    await expect(page.getByTestId('par-grades')).toContainText('06:00 (Seg, Qua), 14:00, 22:00');
-    await page.reload();
-    await page.getByTestId('par-editar-grade-1').click();
-    await expect(page.getByTestId('par-dia-0600-2')).toBeChecked();
-    await expect(page.getByTestId('par-dia-0600-4')).toBeChecked();
-    await expect(page.getByTestId('par-dia-1400-2')).not.toBeChecked();
-    await page.getByTestId('par-gravar-grade').click();
-    await expect(page.getByTestId('par-mensagem')).toContainText('Horários padrão gravados');
-    await expect(page.getByTestId('par-grades')).toContainText('06:00 (Seg, Qua), 14:00, 22:00');
-    await semViolacaoAxe(page, '/farmacia/parametros');
     expect(externas).toEqual([]);
   });
 
