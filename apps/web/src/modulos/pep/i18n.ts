@@ -11,6 +11,7 @@ import { mensagensNotasPaciente } from './i18n-notas-paciente.js';
 import { mensagensTerminologiaClinica } from './i18n-terminologia-clinica.js';
 import { mensagensAvisosRegras } from './i18n-avisos-regras.js';
 import { mensagensExameFisico } from './i18n-exame-fisico.js';
+import { mensagensNotaSoap } from './i18n-nota-soap.js';
 import { mensagensProntuarioRestrito } from './i18n-prontuario-restrito.js';
 import { mensagensPedidoVaga } from './i18n-pedido-vaga.js';
 import { mensagensAnotacoesAdministrativas } from './i18n-anotacoes-administrativas.js';
@@ -40,6 +41,7 @@ export const mensagensPep = {
   avisosRegras: mensagensAvisosRegras,
   // 03-PEP L97: exame físico estruturado por sistema e região do corpo.
   exameFisico: mensagensExameFisico,
+  notaSoap: mensagensNotaSoap,
   restrito: mensagensProntuarioRestrito,
   // 02-AGE linha 53: pedido de vaga do médico no prontuário.
   pedidoVaga: mensagensPedidoVaga,

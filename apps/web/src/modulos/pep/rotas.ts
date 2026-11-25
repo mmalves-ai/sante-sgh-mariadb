@@ -255,6 +255,14 @@ export const rotasPep: RouteRecordRaw[] = [
     meta: { permissao: 'pep.prontuario.ler' },
   },
   {
+    // 03-PEP L98: nota clínica em quatro partes (subjetivo, objetivo, avaliação, plano) com CID-10 e CIAP-2 opcional.
+    path: `/pep/paciente/:paciente${id}/nota-soap`,
+    name: 'pep.notaSoap',
+    component: () => import('./telas/NotaSoapTela.vue'),
+    props: true,
+    meta: { permissao: 'pep.prontuario.ler' },
+  },
+  {
     // 09-AREA L84: diagnósticos do paciente com a CID-10 e o conceito clínico equivalente (registro no atendimento).
     path: `/pep/paciente/:paciente${id}/diagnosticos`,
     name: 'pep.diagnosticos',

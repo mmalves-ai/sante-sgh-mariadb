@@ -180,6 +180,9 @@ async function exportar(): Promise<void> {
           <RouterLink :to="`/pep/paciente/${id}/exame-fisico`" data-testid="atalho-exame-fisico">{{
             t('pep.exameFisico.atalho')
           }}</RouterLink>
+          <RouterLink :to="`/pep/paciente/${id}/nota-soap`" data-testid="atalho-nota-soap">{{
+            t('pep.notaSoap.atalho')
+          }}</RouterLink>
           <AtalhoAnotacoesAdministrativas :paciente="id" />
           <AtalhoEquipeAssistencial :atendimento="cab.data.value.atendimentoAtual" />
           <SanteBotao
