@@ -21,6 +21,8 @@ import { FavorecidosRepasseController } from './favorecidos.controller.js';
 import { PORTA_FAVORECIDOS_REPASSE, PortaFavorecidosRepassePropria } from './favorecidos-propria.js';
 import { FONTE_FISCAL_REPASSE, fonteFiscalRepasse } from './fonte-fiscal.js';
 import { RemuneracaoVariavelController } from './remuneracao-variavel.controller.js';
+import { VariavelFaixaController } from './variavel-faixa.controller.js';
+import { PORTA_VARIAVEL_FAIXA, PortaVariavelFaixaPropria } from './variavel-faixa-propria.js';
 import {
   PORTA_REMUNERACAO_VARIAVEL,
   PortaRemuneracaoVariavelPropria,
@@ -70,7 +72,12 @@ export async function moduloRepasse(
     module: class ModuloRepasse {},
     // Global: o portal-medico injeta as portas deste módulo (montagem da onda 4).
     global: true,
-    controllers: [RepasseController, FavorecidosRepasseController, RemuneracaoVariavelController],
+    controllers: [
+      RepasseController,
+      FavorecidosRepasseController,
+      RemuneracaoVariavelController,
+      VariavelFaixaController,
+    ],
     providers: [
       // Favorecidos e prestadores terceiros (06-FAT linha 46): só com o banco do cliente (sem ele, 503).
       ...(ctx.nucleo && ctx.configuracao.clientePadrao
@@ -83,6 +90,11 @@ export async function moduloRepasse(
             {
               provide: PORTA_REMUNERACAO_VARIAVEL,
               useValue: new PortaRemuneracaoVariavelPropria(ctx.nucleo, ctx.configuracao.clientePadrao),
+            },
+            // Remuneração variável por faixa e rateio da equipe (06-FAT linha 48).
+            {
+              provide: PORTA_VARIAVEL_FAIXA,
+              useValue: new PortaVariavelFaixaPropria(ctx.nucleo, ctx.configuracao.clientePadrao),
             },
             // O dado fiscal e a conta do profissional (cadastro, F3.1) no cálculo do RPA.
             {
