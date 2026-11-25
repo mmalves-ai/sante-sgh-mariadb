@@ -121,6 +121,8 @@ export interface ContaNova {
 }
 
 export interface MudancaConta {
+  /** E-mail de entrada (minúsculas; único). */
+  readonly email?: string;
   readonly ativo?: boolean;
   readonly cifra?: string | null;
   readonly totpEnv?: string | null;

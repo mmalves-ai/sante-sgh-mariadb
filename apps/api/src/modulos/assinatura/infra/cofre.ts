@@ -11,7 +11,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { lerReferenciaSegredoLegado } from '@sgh/contratos';
-import { lerReferenciaCofre } from '@sgh/dominio-documento';
+import { lerReferenciaCofre, lerReferenciaCofreConector } from '@sgh/dominio-documento';
 
 export interface Cofre {
   readonly disponivel: boolean;
@@ -51,10 +51,11 @@ export function decifrarComChave(chave: Buffer, envelope: string): string | null
 
 /**
  * Referências aceitas: as dos provedores de assinatura (M49) e, desde o M59-F3, as das credenciais de parceiro que
- * substituem os segredos guardados nas tabelas do banco (`cofre:parceiro/<estab>/<tabela>/<resumo>/<coluna>`).
+ * substituem os segredos guardados nas tabelas do banco (`cofre:parceiro/<estab>/<tabela>/<resumo>/<coluna>`) e, desde a
+ * obra carga-painel, a senha do servidor Firebird do cliente (`cofre:conector/<cliente>/firebird-senha`).
  */
 function exigirReferencia(r: string): void {
-  if (!lerReferenciaCofre(r) && !lerReferenciaSegredoLegado(r))
+  if (!lerReferenciaCofre(r) && !lerReferenciaSegredoLegado(r) && !lerReferenciaCofreConector(r))
     throw new Error('Referência de cofre inválida.');
 }
 

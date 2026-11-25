@@ -4,8 +4,9 @@
 // na linha de comando: o conector.sh lê a senha do MariaDB do .env, e a variável herdada não é registrada.
 import { execFile } from 'node:child_process';
 import { resolve } from 'node:path';
-import type { ClienteCriado, OrigemDisponivel, OrigemVinculada } from '@sgh/contratos';
+import type { ClienteCriado, OrigemDisponivel, OrigemVinculada, TesteOrigem } from '@sgh/contratos';
 import { ErroOnboarding, type PonteConector } from './porta.js';
+import type { PonteCarga } from './servico-carga.js';
 
 export interface OpcoesPonteScript {
   /** Raiz do repositório (onde ficam tools/ e conector/). */
@@ -24,7 +25,7 @@ interface Saida {
 
 const RECUSAS_409 = new Set(['cliente-existe', 'banco-existe']);
 
-export class PonteConectorScript implements PonteConector {
+export class PonteConectorScript implements PonteConector, PonteCarga {
   constructor(private readonly o: OpcoesPonteScript) {}
 
   private rodar(cmd: string, args: readonly string[], limiteMs: number): Promise<Saida> {
@@ -110,6 +111,29 @@ export class PonteConectorScript implements PonteConector {
       arquivo: String(j['arquivo']),
       tamanhoBytes: Number(j['tamanho_bytes']),
       sha256: String(j['sha256']),
+    };
+  }
+
+  /** Tela de carga: `conector.sh testar-origem <cliente>` abre a conexão e a transação somente leitura no servidor de
+   * origem e devolve só agregados (versão, ODS, número de tabelas). A senha fica no cofre: nunca na linha de comando. */
+  async testarOrigem(codigo: string): Promise<TesteOrigem> {
+    const r = await this.rodar(
+      resolve(this.o.raiz, 'conector/conector.sh'),
+      ['testar-origem', codigo],
+      120_000,
+    );
+    const j = (r.json && typeof r.json === 'object' ? r.json : {}) as Record<string, unknown>;
+    const texto = (v: unknown) => (v == null || v === '' ? null : String(v).slice(0, 80));
+    const tabelas = Number(j['tabelas']);
+    const ok = r.codigo === 0 && j['ok'] === true;
+    return {
+      ok,
+      versaoServidor: texto(j['versaoServidor'] ?? j['versao_servidor'] ?? j['versao']),
+      ods: texto(j['ods']),
+      tabelas: Number.isSafeInteger(tabelas) && tabelas >= 0 ? tabelas : null,
+      mensagem: String(
+        j['mensagem'] ?? j['motivo'] ?? j['erro'] ?? (ok ? 'Conexão aberta.' : 'A conexão falhou.'),
+      ).slice(0, 300),
     };
   }
 }

@@ -3,7 +3,11 @@
 // do worker. Regra 6: fora de produção o SMTP_URL só pode apontar para a captura local (Mailpit em loopback); outro
 // destino recusa a montagem (a API nem parte com ele). Sem SMTP_URL: sem envio (os recursos que dependem dele ficam
 // indisponíveis, nunca caem calados). Texto só com o necessário: nunca senha, resumo ou dado clínico.
+import { execFile } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { connect, type Socket } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 export interface MensagemAcesso {
   readonly para: string;
@@ -21,6 +25,44 @@ export interface PortaEmailAcesso {
 export const ENDERECO_EMAIL = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}$/;
 export const REMETENTE_ACESSO_PADRAO = 'nao-responda@sgh.local';
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
+
+/** E-mail do dono (canal de avisos da obra): DONO_EMAIL do ambiente, senão o padrão de tools/obra/avisar_dono.py. */
+export function emailDoDono(env: Readonly<Record<string, string | undefined>>): string {
+  return (env['DONO_EMAIL']?.trim() || 'mmalves@hal-ai.com').toLowerCase();
+}
+
+/**
+ * Entrega pelo canal de avisos da obra (tools/obra/avisar_dono.py, SES), só ao e-mail do dono. O texto (com link ou
+ * código) passa por arquivo temporário 0600, apagado no fim: nunca por argumento de processo, saída ou log.
+ */
+export function envioPeloCanalDoDono(
+  env: Readonly<Record<string, string | undefined>>,
+  raiz: string,
+): PortaEmailAcesso {
+  return {
+    destino: 'smtp',
+    async enviar(m) {
+      if (m.para.toLowerCase() !== emailDoDono(env))
+        throw new Error('recusado: o canal do dono só entrega ao e-mail do dono');
+      if (/[\r\n]/.test(m.assunto)) throw new Error('Assunto inválido.');
+      const dir = mkdtempSync(join(tmpdir(), 'acesso-'));
+      const arq = join(dir, 'mensagem.txt');
+      try {
+        writeFileSync(arq, m.texto, { mode: 0o600 });
+        await new Promise<void>((ok, falha) =>
+          execFile(
+            'python3',
+            ['-I', join(raiz, 'tools/obra/avisar_dono.py'), '--assunto', m.assunto, '--arquivo', arq, '--para', m.para],
+            { timeout: 30_000 },
+            (e) => (e ? falha(new Error('canal do dono: envio recusado')) : ok()),
+          ),
+        );
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  };
+}
 
 /** Testes e dev sem SMTP: guarda as mensagens em memória (nada sai do processo). */
 export function emailAcessoMemoria(): PortaEmailAcesso & { readonly enviadas: MensagemAcesso[] } {
@@ -42,6 +84,22 @@ export function emailAcessoMemoria(): PortaEmailAcesso & { readonly enviadas: Me
  */
 export function emailAcessoDoAmbiente(env: NodeJS.ProcessEnv): PortaEmailAcesso | null {
   const url = env['SMTP_URL']?.trim();
+  // Canal do dono (decisão do dono, 24/11/2026: "para o admin, que sou eu, pode mandar"): fora de produção, com
+  // ACESSO_EMAIL_CANAL_DONO=sim, o e-mail de acesso cujo destinatário é o dono vai à caixa real dele pelo canal de
+  // avisos da obra (SES); qualquer outro destinatário segue para a captura local (SMTP em loopback) ou é recusado.
+  if ((env['AMBIENTE'] ?? 'dev') !== 'producao' && env['ACESSO_EMAIL_CANAL_DONO']?.trim() === 'sim') {
+    const dono = envioPeloCanalDoDono(env, env['SGH_RAIZ_REPOSITORIO']?.trim() || process.cwd());
+    const resto = url ? emailAcessoDoAmbiente({ ...env, ACESSO_EMAIL_CANAL_DONO: '' }) : null;
+    return {
+      destino: 'smtp',
+      enviar: (m) =>
+        m.para.toLowerCase() === emailDoDono(env)
+          ? dono.enviar(m)
+          : resto
+            ? resto.enviar(m)
+            : Promise.reject(new Error('Neste ambiente só o e-mail do dono é entregue.')),
+    };
+  }
   if (!url) return null;
   const u = new URL(url);
   if (u.protocol !== 'smtp:') throw new Error('SMTP_URL: use smtp://.');

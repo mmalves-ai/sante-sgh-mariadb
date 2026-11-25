@@ -21,6 +21,10 @@ Fila e motor (L2; banco plataforma em CONECTOR_PLATAFORMA_BANCO):
   enfileirar <codigo> importar|sincronizar [--confirmar-exclusao-em-massa] [--continuar]   põe na fila (409 se já há
                                           execução ativa; --continuar: retoma a última importação interrompida)
   cancelar <id>                           cancela execução ainda na fila
+  pausar <id> [--admin N]                 pede a pausa de uma execução rodando (pausa_solicitada_em/_por; o motor para
+                                          no próximo ponto seguro e termina em `pausada`)
+  testar-origem <codigo>                  origem de servidor do cliente: conecta, abre a transação SNAPSHOT READ e
+                                          conta as tabelas ({ok, versaoServidor, ods, tabelas, mensagem}; sem dado)
   execucao <id>                           estado, etapa, % e contadores
   fila [--limite N]                       últimas execuções
   worker [--uma] [--espera S]             trabalhador (com --uma: no máximo uma execução; precisa do abridor)
@@ -49,6 +53,37 @@ def _json(obj, saida=None):
             os.chown(saida, int(uid), int(os.environ.get("CONECTOR_GID", uid)))
     else:
         print(txt)
+
+
+PAUSAVEIS = ("abrindo", "lendo", "gravando", "conciliando")
+
+
+def _pausar(conn, eid, admin_id=None):
+    """Grava o pedido de pausa (idempotente: o primeiro pedido fica). Na fila não há o que pausar (use cancelar);
+    em estado final, 409. Saída só com id, estado e o carimbo do pedido."""
+    conn.begin()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT estado, pausa_solicitada_em FROM conector_execucao WHERE id=%s FOR UPDATE", (eid,))
+            r = cur.fetchone()
+            if not r:
+                conn.rollback(); _json({"erro": 404, "motivo": "execução inexistente"}); return 3
+            estado, pedido = r
+            if estado == "fila":
+                conn.rollback(); _json({"erro": 409, "motivo": "execução ainda na fila: use cancelar"}); return 3
+            if estado not in PAUSAVEIS and estado != "pausando":
+                conn.rollback(); _json({"erro": 409, "motivo": "execução em estado final (%s)" % estado}); return 3
+            if pedido is None:
+                cur.execute("UPDATE conector_execucao SET pausa_solicitada_em=UTC_TIMESTAMP(3),"
+                            " pausa_solicitada_por=%s WHERE id=%s", (admin_id, eid))
+                cur.execute("SELECT pausa_solicitada_em FROM conector_execucao WHERE id=%s", (eid,))
+                pedido = cur.fetchone()[0]
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    _json({"execucao_id": eid, "estado": estado, "pausa_solicitada_em": pedido})
+    return None
 
 
 def main(argv=None):
@@ -81,6 +116,8 @@ def main(argv=None):
     p.add_argument("--confirmar-exclusao-em-massa", action="store_true")
     p.add_argument("--continuar", action="store_true", help="continua a última importação interrompida (continuar.py)")
     p = sub.add_parser("cancelar"); p.add_argument("id", type=int)
+    p = sub.add_parser("pausar"); p.add_argument("id", type=int); p.add_argument("--admin", type=int)
+    p = sub.add_parser("testar-origem"); p.add_argument("codigo")
     p = sub.add_parser("execucao"); p.add_argument("id", type=int)
     p = sub.add_parser("fila"); p.add_argument("--limite", type=int, default=20)
     p = sub.add_parser("worker"); p.add_argument("--uma", action="store_true"); p.add_argument("--espera", type=float, default=5)
@@ -126,6 +163,38 @@ def main(argv=None):
             _json({"erro": 422, "motivo": str(e)}); return 3
         finally:
             conn.close()
+    if a.cmd == "pausar":
+        from . import banco
+        conn = banco.conectar(banco.plataforma_banco())
+        try:
+            return _pausar(conn, a.id, a.admin)
+        finally:
+            conn.close()
+    if a.cmd == "testar-origem":
+        from . import banco, origem as orig, plataforma
+        try:
+            conn = banco.conectar(banco.plataforma_banco())
+        except Exception as e:  # noqa: BLE001 (sem texto do driver: pode ecoar parâmetros)
+            _json({"ok": False, "versaoServidor": None, "ods": None, "tabelas": None,
+                   "mensagem": "banco da plataforma inacessível (%s)" % type(e).__name__}); return 3
+        try:
+            with conn.cursor() as cur:
+                cli = plataforma._cliente(cur, a.codigo, travar=False)
+                cur.execute("SELECT id FROM cliente_origem WHERE cliente_ativo=%s", (cli["id"],))
+                r = cur.fetchone()
+            if not r:
+                _json({"ok": False, "versaoServidor": None, "ods": None, "tabelas": None,
+                       "mensagem": "cliente sem origem ativa"}); return 3
+            res = orig.testar(orig.carregar_origem(conn, r[0]))
+        except (plataforma.PlataformaErro, orig.OrigemErro) as e:
+            res = {"ok": False, "versaoServidor": None, "ods": None, "tabelas": None, "mensagem": str(e)}
+        except Exception as e:  # noqa: BLE001 (erro do driver da plataforma; sem texto: pode ecoar parâmetros)
+            res = {"ok": False, "versaoServidor": None, "ods": None, "tabelas": None,
+                   "mensagem": "falha ao ler a origem no banco da plataforma (%s)" % type(e).__name__}
+        finally:
+            conn.close()
+        _json(res)
+        return 0 if res["ok"] else 3
     if a.cmd == "migrar-controle":
         from . import banco, controle
         root, plat = banco.conectar(None, autocommit=False), banco.conectar(banco.plataforma_banco())

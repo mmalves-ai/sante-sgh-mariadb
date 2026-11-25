@@ -23,7 +23,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F3.5 (05-SADT linha 19): o item "Escala de execução" entrou à mão (mesmo motivo); a contagem acompanha.
 // F3.5 (05-SADT linha 21): os itens "Entrega de resultados" e "Prazos de entrega e publicação no portal" entraram à
 // mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":425,"M":198,"P":57,"N":170};
+// Obra carga-painel (ADR 0010): o item "Carga e sincronismo" do Técnico entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":426,"M":198,"P":57,"N":171};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -451,4 +453,5 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"administracao.coexistencia-com-o-legado.saude-das-conexoes-e-avisos-de-colisao","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Banco de dados","Conexões e avisos de colisão"],"titulo":"Conexões e avisos de colisão","selo":"N","fase":0,"rota":"/administracao/coexistencia/conexoes","permissao":"config.conexao.ler"},
   {"id":"administracao.coexistencia-com-o-legado.painel-da-matriz-de-cobertura","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Banco de dados","Painel da matriz de cobertura"],"titulo":"Painel da matriz de cobertura","selo":"N","fase":1,"rota":"/administracao/coexistencia/matriz","permissao":"config.matriz.ler"},
   {"id":"administracao.saude-do-sistema-observabilidade","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Saúde do sistema"],"titulo":"Saúde do sistema","selo":"N","fase":1,"rota":"/administracao/saude","permissao":"sistema.saude.ler"},
+  {"id":"administracao.carga-e-sincronismo","area":"TÉCNICO","grupo":null,"caminho":["Técnico","Carga e sincronismo"],"titulo":"Carga e sincronismo","selo":"N","fase":4,"rota":"/plataforma/carga","permissao":"config.conexao.ler"},
 ];

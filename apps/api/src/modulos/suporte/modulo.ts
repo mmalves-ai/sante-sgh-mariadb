@@ -157,7 +157,8 @@ export function moduloSuporte(ctx: ContextoModulo, opcoes: OpcoesModuloSuporte =
       { provide: AUDITORIA_COMO, useValue: s.como },
       { provide: APP_INTERCEPTOR, useClass: InterceptadorComo },
     ],
-    exports: [AUDITORIA_COMO],
+    // A tela de carga (plataforma-onboarding) confere a conta da plataforma pelo mesmo serviço.
+    exports: [AUDITORIA_COMO, SERVICO_PLATAFORMA],
   };
 }
 

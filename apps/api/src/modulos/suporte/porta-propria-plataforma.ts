@@ -256,6 +256,7 @@ export class RepositorioPlataformaPropria implements RepositorioPlataforma {
       sets.push(`${coluna} = ?`);
       p.push(v);
     };
+    if (m.email !== undefined) por('email', m.email);
     if (m.ativo !== undefined) por('ativo', m.ativo);
     if (m.cifra !== undefined) por('resumo_senha', m.cifra);
     if (m.totpEnv !== undefined) por('segredo_segundo_fator', m.totpEnv);
@@ -264,17 +265,24 @@ export class RepositorioPlataformaPropria implements RepositorioPlataforma {
     if (m.conviteAte !== undefined) por('convite_valido_ate', m.conviteAte);
     await this.escrever('alterar-conta', async (e) => {
       const agora = this.quando();
-      const feito = await e.executar(
-        `UPDATE conta_plataforma SET ${[...sets, 'alterado_em = ?', 'alterado_por = ?', 'versao = versao + 1'].join(', ')}
+      const feito = await e
+        .executar(
+          `UPDATE conta_plataforma SET ${[...sets, 'alterado_em = ?', 'alterado_por = ?', 'versao = versao + 1'].join(', ')}
           WHERE id = ?${condicao ? ' AND convite_resumo = ? AND CAST(convite_resumo AS BINARY) = CAST(? AS BINARY)' : ''}`,
-        [
-          ...p,
-          agora,
-          evento?.ator ? idBanco(evento.ator) : null,
-          n,
-          ...(condicao ? [condicao.conviteHash, condicao.conviteHash] : []),
-        ],
-      );
+          [
+            ...p,
+            agora,
+            evento?.ator ? idBanco(evento.ator) : null,
+            n,
+            ...(condicao ? [condicao.conviteHash, condicao.conviteHash] : []),
+          ],
+        )
+        .catch((x: unknown) => {
+          // E-mail já usado por outra conta: o nome da chave, nunca o valor.
+          if (duplicado(x, 'uq_conta_plataforma_email'))
+            throw new Error('uq_conta_plataforma_email', { cause: x });
+          throw x;
+        });
       // Com a condição do convite, 0 linhas é o convite que mudou entre a leitura e a gravação (uso único).
       if (feito !== 1 && condicao) throw new ErroConviteMudou('conta_plataforma: o convite mudou.');
       if (feito !== 1) throw new Error('conta_plataforma: conta não alterada.');

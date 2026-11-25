@@ -97,6 +97,8 @@ export const mensagensOnboarding = {
     concluida: 'Concluída',
     falhou: 'Falhou',
     cancelada: 'Cancelada',
+    pausando: 'Pausando',
+    pausada: 'Pausada',
   },
   relatorio: {
     titulo: 'Relatório de conciliação',

@@ -250,8 +250,8 @@ class Plataforma(unittest.TestCase):
             k = ex["contadores"]
             self.assertEqual(k["registros_lidos"], MANIF["registros_total"])
             self.assertEqual(k["tabelas"], len(MANIF["contagens"]))
-            self.assertTrue(k["somente_leitura"] and k["arquivo_inalterado"] and k["conciliacao"]["conferido"])
-            self.assertEqual((k["conciliacao"]["fonte_origem"], k["conciliacao"]["registros_origem"],
+            self.assertTrue(k["somente_leitura"] and k["arquivo_inalterado"] and k["conciliacao_leitura"]["conferido"])
+            self.assertEqual((k["conciliacao_leitura"]["fonte_origem"], k["conciliacao_leitura"]["registros_origem"],
                               k["gstat"]["divergentes"]), ("gstat", MANIF["registros_total"], 0))
             self.assertTrue(k["abertura"]["separado"])
             self.assertEqual(ex["imagem_sha256"], SHA)
@@ -292,7 +292,7 @@ class Plataforma(unittest.TestCase):
             t.fechar()
         self.assertEqual((ex["id"], ex["estado"]), (eid, "falhou"))
         self.assertIn("gstat", ex["motivo_falha"])
-        self.assertFalse(ex["contadores"]["conciliacao"]["conferido"])
+        self.assertFalse(ex["contadores"]["conciliacao_leitura"]["conferido"])
         self.assertEqual(_um(self.c, "SELECT conferido, pendencias FROM conector_ctl_exemplo_l2a.conciliacao"
                                      " WHERE execucao_id=%s", (eid,)), (0, 1))
         self.assertEqual(caminho.sha256_arquivo(os.path.join(ORIG, ARQ)), SHA)
@@ -312,7 +312,7 @@ class Plataforma(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr[-2000:])
         ex = json.loads(r.stdout)
         self.assertEqual((ex["id"], ex["estado"]), (eid, "concluida"), ex.get("motivo_falha"))
-        self.assertTrue(ex["contadores"]["arquivo_inalterado"] and ex["contadores"]["conciliacao"]["conferido"])
+        self.assertTrue(ex["contadores"]["arquivo_inalterado"] and ex["contadores"]["conciliacao_leitura"]["conferido"])
         m, a = ex["separacao"]["motor"], ex["separacao"]["abridor"]
         self.assertEqual((m["uid"], m["cap_efetivas"], m["cap_limite"], m["no_new_privs"], m["conta_mariadb"]),
                          (uid, "0" * 16, "0" * 16, "1", conta))
