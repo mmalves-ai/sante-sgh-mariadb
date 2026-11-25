@@ -5,6 +5,11 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import type { ContextoModulo } from '../registro.js';
+import { ControleOrcamentarioController } from './controle-orcamentario.controller.js';
+import {
+  PORTA_CONTROLE_ORCAMENTARIO,
+  PortaControleOrcamentarioPropria,
+} from './controle-orcamentario-propria.js';
 import { EstatisticasOrcamentoController } from './estatisticas-orcamento.controller.js';
 import {
   PORTA_ESTATISTICAS_ORCAMENTO,
@@ -87,6 +92,8 @@ export async function modulo(
       EstatisticasOrcamentoController,
       // C2-107 (07-FIN linha 128): projeto como centro de resultado; sem banco do cliente, 503.
       ProjetoResultadoController,
+      // C2-112 (07-FIN linha 130): controle orçamentário na compra e no pagamento; sem banco do cliente, 503.
+      ControleOrcamentarioController,
     ],
     providers: [
       { provide: PORTA_ORCAMENTO, useValue: porta },
@@ -97,6 +104,13 @@ export async function modulo(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaProjetoResultadoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      {
+        provide: PORTA_CONTROLE_ORCAMENTARIO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaControleOrcamentarioPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
     ],
