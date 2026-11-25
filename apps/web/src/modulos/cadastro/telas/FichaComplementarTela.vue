@@ -21,9 +21,11 @@ import {
   incluirContato,
   incluirResponsavel,
   lerContatos,
+  lerMunicipiosFicha,
   lerResponsaveis,
   lerTiposFicha,
 } from '../api-ficha-complementar.js';
+import { lerEnderecoCep } from '../api-cadastro.js';
 
 const props = defineProps<{ id: string }>();
 const paciente = computed(() => Number(props.id));
@@ -44,6 +46,14 @@ const { t } = useI18n({
       semNumero: 'Sem número',
       complemento: 'Complemento',
       bairro: 'Bairro (vazio: o do CEP)',
+      cepFora:
+        'CEP fora do cadastro de CEPs: informe a espécie do logradouro, o município e o logradouro (endereço manual).',
+      cepAchado: 'Pelo cadastro de CEPs: {logradouro}, {cidade}/{uf}.',
+      especie: 'Espécie do logradouro',
+      especieDoCep: 'A do CEP',
+      buscarMunicipio: 'Buscar município (2 letras ou mais)',
+      municipio: 'Município',
+      escolha: 'Escolha…',
       inicio: 'Vale desde',
       fim: 'Vale até',
       principal: 'Principal',
@@ -90,6 +100,9 @@ const { t } = useI18n({
       erro: {
         cep: 'CEP com 8 dígitos.',
         numero: 'Informe o número ou marque "sem número".',
+        especie: 'Escolha a espécie do logradouro.',
+        municipio: 'Escolha o município.',
+        logradouro: 'Informe o logradouro.',
         ddd: 'DDD com 2 dígitos.',
         tel: 'Telefone com 8 a 15 dígitos.',
         email: 'E-mail inválido.',
@@ -178,6 +191,8 @@ const so = (v: string) => v.replace(/\D+/g, '');
 const end = ref({
   tipo: 0,
   cep: '',
+  especie: null as number | null,
+  municipio: null as number | null,
   logradouro: '',
   numero: '',
   semNumero: false,
@@ -186,10 +201,44 @@ const end = ref({
   principal: false,
   vigenciaInicio: '',
 });
+// O CEP digitado é conferido no cadastro de CEPs na hora: fora dele, o endereço vira manual e pede a espécie do
+// logradouro, o município e o logradouro (os leiautes públicos pedem o tipo de logradouro e o código do IBGE).
+const cepDigitos = computed(() => so(end.value.cep));
+const cepConsulta = useQuery({
+  queryKey: computed(() => ['cadastro', 'ficha-cep', cepDigitos.value]),
+  queryFn: () => lerEnderecoCep(cepDigitos.value),
+  enabled: computed(() => cepDigitos.value.length === 8),
+  staleTime: 60_000,
+});
+const enderecoManual = computed(
+  () => cepDigitos.value.length === 8 && cepConsulta.isSuccess.value && cepConsulta.data.value === null,
+);
+const termoMunicipio = ref('');
+const municipios = useQuery({
+  queryKey: computed(() => ['cadastro', 'ficha-municipios', termoMunicipio.value.trim()]),
+  queryFn: () => lerMunicipiosFicha(termoMunicipio.value.trim()),
+  enabled: computed(() => enderecoManual.value && termoMunicipio.value.trim().length >= 2),
+});
+const opcoesEspecie = computed(() => [
+  { valor: null, rotulo: enderecoManual.value ? t('escolha') : t('especieDoCep') },
+  ...(tipos.data.value?.especieLogradouro ?? []).map((o) => ({ valor: o.id, rotulo: o.descricao })),
+]);
+const opcoesMunicipio = computed(() => [
+  { valor: null, rotulo: t('escolha') },
+  ...(municipios.data.value ?? []).map((o) => ({ valor: o.id, rotulo: `${o.nome}/${o.uf}` })),
+]);
+watch(enderecoManual, (manual) => {
+  if (!manual) end.value.municipio = null;
+});
 const errosEnd = computed(() => {
   const e: string[] = [];
-  if (end.value.cep && so(end.value.cep).length !== 8) e.push(t('erro.cep'));
+  if (end.value.cep && cepDigitos.value.length !== 8) e.push(t('erro.cep'));
   if (end.value.cep && !end.value.semNumero && !end.value.numero.trim()) e.push(t('erro.numero'));
+  if (enderecoManual.value) {
+    if (!end.value.especie) e.push(t('erro.especie'));
+    if (!end.value.municipio) e.push(t('erro.municipio'));
+    if (!end.value.logradouro.trim()) e.push(t('erro.logradouro'));
+  }
   return e;
 });
 async function incluirEndereco(): Promise<void> {
@@ -198,6 +247,7 @@ async function incluirEndereco(): Promise<void> {
     incluirContato(paciente.value, 'enderecos', {
       ...end.value,
       cep: so(end.value.cep),
+      municipio: enderecoManual.value ? end.value.municipio : null,
       vigenciaInicio: end.value.vigenciaInicio || null,
     }),
   );
@@ -205,6 +255,8 @@ async function incluirEndereco(): Promise<void> {
     end.value = {
       ...end.value,
       cep: '',
+      especie: null,
+      municipio: null,
       logradouro: '',
       numero: '',
       complemento: '',
@@ -377,7 +429,35 @@ async function confirmarEncerramento(): Promise<void> {
           >{{ t('cep') }}
           <input v-model="end.cep" maxlength="9" inputmode="numeric" data-testid="endereco-cep"
         /></label>
-        <label>{{ t('logradouro') }} <input v-model="end.logradouro" maxlength="150" /></label>
+        <p v-if="enderecoManual" class="aviso-campo" role="status" data-testid="endereco-manual-aviso">
+          {{ t('cepFora') }}
+        </p>
+        <p v-else-if="cepConsulta.data.value" class="aviso-campo" data-testid="endereco-cep-achado">
+          {{ t('cepAchado', cepConsulta.data.value) }}
+        </p>
+        <SanteSelecao
+          v-model="end.especie"
+          :rotulo="t('especie')"
+          :opcoes="opcoesEspecie"
+          :busca="true"
+          data-testid="endereco-especie"
+        />
+        <template v-if="enderecoManual">
+          <label
+            >{{ t('buscarMunicipio') }}
+            <input v-model="termoMunicipio" maxlength="80" data-testid="endereco-municipio-busca"
+          /></label>
+          <SanteSelecao
+            v-model="end.municipio"
+            :rotulo="t('municipio')"
+            :opcoes="opcoesMunicipio"
+            data-testid="endereco-municipio"
+          />
+        </template>
+        <label
+          >{{ t('logradouro') }}
+          <input v-model="end.logradouro" maxlength="150" data-testid="endereco-logradouro"
+        /></label>
         <label
           >{{ t('numero') }}
           <input v-model="end.numero" maxlength="10" :disabled="end.semNumero" data-testid="endereco-numero"
@@ -603,6 +683,10 @@ async function confirmarEncerramento(): Promise<void> {
 }
 .erro-campo {
   color: var(--sgh-alerta);
+  width: 100%;
+}
+.aviso-campo {
+  color: var(--sgh-texto-secundario);
   width: 100%;
 }
 </style>

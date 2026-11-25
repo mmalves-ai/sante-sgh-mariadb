@@ -51,7 +51,13 @@ const esquemaContatos = z.object({
 export type Contatos = z.infer<typeof esquemaContatos>;
 
 const opcoes = z.array(z.object({ id: z.number(), descricao: z.string() }));
-const esquemaTipos = z.object({ endereco: opcoes, telefone: opcoes, parentesco: opcoes });
+const esquemaTipos = z.object({
+  endereco: opcoes,
+  telefone: opcoes,
+  parentesco: opcoes,
+  /** Espécies do logradouro (rua, avenida…) para o endereço manual. */
+  especieLogradouro: opcoes.default([]),
+});
 export type TiposFicha = z.infer<typeof esquemaTipos>;
 
 const esquemaResponsaveis = z.object({
@@ -128,6 +134,10 @@ async function gravar(url: string, corpo: unknown = {}, buscar: typeof fetch = f
 export const lerContatos = (id: number, b?: typeof fetch) => ler(`${P}/${id}/contatos`, esquemaContatos, b);
 export const lerTiposFicha = (b?: typeof fetch) =>
   ler('/api/cadastros/ficha-complementar/tipos', esquemaTipos, b);
+const esquemaMunicipios = z.array(z.object({ id: z.number(), nome: z.string(), uf: z.string() }));
+/** Municípios do IBGE pelo começo do nome (endereço manual: CEP fora do cadastro de CEPs). */
+export const lerMunicipiosFicha = (termo: string, b?: typeof fetch) =>
+  ler(`/api/cadastros/ficha-complementar/municipios?${new URLSearchParams({ termo })}`, esquemaMunicipios, b);
 export const lerResponsaveis = (id: number, b?: typeof fetch) =>
   ler(`${P}/${id}/responsaveis`, esquemaResponsaveis, b);
 export const lerRegrasCampo = (inativas: boolean, b?: typeof fetch) =>
