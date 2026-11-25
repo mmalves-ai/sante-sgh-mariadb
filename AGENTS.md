@@ -183,8 +183,12 @@ Mudar o guardião ou o plano só com pedido explícito do dono.
 
 ### 4. O SPDATA nunca é alterado
 
-- O conector **só lê imagens** (cópias restauradas em container sem rede de saída e em somente leitura).
-  Nunca lê o banco de produção nem grava no Firebird.
+- O conector **nunca grava na origem.** Ele lê de dois jeitos:
+  - **imagens:** cópias restauradas em container sem rede de saída e em somente leitura;
+  - **leitura direta do servidor Firebird do hospital** (decisão do dono, 24/11/2026,
+    [ADR 0010](docs/adr/0010-leitura-direta-do-servidor-firebird.md)): usuário só leitura (role só com `SELECT`)
+    e uma transação somente leitura (`SNAPSHOT` + `READ`) por execução. Em dev, simulada por
+    `infra/firebird-simulado/`.
 - As cópias compartilhadas do `banco-dev` (`redesante-fb-pc`, `redesante-fb-pc2`) e o `sante-firebird`
   não são alterados nem parados por este projeto.
 

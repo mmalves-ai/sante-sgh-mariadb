@@ -77,6 +77,7 @@ import { mensagensEspecialidades } from '../modulos/especialidades/i18n-especial
 import { mensagensRouparia } from '../modulos/rouparia/i18n-rouparia.js';
 import { mensagensSessoes } from '../modulos/sessoes/i18n-sessoes.js';
 import { mensagensOnboarding } from '../modulos/plataforma/i18n-onboarding.js';
+import { mensagensCarga } from '../modulos/plataforma/i18n-carga.js';
 import { mensagensDigitalizacao } from '../modulos/same/i18n-digitalizacao.js';
 import { mensagensSameTramite } from '../modulos/same/i18n-tramite.js';
 import { mensagensElegibilidade } from '../modulos/tiss/i18n-elegibilidade.js';
@@ -2342,6 +2343,8 @@ export const mensagensWeb = {
   sessoes: mensagensSessoes,
   // F4 L3: painel de onboarding de clientes da plataforma.
   onboarding: mensagensOnboarding,
+  // Obra carga-painel (ADR 0010): tela "Carga e sincronismo" do painel técnico.
+  carga: mensagensCarga,
   digitalizacao: mensagensDigitalizacao,
   // F3.9: protocolo e empréstimo do arquivo; elegibilidade do beneficiário.
   sameTramite: mensagensSameTramite,

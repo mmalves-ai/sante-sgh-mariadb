@@ -479,3 +479,4 @@ export * from './permissoes/patrimonio.js';
 export * from './plataforma/onboarding.js';
 // 01-ADM L84: colunas que cada lista oferece para a visão guardada por usuário.
 export * from './visao-lista.js';
+export * from './plataforma/carga.js';

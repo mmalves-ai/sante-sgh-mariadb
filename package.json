@@ -51,7 +51,7 @@
     "implantacao:manual": "node --import ./tools/verificadores/src/caminhos-sgh.ts tools/implantacao/src/gerar-manual.ts",
     "instalacao:gerar": "node --import ./tools/verificadores/src/caminhos-sgh.ts tools/instalacao/src/gerar.ts",
     "liberacao:ligar-tudo": "SGH_DEV_PERMITIR_SYSDBA=sim TZ=UTC node --import ./tools/verificadores/src/caminhos-sgh.ts tools/instalacao/src/liberacao-ligar-tudo.ts",
-    "plataforma:criar-admin": "SGH_DEV_PERMITIR_SYSDBA=sim node --import ./tools/verificadores/src/caminhos-sgh.ts tools/schema-check/src/plataforma-criar-admin.ts",
+    "plataforma:criar-admin": "SGH_DEV_PERMITIR_SYSDBA=sim node --experimental-transform-types --import ./tools/verificadores/src/caminhos-sgh.ts tools/db/plataforma-criar-admin.ts",
     "contas:inventario": "TZ=UTC node --import ./tools/verificadores/src/caminhos-sgh.ts tools/verificadores/src/contas-banco.ts",
     "imutabilidade:gerar": "TZ=UTC node --import ./tools/verificadores/src/caminhos-sgh.ts tools/verificadores/src/imutabilidade-gerar.ts",
     "privilegios:gerar": "TZ=UTC node --import ./tools/verificadores/src/caminhos-sgh.ts tools/verificadores/src/privilegios-gerar.ts",

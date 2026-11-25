@@ -203,6 +203,22 @@ describe.skipIf(SEM_BANCO)('suporte no banco próprio contra o MariaDB (platafor
     ]);
   });
 
+  it('e-mail de entrada alterável: único no banco (nome da chave, sem o valor) e com o evento na mesma transação', async () => {
+    const id = (await repo.contaPorEmail('convidado@exemplo.invalid'))!.id;
+    await expect(
+      repo.alterarConta(id, { email: 'suporte.validacao@exemplo.invalid' }, evento(null, 'x')),
+    ).rejects.toThrow('uq_conta_plataforma_email');
+    expect(valor(`SELECT COUNT(*) FROM conta_plataforma_evento WHERE evento = 'x'`)).toBe('0');
+    await repo.alterarConta(
+      id,
+      { email: 'convidado.novo@exemplo.invalid' },
+      evento(null, 'plataforma.conta.email.alterado'),
+    );
+    expect((await repo.contaPorId(id))?.email).toBe('convidado.novo@exemplo.invalid');
+    expect((await repo.eventosConta(1))[0]?.evento).toBe('plataforma.conta.email.alterado');
+    await repo.alterarConta(id, { email: 'convidado@exemplo.invalid' }, null);
+  });
+
   it('atribuições: liga, desliga e religa por rede, com o evento do que mudou', async () => {
     const [sup] = await repo.contas();
     const id = sup?.id ?? '';
