@@ -317,13 +317,13 @@ export class PortaAuditoriaAntimicrobianoPropria {
         'auditor-sem-profissional',
         'O parecer na ficha é assinado por um profissional: a conta não tem vínculo vigente com profissional.',
       );
-    const fi = await tx.uma<Linha>(
+    const [fi] = await tx.consultarParaAtualizar<Linha>(
       `SELECT f.id, f.versao, f.paciente_id, f.atendimento_id, f.prescricao_item_id, f.antimicrobiano_id,
               i.item_prescritivel_id, ft.codigo AS finalidade
          FROM ficha_antimicrobiano f
          JOIN prescricao_item i ON i.id = f.prescricao_item_id
          JOIN finalidade_terapeutica ft ON ft.id = f.finalidade_terapeutica_id
-        WHERE f.id = ? AND f.estabelecimento_id = ? AND f.excluido_em IS NULL FOR UPDATE`,
+        WHERE f.id = ? AND f.estabelecimento_id = ? AND f.excluido_em IS NULL`,
       [ficha, est],
     );
     if (!fi) throw recusar(404, 'registro-inexistente', 'A ficha de antimicrobiano não foi encontrada.');
@@ -367,9 +367,9 @@ export class PortaAuditoriaAntimicrobianoPropria {
       throw recusar(422, cod, r.recusas.map((x) => MENSAGENS_AUDITORIA_ANTIMICROBIANO[x]).join(' '));
     }
     const g = r.gravar;
-    const anteriores = await tx.consultar<Linha>(
+    const anteriores = await tx.consultarParaAtualizar<Linha>(
       `SELECT id, versao FROM auditoria_prescricao_ccih
-        WHERE ficha_antimicrobiano_id = ? AND situacao = 'ativa' AND excluido_em IS NULL FOR UPDATE`,
+        WHERE ficha_antimicrobiano_id = ? AND situacao = 'ativa' AND excluido_em IS NULL`,
       [ficha],
     );
     for (const a of anteriores)

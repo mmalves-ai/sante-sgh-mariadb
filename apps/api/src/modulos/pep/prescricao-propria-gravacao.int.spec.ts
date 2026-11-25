@@ -269,6 +269,8 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
         naoPadronizado: null,
         justificativaAlergia: null,
         seNecessario: [],
+        intervaloMinimoMinutos: null,
+        doseMaxima: null,
         kit: [],
       },
       horarios: horas.map((h) => ({ dataHora: local(h * HORA), relativo: null })),
