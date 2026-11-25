@@ -37,9 +37,10 @@ export const ROTULOS_FONTE_FATO: Readonly<Record<string, string>> = {
   movimento_estoque: 'Saídas de estoque',
   nota_entrada: 'Notas fiscais de entrada',
   recibo_autonomo: 'Recibos de autônomo',
-  SGH_PES_FOLHA_FATO: 'Folha de pagamento (custo de pessoal)',
-  SGH_PAT_DEPRECIACAO: 'Depreciação dos bens patrimoniais',
-  SGH_PAT_AJUSTE: 'Perda por impairment dos bens patrimoniais',
+  lancamento_titulos_folha: 'Folha de pagamento (custo de pessoal)',
+  cota_depreciacao: 'Depreciação dos bens patrimoniais',
+  ajuste_valor_bem: 'Perda por impairment dos bens patrimoniais',
+  lancamento_repasse: 'Repasse aos profissionais',
 };
 
 export const rotuloDaFonte = (tabela: string): string => ROTULOS_FONTE_FATO[tabela] ?? 'Outra fonte';

@@ -88,6 +88,15 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
   const limpar = (e: Escritor) =>
     (async () => {
       for (const est of [ids.est, ids.outroEst]) {
+        // C2-093: os fatos contábeis que o lançamento publicou (os estornos antes dos originais, pela chave).
+        await e.executar(
+          "DELETE FROM fato_contabil WHERE estabelecimento_id = ? AND entidade_origem = 'lancamento_repasse' AND estorno = 1",
+          [est],
+        );
+        await e.executar(
+          "DELETE FROM fato_contabil WHERE estabelecimento_id = ? AND entidade_origem = 'lancamento_repasse'",
+          [est],
+        );
         await e.executar(
           'DELETE x FROM rpa_retencao x JOIN rpa r ON r.id = x.rpa_id WHERE r.estabelecimento_id = ?',
           [est],
@@ -427,6 +436,27 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
     const est1 = Number(
       (await lancar(ctx, { origem: 'estorno', valor: -200, estornaDe: l1 })).resultado['lancamento'],
     );
+    // C2-093 (ADR 0003): o lançamento publica o fato `repasse` na mesma transação; o estorno parcial estorna o fato
+    // vivo (o original fica, o estorno aponta para ele, com o motivo) e publica o saldo como fato novo, na data dele.
+    const fatos = await nucleo.lerSomente(ctx, (l) =>
+      l.consultar(
+        `SELECT f.id, ev.codigo, f.valor, f.estorno, f.estornado_fato_contabil_id AS de, f.situacao,
+                DATE_FORMAT(f.data_fato, '%Y-%m-%d') AS data, f.documento
+           FROM fato_contabil f JOIN evento_contabil ev ON ev.id = f.evento_contabil_id
+          WHERE f.estabelecimento_id = ? AND f.entidade_origem = 'lancamento_repasse' AND f.entidade_origem_id = ?
+            AND f.excluido_em IS NULL ORDER BY f.id`,
+        [ids.est, l1],
+      ),
+    );
+    expect(
+      fatos.map((f) => [f['codigo'], Number(f['valor']), Number(f['estorno']), f['situacao'], f['data']]),
+    ).toEqual([
+      ['repasse', 1000, 0, 'pendente', '2026-10-10'],
+      ['repasse', 1000, 1, 'pendente', '2026-10-10'],
+      ['repasse', 800, 0, 'pendente', '2026-10-10'],
+    ]);
+    expect(Number(fatos[1]!['de'])).toBe(Number(fatos[0]!['id']));
+    expect(String(fatos[1]!['documento'])).toContain(`estorno do repasse no lançamento ${est1}`);
     // O contrato: o id do estorno → o id do original (o original não é estorno de ninguém).
     expect([...(await porta.estornos(ctx, [l1, est1]))]).toEqual([[est1, l1]]);
     expect((await porta.estornos(outro, [est1])).size).toBe(0);
@@ -529,6 +559,44 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
         [ids.est],
       ),
     ).toBeGreaterThanOrEqual(1);
+  });
+
+  it('C2-093: o estorno total zera o fato do repasse (estorna o fato vivo e não publica saldo)', async () => {
+    const lancar = (e: Record<string, unknown>) =>
+      porta.executar(
+        ctx,
+        'repasse.lancarEvento',
+        {
+          origem: 'ajuste',
+          empresa: 1,
+          competencia: '2026-08',
+          data: '2026-08-10',
+          evento: ids.evento,
+          tipo: 'M',
+          prestador: ids.profissional,
+          profissional: ids.profissional,
+          valor: 1000,
+          justificativa: 'Ajuste L0304 fato',
+          ...e,
+        },
+        octx(ctx),
+      );
+    // O estorno do saldo inteiro zera o efeito: estorna o fato do saldo e não publica fato novo.
+    const l2 = Number((await lancar({ valor: 500 })).resultado['lancamento']);
+    await lancar({ origem: 'estorno', valor: -500, estornaDe: l2, data: '2026-08-12' });
+    const vivos = await contar(
+      `SELECT SUM(CASE WHEN f.estorno = 1 THEN -f.valor ELSE f.valor END) AS q FROM fato_contabil f
+        WHERE f.estabelecimento_id = ? AND f.entidade_origem = 'lancamento_repasse' AND f.entidade_origem_id = ?
+          AND f.excluido_em IS NULL`,
+      [ids.est, l2],
+    );
+    expect(vivos).toBe(0);
+    expect(
+      await contar(
+        "SELECT COUNT(*) AS q FROM fato_contabil WHERE entidade_origem = 'lancamento_repasse' AND entidade_origem_id = ?",
+        [l2],
+      ),
+    ).toBe(2);
   });
 
   it('produção e regra de faixa: o item entrega o código de negócio, e a apuração casa a regra pela faixa', async () => {

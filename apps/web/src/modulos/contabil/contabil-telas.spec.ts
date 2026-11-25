@@ -578,7 +578,7 @@ describe('tela dos lançamentos automáticos (aba Fatos)', () => {
         porSituacao: { contabilizado: 8, semConta: 4 },
       },
       {
-        fonte: 'SGH_PES_FOLHA_FATO',
+        fonte: 'lancamento_titulos_folha',
         tipos: ['Folha e encargos'],
         marca: 0,
         ultimaLeitura: null,
@@ -640,7 +640,9 @@ describe('tela dos lançamentos automáticos (aba Fatos)', () => {
     const linha = w.find('[data-testid="resumo-fonte-titulo_pagar"]').text();
     expect(linha).toContain('Contas a pagar');
     expect(linha).not.toContain('titulo_pagar');
-    expect(w.find('[data-testid="resumo-fonte-SGH_PES_FOLHA_FATO"]').text()).toContain('Ainda não lida');
+    expect(w.find('[data-testid="resumo-fonte-lancamento_titulos_folha"]').text()).toContain(
+      'Ainda não lida',
+    );
     expect(w.find('[data-testid="resumo-total"]').text()).toContain(
       'Total: 12 fatos (Contabilizado 8 + Regra sem conta',
     );

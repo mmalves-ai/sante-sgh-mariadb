@@ -68,6 +68,8 @@ import {
   type RpaRegistrado,
   type VersaoRegraRegistrada,
 } from './tipos.js';
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
+import { publicarFatosDoRepasse } from './fato-contabil-repasse.js';
 
 /** O mínimo do núcleo que a porta usa. */
 export type NucleoRepasse = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
@@ -121,6 +123,7 @@ const TABELAS = [
   'producao_repasse',
   'estorno_repasse',
   'sequencia_negocio',
+  ...TABELAS_PUBLICACAO_FATO,
 ] as const;
 
 /** Número de negócio do estabelecimento (a numeração nasce na primeira vez, com o prefixo). */
@@ -690,7 +693,9 @@ async function aplicarOperacao(
           [e['estornaDe']],
         );
         const pct = o?.['p'] === null || o?.['p'] === undefined ? null : n(o['p']);
-        return { lancamento: await linha(n(o?.['f']), String(o?.['t']) as TipoFavorecido, valor, pct) };
+        const estorno = await linha(n(o?.['f']), String(o?.['t']) as TipoFavorecido, valor, pct);
+        await publicarFatosDoRepasse(tx, est, [estorno]);
+        return { lancamento: estorno };
       }
       const ids: number[] = [];
       const cents: number[] = [];
@@ -699,6 +704,7 @@ async function aplicarOperacao(
           ids.push(await linha(p.favorecido, p.tipo, p.centavos / 100, p.percentual));
           cents.push(p.centavos);
         }
+      await publicarFatosDoRepasse(tx, est, ids);
       return { lancamento: ids[0]!, lancamentos: ids, centavos: cents };
     }
     case 'repasse.emitirRpa': {
@@ -863,7 +869,7 @@ async function aplicarOperacao(
 // ── Gravador do lançamento do repasse sobre a transação de outra operação (escala: plantão realizado) ─────────────
 
 /** Tabelas que o gravador do lançamento grava (quem compõe o gravador na própria operação as declara). */
-export const TABELAS_EVENTO_REPASSE: readonly string[] = ['lancamento_repasse'];
+export const TABELAS_EVENTO_REPASSE: readonly string[] = ['lancamento_repasse', ...TABELAS_PUBLICACAO_FATO];
 
 /** A entrada do lançamento composto: a de repasse.lancarEvento, sem a origem (sempre `plantao`) e sem o estorno. */
 export type EntradaEventoRepasseComposto = Omit<

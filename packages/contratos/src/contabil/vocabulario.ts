@@ -19,6 +19,7 @@ export const ORIGENS_LANCAMENTO = {
   9: 'Estoque',
   10: 'Recibo de autônomo',
   11: 'Contabilidade',
+  12: 'Repasse médico',
 } as const;
 export type OrigemLancamento = keyof typeof ORIGENS_LANCAMENTO;
 export const CODIGOS_ORIGEM_LANCAMENTO = Object.keys(ORIGENS_LANCAMENTO).map(Number) as OrigemLancamento[];
@@ -42,6 +43,8 @@ export const TIPOS_FATO = {
   depreciacao: { origem: 7, rotulo: 'Depreciação do mês' },
   impairment: { origem: 7, rotulo: 'Perda por impairment do bem' },
   folha: { origem: 8, rotulo: 'Folha e encargos' },
+  repasse: { origem: 12, rotulo: 'Repasse ao profissional' },
+  descontoRepasse: { origem: 12, rotulo: 'Desconto no repasse do profissional' },
 } as const satisfies Record<string, { origem: OrigemLancamento; rotulo: string }>;
 export type TipoFato = keyof typeof TIPOS_FATO;
 export const CODIGOS_TIPO_FATO = Object.keys(TIPOS_FATO) as TipoFato[];
@@ -63,8 +66,11 @@ export interface FonteFato {
    */
   readonly linhasPc: number;
   readonly semCarimboPc: number | null;
-  /** Dona da fonte (marco que a lê) quando é tabela SGH_ de outro marco. */
-  readonly marcoFonte?: string;
+  /**
+   * O módulo publica o fato na transação do documento (ADR 0003): a fonte não é lida pelo ciclo da leitura e não tem
+   * derivador.
+   */
+  readonly publicada?: true;
 }
 
 export const FONTES_FATO: readonly FonteFato[] = [
@@ -132,39 +138,43 @@ export const FONTES_FATO: readonly FonteFato[] = [
     linhasPc: 5_243,
     semCarimboPc: null,
   },
+  // Fontes publicadas pelo próprio módulo na transação do documento (ADR 0003; C2-093): o ciclo de leitura não as lê
+  // (sem derivador); entram aqui para o resumo por origem na tela de fatos.
   {
-    // D-M54-CUSTO-539 (M53.9): o custo de pessoal da folha calculada fica em SGH_PES_FOLHA_FATO (por centro de custo,
-    // rotina e natureza); SGH_PES_FOLHA_RESUMO só recebe o retorno da folha externa e não é fonte (D-FOLHAFATO-541).
-    tabela: 'SGH_PES_FOLHA_FATO',
+    tabela: 'lancamento_titulos_folha',
     chave: 'id',
     carimbo: null,
     tipos: ['folha'],
     linhasPc: 0,
     semCarimboPc: null,
-    marcoFonte: 'M53',
+    publicada: true,
   },
   {
-    // M54.6 (F6, regra 12): a cota mensal da depreciação de cada bem, gravada pelo cálculo do patrimônio (imutável:
-    // só SELECT e INSERT); um fato de origem 7 (Patrimônio) por cota, pelo centro de custo onde o bem estava.
-    tabela: 'SGH_PAT_DEPRECIACAO',
+    tabela: 'cota_depreciacao',
     chave: 'id',
     carimbo: null,
     tipos: ['depreciacao'],
     linhasPc: 0,
     semCarimboPc: null,
-    marcoFonte: 'M54',
+    publicada: true,
   },
   {
-    // W0-08 (M1, script 1105; CPC 01): o ajuste do valor do bem (imutável: só SELECT e INSERT). Só a perda por
-    // impairment vira fato (origem 7); a revisão de estimativa e a reavaliação são eventos sem lançamento. O estorno
-    // (SGH_PAT_AJUSTE_ESTORNO) faz a conciliação lançar o estorno, como na depreciação.
-    tabela: 'SGH_PAT_AJUSTE',
+    tabela: 'ajuste_valor_bem',
     chave: 'id',
     carimbo: null,
     tipos: ['impairment'],
     linhasPc: 0,
     semCarimboPc: null,
-    marcoFonte: 'W0-08',
+    publicada: true,
+  },
+  {
+    tabela: 'lancamento_repasse',
+    chave: 'id',
+    carimbo: null,
+    tipos: ['repasse', 'descontoRepasse'],
+    linhasPc: 0,
+    semCarimboPc: null,
+    publicada: true,
   },
 ];
 

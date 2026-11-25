@@ -42,8 +42,8 @@ const regra = {
 };
 
 describe('vocabulário da contabilidade', () => {
-  it('tem as 11 origens do banco e todo tipo de fato aponta para uma delas', () => {
-    expect(CODIGOS_ORIGEM_LANCAMENTO).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  it('tem as 12 origens (a 12, repasse médico, do C2-093) e todo tipo de fato aponta para uma delas', () => {
+    expect(CODIGOS_ORIGEM_LANCAMENTO).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     for (const t of Object.values(TIPOS_FATO)) expect(ORIGENS_LANCAMENTO[t.origem]).toBeTruthy();
   });
 
@@ -94,7 +94,7 @@ describe('entradas da contabilidade', () => {
     expect(r.prioridade).toBe(100);
     expect(r.condicoes).toEqual([]);
     expect(esquemaRegraContabil.safeParse({ ...regra, partidas: [regra.partidas[0]] }).success).toBe(false);
-    expect(esquemaRegraContabil.safeParse({ ...regra, origem: 12 }).success).toBe(false);
+    expect(esquemaRegraContabil.safeParse({ ...regra, origem: 13 }).success).toBe(false);
     expect(esquemaRegraContabil.safeParse({ ...regra, tipoFato: 'outro' }).success).toBe(false);
   });
 

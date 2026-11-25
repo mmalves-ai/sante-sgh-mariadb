@@ -3,9 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { linha } from './fixtures.spec-util.js';
 import {
   DERIVADORES,
-  derivarDepreciacao,
-  derivarFolha,
-  derivarImpairment,
   derivarMovimentoBancario,
   derivarNotaEntrada,
   derivarRecibo,
@@ -13,13 +10,20 @@ import {
   derivarTituloPagar,
   derivarTituloReceber,
 } from './fontes.js';
-import { conciliarFatos, estornoDe } from './derivacao.js';
 
 const ctx = { empresa: 1 };
 
 describe('derivadores das fontes', () => {
-  it('toda fonte tem derivador, inclusive a folha do M53 (SGH_PES_FOLHA_FATO)', () => {
-    for (const f of FONTES_FATO) expect(DERIVADORES[f.tabela], f.tabela).toBeTypeOf('function');
+  it('toda fonte lida tem derivador; a publicada pelo módulo na transação do documento não tem (ADR 0003)', () => {
+    for (const f of FONTES_FATO)
+      if (f.publicada) expect(DERIVADORES[f.tabela], f.tabela).toBeUndefined();
+      else expect(DERIVADORES[f.tabela], f.tabela).toBeTypeOf('function');
+    expect(FONTES_FATO.filter((f) => f.publicada).map((f) => f.tabela)).toEqual([
+      'lancamento_titulos_folha',
+      'cota_depreciacao',
+      'ajuste_valor_bem',
+      'lancamento_repasse',
+    ]);
   });
 
   it('título a pagar: lançamento e pagamento', () => {
@@ -127,159 +131,6 @@ describe('derivadores das fontes', () => {
     });
     expect(derivarRecibo(linha('recibo_autonomo', 6, { EMISSAO: '2027-01-31', STATUS: 'C' }), ctx)).toEqual(
       [],
-    );
-  });
-
-  it('folha: custo de pessoal no último dia da competência; rubrica fora da contabilização não gera fato', () => {
-    const l = linha('SGH_PES_FOLHA_FATO', 9, {
-      ID_LANCAMENTO: 3,
-      COD_EMP: 1,
-      PERIODO: '2027-02',
-      ROTINA: 1,
-      ID_TBCENCUS: 12,
-      NATUREZA: 'encargo',
-      CONTABILIZA: 'S',
-      VALOR_CENTAVOS: 123_456,
-    });
-    const [f, ...resto] = derivarFolha(l, ctx);
-    expect(resto).toEqual([]);
-    expect(f).toMatchObject({ tipo: 'folha', data: '2027-02-28', valorCentavos: 123_456, centroCusto: 12 });
-    expect(f!.campos).toEqual({ rotina: 1, natureza: 'encargo', empresaFolha: 1 });
-    expect(derivarFolha(linha('SGH_PES_FOLHA_FATO', 9, { ...l.valores, CONTABILIZA: 'N' }), ctx)).toEqual([]);
-    expect(derivarFolha(linha('SGH_PES_FOLHA_FATO', 9, { ...l.valores, PERIODO: '2027-13' }), ctx)).toEqual(
-      [],
-    );
-    expect(derivarFolha(linha('SGH_PES_FOLHA_FATO', 9, { ...l.valores, VALOR_CENTAVOS: 0 }), ctx)).toEqual(
-      [],
-    );
-  });
-
-  it('depreciação (M54.6): a cota do bem no último dia da competência, pelo centro de custo, com o grupo nos campos', () => {
-    const l = linha('SGH_PAT_DEPRECIACAO', 11, {
-      ID_BEM: 4,
-      EMPRESA: 1,
-      COMPETENCIA: '2027-02',
-      ID_TBCENCUS: 12,
-      GRUPO: 'informatica',
-      PLAQUETA: 'PC000004',
-      VALOR_CENT: 100_00,
-    });
-    expect(derivarDepreciacao(l, ctx)).toEqual([
-      {
-        tipo: 'depreciacao',
-        data: '2027-02-28',
-        valorCentavos: 100_00,
-        centroCusto: 12,
-        documento: 'depreciação 2027-02 bem PC000004',
-        campos: { grupoBem: 'informatica', bem: 4, empresaBem: 1 },
-      },
-    ]);
-    expect(
-      derivarDepreciacao(linha('SGH_PAT_DEPRECIACAO', 11, { ...l.valores, VALOR_CENT: 0 }), ctx),
-    ).toEqual([]);
-    expect(
-      derivarDepreciacao(linha('SGH_PAT_DEPRECIACAO', 11, { ...l.valores, COMPETENCIA: 'x' }), ctx),
-    ).toEqual([]);
-    expect(
-      derivarDepreciacao(
-        linha('SGH_PAT_DEPRECIACAO', 11, { ...l.valores, GRUPO: null, PLAQUETA: null }),
-        ctx,
-      )[0],
-    ).toMatchObject({ documento: 'depreciação 2027-02 bem', campos: { grupoBem: null } });
-  });
-
-  it('W0-08: a cota do cálculo estornado deixa de ser fato e a conciliação lança o estorno com motivo, data e origem', () => {
-    const valores = {
-      ID_BEM: 4,
-      EMPRESA: 1,
-      COMPETENCIA: '2027-02',
-      ID_TBCENCUS: 12,
-      GRUPO: 'informatica',
-      PLAQUETA: 'PC000004',
-      VALOR_CENT: 100_00,
-      ESTORNADO_EM: null,
-      MOTIVO_ESTORNO: null,
-    };
-    const antes = linha('SGH_PAT_DEPRECIACAO', 11, valores);
-    const [original] = conciliarFatos(antes, derivarDepreciacao, [], ctx, '2027-03-10');
-    expect(original).toMatchObject({ estorno: false, data: '2027-02-28', valorCentavos: 100_00 });
-    const depois = linha('SGH_PAT_DEPRECIACAO', 11, {
-      ...valores,
-      ESTORNADO_EM: '2027-03-15',
-      MOTIVO_ESTORNO: 'vida útil errada no cadastro',
-    });
-    expect(derivarDepreciacao(depois, ctx)).toEqual([]);
-    const r = conciliarFatos(depois, derivarDepreciacao, [original!], ctx, '2027-03-15');
-    expect(r).toHaveLength(1);
-    expect(r[0]).toMatchObject({
-      estorno: true,
-      referencia: original!.impressao,
-      data: '2027-03-15',
-      competencia: '2027-03',
-      origem: original!.origem,
-      valorCentavos: 100_00,
-      centroCusto: 12,
-    });
-    expect(r[0]!.documento).toBe(
-      '2027-02 bem PC000004 estornada em 2027-03-15 no patrimônio: vida útil errada no cadastro'.slice(0, 80),
-    );
-    // Sem estorno do cálculo, o fato que some leva o documento do original (o comportamento das outras fontes).
-    expect(estornoDe(original!, '2027-03-15', null).documento).toBe('depreciação 2027-02 bem PC000004');
-  });
-  it('W0-08 (M1): só a perda por impairment vira fato (origem 7, data do ajuste); o estorno do ajuste lança o estorno com motivo, data e origem', () => {
-    const valores = {
-      ID_BEM: 4,
-      EMPRESA: 1,
-      TIPO: 'impairment',
-      COMPETENCIA_MARCO: '2027-02',
-      DATA_AJUSTE: '2027-03-05',
-      ID_TBCENCUS: 12,
-      GRUPO: 'informatica',
-      PLAQUETA: 'PC000004',
-      PERDA_CENT: 350_00,
-      ESTORNADO_EM: null,
-      MOTIVO_ESTORNO: null,
-    };
-    const l = linha('SGH_PAT_AJUSTE', 21, valores);
-    expect(derivarImpairment(l, ctx)).toEqual([
-      {
-        tipo: 'impairment',
-        data: '2027-03-05',
-        valorCentavos: 350_00,
-        centroCusto: 12,
-        documento: 'impairment ajuste 21 bem PC000004',
-        campos: { grupoBem: 'informatica', bem: 4, empresaBem: 1 },
-      },
-    ]);
-    // Revisão de estimativa e reavaliação: eventos sem lançamento.
-    for (const TIPO of ['revisao-estimativa', 'reavaliacao'])
-      expect(
-        derivarImpairment(linha('SGH_PAT_AJUSTE', 22, { ...valores, TIPO, PERDA_CENT: 0 }), ctx),
-      ).toEqual([]);
-    expect(derivarImpairment(linha('SGH_PAT_AJUSTE', 23, { ...valores, PERDA_CENT: 0 }), ctx)).toEqual([]);
-    expect(derivarImpairment(linha('SGH_PAT_AJUSTE', 24, { ...valores, DATA_AJUSTE: null }), ctx)).toEqual(
-      [],
-    );
-    const [original] = conciliarFatos(l, derivarImpairment, [], ctx, '2027-03-05');
-    expect(original).toMatchObject({ estorno: false, valorCentavos: 350_00 });
-    const depois = linha('SGH_PAT_AJUSTE', 21, {
-      ...valores,
-      ESTORNADO_EM: '2027-03-20',
-      MOTIVO_ESTORNO: 'laudo substituído',
-    });
-    expect(derivarImpairment(depois, ctx)).toEqual([]);
-    const r = conciliarFatos(depois, derivarImpairment, [original!], ctx, '2027-03-20');
-    expect(r).toHaveLength(1);
-    expect(r[0]).toMatchObject({
-      estorno: true,
-      referencia: original!.impressao,
-      data: '2027-03-20',
-      origem: original!.origem,
-      valorCentavos: 350_00,
-      centroCusto: 12,
-    });
-    expect(r[0]!.documento).toBe(
-      'impairment 21 bem PC000004 estornado em 2027-03-20 no patrimônio: laudo substituído'.slice(0, 80),
     );
   });
 });

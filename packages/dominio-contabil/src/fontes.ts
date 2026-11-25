@@ -165,136 +165,11 @@ export const derivarRecibo: Derivador = (l) => {
   ];
 };
 
-/** Último dia do mês de uma competência AAAA-MM (a data contábil do custo de pessoal da folha). */
-function ultimoDiaDoMes(competencia: string): string | null {
-  const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(competencia);
-  if (!m) return null;
-  const ano = Number(m[1]);
-  const mes = Number(m[2]);
-  const dia = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
-  return `${m[1]}-${m[2]}-${String(dia).padStart(2, '0')}`;
-}
-
 /**
- * Custo de pessoal da folha calculada (SGH_PES_FOLHA_FATO do M53; D-FOLHAFATO-541): um fato por linha (lançamento da
- * folha, rotina, centro de custo e natureza), na data do último dia da competência. `CONTABILIZA = 'N'` (rubrica fora
- * da contabilização) não gera fato. Sem colaborador: o resumo por centro já basta.
- */
-export const derivarFolha: Derivador = (l) => {
-  const v = l.valores;
-  const competencia = textoOuVazio(v['PERIODO']);
-  const data = ultimoDiaDoMes(competencia);
-  const centavos = inteiroOuNulo(v['VALOR_CENTAVOS']) ?? 0;
-  if (!data || textoOuVazio(v['CONTABILIZA']).toUpperCase() !== 'S' || centavos <= 0) return [];
-  return [
-    {
-      tipo: 'folha',
-      data,
-      valorCentavos: centavos,
-      centroCusto: inteiroOuNulo(v['ID_TBCENCUS']),
-      documento: `folha ${competencia} lançamento ${String(inteiroOuNulo(v['ID_LANCAMENTO']) ?? '')}`.trim(),
-      campos: {
-        rotina: inteiroOuNulo(v['ROTINA']),
-        natureza: textoOuVazio(v['NATUREZA']) || null,
-        empresaFolha: inteiroOuNulo(v['COD_EMP']),
-      },
-    },
-  ];
-};
-
-/**
- * Depreciação do mês (SGH_PAT_DEPRECIACAO do M54.6; ficha, regra 12): uma cota por bem e competência, gravada pelo
- * cálculo do patrimônio (imutável), vira um fato de origem 7 (Patrimônio) no último dia da competência, pelo centro de
- * custo onde o bem estava; o grupo do bem vai nos campos (a regra escolhe a conta de despesa e a de depreciação
- * acumulada pelo grupo). W0-08 (script 1103): a cota de um cálculo ESTORNADO deixa de ser fato; a conciliação lança o
- * estorno no período aberto, com o motivo, a data e a origem do estorno no documento (ITG 2000, item 32).
- */
-export const derivarDepreciacao: Derivador = Object.assign(
-  (l: LinhaFonte): FatoBase[] => {
-    const v = l.valores;
-    if (textoOuVazio(v['ESTORNADO_EM'])) return [];
-    const competencia = textoOuVazio(v['COMPETENCIA']);
-    const data = ultimoDiaDoMes(competencia);
-    const centavos = inteiroOuNulo(v['VALOR_CENT']) ?? 0;
-    if (!data || centavos <= 0) return [];
-    return [
-      {
-        tipo: 'depreciacao',
-        data,
-        valorCentavos: centavos,
-        centroCusto: inteiroOuNulo(v['ID_TBCENCUS']),
-        documento: `depreciação ${competencia} bem ${textoOuVazio(v['PLAQUETA'])}`.trim(),
-        campos: {
-          grupoBem: textoOuVazio(v['GRUPO']) || null,
-          bem: inteiroOuNulo(v['ID_BEM']),
-          empresaBem: inteiroOuNulo(v['EMPRESA']),
-        },
-      },
-    ];
-  },
-  {
-    documentoDoEstorno: (l: LinhaFonte): string | null => {
-      const v = l.valores;
-      const em = dataValida(v['ESTORNADO_EM']);
-      if (!em) return null;
-      // O documento do fato tem 80 caracteres: o motivo inteiro fica no estorno do patrimônio (SGH_PAT_CALCULO_ESTORNO).
-      const motivo = textoOuVazio(v['MOTIVO_ESTORNO']);
-      const comp = textoOuVazio(v['COMPETENCIA']);
-      return `${comp} bem ${textoOuVazio(v['PLAQUETA'])} estornada em ${em} no patrimônio: ${motivo}`.slice(
-        0,
-        80,
-      );
-    },
-  },
-);
-
-/**
- * Perda por impairment do bem (SGH_PAT_AJUSTE do W0-08, M1; CPC 01): o ajuste do tipo `impairment` vira um fato de
- * origem 7 (Patrimônio) na data do ajuste, pelo valor da perda e pelo centro de custo onde o bem estava; a revisão de
- * estimativa e a reavaliação são eventos sem lançamento (nenhum fato). O ajuste ESTORNADO deixa de ser fato e a
- * conciliação lança o estorno com o motivo, a data e a origem no documento (ITG 2000, item 32), como na depreciação.
- */
-export const derivarImpairment: Derivador = Object.assign(
-  (l: LinhaFonte): FatoBase[] => {
-    const v = l.valores;
-    if (textoOuVazio(v['TIPO']) !== 'impairment' || textoOuVazio(v['ESTORNADO_EM'])) return [];
-    const data = dataValida(v['DATA_AJUSTE']);
-    const centavos = inteiroOuNulo(v['PERDA_CENT']) ?? 0;
-    if (!data || centavos <= 0) return [];
-    return [
-      {
-        tipo: 'impairment',
-        data,
-        valorCentavos: centavos,
-        centroCusto: inteiroOuNulo(v['ID_TBCENCUS']),
-        documento: `impairment ajuste ${l.id} bem ${textoOuVazio(v['PLAQUETA'])}`.trim(),
-        campos: {
-          grupoBem: textoOuVazio(v['GRUPO']) || null,
-          bem: inteiroOuNulo(v['ID_BEM']),
-          empresaBem: inteiroOuNulo(v['EMPRESA']),
-        },
-      },
-    ];
-  },
-  {
-    documentoDoEstorno: (l: LinhaFonte): string | null => {
-      const v = l.valores;
-      const em = dataValida(v['ESTORNADO_EM']);
-      if (!em) return null;
-      // O documento do fato tem 80 caracteres: o motivo inteiro fica no estorno do patrimônio (SGH_PAT_AJUSTE_ESTORNO).
-      const motivo = textoOuVazio(v['MOTIVO_ESTORNO']);
-      return `impairment ${l.id} bem ${textoOuVazio(v['PLAQUETA'])} estornado em ${em} no patrimônio: ${motivo}`.slice(
-        0,
-        80,
-      );
-    },
-  },
-);
-
-/**
- * Derivador por tabela de fonte (FONTES_FATO). As chaves já são as tabelas do modelo próprio, mas o corpo dos
- * derivadores ainda lê o leiaute da origem: a decisão (conector ou reescrita sobre as entidades próprias) está pedida no
- * lote 14-contabil da F2.4, e até lá o worker recusa a leitura das fontes.
+ * Derivador por tabela de fonte lida pelo ciclo (FONTES_FATO sem `publicada`). A folha, a depreciação, o impairment e
+ * o repasse publicam o fato na transação do documento (ADR 0003) e não têm derivador. Os derivadores daqui ainda leem o
+ * leiaute da origem: a decisão (conector ou reescrita sobre as entidades próprias) está pedida no lote 14-contabil da
+ * F2.4, e até lá o worker recusa a leitura das fontes.
  */
 export const DERIVADORES: Readonly<Record<string, Derivador>> = {
   conta_hospitalar: derivarConta,
@@ -305,7 +180,4 @@ export const DERIVADORES: Readonly<Record<string, Derivador>> = {
   movimento_estoque: derivarSaidaEstoque,
   nota_entrada: derivarNotaEntrada,
   recibo_autonomo: derivarRecibo,
-  SGH_PES_FOLHA_FATO: derivarFolha,
-  SGH_PAT_DEPRECIACAO: derivarDepreciacao,
-  SGH_PAT_AJUSTE: derivarImpairment,
 };
