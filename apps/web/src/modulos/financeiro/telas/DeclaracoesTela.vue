@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n';
 import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
+import ApuracaoRetidoPainel from '../componentes/ApuracaoRetidoPainel.vue';
 import ReinfEventosPainel from '../componentes/ReinfEventosPainel.vue';
 import RetencoesPainel from '../componentes/RetencoesPainel.vue';
 import SaldoCompensarPainel from '../componentes/SaldoCompensarPainel.vue';
@@ -115,6 +116,8 @@ async function gerar() {
       :pode-editar="tem('financeiro.parametro.editar')"
       :pode-recolher="tem('financeiro.tituloPagar.criar')"
     />
+    <!-- F7, 07-FIN linha 110: a apuração do retido por código de receita, o DARF e o batimento com a Reinf. -->
+    <ApuracaoRetidoPainel v-if="tipo === 'reinf'" :competencia="periodo" />
     <!-- F3.8, 07-FIN linha 109: o tributo retido pelos tomadores e o saldo a compensar na apuração da competência. -->
     <SaldoCompensarPainel
       v-if="tipo === 'reinf'"

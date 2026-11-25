@@ -99,6 +99,8 @@ export async function limparMassa(nucleo: NucleoProprio, ests: readonly number[]
       `DELETE i FROM apuracao_retencao_item i JOIN apuracao_retencao a ON a.id = i.apuracao_retencao_id WHERE a.estabelecimento_id IN (${q})`,
     );
     await x(`DELETE FROM apuracao_retencao WHERE estabelecimento_id IN (${q})`);
+    // F7 (07-FIN linha 110): a guia do recolhimento do retido (DARF), ligada à apuração e ao título.
+    await x(`DELETE FROM guia_recolhimento WHERE estabelecimento_id IN (${q})`);
     await x(
       `DELETE r FROM retencao_titulo r JOIN parcela_receber p ON p.id = r.parcela_receber_id JOIN titulo_receber t ON t.id = p.titulo_receber_id WHERE t.estabelecimento_id IN (${q})`,
     );

@@ -21,6 +21,8 @@ import {
   type LadoDePara,
   MOMENTOS_RETENCAO,
   PARTICIPANTES_RETENCAO,
+  periodoApuracao,
+  receitaDoRecolhimento,
   type RecusaFinanceiro,
   type RegraDeParaConta,
   type RegraRetencao,
@@ -740,6 +742,9 @@ const gerarRecolhimento = definirOperacao<RecolhimentoEntrada, ResultadoOperacao
     'retencao_titulo',
     'sequencia_negocio',
     'tipo_documento_financeiro',
+    'guia_recolhimento',
+    'apuracao_retencao',
+    'apuracao_retencao_item',
   ],
   entrada: esquemaRecolhimento as never,
   async gravar(tx, e, ctx) {
@@ -750,8 +755,10 @@ const gerarRecolhimento = definirOperacao<RecolhimentoEntrada, ResultadoOperacao
     );
     if (!trib) throw recusa('tributo-inexistente', 'O tributo não existe.', { campos: ['tributo'] });
     const retidos = await tx.consultarParaAtualizar(
-      `SELECT r.id, r.versao, r.valor_retido FROM retencao_titulo r JOIN parcela_pagar p ON p.id = r.parcela_pagar_id
+      `SELECT r.id, r.versao, r.valor_retido, r.base_calculo, r.aliquota, r.parcela_pagar_id, c.codigo_receita
+         FROM retencao_titulo r JOIN parcela_pagar p ON p.id = r.parcela_pagar_id
          JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
+         LEFT JOIN codigo_receita_federal c ON c.id = r.codigo_receita_federal_id
         WHERE t.estabelecimento_id = ? AND r.tributo_id = ? AND r.competencia = ? AND r.excluido_em IS NULL
           AND t.excluido_em IS NULL AND t.situacao <> 'cancelado' AND p.excluido_em IS NULL
           AND r.retencao_dispensada = FALSE AND r.recolhimento_titulo_pagar_id IS NULL
@@ -759,8 +766,14 @@ const gerarRecolhimento = definirOperacao<RecolhimentoEntrada, ResultadoOperacao
       [est, e.tributo, `${e.competencia}-01`],
       { teto: 5000 },
     );
-    const codigoReceita =
-      e.codigoReceita?.trim() || (trib['codigo_receita'] ? texto(trib['codigo_receita']) : null);
+    // 07-FIN linha 110: o código de receita do DARF é o das retenções (um só por guia), senão o informado ou o do tributo.
+    const receita = receitaDoRecolhimento(
+      retidos.map((r) => ({ codigoReceita: r['codigo_receita'] ? texto(r['codigo_receita']) : null })),
+      e.codigoReceita,
+      trib['codigo_receita'] ? texto(trib['codigo_receita']) : null,
+    );
+    recusar(receita.recusa);
+    const codigoReceita = receita.codigo;
     recusar(
       conferirRecolhimento(
         retidos.map((r) => ({ valor: numero(r['valor_retido']) })),
@@ -831,7 +844,76 @@ const gerarRecolhimento = definirOperacao<RecolhimentoEntrada, ResultadoOperacao
       await tx.alterar('retencao_titulo', numero(r['id']), numero(r['versao']), {
         recolhimento_titulo_pagar_id: titulo,
       });
-    return { tituloPagar: titulo, retencoes: retidos.length, valor, vencimento, codigoReceita };
+    // 07-FIN linha 110: a guia (DARF) com o código de receita e a apuração do retido com as retenções que ela recolhe.
+    const receitaFederal = await tx.uma<{ id: number }>(
+      "SELECT id FROM codigo_receita_federal WHERE documento_arrecadacao = 'darf' AND codigo_receita = ? ORDER BY id LIMIT 1",
+      [codigoReceita],
+    );
+    const receitaId = receitaFederal ? Number(receitaFederal.id) : null;
+    await garantirSequencia(
+      tx,
+      { tipo: 'guia_recolhimento', estabelecimento: est, prefixo: 'GR-' },
+      { usuario: ctx.usuario, agora: new Date() },
+    );
+    const numGuia = await tx.proximoNumero('guia_recolhimento');
+    const guiaId = await tx.incluir('guia_recolhimento', {
+      estabelecimento_id: est,
+      numero: numGuia.valor,
+      tipo_guia: 'darf',
+      codigo_receita_federal_id: receitaId,
+      codigo_receita: receitaId === null ? codigoReceita : null,
+      competencia: `${e.competencia}-01`,
+      periodo_apuracao: periodoApuracao(e.competencia),
+      data_vencimento: vencimento,
+      valor_principal: valor,
+      valor_total: valor,
+      titulo_pagar_id: titulo,
+      situacao: 'emitida',
+    });
+    const ja = await tx.uma(
+      "SELECT COUNT(*) AS n FROM apuracao_retencao WHERE estabelecimento_id = ? AND tributo_id = ? AND sentido = 'retido_de_terceiros'",
+      [est, e.tributo],
+    );
+    const agora = new Date();
+    const numeroApuracao = `RT-${e.competencia}-${e.tributo}-${numero(ja?.['n']) + 1}`.slice(0, 30);
+    const apuracao = await tx.incluir('apuracao_retencao', {
+      estabelecimento_id: est,
+      numero: numeroApuracao,
+      descricao: `Retido ${texto(trib['codigo'])} ${e.competencia} (receita ${codigoReceita})`.slice(0, 150),
+      tributo_id: e.tributo,
+      codigo_receita_federal_id: receitaId,
+      sentido: 'retido_de_terceiros',
+      competencia_inicio: `${e.competencia}-01`,
+      competencia_fim: `${e.competencia}-01`,
+      data_vencimento: vencimento,
+      valor_base_total: centavos(retidos.reduce((s, r) => s + numero(r['base_calculo']), 0)),
+      valor_total: valor,
+      guia_recolhimento_id: guiaId,
+      titulo_pagar_id: titulo,
+      situacao: 'recolhida',
+      aberto_em: agora,
+      abridor_usuario_id: ctx.usuario,
+      fechado_em: agora,
+      fechador_usuario_id: ctx.usuario,
+    });
+    for (const r of retidos)
+      await tx.incluir('apuracao_retencao_item', {
+        apuracao_retencao_id: apuracao,
+        retencao_titulo_id: numero(r['id']),
+        parcela_pagar_id: numero(r['parcela_pagar_id']),
+        valor_base: numero(r['base_calculo']),
+        aliquota: numero(r['aliquota']),
+        valor_retido: numero(r['valor_retido']),
+      });
+    return {
+      tituloPagar: titulo,
+      guia: guiaId,
+      apuracao,
+      retencoes: retidos.length,
+      valor,
+      vencimento,
+      codigoReceita,
+    };
   },
   alvo: (_e, r) => ({ tabela: 'titulo_pagar', id: numero(r['tituloPagar']) || null }),
   eventos: (_e, r) => [

@@ -9,6 +9,9 @@
 //   GET  /api/financeiro/contabil-fiscal/retencao/sugestao?valor=&data=&participante=&momento=&municipio=
 //   GET  /api/financeiro/contabil-fiscal/retencao/em-aberto?competencia=AAAA-MM
 //   POST /api/financeiro/contabil-fiscal/retencao/recolhimento      { competencia, tributo, credor, natureza, codigoReceita }
+//   GET  /api/financeiro/contabil-fiscal/retencao/apuracoes?competencia=AAAA-MM   apuração com parcelas por receita (L110)
+//   GET  /api/financeiro/contabil-fiscal/retencao/darf?guia=                      o DARF da guia, campos 01 a 10 (L110)
+//   GET  /api/financeiro/contabil-fiscal/retencao/batimento-reinf?competencia=    retido contra a EFD-Reinf (L110)
 // A gravação vai pelo executor do núcleo (trilha, outbox e idempotência na mesma transação); sem núcleo: 503.
 // Sessão sintética (dev/ci sem banco do cliente, E2E): o de-para, o que falta no período e a busca do fornecedor
 // respondem pela porta em memória, com as mesmas regras (contabil-fiscal-memoria.ts); as retenções seguem só no banco.
@@ -21,6 +24,7 @@ import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { contextoOperacao, problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
+import { apuracoesRetido, batimentoReinf, darfDaGuia } from './apuracao-retido-propria.js';
 import {
   apoioRetencao,
   buscarFornecedores,
@@ -222,5 +226,28 @@ export class ContabilFiscalController {
       corpo(esquemaRecolhimento, b),
       'Título do recolhimento gerado; as retenções da competência ficam ligadas a ele.',
     );
+  }
+
+  @Get('retencao/apuracoes')
+  @Permissao('financeiro.reinf.ler')
+  apuracoes(@Query('competencia') c: string | undefined, @Req() req: RequisicaoAutorizada) {
+    const p = competencia(c);
+    return this.ler(req, (l, est) => apuracoesRetido(l, est, p));
+  }
+
+  @Get('retencao/darf')
+  @Permissao('financeiro.reinf.ler')
+  darf(@Query('guia') g: string | undefined, @Req() req: RequisicaoAutorizada) {
+    const guia = Number(g);
+    if (!Number.isInteger(guia) || guia <= 0)
+      throw new ErroProblema('entrada-invalida', 400, 'Guia inválida', 'Informe a guia.');
+    return this.ler(req, (l, est) => darfDaGuia(l, est, guia));
+  }
+
+  @Get('retencao/batimento-reinf')
+  @Permissao('financeiro.reinf.ler')
+  batimento(@Query('competencia') c: string | undefined, @Req() req: RequisicaoAutorizada) {
+    const p = competencia(c);
+    return this.ler(req, (l, est) => batimentoReinf(l, est, p));
   }
 }

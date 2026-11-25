@@ -103,3 +103,49 @@ export const lerRetidoEmAberto = (competencia: string) =>
   ler(`${P}/retencao/em-aberto${qs({ competencia })}`, z.array(confiar<RetidoEmAberto>()));
 export const gerarRecolhimento = (corpo: unknown, chave: string) =>
   enviar(`${P}/retencao/recolhimento`, corpo, confiar<ResultadoFinanceiro>(), chave);
+// F7, 07-FIN linha 110: a apuração do retido com as parcelas por código de receita, o DARF da guia e o batimento com
+// a EFD-Reinf da competência (apuracao-retido-propria.ts).
+export interface ApuracaoRetido {
+  readonly id: number;
+  readonly numero: string;
+  readonly sigla: string;
+  readonly codigoReceita: string | null;
+  readonly situacao: string;
+  readonly vencimento: string | null;
+  readonly base: number;
+  readonly total: number;
+  readonly parcelas: readonly { codigoReceita: string; retencoes: number; base: number; valor: number }[];
+  readonly somaParcelas: number;
+  readonly guia: number | null;
+  readonly guiaNumero: number | null;
+  readonly guiaSituacao: string | null;
+  readonly titulo: string | null;
+}
+export interface DarfGuia {
+  readonly guia: number;
+  readonly numero: number;
+  readonly competencia: string;
+  readonly situacao: string;
+  readonly campos: readonly { numero: string; rotulo: string; valor: string }[];
+  readonly total: number;
+}
+export interface BatimentoReinf {
+  readonly competencia: string;
+  readonly porTributo: readonly { sigla: string; valor: number }[];
+  readonly eventosReinf: number;
+  readonly linhas: readonly {
+    grupo: 'irrf' | 'csrf' | 'inss';
+    apurado: number;
+    reinf: number;
+    diferenca: number;
+    confere: boolean;
+  }[];
+  readonly foraDaReinf: readonly string[];
+  readonly confere: boolean;
+}
+export const lerApuracoesRetido = (competencia: string) =>
+  ler(`${P}/retencao/apuracoes${qs({ competencia })}`, z.array(confiar<ApuracaoRetido>()));
+export const lerDarf = (guia: number) =>
+  ler(`${P}/retencao/darf${qs({ guia: String(guia) })}`, confiar<DarfGuia>());
+export const lerBatimentoReinf = (competencia: string) =>
+  ler(`${P}/retencao/batimento-reinf${qs({ competencia })}`, confiar<BatimentoReinf>());
