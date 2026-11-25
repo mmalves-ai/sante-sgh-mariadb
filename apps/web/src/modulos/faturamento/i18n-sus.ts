@@ -3,12 +3,14 @@
 // do domínio tem texto (o spec confere pelo tipo).
 import { mensagensSusEstabelecimento } from './i18n-estabelecimento-sus.js';
 import { mensagensSusAih, mensagensSusRetorno } from './i18n-sus-aih.js';
+import { mensagensSusProgramacao } from './i18n-sus-programacao.js';
 
 export const mensagensSus = {
   titulo: 'Faturamento SUS',
   // Etapa 4: a AIH, os leitos de UTI e o retorno do gestor (i18n-sus-aih.ts).
   aih: mensagensSusAih,
   estabelecimento: mensagensSusEstabelecimento,
+  programacao: mensagensSusProgramacao,
   retorno: mensagensSusRetorno,
   carregando: 'Carregando…',
   competencias: {

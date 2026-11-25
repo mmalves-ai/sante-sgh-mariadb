@@ -328,6 +328,12 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     meta: { permissao: 'faturamento.sus.ler' },
   },
   {
+    path: '/faturamento/sus/programacao',
+    name: 'faturamento.susProgramacao',
+    component: () => import('./telas/ProgramacaoSusTela.vue'),
+    meta: { permissao: 'faturamento.susProgramacao.ler' },
+  },
+  {
     path: '/faturamento/sus/cadastros/leitos-uti',
     name: 'faturamento.susLeitosUti',
     component: () => import('./telas/LeitosUtiSusTela.vue'),
