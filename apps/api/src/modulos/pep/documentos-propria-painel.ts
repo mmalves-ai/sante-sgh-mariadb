@@ -16,7 +16,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
-import { tiposBaseDoFiltro } from '@sgh/dominio-pep';
+import { situacaoDoPaciente, tiposBaseDoFiltro } from '@sgh/dominio-pep';
 import type { ContextoDocs } from './documentos-porta.js';
 import { type NucleoDocumentosPep, recusaPendente } from './documentos-propria-comum.js';
 import { dataHora, fusoValido } from './registro-propria-comum.js';
@@ -191,6 +191,9 @@ export function painel(
       p.push(...esp);
     }
     const r = f.filtro;
+    // A situação do paciente é regra do domínio (situacaoDoPaciente): o SQL só traz o estado do atendimento, e o
+    // recorte é aplicado depois da leitura, antes do teto.
+    let situacaoPedida: string | null = null;
     if (r) {
       // Recortes do filtro salvo (F3.3, L90): setor da unidade de internação ou, sem ela, o do atendimento; acomodação
       // e leito da internação; especialidade como no recorte da equipe; tipo e situação pelas regras do domínio.
@@ -219,24 +222,21 @@ export function painel(
         filtros.push(`k.tipo_base IN (${marcadores(tipos.length)})`);
         p.push(...tipos);
       }
-      if (r.situacao !== null && r.situacao !== 'todos') {
-        // A mesma ordem de situacaoDoPaciente (domínio): alta, alta prevista, aguardando, em atendimento.
-        filtros.push(`(CASE WHEN a.alta_medica_em IS NOT NULL OR i.situacao = 'alta_medica' THEN 'alta'
-                            WHEN i.data_prevista_alta IS NOT NULL AND DATE(i.data_prevista_alta) <= ? THEN 'alta_prevista'
-                            WHEN i.id IS NULL AND a.situacao = 'aberto' THEN 'aguardando'
-                            ELSE 'em_atendimento' END) = ?`);
-        p.push(hojeNoFuso(est.fuso), r.situacao);
-      }
+      if (r.situacao !== null && r.situacao !== 'todos') situacaoPedida = r.situacao;
     }
-    const ls = await l.consultar(
-      `SELECT a.id, a.numero, a.paciente_id, k.tipo_base, a.entrada_em, pf.nome,
+    const lote = (limite: number, desde: number) =>
+      l.consultar(
+        `SELECT a.id, a.numero, a.paciente_id, k.tipo_base, a.entrada_em, pf.nome,
               CASE WHEN pc.usa_nome_social THEN COALESCE(pc.nome_social, pf.nome_social) END AS nome_social,
               DATE_FORMAT(pf.data_nascimento, '%Y-%m-%d') AS nascimento, sx.sigla AS sexo, pc.numero_prontuario,
               COALESCE(ui.id, ua.id) AS id_unidade, COALESCE(ui.nome, ua.nome) AS unidade, lh.codigo AS leito,
               fp.nome AS convenio, pfm.nome AS medico,
               (SELECT COUNT(*) FROM alergia_paciente al
                 WHERE al.paciente_id = a.paciente_id AND al.ativa = TRUE AND al.excluido_em IS NULL
-                  AND al.tipo_registro IN ('alergia','intolerancia')) AS alergias
+                  AND al.tipo_registro IN ('alergia','intolerancia')) AS alergias,
+              (a.alta_medica_em IS NOT NULL OR i.situacao = 'alta_medica') AS alta_medica,
+              DATE_FORMAT(i.data_prevista_alta, '%Y-%m-%d') AS alta_prevista, i.id AS internacao_id,
+              a.situacao AS situacao_atendimento
          FROM atendimento a
          JOIN categoria_atendimento k ON k.id = a.categoria_atendimento_id
          JOIN paciente pc ON pc.id = a.paciente_id AND pc.excluido_em IS NULL AND pc.situacao <> 'unificado'
@@ -257,9 +257,34 @@ export function painel(
                          AND a2.saida_em IS NULL AND a2.situacao NOT IN ('encerrado','cancelado')
                        ORDER BY a2.entrada_em DESC, a2.id DESC LIMIT 1)
           ${filtros.map((x) => `AND ${x}`).join(' ')}
-        ORDER BY pf.nome, a.id LIMIT ${TETO_PAINEL + 1}`,
-      p,
-    );
+        ORDER BY pf.nome, a.id LIMIT ${limite} OFFSET ${desde}`,
+        p,
+      );
+    let ls: Record<string, unknown>[];
+    if (situacaoPedida === null) ls = await lote(TETO_PAINEL + 1, 0);
+    else {
+      // Lê em lotes e fica com as linhas cuja situação (domínio) é a pedida, até passar do teto.
+      const hoje = hojeNoFuso(est.fuso);
+      const LOTE = 1000;
+      ls = [];
+      for (let desde = 0; ls.length <= TETO_PAINEL; desde += LOTE) {
+        const parte = await lote(LOTE, desde);
+        for (const x of parte)
+          if (
+            situacaoDoPaciente(
+              {
+                altaMedica: Number(x['alta_medica']) === 1,
+                altaPrevista: textoOuNull(x['alta_prevista']),
+                internado: x['internacao_id'] !== null && x['internacao_id'] !== undefined,
+                situacaoAtendimento: String(x['situacao_atendimento']),
+              },
+              hoje,
+            ) === situacaoPedida
+          )
+            ls.push(x);
+        if (parte.length < LOTE) break;
+      }
+    }
     return {
       linhas: ls.slice(0, TETO_PAINEL).map((x) => ({
         paciente: num(x['paciente_id']),

@@ -209,7 +209,7 @@ export interface EstadoDoAtendimento {
 /**
  * Situação do paciente na lista, nesta ordem: alta (alta médica dada, sem saída); alta prevista (a data prevista é hoje
  * ou já passou); aguardando (atendimento aberto e ainda não iniciado, sem internação); em atendimento (o resto). `hoje`
- * é a data do estabelecimento (AAAA-MM-DD). A consulta do painel repete esta ordem no SQL.
+ * é a data do estabelecimento (AAAA-MM-DD). O painel (documentos-propria-painel) aplica esta função a cada linha.
  */
 export function situacaoDoPaciente(
   e: EstadoDoAtendimento,

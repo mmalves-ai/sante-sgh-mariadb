@@ -828,6 +828,146 @@ describe.skipIf(SEM_BANCO)('documentos-propria-painel contra o MariaDB (cliente 
     expect(linha?.leito).toBe(`${P}L1`);
   });
 
+  it('recortes que dependem do estado: alta, alta prevista (limite do dia no fuso), urgência e domiciliar', async () => {
+    // Massa própria do teste (idempotente): um pronto atendimento com alta médica dada e um ambulatorial em atendimento
+    // de paciente com internação domiciliar ativa. A alta prevista mexe na internação da massa e volta ao fim.
+    const m = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-estado` }, async (e) => {
+      const agora = new Date();
+      const pessoa = (nome: string) =>
+        garantir(
+          e,
+          'SELECT id FROM pessoa_fisica WHERE nome = ?',
+          [nome],
+          'INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)',
+          [nome, agora],
+        );
+      const paciente = async (nome: string, prontuario: number) => {
+        const pf = await pessoa(nome);
+        const id = await garantir(
+          e,
+          'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+          [pf],
+          'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
+          [pf, prontuario, agora],
+        );
+        return { pf, id };
+      };
+      const categoria = (codigo: string, tipo: string) =>
+        garantir(
+          e,
+          'SELECT id FROM categoria_atendimento WHERE codigo = ?',
+          [codigo],
+          'INSERT INTO categoria_atendimento (codigo, descricao, tipo_base, criado_em) VALUES (?, ?, ?, ?)',
+          [codigo, `Categoria sintética ${tipo}`, tipo, agora],
+        );
+      const base = await e.uma(
+        'SELECT categoria_atendimento_id AS k, carater_atendimento_tiss_id AS c, fonte_pagadora_id AS f FROM atendimento WHERE id = ?',
+        [ids.atendimento],
+      );
+      const entrada = new Date('2026-11-21T10:00:00Z');
+      const atendimento = (numero: string, pac: number, cat: number, situacao: string, alta: Date | null) =>
+        garantir(
+          e,
+          'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ?',
+          [ids.est, numero],
+          `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+             carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, alta_medica_em, criado_em,
+             situacao)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [ids.est, numero, pac, cat, base?.['c'], base?.['f'], ids.prof, entrada, alta, agora, situacao],
+        );
+      const urg = await paciente(`PESSOA SINTETICA ${P} URGENCIA`, 902_496_011);
+      const dom = await paciente(`PESSOA SINTETICA ${P} DOMICILIAR`, 902_496_012);
+      const atendUrg = await atendimento(
+        'L96-11',
+        urg.id,
+        await categoria(`${P}pa`, 'pronto_atendimento'),
+        'em_atendimento',
+        new Date('2026-11-21T12:00:00Z'),
+      );
+      const atendDom = await atendimento('L96-12', dom.id, Number(base?.['k']), 'em_atendimento', null);
+      const tipoEnd = await e.uma('SELECT MIN(id) AS id FROM tipo_endereco', []);
+      const pais = await e.uma("SELECT id FROM pais_referencia WHERE codigo_iso = 'BR'", []);
+      const endereco = await garantir(
+        e,
+        'SELECT id FROM endereco_pessoa WHERE pessoa_fisica_id = ? AND sequencia = 1',
+        [dom.pf],
+        `INSERT INTO endereco_pessoa (pessoa_fisica_id, sequencia, tipo_endereco_id, exterior, logradouro, sem_numero,
+           pais_referencia_id, cidade_exterior, criado_em)
+         VALUES (?, 1, ?, TRUE, 'Logradouro sintético', TRUE, ?, 'Cidade sintética', ?)`,
+        [dom.pf, tipoEnd?.['id'], pais?.['id'], agora],
+      );
+      await garantir(
+        e,
+        'SELECT id FROM internacao_domiciliar WHERE estabelecimento_id = ? AND numero = ?',
+        [ids.est, `${P}D1`],
+        `INSERT INTO internacao_domiciliar (estabelecimento_id, numero, paciente_id, endereco_pessoa_id,
+           data_solicitacao, situacao, criado_em)
+         VALUES (?, ?, ?, ?, '2026-11-20', 'ativa', ?)`,
+        [ids.est, `${P}D1`, dom.id, endereco, agora],
+      );
+      const est = await e.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [ids.est]);
+      return { atendUrg, atendDom, fuso: String(est?.['fuso_horario'] ?? 'America/Sao_Paulo') };
+    });
+    const vazio = {
+      setor: null,
+      acomodacao: null,
+      leito: null,
+      especialidade: null,
+      tipoAtendimento: null,
+      situacao: null,
+    } as const;
+    const nossos = new Set([ids.atendimento, ids.atendInt, m.atendUrg, m.atendDom]);
+    const com = async (filtro: Record<string, unknown>) =>
+      (
+        await F.painel(nucleo, CLIENTE, C(), { unidade: null, busca: null, filtro: { ...vazio, ...filtro } })
+      ).linhas
+        .map((x) => x.atendimento)
+        .filter((a) => nossos.has(a))
+        .sort((a, b) => a - b);
+    // Tipo: urgência é o pronto atendimento; domiciliar é o paciente com internação domiciliar ativa.
+    expect(await com({ tipoAtendimento: 'urgencia' })).toEqual([m.atendUrg]);
+    expect(await com({ tipoAtendimento: 'domiciliar' })).toEqual([m.atendDom]);
+    expect(await com({ tipoAtendimento: 'ambulatorio' })).toEqual(
+      [ids.atendimento, m.atendDom].sort((a, b) => a - b),
+    );
+    // Situação: a alta médica dada vence; o ambulatorial já iniciado está em atendimento, o aberto aguarda.
+    expect(await com({ situacao: 'alta' })).toEqual([m.atendUrg]);
+    expect(await com({ situacao: 'aguardando' })).toEqual([ids.atendimento]);
+    expect(await com({ situacao: 'em_atendimento' })).toEqual(
+      [ids.atendInt, m.atendDom].sort((a, b) => a - b),
+    );
+    // Alta prevista: hoje no fuso do estabelecimento entra; amanhã ainda está em atendimento; ontem também entra.
+    const dia = (deslocamento: number) =>
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: m.fuso,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date(Date.now() + deslocamento * 86_400_000));
+    const prever = (data: string | null) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-prevista` }, (e) =>
+        e.executar('UPDATE internacao SET data_prevista_alta = ? WHERE atendimento_id = ?', [
+          data,
+          ids.atendInt,
+        ]),
+      );
+    try {
+      await prever(dia(0));
+      expect(await com({ situacao: 'alta_prevista' })).toEqual([ids.atendInt]);
+      expect(await com({ situacao: 'em_atendimento' })).toEqual([m.atendDom]);
+      await prever(dia(1));
+      expect(await com({ situacao: 'alta_prevista' })).toEqual([]);
+      expect(await com({ situacao: 'em_atendimento' })).toEqual(
+        [ids.atendInt, m.atendDom].sort((a, b) => a - b),
+      );
+      await prever(dia(-1));
+      expect(await com({ situacao: 'alta_prevista', tipoAtendimento: 'internacao' })).toEqual([ids.atendInt]);
+    } finally {
+      await prever(null);
+    }
+  });
+
   it('completude do internado: "nega alergias" e ciência do crítico; nada do outro estabelecimento', async () => {
     const comp = await F.completudePainel(
       nucleo,
