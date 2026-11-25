@@ -7,7 +7,21 @@
 // recusado na hora (faixa 1 a 24); 18 grava e a linha deixa de ser "padrão" → a primeira operadora continua sem nada
 // (escopo por operadora) → recolher; axe sem violação séria em cada estado. Sessão real sobre a fonte sintética de dev;
 // documentos SINTÉTICOS. Nenhuma saída externa (vigiarExternas).
-import { expect, test, type Page } from '@playwright/test';
+// As rotas `/api/operadora/complementar/**` só existem no banco do cliente (na fonte sintética, sem o núcleo, respondem
+// 503), então este E2E as simula com um estado em memória por operadora que aplica as mesmas regras do domínio que a
+// porta própria aplica (planoResponsavel, problemasDoDepartamento, valorDoParametro, o catálogo PARAMETROS_OPERADORA).
+// O que fica no banco (encerramento na véspera, hierarquia, vigência do parâmetro, trilha) está no contrato de efeito
+// cadastro-complementar.int.spec.ts. O cadastro das duas operadoras e a liberação seguem pela API real.
+import { expect, test, type Page, type Route } from '@playwright/test';
+import {
+  PARAMETROS_OPERADORA,
+  planoResponsavel,
+  problemasDoDepartamento,
+  valorDoParametro,
+  type ChaveParametroOperadora,
+  type ProblemaCadastro,
+  type TipoResponsavelOperadora,
+} from '@sgh/dominio-operadora';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
 
@@ -78,6 +92,154 @@ async function empresa(page: Page, registro: string, doc: string, nome: string):
   return ((await r.json()) as { id: number }).id;
 }
 
+interface Resp {
+  id: number;
+  sequencia: number;
+  tipo: string;
+  natureza: string;
+  pessoa: number;
+  nome: string | null;
+  numeroRegistro: string | null;
+  inicio: string;
+  fim: string | null;
+}
+interface Dep {
+  id: number;
+  versao: number;
+  codigo: string;
+  descricao: string;
+  tipo: string;
+  email: string | null;
+  emailsCopia: string[];
+  superior: number | null;
+  visivelPortal: boolean;
+  ativo: boolean;
+}
+interface EstadoOp {
+  responsaveis: Resp[];
+  departamentos: Dep[];
+  parametros: Map<string, { valor: string; desde: string }>;
+}
+const hoje = () => new Date().toISOString().slice(0, 10);
+const json = (rota: Route, corpo: unknown, status = 200) =>
+  rota.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
+const recusa = (rota: Route, problemas: readonly ProblemaCadastro[]) =>
+  rota.fulfill({
+    status: 422,
+    contentType: 'application/problem+json',
+    body: JSON.stringify({
+      type: 'urn:sgh:problema:recusa-de-negocio',
+      title: problemas[0]?.detalhe ?? 'Recusado',
+      status: 422,
+      detail: problemas.map((x) => x.detalhe).join(' '),
+      codigo: problemas[0]?.codigo,
+    }),
+  });
+const vespera = (iso: string) =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+
+/** Simula as rotas do cadastro complementar com as regras do domínio; `pessoas` é o achado pelo documento exato. */
+async function simularComplementar(
+  page: Page,
+  pessoas: ReadonlyMap<string, { id: number; natureza: 'fisica' | 'juridica'; nome: string }>,
+): Promise<Map<number, EstadoOp>> {
+  const estados = new Map<number, EstadoOp>();
+  const de = (op: number) => {
+    let e = estados.get(op);
+    if (!e) estados.set(op, (e = { responsaveis: [], departamentos: [], parametros: new Map() }));
+    return e;
+  };
+  let seq = 900;
+  await page.route('**/api/operadora/complementar/**', async (rota) => {
+    const req = rota.request();
+    const url = new URL(req.url());
+    if (url.pathname.endsWith('/complementar/pessoas'))
+      return json(rota, { pessoa: pessoas.get(url.searchParams.get('documento') ?? '') ?? null });
+    const m = /\/complementar\/empresas\/(\d+)\/(responsaveis|departamentos|parametros)$/.exec(url.pathname);
+    if (!m) return rota.fulfill({ status: 404, body: '' });
+    const e = de(Number(m[1]));
+    const recurso = m[2];
+    const post = req.method() === 'POST';
+    const b = post ? (req.postDataJSON() as Record<string, unknown>) : {};
+    if (recurso === 'responsaveis') {
+      if (!post)
+        return json(
+          rota,
+          e.responsaveis.map((r) => ({ ...r, vigente: r.fim === null || r.fim >= hoje() })),
+        );
+      const novo = b as unknown as Omit<Resp, 'id' | 'sequencia' | 'nome' | 'natureza'> & {
+        natureza: 'fisica' | 'juridica';
+      };
+      const plano = planoResponsavel(
+        novo,
+        e.responsaveis.map((r) => ({
+          id: r.id,
+          tipo: r.tipo as TipoResponsavelOperadora,
+          inicio: r.inicio,
+          fim: r.fim,
+        })),
+      );
+      if (plano.problemas.length) return recusa(rota, plano.problemas);
+      for (const x of plano.encerrar) {
+        const r = e.responsaveis.find((y) => y.id === x.id);
+        if (r) r.fim = x.fim;
+      }
+      const nome = [...pessoas.values()].find((p) => p.id === novo.pessoa)?.nome ?? null;
+      const id = ++seq;
+      e.responsaveis.push({ ...novo, id, sequencia: e.responsaveis.length + 1, nome });
+      return json(rota, { id }, 201);
+    }
+    if (recurso === 'departamentos') {
+      if (!post)
+        return json(
+          rota,
+          [...e.departamentos].sort((a, c) => a.descricao.localeCompare(c.descricao)),
+        );
+      const {
+        id: dep,
+        versao,
+        ...dados
+      } = b as unknown as Dep & { id: number | null; versao: number | null };
+      const mapa = new Map(e.departamentos.map((d) => [d.id, d.superior]));
+      if (dados.superior !== null && !mapa.has(dados.superior))
+        return recusa(rota, [
+          {
+            codigo: 'superior-inexistente',
+            campo: 'superior',
+            detalhe: 'O setor superior não é desta operadora.',
+          },
+        ]);
+      const problemas = problemasDoDepartamento({ ...dados, id: dep }, mapa);
+      if (problemas.length) return recusa(rota, problemas);
+      if (dep === null) {
+        const id = ++seq;
+        e.departamentos.push({ ...dados, id, versao: 1 });
+        return json(rota, { id }, 201);
+      }
+      const atual = e.departamentos.find((d) => d.id === dep);
+      if (!atual) return rota.fulfill({ status: 404, body: '' });
+      Object.assign(atual, dados, { versao: (versao ?? atual.versao) + 1 });
+      return json(rota, { id: dep }, 201);
+    }
+    if (!post)
+      return json(
+        rota,
+        (Object.keys(PARAMETROS_OPERADORA) as ChaveParametroOperadora[]).map((k) => {
+          const v = e.parametros.get(k);
+          const def = PARAMETROS_OPERADORA[k];
+          const valor = v ? (def.tipo === 'booleano' ? v.valor === 'true' : Number(v.valor)) : def.padrao;
+          return { chave: k, descricao: def.descricao, valor, padrao: !v, desde: v?.desde ?? null };
+        }),
+      );
+    const r = valorDoParametro(String(b['chave']), b['valor']);
+    if ('problema' in r) return recusa(rota, [r.problema]);
+    const desde = (b['inicio'] as string | null) ?? hoje();
+    e.parametros.set(String(b['chave']), { valor: r.valor, desde });
+    return json(rota, { id: ++seq, anteriorEncerradoEm: vespera(desde) }, 201);
+  });
+  return estados;
+}
+
 test.describe('operadora: responsáveis, setores e parâmetros por operadora @C1-071', () => {
   test.setTimeout(240_000);
 
@@ -102,6 +264,11 @@ test.describe('operadora: responsáveis, setores e parâmetros por operadora @C1
       );
       const opB = await empresa(page, `7${sufixo}`, docB, `Operadora B ${sufixo}`);
       expect(opB).not.toBe(opA);
+      // A empresa criada gera a pessoa jurídica com o CNPJ (porta própria); a busca exata a acha por ele.
+      const estados = await simularComplementar(
+        page,
+        new Map([[docB, { id: 7001, natureza: 'juridica' as const, nome: `Operadora B ${sufixo}` }]]),
+      );
 
       await page.goto('/operadora/beneficiarios');
       await escolher(page.getByTestId('operadora-ativa'), { rotulo: new RegExp(`\\(7${sufixo}\\)`) });
@@ -158,10 +325,15 @@ test.describe('operadora: responsáveis, setores e parâmetros por operadora @C1
       await expect(compl.getByTestId('parametro-prazo_cpt_meses')).toContainText('18');
       await expect(compl.getByTestId('parametro-prazo_cpt_meses')).not.toContainText('padrão');
 
-      // Escopo por operadora: o que foi gravado na B não aparece na A (pela API e pela tela).
-      const resp = await page.request.get(`/api/operadora/complementar/empresas/${opA}/departamentos`);
-      expect(resp.status(), await resp.text()).toBe(200);
-      expect(await resp.json()).toEqual([]);
+      // Escopo por operadora: o que foi gravado na B não aparece na A (nas gravações que a tela enviou e na tela).
+      expect(
+        estados
+          .get(opB)
+          ?.departamentos.map((d) => d.codigo)
+          .sort(),
+      ).toEqual(['AUT', 'REG']);
+      expect(estados.get(opA)?.departamentos ?? []).toEqual([]);
+      expect(estados.get(opA)?.responsaveis ?? []).toEqual([]);
       await escolher(page.getByTestId('operadora-ativa'), { rotulo: new RegExp(`\\(8${sufixo}\\)`) });
       await expect(page.getByTestId('compl-departamentos')).toContainText('Nenhum setor cadastrado');
     } finally {
