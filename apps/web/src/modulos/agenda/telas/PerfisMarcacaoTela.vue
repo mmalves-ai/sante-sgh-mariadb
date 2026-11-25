@@ -39,6 +39,8 @@ const mensagem = ref('');
 
 // ── Edição do perfil ────────────────────────────────────────────────────────────────────────────────
 const editando = ref<number | null | 'novo'>(null);
+/** Versão do perfil quando a edição abriu: vai na gravação (conflito com outro gestor vira 409). */
+const versaoLida = ref<number | null>(null);
 const form = reactive<EntradaPerfil & { recortes: (RecortePerfil & { nome: string })[] }>({
   codigo: '',
   descricao: '',
@@ -54,6 +56,7 @@ function abrir(p: PerfilMarcacao | null) {
   erro.value = null;
   mensagem.value = '';
   editando.value = p ? p.id : 'novo';
+  versaoLida.value = p?.versao ?? null;
   form.codigo = p?.codigo ?? '';
   form.descricao = p?.descricao ?? '';
   form.tipoPerfil = (p?.tipoPerfil as EntradaPerfil['tipoPerfil']) ?? 'geral';
@@ -101,6 +104,7 @@ async function gravarPerfil() {
     const r = await salvarPerfilMarcacao(
       editando.value === 'novo' ? null : (editando.value as number),
       {
+        ...(editando.value !== 'novo' && versaoLida.value !== null ? { versao: versaoLida.value } : {}),
         codigo: form.codigo.trim(),
         descricao: form.descricao.trim(),
         tipoPerfil: form.tipoPerfil,
@@ -110,9 +114,12 @@ async function gravarPerfil() {
       },
       novaChave('perfil-marcacao'),
     );
-    mensagem.value = r.mensagem ?? '';
     await qc.invalidateQueries({ queryKey: ['agenda-perfis-marcacao'] });
-    editando.value = r.resultado['perfil'] ?? null;
+    // Reabre pelo que o banco devolveu: a versão nova passa a ser a lida.
+    const gravado = perfis.data.value?.find((p) => p.id === r.resultado['perfil']);
+    if (gravado) abrir(gravado);
+    else editando.value = r.resultado['perfil'] ?? null;
+    mensagem.value = r.mensagem ?? '';
   } catch (e) {
     erro.value = e;
   }

@@ -332,10 +332,32 @@ describe.skipIf(SEM_BANCO)('perfis de marcação (porta própria, MariaDB)', () 
   });
 
   it('alterar retira o recorte por exclusão lógica; desligar o usuário não apaga e ele volta ao escopo atual', async () => {
+    // Alteração sem a versão lida é recusada pelo esquema (sem controle de concorrência não grava).
+    await expect(
+      perfis.salvar(ctxG(), {
+        ...perfilBase(),
+        id: ids.perfil,
+        recortes: [{ dimensao: 'especialidade', alvo: ids.esp, permitido: true }],
+      }),
+    ).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'entrada-invalida', campos: ['versao'] }),
+    });
     await perfis.salvar(ctxG(), {
       ...perfilBase(),
       id: ids.perfil,
+      versao: 1,
       recortes: [{ dimensao: 'especialidade', alvo: ids.esp, permitido: true }],
+    });
+    // Outro gestor com a versão velha (1) e a lista antiga: 409 conflito-versao, nada muda no banco.
+    await expect(
+      perfis.salvar(ctxG(), {
+        ...perfilBase(),
+        id: ids.perfil,
+        versao: 1,
+        descricao: 'Mudança de outro gestor',
+      }),
+    ).rejects.toMatchObject({
+      problema: expect.objectContaining({ status: 409, codigo: 'conflito-versao' }),
     });
     const rs = await ler<{ tipo_escopo: string; excluido_em: unknown; excluido_por: number | null }>(
       'SELECT tipo_escopo, excluido_em, excluido_por FROM perfil_marcacao_escopo WHERE perfil_marcacao_id = ? ORDER BY sequencia',

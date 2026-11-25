@@ -76,6 +76,8 @@ export const lerPerfisMarcacao = () => ler(P, z.array(esquemaPerfil));
 export const lerOpcoesRecorte = () => ler(`${P}/opcoes`, esquemaOpcoes);
 
 export interface EntradaPerfil {
+  /** Versão lida (obrigatória na alteração): o servidor recusa com 409 se outro gestor gravou antes. */
+  versao?: number;
   codigo: string;
   descricao: string;
   tipoPerfil: (typeof TIPOS)[number];

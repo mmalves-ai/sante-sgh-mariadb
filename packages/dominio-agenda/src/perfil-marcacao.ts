@@ -8,7 +8,8 @@
 //     valor na dimensão não entra), e nenhum recorte de exceção (proibido) acerta o alvo;
 //   - especialidade: a agenda atende uma ou mais; o recorte permitido pede ao menos uma delas, e a exceção acerta se
 //     qualquer uma delas estiver proibida;
-//   - unidade: o perfil vale na unidade dona; recortes de unidade estendem (ou trocam) as unidades alcançadas;
+//   - unidade: o perfil vale na unidade dona; recortes de unidade estendem (ou trocam) as unidades alcançadas; a
+//     exceção de unidade não tira o perfil da conta: o perfil que proíbe a unidade a recusa (não vira "sem perfil");
 //   - encaixe só por perfil que o permita;
 //   - perfil inativo, excluído ou fora da vigência do vínculo do usuário não conta;
 //   - o administrador da plataforma pode tudo; processo automático do sistema (sem usuário) não passa pelo perfil.
@@ -78,6 +79,14 @@ export function perfilAlcancaUnidade(p: PerfilDoUsuario, estabelecimento: number
   return permitidas.length > 0 ? permitidas.includes(estabelecimento) : p.estabelecimento === estabelecimento;
 }
 
+/** O perfil fala desta unidade (alcança ou proíbe por exceção)? Só esses perfis contam na decisão. */
+export function perfilTrataUnidade(p: PerfilDoUsuario, estabelecimento: number): boolean {
+  return (
+    perfilAlcancaUnidade(p, estabelecimento) ||
+    p.recortes.some((r) => r.dimensao === 'estabelecimento' && !r.permitido && r.alvo === estabelecimento)
+  );
+}
+
 function valores(a: AlvoMarcacao, d: DimensaoPerfil): readonly number[] {
   switch (d) {
     case 'fonte_pagadora':
@@ -129,7 +138,7 @@ export function decidirPerfilMarcacao(
   administrador = false,
 ): DecisaoPerfil {
   if (administrador) return { ok: true, motivo: 'administrador' };
-  const valem = perfis.filter((p) => vigente(p, hoje) && perfilAlcancaUnidade(p, alvo.estabelecimento));
+  const valem = perfis.filter((p) => vigente(p, hoje) && perfilTrataUnidade(p, alvo.estabelecimento));
   if (valem.length === 0) return { ok: true, motivo: 'sem-perfil' };
   const aceitam = valem.filter((p) => dimensaoRecusada(p, alvo) === null);
   if (aceitam.length === 0) {

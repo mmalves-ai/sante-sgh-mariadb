@@ -99,6 +99,13 @@ function simular(page: Page) {
       recortes,
     };
     let p = st.perfis.find((x) => x.id === id);
+    // Como o servidor: alteração com versão velha (outro gestor gravou antes) é recusada.
+    if (p && corpo['versao'] !== p.versao)
+      return json(
+        r,
+        { type: 'about:blank', title: 'Conflito de versão', status: 409, codigo: 'conflito-versao' },
+        409,
+      );
     if (p) Object.assign(p, dados, { versao: p.versao + 1 });
     else st.perfis.push((p = { id: 9490 + st.perfis.length + 1, versao: 1, usuarios: [], ...dados }));
     return json(r, {

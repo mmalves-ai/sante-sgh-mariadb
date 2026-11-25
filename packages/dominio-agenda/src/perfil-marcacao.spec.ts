@@ -4,6 +4,7 @@ import {
   dimensaoRecusada,
   type PerfilDoUsuario,
   perfilAlcancaUnidade,
+  perfilTrataUnidade,
   validarPerfil,
   validarRecortes,
   validarVigencia,
@@ -96,6 +97,34 @@ describe('perfil de marcação (02-AGE linha 46)', () => {
     expect([10, 11, 12].map((u) => perfilAlcancaUnidade(rede, u))).toEqual([false, true, true]);
     const menos = perfil({ recortes: [{ dimensao: 'estabelecimento', alvo: 10, permitido: false }] });
     expect(perfilAlcancaUnidade(menos, 10)).toBe(false);
+  });
+
+  it('exceção de unidade recusa a marcação na unidade (não vira "sem perfil")', () => {
+    const menos = perfil({ recortes: [{ dimensao: 'estabelecimento', alvo: 10, permitido: false }] });
+    expect(perfilTrataUnidade(menos, 10)).toBe(true);
+    expect(decidirPerfilMarcacao([menos], alvo, HOJE)).toMatchObject({
+      ok: false,
+      codigo: 'fora-do-perfil-marcacao',
+    });
+    expect(decidirPerfilMarcacao([menos], alvo, HOJE)).toMatchObject({
+      mensagem: expect.stringContaining('unidade'),
+    });
+    // perfil de outra unidade, sem exceção para a 10: não conta, segue o escopo atual
+    expect(decidirPerfilMarcacao([perfil({ estabelecimento: 11 })], alvo, HOJE)).toEqual({
+      ok: true,
+      motivo: 'sem-perfil',
+    });
+    // outro perfil vigente que aceita a unidade ainda libera (basta um aceitar)
+    expect(
+      decidirPerfilMarcacao(
+        [
+          menos,
+          perfil({ codigo: 'B', recortes: [{ dimensao: 'estabelecimento', alvo: 10, permitido: true }] }),
+        ],
+        alvo,
+        HOJE,
+      ),
+    ).toMatchObject({ ok: true, perfil: 'B' });
   });
 
   it('vários perfis: basta um aceitar; encaixe só por perfil que o permita', () => {

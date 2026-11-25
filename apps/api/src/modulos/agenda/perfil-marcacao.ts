@@ -57,6 +57,8 @@ const dataTexto = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-
 export const esquemaSalvarPerfil = z
   .object({
     id: z.number().int().positive().optional(),
+    /** Versão que a tela leu (obrigatória na alteração): diferente da do banco, 409 conflito-versao. */
+    versao: z.number().int().positive().optional(),
     codigo: z.string().trim().min(1).max(30),
     descricao: z.string().trim().min(1).max(150),
     tipoPerfil: z.enum(TIPOS_PERFIL),
@@ -74,7 +76,11 @@ export const esquemaSalvarPerfil = z
       )
       .max(200),
   })
-  .strict();
+  .strict()
+  .refine((e) => e.id === undefined || e.versao !== undefined, {
+    message: 'Informe a versão do perfil que está sendo alterado.',
+    path: ['versao'],
+  });
 export type EntradaSalvarPerfil = z.infer<typeof esquemaSalvarPerfil>;
 
 export const esquemaUsuarioPerfil = z
@@ -433,9 +439,11 @@ export class PerfisMarcacaoPropria {
     };
     let id: number;
     if (e.id) {
-      const p = await this.travarPerfil(tx, e.id, est);
+      await this.travarPerfil(tx, e.id, est);
       id = e.id;
-      await tx.alterar('perfil_marcacao', id, num(p['versao']), valores);
+      // A versão vem da tela: outro gestor que gravou antes faz esta alteração cair em 409 conflito-versao, em vez de
+      // a lista de recortes antiga retirar em silêncio o que ele acabou de incluir.
+      await tx.alterar('perfil_marcacao', id, e.versao!, valores);
     } else {
       id = await tx.incluir('perfil_marcacao', { estabelecimento_id: est, ...valores });
     }
