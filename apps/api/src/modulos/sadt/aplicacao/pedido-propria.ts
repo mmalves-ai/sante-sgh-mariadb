@@ -52,7 +52,7 @@ import {
   TABELAS_CONTA_PEDIDO,
 } from './pedido-conta.js';
 import type { NucleoSadt } from '../porta-propria.js';
-import { conferirPostoDaColeta } from './posto-coleta-propria.js';
+import { conferirPostoDaColeta, ServicoPostoColeta } from './posto-coleta-propria.js';
 import type { ContextoSadt } from '../porta.js';
 
 // ── Entradas (validadas na rota e de novo aqui) ─────────────────────────────────────────────────────────────
@@ -307,12 +307,15 @@ function atendimentoDe(a: Linha): AtendimentoDoPedido {
 
 export class ServicoPedidoSadt {
   private readonly executor: Executor;
+  /** Posto de coleta e etiquetas da recoleta e da alíquota (o mesmo Executor). */
+  readonly postos: ServicoPostoColeta;
 
   constructor(
     private readonly nucleo: NucleoSadt,
     executorPronto?: Executor,
   ) {
     this.executor = executorPronto ?? nucleo.criarExecutor();
+    this.postos = new ServicoPostoColeta(nucleo, this.executor);
   }
 
   private ctxNucleo(c: ContextoSadt): ContextoNucleo {
