@@ -45,3 +45,4 @@ export * from './fluxo-aprovacao.js';
 export * from './cobranca-pix.js';
 export * from './entrada-servico.js';
 export * from './projeto-resultado.js';
+export * from './controle-orcamentario.js';
