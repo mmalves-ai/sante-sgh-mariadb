@@ -6,7 +6,7 @@
 //   - a prorrogação entra como nova linha do histórico com a validade seguinte e o autorizador; a guia inicial fica;
 //   - os operadores da unidade: com a regra, quem não está liberado não admite, não transfere para a unidade nem dá
 //     alta nela; a linha só de material não conta como regra; a lista vazia tira as ações da internação (exclusão
-//     lógica só da linha sem material) e devolve a unidade ao cargo;
+//     lógica só da linha sem material) e devolve a unidade ao cargo; o acesso total da sessão da plataforma passa;
 //   - o principal novo substitui o vigente (fica no histórico); a retirada exige motivo e não apaga;
 //   - a correção da guia não cria linha nem soma diárias; o retrato da internação guarda o total autorizado;
 //   - outro estabelecimento não lê nem grava (404 sem vazamento).
@@ -42,6 +42,15 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
   const executar = (op: string, entrada: unknown) =>
     porta
       .executar(contextoAdt(M()), op, entrada, { ...operacaoAdt(M()), reautenticadoEm: Date.now() })
+      .then((r) => r.resultado as Record<string, unknown>);
+  // A sessão da plataforma (acesso total, ADR 0022): o servidor leva o indicador ao contexto da operação.
+  const executarComAcessoTotal = (op: string, entrada: unknown) =>
+    porta
+      .executar(contextoAdt(M()), op, entrada, {
+        ...operacaoAdt(M()),
+        reautenticadoEm: Date.now(),
+        acessoTotal: true,
+      })
       .then((r) => r.resultado as Record<string, unknown>);
   const internar = (paciente: number, leito: string, extra: Record<string, unknown> = {}) =>
     executar('internacao.internar', {
@@ -486,6 +495,15 @@ describe.skipIf(SEM_BANCO_ADT)(`registros da internação (MariaDB, cliente ${CL
         motivoTroca: M().motivoTroca,
       }),
     ).rejects.toSatisfy((e) => codigoDe(e) === 'unidade-sem-permissao');
+    // O acesso total da sessão da plataforma passa pela regra da unidade: a transferência grava.
+    const antes = await versaoDe(i2);
+    await executarComAcessoTotal('internacao.transferirLeito', {
+      internacao: i2,
+      destino: { bloco: 'B1', acomodacao: 'Q1', leito: M().leitos[1]! },
+      versao: antes,
+      motivoTroca: M().motivoTroca,
+    });
+    expect(Number(await versaoDe(i2))).toBeGreaterThan(Number(antes));
     await expect(
       executar('internacao.darAlta', {
         internacao: i2,

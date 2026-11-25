@@ -52,6 +52,11 @@ export interface ContextoOperacao extends ContextoNucleo {
   readonly chaveIdempotencia: string;
   /** Instante (ms) da última reautenticação (operação crítica). */
   readonly reautenticadoEm?: number;
+  /**
+   * Acesso total da sessão (administrador da plataforma, ADR 0022): só o servidor o põe, a partir da sessão da
+   * plataforma; nenhuma coluna do banco do cliente o concede. As regras de escopo por unidade o respeitam.
+   */
+  readonly acessoTotal?: boolean;
 }
 
 /** Linha principal a travar e reler (passo 2), quando a operação altera registro existente. */
@@ -317,6 +322,7 @@ export class Executor {
       ...base,
       chaveIdempotencia: contexto.chaveIdempotencia,
       ...(contexto.reautenticadoEm !== undefined ? { reautenticadoEm: contexto.reautenticadoEm } : {}),
+      ...(contexto.acessoTotal === true ? { acessoTotal: true } : {}),
     };
   }
 

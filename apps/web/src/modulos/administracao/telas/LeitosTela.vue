@@ -16,6 +16,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { SanteAlerta, SanteBotao, SanteDialogo, SanteSelecao } from '@sgh/ui';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { RouterLink } from 'vue-router';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
@@ -192,6 +193,11 @@ async function incluirLeito(): Promise<void> {
   <section class="tela" aria-labelledby="leitos-titulo">
     <h1 id="leitos-titulo">{{ t('adm.leitos.titulo') }}</h1>
     <p>{{ t('adm.leitos.texto') }}</p>
+    <p>
+      <RouterLink to="/internacao/unidades/operadores" data-testid="leitos-operadores-unidade">
+        {{ t('adm.leitos.operadores') }}
+      </RouterLink>
+    </p>
     <SanteAlerta v-if="aviso" :texto="aviso" variante="info" anunciar data-testid="leitos-aviso" />
     <SanteAlerta v-if="recusa" :texto="recusa" variante="aviso" anunciar data-testid="leitos-recusa" />
     <MensagemErro v-if="erro" :erro="erro" />

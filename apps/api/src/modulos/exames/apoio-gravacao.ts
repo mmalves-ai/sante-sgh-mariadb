@@ -218,7 +218,13 @@ export class ApoioGravacao<G> {
       });
     await this.exigirLiberacao(s);
     // M20: a receita crítica (a exclusão do atendimento) leva a reautenticação recente ao executor.
-    const ctx: ContextoOperacao = { ...contextoOperacao(s, op), ...extras };
+    // F3.4 (04-INT 65): o acesso total da sessão da plataforma segue ao executor (as regras por unidade o respeitam).
+    const acessoTotal = s.req.sgh?.sessao.usuario.ator === 'plataforma';
+    const ctx: ContextoOperacao = {
+      ...contextoOperacao(s, op),
+      ...extras,
+      ...(acessoTotal ? { acessoTotal: true } : {}),
+    };
     const r = await this.porta.executar(s.porta, op, entrada, ctx).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });

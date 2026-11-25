@@ -584,6 +584,8 @@ export const mensagensAdministracao = {
     titulo: 'Blocos, acomodações e leitos',
     texto: 'Um cadastro só. A ocupação vem da internação e não se edita aqui.',
     blocos: 'Cadastros de blocos, clínicas e especialidades de leito',
+    // F3.4 (04-INT 65): quem opera cada unidade (admitir, transferir para ela, dar alta), na mesma estrutura.
+    operadores: 'Quem opera cada unidade de internação',
     totais: '{leitos} leito(s): {ativos} ativo(s), {ocupados} ocupado(s)',
     acomodacao: 'Acomodação {codigo}: {nome}',
     leitosDaAcomodacao: '{ativos} ativo(s) de {total}; {ocupados} ocupado(s)',

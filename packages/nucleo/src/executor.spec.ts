@@ -297,6 +297,28 @@ describe('Executor: protocolo da operação', () => {
     expect(s.repetida).toBe(false);
   });
 
+  it('o acesso total da sessão chega à gravação só quando é verdadeiro (F3.4, 04-INT 65)', async () => {
+    const vistos: unknown[] = [];
+    const espia = definirOperacao({
+      ...incluir,
+      nome: 'teste.espia_acesso',
+      async gravar(tx, e, ctx) {
+        vistos.push(ctx.acessoTotal);
+        return incluir.gravar(tx, e, ctx);
+      },
+    });
+    const ex = new Executor(banco().dependencias());
+    await ex.executar(espia, 'teste_duble', { descricao: 'A' }, { ...CTX, acessoTotal: true });
+    await ex.executar(espia, 'teste_duble', { descricao: 'B' }, { ...CTX, chaveIdempotencia: 'chave-0002' });
+    await ex.executar(
+      espia,
+      'teste_duble',
+      { descricao: 'C' },
+      { ...CTX, chaveIdempotencia: 'chave-0003', acessoTotal: 'sim' as unknown as boolean },
+    );
+    expect(vistos).toEqual([true, undefined, undefined]);
+  });
+
   it('porta de liberação recusa antes de gravar; a consulta de liberação devolve o motivo', async () => {
     const b = banco();
     const ex = new Executor(
