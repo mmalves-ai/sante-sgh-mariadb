@@ -20,6 +20,10 @@ import ErroAdt from '../componentes/ErroAdt.vue';
 const props = defineProps<{ atd: string | number }>();
 // O atalho da regra aparece só para quem pode ver o contrato (a enfermagem registra o uso; a regra é do convênio).
 const podeRegras = computed(() => pode('convenio.contrato.ler'));
+// Os botões seguem as permissões das rotas da API (C1-074): o registro do uso é da enfermagem
+// (PERMISSOES_GAS_MEDICINAL.usoRegistrar) e o lançamento na conta é do faturamento (PERMISSOES_GAS_MEDICINAL.lancar).
+const podeRegistrar = computed(() => pode('enfermagem.cuidado.checar'));
+const podeLancar = computed(() => pode('faturamento.item.lancar'));
 const { t } = useI18n();
 const atd = computed(() => Number(props.atd));
 const cliente = useQueryClient();
@@ -95,7 +99,7 @@ const hora = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : ''
     <ErroAdt v-if="usos.isError.value" :erro="usos.error.value" />
     <ErroAdt v-if="erro" :erro="erro" />
     <p v-if="aviso" role="status" data-testid="gases-aviso">{{ aviso }}</p>
-    <form class="filtros" @submit.prevent="iniciar(null)">
+    <form v-if="podeRegistrar" class="filtros" @submit.prevent="iniciar(null)">
       <label
         >{{ t('adt.gases.gas') }}
         <input v-model.number="insumo" type="number" min="1" required data-testid="gas-insumo"
@@ -113,16 +117,18 @@ const hora = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : ''
       <button type="submit" :disabled="!valido || acao.isPending.value" data-testid="gas-iniciar">
         {{ t('adt.gases.iniciar') }}
       </button>
+    </form>
+    <p v-if="podeLancar">
       <button type="button" :disabled="acao.isPending.value" data-testid="gas-lancar" @click="lancar">
         {{ t('adt.gases.lancar') }}
       </button>
-    </form>
+    </p>
     <p v-if="!usos.data.value" role="status">{{ t('adt.carregando') }}</p>
     <p v-else-if="usos.data.value.itens.length === 0" data-testid="gases-nenhum">
       {{ t('adt.gases.nenhum') }}
     </p>
     <template v-else>
-      <label
+      <label v-if="podeRegistrar"
         >{{ t('adt.gases.motivo') }} <input v-model="motivo" maxlength="400" data-testid="gas-motivo"
       /></label>
       <table class="tabela" data-testid="tabela-gases">
@@ -135,7 +141,7 @@ const hora = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : ''
             <th scope="col">{{ t('adt.gases.horas') }}</th>
             <th scope="col">{{ t('adt.gases.situacao') }}</th>
             <th scope="col">{{ t('adt.gases.faturado') }}</th>
-            <th scope="col"></th>
+            <th v-if="podeRegistrar" scope="col">{{ t('adt.gases.acoes') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -147,9 +153,14 @@ const hora = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : ''
             <td>{{ u.horasUso ?? '' }}</td>
             <td>{{ t(`adt.gases.situacoes.${u.situacao}`) }}</td>
             <td>{{ u.faturado ? t('adt.sim') : t('adt.nao') }}</td>
-            <td>
+            <td v-if="podeRegistrar">
               <template v-if="u.situacao === 'em_uso'">
-                <button type="button" :disabled="acao.isPending.value" @click="iniciar(u)">
+                <button
+                  type="button"
+                  :disabled="acao.isPending.value"
+                  :data-testid="`gas-trocar-${u.id}`"
+                  @click="iniciar(u)"
+                >
                   {{ t('adt.gases.trocar') }}
                 </button>
                 <button type="button" :disabled="acao.isPending.value" @click="encerrar(u)">

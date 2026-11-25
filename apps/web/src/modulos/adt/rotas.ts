@@ -89,7 +89,8 @@ export const rotasAdt: RouteRecordRaw[] = [
     name: 'adt.gases',
     component: () => import('./telas/GasesTela.vue'),
     props: true,
-    meta: { permissao: 'enfermagem.horario.ler' },
+    // O faturamento chega aos gases do paciente para o lançamento na conta (a API aceita a mesma permissão).
+    meta: { permissao: 'enfermagem.horario.ler', permissaoOu: ['faturamento.item.lancar'] },
   },
   {
     // C1-074, 04-INT L82: os gases do paciente a partir da internação (resolve o atendimento da internação).
@@ -97,7 +98,8 @@ export const rotasAdt: RouteRecordRaw[] = [
     name: 'adt.gases.internacao',
     component: () => import('./telas/GasesInternacaoTela.vue'),
     props: true,
-    meta: { permissao: 'enfermagem.horario.ler' },
+    // O faturamento chega aos gases do paciente para o lançamento na conta (a API aceita a mesma permissão).
+    meta: { permissao: 'enfermagem.horario.ler', permissaoOu: ['faturamento.item.lancar'] },
   },
   {
     // F3.4-3, 04-INT L82: regra de cobrança dos gases (faixas e uso simultâneo).

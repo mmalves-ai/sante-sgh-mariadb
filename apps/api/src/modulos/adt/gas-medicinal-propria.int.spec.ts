@@ -17,6 +17,8 @@ import { PortaGasMedicinalPropria } from './gas-medicinal-propria.js';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const P = 'f343gas';
+/** Segundo estabelecimento sintético (isolamento do atalho da internação). */
+const P2 = 'f343gas2';
 
 interface Massa {
   est: number;
@@ -46,6 +48,9 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar('SET FOREIGN_KEY_CHECKS = 0');
   try {
     await e.executar(`DELETE FROM uso_gas_medicinal WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM internacao WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(`DELETE FROM internacao WHERE estabelecimento_id IN ${est}`, [P2]);
+    await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P2]);
     await e.executar(
       `DELETE f FROM regra_cobranca_gas_faixa f JOIN regra_cobranca_gas r ON r.id = f.regra_cobranca_gas_id
         WHERE r.estabelecimento_id IN ${est}`,
@@ -75,8 +80,8 @@ async function limpar(e: Escritor): Promise<void> {
   } finally {
     await e.executar('SET FOREIGN_KEY_CHECKS = 1');
   }
-  await limparTrilhaDaMassa(e, { codigos: [P] });
-  await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+  await limparTrilhaDaMassa(e, { codigos: [P, P2] });
+  await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, P2]);
 }
 
 describe.skipIf(SEM_BANCO)('PortaGasMedicinalPropria contra o MariaDB (contrato de efeito)', () => {
@@ -485,8 +490,90 @@ describe.skipIf(SEM_BANCO)('PortaGasMedicinalPropria contra o MariaDB (contrato 
     const [uf] = await ler('SELECT situacao, faturado FROM uso_gas_medicinal WHERE id = ?', [fora.id]);
     expect([uf!['situacao'], Number(uf!['faturado'])]).toEqual(['cancelado', 0]);
     await expect(porta.lancarNaConta(ctx(), atd2)).rejects.toMatchObject({ problema: { status: 422 } });
-    // Atalho da internação: internação inexistente no estabelecimento é 404.
+
+    // Período ajustado depois do lançamento: a conta B passa a terminar 2 h atrás e nasce a conta C a partir daí. O uso
+    // já faturado na B (3 h a 1 h atrás) cai em parte no período da C, mas nunca é cobrado de novo nela: o acumulado
+    // da C é só o que ela mesma cobrou mais o pendente. O2 de 1 h a 30 min atrás => 0,5 h na C => 1 (com o trecho
+    // já faturado na B recontado seriam 1,5 h => 2).
+    const contaC = await nucleo.escrever({ cliente: CLIENTE, correlacao: `ajuste-${P}` }, async (e) => {
+      await e.executar('UPDATE conta_hospitalar SET fim_em = ? WHERE id = ?', [h(2), contaB]);
+      return e.inserir(
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, calculada, tabela_preco_id, criado_em)
+         SELECT estabelecimento_id, ?, atendimento_id, paciente_id, fonte_pagadora_id, tipo_conta_id, natureza,
+                competencia, ?, TRUE, tabela_preco_id, ? FROM conta_hospitalar WHERE id = ?`,
+        [`${P}-C2C`, h(2), new Date(), contaB],
+      );
+    });
+    const u2 = await porta.iniciar(ctx(), { atendimento: atd2, insumo: m.o2, inicio: h(1).toISOString() });
+    await porta.encerrar(ctx(), u2.id, { fim: h(0.5).toISOString(), versao: 1 });
+    const r2 = await porta.lancarNaConta(ctx(), atd2);
+    expect(r2.itens).toHaveLength(1);
+    const depois = await ler(
+      `SELECT conta_hospitalar_id, SUM(quantidade) AS q, COUNT(*) AS n FROM conta_hospitalar_item
+        WHERE conta_hospitalar_id IN (?, ?, ?) AND excluido_em IS NULL GROUP BY conta_hospitalar_id
+        ORDER BY conta_hospitalar_id`,
+      [contaA, contaB, contaC],
+    );
+    expect(depois.map((x) => [Number(x['conta_hospitalar_id']), Number(x['q']), Number(x['n'])])).toEqual([
+      [contaA, 2, 1],
+      [contaB, 2, 1],
+      [contaC, 1, 1],
+    ]);
+    const [uu2] = await ler('SELECT faturado, conta_hospitalar_id FROM uso_gas_medicinal WHERE id = ?', [
+      u2.id,
+    ]);
+    expect([Number(uu2!['faturado']), Number(uu2!['conta_hospitalar_id'])]).toEqual([1, contaC]);
+  });
+
+  it('atalho da internação: devolve o atendimento da internação do estabelecimento; a de outro estabelecimento é 404', async () => {
+    const { internacao, outra } = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: `internacao-${P}` },
+      async (e) => {
+        const [a] = await e.consultar<Record<string, unknown>>(
+          'SELECT paciente_id, fonte_pagadora_id FROM atendimento WHERE id = ?',
+          [m.atd],
+        );
+        const est2 = await e.inserir(
+          `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
+           VALUES (?, ?, ?, 'America/Sao_Paulo', NOW(3))`,
+          [P2, `Hospital sintético ${P2}`, `Hospital sintético ${P2} (fictício)`],
+        );
+        // Chaves de catálogo (categoria, caráter, modalidade, unidade, acomodação, especialidade, médico) fictícias:
+        // desligadas só neste preparo, como no beforeAll. Cancelada: não ocupa a internação aberta do paciente (só lida).
+        await e.executar('SET FOREIGN_KEY_CHECKS = 0');
+        try {
+          const atdOutro = await e.inserir(
+            `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+               carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em)
+             SELECT ?, ?, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id, fonte_pagadora_id,
+                    profissional_id, entrada_em, NOW(3) FROM atendimento WHERE id = ?`,
+            [est2, `${P2}-1`, m.atd],
+          );
+          const internar = (est: number, numero: string, atd: number) =>
+            e.inserir(
+              `INSERT INTO internacao (estabelecimento_id, numero, atendimento_id, paciente_id, data_hora_entrada,
+                 carater_admissao_id, modalidade_internacao_id, unidade_internacao_id, acomodacao_id,
+                 especialidade_medica_id, medico_assistente_profissional_id, fonte_pagadora_id, situacao, data_hora_cancelamento,
+                 motivo_cancelamento_internacao_id, criado_em)
+               VALUES (?, ?, ?, ?, NOW(3) - INTERVAL 1 DAY, 1, 1, 1, 1, 1, 1, ?, 'cancelada', NOW(3), 1, NOW(3))`,
+              [est, numero, atd, a!['paciente_id'], a!['fonte_pagadora_id']],
+            );
+          return {
+            internacao: await internar(m.est, `${P}-I1`, m.atd),
+            outra: await internar(est2, `${P2}-I1`, atdOutro),
+          };
+        } finally {
+          await e.executar('SET FOREIGN_KEY_CHECKS = 1');
+        }
+      },
+    );
+    expect(await porta.atendimentoDaInternacao(ctx(), internacao)).toEqual({ atendimento: m.atd });
+    // Internação inexistente e internação de outro estabelecimento: 404 (nada vaza entre estabelecimentos).
     await expect(porta.atendimentoDaInternacao(ctx(), 2_000_000_000)).rejects.toMatchObject({
+      problema: { status: 404 },
+    });
+    await expect(porta.atendimentoDaInternacao(ctx(), outra)).rejects.toMatchObject({
       problema: { status: 404 },
     });
   });

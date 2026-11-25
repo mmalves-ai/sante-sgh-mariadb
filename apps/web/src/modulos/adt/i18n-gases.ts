@@ -11,6 +11,7 @@ export const mensagensGases = {
   encerrar: 'Encerrar',
   cancelar: 'Cancelar (registro por engano)',
   motivo: 'Motivo do cancelamento',
+  acoes: 'Ações',
   lancar: 'Lançar na conta',
   lancado: 'Lançado: {n} item(ns) na conta.',
   inicio: 'Início',

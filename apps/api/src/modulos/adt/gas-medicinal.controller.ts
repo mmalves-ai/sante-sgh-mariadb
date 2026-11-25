@@ -24,7 +24,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -57,12 +57,16 @@ export class GasMedicinalController {
 
   @Get('atendimentos/:atd/usos')
   @Permissao(PERMISSOES_GAS_MEDICINAL.usoLer)
+  // O faturamento lança os gases na conta: lê os usos do paciente para conferir o que vai lançar (C1-074).
+  @PermissaoOu(PERMISSOES_GAS_MEDICINAL.lancar)
   usos(@Req() req: RequisicaoAutorizada, @Param('atd', ParseIntPipe) atd: number) {
     return this.com(req, async (p, c) => ({ itens: await p.usos(c, atd) }));
   }
 
   @Get('internacoes/:reg/atendimento')
   @Permissao(PERMISSOES_GAS_MEDICINAL.usoLer)
+  // O faturamento lança os gases na conta: lê os usos do paciente para conferir o que vai lançar (C1-074).
+  @PermissaoOu(PERMISSOES_GAS_MEDICINAL.lancar)
   atendimentoDaInternacao(@Req() req: RequisicaoAutorizada, @Param('reg', ParseIntPipe) reg: number) {
     return this.com(req, (p, c) => p.atendimentoDaInternacao(c, reg));
   }
