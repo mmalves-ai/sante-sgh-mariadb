@@ -24,12 +24,9 @@ import {
   type ReabrirContaEntrada,
   type RegraPrecoParticular,
   type VerificacaoCredenciamento,
-} from "@sgh/contratos";
-import { conferirPrecoManual } from "@sgh/dominio-faturamento";
-import {
-  escolherRegraPrecoParticular,
-  verificarCredenciamento,
-} from "@sgh/dominio-preco";
+} from '@sgh/contratos';
+import { conferirPrecoManual } from '@sgh/dominio-faturamento';
+import { escolherRegraPrecoParticular, verificarCredenciamento } from '@sgh/dominio-preco';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -40,29 +37,19 @@ import {
   recusa,
   type ResultadoOperacao,
   type TxOperacao,
-} from "@sgh/nucleo";
+} from '@sgh/nucleo';
 import {
   candidatasPrecoParticular,
   credenciamentosVigentes,
   opcoesCredenciamentoConvenio,
-} from "@sgh/persistencia";
-import {
-  sincronizarProducaoDaConta,
-  TABELAS_PRODUCAO_CONTA,
-} from "../repasse/producao-conta.js";
-import {
-  apurarLancamentosAutomaticos,
-  apurarLancamentosDoDia,
-} from "./conta-entrada.js";
-import { conferirLancamentoNoPeriodo } from "./conta-periodos-propria.js";
-import { versaoNumero } from "./esquemas.js";
-import { dispararKitsDoItem } from "./kit-lancamento.js";
-import {
-  type PrecoVigente,
-  precoVigente,
-  tabelasDePreco,
-} from "./preco-conta.js";
-import { aplicarAcordoNoItem } from "./regras-acordo-conta.js";
+} from '@sgh/persistencia';
+import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
+import { apurarLancamentosAutomaticos, apurarLancamentosDoDia } from './conta-entrada.js';
+import { conferirLancamentoNoPeriodo } from './conta-periodos-propria.js';
+import { versaoNumero } from './esquemas.js';
+import { dispararKitsDoItem } from './kit-lancamento.js';
+import { type PrecoVigente, precoVigente, tabelasDePreco } from './preco-conta.js';
+import { aplicarAcordoNoItem } from './regras-acordo-conta.js';
 import {
   conferirCompetenciaDaConta,
   conferirConferenciaItens,
@@ -71,12 +58,12 @@ import {
   conferirReaberturaConta,
   tiposDoGrupo,
   valorDoItem,
-} from "./regras-conta.js";
+} from './regras-conta.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
-const texto = (v: unknown) => (v === null || v === undefined ? "" : String(v));
-const lista = (k: number) => Array.from({ length: k }, () => "?").join(", ");
+const texto = (v: unknown) => (v === null || v === undefined ? '' : String(v));
+const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 const r2 = (x: number) => Math.round(x * 100) / 100;
 
 /** Faixa do preço manual em relação ao da tabela (10% abaixo, 20% acima) sem aprovação. */
@@ -84,25 +71,17 @@ export const FAIXA_PRECO_MANUAL = { abaixo: 0.1, acima: 0.2 } as const;
 
 function estabelecimentoDe(ctx: ContextoOperacao): number {
   if (ctx.estabelecimento === null)
-    throw recusa("sem-estabelecimento", "Escolha o estabelecimento da sessão.");
+    throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
   return ctx.estabelecimento;
 }
 const naoEncontrada = () =>
-  new ErroOperacao(
-    404,
-    "registro-inexistente",
-    "Conta inexistente",
-    "A conta não existe.",
-  );
-const recusaDe = (r: {
-  codigo: string;
-  mensagem: string;
-  campos?: readonly string[];
-}) => recusa(r.codigo, r.mensagem, r.campos ? { campos: r.campos } : {});
+  new ErroOperacao(404, 'registro-inexistente', 'Conta inexistente', 'A conta não existe.');
+const recusaDe = (r: { codigo: string; mensagem: string; campos?: readonly string[] }) =>
+  recusa(r.codigo, r.mensagem, r.campos ? { campos: r.campos } : {});
 
 function versaoDaTela(v: string): number {
   const x = versaoNumero(v);
-  if (x === null) throw erroEntradaInvalida(["versao"]);
+  if (x === null) throw erroEntradaInvalida(['versao']);
   return x;
 }
 
@@ -119,11 +98,7 @@ interface ContaLida {
 }
 
 /** A conta já travada pelo passo 2 do executor, relida com o que as operações precisam. */
-async function contaDa(
-  tx: TxOperacao,
-  id: number,
-  est: number,
-): Promise<ContaLida> {
+async function contaDa(tx: TxOperacao, id: number, est: number): Promise<ContaLida> {
   const x = await tx.uma<Linha>(
     `SELECT id, versao, situacao, fonte_pagadora_id, tabela_preco_id, plano_fonte_pagadora_id, valor_total,
             competencia
@@ -132,17 +107,14 @@ async function contaDa(
   );
   if (!x) throw naoEncontrada();
   return {
-    id: n(x["id"]),
-    versao: n(x["versao"]),
-    situacao: texto(x["situacao"]),
-    fonte: n(x["fonte_pagadora_id"]),
-    tabela: x["tabela_preco_id"] === null ? null : n(x["tabela_preco_id"]),
-    plano:
-      x["plano_fonte_pagadora_id"] === null
-        ? null
-        : n(x["plano_fonte_pagadora_id"]),
-    total: n(x["valor_total"]),
-    competencia: x["competencia"],
+    id: n(x['id']),
+    versao: n(x['versao']),
+    situacao: texto(x['situacao']),
+    fonte: n(x['fonte_pagadora_id']),
+    tabela: x['tabela_preco_id'] === null ? null : n(x['tabela_preco_id']),
+    plano: x['plano_fonte_pagadora_id'] === null ? null : n(x['plano_fonte_pagadora_id']),
+    total: n(x['valor_total']),
+    competencia: x['competencia'],
   };
 }
 
@@ -150,11 +122,7 @@ async function contaDa(
  * Regra 9: a competência da conta precisa estar aberta para a fonte pagadora. Lê, na transação e com trava
  * (o fechamento concorrente da competência espera), o fechamento da fonte e a competência do faturamento de convênios.
  */
-async function conferirCompetencia(
-  tx: TxOperacao,
-  conta: ContaLida,
-  est: number,
-): Promise<void> {
+async function conferirCompetencia(tx: TxOperacao, conta: ContaLida, est: number): Promise<void> {
   const [daFonte] = await tx.consultarParaAtualizar<Linha>(
     `SELECT situacao FROM fechamento_competencia_fonte_pagadora
       WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND competencia = ? AND excluido_em IS NULL`,
@@ -168,22 +136,15 @@ async function conferirCompetencia(
     { teto: 1 },
   );
   const r = conferirCompetenciaDaConta(
-    daFonte ? texto(daFonte["situacao"]) : null,
-    geral ? texto(geral["situacao"]) : null,
+    daFonte ? texto(daFonte['situacao']) : null,
+    geral ? texto(geral['situacao']) : null,
   );
   if (r) throw recusaDe(r);
 }
 
 /** Confere, sob a trava, que a conta é do estabelecimento da sessão (outro estabelecimento: 404). */
-async function conferirDoEstabelecimento(
-  relido: Linha | null,
-  ctx: ContextoOperacao,
-): Promise<void> {
-  if (
-    !relido ||
-    n(relido["estabelecimento_id"]) !== estabelecimentoDe(ctx) ||
-    relido["excluido_em"] !== null
-  )
+async function conferirDoEstabelecimento(relido: Linha | null, ctx: ContextoOperacao): Promise<void> {
+  if (!relido || n(relido['estabelecimento_id']) !== estabelecimentoDe(ctx) || relido['excluido_em'] !== null)
     throw naoEncontrada();
 }
 
@@ -195,14 +156,14 @@ async function registrarEtapa(
   motivo: string | null,
   total = conta.total,
 ): Promise<number> {
-  return tx.incluir("conta_hospitalar_etapa", {
+  return tx.incluir('conta_hospitalar_etapa', {
     conta_hospitalar_id: conta.id,
     situacao_anterior: conta.situacao,
     situacao_nova: nova,
     responsavel_usuario_id: tx.contexto.usuario,
     motivo,
     valor_total_conta: total,
-    operacao: "alteracao",
+    operacao: 'alteracao',
     dados: JSON.stringify(dados),
     ocorrido_em: new Date(),
     usuario_id: tx.contexto.usuario,
@@ -210,9 +171,9 @@ async function registrarEtapa(
 }
 
 const travaConta = (id: number, versaoEsperada?: number) => ({
-  tabela: "conta_hospitalar",
+  tabela: 'conta_hospitalar',
   id,
-  colunas: ["estabelecimento_id", "excluido_em", "situacao"],
+  colunas: ['estabelecimento_id', 'excluido_em', 'situacao'],
   ...(versaoEsperada !== undefined ? { versaoEsperada } : {}),
 });
 
@@ -222,7 +183,7 @@ export { type PrecoVigente, precoVigente, tabelasDePreco };
 
 /** O total da conta a partir dos itens cobrados (sem gatilho): itens, filme e total com acréscimo e desconto. */
 export async function totalDosItens(
-  tx: Pick<TxOperacao, "uma">,
+  tx: Pick<TxOperacao, 'uma'>,
   conta: number,
 ): Promise<{ valor_itens: number; valor_filme: number; valor_total: number }> {
   const soma = await tx.uma<Linha>(
@@ -232,39 +193,28 @@ export async function totalDosItens(
     [conta],
   );
   const cab = await tx.uma<Linha>(
-    "SELECT valor_acrescimo, valor_desconto FROM conta_hospitalar WHERE id = ?",
+    'SELECT valor_acrescimo, valor_desconto FROM conta_hospitalar WHERE id = ?',
     [conta],
   );
-  const itens = n(soma?.["itens"]);
+  const itens = n(soma?.['itens']);
   return {
     valor_itens: itens,
-    valor_filme: n(soma?.["filme"]),
-    valor_total: Math.max(
-      0,
-      r2(itens + n(cab?.["valor_acrescimo"]) - n(cab?.["valor_desconto"])),
-    ),
+    valor_filme: n(soma?.['filme']),
+    valor_total: Math.max(0, r2(itens + n(cab?.['valor_acrescimo']) - n(cab?.['valor_desconto']))),
   };
 }
 
 // ── Operações ───────────────────────────────────────────────────────────────────────────────────────────
 
-export const fecharConta = definirOperacao<
-  FecharContaEntrada,
-  ResultadoOperacao
->({
-  nome: "faturamento.fechar-conta",
-  tabelas: [
-    "conta_hospitalar",
-    "conta_hospitalar_etapa",
-    ...TABELAS_PRODUCAO_CONTA,
-  ],
+export const fecharConta = definirOperacao<FecharContaEntrada, ResultadoOperacao>({
+  nome: 'faturamento.fechar-conta',
+  tabelas: ['conta_hospitalar', 'conta_hospitalar_etapa', ...TABELAS_PRODUCAO_CONTA],
   entrada: esquemaFecharConta,
   travar: (e) => travaConta(e.conta, versaoDaTela(e.versao)),
   conferir: (_tx, _e, ctx, relido) => conferirDoEstabelecimento(relido, ctx),
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
-    if (ctx.usuario === null)
-      throw recusa("sem-usuario", "A gravação exige o usuário da sessão.");
+    if (ctx.usuario === null) throw recusa('sem-usuario', 'A gravação exige o usuário da sessão.');
     const conta = await contaDa(tx, e.conta, est);
     const soma = await tx.uma<Linha>(
       `SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE conta_hospitalar_id = ? AND excluido_em IS NULL
@@ -283,96 +233,82 @@ export const fecharConta = definirOperacao<
     );
     const r = conferirFechamentoConta({
       situacao: conta.situacao,
-      itens: n(soma?.["n"]),
-      pendenciasBloqueantes: n(pend?.["n"]),
-      auditoriaBloqueante: n(aud?.["n"]) > 0,
+      itens: n(soma?.['n']),
+      pendenciasBloqueantes: n(pend?.['n']),
+      auditoriaBloqueante: n(aud?.['n']) > 0,
     });
     if (r) throw recusaDe(r);
     await conferirCompetencia(tx, conta, est);
     // O total sai dos itens na hora de fechar: a diária, o mat/med do estoque e o lançamento manual entram pelo mesmo
     // cálculo (a saída do estoque só marca a conta como não calculada).
     const total = await totalDosItens(tx, conta.id);
-    await tx.alterar("conta_hospitalar", conta.id, conta.versao, {
+    await tx.alterar('conta_hospitalar', conta.id, conta.versao, {
       ...total,
       calculada: true,
-      situacao: "fechada",
+      situacao: 'fechada',
       fechada_em: new Date(),
       fechada_por_usuario_id: ctx.usuario,
     });
     await registrarEtapa(
       tx,
       conta,
-      "fechada",
-      { etapa: "fechamento", situacao: "registrada" },
+      'fechada',
+      { etapa: 'fechamento', situacao: 'registrada' },
       null,
       total.valor_total,
     );
     // A produção do repasse do momento "fechamento" nasce na mesma transação (no momento "lançamento" já existe).
     await sincronizarProducaoDaConta(
       tx,
-      { conta: conta.id, evento: "fechamento" },
+      { conta: conta.id, evento: 'fechamento' },
       { estabelecimento: est, usuario: ctx.usuario },
     );
     return { conta: conta.id };
   },
-  eventos: (_e, r) => [
-    { tipo: "faturamento.conta.fechada", carga: { conta: Number(r["conta"]) } },
-  ],
-  alvo: (e) => ({ tabela: "conta_hospitalar", id: e.conta }),
+  eventos: (_e, r) => [{ tipo: 'faturamento.conta.fechada', carga: { conta: Number(r['conta']) } }],
+  alvo: (e) => ({ tabela: 'conta_hospitalar', id: e.conta }),
 });
 
-export const reabrirConta = definirOperacao<
-  ReabrirContaEntrada,
-  ResultadoOperacao
->({
-  nome: "faturamento.reabrir-conta",
-  tabelas: ["conta_hospitalar", "conta_hospitalar_etapa"],
+export const reabrirConta = definirOperacao<ReabrirContaEntrada, ResultadoOperacao>({
+  nome: 'faturamento.reabrir-conta',
+  tabelas: ['conta_hospitalar', 'conta_hospitalar_etapa'],
   entrada: esquemaReabrirConta,
   travar: (e) => travaConta(e.conta, versaoDaTela(e.versao)),
   conferir: (_tx, _e, ctx, relido) => conferirDoEstabelecimento(relido, ctx),
   async gravar(tx, e, ctx) {
     const conta = await contaDa(tx, e.conta, estabelecimentoDe(ctx));
     const lote = await tx.uma<Linha>(
-      "SELECT COUNT(*) AS n FROM lote_tiss_conta WHERE conta_hospitalar_id = ? AND excluido_em IS NULL",
+      'SELECT COUNT(*) AS n FROM lote_tiss_conta WHERE conta_hospitalar_id = ? AND excluido_em IS NULL',
       [conta.id],
     );
     const r = conferirReaberturaConta({
       situacao: conta.situacao,
-      emLote: n(lote?.["n"]) > 0,
+      emLote: n(lote?.['n']) > 0,
       motivo: e.motivo,
     });
     if (r) throw recusaDe(r);
-    await tx.alterar("conta_hospitalar", conta.id, conta.versao, {
-      situacao: "aberta",
+    await tx.alterar('conta_hospitalar', conta.id, conta.versao, {
+      situacao: 'aberta',
       reaberta_em: new Date(),
       fechada_em: null,
       fechada_por_usuario_id: null,
     });
-    await registrarEtapa(
-      tx,
-      conta,
-      "aberta",
-      { etapa: "reabertura", situacao: "registrada" },
-      e.motivo,
-    );
+    await registrarEtapa(tx, conta, 'aberta', { etapa: 'reabertura', situacao: 'registrada' }, e.motivo);
     return { conta: conta.id };
   },
   eventos: (_e, r) => [
     {
-      tipo: "faturamento.conta.reaberta",
-      carga: { conta: Number(r["conta"]) },
+      tipo: 'faturamento.conta.reaberta',
+      carga: { conta: Number(r['conta']) },
     },
   ],
-  alvo: (e) => ({ tabela: "conta_hospitalar", id: e.conta }),
+  alvo: (e) => ({ tabela: 'conta_hospitalar', id: e.conta }),
   trilha: (e) => ({ motivo: e.motivo }),
 });
 
-export const conferirItem = definirOperacao<
-  ConferirItemEntrada,
-  ResultadoOperacao
->({
-  nome: "faturamento.conferir-item",
-  tabelas: ["conta_hospitalar_item", "conta_hospitalar_etapa"],
+export const conferirItem = definirOperacao<ConferirItemEntrada, ResultadoOperacao>({
+  nome: 'faturamento.conferir-item',
+  tabelas: ['conta_hospitalar_item', 'conta_hospitalar_etapa'],
   entrada: esquemaConferirItem,
   travar: (e) => travaConta(e.conta),
   conferir: (_tx, _e, ctx, relido) => conferirDoEstabelecimento(relido, ctx),
@@ -387,52 +323,38 @@ export const conferirItem = definirOperacao<
       ids,
       { teto: ids.length },
     );
-    const porId = new Map(linhas.map((x) => [n(x["id"]), x]));
+    const porId = new Map(linhas.map((x) => [n(x['id']), x]));
     const mudaram: string[] = [];
     for (const i of e.itens) {
       const x = porId.get(i.id);
-      if (!x || n(x["conta_hospitalar_id"]) !== conta.id)
-        throw recusa(
-          "item-de-outra-conta",
-          `O item ${i.id} não é desta conta.`,
-          { campos: ["itens"] },
-        );
-      if (n(x["versao"]) !== versaoDaTela(i.versao))
-        mudaram.push(`item ${i.id}`);
-      const sit = texto(x["situacao"]);
-      if (sit !== "lancado" && sit !== "conferido")
-        throw recusa(
-          "item-sem-conferencia",
-          `O item ${i.id} está ${sit}: só item lançado é conferido.`,
-          {
-            campos: ["itens"],
-          },
-        );
+      if (!x || n(x['conta_hospitalar_id']) !== conta.id)
+        throw recusa('item-de-outra-conta', `O item ${i.id} não é desta conta.`, { campos: ['itens'] });
+      if (n(x['versao']) !== versaoDaTela(i.versao)) mudaram.push(`item ${i.id}`);
+      const sit = texto(x['situacao']);
+      if (sit !== 'lancado' && sit !== 'conferido')
+        throw recusa('item-sem-conferencia', `O item ${i.id} está ${sit}: só item lançado é conferido.`, {
+          campos: ['itens'],
+        });
     }
     if (mudaram.length) throw erroConflitoVersao(mudaram);
     for (const i of e.itens)
-      await tx.alterar(
-        "conta_hospitalar_item",
-        i.id,
-        n(porId.get(i.id)?.["versao"]),
-        {
-          situacao: "conferido",
-        },
-      );
+      await tx.alterar('conta_hospitalar_item', i.id, n(porId.get(i.id)?.['versao']), {
+        situacao: 'conferido',
+      });
     await registrarEtapa(
       tx,
       conta,
       conta.situacao,
       {
-        etapa: "conferencia-item",
-        situacao: "registrada",
+        etapa: 'conferencia-item',
+        situacao: 'registrada',
         itens: e.itens.length,
       },
       `${e.itens.length} item(ns)`,
     );
     return { conta: conta.id, itens: e.itens.length };
   },
-  alvo: (e) => ({ tabela: "conta_hospitalar", id: e.conta }),
+  alvo: (e) => ({ tabela: 'conta_hospitalar', id: e.conta }),
 });
 
 /** Quem atende o item e de onde veio o atendimento: o profissional e a agenda da marcação (ADR 0009). */
@@ -451,10 +373,7 @@ async function atendimentoDoItem(
   conta: { readonly id: number; readonly fonte: number },
   executante: number | null,
 ): Promise<AtendimentoDoItem> {
-  const f = await tx.uma<Linha>(
-    "SELECT tipo FROM fonte_pagadora WHERE id = ?",
-    [conta.fonte],
-  );
+  const f = await tx.uma<Linha>('SELECT tipo FROM fonte_pagadora WHERE id = ?', [conta.fonte]);
   const at = await tx.uma<Linha>(
     `SELECT a.profissional_id, ha.agenda_servico_id, m.id AS marcacao_id
        FROM conta_hospitalar c JOIN atendimento a ON a.id = c.atendimento_id
@@ -463,20 +382,15 @@ async function atendimentoDoItem(
       WHERE c.id = ?`,
     [conta.id],
   );
-  const doAtendimento =
-    at?.["profissional_id"] == null ? null : n(at["profissional_id"]);
-  const agenda =
-    at?.["agenda_servico_id"] == null ? null : n(at["agenda_servico_id"]);
+  const doAtendimento = at?.['profissional_id'] == null ? null : n(at['profissional_id']);
+  const agenda = at?.['agenda_servico_id'] == null ? null : n(at['agenda_servico_id']);
   const profissional = executante ?? doAtendimento;
   const daAgenda = profissional !== null && profissional === doAtendimento;
   return {
-    particular: texto(f?.["tipo"]) === "particular",
+    particular: texto(f?.['tipo']) === 'particular',
     profissional,
     agenda: daAgenda ? agenda : null,
-    marcacao:
-      daAgenda && agenda !== null && at?.["marcacao_id"] != null
-        ? n(at["marcacao_id"])
-        : null,
+    marcacao: daAgenda && agenda !== null && at?.['marcacao_id'] != null ? n(at['marcacao_id']) : null,
   };
 }
 
@@ -498,16 +412,14 @@ async function regraParticularDoItem(
   const agendavel = await tx.consultar<Linha>(
     `SELECT DISTINCT tipo_item FROM item_agendavel WHERE item_faturavel_id = ? AND tipo_item IN ('consulta','exame')
         AND excluido_em IS NULL`,
-    [n(item["id"])],
+    [n(item['id'])],
   );
-  const consulta = agendavel.some((x) => texto(x["tipo_item"]) === "consulta")
-    ? true
-    : null;
+  const consulta = agendavel.some((x) => texto(x['tipo_item']) === 'consulta') ? true : null;
   // O exame da agenda (alvo "exame", só da agenda): o item agendável de exame que a agenda da marcação oferece
   // (agenda_item_agendavel) ou que é o item da própria marcação. O exame de outra agenda segue a tabela do particular.
   const exame =
     quem.agenda !== null &&
-    agendavel.some((x) => texto(x["tipo_item"]) === "exame") &&
+    agendavel.some((x) => texto(x['tipo_item']) === 'exame') &&
     (await tx.uma<Linha>(
       `SELECT ia.id FROM item_agendavel ia
         WHERE ia.item_faturavel_id = ? AND ia.tipo_item = 'exame' AND ia.excluido_em IS NULL
@@ -517,7 +429,7 @@ async function regraParticularDoItem(
                OR EXISTS (SELECT 1 FROM marcacao_horario_item mi
                            WHERE mi.marcacao_horario_id = ? AND mi.item_agendavel_id = ia.id AND mi.excluido_em IS NULL))
         LIMIT 1`,
-      [n(item["id"]), quem.agenda, quem.marcacao ?? 0, quem.marcacao ?? 0],
+      [n(item['id']), quem.agenda, quem.marcacao ?? 0, quem.marcacao ?? 0],
     )) !== null;
   const pedido = {
     fontePagadoraId: conta.fonte,
@@ -530,11 +442,8 @@ async function regraParticularDoItem(
   return escolherRegraPrecoParticular(candidatas, {
     ...pedido,
     alvo: {
-      itemFaturavelId: n(item["id"]),
-      grupoFaturamentoId:
-        item["grupo_faturamento_id"] == null
-          ? null
-          : n(item["grupo_faturamento_id"]),
+      itemFaturavelId: n(item['id']),
+      grupoFaturamentoId: item['grupo_faturamento_id'] == null ? null : n(item['grupo_faturamento_id']),
       consulta: consulta !== null,
       exame,
     },
@@ -555,12 +464,10 @@ async function credenciamentoDoItem(
   if (quem.particular || quem.profissional === null) return null;
   let planoSuperiorId: number | null = null;
   if (conta.plano !== null) {
-    const pl = await tx.uma<Linha>(
-      "SELECT plano_superior_id FROM plano_fonte_pagadora WHERE id = ?",
-      [conta.plano],
-    );
-    planoSuperiorId =
-      pl?.["plano_superior_id"] == null ? null : n(pl["plano_superior_id"]);
+    const pl = await tx.uma<Linha>('SELECT plano_superior_id FROM plano_fonte_pagadora WHERE id = ?', [
+      conta.plano,
+    ]);
+    planoSuperiorId = pl?.['plano_superior_id'] == null ? null : n(pl['plano_superior_id']);
   }
   const q = {
     profissionalId: quem.profissional,
@@ -579,368 +486,305 @@ async function credenciamentoDoItem(
     credenciamentos,
     opcoes,
   });
-  if (v.efeito === "bloqueio")
+  if (v.efeito === 'bloqueio')
     throw recusa(
-      "profissional-nao-credenciado",
-      v.motivo ?? "O profissional não é credenciado no convênio.",
+      'profissional-nao-credenciado',
+      v.motivo ?? 'O profissional não é credenciado no convênio.',
       {
-        campos: ["executante"],
+        campos: ['executante'],
       },
     );
-  return v.efeito === "alerta" ? v : null;
+  return v.efeito === 'alerta' ? v : null;
 }
 
-export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
-  {
-    nome: "faturamento.lancar-item",
-    tabelas: [
-      "conta_hospitalar_item",
-      "conta_hospitalar_item_memoria",
-      "conta_hospitalar",
-      ...TABELAS_PRODUCAO_CONTA,
-    ],
-    entrada: esquemaLancarItem,
-    travar: (e) => travaConta(e.conta),
-    conferir: (_tx, _e, ctx, relido) => conferirDoEstabelecimento(relido, ctx),
-    async gravar(tx, e, ctx) {
-      const est = estabelecimentoDe(ctx);
-      const conta = await contaDa(tx, e.conta, est);
-      const r = conferirLancamento(conta.situacao);
-      if (r) throw recusaDe(r);
-      await conferirCompetencia(tx, conta, est);
-      // O catálogo de itens faturáveis é da rede inteira (sem estabelecimento).
-      const tipos = tiposDoGrupo(e.tipo);
-      const item = await tx.uma<Linha>(
-        `SELECT id, grupo_faturamento_id FROM item_faturavel WHERE codigo = ? AND tipo_item IN (${lista(tipos.length)})
+export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>({
+  nome: 'faturamento.lancar-item',
+  tabelas: [
+    'conta_hospitalar_item',
+    'conta_hospitalar_item_memoria',
+    'conta_hospitalar',
+    ...TABELAS_PRODUCAO_CONTA,
+  ],
+  entrada: esquemaLancarItem,
+  travar: (e) => travaConta(e.conta),
+  conferir: (_tx, _e, ctx, relido) => conferirDoEstabelecimento(relido, ctx),
+  async gravar(tx, e, ctx) {
+    const est = estabelecimentoDe(ctx);
+    const conta = await contaDa(tx, e.conta, est);
+    const r = conferirLancamento(conta.situacao);
+    if (r) throw recusaDe(r);
+    await conferirCompetencia(tx, conta, est);
+    // O catálogo de itens faturáveis é da rede inteira (sem estabelecimento).
+    const tipos = tiposDoGrupo(e.tipo);
+    const item = await tx.uma<Linha>(
+      `SELECT id, grupo_faturamento_id FROM item_faturavel WHERE codigo = ? AND tipo_item IN (${lista(tipos.length)})
           AND excluido_em IS NULL AND situacao = 'ativo'`,
-        [String(e.codigo), ...tipos],
-      );
-      if (!item)
-        throw recusa(
-          "item-fora-do-catalogo",
-          "O item não está no catálogo de itens faturáveis.",
-          {
-            campos: ["codigo"],
-          },
-        );
-      // ADR 0009: no particular, a regra estruturada do médico ou da agenda vale ANTES da tabela do particular (o
-      // convênio segue só a tabela: não há preço por médico em convênio).
-      const quem = await atendimentoDoItem(tx, conta, e.executante);
-      const alerta = await credenciamentoDoItem(tx, conta, est, quem, e.data);
-      const regra = e.precoManual
-        ? null
-        : await regraParticularDoItem(tx, conta, est, item, quem, e.data);
-      const tabelas = await tabelasDePreco(
-        tx,
-        est,
-        conta.fonte,
-        conta.plano,
-        conta.tabela,
-      );
-      const naTabela = regra
-        ? null
-        : tabelas.length
-          ? await tx.uma<Linha>(
-              `SELECT tabela_preco_id FROM preco_procedimento
+      [String(e.codigo), ...tipos],
+    );
+    if (!item)
+      throw recusa('item-fora-do-catalogo', 'O item não está no catálogo de itens faturáveis.', {
+        campos: ['codigo'],
+      });
+    // ADR 0009: no particular, a regra estruturada do médico ou da agenda vale ANTES da tabela do particular (o
+    // convênio segue só a tabela: não há preço por médico em convênio).
+    const quem = await atendimentoDoItem(tx, conta, e.executante);
+    const alerta = await credenciamentoDoItem(tx, conta, est, quem, e.data);
+    const regra = e.precoManual ? null : await regraParticularDoItem(tx, conta, est, item, quem, e.data);
+    const tabelas = await tabelasDePreco(tx, est, conta.fonte, conta.plano, conta.tabela);
+    const naTabela = regra
+      ? null
+      : tabelas.length
+        ? await tx.uma<Linha>(
+            `SELECT tabela_preco_id FROM preco_procedimento
             WHERE item_faturavel_id = ? AND tabela_preco_id IN (${lista(tabelas.length)}) AND ativo = 1
               AND excluido_em IS NULL LIMIT 1`,
-              [n(item["id"]), ...tabelas],
-            )
-          : null;
-      if (!naTabela && !regra)
-        throw recusa(
-          "item-fora-da-tabela",
-          "O item não está na tabela de preço da fonte pagadora da conta.",
-          {
-            campos: ["codigo"],
-          },
-        );
-      const doTabela = regra
-        ? null
-        : await precoVigente(tx, tabelas, n(item["id"]), e.data);
-      const preco: PrecoVigente | null = regra
-        ? {
-            modelo: "regra_particular",
-            unitario: regra.valor,
-            honorario: 0,
-            custoOperacional: 0,
-            filme: 0,
-            vigencia: regra.vigenciaInicio,
-            tabela: 0,
-          }
-        : doTabela;
-      // O setor onde o paciente estava: setor funcional do estabelecimento da sessão (0 na tela = sem setor).
-      let setor: number | null = null;
-      if (e.local > 0) {
-        const x = await tx.uma<Linha>(
-          `SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND ativo = 1 AND excluido_em IS NULL`,
-          [e.local, est],
-        );
-        if (!x)
-          throw recusa(
-            "setor-inexistente",
-            "O setor não existe neste estabelecimento.",
-            { campos: ["local"] },
-          );
-        setor = n(x["id"]);
-      }
-      let unitario: number;
-      let valorizacao: "tabela" | "manual" = "tabela";
-      if (e.precoManual) {
-        const operador = await tx.uma<Linha>(
-          "SELECT login FROM usuario WHERE id = ?",
-          [ctx.usuario],
-        );
-        const recusaManual = conferirPrecoManual({
-          tabela: preco?.unitario ?? 0,
-          manual: e.precoManual.unitario,
-          faixa: FAIXA_PRECO_MANUAL,
-          aprovador: e.precoManual.aprovador,
-          justificativa: e.precoManual.justificativa,
-          ...(operador ? { operador: texto(operador["login"]) } : {}),
-        });
-        if (recusaManual) throw recusaDe(recusaManual);
-        unitario = e.precoManual.unitario;
-        valorizacao = "manual";
-      } else if (preco) unitario = preco.unitario;
-      else
-        throw recusa(
-          "item-sem-preco",
-          "O item não tem preço vigente na tabela da conta: informe o preço manual.",
-          {
-            campos: ["precoManual"],
-          },
-        );
-      // 06-FAT linha 1: o acordo da fonte (percentual, desconto por grupo, isento, teto e alto custo) no item da tabela.
-      const acordo =
-        valorizacao === "tabela" && !regra && preco
-          ? await aplicarAcordoNoItem(
-              tx,
-              est,
-              { id: conta.id, fonte: conta.fonte, plano: conta.plano },
-              {
-                item: n(item["id"]),
-                grupo:
-                  item["grupo_faturamento_id"] == null
-                    ? null
-                    : n(item["grupo_faturamento_id"]),
-                tabela: preco.tabela || null,
-                funcaoEquipe: e.funcao,
-                quantidade: e.quantidade,
-                honorario: preco.honorario,
-                // O preço sem parcelas (só o unitário) entra inteiro como custo operacional no cálculo do acordo.
-                custoOperacional: r2(
-                  preco.unitario - preco.honorario - preco.filme,
-                ),
-                filme: preco.filme,
-                data: e.data,
-              },
-            )
-          : null;
-      if (acordo?.recusa)
-        throw recusa(acordo.recusa.codigo, acordo.recusa.mensagem, {
-          campos: ["codigo"],
-        });
-      const comAcordo = acordo && acordo.aplicadas.length > 0 ? acordo : null;
-      if (comAcordo) unitario = comAcordo.unitario;
-      const fuso = await tx.uma<Linha>(
-        "SELECT fuso_horario FROM estabelecimento WHERE id = ?",
-        [est],
-      );
-      const realizado = new Date(
-        dataHoraParaInstante(
-          e.data,
-          e.hora,
-          texto(fuso?.["fuso_horario"]) || undefined,
-        ),
-      );
-      // 06-FAT linha 12: a data que cai num período fechado da conta parcial é recusada (o item sem tipo de lançamento
-      // só esbarra no período geral).
-      await conferirLancamentoNoPeriodo(tx, conta.id, realizado, null);
-      const seq = await tx.uma<Linha>(
-        "SELECT COALESCE(MAX(sequencia), 0) + 1 AS proxima FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?",
-        [conta.id],
-      );
-      const valor = comAcordo
-        ? comAcordo.total
-        : valorDoItem(unitario, e.quantidade);
-      const id = await tx.incluir("conta_hospitalar_item", {
-        conta_hospitalar_id: conta.id,
-        sequencia: n(seq?.["proxima"]),
-        item_faturavel_id: n(item["id"]),
-        grupo_faturamento_id: item["grupo_faturamento_id"] ?? null,
-        setor_funcional_id: setor,
-        realizado_em: realizado,
-        quantidade: e.quantidade,
-        valor_unitario: unitario,
-        valor_honorario: comAcordo
-          ? comAcordo.honorario
-          : valorizacao === "tabela" && preco
-            ? r2(preco.honorario * e.quantidade)
-            : 0,
-        valor_custo_operacional: comAcordo
-          ? comAcordo.custoOperacional
-          : valorizacao === "tabela" && preco
-            ? r2(preco.custoOperacional * e.quantidade)
-            : 0,
-        valor_filme: comAcordo
-          ? comAcordo.filme
-          : valorizacao === "tabela" && preco
-            ? r2(preco.filme * e.quantidade)
-            : 0,
-        valor_total: valor,
-        tipo_valorizacao: valorizacao,
-        // O executor e a função na equipe: a produção do repasse sai deles (sem executor informado, não há produção).
-        executante_profissional_id: e.executante,
-        funcao_equipe_cobranca_id: e.funcao,
-        situacao: "lancado",
-        observacao: e.precoManual
-          ? `Preço manual: ${e.precoManual.justificativa}`.slice(0, 2000)
-          : null,
+            [n(item['id']), ...tabelas],
+          )
+        : null;
+    if (!naTabela && !regra)
+      throw recusa('item-fora-da-tabela', 'O item não está na tabela de preço da fonte pagadora da conta.', {
+        campos: ['codigo'],
       });
-      // A memória do cálculo: de onde veio o preço e, no manual, quem aprovou e por quê.
-      await tx.incluir("conta_hospitalar_item_memoria", {
-        conta_hospitalar_item_id: id,
-        tabela_preco_id: regra
-          ? null
-          : (preco?.tabela ?? n(naTabela?.["tabela_preco_id"])),
-        regra_preco_particular_id: regra?.id ?? null,
-        valor_unitario_calculado: preco?.unitario ?? null,
-        valor_total_calculado: preco
-          ? valorDoItem(preco.unitario, e.quantidade)
-          : null,
-        preco_manual: valorizacao === "manual" ? 1 : 0,
-        operacao: "inclusao",
-        dados: JSON.stringify({
-          origemPreco: regra
-            ? regra.dono.tipo === "agenda"
-              ? "regra_particular_agenda"
-              : "regra_particular_profissional"
-            : valorizacao === "manual"
-              ? "manual"
-              : "tabela",
-          regraEstimada: regra ? regra.situacaoRevisao === "estimada" : null,
-          modelo: preco?.modelo ?? null,
-          vigencia: preco?.vigencia ?? null,
-          unitarioTabela: preco?.unitario ?? null,
-          honorario: preco?.honorario ?? null,
-          custoOperacional: preco?.custoOperacional ?? null,
-          filme: preco?.filme ?? null,
-          faixa: FAIXA_PRECO_MANUAL,
-          manual: e.precoManual
-            ? {
-                unitario: e.precoManual.unitario,
-                aprovador: e.precoManual.aprovador,
-                justificativa: e.precoManual.justificativa,
-              }
-            : null,
-          ato: e.ato > 0 ? e.ato : null,
-          origem: e.origem ?? null,
-          profissional: quem.profissional,
-          credenciamento: alerta
-            ? { efeito: alerta.efeito, motivo: alerta.motivo }
-            : null,
-          // 06-FAT linha 1: as regras do acordo aplicadas, o excedente transferido e o que o alto custo exige.
-          acordo: comAcordo
-            ? {
-                aplicadas: comAcordo.aplicadas,
-                isento: comAcordo.isento,
-                cobrancaAParte: comAcordo.cobrancaAParte,
-                exigeAutorizacao: comAcordo.exigeAutorizacao,
-                excedente: comAcordo.excedente,
-                alertas: comAcordo.alertas,
-              }
-            : null,
-        }),
-        ocorrido_em: new Date(),
-        usuario_id: ctx.usuario,
+    const doTabela = regra ? null : await precoVigente(tx, tabelas, n(item['id']), e.data);
+    const preco: PrecoVigente | null = regra
+      ? {
+          modelo: 'regra_particular',
+          unitario: regra.valor,
+          honorario: 0,
+          custoOperacional: 0,
+          filme: 0,
+          vigencia: regra.vigenciaInicio,
+          tabela: 0,
+        }
+      : doTabela;
+    // O setor onde o paciente estava: setor funcional do estabelecimento da sessão (0 na tela = sem setor).
+    let setor: number | null = null;
+    if (e.local > 0) {
+      const x = await tx.uma<Linha>(
+        `SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ? AND ativo = 1 AND excluido_em IS NULL`,
+        [e.local, est],
+      );
+      if (!x)
+        throw recusa('setor-inexistente', 'O setor não existe neste estabelecimento.', { campos: ['local'] });
+      setor = n(x['id']);
+    }
+    let unitario: number;
+    let valorizacao: 'tabela' | 'manual' = 'tabela';
+    if (e.precoManual) {
+      const operador = await tx.uma<Linha>('SELECT login FROM usuario WHERE id = ?', [ctx.usuario]);
+      const recusaManual = conferirPrecoManual({
+        tabela: preco?.unitario ?? 0,
+        manual: e.precoManual.unitario,
+        faixa: FAIXA_PRECO_MANUAL,
+        aprovador: e.precoManual.aprovador,
+        justificativa: e.precoManual.justificativa,
+        ...(operador ? { operador: texto(operador['login']) } : {}),
       });
-      // F3.7 (06-FAT linha 16): o item que é gatilho de kit lança o kit junto, na mesma transação.
-      const kits = await dispararKitsDoItem(
-        tx,
-        est,
+      if (recusaManual) throw recusaDe(recusaManual);
+      unitario = e.precoManual.unitario;
+      valorizacao = 'manual';
+    } else if (preco) unitario = preco.unitario;
+    else
+      throw recusa(
+        'item-sem-preco',
+        'O item não tem preço vigente na tabela da conta: informe o preço manual.',
         {
-          id: conta.id,
-          fontePagadora: conta.fonte,
-          plano: conta.plano,
-          tabela: conta.tabela,
+          campos: ['precoManual'],
         },
-        n(item["id"]),
-        e.quantidade,
-        e.data,
-        ctx.usuario,
       );
-      // O total da conta a partir dos itens, na mesma transação (sem gatilho).
-      await tx.alterar(
-        "conta_hospitalar",
-        conta.id,
-        conta.versao,
-        await totalDosItens(tx, conta.id),
-      );
-      // F3.7 (06-FAT linha 17): o acréscimo de horário especial entra ao lançar (o item e os do kit), pelo relógio do
-      // hospital e pelo caráter do atendimento, na mesma transação. Importação tardia: o módulo dos ajustes usa o total
-      // dos itens daqui.
-      const { aplicarHorarioEspecialNaConta } =
-        await import("./conta-ajustes-propria.js");
-      const horario = await aplicarHorarioEspecialNaConta(tx, est, conta.id, {
-        soSeEditavel: true,
+    // 06-FAT linha 1: o acordo da fonte (percentual, desconto por grupo, isento, teto e alto custo) no item da tabela.
+    const acordo =
+      valorizacao === 'tabela' && !regra && preco
+        ? await aplicarAcordoNoItem(
+            tx,
+            est,
+            { id: conta.id, fonte: conta.fonte, plano: conta.plano },
+            {
+              item: n(item['id']),
+              grupo: item['grupo_faturamento_id'] == null ? null : n(item['grupo_faturamento_id']),
+              tabela: preco.tabela || null,
+              funcaoEquipe: e.funcao,
+              quantidade: e.quantidade,
+              honorario: preco.honorario,
+              // O preço sem parcelas (só o unitário) entra inteiro como custo operacional no cálculo do acordo.
+              custoOperacional: r2(preco.unitario - preco.honorario - preco.filme),
+              filme: preco.filme,
+              data: e.data,
+            },
+          )
+        : null;
+    if (acordo?.recusa)
+      throw recusa(acordo.recusa.codigo, acordo.recusa.mensagem, {
+        campos: ['codigo'],
       });
-      // A produção do repasse do item (momento "lançamento"), na mesma transação e pela mesma conta.
-      await sincronizarProducaoDaConta(
-        tx,
-        { conta: conta.id, itens: [id], evento: "lancamento" },
-        { estabelecimento: est, usuario: ctx.usuario },
-      );
-      // Decisão 25: o alerta de credenciamento volta no resultado (o resultado da operação é plano).
-      const doHorario = horario.alterados
-        ? { horarioEspecial: horario.alterados }
-        : {};
-      const doAcordo = comAcordo?.alertas.length
-        ? { alertasAcordo: comAcordo.alertas.join(",") }
-        : {};
-      const doKit = kits.kits.length
-        ? {
-            kits: kits.kits.join(","),
-            itensKit: kits.itens.length,
-            semPrecoKit: kits.semPreco,
-          }
-        : {};
-      return alerta
-        ? {
-            id,
-            conta: conta.id,
-            valor,
-            alerta: "profissional-nao-credenciado",
-            alertaMotivo: alerta.motivo,
-            ...doKit,
-            ...doHorario,
-            ...doAcordo,
-          }
-        : { id, conta: conta.id, valor, ...doKit, ...doHorario, ...doAcordo };
-    },
-    eventos: (_e, r) => [
+    const comAcordo = acordo && acordo.aplicadas.length > 0 ? acordo : null;
+    if (comAcordo) unitario = comAcordo.unitario;
+    const fuso = await tx.uma<Linha>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+    const realizado = new Date(
+      dataHoraParaInstante(e.data, e.hora, texto(fuso?.['fuso_horario']) || undefined),
+    );
+    // 06-FAT linha 12: a data que cai num período fechado da conta parcial é recusada (o item sem tipo de lançamento
+    // só esbarra no período geral).
+    await conferirLancamentoNoPeriodo(tx, conta.id, realizado, null);
+    const seq = await tx.uma<Linha>(
+      'SELECT COALESCE(MAX(sequencia), 0) + 1 AS proxima FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
+      [conta.id],
+    );
+    const valor = comAcordo ? comAcordo.total : valorDoItem(unitario, e.quantidade);
+    const id = await tx.incluir('conta_hospitalar_item', {
+      conta_hospitalar_id: conta.id,
+      sequencia: n(seq?.['proxima']),
+      item_faturavel_id: n(item['id']),
+      grupo_faturamento_id: item['grupo_faturamento_id'] ?? null,
+      setor_funcional_id: setor,
+      realizado_em: realizado,
+      quantidade: e.quantidade,
+      valor_unitario: unitario,
+      valor_honorario: comAcordo
+        ? comAcordo.honorario
+        : valorizacao === 'tabela' && preco
+          ? r2(preco.honorario * e.quantidade)
+          : 0,
+      valor_custo_operacional: comAcordo
+        ? comAcordo.custoOperacional
+        : valorizacao === 'tabela' && preco
+          ? r2(preco.custoOperacional * e.quantidade)
+          : 0,
+      valor_filme: comAcordo
+        ? comAcordo.filme
+        : valorizacao === 'tabela' && preco
+          ? r2(preco.filme * e.quantidade)
+          : 0,
+      valor_total: valor,
+      tipo_valorizacao: valorizacao,
+      // O executor e a função na equipe: a produção do repasse sai deles (sem executor informado, não há produção).
+      executante_profissional_id: e.executante,
+      funcao_equipe_cobranca_id: e.funcao,
+      situacao: 'lancado',
+      observacao: e.precoManual ? `Preço manual: ${e.precoManual.justificativa}`.slice(0, 2000) : null,
+    });
+    // A memória do cálculo: de onde veio o preço e, no manual, quem aprovou e por quê.
+    await tx.incluir('conta_hospitalar_item_memoria', {
+      conta_hospitalar_item_id: id,
+      tabela_preco_id: regra ? null : (preco?.tabela ?? n(naTabela?.['tabela_preco_id'])),
+      regra_preco_particular_id: regra?.id ?? null,
+      valor_unitario_calculado: preco?.unitario ?? null,
+      valor_total_calculado: preco ? valorDoItem(preco.unitario, e.quantidade) : null,
+      preco_manual: valorizacao === 'manual' ? 1 : 0,
+      operacao: 'inclusao',
+      dados: JSON.stringify({
+        origemPreco: regra
+          ? regra.dono.tipo === 'agenda'
+            ? 'regra_particular_agenda'
+            : 'regra_particular_profissional'
+          : valorizacao === 'manual'
+            ? 'manual'
+            : 'tabela',
+        regraEstimada: regra ? regra.situacaoRevisao === 'estimada' : null,
+        modelo: preco?.modelo ?? null,
+        vigencia: preco?.vigencia ?? null,
+        unitarioTabela: preco?.unitario ?? null,
+        honorario: preco?.honorario ?? null,
+        custoOperacional: preco?.custoOperacional ?? null,
+        filme: preco?.filme ?? null,
+        faixa: FAIXA_PRECO_MANUAL,
+        manual: e.precoManual
+          ? {
+              unitario: e.precoManual.unitario,
+              aprovador: e.precoManual.aprovador,
+              justificativa: e.precoManual.justificativa,
+            }
+          : null,
+        ato: e.ato > 0 ? e.ato : null,
+        origem: e.origem ?? null,
+        profissional: quem.profissional,
+        credenciamento: alerta ? { efeito: alerta.efeito, motivo: alerta.motivo } : null,
+        // 06-FAT linha 1: as regras do acordo aplicadas, o excedente transferido e o que o alto custo exige.
+        acordo: comAcordo
+          ? {
+              aplicadas: comAcordo.aplicadas,
+              isento: comAcordo.isento,
+              cobrancaAParte: comAcordo.cobrancaAParte,
+              exigeAutorizacao: comAcordo.exigeAutorizacao,
+              excedente: comAcordo.excedente,
+              alertas: comAcordo.alertas,
+            }
+          : null,
+      }),
+      ocorrido_em: new Date(),
+      usuario_id: ctx.usuario,
+    });
+    // F3.7 (06-FAT linha 16): o item que é gatilho de kit lança o kit junto, na mesma transação.
+    const kits = await dispararKitsDoItem(
+      tx,
+      est,
       {
-        tipo: "faturamento.item.lancado",
-        carga: { conta: Number(r["conta"]), item: Number(r["id"]) },
+        id: conta.id,
+        fontePagadora: conta.fonte,
+        plano: conta.plano,
+        tabela: conta.tabela,
       },
-    ],
-    alvo: (_e, r) => ({ tabela: "conta_hospitalar_item", id: Number(r["id"]) }),
+      n(item['id']),
+      e.quantidade,
+      e.data,
+      ctx.usuario,
+    );
+    // O total da conta a partir dos itens, na mesma transação (sem gatilho).
+    await tx.alterar('conta_hospitalar', conta.id, conta.versao, await totalDosItens(tx, conta.id));
+    // F3.7 (06-FAT linha 17): o acréscimo de horário especial entra ao lançar (o item e os do kit), pelo relógio do
+    // hospital e pelo caráter do atendimento, na mesma transação. Importação tardia: o módulo dos ajustes usa o total
+    // dos itens daqui.
+    const { aplicarHorarioEspecialNaConta } = await import('./conta-ajustes-propria.js');
+    const horario = await aplicarHorarioEspecialNaConta(tx, est, conta.id, {
+      soSeEditavel: true,
+    });
+    // A produção do repasse do item (momento "lançamento"), na mesma transação e pela mesma conta.
+    await sincronizarProducaoDaConta(
+      tx,
+      { conta: conta.id, itens: [id], evento: 'lancamento' },
+      { estabelecimento: est, usuario: ctx.usuario },
+    );
+    // Decisão 25: o alerta de credenciamento volta no resultado (o resultado da operação é plano).
+    const doHorario = horario.alterados ? { horarioEspecial: horario.alterados } : {};
+    const doAcordo = comAcordo?.alertas.length ? { alertasAcordo: comAcordo.alertas.join(',') } : {};
+    const doKit = kits.kits.length
+      ? {
+          kits: kits.kits.join(','),
+          itensKit: kits.itens.length,
+          semPrecoKit: kits.semPreco,
+        }
+      : {};
+    return alerta
+      ? {
+          id,
+          conta: conta.id,
+          valor,
+          alerta: 'profissional-nao-credenciado',
+          alertaMotivo: alerta.motivo,
+          ...doKit,
+          ...doHorario,
+          ...doAcordo,
+        }
+      : { id, conta: conta.id, valor, ...doKit, ...doHorario, ...doAcordo };
   },
-);
+  eventos: (_e, r) => [
+    {
+      tipo: 'faturamento.item.lancado',
+      carga: { conta: Number(r['conta']), item: Number(r['id']) },
+    },
+  ],
+  alvo: (_e, r) => ({ tabela: 'conta_hospitalar_item', id: Number(r['id']) }),
+});
 
 const comoOperacao = <E>(o: Operacao<E, ResultadoOperacao>) =>
   o as unknown as Operacao<never, ResultadoOperacao>;
 
 /** As operações da conta pelo nome da tela (o executor as registra pelo nome em minúsculas). */
-export const OPERACOES_CONTA: Readonly<
-  Record<string, Operacao<never, ResultadoOperacao>>
-> = {
-  "faturamento.fecharConta": comoOperacao(fecharConta),
-  "faturamento.reabrirConta": comoOperacao(reabrirConta),
-  "faturamento.conferirItem": comoOperacao(conferirItem),
-  "faturamento.lancarItem": comoOperacao(lancarItem),
-  "faturamento.apurarLancamentosAutomaticos": comoOperacao(
-    apurarLancamentosAutomaticos,
-  ),
-  "faturamento.apurarLancamentosDoDia": comoOperacao(apurarLancamentosDoDia),
+export const OPERACOES_CONTA: Readonly<Record<string, Operacao<never, ResultadoOperacao>>> = {
+  'faturamento.fecharConta': comoOperacao(fecharConta),
+  'faturamento.reabrirConta': comoOperacao(reabrirConta),
+  'faturamento.conferirItem': comoOperacao(conferirItem),
+  'faturamento.lancarItem': comoOperacao(lancarItem),
+  'faturamento.apurarLancamentosAutomaticos': comoOperacao(apurarLancamentosAutomaticos),
+  'faturamento.apurarLancamentosDoDia': comoOperacao(apurarLancamentosDoDia),
 };
