@@ -280,6 +280,32 @@ class PlataformaModos(unittest.TestCase):
         self.assertEqual(_eventos(self.c, eid), ["fila", "abrindo", "lendo", "pausando", "pausada"])
         self.assertEqual(P.consultar(self.c, P.retomar(self.c, "painel_a"))["contadores"], {"continuar_de": eid})
 
+    def test_orfa_com_pausa_pedida_termina_pausada(self):
+        """Pausa pedida (`pausa_solicitada_em`) e o trabalhador caiu antes do batimento ler o pedido (execução ainda
+        em `gravando`): a órfã termina `pausada` e continuável, não `falhou`."""
+        from sante_conector import plataforma as P
+        from sante_conector.trabalhador import Trabalhador
+        eid = P.enfileirar(self.c, "painel_a", "importar", modo="completa")
+        t1 = Trabalhador("t1")
+        self.assertEqual(t1.tomar_vaga(), 1)
+        self.assertEqual(t1.reivindicar(), eid)
+        P.mudar_estado(self.c, eid, "lendo", etapa="contando")
+        P.mudar_estado(self.c, eid, "gravando", etapa="carregando pacientes")
+        with self.c.cursor() as cur:
+            cur.execute("UPDATE conector_execucao SET pausa_solicitada_em=UTC_TIMESTAMP(3) WHERE id=%s", (eid,))
+        t1.fechar()
+        t2 = Trabalhador("t2")
+        try:
+            self.assertEqual(t2.recuperar_orfas(), [eid])
+        finally:
+            t2.fechar()
+        ex = P.consultar(self.c, eid)
+        self.assertEqual((ex["estado"], ex["contadores"]["continuavel"]), ("pausada", True))
+        self.assertTrue(ex["contadores"]["pausa"]["trabalhador_interrompido"])
+        self.assertEqual(ex["etapa"], "pausada: carregando pacientes")
+        self.assertEqual(_eventos(self.c, eid), ["fila", "abrindo", "lendo", "gravando", "pausando", "pausada"])
+        self.assertEqual(P.consultar(self.c, P.retomar(self.c, "painel_a"))["contadores"], {"continuar_de": eid})
+
     def test_pausa_no_preparo_termina_pausada(self):
         """Rodada retomada-rapida (d): a pausa pedida durante o preparo da continuação (tabelas concluídas) é lida pelo
         batimento do preparo e a execução termina `pausada` (antes, sem batimento, a execução ficava em `gravando`

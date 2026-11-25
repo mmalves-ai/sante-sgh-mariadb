@@ -219,7 +219,7 @@ class RepetirPendencias(unittest.TestCase):
                                              "tab_c:valor_presumido:baixa": 1},
                                "por_restricao": {"TAB_B:restricao_destino_1048:coluna_x": self.N // 2 - 1}})
         self.assertEqual(conta["insert"], 0)             # antes: um INSERT ... SELECT por pedaço (cópia inteira)
-        self.assertEqual(beats, [esperado])
+        self.assertEqual(beats, [self.N - 1, esperado])  # batimento acumulado depois de cada tabela (retomada-rapida)
         self.assertEqual(self._ai(), antes)              # nenhuma linha nova na pendencia
         with self.cn.cursor() as c:
             c.execute("SELECT COUNT(*) FROM `%s`.pendencia WHERE execucao_id=2" % self.ctl)

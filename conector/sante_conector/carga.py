@@ -659,6 +659,13 @@ class Carga:
         else:
             pl.somar(delta)
 
+    def _entre_tabelas_pausa(self):
+        """Entre as tabelas da contagem das pendências herdadas (continuar.repetir_pendencias): com a pausa pedida
+        (lida pelo batimento `progresso`), para; nada foi gravado e a próxima continuação refaz a contagem."""
+        pl = getattr(self, "placar", None)
+        if pl is not None and pl.pausa_pedida:
+            raise PausaPedida()
+
     def _pulsar(self):
         """Batimento dentro da tabela (a cada lote commitado, limitado pelo Batimento.INTERVALO)."""
         pulsar = getattr(getattr(self, "progresso", None), "pulsar", None)
@@ -1448,7 +1455,7 @@ class Carga:
             self.cont["pendencias_repetidas"] = continuar.repetir_pendencias(
                 self, {t: self.pular[t] for t in pulados},
                 lambda n: self.progresso(0, "pendências herdadas do atendimento já concluído (%d)" % n),
-                excluir_regras=continuar.CONCILIACAO_PROPRIA)
+                excluir_regras=continuar.CONCILIACAO_PROPRIA, entre_tabelas=self._entre_tabelas_pausa)
             continuar.marcar(self, pulados, None, "continuada")
         pl = getattr(self, "placar", None)
         for i, t in enumerate(self.tabelas):

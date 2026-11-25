@@ -102,7 +102,10 @@ class Trabalhador:
             raise
 
     def recuperar_orfas(self):
-        """Execução rodando sem trava viva = trabalhador caiu: vira `falhou` (com evento)."""
+        """Execução rodando sem trava viva = trabalhador caiu: vira `falhou` (com evento). Com a pausa pedida
+        (`pausando`, ou `pausa_solicitada_em` preenchido em qualquer estado ativo, ex.: o trabalhador caiu antes do
+        batimento ler o pedido) termina `pausada`, continuável: tudo que entrou está commitado e o hash pula o que já
+        entrou na continuação."""
         with self.conn.cursor() as c:
             c.execute("SELECT id FROM conector_execucao WHERE estado IN %s", (plataforma.RODANDO,))
             ids = [r[0] for r in c.fetchall()]
@@ -112,7 +115,12 @@ class Trabalhador:
                 try:
                     ex = plataforma.consultar(self.conn, eid)
                     cont = dict(ex["contadores"] or {})
-                    if ex["estado"] == "pausando":  # a pausa já fora pedida: tudo commitado até o último commit
+                    pedida = ex["estado"] == "pausando" or plataforma.pausa_solicitada(self.conn, eid)
+                    if pedida and ex["estado"] != "pausando":  # pedido ainda não lido: passa por `pausando` (transição)
+                        plataforma.mudar_estado(self.conn, eid, "pausando",
+                                                etapa=("pausando: %s" % (ex["etapa"] or ""))[:120])
+                        ex = dict(ex, estado="pausando", etapa=("pausando: %s" % (ex["etapa"] or ""))[:120])
+                    if pedida:  # a pausa já fora pedida: tudo commitado até o último commit
                         cont.update(continuavel=True, pausa={"etapa": ex["etapa"], "percentual": ex["percentual"],
                                                              "trabalhador_interrompido": True})
                         plataforma.mudar_estado(self.conn, eid, "pausada",
