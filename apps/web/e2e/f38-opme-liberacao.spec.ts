@@ -80,7 +80,8 @@ test.describe('liberação de OPME acima do limite @C2-057', () => {
     await page.route('**/api/tiss/opme-liberacao/2/decisao', (r) =>
       json(r, { id: 2, situacao: 'cancelado', faltam: [] }, 201),
     );
-    await entrar(page, 'SINT.CONTAS');
+    // A liberação (faturamento.autorizacao.*) é concedida por perfil (administrador-sistema), que esta conta tem.
+    await entrar(page, 'SINT.FIN.GESTOR');
     await page.goto('/faturamento/opme-liberacao');
     const card = page.getByTestId('opme-lib-SA-SINT-1');
     await expect(card).toContainText('Haste longa exigida');
