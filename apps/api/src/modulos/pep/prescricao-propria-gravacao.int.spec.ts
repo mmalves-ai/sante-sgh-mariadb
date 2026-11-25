@@ -64,6 +64,7 @@ async function limpar(e: Escritor): Promise<void> {
     `DELETE FROM prescricao_item_medicamento WHERE prescricao_item_id IN ${itens}`,
     `DELETE FROM planejamento_prescricao WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM prescricao_item WHERE prescricao_id IN ${presc}`,
+    `DELETE FROM prescricao_protocolo_aplicado WHERE prescricao_id IN ${presc}`,
     `DELETE FROM prescricao WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM reconciliacao_item WHERE reconciliacao_medicamentosa_id IN ${recs}`,
     `DELETE FROM reconciliacao_medicamentosa WHERE estabelecimento_id IN ${est}`,
@@ -89,6 +90,7 @@ async function limpar(e: Escritor): Promise<void> {
     [`${P} %`],
   );
   await e.executar('DELETE FROM pessoa_fisica WHERE nome LIKE ?', [`${P} %`]);
+  await e.executar('DELETE FROM protocolo_prescricao WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM item_prescritivel WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM antimicrobiano WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM principio_ativo WHERE codigo_dcb LIKE ?', [`${P}%`]);
@@ -738,5 +740,42 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
         [r.prescricao],
       ),
     ).toBe(1);
+  });
+
+  it('prescrever com protocolo: grava o protocolo aplicado (indicador); o de outro estabelecimento recusa sem gravar', async () => {
+    const [meu, alheio] = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-pr` }, async (e) => {
+      const agora = new Date();
+      const outro = await e.uma('SELECT id FROM estabelecimento WHERE id <> ? ORDER BY id LIMIT 1', [m.est]);
+      const proto = (codigo: string, est: number | null) =>
+        e.inserir(
+          "INSERT INTO protocolo_prescricao (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, ?, 'protocolo', ?)",
+          [est, codigo, `Protocolo sintético ${codigo}`, agora],
+        );
+      return [await proto(`${P}pr1`, m.est), await proto(`${P}pr2`, outro ? Number(outro['id']) : m.est + 1)];
+    });
+    const comProtocolo = (protocolos: number[]): GravacaoPrescricao => ({
+      ...gravacao(120, 130),
+      itens: [item('k1', [121])],
+      protocolos,
+    });
+    const antes = await contar('SELECT COUNT(*) AS n FROM prescricao WHERE estabelecimento_id = ?', [m.est]);
+    await expect(
+      porta.prescrever(c, 'pep.prescrever', comProtocolo([meu, alheio]), ctx()),
+    ).rejects.toMatchObject({
+      problema: { status: 404, codigo: 'registro-inexistente' },
+    });
+    expect(await contar('SELECT COUNT(*) AS n FROM prescricao WHERE estabelecimento_id = ?', [m.est])).toBe(
+      antes,
+    );
+    const r = await porta.prescrever(c, 'pep.prescrever', comProtocolo([meu, meu]), ctx());
+    const aplicados = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+      l.consultar(
+        'SELECT protocolo_prescricao_id, aplicado_em, criado_por FROM prescricao_protocolo_aplicado WHERE prescricao_id = ?',
+        [r.prescricao],
+      ),
+    );
+    expect(aplicados).toHaveLength(1);
+    expect(Number(aplicados[0]!['protocolo_prescricao_id'])).toBe(meu);
+    expect(aplicados[0]!['aplicado_em']).not.toBeNull();
   });
 });

@@ -50,6 +50,7 @@ export * from './prescricao/renovacao.js';
 export * from './prescricao/copia.js';
 export * from './prescricao/favoritos.js';
 export * from './prescricao/cadastro-catalogo.js';
+export * from './prescricao/cadastro-protocolo.js';
 export * from './prescricao/protocolo.js';
 export * from './prescricao/receita-alta.js';
 export * from './prescricao/avaliacao.js';

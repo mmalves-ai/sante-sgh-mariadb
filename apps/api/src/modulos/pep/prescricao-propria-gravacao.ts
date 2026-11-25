@@ -103,6 +103,8 @@ export const TABELAS_GRAVACAO_PRESCRICAO = [
   'reconciliacao_item',
   // A ficha de antimicrobiano que vai junto da gravação (03-PEP linha 110).
   'ficha_antimicrobiano',
+  // Os protocolos aplicados na prescrição, para o indicador de adesão (03-PEP L107).
+  'prescricao_protocolo_aplicado',
   'grade_horario_classe',
   'sequencia_negocio',
 ] as const;
@@ -155,6 +157,37 @@ const verdadeiro = (v: unknown): boolean =>
 
 const recusar = (status: number, codigo: string, detalhe: string): ErroOperacao =>
   new ErroOperacao(status, codigo, status === 404 ? 'Não encontrado' : 'Operação recusada', detalhe);
+
+/**
+ * Os protocolos de onde vieram itens da prescrição (03-PEP L107): uma linha por protocolo em
+ * prescricao_protocolo_aplicado, só para o indicador de adesão (os itens já são da prescrição). O protocolo tem de
+ * existir e valer no estabelecimento; o de outro estabelecimento recusa a gravação inteira.
+ */
+export async function registrarProtocolosAplicados(
+  tx: TxOperacao,
+  estabelecimento: number,
+  prescricao: number,
+  protocolos: readonly number[],
+  agora: Date,
+): Promise<number> {
+  const ids = [...new Set(protocolos.filter((p) => Number.isInteger(p) && p > 0))];
+  if (ids.length === 0) return 0;
+  const vivos = await tx.consultar(
+    `SELECT id FROM protocolo_prescricao
+      WHERE id IN (${ids.map(() => '?').join(',')}) AND excluido_em IS NULL
+        AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
+    [...ids, estabelecimento],
+  );
+  if (vivos.length !== ids.length)
+    throw recusar(404, 'registro-inexistente', 'O protocolo aplicado não existe neste estabelecimento.');
+  for (const p of ids)
+    await tx.incluir('prescricao_protocolo_aplicado', {
+      prescricao_id: prescricao,
+      protocolo_prescricao_id: p,
+      aplicado_em: agora,
+    });
+  return ids.length;
+}
 
 export function recusaPendenteGravacao(oque: string): ErroOperacao {
   return new ErroOperacao(
@@ -761,6 +794,7 @@ export class GravacaoPrescricaoPropria {
           horarios += r.horarios;
         }
         await gravarDecisoes(tx, prof, prescricao, porChave, e.sgh.decisoes, agora);
+        await registrarProtocolosAplicados(tx, est.id, prescricao, e.protocolos, agora);
         for (const futura of e.sgh.futuras)
           await efetivarFutura(tx, est.id, e.atendimento, futura, prescricao, agora);
         // A ficha de antimicrobiano de cada item (pela chave), na mesma transação: sem o item, nada é gravado.
