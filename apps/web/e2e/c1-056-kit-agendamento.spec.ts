@@ -34,6 +34,7 @@ interface Material {
   nome: string;
   quantidade: number;
   excluido: boolean;
+  natureza?: string;
 }
 
 const PADROES = [
@@ -63,8 +64,8 @@ const PADROES = [
   },
 ];
 
-function simular(page: Page, aberta: () => boolean) {
-  const materiais: Material[] = [];
+function simular(page: Page, aberta: () => boolean, iniciais: Material[] = []) {
+  const materiais: Material[] = [...iniciais];
   const corpos: unknown[] = [];
   const vigentes = () => materiais.filter((m) => !m.excluido);
   const naLista = (p: (typeof PADROES)[number]) =>
@@ -79,12 +80,13 @@ function simular(page: Page, aberta: () => boolean) {
       id: m.id,
       versao: m.versao,
       sequencia: m.sequencia,
-      natureza: 'kit',
+      natureza: m.natureza ?? 'kit',
       insumo: null,
-      kit: m.kit,
+      kit: m.natureza && m.natureza !== 'kit' ? null : m.kit,
       procedimentoAgendamento: m.procedimentoAgendamento,
       nome: m.nome,
       quantidade: m.quantidade,
+      retiravel: (m.natureza ?? 'kit') === 'kit',
     })),
   });
   return {
@@ -120,6 +122,7 @@ function simular(page: Page, aberta: () => boolean) {
         const id = Number(rota.request().url().split('/materiais/')[1]!.split('/')[0]);
         const m = materiais.find((x) => x.id === id && !x.excluido);
         if (!m) return json(rota, { status: 404, codigo: 'registro-inexistente' }, 404);
+        if ((m.natureza ?? 'kit') !== 'kit') return json(rota, { status: 422, codigo: 'regra-violada' }, 422);
         m.excluido = true;
         m.versao += 1;
         return json(rota, { id, agendamento: AG });
@@ -185,6 +188,34 @@ test.describe('Kit padrão no agendamento cirúrgico @C1-056', () => {
     await expect(page.getByTestId('kit-agendamento-fechada')).toBeVisible();
     await expect(page.getByTestId('kit-agendamento-incluir')).toHaveCount(0);
     await expect(page.locator('[data-testid^="kit-agendamento-retirar-"]')).toHaveCount(0);
+    expect(externas).toEqual([]);
+  });
+
+  test('linha de material especial (OPME) na lista não tem o botão de retirar; a de kit tem', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const opme: Material = {
+      id: 950,
+      versao: 1,
+      sequencia: 1,
+      kit: 0,
+      procedimentoAgendamento: 11,
+      nome: 'PROTESE FICTICIA',
+      quantidade: 1,
+      excluido: false,
+      natureza: 'opme',
+    };
+    const api = simular(page, () => true, [opme]);
+    await api.ligar();
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto(`/cirurgia/agendamentos/${AG}`);
+    await expect(page.getByTestId('kit-agendamento-material-1')).toContainText('PROTESE FICTICIA');
+    await expect(page.getByTestId('kit-agendamento-retirar-1')).toHaveCount(0);
+    await page.getByTestId('kit-agendamento-incluir').click();
+    await expect(page.locator('[data-testid^="kit-agendamento-material-"]')).toHaveCount(3);
+    await expect(page.getByTestId('kit-agendamento-retirar-2')).toBeVisible();
+    await expect(page.getByTestId('kit-agendamento-retirar-1')).toHaveCount(0);
     expect(externas).toEqual([]);
   });
 });

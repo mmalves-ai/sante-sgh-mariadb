@@ -161,7 +161,7 @@ async function retirar(material: number, versao: number): Promise<void> {
         <li v-for="x in dados.materiais" :key="x.id" :data-testid="`kit-agendamento-material-${x.sequencia}`">
           {{ t('linha', { seq: x.sequencia, nome: x.nome ?? '—', qtd: qtd(x.quantidade) }) }}
           <SanteBotao
-            v-if="dados.aberta && podeEditar"
+            v-if="dados.aberta && podeEditar && x.retiravel"
             variante="secundario"
             :rotulo="t('retirar')"
             :desabilitado="ocupado"

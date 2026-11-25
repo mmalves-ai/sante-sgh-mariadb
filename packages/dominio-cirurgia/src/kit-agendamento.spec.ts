@@ -5,6 +5,7 @@ import {
   kitJaNaLista,
   linhasKitAgendamento,
   listaMaterialAberta,
+  materialRetiravelPeloKit,
   type KitPadraoDoAgendamento,
 } from './kit-agendamento.js';
 
@@ -70,8 +71,27 @@ describe('conferirKitsAgendamento', () => {
       ]),
     ).toEqual(['kits.1', 'kits.2']);
   });
+  const kit = { natureza: 'kit', solicitacaoOpme: null, implantePermanente: false };
   it('a retirada só com a lista aberta', () => {
-    expect(conferirRetiradaMaterial('confirmado')).toEqual([]);
-    expect(conferirRetiradaMaterial('em_andamento').map((p) => p.campo)).toEqual(['situacao']);
+    expect(conferirRetiradaMaterial('confirmado', kit)).toEqual([]);
+    expect(conferirRetiradaMaterial('em_andamento', kit).map((p) => p.campo)).toEqual(['situacao']);
+  });
+  it('a retirada só vale para a linha de kit: OPME, implante e outras naturezas são recusados', () => {
+    for (const natureza of ['opme', 'material', 'instrumental', 'medicamento', 'rouparia'])
+      expect(conferirRetiradaMaterial('agendado', { ...kit, natureza }).map((p) => p.campo)).toEqual([
+        'natureza',
+      ]);
+    expect(conferirRetiradaMaterial('agendado', { ...kit, solicitacaoOpme: 7 }).map((p) => p.campo)).toEqual([
+      'natureza',
+    ]);
+    expect(
+      conferirRetiradaMaterial('agendado', { ...kit, implantePermanente: true }).map((p) => p.campo),
+    ).toEqual(['natureza']);
+    expect(conferirRetiradaMaterial('realizado', { ...kit, natureza: 'opme' }).map((p) => p.campo)).toEqual([
+      'situacao',
+      'natureza',
+    ]);
+    expect(materialRetiravelPeloKit(kit)).toBe(true);
+    expect(materialRetiravelPeloKit({ ...kit, natureza: 'opme' })).toBe(false);
   });
 });

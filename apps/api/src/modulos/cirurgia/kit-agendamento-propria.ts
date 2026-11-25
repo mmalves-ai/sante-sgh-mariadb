@@ -8,7 +8,8 @@
 //     que já está na lista não entra de novo; a linha do agendamento fica travada na transação (duas aplicações
 //     simultâneas passam uma de cada vez); lista fechada pela situação, escolha vazia, repetida ou fora do padrão
 //     são recusadas (422) sem escrita;
-//   - retirar: a linha sai da lista com a marca de exclusão (excluido_em/excluido_por) e a versão lida; nunca apagada.
+//   - retirar: só a linha de kit (sem OPME nem implante; as demais naturezas são recusadas com 422, sem escrita) sai
+//     da lista com a marca de exclusão (excluido_em/excluido_por) e a versão lida; nunca apagada.
 import {
   conferirKitsAgendamento,
   conferirRetiradaMaterial,
@@ -17,6 +18,7 @@ import {
   linhasKitAgendamento,
   listaMaterialAberta,
   type MaterialVigenteAgendamento,
+  materialRetiravelPeloKit,
 } from '@sgh/dominio-cirurgia';
 import { ErroOperacao, type Leitor, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
@@ -65,6 +67,8 @@ export interface MaterialAgendamentoLido extends MaterialVigenteAgendamento {
   readonly insumo: number | null;
   readonly nome: string | null;
   readonly quantidade: number;
+  /** Se a linha sai por esta retirada (só a linha de kit; OPME e os demais materiais seguem o fluxo próprio). */
+  readonly retiravel: boolean;
 }
 
 export interface SugestaoKitAgendamento {
@@ -89,6 +93,7 @@ const esquemaRetirar = z.object({ versao: id }).strict();
 
 const SQL_MATERIAIS = `
   SELECT m.id, m.versao, m.sequencia, m.natureza, m.insumo_id, m.kit_material_id,
+         m.solicitacao_opme_id, m.implante_permanente,
          m.agendamento_cirurgico_procedimento_id, m.quantidade_solicitada,
          COALESCE(k.nome, i.nome, m.descricao_nao_padronizada) AS nome
     FROM agendamento_cirurgico_material m
@@ -97,8 +102,16 @@ const SQL_MATERIAIS = `
    WHERE m.agendamento_cirurgico_id = ? AND m.excluido_em IS NULL
    ORDER BY m.sequencia`;
 
+/** A linha como a regra da retirada a lê. */
+const linhaRetirada = (r: Linha) => ({
+  natureza: String(r['natureza']),
+  solicitacaoOpme: numOuNull(r['solicitacao_opme_id']),
+  implantePermanente: Boolean(num(r['implante_permanente'])),
+});
+
 function materialLido(r: Linha): MaterialAgendamentoLido {
   return {
+    retiravel: materialRetiravelPeloKit(linhaRetirada(r)),
     id: num(r['id']),
     versao: num(r['versao']),
     sequencia: num(r['sequencia']),
@@ -245,14 +258,14 @@ export class PortaKitAgendamentoPropria extends PortaEstabelecimentoPropria {
     const e = entradaValida(esquemaRetirar, entrada);
     return this.gravarSemCorrida(c, 'cirurgia.agendamento-kit.retirar', async (tx, est, usuario) => {
       const a = await this.agendamentoDoEstabelecimento(tx, est.id, agendamento, true);
-      const problemas = conferirRetiradaMaterial(a.situacao);
-      if (problemas.length) throw recusaRegra('Retirada recusada', problemas);
-      const linha = await tx.uma<Linha>(
-        `SELECT id FROM agendamento_cirurgico_material
+      const [linha] = await tx.consultarParaAtualizar<Linha>(
+        `SELECT id, natureza, solicitacao_opme_id, implante_permanente FROM agendamento_cirurgico_material
           WHERE id = ? AND agendamento_cirurgico_id = ? AND excluido_em IS NULL`,
         [material, agendamento],
       );
       if (!linha) throw naoEncontrado('Material do agendamento');
+      const problemas = conferirRetiradaMaterial(a.situacao, linhaRetirada(linha));
+      if (problemas.length) throw recusaRegra('Retirada recusada', problemas);
       await tx.alterar(MATERIAL, material, e.versao, { excluido_em: new Date(), excluido_por: usuario });
       return { tabela: MATERIAL, id: material, agendamento };
     });

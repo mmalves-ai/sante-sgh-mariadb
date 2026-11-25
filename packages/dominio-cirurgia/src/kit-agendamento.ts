@@ -112,15 +112,40 @@ export function conferirKitsAgendamento(
   return problemas;
 }
 
-/** A recusa de retirar uma linha da lista (a linha some da lista, mas fica no banco com a marca de exclusão). */
-export function conferirRetiradaMaterial(situacao: string): ProblemaKitAgendamento[] {
-  return listaMaterialAberta(situacao)
-    ? []
-    : [
-        {
-          campo: 'situacao',
-          mensagem:
-            'A lista de materiais desta cirurgia está fechada: a cirurgia já começou, terminou ou foi cancelada.',
-        },
-      ];
+/** A linha da lista que se quer retirar, como está no banco. */
+export interface LinhaRetiradaMaterial {
+  readonly natureza: string;
+  /** A solicitação de OPME a que a linha está ligada (material especial ou implante), quando houver. */
+  readonly solicitacaoOpme: number | null;
+  readonly implantePermanente: boolean;
+}
+
+/** Se a linha sai pela retirada do kit: só a linha de kit, sem solicitação de OPME e sem implante. */
+export function materialRetiravelPeloKit(linha: LinhaRetiradaMaterial): boolean {
+  return linha.natureza === 'kit' && linha.solicitacaoOpme === null && !linha.implantePermanente;
+}
+
+/**
+ * A recusa de retirar uma linha da lista (a linha some da lista, mas fica no banco com a marca de exclusão). Por este
+ * caminho só sai a linha de kit: material especial ou implante (OPME), instrumental e os demais materiais têm regras e
+ * rastreabilidade próprias e não saem pela retirada do kit.
+ */
+export function conferirRetiradaMaterial(
+  situacao: string,
+  linha: LinhaRetiradaMaterial,
+): ProblemaKitAgendamento[] {
+  const problemas: ProblemaKitAgendamento[] = [];
+  if (!listaMaterialAberta(situacao))
+    problemas.push({
+      campo: 'situacao',
+      mensagem:
+        'A lista de materiais desta cirurgia está fechada: a cirurgia já começou, terminou ou foi cancelada.',
+    });
+  if (!materialRetiravelPeloKit(linha))
+    problemas.push({
+      campo: 'natureza',
+      mensagem:
+        'Só a linha de kit sai por aqui: material especial, implante, instrumental e os demais materiais seguem o fluxo próprio.',
+    });
+  return problemas;
 }

@@ -5,7 +5,9 @@
 // Prova o que fica no banco: a sugestão (kit padrão por procedimento, com a composição); aplicar grava uma linha de
 // natureza "kit" por kit e procedimento, com a quantidade do vínculo e a sequência, na trilha; aplicar de novo não
 // repete; duas aplicações simultâneas deixam uma linha só por kit; escolha fora do padrão e lista fechada (422) sem
-// escrita; retirar marca a exclusão sem apagar e o kit volta à sugestão como fora da lista e reentra noutra linha.
+// escrita; retirar marca a exclusão sem apagar e o kit volta à sugestão como fora da lista e reentra noutra linha;
+// a linha de OPME ou de material avulso não sai pela retirada do kit (422, sem escrita); a sessão de outro
+// estabelecimento (que existe) não enxerga o agendamento: sugestão, aplicar e retirar dão 404 do agendamento, sem escrita.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -24,7 +26,13 @@ interface Massa {
   kit1: number;
   kit2: number;
   kitOutro: number;
+  /** Segundo agendamento, com uma linha de OPME (implante) e uma de material avulso, fora do kit. */
+  agendamento2: number;
+  opme: number;
+  avulso: number;
 }
+
+const P2 = `${P}b`;
 
 async function limpar(e: Escritor): Promise<void> {
   const est = 'SELECT id FROM estabelecimento WHERE codigo = ?';
@@ -49,8 +57,8 @@ async function limpar(e: Escritor): Promise<void> {
   );
   await e.executar(`DELETE FROM kit_material WHERE estabelecimento_id = (${est})`, [P]);
   await e.executar('DELETE FROM procedimento_cirurgico WHERE codigo IN (?, ?)', [`${P}-PC1`, `${P}-PC2`]);
-  await limparTrilhaDaMassa(e, { codigos: [P] });
-  await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+  await limparTrilhaDaMassa(e, { codigos: [P, P2] });
+  await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, P2]);
 }
 
 describe.skipIf(SEM_BANCO)('PortaKitAgendamentoPropria contra o MariaDB (contrato de efeito)', () => {
@@ -118,6 +126,12 @@ describe.skipIf(SEM_BANCO)('PortaKitAgendamentoPropria contra o MariaDB (contrat
          VALUES (?, ?, ?, 'America/Sao_Paulo', ?)`,
         [P, `Hospital sintético ${P}`, `Hospital sintético ${P} (fictício)`, agora],
       );
+      // Segundo estabelecimento, que existe: a sessão dele não enxerga o agendamento do primeiro.
+      await e.inserir(
+        `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
+         VALUES (?, ?, ?, 'America/Sao_Paulo', ?)`,
+        [P2, `Hospital sintético ${P2}`, `Hospital sintético ${P2} (fictício)`, agora],
+      );
       const proc = (s: string) =>
         e.inserir('INSERT INTO procedimento_cirurgico (codigo, descricao, criado_em) VALUES (?, ?, ?)', [
           `${P}-${s}`,
@@ -153,12 +167,25 @@ describe.skipIf(SEM_BANCO)('PortaKitAgendamentoPropria contra o MariaDB (contrat
       await vinc(kit1, pc1, 2, true);
       await vinc(kit2, pc2, 1, true);
       await vinc(kitOutro, pc1, 1, false);
-      const agendamento = await e.inserir(
-        `INSERT INTO agendamento_cirurgico (estabelecimento_id, numero, paciente_id, cirurgiao_profissional_id,
-                                            carater_cirurgia_id, tipo_cobertura, solicitado_em, situacao, criado_em)
-         VALUES (?, ?, ?, ?, ?, 'particular', ?, 'solicitado', ?)`,
-        [est, `${P}-1`, paciente['id'], cirurgiao['id'], carater['id'], agora, agora],
-      );
+      const novoAgendamento = (n: number) =>
+        e.inserir(
+          `INSERT INTO agendamento_cirurgico (estabelecimento_id, numero, paciente_id, cirurgiao_profissional_id,
+                                              carater_cirurgia_id, tipo_cobertura, solicitado_em, situacao, criado_em)
+           VALUES (?, ?, ?, ?, ?, 'particular', ?, 'solicitado', ?)`,
+          [est, `${P}-${n}`, paciente['id'], cirurgiao['id'], carater['id'], agora, agora],
+        );
+      const agendamento = await novoAgendamento(1);
+      const agendamento2 = await novoAgendamento(2);
+      const linhaFora = (seq: number, natureza: string, implante: boolean, i: number) =>
+        e.inserir(
+          `INSERT INTO agendamento_cirurgico_material (agendamento_cirurgico_id, sequencia, natureza, insumo_id,
+                                                      unidade_medida_id, quantidade_solicitada, implante_permanente,
+                                                      criado_em)
+           VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+          [agendamento2, seq, natureza, ins[i]!['id'], ins[i]!['u'], implante, agora],
+        );
+      const opme = await linhaFora(1, 'opme', true, 0);
+      const avulso = await linhaFora(2, 'material', false, 1);
       const procAg = (pc: number, seq: number) =>
         e.inserir(
           `INSERT INTO agendamento_cirurgico_procedimento (agendamento_cirurgico_id, sequencia, procedimento_cirurgico_id,
@@ -173,6 +200,9 @@ describe.skipIf(SEM_BANCO)('PortaKitAgendamentoPropria contra o MariaDB (contrat
         kit1,
         kit2,
         kitOutro,
+        agendamento2,
+        opme,
+        avulso,
       };
     });
     porta = new PortaKitAgendamentoPropria(nucleo, CLIENTE);
@@ -291,11 +321,51 @@ describe.skipIf(SEM_BANCO)('PortaKitAgendamentoPropria contra o MariaDB (contrat
     expect((await porta.sugestao(ctx(), m.agendamento)).aberta).toBe(false);
   });
 
-  it('agendamento de outro estabelecimento não é encontrado (404)', async () => {
+  it('a linha de OPME e a de material avulso não saem pela retirada do kit (422, sem escrita)', async () => {
+    const lerAg2 = () =>
+      ler(
+        `SELECT id, natureza, excluido_em, excluido_por, versao FROM agendamento_cirurgico_material
+          WHERE agendamento_cirurgico_id = ? ORDER BY sequencia`,
+        [m.agendamento2],
+      );
+    const antes = await lerAg2();
+    expect(antes.map((l) => l['natureza'])).toEqual(['opme', 'material']);
+    for (const l of antes)
+      await expect(
+        porta.retirar(ctx(), m.agendamento2, Number(l['id']), { versao: Number(l['versao']) }),
+      ).rejects.toMatchObject({ problema: { status: 422, codigo: 'regra-violada', campos: ['natureza'] } });
+    expect(await lerAg2()).toEqual(antes);
+    expect(antes.every((l) => l['excluido_em'] === null)).toBe(true);
+    const s = await porta.sugestao(ctx(), m.agendamento2);
+    expect(s.materiais.map((x) => [x.id, x.natureza, x.retiravel])).toEqual([
+      [m.opme, 'opme', false],
+      [m.avulso, 'material', false],
+    ]);
+    expect(
+      (await porta.sugestao(ctx(), m.agendamento)).materiais.every(
+        (x) => x.natureza === 'kit' && x.retiravel,
+      ),
+    ).toBe(true);
+  });
+
+  it('a sessão de outro estabelecimento (que existe) não enxerga o agendamento: 404 do agendamento, sem escrita', async () => {
+    const outro = { ...ctx(), hospital: P2 };
+    const doAgendamento = { problema: { status: 404, title: 'Agendamento cirúrgico não encontrado' } };
+    const antes = await linhas();
+    const trilha = () =>
+      ler(
+        `SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'agendamento_cirurgico_material'
+            AND entidade_id IN (SELECT id FROM agendamento_cirurgico_material WHERE agendamento_cirurgico_id = ?)`,
+        [m.agendamento],
+      );
+    const trilhaAntes = await trilha();
+    await expect(porta.sugestao(outro, m.agendamento)).rejects.toMatchObject(doAgendamento);
+    await expect(porta.aplicar(outro, m.agendamento, {})).rejects.toMatchObject(doAgendamento);
+    const viva = antes.find((x) => x['excluido_em'] === null)!;
     await expect(
-      porta.sugestao({ ...ctx(), hospital: 'inexistente-c1056' }, m.agendamento),
-    ).rejects.toMatchObject({
-      problema: { status: 404 },
-    });
+      porta.retirar(outro, m.agendamento, Number(viva['id']), { versao: Number(viva['versao']) }),
+    ).rejects.toMatchObject(doAgendamento);
+    expect(await linhas()).toEqual(antes);
+    expect(await trilha()).toEqual(trilhaAntes);
   });
 });

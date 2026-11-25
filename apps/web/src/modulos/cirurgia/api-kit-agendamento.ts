@@ -39,6 +39,7 @@ const esquemaSugestao = z.object({
       procedimentoAgendamento: z.number().nullable(),
       nome: z.string().nullable(),
       quantidade: z.number(),
+      retiravel: z.boolean(),
     }),
   ),
 });
