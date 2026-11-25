@@ -67,3 +67,5 @@ export * from './identificacao-estoque.js';
 export * from './romaneio-entrega.js';
 // C1-124 (05-SUP linha 12): produção interna (lote produzido da manipulação e kit montado).
 export * from './producao-interna.js';
+// C1-126 (09-AREA linha 79): entrada de produtos recebidos em doação (doador, termo e custo pelo valor justo).
+export * from './entrada-doacao.js';
