@@ -170,10 +170,13 @@ test.describe('agenda: perfis de marcação @C1-094 @fase8', () => {
     await ed.getByLabel('Buscar usuário (nome ou login)').fill('ATENDENTE');
     await escolher(ed.getByLabel('Usuário encontrado'), '7101');
     await ed.getByLabel('Vale a partir de').fill('10/03/2030');
+    // A data se confirma ao sair do campo (SanteData), como o usuário faz.
     await ed.getByLabel('Vale até').fill('01/03/2030');
+    await ed.getByLabel('Vale até').press('Tab');
     await expect(ed.getByText('O fim da vigência é antes do início.')).toBeVisible();
     await expect(page.getByTestId('perfil-incluir-usuario')).toBeDisabled();
     await ed.getByLabel('Vale até').fill('31/12/2030');
+    await ed.getByLabel('Vale até').press('Tab');
     await page.getByTestId('perfil-incluir-usuario').click();
     await expect(page.getByTestId('perfil-usuarios')).toContainText('ATENDENTE SINTETICA C1094');
     expect(st.corpos[1]!.corpo).toMatchObject({

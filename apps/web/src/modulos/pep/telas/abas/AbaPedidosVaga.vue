@@ -190,9 +190,11 @@ async function pedir(): Promise<void> {
           ><span>{{ t('pep.pedidoVaga.observacao') }}</span
           ><textarea v-model="observacao" rows="3" maxlength="600" />
         </label>
-        <ul v-if="problemas.length > 0" role="alert" data-testid="pedido-vaga-problemas">
-          <li v-for="p in problemas" :key="p">{{ p }}</li>
-        </ul>
+        <div v-if="problemas.length > 0" role="alert" data-testid="pedido-vaga-problemas">
+          <ul>
+            <li v-for="p in problemas" :key="p">{{ p }}</li>
+          </ul>
+        </div>
         <SanteBotao tipo="submit" :rotulo="t('pep.pedidoVaga.pedir')" :desabilitado="problemas.length > 0" />
         <SanteAlerta v-if="gravado" variante="info" :texto="t('pep.pedidoVaga.pedido')" />
       </form>

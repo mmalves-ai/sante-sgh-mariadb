@@ -127,7 +127,8 @@ test.describe('regulação: pedidos recebidos da central @C1-080', () => {
       });
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // A recepção de internação (NIR) tem internacao.regulacao.ler e .registrar; o administrador do sistema não.
+    await entrar(page, 'SINT.INTERNACAO');
     await page.goto('/internacao/nir/regulacao');
     await page.getByTestId('aba-regulacao-recebidos').click();
     await expect(page.getByTestId('regulacao-recebidos')).toBeVisible();
@@ -242,7 +243,8 @@ test.describe('regulação: pedidos recebidos da central @C1-080', () => {
       }),
     );
 
-    await entrar(page, 'SINT.ADMIN');
+    // A recepção de internação (NIR) tem internacao.regulacao.ler e .registrar; o administrador do sistema não.
+    await entrar(page, 'SINT.INTERNACAO');
     await page.goto('/internacao/nir/regulacao');
     await page.getByTestId('aba-regulacao-recebidos').click();
     const internacao = page.getByTestId('recebido-REG-SINT-0004');

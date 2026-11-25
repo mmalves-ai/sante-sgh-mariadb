@@ -17,7 +17,7 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req } from '@nestjs/common';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { z } from 'zod';
-import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import {
@@ -69,6 +69,9 @@ export class LinhasCuidadoController {
 
   @Get('linhas-cuidado')
   @Permissao('cadastro.linhaCuidado.ler')
+  // O catálogo (sem paciente, só contagens) também abre a quem o mantém: o administrador do sistema não recebe a leitura
+  // clínica (segregação) e precisa da lista para alterar e inativar o programa.
+  @PermissaoOu('cadastro.linhaCuidado.editar')
   async opcoes(@Req() req: RequisicaoAutorizada): Promise<OpcoesLinhas> {
     const s = sessaoDe(req);
     try {
