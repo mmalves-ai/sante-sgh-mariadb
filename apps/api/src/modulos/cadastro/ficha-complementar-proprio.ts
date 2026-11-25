@@ -44,6 +44,7 @@ import { z } from 'zod';
 import type { ContextoPorta } from './porta.js';
 import type { NucleoCadastro } from './porta-propria.js';
 import { TIPO_TERMO_BALCAO } from './porta-propria-consentimento.js';
+import { incapacidadeVigente } from './representacao-paciente-propria.js';
 import type { RegistroTrilhaTela } from './tipos.js';
 
 export const FICHA_COMPLEMENTAR = Symbol('FICHA_COMPLEMENTAR');
@@ -747,7 +748,20 @@ const operacaoEncerrarResponsavel = (trilha: RegistroTrilhaTela) =>
       const alvo = (await vigentesDe(tx, e.paciente, true)).find((v) => v.id === e.id);
       if (!alvo)
         throw recusaCampos('vinculo-inexistente', 'O vínculo não existe ou já foi encerrado.', ['id']);
-      const r = recusaEncerramento(p.nascimento, vigentes, e.id, hoje, e.levantamentoCuratela);
+      const r = recusaEncerramento(
+        p.nascimento,
+        vigentes,
+        e.id,
+        hoje,
+        e.levantamentoCuratela,
+        await incapacidadeVigente(tx, e.paciente),
+      );
+      if (r === 'incapacidade-vigente')
+        throw recusaCampos(
+          r,
+          'O paciente tem a incapacidade registrada: inclua o novo curador ou registre o levantamento da incapacidade antes de encerrar este.',
+          ['id'],
+        );
       if (r === 'menor-sem-representante')
         throw recusaCampos(
           r,
@@ -838,6 +852,86 @@ export interface ResponsaveisPaciente {
     temComprovante: boolean;
   }[];
   pendencias: { pendencia: string; vinculo: number | null }[];
+}
+
+/**
+ * Os dados atuais do cadastro do paciente nos nomes dos campos da regra. Serve à leitura da ficha e à conferência
+ * dentro da transação da abertura do atendimento (campos-abertura.ts).
+ */
+export async function lerDadosDoCadastro(
+  l: Leitor | TxOperacao,
+  paciente: number,
+): Promise<Record<string, unknown>> {
+  const p = await l.uma(
+    `SELECT pf.id, pf.nome, pf.data_nascimento, pf.sexo_id, pf.cpf, pf.nome_mae, pf.naturalidade_municipio_ibge_id,
+            (SELECT m.unidade_federativa_id FROM municipio_ibge m WHERE m.id = pf.naturalidade_municipio_ibge_id) AS uf_naturalidade
+       FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ? AND p.excluido_em IS NULL`,
+    [paciente],
+  );
+  if (!p) throw recusa('paciente-inexistente', 'O paciente não existe.', { campos: ['idPaciente'] });
+  const pessoa = Number(p['id']);
+  const en = await l.uma(
+    `SELECT cep, logradouro, numero, sem_numero, complemento, COALESCE(bairro_nome, CAST(bairro_id AS CHAR)) AS bairro
+       FROM endereco_pessoa WHERE pessoa_fisica_id = ? AND excluido_em IS NULL
+        ${VIGENTE_ENDERECO} ORDER BY principal DESC, id LIMIT 1`,
+    [pessoa],
+  );
+  const tel = await l.consultar(
+    `SELECT tt.movel, tt.recado, t.numero, t.nome_contato FROM telefone_pessoa t JOIN tipo_telefone tt ON tt.id = t.tipo_telefone_id
+      WHERE t.pessoa_fisica_id = ? AND t.excluido_em IS NULL`,
+    [pessoa],
+    { teto: TETO },
+  );
+  const em = await l.uma(
+    'SELECT email FROM email_pessoa WHERE pessoa_fisica_id = ? AND excluido_em IS NULL LIMIT 1',
+    [pessoa],
+  );
+  const recado = tel.find((t) => bool(t['recado']));
+  return {
+    nome: texto(p['nome']),
+    nascimento: data(p['data_nascimento']),
+    sexo: num(p['sexo_id']),
+    cpf: texto(p['cpf']),
+    nomeMae: texto(p['nome_mae']),
+    naturalidade: num(p['naturalidade_municipio_ibge_id']),
+    ufNaturalidade: num(p['uf_naturalidade']),
+    cep: texto(en?.['cep']),
+    logradouro: texto(en?.['logradouro']),
+    numero: en && bool(en['sem_numero']) ? 'SN' : texto(en?.['numero']),
+    complemento: texto(en?.['complemento']),
+    bairro: texto(en?.['bairro']),
+    celular: texto(tel.find((t) => bool(t['movel']) && !bool(t['recado']))?.['numero']),
+    telefone: texto(tel.find((t) => !bool(t['movel']) && !bool(t['recado']))?.['numero']),
+    email: texto(em?.['email']),
+    contatoNome: texto(recado?.['nome_contato']),
+    contatoTelefone: texto(recado?.['numero']),
+  };
+}
+
+/** As regras de campo ativas do cadastro do paciente que valem no estabelecimento (as dele e as de toda a rede). */
+export async function lerRegrasCampoAtivas(
+  l: Leitor | TxOperacao,
+  estabelecimento: number,
+): Promise<RegraCampo[]> {
+  const linhas = await l.consultar(
+    `SELECT id, estabelecimento_id, campo, modulo_recepcao_id, tipo_atendimento, fonte_pagadora_id, exigencia, rotulo
+       FROM regra_campo_cadastro
+      WHERE entidade = 'paciente' AND (estabelecimento_id IS NULL OR estabelecimento_id = ?) AND ativo
+      ORDER BY campo, id`,
+    [estabelecimento],
+    { teto: TETO },
+  );
+  return linhas.map((x) => ({
+    id: Number(x['id']),
+    campo: String(x['campo']),
+    estabelecimento: num(x['estabelecimento_id']),
+    modulo: num(x['modulo_recepcao_id']),
+    tipoAtendimento: String(x['tipo_atendimento']) as TipoAtendimentoRegra,
+    fontePagadora: num(x['fonte_pagadora_id']),
+    exigencia: String(x['exigencia']) as RegraCampo['exigencia'],
+    rotulo: texto(x['rotulo']),
+    ativo: true,
+  }));
 }
 
 export class FichaComplementarPropria {
@@ -968,50 +1062,7 @@ export class FichaComplementarPropria {
 
   /** Os dados atuais do cadastro nos nomes dos campos da regra (para a conferência da abertura do atendimento). */
   async dadosDoCadastro(c: ContextoPorta, paciente: number): Promise<Record<string, unknown>> {
-    return this.ler(c, async (l) => {
-      const p = await l.uma(
-        `SELECT pf.id, pf.nome, pf.data_nascimento, pf.sexo_id, pf.cpf, pf.nome_mae, pf.naturalidade_municipio_ibge_id
-           FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ? AND p.excluido_em IS NULL`,
-        [paciente],
-      );
-      if (!p) throw recusa('paciente-inexistente', 'O paciente não existe.', { campos: ['idPaciente'] });
-      const pessoa = Number(p['id']);
-      const en = await l.uma(
-        `SELECT cep, logradouro, numero, sem_numero, complemento, COALESCE(bairro_nome, CAST(bairro_id AS CHAR)) AS bairro
-           FROM endereco_pessoa WHERE pessoa_fisica_id = ? AND excluido_em IS NULL
-            ${VIGENTE_ENDERECO} ORDER BY principal DESC, id LIMIT 1`,
-        [pessoa],
-      );
-      const tel = await l.consultar(
-        `SELECT tt.movel, tt.recado, t.numero, t.nome_contato FROM telefone_pessoa t JOIN tipo_telefone tt ON tt.id = t.tipo_telefone_id
-          WHERE t.pessoa_fisica_id = ? AND t.excluido_em IS NULL`,
-        [pessoa],
-        { teto: TETO },
-      );
-      const em = await l.uma(
-        'SELECT email FROM email_pessoa WHERE pessoa_fisica_id = ? AND excluido_em IS NULL LIMIT 1',
-        [pessoa],
-      );
-      const recado = tel.find((t) => bool(t['recado']));
-      return {
-        nome: texto(p['nome']),
-        nascimento: data(p['data_nascimento']),
-        sexo: num(p['sexo_id']),
-        cpf: texto(p['cpf']),
-        nomeMae: texto(p['nome_mae']),
-        naturalidade: num(p['naturalidade_municipio_ibge_id']),
-        cep: texto(en?.['cep']),
-        logradouro: texto(en?.['logradouro']),
-        numero: en && bool(en['sem_numero']) ? 'SN' : texto(en?.['numero']),
-        complemento: texto(en?.['complemento']),
-        bairro: texto(en?.['bairro']),
-        celular: texto(tel.find((t) => bool(t['movel']) && !bool(t['recado']))?.['numero']),
-        telefone: texto(tel.find((t) => !bool(t['movel']) && !bool(t['recado']))?.['numero']),
-        email: texto(em?.['email']),
-        contatoNome: texto(recado?.['nome_contato']),
-        contatoTelefone: texto(recado?.['numero']),
-      };
-    });
+    return this.ler(c, (l) => lerDadosDoCadastro(l, paciente));
   }
 
   /** Campos que faltam no cadastro do paciente para abrir o atendimento no escopo (lista vazia: pode abrir). */
@@ -1178,7 +1229,15 @@ export class FichaComplementarPropria {
         };
       });
       const vigentes = itens.filter((i) => i.vigente);
-      return { itens, pendencias: pendenciasRepresentacao(p.nascimento, vigentes, hoje) };
+      return {
+        itens,
+        pendencias: pendenciasRepresentacao(
+          p.nascimento,
+          vigentes,
+          hoje,
+          await incapacidadeVigente(l, paciente),
+        ),
+      };
     });
   }
 

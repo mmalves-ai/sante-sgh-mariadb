@@ -70,7 +70,12 @@ import {
 } from '@sgh/dominio-atendimento';
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
+import { conferirCadastroNaAbertura } from '../cadastro/campos-abertura.js';
 import { nomeNoNucleo } from '../cadastro/porta-propria.js';
+import {
+  alertasRepresentacaoDoPaciente,
+  MENSAGEM_ALERTA_REPRESENTACAO,
+} from '../cadastro/representacao-paciente-propria.js';
 import type { LiberacaoOperacao, RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { GravacaoFeita } from '../exames/public-api.js';
 import {
@@ -1526,6 +1531,16 @@ const OPERACAO_ABRIR = definirOperacao({
     );
     if (conv['situacao'] !== 'ativa')
       throw recusa('convenio-inativo', 'Convênio inativo.', { campos: ['convenio'] });
+    // Regra de campo do cadastro (02-CAD linha 2): o atendimento só abre com o cadastro completo no escopo da
+    // recepção (módulo, tipo de atendimento e convênio); o cadastro provisório do não identificado não é barrado.
+    await conferirCadastroNaAbertura(tx, {
+      estabelecimento: est,
+      paciente: Number(pac['id']),
+      tipo: String(e['tipo']),
+      fontePagadora: Number(conv['id']),
+      modulo: num('moduloRecepcao'),
+      provisorio: String(pac['situacao']) === 'provisorio',
+    });
     const prof = await exigir(
       "SELECT id FROM profissional WHERE id = ? AND situacao = 'ativo' AND excluido_em IS NULL",
       [num('profissional')],
@@ -1775,8 +1790,17 @@ const OPERACAO_ABRIR = definirOperacao({
     // Sem tipo de conta da natureza, o atendimento abre e a pendência volta para o faturista (alertaConta).
     const { conta, pendencia } = await abrirContaDaEntrada(tx, est, id);
     if (conta !== null) await apurarConta(tx, est, conta, agora);
+    // F3.1 (02-CAD linha 4): menor sem representante ou incapaz sem curador no cadastro. O atendimento abre (a
+    // urgência não espera o cadastro) e o aviso volta para a recepção regularizar a ficha.
+    const representacao = await alertasRepresentacaoDoPaciente(tx, Number(pac['id']));
     const aberto = {
       ...(pendencia !== null ? { alertaConta: pendencia.codigo, alertaContaMotivo: pendencia.mensagem } : {}),
+      ...(representacao.length > 0
+        ? {
+            alertaRepresentacao: representacao.join(','),
+            alertaRepresentacaoMotivo: representacao.map((a) => MENSAGEM_ALERTA_REPRESENTACAO[a]).join(' '),
+          }
+        : {}),
       reg: id,
       cabecalho: numero.formatado,
       tipo: String(e['tipo']),

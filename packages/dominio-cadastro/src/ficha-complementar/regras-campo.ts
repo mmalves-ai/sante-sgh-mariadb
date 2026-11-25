@@ -144,3 +144,53 @@ export function camposRecusados(
   }
   return fora.sort((a, b) => a.campo.localeCompare(b.campo));
 }
+
+// ── Abertura do atendimento (recepção, pronto atendimento, exames e internação) ──
+// O atendimento só abre com o cadastro do paciente completo no escopo em que a recepção trabalha. A conferência é a
+// mesma do cadastro novo (todo obrigatório do escopo preenchido); "somente leitura", "opcional" e "oculto" não
+// impedem a abertura. O cadastro provisório (paciente ainda não identificado da urgência) nunca é barrado: a
+// identificação fica pendente e o cadastro é completado depois.
+
+/** Tipo de atendimento da regra pelo código do tipo com que a recepção abre o atendimento (nulo: só a regra geral). */
+const TIPO_REGRA_DA_ABERTURA: Readonly<Record<string, TipoAtendimentoRegra>> = Object.freeze({
+  consulta: 'ambulatorial',
+  pa: 'urgencia',
+  exame: 'externo',
+  requisicaoLab: 'externo',
+  internacao: 'internacao',
+  domiciliar: 'domiciliar',
+});
+
+export function tipoAtendimentoDaAbertura(codigo: string | null | undefined): TipoAtendimentoRegra | null {
+  return codigo && Object.prototype.hasOwnProperty.call(TIPO_REGRA_DA_ABERTURA, codigo)
+    ? (TIPO_REGRA_DA_ABERTURA[codigo] as TipoAtendimentoRegra)
+    : null;
+}
+
+export interface RecusaAberturaPorCadastro {
+  readonly codigo: 'cadastro-incompleto';
+  readonly detalhe: string;
+  /** Os campos do cadastro que faltam, em ordem alfabética. */
+  readonly campos: readonly string[];
+  readonly pendentes: readonly { readonly campo: string; readonly rotulo: string }[];
+}
+
+/** Recusa da abertura do atendimento quando o cadastro do paciente não cumpre a regra do escopo (nulo: pode abrir). */
+export function recusaAberturaPorCadastro(
+  regras: readonly RegraCampo[],
+  e: EscopoRegra,
+  dados: Readonly<Record<string, unknown>>,
+  opcoes: { readonly provisorio?: boolean } = {},
+): RecusaAberturaPorCadastro | null {
+  if (opcoes.provisorio) return null;
+  const pendentes = camposRecusados(regras, e, dados, 'cadastro')
+    .filter((f) => f.motivo === 'obrigatorio')
+    .map(({ campo, rotulo }) => ({ campo, rotulo }));
+  if (pendentes.length === 0) return null;
+  return {
+    codigo: 'cadastro-incompleto',
+    detalhe: `Complete o cadastro do paciente antes de abrir o atendimento: ${pendentes.map((p) => p.rotulo).join(', ')}.`,
+    campos: pendentes.map((p) => p.campo),
+    pendentes,
+  };
+}

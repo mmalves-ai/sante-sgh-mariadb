@@ -78,6 +78,8 @@ export const esquemaAbrirAtendimento = z
     local: smallint.optional(),
     /** A marcação de consulta do dia (a partir do agendamento). */
     marcacao: id.optional(),
+    /** Módulo de recepção em que a tela trabalha: escolhe a regra de campo do cadastro conferida na abertura. */
+    moduloRecepcao: id.optional(),
     responsavel: esquemaResponsavel.optional(),
     /** Tipo de guia do SADT (H, E, S: só os valores vistos; a confirmar, DP-46.6); sem ele, o padrão do tipo. */
     tipoGuia: z.enum(['H', 'E', 'S']).optional(),
