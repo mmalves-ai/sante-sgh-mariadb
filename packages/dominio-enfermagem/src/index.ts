@@ -13,6 +13,7 @@ export * from './checagem/auditoria-checagem.js';
 export * from './offline/sincronizacao.js';
 export * from './sinais/validacao.js';
 export * from './sinais/limites-setor.js';
+export * from './sinais/nivel-afericao.js';
 export * from './plantao/aceite.js';
 export * from './turno/linha-do-tempo.js';
 export * from './contingencia/relatorio.js';

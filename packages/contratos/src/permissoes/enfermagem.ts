@@ -35,6 +35,8 @@ export const PERMISSOES_ENFERMAGEM = {
   // 09-AREA linha 86 (C1-035): a auditoria das checagens (amostra sorteada, auditores e avaliação de cada checagem).
   auditoriaChecagemLer: 'enfermagem.auditoriaChecagem.ler',
   auditoriaChecagemAuditar: 'enfermagem.auditoriaChecagem.auditar',
+  // 03-PEP linha 115 (C2-003): limites de alerta dos sinais vitais e regra do parâmetro no setor.
+  limiteSinalEditar: 'enfermagem.limiteSinal.editar',
 } as const;
 const P = PERMISSOES_ENFERMAGEM;
 
@@ -112,6 +114,16 @@ export const PERMISSOES_ENFERMAGEM_M25: readonly DeclaracaoPermissao[] = [
     {
       concessaoPorPerfil: 'por-perfil',
       perfis: ['gestao-qualidade', 'auditor', 'assistencial-com-conselho', 'administrador-sistema'],
+    },
+  ),
+  // Recurso só do novo (03-PEP linha 115): concedido por perfil à enfermagem com conselho, à qualidade e ao administrador.
+  p(
+    P.limiteSinalEditar,
+    'Cadastrar os limites de alerta dos sinais vitais (por setor, instrumento, sexo e idade) e a regra do parâmetro no setor',
+    {
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['assistencial-com-conselho', 'gestao-qualidade', 'administrador-sistema'],
+      criticidade: 'normal',
     },
   ),
 ];

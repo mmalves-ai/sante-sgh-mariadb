@@ -35,6 +35,7 @@ import { PortaEnfermagemPropria } from './porta-propria.js';
 import { PrescricaoEnfermeiroController } from './prescricao-enfermeiro.controller.js';
 import { ProtocoloInternadoController } from './protocolo-internado.controller.js';
 import { SaeController } from './sae.controller.js';
+import { SinaisDetalheController } from './sinais-detalhe.controller.js';
 import { PORTA_SAE, type PortaSae } from './sae-porta.js';
 import { PortaSaeMemoria } from './sae-porta-memoria.js';
 import { PortaSaePropria, portaSaeIndisponivel } from './sae-porta-propria.js';
@@ -178,6 +179,7 @@ export async function modulo(
       AgenciaController,
       FechamentoChecagemController,
       AuditoriaChecagemController,
+      SinaisDetalheController,
     ],
     providers: [
       { provide: PORTA_ENFERMAGEM, useValue: p.enfermagem },
