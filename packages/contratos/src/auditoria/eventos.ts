@@ -5734,6 +5734,18 @@ export const EVENTOS_AUDITAVEIS = {
     descricao: 'Cenário do orçamento cadastrado ou alterado, ou escolhido para uma versão',
     legado: null,
   },
+  orcamentoIndicadorGravado: {
+    codigo: 'financeiro.orcamento.indicadorGravado',
+    descricao:
+      'Indicador orçamentário (diárias, exames, cirurgias) cadastrado ou alterado, com a visão e a projeção',
+    legado: null,
+  },
+  orcamentoEstatisticaGravada: {
+    codigo: 'financeiro.orcamento.estatisticaGravada',
+    descricao:
+      'Quantidades orçadas do indicador por setor e mês gravadas na versão (incluídas, alteradas ou retiradas)',
+    legado: null,
+  },
   // M54 (etapa 5): custos — apuração do mês, custo por conta, resultado e exportação (só SGH_CUS_*; a conta pelo ID).
   custosApuracaoLida: {
     codigo: 'custos.apuracao.lida',
