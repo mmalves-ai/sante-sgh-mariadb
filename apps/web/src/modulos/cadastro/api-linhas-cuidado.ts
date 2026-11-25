@@ -115,3 +115,8 @@ export const mudarEstado = (
   id: number,
   e: { versao: number; estado: number; data: string; motivo: string | null },
 ) => pedir<{ id: number; encerrada: boolean }>(`${P(paciente)}/${id}/estado`, 'POST', e);
+export const trocarReferencia = (
+  paciente: number,
+  id: number,
+  e: { versao: number; referencia: number | null },
+) => pedir<Gravado>(`${P(paciente)}/${id}/referencia`, 'PUT', e);

@@ -49,6 +49,7 @@ import { mensagensIdentidadeEstabelecimento } from '../modulos/cadastro/i18n-ide
 import { mensagensLigacoes } from '../modulos/cadastro/i18n-ligacoes.js';
 import { mensagensCalendario } from '../modulos/cadastro/i18n-calendario.js';
 import { mensagensVinculos } from '../modulos/cadastro/i18n-vinculos.js';
+import { mensagensLinhasCuidado } from '../modulos/cadastro/i18n-linhas-cuidado.js';
 import { mensagensDemografia } from '../modulos/cadastro/i18n-demografia.js';
 import { mensagensComplementoProfissional } from '../modulos/cadastro/i18n-complemento-profissional.js';
 import { mensagensSesmt } from '../modulos/pessoas/sesmt/i18n.js';
@@ -2415,6 +2416,8 @@ export const mensagensWeb = {
   orcamentoEmpresarial: mensagensOrcamento,
   pessoas: mensagensPessoas,
   vinculos: mensagensVinculos,
+  // F8 (02-CAD linha 11): programas de saúde e linhas de cuidado do paciente.
+  linhasCuidado: mensagensLinhasCuidado,
   demografia: mensagensDemografia,
   ligacoes: mensagensLigacoes,
   calendario: mensagensCalendario,

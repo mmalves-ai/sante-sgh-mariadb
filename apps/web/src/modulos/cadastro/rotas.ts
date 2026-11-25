@@ -48,6 +48,16 @@ export const rotasCadastro: RouteRecordRaw[] = [
     },
   },
   {
+    // F8 (02-CAD linha 11): painel e catálogo dos programas de saúde e linhas de cuidado; lista nominal com coordenar.
+    path: '/cadastros/pacientes/linhas-cuidado',
+    name: 'cadastro.linhasCuidado',
+    component: () => import('./telas/LinhasCuidadoTela.vue'),
+    meta: {
+      permissao: 'cadastro.linhaCuidado.ler',
+      menu: 'Cadastros > Pacientes (cadastro único) > Programas e linhas de cuidado',
+    },
+  },
+  {
     path: '/cadastros/pacientes/historico',
     name: 'cadastro.historico',
     component: () => import('./telas/HistoricoPacienteTela.vue'),
