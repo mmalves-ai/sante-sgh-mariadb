@@ -661,6 +661,13 @@ export const VARIAVEIS: readonly Variavel[] = [
     'Pasta das imagens de origem lidas pelo conector (somente leitura). Vazio: a do pacote.',
   ),
   v(
+    'CONECTOR_LOG_DIR',
+    'caminhos',
+    'opcional',
+    '',
+    'Pasta dos logs de execução do conector (worker e serviço), lida pela tela Carga e sincronismo. Vazio: a do pacote.',
+  ),
+  v(
     'SGH_RAIZ_REPOSITORIO',
     'caminhos',
     'opcional',
@@ -688,6 +695,9 @@ export const VARIAVEIS: readonly Variavel[] = [
 /** Chaves que o código lê e que NÃO vão para o arquivo do servidor, com o motivo (dev, teste, ferramenta). */
 export const NAO_CONFIGURAVEIS: Readonly<Record<string, string>> = {
   SGH_DEV_PERMITIR_SYSDBA: 'exceção de dev (SYSDBA na cópia); recusada fora de dev',
+  ACESSO_EMAIL_CANAL_DONO:
+    'fora de produção: e-mail de acesso do dono pelo canal de avisos da obra; ignorada em produção',
+  DONO_EMAIL: 'fora de produção: destinatário do canal de avisos da obra (com ACESSO_EMAIL_CANAL_DONO)',
   ACESSO_FONTE_DEV: 'dev: fonte das contas (cópia ou sintética)',
   ACESSO_GESTAO_LEGADO_DEV: 'dev: gestão das contas na cópia',
   DEV_GRAVA_COPIA: 'dev: a API grava na cópia pelas fontes de produção',

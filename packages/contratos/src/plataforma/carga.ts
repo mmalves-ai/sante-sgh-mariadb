@@ -34,7 +34,10 @@ export const esquemaProgressoCarga = z.object({
   /** Recusas por regra (ex.: `restricao_destino_1048`). */
   recusasPorRegra: z.record(z.string(), contagem).optional(),
   /** Até 20 tabelas de destino com mais recusas. */
-  recusasPorTabela: z.array(z.object({ tabela: z.string(), recusadas: contagem })).max(20).optional(),
+  recusasPorTabela: z
+    .array(z.object({ tabela: z.string(), recusadas: contagem }))
+    .max(20)
+    .optional(),
   atualizadoEm: z.string().nullish(),
 });
 export type ProgressoCarga = z.infer<typeof esquemaProgressoCarga>;

@@ -193,6 +193,7 @@ servidor, nunca em repositório, e-mail ou chamado.
 | variável | uso | segredo | descrição |
 |---|---|---|---|
 | `CONECTOR_ORIGENS_DIR` | opcional |  | Pasta das imagens de origem lidas pelo conector (somente leitura). Vazio: a do pacote. |
+| `CONECTOR_LOG_DIR` | opcional |  | Pasta dos logs de execução do conector (worker e serviço), lida pela tela Carga e sincronismo. Vazio: a do pacote. |
 | `SGH_RAIZ_REPOSITORIO` | opcional |  | Pasta das ferramentas do pacote usadas pelo painel da plataforma (criar cliente). Vazio: a do pacote. |
 | `ESTRUTURA_HOMOLOGADA` | opcional |  | Resumo homologado da estrutura do banco, conferido pela fumaça da implantação. Vazio: o do pacote. |
 | `SGH_M58_ENSAIOS` | opcional |  | Pasta ou arquivo: relatórios do ensaio da versão 5 do banco. Vazio: o do pacote. |

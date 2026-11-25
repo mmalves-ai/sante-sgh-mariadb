@@ -13,7 +13,9 @@ describe('canal do dono na porta de e-mail', () => {
 
   it('o canal recusa outro destinatário sem chamar o envio', async () => {
     const porta = envioPeloCanalDoDono({ DONO_EMAIL: 'dono@exemplo.dev' }, '/inexistente');
-    await expect(porta.enviar({ para: 'outra@exemplo.dev', ...MSG })).rejects.toThrow('só entrega ao e-mail do dono');
+    await expect(porta.enviar({ para: 'outra@exemplo.dev', ...MSG })).rejects.toThrow(
+      'só entrega ao e-mail do dono',
+    );
   });
 
   it('ligado e sem SMTP: outro destinatário é recusado (nada sai do ambiente)', async () => {
@@ -31,7 +33,11 @@ describe('canal do dono na porta de e-mail', () => {
 
   it('em produção o canal não existe: sem SMTP_URL a porta é nula', () => {
     expect(
-      emailAcessoDoAmbiente({ AMBIENTE: 'producao', ACESSO_EMAIL_CANAL_DONO: 'sim', DONO_EMAIL: 'dono@exemplo.dev' }),
+      emailAcessoDoAmbiente({
+        AMBIENTE: 'producao',
+        ACESSO_EMAIL_CANAL_DONO: 'sim',
+        DONO_EMAIL: 'dono@exemplo.dev',
+      }),
     ).toBeNull();
   });
 

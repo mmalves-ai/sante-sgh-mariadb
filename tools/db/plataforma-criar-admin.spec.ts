@@ -208,8 +208,8 @@ describe('entrega pelo canal do dono (decisão do dono, 24/11/2026)', () => {
   });
   it('recusa entregar a quem não é o dono, sem chamar o canal', async () => {
     const porta = envioPeloCanalDoDono({ DONO_EMAIL: 'dono@exemplo.dev' }, '/inexistente');
-    await expect(
-      porta.enviar({ para: 'outra@exemplo.dev', assunto: 'x', texto: 'link' }),
-    ).rejects.toThrow('só entrega ao e-mail do dono');
+    await expect(porta.enviar({ para: 'outra@exemplo.dev', assunto: 'x', texto: 'link' })).rejects.toThrow(
+      'só entrega ao e-mail do dono',
+    );
   });
 });

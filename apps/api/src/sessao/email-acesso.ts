@@ -52,7 +52,16 @@ export function envioPeloCanalDoDono(
         await new Promise<void>((ok, falha) =>
           execFile(
             'python3',
-            ['-I', join(raiz, 'tools/obra/avisar_dono.py'), '--assunto', m.assunto, '--arquivo', arq, '--para', m.para],
+            [
+              '-I',
+              join(raiz, 'tools/obra/avisar_dono.py'),
+              '--assunto',
+              m.assunto,
+              '--arquivo',
+              arq,
+              '--para',
+              m.para,
+            ],
             { timeout: 30_000 },
             (e) => (e ? falha(new Error('canal do dono: envio recusado')) : ok()),
           ),
