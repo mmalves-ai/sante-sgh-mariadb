@@ -25,6 +25,7 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import PaginacaoCadastro from '../../cadastro/componentes/PaginacaoCadastro.vue';
 import { carimboBr } from '../../cadastro/formato.js';
+import ContaAihComplemento from '../componentes/ContaAihComplemento.vue';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
 import LaudoInternacaoSusPainel from '../componentes/LaudoInternacaoSusPainel.vue';
 import LotesLaudoSusPainel from '../componentes/LotesLaudoSusPainel.vue';
@@ -767,6 +768,13 @@ const situacaoArquivo = (a: ArquivoSusLido) => t(`faturamentoSus.ciha.situacoes.
               })
             }}
           </p>
+          <ContaAihComplemento
+            v-if="esp.complemento"
+            :key="`complemento-${aih.id}-${esp.complemento.conta}`"
+            :aih="aih.id"
+            :cid-principal="aih.cidPrincipal"
+            :pode-registrar="podeRegistrar && liberado"
+          />
           <section
             v-if="esp.criticas.length"
             :aria-label="t('faturamentoSus.aih.criticasDaAih')"
