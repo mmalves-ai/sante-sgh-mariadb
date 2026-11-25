@@ -13,6 +13,7 @@ import type {
   LancamentoRepasseRegistrado,
   MemoriaCalculoParaGravar,
   MemoriaCalculoRegistrada,
+  PaginaItensPendentes,
   PrestadorRepasse,
   RpaDetalhe,
   RpaRegistrado,
@@ -118,6 +119,12 @@ export interface PortaRepasse extends PortaGravacaoM18<GravadorRepasse> {
     apuracao: number,
     prestador: number | null,
   ): Promise<MemoriaCalculoRegistrada[]>;
+  /** Itens pendentes da apuração, paginados e filtrados pelo motivo, com a referência da conta. */
+  itensPendentes(
+    c: ContextoRepasse,
+    apuracao: number,
+    f: { motivo: string | null; deslocamento: number; limite: number },
+  ): Promise<PaginaItensPendentes>;
   lancamentos(
     c: ContextoRepasse,
     f: { empresa: number; competencia: string; prestador?: number },
@@ -173,6 +180,7 @@ export const METODOS_PORTA_REPASSE: ReadonlySet<string> = new Set([
   'apuracaoDoPeriodo',
   'apuracao',
   'memorias',
+  'itensPendentes',
   'lancamentos',
   'estornos',
   'rpas',

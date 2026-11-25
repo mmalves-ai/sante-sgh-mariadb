@@ -21,7 +21,12 @@ import {
   type LancamentoRepasseResposta,
   type LancarEventoRepasseEntrada,
   type ListaRegrasRepasse,
+  type ItemPendenteApuracaoResposta,
+  ITENS_PENDENTES_NA_APURACAO,
   type MemoriaItemResposta,
+  type PendenciaApuracao,
+  PENDENCIAS_APURACAO,
+  type PendentesApuracaoResposta,
   type PrestadorRepasseResposta,
   type PreviaRpaResposta,
   type ProporRegraRepasseEntrada,
@@ -57,6 +62,7 @@ import {
   type ApuracaoRepasseRegistrada,
   type LancamentoRepasseRegistrado,
   limitesCompetencia,
+  type ItemPendenteRegistrado,
   type MemoriaCalculoParaGravar,
   type MemoriaCalculoRegistrada,
   type RpaDetalhe,
@@ -71,6 +77,9 @@ import type { ContextoRepasse, FiltroRegrasPorta, GravadorRepasse, PortaRepasse 
 
 const ctx = (s: SessaoCadastro): ContextoRepasse => s.porta;
 const E = EVENTOS_AUDITAVEIS;
+/** Página padrão e máxima da lista de pendentes da apuração. */
+const TAMANHO_PENDENTES = 50;
+const TAMANHO_MAXIMO_PENDENTES = 200;
 const naoEncontrado = (o: string) => new ErroProblema('nao-encontrado', 404, `${o} não encontrado`);
 const recusar = (codigo: string, titulo: string, detalhe: string, status = 409) =>
   new ErroProblema('recusa-de-negocio', status, titulo, detalhe, { codigo });
@@ -152,6 +161,22 @@ function memoriaRegistradaResposta(m: MemoriaCalculoRegistrada): MemoriaItemResp
     pendencia: m.pendencia as MemoriaItemResposta['pendencia'],
   };
   return { ...r, conta: contaDaMemoria(r) };
+}
+
+export function itemPendenteResposta(m: ItemPendenteRegistrado): ItemPendenteApuracaoResposta {
+  return {
+    ...memoriaRegistradaResposta(m),
+    referencia: {
+      conta: m.contaId,
+      contaNumero: m.contaNumero,
+      atendimento: m.atendimentoNumero,
+      prontuario: m.prontuario,
+      procedimento: m.procedimento,
+      procedimentoDescricao: m.procedimentoDescricao,
+      realizadoEm: m.realizadoEm,
+      profissional: m.profissionalNome,
+    },
+  };
 }
 
 function paraGravar(m: MemoriaCalculo): MemoriaCalculoParaGravar {
@@ -567,13 +592,9 @@ export class ServicoRepasse {
     };
   }
 
-  private async porBeneficiario(
-    s: SessaoCadastro,
-    a: ApuracaoRepasseRegistrada | null,
-    carregadas?: readonly MemoriaCalculoRegistrada[],
-  ) {
+  private async porBeneficiario(s: SessaoCadastro, a: ApuracaoRepasseRegistrada | null) {
     if (!a) return [];
-    const ms = carregadas ?? (await this.porta.memorias(ctx(s), a.id, null));
+    const ms = await this.porta.memorias(ctx(s), a.id, null);
     const mapa = new Map<number, { itens: number; base: number; valor: number }>();
     for (const m of ms) {
       if (m.pendencia || m.prestador === null) continue;
@@ -593,17 +614,57 @@ export class ServicoRepasse {
       this.porta.apuracaoDoPeriodo(ctx(s), empresa, competencia),
       this.porta.estadoPeriodo(ctx(s), empresa, competencia),
     ]);
-    // A memória dos itens pendentes (sem beneficiário ou sem regra) vai à tela da apuração: o de cada médico abre no
-    // demonstrativo dele.
-    const ms = a ? await this.porta.memorias(ctx(s), a.id, null) : [];
+    // A memória dos itens pendentes (sem beneficiário ou sem regra) vai à tela da apuração, só os primeiros (o total é
+    // `pendentes`; a lista inteira é paginada em pendentes()); a de cada médico abre no demonstrativo dele.
+    const [porBeneficiario, pendentes] = await Promise.all([
+      this.porBeneficiario(s, a),
+      a
+        ? this.porta.itensPendentes(ctx(s), a.id, {
+            motivo: null,
+            deslocamento: 0,
+            limite: ITENS_PENDENTES_NA_APURACAO,
+          })
+        : null,
+    ]);
     return this.apuracaoResposta(
       a,
       empresa,
       competencia,
       outro,
-      await this.porBeneficiario(s, a, ms),
-      ms.filter((m) => m.pendencia).map(memoriaRegistradaResposta),
+      porBeneficiario,
+      (pendentes?.itens ?? []).map(itemPendenteResposta),
     );
+  }
+
+  /** Os itens pendentes da apuração, por página e pelo motivo, com a referência da conta para corrigir o item. */
+  async pendentes(
+    s: SessaoCadastro,
+    apuracao: number,
+    f: { motivo: string | null; pagina: number; tamanho: number },
+  ): Promise<PendentesApuracaoResposta> {
+    const motivo = f.motivo === null || f.motivo === '' ? null : f.motivo;
+    if (motivo !== null && !(PENDENCIAS_APURACAO as readonly string[]).includes(motivo))
+      throw new ErroProblema('entrada-invalida', 400, 'Motivo de pendência desconhecido', motivo);
+    const pagina = Math.max(1, Math.trunc(f.pagina) || 1);
+    const tamanho = Math.min(
+      TAMANHO_MAXIMO_PENDENTES,
+      Math.max(1, Math.trunc(f.tamanho) || TAMANHO_PENDENTES),
+    );
+    const a = await this.porta.apuracao(ctx(s), apuracao);
+    if (!a) throw naoEncontrado('Apuração');
+    const r = await this.porta.itensPendentes(ctx(s), apuracao, {
+      motivo,
+      deslocamento: (pagina - 1) * tamanho,
+      limite: tamanho,
+    });
+    return {
+      apuracao,
+      motivo: motivo as PendenciaApuracao | null,
+      pagina,
+      tamanho,
+      total: r.total,
+      itens: r.itens.map(itemPendenteResposta),
+    };
   }
 
   async apurar(s: SessaoCadastro, e: ApurarRepasseEntrada): Promise<ResultadoRepasse> {

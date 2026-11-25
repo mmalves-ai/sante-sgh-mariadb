@@ -120,6 +120,17 @@ export const mensagensRepasse = {
     semDescartadas: 'Nenhuma regra candidata',
     profissional: 'Profissional',
     semProfissional: 'Sem profissional',
+    conta: 'Conta',
+    atendimento: 'Atendimento',
+    prontuario: 'Prontuário {numero}',
+    procedimento: 'Procedimento',
+    realizadoEm: 'Realizado em',
+    abrirConta: 'Abrir a conta {numero} para corrigir o item',
+    filtroMotivo: 'Motivo da pendência',
+    todosMotivos: 'Todos os motivos',
+    paginaDe: '{de} a {ate} de {total}',
+    anterior: 'Anterior',
+    proxima: 'Próxima',
     simulacao:
       'Simulação: esta apuração ainda não é gravada. O período continua sendo apurado no sistema em uso.',
     apuradaFora:

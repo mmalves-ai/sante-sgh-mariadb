@@ -52,6 +52,25 @@ export interface MemoriaCalculoRegistrada {
 
 export type MemoriaCalculoParaGravar = MemoriaCalculoRegistrada;
 
+/** Item pendente da apuração com a referência de negócio para agir nele (a conta, o atendimento, o procedimento). */
+export interface ItemPendenteRegistrado extends MemoriaCalculoRegistrada {
+  readonly contaId: number;
+  readonly contaNumero: string;
+  readonly atendimentoNumero: string;
+  readonly prontuario: string;
+  readonly procedimento: string;
+  readonly procedimentoDescricao: string;
+  /** Data e hora local do item (AAAA-MM-DD HH:MM). */
+  readonly realizadoEm: string | null;
+  readonly profissionalNome: string | null;
+}
+
+/** Página de itens pendentes: os da página e o total do filtro. */
+export interface PaginaItensPendentes {
+  readonly itens: readonly ItemPendenteRegistrado[];
+  readonly total: number;
+}
+
 export interface TotaisApuracao {
   readonly itens: number;
   readonly comRepasse: number;

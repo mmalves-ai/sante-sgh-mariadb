@@ -1,5 +1,6 @@
 // Respostas das telas do repasse médico (M33; ficha, seções 4 e 7). Só códigos, valores e estados: nada de CPF, conta
-// bancária ou nome de paciente. Valores em reais (duas casas) e a memória de cálculo com as parcelas, para a tela
+// bancária ou nome de paciente (o item pendente leva o número da conta, do atendimento e do prontuário; o nome fica na
+// tela da conta, com a permissão dela). Valores em reais (duas casas) e a memória de cálculo com as parcelas, para a tela
 // mostrar a conta de cada valor (o médico vê a regra e a conta).
 import type { ProporRegraRepasseEntrada } from './entradas.js';
 import type { RegraRepasse } from './modelo.js';
@@ -81,6 +82,37 @@ export interface MemoriaItemResposta {
   readonly conta: string;
 }
 
+/** Referência de negócio do item pendente: o que a tela de contas já mostra, para chegar ao item e corrigi-lo. */
+export interface ReferenciaItemPendente {
+  /** Id da conta (o link da tela de contas). */
+  readonly conta: number;
+  readonly contaNumero: string;
+  readonly atendimento: string;
+  /** Número do prontuário do paciente (o nome fica na tela da conta). */
+  readonly prontuario: string;
+  readonly procedimento: string;
+  readonly procedimentoDescricao: string;
+  /** AAAA-MM-DD HH:MM, hora local. */
+  readonly realizadoEm: string | null;
+  /** Nome do profissional executante; null quando o item está sem executante. */
+  readonly profissional: string | null;
+}
+
+export interface ItemPendenteApuracaoResposta extends MemoriaItemResposta {
+  readonly referencia: ReferenciaItemPendente;
+}
+
+/** Página de itens pendentes da apuração (GET /repasse/apuracoes/:id/pendentes), filtrável pelo motivo. */
+export interface PendentesApuracaoResposta {
+  readonly apuracao: number;
+  readonly motivo: PendenciaApuracao | null;
+  readonly pagina: number;
+  readonly tamanho: number;
+  /** Total de pendentes no filtro (todas as páginas). */
+  readonly total: number;
+  readonly itens: readonly ItemPendenteApuracaoResposta[];
+}
+
 export interface SimulacaoRepasseResposta {
   readonly memoria: MemoriaItemResposta;
   readonly regrasConsideradas: number;
@@ -92,6 +124,9 @@ export interface BeneficiarioApuracao {
   readonly base: number;
   readonly valor: number;
 }
+
+/** Quantos itens pendentes a resposta da apuração traz (o resto pela rota paginada). */
+export const ITENS_PENDENTES_NA_APURACAO = 20;
 
 export interface ApuracaoResposta {
   /** SGH_REP_APURACAO.ID; null quando o período não tem apuração no novo. */
@@ -114,8 +149,11 @@ export interface ApuracaoResposta {
   readonly valor: number;
   /** Parcelas do total (a soma é `valor`). */
   readonly porBeneficiario: readonly BeneficiarioApuracao[];
-  /** A memória de cálculo de cada item pendente (sem executante, sem regra, sem conciliação...), com o motivo. */
-  readonly itensPendentes: readonly MemoriaItemResposta[];
+  /**
+   * Os primeiros itens pendentes (até ITENS_PENDENTES_NA_APURACAO), com a memória de cálculo, o motivo e a referência
+   * da conta; o total é `pendentes`, e a lista inteira, paginada e por motivo, vem de GET /repasse/apuracoes/:id/pendentes.
+   */
+  readonly itensPendentes: readonly ItemPendenteApuracaoResposta[];
   /** Lançamentos do outro sistema no período (quando o período é dele). */
   readonly lancamentosOutroSistema: number;
   readonly aviso: string | null;

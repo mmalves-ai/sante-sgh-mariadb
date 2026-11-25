@@ -59,6 +59,7 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
     fonte: 0,
     producao: 0,
     paciente: 0,
+    conta: 0,
   };
   let ctx: ContextoNucleo;
   let gestor: ContextoNucleo;
@@ -258,7 +259,7 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
         descricao: 'EXTERNA L0304R',
         natureza: 'externa',
       });
-      const conta = await e.inserir(
+      const conta = (ids.conta = await e.inserir(
         `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id, tipo_conta_id, natureza,
            competencia, inicio_em, situacao, fechada_em, fechada_por_usuario_id, valor_itens, valor_total, criado_em)
          VALUES (?, ?, ?, ?, ?, ?, 'ambulatorial', ?, ?, 'fechada', ?, ?, 500, 500, ?)`,
@@ -275,7 +276,7 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
           ids.analista,
           agora,
         ],
-      );
+      ));
       const grupo = await porCodigo('grupo_faturamento', `${P}-GF`, {
         descricao: 'GRUPO L0304R',
         tipo_grupo: 'servico_hospitalar',
@@ -790,6 +791,42 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
     // A memória completa volta como foi gravada (item da regra, dimensões, descartadas, base, fixo, adicional).
     expect(await porta.memorias(ctx, apuracao, null)).toEqual([memoria, pendente]);
     expect(await porta.memorias(ctx, apuracao, ids.profissional)).toEqual([memoria]);
+    // Os pendentes, por página e pelo motivo, com a referência de negócio do item (conta, atendimento, prontuário,
+    // procedimento e a data local); o executante ausente fica sem nome.
+    const pg = await porta.itensPendentes(ctx, apuracao, {
+      motivo: 'sem-executante',
+      deslocamento: 0,
+      limite: 10,
+    });
+    expect(pg.total).toBe(1);
+    expect(pg.itens).toEqual([
+      {
+        ...pendente,
+        contaId: ids.conta,
+        contaNumero: `${P}-CH1`,
+        atendimentoNumero: `${P}-AT1`,
+        prontuario: '930304001',
+        procedimento: '99304012',
+        procedimentoDescricao: 'PROCEDIMENTO L0304R',
+        realizadoEm: expect.stringMatching(/^2026-10-14 \d{2}:00$/),
+        profissionalNome: null,
+      },
+    ]);
+    expect(
+      await porta.itensPendentes(ctx, apuracao, { motivo: 'sem-regra', deslocamento: 0, limite: 10 }),
+    ).toEqual({
+      itens: [],
+      total: 0,
+    });
+    expect(
+      (await porta.itensPendentes(ctx, apuracao, { motivo: null, deslocamento: 1, limite: 10 })).itens,
+    ).toEqual([]);
+    expect(
+      await porta.itensPendentes(outro, apuracao, { motivo: null, deslocamento: 0, limite: 10 }),
+    ).toEqual({
+      itens: [],
+      total: 0,
+    });
     expect(
       await contar(
         'SELECT COUNT(*) AS q FROM apuracao_repasse_item WHERE apuracao_repasse_id = ? AND regra_repasse_id IS NOT NULL AND excluido_em IS NULL',

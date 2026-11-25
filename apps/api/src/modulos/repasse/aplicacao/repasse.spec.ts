@@ -162,6 +162,32 @@ describe('repasse médico pela HTTP (memória)', { timeout: 30_000 }, () => {
     expect(ap.itensPendentes).toHaveLength(1);
     expect(ap.itensPendentes[0]).toMatchObject({ beneficiario: null, valor: 0, pendencia: 'sem-executante' });
     expect(ap.itensPendentes[0].conta).toBe('sem repasse (sem-executante)');
+    // A referência de negócio do item (conta, atendimento, prontuário, procedimento) para chegar a ele e corrigi-lo.
+    expect(ap.itensPendentes[0].referencia).toMatchObject({
+      conta: ap.itensPendentes[0].item,
+      procedimento: '10101012',
+      profissional: null,
+    });
+    expect(ap.itensPendentes[0].referencia.contaNumero).not.toBe('');
+    // A lista inteira, paginada e pelo motivo: o total do filtro e a página pedida.
+    const pg = await get(a, `/repasse/apuracoes/${id}/pendentes?motivo=sem-executante&pagina=1&tamanho=10`);
+    expect(pg.statusCode, pg.body).toBe(200);
+    expect(pg.json()).toMatchObject({
+      apuracao: id,
+      motivo: 'sem-executante',
+      pagina: 1,
+      tamanho: 10,
+      total: 1,
+    });
+    expect(pg.json().itens).toHaveLength(1);
+    const outroMotivo = (await get(a, `/repasse/apuracoes/${id}/pendentes?motivo=sem-regra`)).json();
+    expect(outroMotivo).toMatchObject({ total: 0, itens: [] });
+    expect((await get(a, `/repasse/apuracoes/${id}/pendentes?pagina=2&tamanho=1`)).json()).toMatchObject({
+      total: 1,
+      itens: [],
+    });
+    expect((await get(a, `/repasse/apuracoes/${id}/pendentes?motivo=qualquer`)).statusCode).toBe(400);
+    expect((await get(a, '/repasse/apuracoes/999999/pendentes')).statusCode).toBe(404);
     expect(ap.conferidoPor).toBeNull();
     expect((await post(a, `/repasse/apuracoes/${id}/decisao`, { acao: 'aprovar' })).statusCode).toBe(403);
     // A negação da permissão de agir vai à trilha de permissão negada (como a da rota).

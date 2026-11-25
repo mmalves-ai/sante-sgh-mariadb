@@ -84,6 +84,15 @@ test.describe('repasse médico @M33 @C1-138', () => {
     await expect(page.getByTestId('ap-itens-pendentes')).toContainText('Item sem executante');
     await expect(page.getByTestId('ap-itens-pendentes')).toContainText('Sem profissional');
     await expect(page.getByTestId('ap-itens-pendentes')).toContainText('sem repasse');
+    // @C1-138 (revisão): a referência de negócio do item para agir nele (conta, procedimento) e o filtro pelo motivo,
+    // pela rota paginada, com a contagem da página.
+    await expect(page.getByTestId('ap-itens-pendentes')).toContainText(/C\d+/);
+    await expect(page.getByTestId('ap-itens-pendentes')).toContainText('10101012');
+    await expect(page.getByTestId('ap-pend-paginas')).toContainText('1 a 1 de 1');
+    await escolher(page.getByTestId('ap-pend-motivo'), { rotulo: /Item sem executante/ });
+    await expect(page.getByTestId('ap-itens-pendentes')).toContainText('Sem profissional');
+    await expect(page.getByTestId('ap-pend-paginas')).toContainText('1 a 1 de 1');
+    await expect(page.getByTestId('ap-pend-proxima')).toBeDisabled();
     await expect(page.getByTestId('ap-apurado-por')).toContainText('SINT.REP.ANALISTA');
     await expect(page.getByTestId('ap-conferido-por')).toContainText('Ainda não');
     await semViolacaoAxe(page, '/repasse/apuracao');

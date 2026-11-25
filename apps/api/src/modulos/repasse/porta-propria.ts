@@ -61,6 +61,8 @@ import {
   type LancamentoRepasseRegistrado,
   limitesCompetencia,
   type MemoriaCalculoRegistrada,
+  type ItemPendenteRegistrado,
+  type PaginaItensPendentes,
   type PrestadorRepasse,
   type RpaDetalhe,
   type RpaRegistrado,
@@ -1280,6 +1282,81 @@ export class PortaRepassePropria implements PortaRepasse {
         pendencia: textoN(r['pendencia']),
       })),
     );
+  }
+
+  itensPendentes(
+    c: ContextoRepasse,
+    apuracao: number,
+    f: { motivo: string | null; deslocamento: number; limite: number },
+  ): Promise<PaginaItensPendentes> {
+    // A referência de negócio do item (conta, atendimento, prontuário, procedimento e profissional) vem pela produção.
+    const filtro = f.motivo === null ? '' : ' AND x.pendencia = ?';
+    const args = f.motivo === null ? [apuracao] : [apuracao, f.motivo];
+    return this.ler(c, async (l, est, fuso) => {
+      const total = n(
+        (
+          await l.consultar(
+            `SELECT COUNT(*) AS q FROM apuracao_repasse_item x
+               JOIN apuracao_repasse a ON a.id = x.apuracao_repasse_id AND a.estabelecimento_id = ?
+              WHERE x.apuracao_repasse_id = ? AND x.excluido_em IS NULL AND x.pendencia IS NOT NULL${filtro}`,
+            [est, ...args],
+            { teto: 1 },
+          )
+        )[0]?.['q'],
+      );
+      const rs = await l.consultar(
+        `SELECT x.producao_repasse_id, x.profissional_id, x.valor_faturado, x.percentual_repasse, x.valor_repasse,
+                x.regra_repasse_item_id, x.dimensoes, x.dimensoes_ignoradas, x.base_calculo, x.valor_fixo,
+                x.valor_sem_adicional, x.adicional, x.pendencia,
+                ch.id AS conta_id, ch.numero AS conta_numero, at.numero AS atendimento_numero,
+                pa.numero_prontuario AS prontuario,
+                ifa.codigo AS procedimento, ifa.descricao AS procedimento_descricao, chi.realizado_em,
+                COALESCE(pr.nome_exibicao, pfp.nome) AS profissional_nome
+           FROM apuracao_repasse_item x
+           JOIN apuracao_repasse a ON a.id = x.apuracao_repasse_id AND a.estabelecimento_id = ?
+           JOIN producao_repasse p ON p.id = x.producao_repasse_id
+           JOIN conta_hospitalar ch ON ch.id = p.conta_hospitalar_id
+           JOIN conta_hospitalar_item chi ON chi.id = p.conta_hospitalar_item_id
+           JOIN item_faturavel ifa ON ifa.id = chi.item_faturavel_id
+           JOIN atendimento at ON at.id = ch.atendimento_id
+           JOIN paciente pa ON pa.id = ch.paciente_id
+           LEFT JOIN profissional pr ON pr.id = x.profissional_id
+           LEFT JOIN pessoa_fisica pfp ON pfp.id = pr.pessoa_fisica_id
+          WHERE x.apuracao_repasse_id = ? AND x.excluido_em IS NULL AND x.pendencia IS NOT NULL${filtro}
+          ORDER BY x.sequencia
+          LIMIT ${Math.trunc(f.limite)} OFFSET ${Math.trunc(f.deslocamento)}`,
+        [est, ...args],
+        { teto: Math.trunc(f.limite) },
+      );
+      const itens = rs.map((r): ItemPendenteRegistrado => {
+        const quando = local(r['realizado_em'], fuso);
+        return {
+          item: n(r['producao_repasse_id']),
+          prestador: nn(r['profissional_id']),
+          regra: nn(r['regra_repasse_item_id']),
+          dimensoes: texto(r['dimensoes']),
+          ignoradas: texto(r['dimensoes_ignoradas']),
+          base: textoN(r['base_calculo']),
+          baseValor: n(r['valor_faturado']),
+          percentual: n(r['percentual_repasse']),
+          valorFixo: n(r['valor_fixo']),
+          valorSemAdicional:
+            r['valor_sem_adicional'] === null ? n(r['valor_repasse']) : n(r['valor_sem_adicional']),
+          adicional: adicionalDaColuna(r['adicional']),
+          valor: n(r['valor_repasse']),
+          pendencia: textoN(r['pendencia']),
+          contaId: n(r['conta_id']),
+          contaNumero: texto(r['conta_numero']),
+          atendimentoNumero: texto(r['atendimento_numero']),
+          prontuario: texto(r['prontuario']),
+          procedimento: texto(r['procedimento']),
+          procedimentoDescricao: texto(r['procedimento_descricao']),
+          realizadoEm: quando ? quando.slice(0, 16).replace('T', ' ') : null,
+          profissionalNome: textoN(r['profissional_nome']),
+        };
+      });
+      return { itens, total };
+    });
   }
 
   lancamentos(

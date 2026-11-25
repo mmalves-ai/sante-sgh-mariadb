@@ -17,6 +17,7 @@ import type {
   ApuracaoRepasseRegistrada,
   LancamentoRepasseRegistrado,
   MemoriaCalculoRegistrada,
+  ItemPendenteRegistrado,
   PrestadorRepasse,
   RpaDetalhe,
   RpaRegistrado,
@@ -639,6 +640,30 @@ export class PortaRepasseMemoria implements PortaRepasse {
     return (this.e(c).memorias.get(apuracao) ?? []).filter(
       (m) => prestador === null || m.prestador === prestador,
     );
+  }
+
+  async itensPendentes(
+    c: ContextoRepasse,
+    apuracao: number,
+    f: { motivo: string | null; deslocamento: number; limite: number },
+  ) {
+    const competencia = this.e(c).apuracoes.get(apuracao)?.competencia ?? '';
+    const todos = (this.e(c).memorias.get(apuracao) ?? []).filter(
+      (m) => m.pendencia !== null && (f.motivo === null || m.pendencia === f.motivo),
+    );
+    // A referência sintética do item (a fonte de memória não tem conta: o número deriva do item).
+    const itens = todos.slice(f.deslocamento, f.deslocamento + f.limite).map((m): ItemPendenteRegistrado => ({
+      ...m,
+      contaId: m.item,
+      contaNumero: `C${m.item}`,
+      atendimentoNumero: `A${m.item}`,
+      prontuario: String(900000 + (m.item % 1000)),
+      procedimento: '10101012',
+      procedimentoDescricao: 'CONSULTA SINTETICA',
+      realizadoEm: competencia ? `${competencia}-10 10:00` : null,
+      profissionalNome: m.prestador === null ? null : `MEDICO SINTETICO ${m.prestador}`,
+    }));
+    return { itens, total: todos.length };
   }
 
   async lancamentos(c: ContextoRepasse, f: { empresa: number; competencia: string; prestador?: number }) {

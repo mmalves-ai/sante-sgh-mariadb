@@ -5,7 +5,7 @@
 //   GET  /api/repasse/regras?convenio&data&procedimento&profissional&depoisDe (keyset) ; GET prestadores?termo
 //   POST regras/simular | regras/versoes | regras/versoes/:id/decisao ; GET regras/versoes
 //   GET  /api/repasse/apuracoes ; POST apuracoes | apuracoes/:id/decisao | apuracoes/:id/lancamentos
-//   GET  /api/repasse/apuracoes/:id/demonstrativo/:prestador (+ /pdf: PDF/A pelo Gotenberg)
+//   GET  /api/repasse/apuracoes/:id/demonstrativo/:prestador (+ /pdf: PDF/A pelo Gotenberg) | apuracoes/:id/pendentes
 //   GET  /api/repasse/lancamentos ; POST lancamentos
 //   GET  /api/repasse/rpas ; POST rpas/previa | rpas (crítica: com a senha) ; GET rpas/:id/pdf (o RPA emitido, PDF/A)
 //   GET  /api/repasse/meu-extrato?competencia | meu-extrato/conta?competencia (só o próprio médico: o vínculo do
@@ -28,6 +28,7 @@ import {
   type ApuracaoResposta,
   type ContaDoMedicoResposta,
   type DemonstrativoResposta,
+  type PendentesApuracaoResposta,
   esquemaApurarRepasse,
   esquemaDecidirApuracao,
   esquemaDecidirRegraRepasse,
@@ -291,6 +292,21 @@ export class RepasseController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<ResultadoRepasse> {
     return this.servico.lancarApuracao(sessaoDe(req), idDaRota(id), corpo(esquemaLancarApuracao, b).evento);
+  }
+
+  @Get('apuracoes/:id/pendentes')
+  @Permissao('repasse.apuracao.ler')
+  @Auditar(E.repasseLido.codigo)
+  pendentes(
+    @Param('id') id: string,
+    @Query() q: Record<string, string>,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<PendentesApuracaoResposta> {
+    return this.servico.pendentes(sessaoDe(req), idDaRota(id), {
+      motivo: q['motivo'] ?? null,
+      pagina: inteiroOuNulo(q['pagina']) ?? 1,
+      tamanho: inteiroOuNulo(q['tamanho']) ?? 50,
+    });
   }
 
   @Get('apuracoes/:id/demonstrativo/:prestador')

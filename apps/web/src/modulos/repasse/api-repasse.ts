@@ -11,6 +11,7 @@ import type {
   IndicadorRepasse,
   LancamentoRepasseResposta,
   ListaRegrasRepasse,
+  PendentesApuracaoResposta,
   PrestadorRepasseResposta,
   PreviaRpaResposta,
   ResultadoRepasse,
@@ -59,6 +60,8 @@ export const decidirApuracao = (id: number, corpo: unknown, chave: string) =>
   gravar(`${R}/apuracoes/${id}/decisao`, corpo, chave);
 export const lancarApuracao = (id: number, evento: number, chave: string) =>
   gravar(`${R}/apuracoes/${id}/lancamentos`, { evento }, chave);
+export const lerPendentes = (id: number, f: { motivo?: string; pagina: number; tamanho: number }) =>
+  ler(`${R}/apuracoes/${id}/pendentes${qs(f)}`, confiar<PendentesApuracaoResposta>());
 export const lerDemonstrativo = (id: number, prestador: number) =>
   ler(`${R}/apuracoes/${id}/demonstrativo/${prestador}`, confiar<DemonstrativoResposta>());
 export const urlDemonstrativoPdf = (id: number, prestador: number) =>
