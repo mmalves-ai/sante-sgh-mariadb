@@ -393,7 +393,12 @@ export interface FiltroFaturasNota {
   readonly competencia?: string | null;
   readonly fontePagadoraId?: number | null;
   readonly documentacao?: 'sem_nota' | 'parcial' | 'documentada' | null;
+  /** Quantas faturas no máximo (padrão 300). O corte vale depois do filtro pela documentação. */
+  readonly limite?: number;
 }
+
+/** Limite padrão da lista das faturas: o corte é aplicado depois de todos os filtros, inclusive o da documentação. */
+export const LIMITE_FATURAS_NOTA = 300;
 
 /**
  * Lista das faturas ao pagador do estabelecimento com a documentação fiscal de cada uma (quanto vale, quanto as notas
@@ -412,41 +417,55 @@ export async function faturasDocumentacaoPropria(l: Leitor, est: number, filtro:
     onde.push('f.fonte_pagadora_id = ?');
     p.push(filtro.fontePagadoraId);
   }
+  // A situação da documentação é filtrada no SQL, antes do corte: a fatura antiga ainda sem nota não some da lista por
+  // haver mais faturas recentes do que o limite. A conta em centavos é a mesma de valorDocumentavelFatura e de
+  // situacaoDocumentacao do domínio (sem nota quando nada documenta; documentada quando cobre o valor documentável).
+  const fora: string[] = [];
+  if (filtro.documentacao === 'sem_nota') fora.push('d.documentado_c <= 0');
+  else if (filtro.documentacao === 'parcial')
+    fora.push('d.documentado_c > 0', 'd.documentado_c < d.documentavel_c');
+  else if (filtro.documentacao === 'documentada')
+    fora.push('d.documentado_c > 0', 'd.documentado_c >= d.documentavel_c');
+  const limite = Math.max(1, Math.min(LIMITE_FATURAS_NOTA, Math.trunc(filtro.limite ?? LIMITE_FATURAS_NOTA)));
+  p.push(limite);
   const linhas = await l.consultar<Linha>(
-    `SELECT f.id, f.numero, f.situacao, f.competencia, f.fonte_pagadora_id, fp.nome AS fonte_nome,
-            f.valor_apresentado, f.valor_acrescimo, f.valor_desconto,
-            (SELECT COALESCE(SUM(v.valor_apropriado), 0) FROM vinculo_nota_faturamento v
-               JOIN nota_servico ns ON ns.id = v.nota_servico_id
-              WHERE v.fatura_fonte_pagadora_id = f.id AND v.excluido_em IS NULL
-                AND ns.situacao IN (${situacoes.map(() => '?').join(',')})) AS documentado,
-            (SELECT COUNT(*) FROM vinculo_nota_faturamento v
-              WHERE v.fatura_fonte_pagadora_id = f.id AND v.excluido_em IS NULL) AS notas
-       FROM fatura_fonte_pagadora f LEFT JOIN fonte_pagadora fp ON fp.id = f.fonte_pagadora_id
-      WHERE ${onde.join(' AND ')}
-      ORDER BY f.competencia DESC, f.id DESC LIMIT 300`,
+    `SELECT d.* FROM (
+       SELECT f.id, f.numero, f.situacao, f.competencia, f.fonte_pagadora_id, fp.nome AS fonte_nome,
+              f.valor_apresentado, f.valor_acrescimo, f.valor_desconto,
+              GREATEST(0, ROUND(f.valor_apresentado * 100) + ROUND(f.valor_acrescimo * 100)
+                          - ROUND(f.valor_desconto * 100)) AS documentavel_c,
+              (SELECT COALESCE(SUM(ROUND(v.valor_apropriado * 100)), 0) FROM vinculo_nota_faturamento v
+                 JOIN nota_servico ns ON ns.id = v.nota_servico_id
+                WHERE v.fatura_fonte_pagadora_id = f.id AND v.excluido_em IS NULL
+                  AND ns.situacao IN (${situacoes.map(() => '?').join(',')})) AS documentado_c,
+              (SELECT COUNT(*) FROM vinculo_nota_faturamento v
+                WHERE v.fatura_fonte_pagadora_id = f.id AND v.excluido_em IS NULL) AS notas
+         FROM fatura_fonte_pagadora f LEFT JOIN fonte_pagadora fp ON fp.id = f.fonte_pagadora_id
+        WHERE ${onde.join(' AND ')}
+     ) d
+     ${fora.length ? `WHERE ${fora.join(' AND ')}` : ''}
+     ORDER BY d.competencia DESC, d.id DESC LIMIT ?`,
     p,
   );
-  return linhas
-    .map((r) => {
-      const valorDocumentavel = valorDocumentavelFatura({
-        valorApresentado: n(r['valor_apresentado']),
-        valorAcrescimo: n(r['valor_acrescimo']),
-        valorDesconto: n(r['valor_desconto']),
-      });
-      const valorDocumentado = n(r['documentado']);
-      return {
-        id: n(r['id']),
-        numero: String(r['numero']),
-        situacao: String(r['situacao']),
-        competencia: dataHora(r['competencia'])?.slice(0, 7) ?? null,
-        fontePagadoraId: nn(r['fonte_pagadora_id']),
-        fontePagadora: txt(r['fonte_nome']),
-        valorDocumentavel,
-        valorDocumentado,
-        saldo: Math.max(0, Math.round((valorDocumentavel - valorDocumentado) * 100) / 100),
-        notasLigadas: n(r['notas']),
-        documentacao: situacaoDocumentacao(valorDocumentavel, valorDocumentado),
-      };
-    })
-    .filter((f) => !filtro.documentacao || f.documentacao === filtro.documentacao);
+  return linhas.map((r) => {
+    const valorDocumentavel = valorDocumentavelFatura({
+      valorApresentado: n(r['valor_apresentado']),
+      valorAcrescimo: n(r['valor_acrescimo']),
+      valorDesconto: n(r['valor_desconto']),
+    });
+    const valorDocumentado = n(r['documentado_c']) / 100;
+    return {
+      id: n(r['id']),
+      numero: String(r['numero']),
+      situacao: String(r['situacao']),
+      competencia: dataHora(r['competencia'])?.slice(0, 7) ?? null,
+      fontePagadoraId: nn(r['fonte_pagadora_id']),
+      fontePagadora: txt(r['fonte_nome']),
+      valorDocumentavel,
+      valorDocumentado,
+      saldo: Math.max(0, Math.round((valorDocumentavel - valorDocumentado) * 100) / 100),
+      notasLigadas: n(r['notas']),
+      documentacao: situacaoDocumentacao(valorDocumentavel, valorDocumentado),
+    };
+  });
 }

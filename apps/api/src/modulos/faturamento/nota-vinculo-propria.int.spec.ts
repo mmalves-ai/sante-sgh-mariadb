@@ -486,4 +486,39 @@ describe.skipIf(SEM_BANCO)('nota fiscal que documenta a fatura ou a conta (Maria
     );
     expect(deOutro.some((x) => x.id === ids.fatura)).toBe(false);
   });
+
+  it('lista das faturas: o filtro pela documentação vale antes do corte (a fatura antiga não some atrás das recentes)', async () => {
+    const visao = await s.ler(ctxL(), (l, est) => documentacaoFiscalPropria(l, est, 'fatura', ids.fatura));
+    expect(visao.alvo.documentacao).not.toBe('sem_nota');
+    // Duas faturas mais recentes, ainda sem nota: com o corte em 2, elas ocupam a lista inteira sem filtro.
+    const recentes = await escrever(async (e) => {
+      const r: number[] = [];
+      for (const [num, comp] of [
+        [`${P}-F2`, '2026-02-01'],
+        [`${P}-F3`, '2026-03-01'],
+      ] as const)
+        r.push(
+          await e.inserir(
+            `INSERT INTO fatura_fonte_pagadora (estabelecimento_id, numero, fonte_pagadora_id, competencia,
+               data_abertura, fechado_em, valor_apresentado, valor_acrescimo, valor_desconto, situacao, criado_em)
+             VALUES (?, ?, ?, ?, ?, ?, 400, 0, 0, 'fechada', ?)`,
+            [ids.est, num, ids.fonte, comp, comp, `${comp} 09:00:00`, new Date()],
+          ),
+        );
+      return r;
+    });
+    const semFiltro = await s.ler(ctxL(), (l, est) => faturasDocumentacaoPropria(l, est, { limite: 2 }));
+    expect(semFiltro.map((x) => x.id).sort()).toEqual([...recentes].sort());
+    // Filtrada pela situação dela, a fatura antiga aparece mesmo com o corte em 1.
+    const filtrada = await s.ler(ctxL(), (l, est) =>
+      faturasDocumentacaoPropria(l, est, { documentacao: visao.alvo.documentacao, limite: 1 }),
+    );
+    expect(filtrada.map((x) => x.id)).toEqual([ids.fatura]);
+    // As sem nota vêm todas, e só elas; a mais recente primeiro.
+    const semNota = await s.ler(ctxL(), (l, est) =>
+      faturasDocumentacaoPropria(l, est, { documentacao: 'sem_nota', limite: 2 }),
+    );
+    expect(semNota.map((x) => x.id)).toEqual([recentes[1], recentes[0]]);
+    expect(semNota.every((x) => x.documentacao === 'sem_nota' && x.valorDocumentado === 0)).toBe(true);
+  });
 });
