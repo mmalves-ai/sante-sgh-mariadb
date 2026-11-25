@@ -7,6 +7,8 @@
 // apps/api/src/modulos/cirurgia/kit-agendamento-propria.int.spec.ts. Aqui se prova o fluxo: os kits padrão chegam
 // marcados, um clique leva o escolhido à lista, o já incluído fica travado, retirar devolve o kit à sugestão, e a
 // lista fechada só mostra. Axe na tela. Massa SINTÉTICA.
+// Quem entra é o usuário do bloco (SINT.BLOCO): a tela exige cirurgia.agenda.ler e incluir/retirar exige
+// cirurgia.agenda.agendar, que são do bloco cirúrgico e não do administrador do sistema.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 
@@ -139,7 +141,7 @@ test.describe('Kit padrão no agendamento cirúrgico @C1-056', () => {
     let aberta = true;
     const api = simular(page, () => aberta);
     await api.ligar();
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.BLOCO');
 
     await page.goto(`/cirurgia/agendamentos/${AG}`);
     await expect(page.getByTestId('tela-agendamento-cirurgico')).toBeVisible();
@@ -208,7 +210,7 @@ test.describe('Kit padrão no agendamento cirúrgico @C1-056', () => {
     };
     const api = simular(page, () => true, [opme]);
     await api.ligar();
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.BLOCO');
     await page.goto(`/cirurgia/agendamentos/${AG}`);
     await expect(page.getByTestId('kit-agendamento-material-1')).toContainText('PROTESE FICTICIA');
     await expect(page.getByTestId('kit-agendamento-retirar-1')).toHaveCount(0);
