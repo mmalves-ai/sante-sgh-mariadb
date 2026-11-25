@@ -54,7 +54,7 @@ describe.skipIf(SEM_BANCO)('liberação do exame no banco (pendência explícita
     const erro = await porta
       .executar(
         c,
-        'sadt.registrarLaudo',
+        'sadt.lancarExame',
         { exames: [], responsavel: m!.base.profissional },
         { ...c, chaveIdempotencia: 't-s09lib-1' },
       )

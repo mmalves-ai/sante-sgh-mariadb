@@ -482,6 +482,7 @@ export class ServicoPortal {
       emitidoEm: r.emitidoEm,
       estabelecimento: r.valido ? hospital : null,
       exames: r.exames,
+      ...(r.superado ? { superado: true } : {}),
     };
   }
 }

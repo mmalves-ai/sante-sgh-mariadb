@@ -361,6 +361,8 @@ export const esquemaValidacaoLaudo = z.object({
   emitidoEm: nul(txt),
   estabelecimento: nul(txt),
   exames: n,
+  /** O laudo foi retificado depois desta emissão: a via impressa não é mais a atual. */
+  superado: z.boolean().optional(),
 });
 export type ValidacaoLaudo = z.infer<typeof esquemaValidacaoLaudo>;
 

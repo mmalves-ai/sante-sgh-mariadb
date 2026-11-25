@@ -358,7 +358,14 @@ export interface PortaSadt extends PortaGravacaoM18<GravadorSghSadt> {
   validarLaudo(
     c: ContextoSadt,
     codigo: string,
-  ): Promise<{ valido: boolean; numero: string | null; emitidoEm: string | null; exames: number }>;
+  ): Promise<{
+    valido: boolean;
+    numero: string | null;
+    emitidoEm: string | null;
+    exames: number;
+    /** O laudo foi retificado depois da última via emitida com este código (a via impressa não é mais a atual). */
+    superado?: boolean;
+  }>;
   laudoParaEmitir(c: ContextoSadt, ids: readonly number[]): Promise<LaudoParaEmitir | null>;
   requisicoes(
     c: ContextoSadt,

@@ -62,6 +62,7 @@ import {
   avisoDoAlvo,
   dataDaReferencia,
   distribuirPorBancada,
+  emissaoSuperada,
   numeroDoLaudo,
   type RegraCriticoCandidata,
   SEQUENCIA_NUMERO_LAUDO,
@@ -1246,15 +1247,18 @@ export class PortaSadtPropria implements PortaSadt {
       const { hoje } = await this.hoje(l, est);
       const ls = await l.consultar(
         `SELECT a.id, a.gerado_em, a.prazo_em, a.situacao, a.nivel_escalonamento, a.comunicado_descricao, a.comunicado_em,
-                a.leitura_confirmada_em, re.exame_item_id, re.liberado_em, r.numero, ei.sequencia, r.atendimento_id,
+                a.leitura_confirmada_em, ei.id AS exame_item_id, COALESCE(re.liberado_em, ld.assinado_em) AS liberado_em,
+                r.numero, ei.sequencia, r.atendimento_id,
                 at.numero AS atendimento_numero, p.id AS paciente_id, p.numero_prontuario, pf.nome, pf.data_nascimento,
-                sx.sigla AS sexo, an.nome AS analito, ra.valor_numerico, ra.valor_texto, ur.simbolo,
+                sx.sigla AS sexo, COALESCE(an.nome, IF(ld.id IS NULL, NULL, 'Achado crítico do laudo')) AS analito,
+                ra.valor_numerico, COALESCE(ra.valor_texto, ld.achado_critico_descricao) AS valor_texto, ur.simbolo,
                 (SELECT cn.descricao FROM aviso_valor_critico_tentativa t JOIN canal_notificacao cn ON cn.id = t.canal_notificacao_id
                   WHERE t.aviso_valor_critico_id = a.id ORDER BY t.sequencia DESC LIMIT 1) AS canal,
                 COALESCE(uc.login, '') AS comunicado_por, COALESCE(pcf.nome, a.comunicado_descricao, '') AS destinatario
            FROM aviso_valor_critico a
-           JOIN resultado_exame re ON re.id = a.resultado_exame_id
-           JOIN exame_item ei ON ei.id = re.exame_item_id
+           LEFT JOIN resultado_exame re ON re.id = a.resultado_exame_id
+           LEFT JOIN laudo_diagnostico ld ON ld.id = a.laudo_diagnostico_id
+           JOIN exame_item ei ON ei.id = COALESCE(re.exame_item_id, ld.exame_item_id)
            JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
            JOIN atendimento at ON at.id = r.atendimento_id
            JOIN paciente p ON p.id = a.paciente_id
@@ -1569,16 +1573,35 @@ export class PortaSadtPropria implements PortaSadt {
   validarLaudo(c: ContextoSadt, codigo: string) {
     return this.ler(c, async (l, est) => {
       const r = await l.uma(
-        `SELECT el.numero, el.emitida_em, (SELECT COUNT(*) FROM emissao_laudo_exame ex WHERE ex.emissao_laudo_id = el.id
-                                   AND ex.excluido_em IS NULL) AS exames
+        `SELECT el.id, el.numero, el.emitida_em, (SELECT COUNT(*) FROM emissao_laudo_exame ex WHERE ex.emissao_laudo_id = el.id
+                                   AND ex.excluido_em IS NULL) AS exames,
+                (SELECT MAX(u.emitida_em) FROM emissao_laudo u WHERE u.estabelecimento_id = el.estabelecimento_id
+                    AND u.codigo_autenticacao = el.codigo_autenticacao AND u.excluido_em IS NULL) AS ultima_via
            FROM emissao_laudo el WHERE el.estabelecimento_id = ? AND el.codigo_autenticacao = ? AND el.excluido_em IS NULL
           ORDER BY el.numero_via, el.id LIMIT 1`,
         [est, codigo],
       );
+      // O laudo retificado depois da última via emitida: o código continua achando a emissão, mas ela não é mais a
+      // atual (a validação diz isso, sem dado clínico).
+      const retificacoes = r
+        ? (
+            await l.consultar(
+              `SELECT v.ocorrido_em FROM emissao_laudo_exame ex
+                 JOIN laudo_diagnostico ld ON ld.exame_item_id = ex.exame_item_id AND ld.excluido_em IS NULL
+                 JOIN laudo_diagnostico_versao v ON v.laudo_diagnostico_id = ld.id AND v.situacao = 'retificado'
+                WHERE ex.emissao_laudo_id = ? AND ex.excluido_em IS NULL`,
+              [n(r['id'])],
+            )
+          ).map((x) => new Date(x['ocorrido_em'] as string | Date))
+        : [];
       // A validação pública devolve o número do laudo (impresso no PDF ao lado do código), nunca dado clínico.
       return r
         ? {
             valido: true,
+            superado: emissaoSuperada(
+              new Date((r['ultima_via'] ?? r['emitida_em']) as string | Date),
+              retificacoes,
+            ),
             numero: texto(r['numero']),
             emitidoEm: instante(r['emitida_em']),
             exames: n(r['exames']),

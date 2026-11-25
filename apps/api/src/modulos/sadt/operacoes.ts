@@ -42,7 +42,6 @@ const CONTRATO =
 export const OPERACOES_SADT_PENDENTES: Readonly<Record<string, string>> = {
   'sadt.receberSolicitacao': `o recebimento do pedido no setor ${CONTRATO}`,
   'sadt.lancarExame': `o lançamento de exame no setor ${CONTRATO}`,
-  'sadt.registrarLaudo': `o registro do laudo ${CONTRATO}`,
   'sadt.criarOrcamento': `o orçamento do diagnóstico ${CONTRATO}`,
   'sadt.registrarVisualizacaoPortal': `a visualização no portal ${CONTRATO}`,
   'sadt.abrirRequisicao': `a abertura da requisição ${CONTRATO}`,
@@ -56,6 +55,8 @@ export const OPERACOES_SADT_NO_CONTRATO_NOVO: Readonly<Record<string, string>> =
   'sadt.registrarResultado': 'POST /api/sadt/exames-pedidos/:exame/resultado',
   'sadt.liberarExame': 'POST /api/sadt/exames-pedidos/:exame/resultado/liberar',
   'sadt.retificarResultado': 'POST /api/sadt/exames-pedidos/:exame/resultado/retificar',
+  // O laudo de imagem e de métodos gráficos (05-SADT linha 16) grava pela redação do laudo (aplicacao/laudo-redacao.ts).
+  'sadt.registrarLaudo': 'POST /api/sadt/laudos/redacao/:item',
 };
 
 /**
