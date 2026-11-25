@@ -29,3 +29,5 @@ export {
 export * from './worklist/ordenacao.js';
 // M44 (etapa 1): classificação de risco no pronto atendimento.
 export * from './classificacao/index.js';
+// 02-CAD linha 24: regra própria do plano da fonte pagadora na recepção (carteira, guia, senha, teto, pendência).
+export * from './regra-plano.js';
