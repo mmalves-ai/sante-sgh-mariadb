@@ -316,6 +316,9 @@ async function remarcarDia(): Promise<void> {
             <td>
               {{ t(`agenda.espera.situacoes.${e.situacao}`) }}
               <template v-if="e.oferta"> ({{ dataBr(e.oferta.data) }} {{ horaBr(e.oferta.hora) }})</template>
+              <span v-if="e.oferta?.motivo" :data-testid="`espera-motivo-${e.id}`">
+                <br />{{ t('agenda.espera.motivoOferta', { motivo: e.oferta.motivo }) }}
+              </span>
             </td>
             <td class="acoes">
               <SanteBotao
@@ -394,6 +397,22 @@ async function remarcarDia(): Promise<void> {
                   data-testid="botao-marcar-espera"
                 />
               </form>
+              <section
+                v-if="e.historico.length > 0"
+                :aria-label="t('agenda.espera.historico')"
+                :data-testid="`espera-historico-${e.id}`"
+              >
+                <h3>{{ t('agenda.espera.historico') }}</h3>
+                <ol>
+                  <li v-for="(h, i) in e.historico" :key="i">
+                    {{ dataBr(h.em) }} · {{ t(`agenda.espera.eventos.${h.evento}`) }}
+                    <template v-if="h.autor">
+                      {{ t('agenda.espera.historicoAutor', { autor: h.autor }) }}</template
+                    >
+                    <template v-if="h.motivo"> — {{ h.motivo }}</template>
+                  </li>
+                </ol>
+              </section>
             </td>
           </tr>
         </template>

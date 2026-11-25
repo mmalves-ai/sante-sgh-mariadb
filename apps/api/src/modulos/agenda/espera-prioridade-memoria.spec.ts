@@ -73,6 +73,8 @@ interface ItemFila {
   prioridadeLegal: { id: number; descricao: string; peso: number } | null;
   posicao: number | null;
   situacao: string;
+  oferta: { motivo: string | null } | null;
+  historico: { evento: string; motivo: string | null; autor: string | null }[];
 }
 
 describe('lista de espera com prioridade legal (porta em memória)', () => {
@@ -127,10 +129,23 @@ describe('lista de espera com prioridade legal (porta em memória)', () => {
     });
     expect(comMotivo.statusCode).toBe(200);
     const fim = (await get(s, '/espera')).json().itens as ItemFila[];
-    expect(fim.find((x) => x.id === segundo?.id)?.situacao).toBe('ofertado');
+    const ofertado = fim.find((x) => x.id === segundo?.id);
+    expect(ofertado?.situacao).toBe('ofertado');
+    // O motivo da oferta fora da ordem fica no histórico do pedido (como lista_espera_historico) e na oferta.
+    expect(ofertado?.oferta?.motivo).toBe('Paciente sintético com retorno de exame');
+    expect(ofertado?.historico.map((h) => [h.evento, h.motivo, h.autor])).toEqual([
+      ['entrada', null, 'SINT.AGENDA'],
+      ['oferta', 'Paciente sintético com retorno de exame', 'SINT.AGENDA'],
+    ]);
     // O primeiro da fila recebe a vaga sem motivo.
     const primeiro = fim.find((x) => x.idPaciente === 1001 && x.situacao === 'aguardando');
     const ok = await post(s, `/espera/${primeiro?.id}/ofertar`, { ...vaga, agenda: 903, hora: '08:15' });
     expect(ok.statusCode).toBe(200);
+    const sem = ((await get(s, '/espera')).json().itens as ItemFila[]).find((x) => x.id === primeiro?.id);
+    expect(sem?.oferta?.motivo).toBeNull();
+    expect(sem?.historico.map((h) => [h.evento, h.motivo])).toEqual([
+      ['entrada', null],
+      ['oferta', null],
+    ]);
   });
 });

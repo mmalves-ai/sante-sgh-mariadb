@@ -352,5 +352,20 @@ describe.skipIf(SEM_BANCO)('02-AGE 48: lista de espera pelo grupo de prioridade 
       [ped.g, ped.b],
     );
     expect(sit.map((x) => x.situacao)).toEqual(['ofertado', 'ofertado']);
+    // A leitura serve o histórico gravado: a oferta fora da ordem volta com o motivo; a do primeiro, sem motivo.
+    const lidos = await porta.espera(ctx(), { situacoes: ['ofertado'] });
+    const b = lidos.find((x) => x.id === ped.b);
+    const g = lidos.find((x) => x.id === ped.g);
+    expect(b?.oferta?.motivo).toBe('Paciente só pode neste horário');
+    expect(b?.historico?.map((h) => [h.evento, h.motivo])).toEqual([
+      ['entrada', null],
+      ['oferta', 'Paciente só pode neste horário'],
+    ]);
+    expect(b?.historico?.every((h) => h.autor !== null && h.em.length > 0)).toBe(true);
+    expect(g?.oferta?.motivo).toBeNull();
+    expect(g?.historico?.map((h) => [h.evento, h.motivo])).toEqual([
+      ['entrada', null],
+      ['oferta', null],
+    ]);
   });
 });

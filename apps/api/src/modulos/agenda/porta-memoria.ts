@@ -1276,6 +1276,8 @@ export class PortaAgendaMemoria implements PortaAgenda {
           desde: new Date().toISOString(),
           oferta: null,
           marcacao: null,
+          // 02-AGE 48: o histórico do pedido, como lista_espera_historico na porta própria (nunca apagado).
+          historico: [{ evento: 'entrada', em: new Date().toISOString(), autor: login, motivo: null }],
         });
         return id;
       },
@@ -1312,12 +1314,31 @@ export class PortaAgendaMemoria implements PortaAgenda {
           throw recusa(conf.codigo, conf.motivo, {
             campos: [conf.codigo === 'vaga-incompativel' ? 'agenda' : 'motivo'],
           });
-        Object.assign(x, { situacao: 'ofertado', oferta: { agenda: r.agenda, data: r.data, hora: r.hora } });
+        // Fora da ordem, o motivo fica no histórico e na oferta (a porta própria grava em lista_espera_historico).
+        const motivo = conf.aFrente > 0 ? (r.motivo ?? '').trim() : null;
+        Object.assign(x, {
+          situacao: 'ofertado',
+          oferta: { agenda: r.agenda, data: r.data, hora: r.hora, motivo },
+          historico: [
+            ...(x.historico ?? []),
+            { evento: 'oferta', em: new Date().toISOString(), autor: login, motivo },
+          ],
+        });
       },
       encerrarEspera: async (r) => {
         const x = s.espera.find((y) => y.id === r.id && ['aguardando', 'ofertado'].includes(y.situacao));
         if (!x) throw recusa('espera-encerrada', 'O pedido da lista de espera já foi encerrado.');
-        Object.assign(x, { situacao: r.situacao, marcacao: r.marcacao });
+        const evento =
+          r.situacao === 'atendido' ? 'marcacao' : r.situacao === 'cancelado' ? 'cancelamento' : 'recusa';
+        Object.assign(x, {
+          situacao: r.situacao,
+          marcacao: r.marcacao,
+          oferta: r.situacao === 'aguardando' ? null : x.oferta,
+          historico: [
+            ...(x.historico ?? []),
+            { evento, em: new Date().toISOString(), autor: login, motivo: null },
+          ],
+        });
       },
       gravarVinculo: async (r) => {
         s.ligacoes.set(r.agenda, {

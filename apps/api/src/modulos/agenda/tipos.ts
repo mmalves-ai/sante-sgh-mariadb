@@ -246,8 +246,36 @@ export interface ItemListaEspera {
   readonly situacao: string;
   readonly observacao: string | null;
   readonly desde: string;
-  readonly oferta: { readonly agenda: number; readonly data: string; readonly hora: string } | null;
+  readonly oferta: {
+    readonly agenda: number;
+    readonly data: string;
+    readonly hora: string;
+    /** Motivo registrado quando a oferta passou alguém à frente na mesma fila (02-AGE 48). */
+    readonly motivo?: string | null;
+  } | null;
   readonly marcacao: number | null;
+  /** Histórico do pedido, do mais antigo ao mais novo (lista_espera_historico; nunca apagado). */
+  readonly historico?: readonly EventoListaEspera[];
+  /** Quem pediu (02-AGE 53): o profissional, pelo prontuário, ou o número do pedido da central de regulação. */
+  readonly solicitante?: string | null;
+  readonly regulacao?: string | null;
+  /** Procedimentos pedidos, com a situação de cada um (aguardando, marcado, cancelado). */
+  readonly itens?: readonly {
+    readonly sequencia: number;
+    readonly descricao: string;
+    readonly quantidade: number;
+    readonly situacao: string;
+    readonly marcacao: number | null;
+  }[];
+}
+
+/** Um evento do histórico da lista de espera: entrada, oferta, marcacao, recusa (devolução) ou cancelamento. */
+export interface EventoListaEspera {
+  readonly evento: string;
+  readonly em: string;
+  /** Login de quem registrou (null quando o usuário não é mais conhecido). */
+  readonly autor: string | null;
+  readonly motivo: string | null;
 }
 
 /** Vínculos da agenda (profissional, especialidade principal, local e unidade). */

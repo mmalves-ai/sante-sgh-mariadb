@@ -72,6 +72,7 @@ import { z } from 'zod';
 import { recusarEntradaDeFalecido } from '@sgh/dominio-atendimento';
 import { vidaDoPaciente } from '../cadastro/vida-do-paciente.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
+import { complementoDosPedidos, encerrarItensDoPedido } from './pedido-vaga-itens.js';
 import { lerDiasSemExpediente } from './dias-sem-expediente-leitor.js';
 import { operacaoAgenda } from './operacoes.js';
 import { dataNoFuso, preCadastroDaMarcacao } from './pre-cadastro-marcacao.js';
@@ -101,6 +102,7 @@ import type {
   Feriado,
   GeracaoGrade,
   Horario,
+  EventoListaEspera,
   ItemListaEspera,
   LiberacaoGravacao,
   Marcacao,
@@ -1201,14 +1203,54 @@ export class PortaAgendaPropria implements PortaAgenda {
         })),
         dataNoFuso(this.fuso(e.id), this.agora()),
       );
+      // 02-AGE 48: o histórico de cada pedido (entrada, oferta com o motivo fora da ordem, marcação, devolução,
+      // cancelamento), na ordem em que aconteceu.
+      const json = (v: unknown) =>
+        (v === null || v === undefined ? {} : typeof v === 'string' ? JSON.parse(v) : v) as Record<
+          string,
+          unknown
+        >;
+      const motivoDe = (d: Record<string, unknown>) => {
+        const f = d['foraDaOrdem'] as Record<string, unknown> | undefined;
+        return f ? txt(f['motivo']) : null;
+      };
+      const historico = new Map<number, EventoListaEspera[]>();
+      if (linhas.length > 0) {
+        const hs = await l.consultar(
+          `SELECT h.lista_espera_id, h.evento, h.dados, h.ocorrido_em, u.login
+           FROM lista_espera_historico h LEFT JOIN usuario u ON u.id = h.usuario_id
+           WHERE h.lista_espera_id IN (${marcadores(linhas.length)})
+           ORDER BY h.ocorrido_em, h.id LIMIT ${TETO_LEITURA}`,
+          linhas.map((x) => num(x['id'])),
+          { teto: TETO_LEITURA },
+        );
+        for (const h of hs) {
+          const id = num(h['lista_espera_id']);
+          const lista = historico.get(id) ?? [];
+          lista.push({
+            evento: String(h['evento']),
+            em: instante(h['ocorrido_em']).toISOString(),
+            autor: txt(h['login']),
+            motivo: motivoDe(json(h['dados'])),
+          });
+          historico.set(id, lista);
+        }
+      }
+      // 02-AGE 53: quem pediu e os procedimentos pedidos, para quem marca ver o pedido inteiro.
+      const complemento = await complementoDosPedidos(
+        l,
+        linhas.map((x) => num(x['id'])),
+      );
       return linhas.map((x) => {
         let oferta: ItemListaEspera['oferta'] = null;
         if (x['situacao'] === 'ofertado' && x['oferta']) {
-          const o = (typeof x['oferta'] === 'string' ? JSON.parse(x['oferta']) : x['oferta']) as Record<
-            string,
-            unknown
-          >;
-          oferta = { agenda: num(o['agenda']), data: String(o['data']), hora: String(o['hora']) };
+          const o = json(x['oferta']);
+          oferta = {
+            agenda: num(o['agenda']),
+            data: String(o['data']),
+            hora: String(o['hora']),
+            motivo: motivoDe(o),
+          };
         }
         return {
           id: num(x['id']),
@@ -1227,6 +1269,10 @@ export class PortaAgendaPropria implements PortaAgenda {
           desde: instante(x['entrada_em']).toISOString(),
           oferta,
           marcacao: numOuNull(x['marcacao_horario_id']),
+          historico: historico.get(num(x['id'])) ?? [],
+          solicitante: complemento.get(num(x['id']))?.solicitante ?? null,
+          regulacao: complemento.get(num(x['id']))?.regulacao ?? null,
+          itens: complemento.get(num(x['id']))?.itens ?? [],
         };
       });
     });
@@ -2080,7 +2126,7 @@ export class PortaAgendaPropria implements PortaAgenda {
       }),
       encerrarEspera: operacao({
         nome: 'agenda.encerrarEspera',
-        tabelas: ['lista_espera', 'lista_espera_historico'],
+        tabelas: ['lista_espera', 'lista_espera_item', 'lista_espera_historico'],
         entrada: z
           .object({ id, situacao: z.enum(['atendido', 'cancelado', 'aguardando']), marcacao: id.nullable() })
           .strict(),
@@ -2092,9 +2138,14 @@ export class PortaAgendaPropria implements PortaAgenda {
             marcacao_horario_id: e.marcacao,
             encerrada_em: fim ? this.agora() : null,
           });
+          // 02-AGE 53: os procedimentos pedidos acompanham o pedido (marcados com a marcação, ou cancelados).
+          const itens = await encerrarItensDoPedido(tx, e.id, e.situacao, e.marcacao);
           const evento =
             e.situacao === 'atendido' ? 'marcacao' : e.situacao === 'cancelado' ? 'cancelamento' : 'recusa';
-          await this.historicoEspera(tx, ctx, e.id, 'alteracao', evento, { marcacao: e.marcacao });
+          await this.historicoEspera(tx, ctx, e.id, 'alteracao', evento, {
+            marcacao: e.marcacao,
+            ...(itens > 0 ? { itens } : {}),
+          });
           return { id: e.id };
         },
         alvo: (e) => ({ tabela: 'lista_espera', id: e.id }),

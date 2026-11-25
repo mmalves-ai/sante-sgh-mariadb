@@ -344,9 +344,15 @@ export class ApoioAgendaController {
       desde: e.desde,
       observacao: e.observacao,
       oferta: e.oferta
-        ? { agenda: e.oferta.agenda, data: e.oferta.data, hora: horaIso(e.oferta.hora) }
+        ? {
+            agenda: e.oferta.agenda,
+            data: e.oferta.data,
+            hora: horaIso(e.oferta.hora),
+            motivo: e.oferta.motivo ?? null,
+          }
         : null,
       posicao: null,
+      historico: [...(e.historico ?? [])],
     }));
     // 02-AGE 48: urgência clínica, grupo de prioridade legal vigente (peso) e antiguidade, pela regra do domínio; a
     // posição conta dentro da fila da vaga (agenda, ou especialidade no pedido sem agenda).

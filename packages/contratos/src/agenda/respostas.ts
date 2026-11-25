@@ -359,8 +359,11 @@ export const esquemaItemEspera = z.object({
   situacao: z.enum(['aguardando', 'ofertado', 'atendido', 'cancelado']),
   desde: txt,
   observacao: nul(txt),
-  oferta: nul(z.object({ agenda: n, data: txt, hora: txt })),
+  /** A vaga ofertada; `motivo` é o registrado quando a oferta passou alguém à frente na mesma fila (02-AGE 48). */
+  oferta: nul(z.object({ agenda: n, data: txt, hora: txt, motivo: nul(txt).default(null) })),
   posicao: nul(n),
+  /** Histórico do pedido (entrada, oferta, marcação, devolução, cancelamento), do mais antigo ao mais novo. */
+  historico: z.array(z.object({ evento: txt, em: txt, autor: nul(txt), motivo: nul(txt) })).default([]),
 });
 export type ItemEspera = z.infer<typeof esquemaItemEspera>;
 export const esquemaListaEspera = z.object({ itens: z.array(esquemaItemEspera), total: n });

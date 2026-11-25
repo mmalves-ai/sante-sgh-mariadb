@@ -1,7 +1,7 @@
 // E2E @C1-121 (02-AGE 48): lista de espera com prioridade legal. (1) espera-prioridade-legal: a inclusão com o grupo
 // legal (gestante) põe o pedido à frente de quem entrou antes sem prioridade, com o grupo na coluna de prioridade.
 // (2) espera-motivo-oferta: a oferta da vaga a quem tem pedido à frente recusa sem motivo, recusa a vaga de outra
-// agenda e aceita com o motivo. Sessão real sobre a fonte sintética de dev e a porta da agenda em MEMÓRIA (agendas
+// agenda, aceita com o motivo e mostra o motivo na linha e no histórico do pedido. Sessão real sobre a fonte sintética de dev e a porta da agenda em MEMÓRIA (agendas
 // e pacientes SINTÉTICOS; nada vai à cópia).
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
@@ -112,6 +112,13 @@ test.describe('Lista de espera com prioridade legal @C1-121 @fase3', () => {
     await page.getByTestId('botao-ofertar-espera').click();
     await expect(page.getByTestId('espera-mensagem')).toContainText('Vaga ofertada');
     await expect(segundo).toContainText('Vaga ofertada');
+    // O motivo exigido fica registrado: aparece na linha do pedido e no histórico (entrada e oferta, com o motivo).
+    await expect(segundo).toContainText('Fora da ordem: Retorno sintético com exame pronto');
+    const historico = page.getByRole('region', { name: 'Histórico do pedido' });
+    await expect(historico.locator('li')).toHaveCount(2);
+    await expect(historico.locator('li').nth(0)).toContainText('Entrada na fila');
+    await expect(historico.locator('li').nth(1)).toContainText('Vaga ofertada');
+    await expect(historico.locator('li').nth(1)).toContainText('Retorno sintético com exame pronto');
     await semViolacaoAxe(page, 'oferta com motivo');
     expect(externas).toEqual([]);
   });
