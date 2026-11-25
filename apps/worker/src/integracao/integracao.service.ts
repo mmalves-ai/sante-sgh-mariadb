@@ -87,6 +87,8 @@ export class IntegracaoService implements OnApplicationBootstrap, OnApplicationS
       destinoApi: (codigo) =>
         process.env[`INTEGRACAO_DESTINO_${codigo.toUpperCase().replace(/-/g, '_')}`]?.trim() || null,
       ler: (h, fn) => acesso.ler(h, fn),
+      // F8 (08-INTG L132): o retorno da prescrição digital gravado no envio, pela operação declarada.
+      gravar: (h, fn, o) => acesso.gravar(h, fn, o),
       agora: () => new Date(),
     });
     const c = { acesso, enviador };

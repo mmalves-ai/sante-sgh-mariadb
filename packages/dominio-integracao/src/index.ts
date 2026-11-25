@@ -27,3 +27,6 @@ export * from './classificacao-externa.js';
 export * from './classificacao-externa-envio.js';
 // F3.9-3: rotinas agendadas com histórico de execução (01-SIS L95).
 export * from './rotinas-agendadas.js';
+// F8 (08-INTG L132): prescrição digital por plataforma externa (envio, retorno validável, cancelamento, simulador).
+export * from './prescricao-digital.js';
+export * from './fila-erp.js';

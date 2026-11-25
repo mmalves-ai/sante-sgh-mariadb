@@ -39,6 +39,7 @@ export const PERMISSOES_M34_CODIGOS = {
   apoioRemessa: 'sadt.apoio.remessa',
   apoioDePara: 'sadt.apoio.configurar',
   prescricaoDigitalLer: 'pep.prescricaoDigital.ler',
+  prescricaoDigitalEnviar: 'pep.prescricaoDigital.enviar',
   datamartLer: 'relatorio.datamart.ler',
   datamartAcionar: 'relatorio.datamart.acionar',
 } as const;
@@ -358,5 +359,16 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     concessaoPorPerfil: null,
     categoria: 'clinica',
     criticidade: 'normal',
+  },
+  // F8 (08-INTG L132): envio da receita assinada à plataforma de prescrição digital e o cancelamento; recurso só do
+  // novo, concedido por perfil.
+  {
+    codigo: C.prescricaoDigitalEnviar,
+    descricao:
+      'Enviar a receita assinada à plataforma de prescrição digital e cancelar o envio (simulador fora de produção)',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
+    categoria: 'clinica',
+    criticidade: 'sensivel',
   },
 ];

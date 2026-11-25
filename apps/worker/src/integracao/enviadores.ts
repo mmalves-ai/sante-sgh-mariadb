@@ -28,7 +28,8 @@ import {
 import { itemMwlDicom } from '@sgh/dominio-sadt';
 import { destinoDaWorklistNoEstabelecimento } from './destino-worklist.js';
 import { conteudoPerfisTriagem } from './perfis-triagem.js';
-import type { Leitor } from '@sgh/nucleo';
+import { ehEventoPrescricaoDigital, entregarPrescricaoDigital } from './prescricao-digital.js';
+import type { Leitor, TxOperacao } from '@sgh/nucleo';
 import { ErroEntrega, type Enviador } from './entrega.js';
 import {
   type EnvioEntrega,
@@ -85,6 +86,12 @@ export interface ConfiguracaoEnviadores {
   readonly destinoApi: (codigo: string) => string | null;
   readonly ler: <T>(hospital: string, fn: (l: Leitor) => Promise<T>) => Promise<T>;
   readonly agora: () => Date;
+  /** F8 (08-INTG L132): a gravação do retorno da prescrição digital no envio (operação do executor). */
+  readonly gravar?: <T>(
+    hospital: string,
+    fn: (tx: TxOperacao) => Promise<T>,
+    opcoes: { readonly operacao: string; readonly tabelas: readonly string[] },
+  ) => Promise<T>;
   /** A porta MLLP do canal no motor (padrão: a do canal versionado; o teste usa a do contêiner descartável). */
   readonly portaDoCanal?: (canal: string) => number;
   /**
@@ -302,6 +309,9 @@ export function criarEnviador(c: ConfiguracaoEnviadores): Enviador {
   return async (p, e, hospital) => {
     // W0-03 (M6): o RIA (aplicação, substituição e cancelamento) ao parceiro FHIR da RNDS.
     if (p.tipo === 'fhir' && eventoRia(e.tipoEvento)) return enviarRia(c, e, hospital);
+    // F8 (08-INTG L132): a receita à plataforma de prescrição digital (simulador fora de produção) e o retorno.
+    if (p.tipo === 'api' && ehEventoPrescricaoDigital(e.tipoEvento))
+      return entregarPrescricaoDigital(c, p, e, hospital);
     if (p.tipo === 'hl7' || p.tipo === 'apoio') {
       const canal = p.canal ? canalOie(p.canal) : undefined;
       if (!canal) throw new ErroEntrega('parceiro sem canal do motor de integração');
