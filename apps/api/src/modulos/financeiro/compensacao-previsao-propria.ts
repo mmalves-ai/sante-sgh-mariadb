@@ -1213,8 +1213,48 @@ export async function provisoesDoEstabelecimento(l: Leitor, est: number) {
   }));
 }
 
-/** Os cadastros que as telas de previsão e provisão oferecem nas listas. */
-export async function apoiosPrevisao(l: Leitor) {
+/**
+ * Os títulos a pagar que podem liquidar a provisão, sem digitar número: vivos, ainda não conciliados e do mesmo credor
+ * (fornecedor e profissional, quando a provisão tem); os de valor mais próximo do saldo primeiro. Provisão já liquidada
+ * ou revertida não tem candidato.
+ */
+export async function titulosParaLiquidar(l: Leitor, est: number, provisao: number) {
+  const [p] = await l.consultar(
+    `SELECT saldo, empresa_fornecedora_id, profissional_id FROM provisao_passivo
+      WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND situacao IN ('provisionada','parcial')`,
+    [provisao, est],
+  );
+  if (!p) return [];
+  const linhas = await l.consultar(
+    `SELECT t.id, t.numero, t.data_emissao AS data, t.valor_liquido FROM titulo_pagar t
+      WHERE t.estabelecimento_id = ? AND t.excluido_em IS NULL AND t.situacao <> 'cancelado'
+        AND (? IS NULL OR t.empresa_fornecedora_id = ?) AND (? IS NULL OR t.profissional_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM conciliacao_previsao_realizado c WHERE c.titulo_pagar_id = t.id AND c.excluido_em IS NULL)
+      ORDER BY ABS(t.valor_liquido - ?), t.id DESC LIMIT 50`,
+    [
+      est,
+      p['empresa_fornecedora_id'],
+      p['empresa_fornecedora_id'],
+      p['profissional_id'],
+      p['profissional_id'],
+      numero(p['saldo']),
+    ],
+  );
+  return linhas.map((r) => ({
+    id: numero(r['id']),
+    lado: 'pagar' as const,
+    numero: String(r['numero']),
+    data: dataIso(r['data']) ?? '',
+    valor: numero(r['valor_liquido']),
+  }));
+}
+
+/**
+ * Os cadastros que as telas de previsão e provisão oferecem nas listas: naturezas, contas do passivo, e o credor ou a
+ * fonte pagadora, o centro de custo, a conta bancária e o profissional (para a previsão ficar presa a quem paga ou
+ * recebe, e o honorário provisionado ao profissional).
+ */
+export async function apoiosPrevisao(l: Leitor, est: number) {
   const naturezas = await l.consultar(
     'SELECT id, codigo, descricao, tipo FROM natureza_financeira WHERE excluido_em IS NULL ORDER BY codigo LIMIT 500',
     [],
@@ -1223,6 +1263,30 @@ export async function apoiosPrevisao(l: Leitor) {
     "SELECT id, classificacao, descricao FROM conta_contabil WHERE ativo = TRUE AND excluido_em IS NULL AND natureza = 'passivo' ORDER BY classificacao LIMIT 500",
     [],
   );
+  const fornecedores = await l.consultar(
+    "SELECT id, razao_social AS nome FROM empresa_fornecedora WHERE excluido_em IS NULL AND situacao = 'ativo' ORDER BY razao_social LIMIT 1000",
+    [],
+  );
+  const fontes = await l.consultar(
+    'SELECT id, nome FROM fonte_pagadora WHERE excluido_em IS NULL ORDER BY nome LIMIT 1000',
+    [],
+  );
+  const centros = await l.consultar(
+    'SELECT id, nome FROM centro_custo WHERE estabelecimento_id = ? AND ativo = TRUE AND analitico = TRUE AND excluido_em IS NULL ORDER BY nome LIMIT 1000',
+    [est],
+  );
+  const bancarias = await l.consultar(
+    'SELECT id, descricao AS nome FROM conta_bancaria WHERE estabelecimento_id = ? ORDER BY descricao LIMIT 200',
+    [est],
+  );
+  const profissionais = await l.consultar(
+    `SELECT pr.id, COALESCE(pr.nome_exibicao, pf.nome) AS nome
+       FROM profissional pr JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+      WHERE pr.excluido_em IS NULL AND pr.situacao = 'ativo' ORDER BY nome LIMIT 2000`,
+    [],
+  );
+  const lista = (rs: readonly Record<string, unknown>[]) =>
+    rs.map((r) => ({ id: numero(r['id']), rotulo: String(r['nome'] ?? '') }));
   return {
     naturezas: naturezas.map((r) => ({
       id: numero(r['id']),
@@ -1233,5 +1297,10 @@ export async function apoiosPrevisao(l: Leitor) {
       id: numero(r['id']),
       rotulo: `${String(r['classificacao'])} ${String(r['descricao'])}`,
     })),
+    fornecedores: lista(fornecedores),
+    fontesPagadoras: lista(fontes),
+    centrosCusto: lista(centros),
+    contasBancarias: lista(bancarias),
+    profissionais: lista(profissionais),
   };
 }

@@ -5,10 +5,18 @@
 // conciliado e a ocorrência já realizada também. A leitura do previsto × realizado traz o número do título a receber e
 // a lista de títulos candidatos só traz os da fonte, vivos e livres.
 // Cancelamento: o motivo fica na ocorrência (cancelamento avulso e encerramento da previsão), e a linha não se apaga.
+// Tela: a previsão de despesa presa ao credor grava o credor, o centro de custo e a conta bancária, e só lista títulos
+// dele; a provisão lista para liquidar só os títulos a pagar livres do mesmo credor (o já conciliado sai da lista), e os
+// apoios trazem as listas de credor, fonte pagadora, centro de custo, conta bancária e profissional.
 import { randomUUID } from 'node:crypto';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { previstoRealizado, titulosParaRealizar } from '../compensacao-previsao-propria.js';
+import {
+  apoiosPrevisao,
+  previstoRealizado,
+  titulosParaLiquidar,
+  titulosParaRealizar,
+} from '../compensacao-previsao-propria.js';
 import { PortaFinanceiroPropria } from '../porta-propria.js';
 import {
   CLIENTE,
@@ -96,6 +104,11 @@ describe.skipIf(SEM_BANCO)(
           [m.est],
         );
         await e.executar('DELETE FROM previsao_financeira WHERE estabelecimento_id = ?', [m.est]);
+        await e.executar(
+          'DELETE a FROM ajuste_provisao_passivo a JOIN provisao_passivo p ON p.id = a.provisao_passivo_id WHERE p.estabelecimento_id = ?',
+          [m.est],
+        );
+        await e.executar('DELETE FROM provisao_passivo WHERE estabelecimento_id = ?', [m.est]);
       });
 
     beforeAll(async () => {
@@ -133,6 +146,14 @@ describe.skipIf(SEM_BANCO)(
         await e.executar(
           'DELETE f FROM fonte_pagadora f WHERE f.codigo = ? AND NOT EXISTS (SELECT 1 FROM titulo_receber t WHERE t.fonte_pagadora_id = f.id)',
           [FONTE2],
+        );
+        await e.executar(
+          "DELETE c FROM conta_contabil c JOIN plano_contas p ON p.id = c.plano_contas_id WHERE p.codigo = 'L0207-PR' AND NOT EXISTS (SELECT 1 FROM provisao_passivo v WHERE v.conta_contabil_id = c.id)",
+          [],
+        );
+        await e.executar(
+          "DELETE p FROM plano_contas p WHERE p.codigo = 'L0207-PR' AND NOT EXISTS (SELECT 1 FROM conta_contabil c WHERE c.plano_contas_id = p.id)",
+          [],
         );
       });
       await m.nucleo.encerrar();
@@ -300,6 +321,131 @@ describe.skipIf(SEM_BANCO)(
         previstoRealizado(l, m.est, '2026-12-01', '2026-12-31'),
       );
       expect(leitura.find((x) => x.id === oc[0])?.motivoCancelamento).toBe('manutenção suspensa em dezembro');
+    });
+
+    it('tela: previsão de despesa presa ao credor e provisão liquidada pelo título da lista do mesmo credor', async () => {
+      // Os apoios trazem as listas que a tela oferece (o credor e a fonte da massa estão nelas).
+      const apoios = await ler<Awaited<ReturnType<typeof apoiosPrevisao>>>((l) => apoiosPrevisao(l, m.est));
+      expect(apoios.fornecedores.some((f) => f.id === m.fornecedor)).toBe(true);
+      expect(apoios.fontesPagadoras.some((f) => f.id === m.convenio)).toBe(true);
+      expect(Array.isArray(apoios.centrosCusto) && Array.isArray(apoios.contasBancarias)).toBe(true);
+      expect(Array.isArray(apoios.profissionais)).toBe(true);
+
+      // A previsão de despesa com o credor, o centro de custo e a conta bancária grava os três.
+      const centro = (
+        await consultar(
+          'SELECT id FROM centro_custo WHERE estabelecimento_id = ? AND ativo = TRUE AND analitico = TRUE AND excluido_em IS NULL ORDER BY id LIMIT 1',
+          [m.est],
+        )
+      )[0]?.['id'];
+      const bancaria = (
+        await consultar('SELECT id FROM conta_bancaria WHERE estabelecimento_id = ? ORDER BY id LIMIT 1', [
+          m.est,
+        ])
+      )[0]?.['id'];
+      const r = resultado(
+        await executar('financeiro.criarPrevisaoFinanceira', {
+          descricao: 'ALUGUEL SINTETICO L0207',
+          tipo: 'despesa',
+          natureza: naturezaDespesa,
+          fornecedor: m.fornecedor,
+          ...(centro ? { centroCusto: Number(centro) } : {}),
+          ...(bancaria ? { contaBancaria: Number(bancaria) } : {}),
+          valor: 700,
+          periodicidade: 'unica',
+          dataInicio: HOJE,
+          ajuste: 'manter',
+        }),
+      );
+      const [pv] = await consultar(
+        'SELECT empresa_fornecedora_id, fonte_pagadora_id, centro_custo_id, conta_bancaria_id FROM previsao_financeira WHERE id = ?',
+        [Number(r['previsao'])],
+      );
+      expect([
+        Number(pv?.['empresa_fornecedora_id']),
+        pv?.['fonte_pagadora_id'],
+        pv?.['centro_custo_id'] === null ? null : Number(pv?.['centro_custo_id']),
+        pv?.['conta_bancaria_id'] === null ? null : Number(pv?.['conta_bancaria_id']),
+      ]).toEqual([m.fornecedor, null, centro ? Number(centro) : null, bancaria ? Number(bancaria) : null]);
+
+      // A provisão de tributo do credor: a lista para liquidar traz os títulos livres dele, o mais próximo do saldo primeiro.
+      const conta = await escrever<number>(async (e) => {
+        const achada = (
+          await e.uma<{ id: number }>(
+            "SELECT id FROM conta_contabil WHERE ativo = TRUE AND excluido_em IS NULL AND natureza = 'passivo' ORDER BY id LIMIT 1",
+            [],
+          )
+        )?.id;
+        if (achada) return Number(achada);
+        const agora = new Date();
+        const plano =
+          (await e.uma<{ id: number }>("SELECT id FROM plano_contas WHERE codigo = 'L0207-PR'", []))?.id ??
+          (await e.inserir(
+            "INSERT INTO plano_contas (codigo, descricao, tipo, mascara, quantidade_niveis, vigencia_inicio, criado_em) VALUES ('L0207-PR', 'PLANO SINTETICO L0207 PR', 'contabil', '9.9.9.999', 4, '2000-01-01', ?)",
+            [agora],
+          ));
+        return Number(
+          await e.inserir(
+            `INSERT INTO conta_contabil (plano_contas_id, classificacao, codigo_reduzido, descricao, nivel, natureza,
+               natureza_saldo, tipo, criado_em) VALUES (?, '2.9.9.208', 'L0208P', 'PASSIVO SINTETICO L0207 PR', 4, 'passivo', 'credora', 'analitica', ?)`,
+            [Number(plano), agora],
+          ),
+        );
+      });
+      const provisao = Number(
+        resultado(
+          await executar('financeiro.provisionarPassivo', {
+            tipo: 'tributo',
+            competencia: `${HOJE.slice(0, 7)}-01`,
+            descricao: 'TRIBUTO SINTETICO L0207 PR',
+            contaContabil: conta,
+            fornecedor: m.fornecedor,
+            valor: 1200,
+          }),
+        )['provisao'],
+      );
+      const tA = Number(
+        resultado(await executar('financeiro.criarTituloPagar', tituloDaMassa(m, 920_868_201, 1_150)))[
+          'tituloPagar'
+        ],
+      );
+      const tB = Number(
+        resultado(await executar('financeiro.criarTituloPagar', tituloDaMassa(m, 920_868_202, 3_000)))[
+          'tituloPagar'
+        ],
+      );
+      const lista = () =>
+        ler<Awaited<ReturnType<typeof titulosParaLiquidar>>>((l) => titulosParaLiquidar(l, m.est, provisao));
+      const antes = await lista();
+      expect(antes.every((c) => c.lado === 'pagar')).toBe(true);
+      expect(antes.map((c) => c.id).indexOf(tA)).toBeLessThan(antes.map((c) => c.id).indexOf(tB));
+      expect(antes.map((c) => c.id)).toContain(tB);
+      // Outro estabelecimento não vê a provisão.
+      expect(
+        await ler<Awaited<ReturnType<typeof titulosParaLiquidar>>>((l) =>
+          titulosParaLiquidar(l, m.outroEst, provisao),
+        ),
+      ).toEqual([]);
+
+      // Liquidar pelo primeiro da lista: o título sai da lista e a provisão fica parcial com o saldo restante.
+      const liq = resultado(
+        await executar('financeiro.liquidarProvisaoPassivo', { provisao, tituloPagar: antes[0]?.id }),
+      );
+      expect(liq).toMatchObject({ situacao: 'parcial', saldo: 50 });
+      const depois = await lista();
+      expect(depois.some((c) => c.id === tA)).toBe(false);
+      expect(depois.map((c) => c.id)).toContain(tB);
+
+      // Reverter o saldo com motivo: a provisão sai da lista de liquidação (nada a liquidar).
+      await executar(
+        'financeiro.reverterProvisaoPassivo',
+        { provisao, valor: 50, motivo: 'tributo recalculado', data: HOJE },
+        m.aprova,
+      );
+      const [pp] = await consultar('SELECT situacao, saldo FROM provisao_passivo WHERE id = ?', [provisao]);
+      expect(Number(pp?.['saldo'])).toBe(0);
+      expect(['provisionada', 'parcial']).not.toContain(pp?.['situacao']);
+      expect(await lista()).toEqual([]);
     });
   },
 );

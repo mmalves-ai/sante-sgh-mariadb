@@ -10,10 +10,12 @@
 //   GET  /api/financeiro/compensacao/previsoes/titulos?ocorrencia=  títulos que podem realizar a ocorrência
 //   POST /api/financeiro/compensacao/previsoes/realizar        { ocorrencia, tituloPagar | tituloReceber }
 //   GET  /api/financeiro/compensacao/provisoes                 provisões do passivo
+//   GET  /api/financeiro/compensacao/provisoes/titulos?provisao=  títulos a pagar que podem liquidar a provisão
 //   POST /api/financeiro/compensacao/provisoes                 a provisão
 //   POST /api/financeiro/compensacao/provisoes/liquidar        { provisao, tituloPagar }
 //   POST /api/financeiro/compensacao/provisoes/reverter        { provisao, valor, motivo, data }
-//   GET  /api/financeiro/compensacao/apoios                    naturezas e contas do passivo para as listas
+//   GET  /api/financeiro/compensacao/apoios                    naturezas, contas do passivo, credores, fontes pagadoras,
+//                                                               centros de custo, contas bancárias e profissionais
 // A gravação vai pelo apoio do contas a pagar (permissão da operação, trilha e idempotência no executor); a leitura,
 // direto no banco do cliente (sem núcleo: 503, falha fechada).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Query, Req } from '@nestjs/common';
@@ -52,6 +54,7 @@ import {
   parcelasDoParceiro,
   previstoRealizado,
   provisoesDoEstabelecimento,
+  titulosParaLiquidar,
   titulosParaRealizar,
 } from './compensacao-previsao-propria.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
@@ -263,6 +266,14 @@ export class CompensacaoPrevisaoController {
     return this.ler(req, (l, est) => provisoesDoEstabelecimento(l, est));
   }
 
+  @Get('provisoes/titulos')
+  @Permissao('financeiro.fluxoCaixa.ler')
+  titulosParaLiquidar(@Query('provisao') provisao: string | undefined, @Req() req: RequisicaoAutorizada) {
+    const n = inteiroOuNulo(provisao);
+    if (!n) throw new ErroProblema('entrada-invalida', 400, 'Provisão inválida', 'Escolha a provisão.');
+    return this.ler(req, (l, est) => titulosParaLiquidar(l, est, n));
+  }
+
   @Post('provisoes')
   @HttpCode(200)
   @Permissao('financeiro.tituloPagar.criar')
@@ -305,6 +316,6 @@ export class CompensacaoPrevisaoController {
   @Get('apoios')
   @Permissao('financeiro.fluxoCaixa.ler')
   apoiosTela(@Req() req: RequisicaoAutorizada) {
-    return this.ler(req, (l) => apoiosPrevisao(l));
+    return this.ler(req, (l, est) => apoiosPrevisao(l, est));
   }
 }

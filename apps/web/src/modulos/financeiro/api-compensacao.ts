@@ -41,9 +41,19 @@ export interface Provisao {
   readonly saldo: number;
   readonly situacao: string;
 }
+export interface ItemApoio {
+  readonly id: number;
+  readonly rotulo: string;
+}
 export interface ApoiosPrevisao {
   readonly naturezas: readonly { readonly id: number; readonly rotulo: string; readonly tipo: string }[];
-  readonly contas: readonly { readonly id: number; readonly rotulo: string }[];
+  /** Contas contábeis do passivo (provisão). */
+  readonly contas: readonly ItemApoio[];
+  readonly fornecedores?: readonly ItemApoio[];
+  readonly fontesPagadoras?: readonly ItemApoio[];
+  readonly centrosCusto?: readonly ItemApoio[];
+  readonly contasBancarias?: readonly ItemApoio[];
+  readonly profissionais?: readonly ItemApoio[];
 }
 export interface NovaPrevisao {
   readonly descricao: string;
@@ -55,6 +65,32 @@ export interface NovaPrevisao {
   readonly dataInicio: string;
   readonly dataFim?: string;
   readonly ajuste: 'antecipar' | 'postergar' | 'manter';
+  /** Despesa: o credor; receita: a fonte pagadora (a realização só aceita título de quem foi escolhido). */
+  readonly fornecedor?: number;
+  readonly fontePagadora?: number;
+  readonly centroCusto?: number;
+  readonly contaBancaria?: number;
+}
+export const TIPOS_PROVISAO = [
+  'honorario_medico',
+  'tributo',
+  'imposto_retido',
+  'ferias',
+  'decimo_terceiro',
+  'contingencia',
+  'outro',
+] as const;
+export interface NovaProvisao {
+  readonly tipo: (typeof TIPOS_PROVISAO)[number];
+  /** Primeiro dia do mês (AAAA-MM-01). */
+  readonly competencia: string;
+  readonly descricao: string;
+  readonly contaContabil: number;
+  readonly valor: number;
+  /** Obrigatório no honorário médico. */
+  readonly profissional?: number;
+  readonly fornecedor?: number;
+  readonly centroCusto?: number;
 }
 
 const confiar = <X>() => z.custom<X>((v) => v !== null && typeof v === 'object');
@@ -64,6 +100,8 @@ export const lerPrevistoRealizado = (f: { de: string; ate: string }): Promise<Oc
   ler(`${P}/previsoes${qs(f)}`, z.array(confiar<OcorrenciaPrevista>()));
 export const lerTitulosParaRealizar = (ocorrencia: number): Promise<TituloCandidato[]> =>
   ler(`${P}/previsoes/titulos${qs({ ocorrencia })}`, z.array(confiar<TituloCandidato>()));
+export const lerTitulosParaLiquidar = (provisao: number): Promise<TituloCandidato[]> =>
+  ler(`${P}/provisoes/titulos${qs({ provisao })}`, z.array(confiar<TituloCandidato>()));
 export const lerProvisoes = (): Promise<Provisao[]> => ler(`${P}/provisoes`, z.array(confiar<Provisao>()));
 export const lerApoiosPrevisao = (): Promise<ApoiosPrevisao> => ler(`${P}/apoios`, confiar<ApoiosPrevisao>());
 
@@ -98,3 +136,22 @@ export const encerrarPrevisao = (
   chave: string,
 ): Promise<ResultadoFinanceiro> =>
   enviar(`${P}/previsoes/encerrar`, { previsao, data, motivo }, resultado, chave);
+
+export const criarProvisao = (p: NovaProvisao, chave: string): Promise<ResultadoFinanceiro> =>
+  enviar(`${P}/provisoes`, p, resultado, chave);
+/** Liquida (parcial ou total) a provisão pelo título a pagar do mesmo credor. */
+export const liquidarProvisao = (
+  provisao: number,
+  tituloPagar: number,
+  chave: string,
+): Promise<ResultadoFinanceiro> =>
+  enviar(`${P}/provisoes/liquidar`, { provisao, tituloPagar }, resultado, chave);
+/** Reverte parte ou todo o saldo, com motivo; o ajuste fica no histórico da provisão. */
+export const reverterProvisao = (
+  provisao: number,
+  valor: number,
+  motivo: string,
+  data: string,
+  chave: string,
+): Promise<ResultadoFinanceiro> =>
+  enviar(`${P}/provisoes/reverter`, { provisao, valor, motivo, data }, resultado, chave);
