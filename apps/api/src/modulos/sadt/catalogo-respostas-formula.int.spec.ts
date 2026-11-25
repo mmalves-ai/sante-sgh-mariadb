@@ -11,6 +11,9 @@
 //     e outra a partir de hoje, a tela e o banco dão o mesmo valor (o da versão da data do exame);
 //   - o calculado já gravado cuja conta deixa de fechar (divisão por zero) recusa a gravação: nada muda no banco, o
 //     número antigo não fica ao lado de entradas que não o produzem; também na retificação do liberado;
+//   - a resposta padronizada do analito qualitativo: a gravação liga o texto (descrição ou atalho) à resposta ativa do
+//     grupo em resultado_analito.resposta_padrao_id, com a marca dela (anormal); texto livre fica sem resposta;
+//   - a faixa congelada na gravação é a vigente na DATA DO EXAME, não a do dia da digitação;
 //   - a trilha de cada gravação.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -102,6 +105,11 @@ describe.skipIf(SEM_BANCO)(
             [mm.exameLab],
           );
           await e.executar(`DELETE FROM formula_calculo WHERE exame_analito_id IN ${eas}`, [mm.exameLab]);
+          await e.executar(
+            `DELETE FROM faixa_referencia_versao WHERE faixa_referencia_id IN (SELECT id FROM faixa_referencia WHERE exame_analito_id IN ${eas})`,
+            [mm.exameLab],
+          );
+          await e.executar(`DELETE FROM faixa_referencia WHERE exame_analito_id IN ${eas}`, [mm.exameLab]);
           await e.executar('DELETE FROM texto_padrao_resultado WHERE exame_id = ?', [mm.exameLab]);
           if (analitos.length)
             await e.executar(
@@ -569,6 +577,142 @@ describe.skipIf(SEM_BANCO)(
       expect(
         (await porta.digitacao(contexto(mm), mm.itemLab2))?.elementos.find((e) => e.codigo === calc)?.calculo,
       ).toMatchObject({ expressao: '(K * fator) / 2', valor: 6, motivo: null });
+    });
+
+    it('resposta padronizada gravada pelo texto e faixa congelada pela data do exame', async () => {
+      const mm = m as MassaSadt;
+      const servico = new ServicoResultadoSadt(nucleo);
+      const cs = () => ({ ...contexto(mm), chaveIdempotencia: `t-crf-${mm.marca}-${++k}` });
+      const hoje = String((await um('SELECT DATE_FORMAT(CURRENT_DATE, "%Y-%m-%d") AS d', []))?.['d']);
+      const sor = Number((await um('SELECT id FROM analito WHERE codigo = ?', [`${mm.marca}SOR`]))?.['id']);
+      const grupo = grupos[0] as number;
+      const respostaDe = async (codigo: string) =>
+        Number(
+          (
+            await um('SELECT id FROM resposta_padrao WHERE grupo_resposta_id = ? AND codigo = ?', [
+              grupo,
+              codigo,
+            ])
+          )?.['id'],
+        );
+      const linhaDe = async (item: number, analito: number) =>
+        um(
+          `SELECT ra.valor_texto, ra.resposta_padrao_id, ra.interpretacao, ra.anormal, ra.faixa_referencia_id,
+                  ra.referencia_maximo, re.anormal AS resultado_anormal
+             FROM resultado_analito ra JOIN resultado_exame re ON re.id = ra.resultado_exame_id
+            WHERE re.exame_item_id = ? AND ra.analito_id = ? AND ra.excluido_em IS NULL`,
+          [item, analito],
+        );
+      const fator = Number(
+        (
+          await um(
+            `SELECT vf.id FROM variavel_formula vf JOIN formula_calculo fc ON fc.id = vf.formula_calculo_id
+              WHERE fc.exame_analito_id = ? AND vf.identificador = 'fator'`,
+            [await vinculoDe(analitos[analitos.length - 1] as number)],
+          )
+        )?.['id'],
+      );
+
+      // 1) Resposta padronizada: o atalho "n" grava a resposta "Não reagente" por extenso, com a ligação ao grupo.
+      await servico.registrar(cs(), mm.itemLab2, {
+        valores: [
+          { analito: mm.analito, numero: 4 },
+          { analito: sor, texto: 'n' },
+        ],
+        variaveis: [{ variavel: fator, valor: 3 }],
+      });
+      expect(await linhaDe(mm.itemLab2, sor)).toMatchObject({
+        valor_texto: 'Não reagente',
+        resposta_padrao_id: await respostaDe('NR'),
+        interpretacao: 'normal',
+        anormal: 0,
+      });
+      // A resposta anormal escolhida na lista (descrição, sem diferença de maiúsculas) marca o analito e o resultado.
+      await servico.registrar(cs(), mm.itemLab2, {
+        valores: [{ analito: sor, texto: 'indeterminado' }],
+        variaveis: [{ variavel: fator, valor: 3 }],
+      });
+      expect(await linhaDe(mm.itemLab2, sor)).toMatchObject({
+        valor_texto: 'Indeterminado',
+        resposta_padrao_id: await respostaDe('IND'),
+        interpretacao: 'anormal',
+        anormal: 1,
+        resultado_anormal: 1,
+      });
+      // A resposta inativada não é mais oferecida nem ligada; texto livre fica sem resposta.
+      await servico.registrar(cs(), mm.itemLab2, {
+        valores: [{ analito: sor, texto: 'Reagente' }],
+        variaveis: [{ variavel: fator, valor: 3 }],
+      });
+      expect(await linhaDe(mm.itemLab2, sor)).toMatchObject({
+        valor_texto: 'Reagente',
+        resposta_padrao_id: null,
+        interpretacao: null,
+        anormal: 0,
+      });
+
+      // 2) Faixa pela data do exame: versão 1 (máximo 5) até seis dias atrás, versão 2 (máximo 3) depois. O exame
+      //    pedido dez dias atrás (itemLab2) congela a versão 1, mesmo digitado hoje (pelo dia de hoje seria a versão 2).
+      const eaK = await vinculoDe(mm.analito);
+      await catalogo.novaFaixa(c(), eaK, {
+        referenciaMinima: 1,
+        referenciaMaxima: 5,
+        vigenciaInicio: hoje,
+      });
+      await nucleo.escrever(COR, (e) =>
+        e.executar("UPDATE faixa_referencia SET vigencia_inicio = '2020-01-01' WHERE exame_analito_id = ?", [
+          eaK,
+        ]),
+      );
+      await catalogo.novaFaixa(c(), eaK, { referenciaMinima: 1, referenciaMaxima: 3, vigenciaInicio: hoje });
+      const faixas = await varias(
+        'SELECT id, referencia_maxima FROM faixa_referencia WHERE exame_analito_id = ? ORDER BY id',
+        [eaK],
+      );
+      expect(faixas).toHaveLength(2);
+      const [v1, v2] = faixas.map((f) => Number(f['id'])) as [number, number];
+      await nucleo.escrever(COR, async (e) => {
+        await e.executar(
+          'UPDATE faixa_referencia SET vigencia_fim = CURRENT_DATE - INTERVAL 6 DAY WHERE id = ?',
+          [v1],
+        );
+        await e.executar(
+          'UPDATE faixa_referencia SET vigencia_inicio = CURRENT_DATE - INTERVAL 5 DAY WHERE id = ?',
+          [v2],
+        );
+      });
+      await servico.registrar(cs(), mm.itemLab2, {
+        valores: [{ analito: mm.analito, numero: 4 }],
+        variaveis: [{ variavel: fator, valor: 3 }],
+      });
+      expect(await linhaDe(mm.itemLab2, mm.analito)).toMatchObject({
+        faixa_referencia_id: v1,
+        interpretacao: 'normal',
+        anormal: 0,
+      });
+      expect(Number((await linhaDe(mm.itemLab2, mm.analito))?.['referencia_maximo'])).toBe(5);
+      // A virada passa para antes da data do exame (v1 até doze dias atrás, v2 a partir de onze): a nova gravação
+      // congela a versão 2.
+      await nucleo.escrever(COR, async (e) => {
+        await e.executar(
+          'UPDATE faixa_referencia SET vigencia_fim = CURRENT_DATE - INTERVAL 12 DAY WHERE id = ?',
+          [v1],
+        );
+        await e.executar(
+          'UPDATE faixa_referencia SET vigencia_inicio = CURRENT_DATE - INTERVAL 11 DAY WHERE id = ?',
+          [v2],
+        );
+      });
+      await servico.registrar(cs(), mm.itemLab2, {
+        valores: [{ analito: mm.analito, numero: 4 }],
+        variaveis: [{ variavel: fator, valor: 3 }],
+      });
+      expect(await linhaDe(mm.itemLab2, mm.analito)).toMatchObject({
+        faixa_referencia_id: v2,
+        interpretacao: 'alto',
+        anormal: 1,
+      });
+      expect(Number((await linhaDe(mm.itemLab2, mm.analito))?.['referencia_maximo'])).toBe(3);
     });
   },
 );

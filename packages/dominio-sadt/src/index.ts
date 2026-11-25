@@ -36,5 +36,6 @@ export * from './mapa/lote.js';
 export * from './escala/index.js';
 export * from './resultado/ciclo.js';
 export * from './resultado/responsavel-setor.js';
+export * from './resultado/resposta-padrao.js';
 export * from './microbiologia/antibiograma.js';
 export * from './equipamento/interface.js';

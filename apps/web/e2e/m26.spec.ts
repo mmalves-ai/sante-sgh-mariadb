@@ -53,6 +53,14 @@ test.describe('SADT, laudos e portal de resultados @M26 @fase2', () => {
     await page.goto('/pep/paciente/1001/exames');
     await page.getByTestId('incluir-exame-502').click();
     await page.getByTestId('enviar-pedido').click();
+    // O servidor da rodada é compartilhado: outro spec pode ter pedido o potássio deste paciente nas últimas 24 horas,
+    // e então o pedido repetido só sai com os avisos conferidos (regra do pedido, que não se afrouxa aqui).
+    const enviado = page.getByTestId('aba-exames-conteudo').getByText('Pedido enviado.');
+    await expect(enviado.or(page.getByTestId('avisos-pedido'))).toBeVisible();
+    if (!(await enviado.isVisible())) {
+      await page.getByTestId('confirmar-avisos').check();
+      await page.getByTestId('enviar-pedido').click();
+    }
     await expect(page.getByTestId('aba-exames-conteudo')).toContainText('Pedido enviado.');
     await sair(page);
 

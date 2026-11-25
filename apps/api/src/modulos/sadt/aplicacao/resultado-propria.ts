@@ -7,6 +7,7 @@
 // Executor, com a trilha na mesma transação.
 import { type CalculadoSemConta, calcularNoResultado, lerDiaDoExame } from './formulas-leitura.js';
 import {
+  avaliarResposta,
   avaliarValor,
   conferirDigitacao,
   conferirLiberacao,
@@ -16,6 +17,8 @@ import {
   liberacaoPrivativaDeMedico,
   MENSAGEM_RESPONSAVEL_SETOR,
   MENSAGEM_RESULTADO,
+  type RespostaDoAnalito,
+  respostaDoTexto,
   type ValorDigitado,
 } from '@sgh/dominio-sadt';
 import { ehMedico, ehResponsavelLaboratorio } from '@sgh/contratos';
@@ -97,12 +100,15 @@ export class ServicoResultadoSadt {
   async registrar(c: ContextoSadt, exame: number, entrada: unknown): Promise<ResultadoGravado> {
     const e = esquemaRegistrarResultadoBanco.parse(entrada);
     return this.gravar(c, 'sadt.resultado.registrar', exame, null, async (tx, ctx) => {
-      const faixas = await this.faixas(tx, ctx.exameId, ctx.paciente, ctx.agora);
+      // A faixa, a fórmula e a idade são as da DATA DO EXAME (coleta, senão solicitação), como na leitura da digitação:
+      // o exame colhido ontem e digitado hoje leva a faixa vigente ontem, nunca a de hoje.
+      const dia = await lerDiaDoExame(tx, exame);
+      const faixas = await this.faixas(tx, ctx.exameId, ctx.paciente, dia);
       // O analito calculado sai da fórmula vigente (05-SADT linha 3); o valor digitado nele é ignorado.
       const calculo = await calcularNoResultado(tx, {
         exameId: ctx.exameId,
         paciente: ctx.paciente,
-        dia: await lerDiaDoExame(tx, exame),
+        dia,
         resultado: ctx.resultado ? n(ctx.resultado['id']) : null,
         valores: e.valores,
         variaveis: e.variaveis ?? [],
@@ -139,7 +145,8 @@ export class ServicoResultadoSadt {
         });
       }
       await calculo.gravarVariaveis(id);
-      const marcas = await this.gravarValores(tx, id, calculo.valores, faixas, ctx.analitos, null);
+      const respostas = await this.respostas(tx, ctx.exameId);
+      const marcas = await this.gravarValores(tx, id, calculo.valores, faixas, respostas, ctx.analitos, null);
       await tx.alterar('resultado_exame', id, await this.versaoDe(tx, id), marcas);
       // O valor crítico avisa já na digitação (e a correção que tira o crítico cancela o aviso ainda pendente).
       await avisarCriticosDoResultado(tx, {
@@ -209,8 +216,8 @@ export class ServicoResultadoSadt {
       const id = r ? n(r['id']) : 0;
       const antes = r
         ? await tx.consultar(
-            `SELECT id, versao, analito_id, sequencia, valor_numerico, valor_texto, faixa_referencia_id, referencia_minimo,
-                    referencia_maximo, referencia_texto, critico_minimo, critico_maximo, interpretacao, anormal, critico
+            `SELECT id, versao, analito_id, sequencia, valor_numerico, valor_texto, resposta_padrao_id, faixa_referencia_id,
+                    referencia_minimo, referencia_maximo, referencia_texto, critico_minimo, critico_maximo, interpretacao, anormal, critico
                FROM resultado_analito WHERE resultado_exame_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
             [id],
           )
@@ -228,12 +235,14 @@ export class ServicoResultadoSadt {
       });
       if (falha) throw recusa(falha, MENSAGEM_RESULTADO[falha]);
       await this.conferirResponsavel(tx, ctx.setor, ctx.exameId, prof);
-      const faixas = await this.faixas(tx, ctx.exameId, ctx.paciente, ctx.agora);
+      // A faixa da retificação é a da data do exame, a mesma da digitação original (não a do dia da correção).
+      const dia = await lerDiaDoExame(tx, exame);
+      const faixas = await this.faixas(tx, ctx.exameId, ctx.paciente, dia);
       // O calculado é refeito pela fórmula vigente com os valores corrigidos e as variáveis já gravadas.
       const calculo = await calcularNoResultado(tx, {
         exameId: ctx.exameId,
         paciente: ctx.paciente,
-        dia: await lerDiaDoExame(tx, exame),
+        dia,
         resultado: id || null,
         valores: e.valores,
         variaveis: [],
@@ -262,6 +271,7 @@ export class ServicoResultadoSadt {
             analito: n(a['analito_id']),
             numero: num(a['valor_numerico']),
             texto: a['valor_texto'] ?? null,
+            resposta: num(a['resposta_padrao_id']),
             faixa: num(a['faixa_referencia_id']),
             referenciaMinimo: num(a['referencia_minimo']),
             referenciaMaximo: num(a['referencia_maximo']),
@@ -273,7 +283,16 @@ export class ServicoResultadoSadt {
         ocorrido_em: ctx.agora,
         usuario_id: tx.contexto.usuario,
       });
-      const marcas = await this.gravarValores(tx, id, calculo.valores, faixas, ctx.analitos, e.motivo);
+      const respostas = await this.respostas(tx, ctx.exameId);
+      const marcas = await this.gravarValores(
+        tx,
+        id,
+        calculo.valores,
+        faixas,
+        respostas,
+        ctx.analitos,
+        e.motivo,
+      );
       await tx.alterar('resultado_exame', id, n(r!['versao']), {
         ...marcas,
         situacao: 'retificado',
@@ -303,8 +322,11 @@ export class ServicoResultadoSadt {
     });
   }
 
-  /** A faixa vigente de cada analito do exame para o paciente (sexo e idade), a mais específica primeiro. */
-  private async faixas(tx: Tx, exameId: number, paciente: number, agora: Date) {
+  /**
+   * A faixa vigente de cada analito do exame para o paciente (sexo e idade), a mais específica primeiro, na data do
+   * exame (AAAA-MM-DD, de `lerDiaDoExame`): vigência e idade contadas nesse dia, como na leitura da digitação.
+   */
+  private async faixas(tx: Tx, exameId: number, paciente: number, dia: string) {
     const linhas = await tx.consultar(
       `SELECT ea.analito_id, f.id, f.referencia_minima, f.referencia_maxima, f.critico_minimo, f.critico_maximo,
               f.absurdo_minimo, f.absurdo_maximo, f.referencia_texto
@@ -319,7 +341,7 @@ export class ServicoResultadoSadt {
                (f.idade_minima_dias IS NULL OR DATEDIFF(?, pf.data_nascimento) >= f.idade_minima_dias)
            AND (f.idade_maxima_dias IS NULL OR DATEDIFF(?, pf.data_nascimento) <= f.idade_maxima_dias)))
         ORDER BY ea.analito_id, (f.sexo_id IS NULL), (f.idade_minima_dias IS NULL AND f.idade_maxima_dias IS NULL), f.id`,
-      [agora, agora, paciente, exameId, agora, agora],
+      [dia, dia, paciente, exameId, dia, dia],
     );
     const m = new Map<number, FaixaDoAnalito>();
     for (const l of linhas) {
@@ -353,12 +375,43 @@ export class ServicoResultadoSadt {
       );
   }
 
-  /** Grava (ou corrige) o valor de cada analito com a faixa congelada; devolve as marcas do resultado. */
+  /** As respostas ativas do grupo de cada analito qualitativo do exame, na ordem do grupo. */
+  private async respostas(tx: Tx, exameId: number): Promise<Map<number, RespostaDoAnalito[]>> {
+    const m = new Map<number, RespostaDoAnalito[]>();
+    for (const l of await tx.consultar(
+      `SELECT ea.analito_id, rp.id, rp.codigo, rp.descricao, rp.mnemonico, rp.anormal, rp.critico
+         FROM exame_analito ea
+         JOIN resposta_padrao rp ON rp.grupo_resposta_id = ea.grupo_resposta_id AND rp.ativo = TRUE AND rp.excluido_em IS NULL
+        WHERE ea.exame_id = ? AND ea.excluido_em IS NULL
+        ORDER BY ea.analito_id, rp.sequencia`,
+      [exameId],
+    )) {
+      const a = n(l['analito_id']);
+      m.set(a, [
+        ...(m.get(a) ?? []),
+        {
+          id: n(l['id']),
+          codigo: String(l['codigo']),
+          descricao: String(l['descricao']),
+          mnemonico: (l['mnemonico'] as string | null) ?? null,
+          anormal: n(l['anormal']) === 1,
+          critico: n(l['critico']) === 1,
+        },
+      ]);
+    }
+    return m;
+  }
+
+  /**
+   * Grava (ou corrige) o valor de cada analito com a faixa congelada e a resposta padronizada que o texto nomeia
+   * (resposta_padrao_id; o atalho vira a descrição); devolve as marcas do resultado.
+   */
   private async gravarValores(
     tx: Tx,
     resultado: number,
     valores: readonly ValorDigitado[],
     faixas: ReadonlyMap<number, FaixaDoAnalito>,
+    respostas: ReadonlyMap<number, readonly RespostaDoAnalito[]>,
     ordem: readonly number[],
     justificativa: string | null,
   ): Promise<{ anormal: boolean; critico: boolean }> {
@@ -367,20 +420,25 @@ export class ServicoResultadoSadt {
     for (const v of valores) {
       const f = faixas.get(v.analito) ?? null;
       const av = avaliarValor(v.numero, f);
-      anormal ||= av.anormal;
-      critico ||= av.critico;
+      const resposta = respostaDoTexto(v.texto, respostas.get(v.analito) ?? []);
+      const ar = avaliarResposta(resposta);
+      const anormalDoValor = av.anormal || ar.anormal;
+      const criticoDoValor = av.critico || ar.critico;
+      anormal ||= anormalDoValor;
+      critico ||= criticoDoValor;
       const campos = {
         valor_numerico: v.numero,
-        valor_texto: v.texto,
+        valor_texto: resposta ? resposta.descricao : v.texto,
+        resposta_padrao_id: resposta?.id ?? null,
         faixa_referencia_id: f?.faixa ?? null,
         referencia_minimo: f?.minimo ?? null,
         referencia_maximo: f?.maximo ?? null,
         referencia_texto: f?.texto ?? null,
         critico_minimo: f?.criticoMinimo ?? null,
         critico_maximo: f?.criticoMaximo ?? null,
-        interpretacao: av.interpretacao,
-        anormal: av.anormal,
-        critico: av.critico,
+        interpretacao: av.interpretacao ?? ar.interpretacao,
+        anormal: anormalDoValor,
+        critico: criticoDoValor,
       };
       const [ja] = await tx.consultarParaAtualizar(
         'SELECT id, versao FROM resultado_analito WHERE resultado_exame_id = ? AND analito_id = ? AND excluido_em IS NULL',
