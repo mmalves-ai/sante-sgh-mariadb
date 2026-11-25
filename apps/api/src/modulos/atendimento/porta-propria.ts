@@ -89,6 +89,7 @@ import {
 } from '../faturamento/conta-entrada.js';
 import { lancarItem } from '../faturamento/operacoes.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
+import { conferirRegraDoPlanoNaAbertura } from './regra-plano-propria.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
 import { gravarImpressoEmitido, lerFichasDoAtendimento } from './regras-impressao.js';
 import { lerLocaisComUso } from './uso-locais-propria.js';
@@ -1736,6 +1737,21 @@ const OPERACAO_ABRIR = definirOperacao({
       data: hoje,
       campo: 'profissional',
     });
+    // 02-CAD linha 24: a regra própria do plano (carteira, validade, guia, senha, teto e pendência). O bloqueio recusa
+    // a abertura; os alertas, os documentos pedidos e a orientação voltam para a recepção.
+    const regraPlano = await conferirRegraDoPlanoNaAbertura(tx, {
+      fontePagadoraId: Number(conv['id']),
+      planoId: plano ?? null,
+      categoriaId: Number(cat['id']),
+      estabelecimentoId: est,
+      pacienteId: Number(pac['id']),
+      data: hoje,
+      carteira: texto(e['matricula']) ?? null,
+      validadeCarteira: texto(e['validadeCarteira']) ?? null,
+      guia: texto(e['guia']) ?? null,
+      senhaAutorizacao: texto(e['senhaConvenio']) ?? null,
+      validadeSenha: texto(e['validadeSenha']) ?? null,
+    });
     const numero = await tx.proximoNumero('atendimento');
     const agora = new Date();
     const id = await tx.incluir('atendimento', {
@@ -1844,6 +1860,22 @@ const OPERACAO_ABRIR = definirOperacao({
         ? {
             alertaRepresentacao: representacao.join(','),
             alertaRepresentacaoMotivo: representacao.map((a) => MENSAGEM_ALERTA_REPRESENTACAO[a]).join(' '),
+          }
+        : {}),
+      ...(regraPlano.alertas.length > 0
+        ? {
+            alertaPlano: regraPlano.alertas.map((x) => x.codigo).join(','),
+            alertaPlanoMotivo: regraPlano.alertas.map((x) => x.mensagem).join(' '),
+          }
+        : {}),
+      ...(regraPlano.documentos.length > 0 || regraPlano.orientacao
+        ? {
+            orientacaoPlano: [
+              ...(regraPlano.documentos.length > 0
+                ? [`Documentos: ${regraPlano.documentos.join(', ')}.`]
+                : []),
+              ...(regraPlano.orientacao ? [regraPlano.orientacao] : []),
+            ].join(' '),
           }
         : {}),
       reg: id,
