@@ -110,6 +110,7 @@
     "src/modulos/recepcao/tela-senha.ts",
     "src/modulos/atendimento/atendimento.controller.ts",
     "src/modulos/atendimento/atendimento.spec.ts",
+    "src/modulos/atendimento/padrao-memoria.spec.ts",
     "src/modulos/atendimento/avisos.ts",
     "src/modulos/atendimento/escore-pa.ts",
     "src/modulos/atendimento/modulo.ts",

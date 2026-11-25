@@ -37,7 +37,8 @@ function item(campo: CampoPadraoAbertura, id: number, l: ListasPadrao): ItemPadr
   return x ? { id, rotulo: x.nome, vale: x.ativo !== false } : null;
 }
 
-const chave = (usuario: unknown): string => `u:${String(usuario)}`;
+// A sessão sintética não tem id numérico de usuário: em memória, o escopo pessoal dela é um só ("sessao").
+const chave = (usuario: unknown): string => `u:${String(usuario ?? 'sessao')}`;
 
 export function lerPadraoMemoria(
   s: EstadoPadraoAbertura,
@@ -54,12 +55,11 @@ export function lerPadraoMemoria(
     }
     return r;
   };
-  const temUsuario = usuario !== null && usuario !== undefined;
   return {
     estabelecimento: escopo('est'),
-    pessoal: temUsuario ? escopo(chave(usuario)) : null,
+    pessoal: escopo(chave(usuario)),
     versaoEstabelecimento: s.linhas.get('est')?.versao ?? 0,
-    versaoPessoal: temUsuario ? (s.linhas.get(chave(usuario))?.versao ?? 0) : 0,
+    versaoPessoal: s.linhas.get(chave(usuario))?.versao ?? 0,
   };
 }
 
@@ -70,8 +70,6 @@ export function definirPadraoMemoria(
   e: DefinirPadraoAberturaEntrada,
   l: ListasPadrao,
 ) {
-  if (pessoal && (usuario === null || usuario === undefined))
-    throw recusa('usuario-obrigatorio', 'Os valores habituais pessoais exigem o usuário da sessão.');
   const k = pessoal ? chave(usuario) : 'est';
   const linha = s.linhas.get(k);
   if ((linha?.versao ?? 0) !== e.versao)

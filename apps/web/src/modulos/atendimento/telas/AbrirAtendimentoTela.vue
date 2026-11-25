@@ -161,6 +161,8 @@ const coberturas = useQuery({
   refetchOnWindowFocus: 'always',
 });
 const herdou = ref<string[]>([]);
+// Os campos que os valores habituais (do usuário ou do estabelecimento) preencheram.
+const habitual = ref<string[]>([]);
 const daCarteira = ref<number | null>(null);
 // A marca da última resposta do cadastro já proposta, e o que a carteira pôs na tela (para não repor o mesmo).
 const respostaVista = ref<string | null>(null);
@@ -211,7 +213,8 @@ watch(
     const primeira = respostaVista.value !== marca;
     if (conv === '' && !primeira) return limparCarteira();
     respostaVista.value = marca;
-    const herdado = primeira && herdou.value.includes('convenio');
+    // O convênio habitual de quem atende também cede à carteira do paciente.
+    const herdado = primeira && (herdou.value.includes('convenio') || habitual.value.includes('convenio'));
     let p = preenchimentoDaCobertura(c, herdado ? '' : conv, conveniosAceitos.value, herdado ? conv : '');
     // O convênio que estava na tela veio de uma carteira que deixou de servir: vale a proposta nova.
     if (!p && primeira && daCarteira.value !== null) {
@@ -229,6 +232,7 @@ watch(
     plano.value = p.plano;
     validadeCarteira.value = p.validadeCarteira;
     herdou.value = herdou.value.filter((x) => !CAMPOS_DA_CARTEIRA.includes(x));
+    habitual.value = habitual.value.filter((x) => x !== 'convenio');
   },
 );
 
@@ -262,6 +266,37 @@ watch(
       usados.push(campo);
     }
     herdou.value = usados;
+  },
+);
+
+// Os valores habituais: o servidor manda só o que a herança não preencheu (o paciente sem atendimento anterior
+// recebe todos); a tela só completa o campo vazio, nunca troca o que veio do paciente, do agendamento ou da pessoa.
+const avisosPadrao = computed(() => historico.data.value?.padrao?.avisos ?? []);
+const ROTULOS_HABITUAIS: Record<string, string> = {
+  convenio: t('atendimento.convenio'),
+  especialidade: t('atendimento.especialidade'),
+  unidade: t('atendimento.unidade'),
+  centroCusto: t('atendimento.centroCusto'),
+};
+watch(
+  () => historico.data.value,
+  (h) => {
+    habitual.value = [];
+    const v = h?.padrao?.valores;
+    if (!v) return;
+    const alvos: Record<string, { value: string }> = { convenio, especialidade, unidade, centroCusto };
+    const usados: string[] = [];
+    for (const [campo, x] of Object.entries(v)) {
+      const alvo = alvos[campo];
+      if (!alvo || alvo.value !== '') continue;
+      // Com a carteira do cadastro na tela, o convênio é o dela.
+      if (campo === 'convenio' && daCarteira.value !== null) continue;
+      // Requisição de laboratório não tem especialidade.
+      if (campo === 'especialidade' && lab.value) continue;
+      alvo.value = String(x);
+      usados.push(campo);
+    }
+    habitual.value = usados;
   },
 );
 
@@ -517,6 +552,23 @@ async function abrir(): Promise<void> {
             t('atendimento.abrir.herdado', { data: dataBr(historico.data.value?.anterior?.data ?? '') })
           "
           data-testid="abrir-atd-herdado"
+        />
+        <SanteAlerta
+          v-if="habitual.length"
+          variante="info"
+          :texto="
+            t('atendimento.abrir.habitual', {
+              campos: habitual.map((c) => ROTULOS_HABITUAIS[c] ?? c).join(', '),
+            })
+          "
+          data-testid="abrir-atd-habitual"
+        />
+        <SanteAlerta
+          v-for="(aviso, i) in avisosPadrao"
+          :key="`padrao-aviso-${i}`"
+          variante="alerta"
+          :texto="aviso"
+          data-testid="abrir-atd-padrao-aviso"
         />
         <SanteAlerta
           v-if="daCarteira !== null"

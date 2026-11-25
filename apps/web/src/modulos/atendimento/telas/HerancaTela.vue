@@ -10,6 +10,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { alterarHeranca, lerConfiguracaoHeranca, novaChave } from '../api-atendimento.js';
 import ErroAtendimento from '../componentes/ErroAtendimento.vue';
+import PadraoAberturaPainel from '../componentes/PadraoAberturaPainel.vue';
 import { usarAtendimento } from '../usar-atendimento.js';
 
 type Pessoal = 'segue' | 'sim' | 'nao';
@@ -138,6 +139,7 @@ async function gravar(paraMim: boolean): Promise<void> {
       <p v-if="mensagem" role="status">{{ mensagem }}</p>
       <ErroAtendimento v-if="erro" :erro="erro" />
     </form>
+    <PadraoAberturaPainel />
   </section>
 </template>
 

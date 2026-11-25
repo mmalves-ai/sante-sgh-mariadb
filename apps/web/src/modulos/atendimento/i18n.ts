@@ -112,6 +112,7 @@ export const mensagensAtendimento = {
     buscarPaciente: 'Buscar paciente',
     escolherPaciente: 'Escolher {nome} (prontuário {pront})',
     herdado: 'Campos preenchidos do atendimento de {data}: confira antes de gravar.',
+    habitual: 'Preenchido pelos valores habituais ({campos}): confira antes de gravar.',
     daCarteira:
       'Convênio, plano, carteirinha e validade preenchidos da carteira do cadastro do paciente: confira antes de gravar.',
     semCarteiraUtil: 'O paciente não tem carteira em vigor no cadastro.',
@@ -357,6 +358,17 @@ export const mensagensAtendimento = {
     naoHerda: 'Não herda',
     gravarEstabelecimento: 'Gravar para o estabelecimento',
     gravarPessoal: 'Gravar só para mim',
+  },
+  padraoAbertura: {
+    titulo: 'Valores habituais da abertura',
+    texto:
+      'O que a ficha traz preenchido quando o paciente não tem atendimento anterior, ou no campo que a herança não trouxe. O seu valor vence o do estabelecimento. O que vem do paciente (atendimento anterior, carteirinha do cadastro, agendamento) nunca é trocado pelo valor habitual.',
+    emVigor: 'A ficha vai receber',
+    semValor: 'Sem valor habitual',
+    vigorPessoal: '{nome} (meu)',
+    vigorEstabelecimento: '{nome} (do estabelecimento)',
+    foraDeUso: '{nome} (fora de uso)',
+    avisoForaDeUso: '{campo} habitual ({nome}) não está mais em uso: escolha outro valor.',
   },
   recusas: {
     'paciente-inativo': 'O cadastro do paciente está inativo.',
