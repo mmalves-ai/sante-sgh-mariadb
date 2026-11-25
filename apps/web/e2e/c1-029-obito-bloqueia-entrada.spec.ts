@@ -1,14 +1,17 @@
 // C1-029 (02-CAD linha 13) @C1-029: o óbito registrado no cadastro fecha a porta de entrada do paciente.
-//  1. O médico emite a declaração de óbito (com número) na aba de alta do prontuário; a emissão marca o cadastro
-//     (falecido, declaração e data) na mesma transação.
+//  1. O médico emite a declaração de óbito (com número) na aba de alta do prontuário e a aba passa a mostrar o óbito
+//     registrado; a gravação e a releitura da aba são respostas simuladas pelo Playwright.
 //  2. A recepção tenta abrir atendimento para o paciente: o servidor recusa com `paciente-falecido` e a tela mostra o
 //     motivo com a data, sem gravar e sem mensagem geral com código de correlação.
-// A recusa de verdade (o que fica no banco) está nos contratos de efeito
-// apps/api/src/modulos/pep/documentos-propria-pareceres.int.spec.ts (marca e desfaz no cadastro),
-// apps/api/src/modulos/atendimento/abertura-modulo-origem.int.spec.ts (abertura),
-// apps/api/src/modulos/agenda/porta-propria.int.spec.ts (marcação e encaixe) e
-// apps/api/src/modulos/adt/internacao-falecido.int.spec.ts (admissão e pré-internação). Aqui a recusa da gravação é a
-// resposta do servidor simulada pelo Playwright (massa SINTÉTICA), como no vizinho f31-regra-campo-abertura.
+// Nada é gravado na base do E2E: o paciente sintético 1001 é usado por dezenas de specs vizinhas, e uma declaração
+// emitida de verdade o deixaria falecido para todas elas (e repetiria o número na execução seguinte). A ligação real
+// entre a emissão e a recusa (o que fica no banco) está nos contratos de efeito
+// apps/api/src/modulos/pep/documentos-propria-pareceres.int.spec.ts (marca, ficha do cadastro com data, número e
+// causa, e desfaz no cancelamento), apps/api/src/modulos/atendimento/abertura-modulo-origem.int.spec.ts (abertura),
+// apps/api/src/modulos/agenda/porta-propria.int.spec.ts (marcação e encaixe),
+// apps/api/src/modulos/exames/porta-propria.int.spec.ts (marcação de exame) e
+// apps/api/src/modulos/adt/internacao-falecido.int.spec.ts (admissão e pré-internação). Massa SINTÉTICA, como no
+// vizinho f31-regra-campo-abertura.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -36,10 +39,25 @@ test.describe('@C1-029 óbito no cadastro barra novo atendimento', () => {
   test('o médico emite a declaração de óbito; a recepção não abre atendimento para o paciente; axe', async ({
     browser,
   }) => {
-    // 1. Emissão pela aba de alta do prontuário.
+    // 1. Emissão pela aba de alta do prontuário (gravação e releitura simuladas: nada fica na base do E2E).
     const ctxMed = await browser.newContext();
     const med = await ctxMed.newPage();
     await entrar(med, 'SINT.MEDICO');
+    let emissoes = 0;
+    await med.route(`**/api/pep/paciente/${PACIENTE}/alta/obito`, (rota) => {
+      if (rota.request().method() !== 'POST') return rota.fallback();
+      emissoes += 1;
+      return json(rota, { id: 9_029_001, documento: 9_029_002 });
+    });
+    await med.route(new RegExp(`/api/pep/paciente/${PACIENTE}/alta(\\?.*)?$`), async (rota) => {
+      if (rota.request().method() !== 'GET' || emissoes === 0) return rota.fallback();
+      const real = await rota.fetch();
+      const corpo = (await real.json()) as Record<string, unknown>;
+      return json(rota, {
+        ...corpo,
+        obito: { id: 9_029_001, em: '2026-11-20T13:00:00.000Z', numero: '90002901', documento: 9_029_002 },
+      });
+    });
     await med.goto(`/pep/paciente/${PACIENTE}/alergias`);
     await med.getByTestId('aba-alta').click();
     const form = med.getByTestId('form-obito');
@@ -50,6 +68,7 @@ test.describe('@C1-029 óbito no cadastro barra novo atendimento', () => {
     await form.locator('input[type=password]').fill(SENHA);
     await form.getByRole('button').click();
     await expect(med.getByTestId('aba-alta-conteudo')).toContainText('Óbito registrado em');
+    expect(emissoes).toBe(1);
     await ctxMed.close();
 
     // 2. A recepção tenta abrir o atendimento: o servidor recusa com o motivo do óbito.
