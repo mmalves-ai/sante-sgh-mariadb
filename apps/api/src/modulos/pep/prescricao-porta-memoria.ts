@@ -1096,8 +1096,34 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
       })),
       hash: '',
     };
+    // C2-013: a ficha de antimicrobiano de cada item vai junto da prescrição (pela chave), como na porta própria.
+    const fichas = e.sgh.fichas.map((fi) => {
+      const k = e.itens.findIndex((it) => it.chave === fi.chave);
+      if (k < 0)
+        throw new ErroOperacao(
+          422,
+          'ficha-sem-item',
+          'Operação recusada',
+          'A ficha justifica um item desta prescrição: a chave não existe.',
+        );
+      return { fi, item: itens[k]!.id };
+    });
     this.selar(p, 'prescrito', null, loginDaOperacao(ctx), e.sgh.comoSuporte);
     l.push(p);
+    for (const { fi, item } of fichas)
+      this.lista(this.fichasSgh, c.hospital).push({
+        id: this.proximo++,
+        paciente: e.paciente,
+        item,
+        produto: fi.produto,
+        produtoNome: PRODUTOS.find((x) => x.produto === fi.produto)?.nome ?? null,
+        indicacao: fi.indicacao,
+        sitio: fi.sitio,
+        tipo: fi.tipo,
+        culturaColhida: fi.culturaColhida,
+        diaTratamento: fi.diaTratamento,
+        em: agora,
+      });
     await this.auditar(c, ctx, 'pep.prescricao.assinada', id, e.paciente);
     return { prescricao: id, horarios: itens.reduce((s, i) => s + i.horarios.length, 0) };
   }

@@ -7,6 +7,10 @@
 // a fonte sintética: as respostas são simuladas pelo Playwright com massa SINTÉTICA. O efeito no banco está nos
 // contratos apps/api/src/modulos/qualidade/auditoria-antimicrobiano.int.spec.ts (auditoria e parecer na ficha) e
 // apps/api/src/modulos/pep/prescricao-propria-gravacao.int.spec.ts (a ficha gravada junto da prescrição).
+// O segundo teste faz o caminho inteiro pela tela: o médico prescreve o antimicrobiano com a ficha preenchida no
+// editor, a gravação sai com a ficha no item e volta 201 (nada da recusa 501 antiga), a farmácia clínica vê a ficha
+// ligada à prescrição (porta da prescrição em memória, fonte sintética) e a CCIH a encontra pendente na fila da
+// auditoria (a fila é simulada com a ficha que a prescrição acabou de enviar).
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -175,5 +179,94 @@ test.describe('Auditoria da ficha de antimicrobiano @C2-013 @fase7', () => {
     await grupo.getByTestId(`auditoria-ver-historico-${PACIENTE}`).click();
     await expect(page.getByTestId('auditoria-61')).toContainText('Suspenso');
     await semViolacaoAxe(page, '/qualidade/ccih/auditoria-antimicrobiano (histórico do paciente)');
+  });
+
+  test('prescrição → ficha → fila: a ficha vai junto do item ao prescrever (201) e cai pendente na auditoria', async ({
+    page,
+  }) => {
+    const PACIENTE_PRESC = 1003;
+    const INDICACAO = 'Pneumonia sintética comunitária';
+    const SITIO = 'Pulmão';
+    await entrar(page, 'SINT.MEDICO');
+    await page.goto(`/pep/paciente/${PACIENTE_PRESC}/prescricao/nova?periodo=seguinte`);
+    await expect(page.getByTestId('tela-prescricao-editor')).toBeVisible();
+    await page.getByTestId('aba-medicamentos').click();
+    const editor = page.getByTestId('editor-medicamentos');
+    await editor.getByTestId('busca-produto').fill('ceftriaxona');
+    await editor.getByTestId('buscar-produto').click();
+    await editor.getByTestId('produto-502').click();
+    await editor.getByTestId('dose').fill('1');
+    await escolher(editor.getByTestId('unidade'), 'G');
+    await escolher(editor.getByTestId('via'), 'EV');
+    await escolher(editor.getByTestId('frequencia'), { rotulo: '12/12' });
+    // Sem a indicação e o sítio o item não entra: o que falta aparece na hora.
+    await editor.getByTestId('incluir-item').click();
+    await expect(page.getByTestId('item-incompleto')).toBeVisible();
+    const fichaTela = editor.getByTestId('ficha-antimicrobiano');
+    await fichaTela.getByTestId('ficha-indicacao').fill(INDICACAO);
+    await fichaTela.getByTestId('ficha-sitio').fill(SITIO);
+    await fichaTela.getByRole('checkbox').check();
+    await editor.getByTestId('incluir-item').click();
+    await expect(page.getByTestId('itens-prescricao').locator('tbody tr')).toHaveCount(1);
+    await page.getByTestId('verificar-prescricao').click();
+    await expect(page.getByTestId('painel-alertas')).toBeVisible();
+
+    const ehGravacao = (u: string, metodo: string) =>
+      metodo === 'POST' && new URL(u).pathname === `/api/pep/prescricao/${PACIENTE_PRESC}/prescrever`;
+    const pedido = page.waitForRequest((r) => ehGravacao(r.url(), r.method()));
+    const resposta = page.waitForResponse((r) => ehGravacao(r.url(), r.request().method()));
+    await page.getByTestId('assinar-prescricao').click();
+    const corpo = (await pedido).postDataJSON() as { itens: Record<string, unknown>[] };
+    expect(corpo.itens).toHaveLength(1);
+    expect(corpo.itens[0]).toMatchObject({
+      detalhe: { tipo: 'medicamento', item: { produto: 502 } },
+      antimicrobiano: { indicacao: INDICACAO, sitio: SITIO, culturaColhida: true, diaTratamento: 1 },
+    });
+    expect((await resposta).status()).toBe(201);
+    await expect(page).toHaveURL(new RegExp(`/pep/paciente/${PACIENTE_PRESC}/prescricao/\\d+\\?assinada=`));
+    await semViolacaoAxe(page, 'prescrição assinada com a ficha de antimicrobiano');
+
+    // A farmácia clínica vê a ficha gravada com a prescrição (origem: o novo), ligada ao paciente.
+    await entrar(page, 'SINT.FARMACIA');
+    await page.goto('/farmacia-clinica/antimicrobianos');
+    await expect(page.getByTestId('tela-antimicrobianos')).toBeVisible();
+    await page.getByTestId('atm-paciente').fill(String(PACIENTE_PRESC));
+    await page.getByTestId('atm-paciente').press('Enter');
+    await expect(page.getByTestId('lista-fichas')).toContainText(INDICACAO);
+    await expect(page.getByTestId('lista-fichas')).toContainText('CEFTRIAXONA');
+
+    // A CCIH acha a ficha pendente na fila da auditoria, pelo item do menu.
+    const FICHA_NOVA = 8802;
+    await page.route('**/api/qualidade/ccih/auditoria-antimicrobiano**', (rota) => {
+      const req = rota.request();
+      if (req.method() !== 'GET') return json(rota, { codigo: 'nao-simulado' }, 500);
+      const caminho = new URL(req.url()).pathname.replace(
+        /^\/api\/qualidade\/ccih\/auditoria-antimicrobiano\/?/,
+        '',
+      );
+      if (caminho === '')
+        return json(rota, [
+          {
+            ...ficha('pendente'),
+            id: FICHA_NOVA,
+            paciente: PACIENTE_PRESC,
+            nome: 'PACIENTE SINTETICO PRESCRICAO',
+            antimicrobiano: 'CEFTRIAXONA SINTETICO 1 G',
+            indicacaoClinica: (corpo.itens[0]!.antimicrobiano as { indicacao: string }).indicacao,
+            sitio: SITIO,
+          },
+        ]);
+      if (caminho === 'cadastro') return json(rota, cadastro);
+      if (caminho === 'historico') return json(rota, []);
+      return rota.fallback();
+    });
+    await entrar(page, 'SINT.CCIH');
+    await page.goto('/qualidade/ccih/auditoria-antimicrobiano');
+    await expect(page.getByTestId('tela-ccih-auditoria-am')).toBeVisible();
+    const grupo = page.getByTestId(`auditoria-paciente-${PACIENTE_PRESC}`);
+    await expect(grupo.getByTestId(`auditoria-situacao-${FICHA_NOVA}`)).toContainText('Pendente');
+    await expect(grupo).toContainText('CEFTRIAXONA');
+    await expect(grupo).toContainText(INDICACAO);
+    await expect(grupo.getByTestId(`auditoria-auditar-${FICHA_NOVA}`)).toBeEnabled();
   });
 });

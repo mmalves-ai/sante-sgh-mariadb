@@ -252,6 +252,18 @@ describe('prescrição eletrônica (M24)', () => {
       ],
     });
     expect(com.statusCode, com.body).toBe(201);
+    // C2-013: a ficha do antimicrobiano vai junto da prescrição, ligada ao item gravado (nada de 501).
+    const farm = await entrar('SINT.FARMACIA');
+    const fichas = (await get(farm, '/api/farmacia-clinica/antimicrobianos?paciente=1003')).json();
+    expect(fichas).toContainEqual(
+      expect.objectContaining({
+        origem: 'novo',
+        produto: expect.stringContaining('AMOXICILINA'),
+        item: expect.any(Number),
+        indicacao: 'Infecção sintética',
+        sitio: 'Pulmão',
+      }),
+    );
   });
 
   it('adendo e suspensão do item (reautenticação, justificativa, já suspenso 409)', async () => {

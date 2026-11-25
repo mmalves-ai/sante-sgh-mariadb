@@ -67,7 +67,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // contagem acompanha.
 // C2-014 (06-SUS linha 65): o item "Transplantes para a central estadual" do faturamento SUS entrou à mão (mesmo
 // motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":454,"M":198,"P":57,"N":199};
+// C2-013 (03-PEP L110): o item "Auditoria de antimicrobianos" da CCIH entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":455,"M":198,"P":57,"N":200};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -376,6 +378,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"qualidade-e-seguranca.ccih.ficha-de-iras-e-denominadores-automaticos","area":"QUALIDADE E SEGURANÇA","grupo":null,"caminho":["Qualidade e segurança","CCIH","Ficha de IRAS e denominadores automáticos"],"titulo":"Ficha de IRAS e denominadores automáticos","selo":"N","fase":5,"rota":"/qualidade/ccih/iras","permissao":"qualidade.iras.ler"},
   {"id":"qualidade-e-seguranca.ccih.analise-das-culturas-positivas","area":"QUALIDADE E SEGURANÇA","grupo":null,"caminho":["Qualidade e segurança","CCIH","Análise das culturas positivas"],"titulo":"Análise das culturas positivas","selo":"N","fase":7,"rota":"/qualidade/ccih/culturas","permissao":"qualidade.iras.ler"},
   {"id":"qualidade-e-seguranca.ccih.uso-de-antimicrobianos-liberacao-ddd","area":"QUALIDADE E SEGURANÇA","grupo":null,"caminho":["Qualidade e segurança","CCIH","Uso de antimicrobianos"],"titulo":"Uso de antimicrobianos","selo":"P","fase":5,"rota":"/qualidade/ccih/antimicrobianos","permissao":"qualidade.antimicrobiano.ler"},
+  {"id":"qualidade-e-seguranca.ccih.auditoria-de-antimicrobianos","area":"QUALIDADE E SEGURANÇA","grupo":null,"caminho":["Qualidade e segurança","CCIH","Auditoria de antimicrobianos"],"titulo":"Auditoria de antimicrobianos","selo":"N","fase":7,"rota":"/qualidade/ccih/auditoria-antimicrobiano","permissao":"qualidade.antimicrobiano.ler"},
   {"id":"qualidade-e-seguranca.ccih.isolamento-e-precaucoes-no-mapa-de-leitos","area":"QUALIDADE E SEGURANÇA","grupo":null,"caminho":["Qualidade e segurança","CCIH","Isolamento e precauções no mapa de leitos"],"titulo":"Isolamento e precauções no mapa de leitos","selo":"N","fase":5,"rota":"/qualidade/ccih/precaucoes","permissao":"qualidade.precaucao.ler"},
   {"id":"qualidade-e-seguranca.ccih.higiene-das-maos-e-surtos","area":"QUALIDADE E SEGURANÇA","grupo":null,"caminho":["Qualidade e segurança","CCIH","Higiene das mãos e surtos"],"titulo":"Higiene das mãos e surtos","selo":"N","fase":5,"rota":"/qualidade/ccih/maos-surtos","permissao":"qualidade.ccih.registrar"},
   {"id":"qualidade-e-seguranca.vigilancia-epidemiologica.notificacao-compulsoria-sinan-gatilho-por-cid","area":"QUALIDADE E SEGURANÇA","grupo":null,"caminho":["Qualidade e segurança","Vigilância epidemiológica","Notificação compulsória"],"titulo":"Notificação compulsória","selo":"P","fase":5,"rota":"/qualidade/vigilancia/agravos","permissao":"qualidade.agravo.ler"},
