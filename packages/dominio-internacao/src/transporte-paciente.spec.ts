@@ -80,6 +80,22 @@ describe('conferirPedidoTransporte', () => {
     ).toEqual([]);
   });
 
+  it('retorno: o paciente volta de fora do hospital para a própria unidade; a origem é o local externo', () => {
+    const retorno = { ...base, tipo: 'retorno', destinoDescricao: null, destinoSetor: 1 };
+    // O caso típico: volta do exame externo para o setor em que está internado (destino = setor atual).
+    expect(
+      conferirPedidoTransporte({ ...retorno, origemSetor: null, origemDescricao: 'Clínica de imagem' }),
+    ).toEqual([]);
+    // Sem o local de onde volta, ou com um setor do hospital como origem, recusa.
+    expect(campos(conferirPedidoTransporte({ ...retorno, origemSetor: null }))).toEqual(['origemDescricao']);
+    expect(
+      campos(conferirPedidoTransporte({ ...retorno, origemSetor: 1, origemDescricao: 'Clínica de imagem' })),
+    ).toEqual(['origemDescricao']);
+    expect(
+      campos(conferirPedidoTransporte({ ...retorno, origemSetor: null, origemDescricao: '  ' })),
+    ).toEqual(['origemDescricao']);
+  });
+
   it('oxigênio ou monitorização só com meio de ambulância', () => {
     expect(
       campos(conferirPedidoTransporte({ ...base, requerOxigenio: true, meioExigeAmbulancia: false })),

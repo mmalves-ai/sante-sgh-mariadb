@@ -5,7 +5,7 @@ export const mensagensTransporte = {
     'Pedidos em aberto, com a emergência primeiro e depois pela previsão. A equipe do transporte agenda, registra a saída e a chegada. Cancelar pede o motivo e não apaga o pedido.',
   tituloInternacao: 'Transporte do paciente',
   textoInternacao:
-    'Peça o transporte na alta, na transferência ou para outro setor. O tipo e o destino já vêm da alta registrada. A origem é o setor atual do paciente.',
+    'Peça o transporte na alta, na transferência ou para outro setor. O tipo e o destino já vêm da alta registrada. A origem é o setor atual do paciente; no retorno ao hospital, informe o local de onde ele volta.',
   internacao: 'Internação {numero} · prontuário {prontuario}',
   altaRegistrada: 'Alta registrada com destino: {destino}.',
   destinosAlta: {
@@ -38,6 +38,9 @@ export const mensagensTransporte = {
   destinoSetor: 'Setor de destino',
   destinoExterno: 'Estabelecimento de destino',
   destinoDescricao: 'Endereço ou local de destino',
+  origemDescricao: 'De onde o paciente volta (estabelecimento ou endereço)',
+  somenteLeitura:
+    'Você pode consultar os pedidos de transporte. Pedir e atender o transporte pede a permissão de transferência de leitos.',
   escolha: 'Escolha…',
   nenhum: 'Nenhum',
   condicao: 'Condição do paciente',

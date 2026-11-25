@@ -338,7 +338,8 @@ export class PortaTransportePacientePropria extends PortaEstabelecimentoPropria 
         );
         paciente = num(i['paciente_id']);
         atendimento = num(i['atendimento_id']);
-        if (origemSetor === null && e.origemDescricao === null)
+        // No retorno o paciente volta de fora do hospital: a origem é o local externo informado, nunca o setor atual.
+        if (origemSetor === null && e.origemDescricao === null && e.tipo !== 'retorno')
           origemSetor = numOuNull(i['setor_funcional_id']);
         const a = await tx.uma(
           `SELECT id FROM alta_hospitalar WHERE internacao_id = ? AND situacao <> 'cancelada' AND excluido_em IS NULL

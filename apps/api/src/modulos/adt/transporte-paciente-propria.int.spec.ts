@@ -339,4 +339,46 @@ describe.skipIf(SEM_BANCO)('PortaTransportePacientePropria contra o MariaDB (con
     // 3 pedidos + agendar, saída, chegada + 2 cancelamentos.
     expect(Number(tr!['n'])).toBeGreaterThanOrEqual(8);
   });
+
+  it('retorno do exame externo para a própria unidade: a origem é o local externo, nunca o setor atual', async () => {
+    // Sem o local de onde o paciente volta, recusa sem gravar (antes, a origem virava o setor atual e o pedido caía em
+    // "mesmo setor").
+    const antes = await contar();
+    const retorno = {
+      internacao: m.internacao,
+      tipo: 'retorno',
+      destinoSetor: m.setorA,
+      previsto: daqui(90),
+    };
+    await expect(porta.solicitar(ctx(), retorno)).rejects.toMatchObject({ problema: { status: 422 } });
+    await expect(
+      porta.solicitar(ctx(), {
+        ...retorno,
+        origemSetor: m.setorB,
+        origemDescricao: 'Clínica de imagem sintética',
+      }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    expect(await contar()).toBe(antes);
+
+    const { id } = await porta.solicitar(ctx(), {
+      ...retorno,
+      origemDescricao: 'Clínica de imagem sintética',
+    });
+    expect(await linha(id)).toMatchObject({
+      tipo: 'retorno',
+      internacao_id: m.internacao,
+      origem_setor_funcional_id: null,
+      origem_descricao: 'Clínica de imagem sintética',
+      destino_setor_funcional_id: m.setorA,
+      situacao: 'solicitado',
+      versao: 1,
+    });
+    expect(await contar()).toBe(antes + 1);
+    const [fila] = await porta.listar(ctx(), {});
+    expect(fila).toMatchObject({
+      id,
+      origemNome: 'Clínica de imagem sintética',
+      destinoNome: 'Setor sintético A',
+    });
+  });
 });

@@ -77,6 +77,7 @@ export interface PedidoTransporteEntrada {
   meio: number | null;
   posicao: number | null;
   origemSetor: number | null;
+  origemDescricao: string | null;
   destinoSetor: number | null;
   destinoExterno: number | null;
   destinoDescricao: string | null;

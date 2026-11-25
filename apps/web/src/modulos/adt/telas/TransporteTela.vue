@@ -31,6 +31,7 @@ import {
   solicitarTransporte,
   type Transporte,
 } from '../api-transporte.js';
+import { pode } from '../../../casca/sessao/pode.js';
 import ErroAdt from '../componentes/ErroAdt.vue';
 
 const props = defineProps<{ reg?: string }>();
@@ -49,6 +50,9 @@ const lista = useQuery({
   queryFn: () => listarTransportes(internacaoId.value ? { internacao: internacaoId.value } : {}),
 });
 const recarregar = () => cliente.invalidateQueries({ queryKey: ['adt', 'transporte'] });
+// Ler pede internacao.internacao.ler; pedir e atender (agendar, saída, chegada, cancelar) pedem a mesma permissão que a
+// API cobra em todas as gravações. Sem ela, o formulário e os botões não aparecem.
+const podeGravar = computed(() => pode('leitos.transferencia.criar'));
 
 type Id = number | '';
 const comVazio = (vazio: string, itens: { id: number; nome: string }[]) => [
@@ -90,6 +94,7 @@ const posicao = ref<Id>('');
 const destinoSetor = ref<Id>('');
 const destinoExterno = ref<Id>('');
 const destinoDescricao = ref('');
+const origemDescricao = ref('');
 const condicao = ref('');
 const oxigenio = ref(false);
 const monitorizacao = ref(false);
@@ -107,6 +112,10 @@ watch(
   { immediate: true },
 );
 const vaiASetor = computed(() => tipo.value === 'interno' || tipo.value === 'retorno');
+// No retorno o paciente volta de fora do hospital: a origem é o local externo informado, nunca o setor atual.
+const eRetorno = computed(() => tipo.value === 'retorno');
+const origemSetor = computed(() => (eRetorno.value ? null : (internacao.data.value?.setorAtual ?? null)));
+const origemTexto = computed(() => (eRetorno.value ? origemDescricao.value.trim() || null : null));
 const nulo = (v: Id) => (v === '' ? null : v);
 const quando = (s: string) => (s ? new Date(s) : null);
 const abertosMesmoTipo = computed(
@@ -122,8 +131,8 @@ const problemas = computed(() =>
     prioridade: prioridade.value,
     internacao: internacaoId.value,
     atendimento: internacao.data.value?.atendimento ?? null,
-    origemSetor: internacao.data.value?.setorAtual ?? null,
-    origemDescricao: null,
+    origemSetor: origemSetor.value,
+    origemDescricao: origemTexto.value,
     destinoSetor: vaiASetor.value ? nulo(destinoSetor.value) : null,
     destinoExterno: vaiASetor.value ? null : nulo(destinoExterno.value),
     destinoDescricao: vaiASetor.value ? null : destinoDescricao.value.trim() || null,
@@ -158,6 +167,7 @@ const pedir = () =>
       meio: nulo(meio.value),
       posicao: nulo(posicao.value),
       origemSetor: null,
+      origemDescricao: origemTexto.value,
       destinoSetor: vaiASetor.value ? nulo(destinoSetor.value) : null,
       destinoExterno: vaiASetor.value ? null : nulo(destinoExterno.value),
       destinoDescricao: vaiASetor.value ? null : destinoDescricao.value.trim() || null,
@@ -173,6 +183,7 @@ const pedir = () =>
     condicao.value = '';
     observacao.value = '';
     previsto.value = '';
+    origemDescricao.value = '';
   });
 
 // Ações nos pedidos: os campos ficam acima da tabela e valem para o pedido em que se clica.
@@ -201,7 +212,7 @@ function regra(x: Transporte, a: 'agendar' | 'iniciar' | 'concluir' | 'cancelar'
   }).situacao;
 }
 const podeAgir = (x: Transporte, a: 'agendar' | 'iniciar' | 'concluir' | 'cancelar') =>
-  !acao.isPending.value && regra(x, a) !== null;
+  podeGravar.value && !acao.isPending.value && regra(x, a) !== null;
 const feito = () => {
   aviso.value = t('adt.transporte.feito');
 };
@@ -279,8 +290,11 @@ const necessidades = (x: Transporte) =>
         </template>
       </p>
 
-      <h2>{{ t('adt.transporte.novo') }}</h2>
-      <form class="filtros" data-testid="transporte-form" @submit.prevent="pedir">
+      <p v-if="!podeGravar" role="note" data-testid="transporte-somente-leitura">
+        {{ t('adt.transporte.somenteLeitura') }}
+      </p>
+      <h2 v-if="podeGravar">{{ t('adt.transporte.novo') }}</h2>
+      <form v-if="podeGravar" class="filtros" data-testid="transporte-form" @submit.prevent="pedir">
         <SanteSelecao
           v-model="tipo"
           :rotulo="t('adt.transporte.tipo')"
@@ -295,6 +309,10 @@ const necessidades = (x: Transporte) =>
           obrigatorio
           data-testid="transporte-prioridade"
         />
+        <label v-if="eRetorno"
+          >{{ t('adt.transporte.origemDescricao') }}
+          <input v-model="origemDescricao" maxlength="150" required data-testid="transporte-origem-descricao"
+        /></label>
         <SanteSelecao
           v-if="vaiASetor"
           v-model="destinoSetor"
@@ -375,7 +393,7 @@ const necessidades = (x: Transporte) =>
       {{ t('adt.transporte.vazio') }}
     </p>
     <template v-else>
-      <form v-if="temAberto" class="filtros" data-testid="transporte-acoes" @submit.prevent>
+      <form v-if="temAberto && podeGravar" class="filtros" data-testid="transporte-acoes" @submit.prevent>
         <label
           >{{ t('adt.transporte.previsao') }}
           <input v-model="novaPrevisao" type="datetime-local" data-testid="transporte-nova-previsao"
@@ -463,7 +481,7 @@ const necessidades = (x: Transporte) =>
               <template v-if="x.motivoCancelamento"><br />{{ x.motivoCancelamento }}</template>
             </td>
             <td>
-              <template v-if="aberto(x.situacao)">
+              <template v-if="podeGravar && aberto(x.situacao)">
                 <button
                   v-if="x.situacao !== 'em_andamento'"
                   type="button"

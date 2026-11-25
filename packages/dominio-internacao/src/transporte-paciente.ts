@@ -2,7 +2,8 @@
 // sem banco:
 //   - o pedido é conferido antes de gravar: tipo e prioridade válidos, destino coerente com o tipo (interno e retorno
 //     vão a um setor do hospital; alta, transferência, exame externo e remoção saem do hospital), a alta ligada a uma
-//     internação, origem diferente do destino, previsão não no passado, o paciente que precisa de oxigênio ou de
+//     internação, origem diferente do destino, o retorno vindo de fora do hospital (a origem é o local externo, nunca um
+//     setor), previsão não no passado, o paciente que precisa de oxigênio ou de
 //     monitorização só com meio de transporte de ambulância, e um pedido em aberto por internação e tipo;
 //   - o ciclo do pedido: solicitado → agendado (previsão e meio) → em andamento (saída) → concluído (chegada e retorno),
 //     ou cancelado com motivo antes da saída (depois da saída o transporte é concluído, nunca cancelado); nada se apaga;
@@ -105,9 +106,15 @@ export function conferirPedidoTransporte(e: PedidoTransporte): ProblemaTransport
     });
   if (tipo && !VAI_A_SETOR.has(tipo) && !temExterno)
     p.push({ campo: 'destinoExterno', mensagem: 'Informe o estabelecimento de destino ou o endereço.' });
-  if (e.origemSetor !== null && e.origemSetor === e.destinoSetor)
+  // No retorno a origem é externa (conferida abaixo): o destino pode ser o próprio setor em que o paciente está internado.
+  if (tipo !== 'retorno' && e.origemSetor !== null && e.origemSetor === e.destinoSetor)
     p.push({ campo: 'destinoSetor', mensagem: 'A origem e o destino são o mesmo setor.' });
-  if (e.origemSetor === null && vazio(e.origemDescricao))
+  if (tipo === 'retorno' && (e.origemSetor !== null || vazio(e.origemDescricao)))
+    p.push({
+      campo: 'origemDescricao',
+      mensagem: 'O retorno vem de fora do hospital: informe o local de onde o paciente volta.',
+    });
+  else if (e.origemSetor === null && vazio(e.origemDescricao))
     p.push({ campo: 'origem', mensagem: 'Informe o local de saída do paciente.' });
   if ((e.requerOxigenio || e.requerMonitorizacao) && e.meioExigeAmbulancia === false)
     p.push({
