@@ -2,7 +2,8 @@
 // eSocial (públicos), com poucas linhas; os registros vivem por estabelecimento, numa cópia por transação (o erro no meio
 // desfaz tudo). Nada vai à cópia do banco. As regras de banco que importam ao teste também valem aqui: só inclusão no
 // ocupacional e nas vacinas, versão no acidente, o marco da sorologia uma vez, a assinatura só da entrega pendente.
-import { ErroOperacao, type LinhaTrilha } from '@sgh/nucleo';
+import { conferirLeituraRepetida } from '@sgh/dominio-pessoas';
+import { ErroOperacao, type LinhaTrilha, recusa } from '@sgh/nucleo';
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
 import {
@@ -364,6 +365,21 @@ export class PortaSesmtMemoria implements PortaSesmt {
         Object.assign(r, { fim: x.fim, motivoFim: x.motivo });
       },
       incluirRegistroEpi: async (x) => {
+        // A mesma garantia da chave única do banco (leitura ativa por vínculo, dosímetro e início do período).
+        if (x.tipo === 'dosimetria') {
+          const r = conferirLeituraRepetida(
+            s.epis
+              .filter((y) => y.vinculo === x.vinculo)
+              .map((y) => ({
+                tipo: y.tipo,
+                dosimetro: y.dosimetro,
+                periodoInicio: y.periodoInicio,
+                cancelada: y.canceladoEm !== null,
+              })),
+            { dosimetro: x.dosimetro ?? '', periodoInicio: x.periodoInicio ?? '' },
+          );
+          if (r) throw recusa(r.codigo, r.mensagem);
+        }
         const n = id();
         s.epis.push({
           id: n,

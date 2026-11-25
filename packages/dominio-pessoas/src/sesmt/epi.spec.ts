@@ -5,6 +5,7 @@ import {
   chaveFuncao,
   conferirDosimetria,
   conferirEntregaEpi,
+  conferirLeituraRepetida,
   doseNoAno,
   type EntregaLida,
   episFaltando,
@@ -132,5 +133,45 @@ describe('dosimetria e pendências', () => {
       ['epi-faltando', 'alerta'],
       ['dose-acima-limite', 'alerta'],
     ]);
+  });
+  it('o registro cancelado fica no histórico mas não conta na dose, nos EPI entregues nem nas pendências', () => {
+    const alta = entrega(9, { tipo: 'dosimetria', data: '2026-03-31', doseMsv: 30, epi: null });
+    expect(pendenciasEpi([], [alta], HOJE)).toEqual(['dose-acima-limite']);
+    const cancelada = { ...alta, cancelada: true };
+    expect(doseNoAno([cancelada], 2026)).toEqual({ total: 0, parcelas: [], situacao: 'normal' });
+    expect(
+      pendenciasEpi(
+        [linha(1, {})],
+        [
+          cancelada,
+          entrega(1, { assinatura: 'pendente', cancelada: true }),
+          entrega(2, { cancelada: false }),
+        ],
+        HOJE,
+      ),
+    ).toEqual([]);
+    expect(episFaltando([linha(1, {})], [entrega(1, { cancelada: true })], HOJE)).toEqual([
+      'Luva de procedimento',
+    ]);
+  });
+  it('leitura repetida: o mesmo dosímetro e início de período com leitura ativa recusa; a cancelada não', () => {
+    const lida = (extra: Partial<Parameters<typeof conferirLeituraRepetida>[0][number]>) => ({
+      tipo: 'dosimetria' as const,
+      dosimetro: 'DOS-01',
+      periodoInicio: '2026-09-01',
+      cancelada: false,
+      ...extra,
+    });
+    const nova = { dosimetro: ' dos-01 ', periodoInicio: '2026-09-01' };
+    expect(conferirLeituraRepetida([lida({})], nova)).toEqual({
+      codigo: 'leitura-repetida',
+      mensagem:
+        'Já há leitura deste dosímetro para o mesmo período: cancele a anterior para lançar a correta.',
+      campo: 'periodoInicio',
+    });
+    expect(conferirLeituraRepetida([lida({ cancelada: true })], nova)).toBeNull();
+    expect(conferirLeituraRepetida([lida({ periodoInicio: '2026-08-01' })], nova)).toBeNull();
+    expect(conferirLeituraRepetida([lida({ dosimetro: 'DOS-02' })], nova)).toBeNull();
+    expect(conferirLeituraRepetida([lida({ tipo: 'quimio' })], nova)).toBeNull();
   });
 });

@@ -46,7 +46,13 @@ export interface EntregaLida {
   readonly caValidade: string | null;
   readonly assinatura: 'pendente' | 'assinada' | null;
   readonly doseMsv: number | null;
+  /** O registro cancelado (marcado com o motivo, nunca apagado) fica no histórico, mas não conta em dose nem pendência. */
+  readonly cancelada?: boolean;
 }
+
+/** Só os registros que valem: o cancelado não entra na dose do ano, nos EPI entregues nem nas pendências. */
+const ativas = (entregas: readonly EntregaLida[]): EntregaLida[] =>
+  entregas.filter((e) => e.cancelada !== true);
 
 export interface EntradaEntregaEpi {
   readonly epi: string;
@@ -91,12 +97,45 @@ export function conferirDosimetria(e: EntradaDosimetria, hoje: string): RecusaSe
   return null;
 }
 
+export interface LeituraDosimetriaLida {
+  readonly tipo: 'epi' | 'dosimetria' | 'quimio';
+  readonly dosimetro: string | null;
+  readonly periodoInicio: string | null;
+  readonly cancelada: boolean;
+}
+
+/**
+ * CNEN NN 3.01: uma leitura por dosímetro e período. A leitura ativa do mesmo dosímetro com o mesmo início de período
+ * recusa a nova (a correção é cancelar a anterior, com o motivo, e lançar a certa). O dosímetro é comparado sem espaço
+ * nas pontas e sem caixa.
+ */
+export function conferirLeituraRepetida(
+  leituras: readonly LeituraDosimetriaLida[],
+  nova: { readonly dosimetro: string; readonly periodoInicio: string },
+): RecusaSesmt | null {
+  const chave = nova.dosimetro.trim().toUpperCase();
+  const repetida = leituras.some(
+    (l) =>
+      l.tipo === 'dosimetria' &&
+      !l.cancelada &&
+      l.periodoInicio === nova.periodoInicio &&
+      (l.dosimetro ?? '').trim().toUpperCase() === chave,
+  );
+  return repetida
+    ? recusaSesmt(
+        'leitura-repetida',
+        'Já há leitura deste dosímetro para o mesmo período: cancele a anterior para lançar a correta.',
+        'periodoInicio',
+      )
+    : null;
+}
+
 /** A dose efetiva acumulada no ano civil (soma das leituras cujo período termina no ano), com as parcelas. */
 export function doseNoAno(
   entregas: readonly EntregaLida[],
   ano: number,
 ): { total: number; parcelas: number[]; situacao: 'normal' | 'acima-limite' | 'acima-teto' } {
-  const parcelas = entregas
+  const parcelas = ativas(entregas)
     .filter((e) => e.tipo === 'dosimetria' && Number(e.data.slice(0, 4)) === ano && e.doseMsv !== null)
     .map((e) => e.doseMsv as number);
   const total = Math.round(parcelas.reduce((s, x) => s + x, 0) * 1000) / 1000;
@@ -115,7 +154,7 @@ export function episFaltando(
   for (const l of exigidos) {
     if (l.tipo !== 'epi' || !l.epi) continue;
     const chave = chaveFuncao(l.epi);
-    const tem = entregas.some(
+    const tem = ativas(entregas).some(
       (e) =>
         e.tipo === 'epi' &&
         e.epi !== null &&
@@ -135,7 +174,7 @@ export function pendenciasEpi(
   hoje: string,
 ): PendenciaSesmt[] {
   const r: PendenciaSesmt[] = [];
-  if (entregas.some((e) => e.tipo === 'epi' && e.assinatura === 'pendente')) r.push('epi-assinatura');
+  if (ativas(entregas).some((e) => e.tipo === 'epi' && e.assinatura === 'pendente')) r.push('epi-assinatura');
   if (episFaltando(exigidos, entregas, hoje).length > 0) r.push('epi-faltando');
   if (doseNoAno(entregas, Number(hoje.slice(0, 4))).situacao !== 'normal') r.push('dose-acima-limite');
   return r;

@@ -596,6 +596,47 @@ describe('SESMT pela HTTP', () => {
       const b = (await s.get(`${P}/aso/colaboradores?termo=SESMT`)).json();
       expect(b.itens.map((x: { vinculo: number }) => x.vinculo)).toEqual([vinculo]);
       expect(JSON.stringify(b)).not.toMatch(/cpf/i);
+      // C1-119: a leitura repetida (mesmo dosímetro e início do período, ainda ativa) é recusada pelo domínio; a
+      // cancelada sai da dose e das pendências do painel, e a leitura certa do mesmo período entra depois.
+      const leitura12 = {
+        tipo: 'dosimetria',
+        periodoInicio: '2026-09-01',
+        data: '2026-09-30',
+        doseMsv: 12,
+        dosimetro: 'DOS-SINT-1',
+      };
+      const rep = await s.post(`${P}/epi/${vinculo}`, leitura12);
+      expect(rep.statusCode).toBe(409);
+      expect(rep.json()).toMatchObject({
+        codigo: 'leitura-repetida',
+        detail:
+          'Já há leitura deste dosímetro para o mesmo período: cancele a anterior para lançar a correta.',
+      });
+      const alta = (await s.get(`${P}/epi/${vinculo}`))
+        .json()
+        .registros.find(
+          (x: { tipo: string; doseMsv: number | null; canceladoEm: string | null }) =>
+            x.tipo === 'dosimetria' && x.doseMsv === 12 && x.canceladoEm === null,
+        ) as { id: number };
+      expect(
+        (
+          await s.post(`${P}/epi/entregas/${alta.id}/cancelamento`, {
+            tipo: 'dosimetria',
+            motivo: 'Leitura lançada por engano.',
+          })
+        ).statusCode,
+      ).toBe(200);
+      const semAlta = (await s.get(`${P}/painel?somentePendentes=false`)).json();
+      expect(semAlta.itens[0].pendencias.map((x: { codigo: string }) => x.codigo)).toEqual([
+        'dupla-incompleta',
+      ]);
+      expect(semAlta.contagens).toEqual({ 'dupla-incompleta': 1 });
+      expect((await s.post(`${P}/epi/${vinculo}`, leitura12)).statusCode).toBe(200);
+      expect(
+        (await s.get(`${P}/painel?somentePendentes=false`))
+          .json()
+          .itens[0].pendencias.map((x: { codigo: string }) => x.codigo),
+      ).toEqual(['dupla-incompleta', 'dose-acima-limite']);
     });
 
     it('regra 16: o painel e a lista de acidentes são leituras auditadas; quem só lê o ASO não vê acidente, EPI nem vacina', async () => {

@@ -83,6 +83,8 @@ import {
   dataDe,
   diasEntre,
   doseNoAno,
+  conferirLeituraRepetida,
+  type LeituraDosimetriaLida,
   type EntregaLida,
   episFaltando,
   juntarPendencias,
@@ -457,6 +459,7 @@ export class ServicoSesmt {
         ...(veVacinas
           ? situacaoVacinas((vacinas.get(v.id) ?? []).map(vacinaLida), hoje).flatMap((x) => x.pendencias)
           : []),
+        // O registro cancelado (leitura de dosímetro lançada por engano, entrega desfeita) não acende pendência.
         ...(veRiscos ? pendenciasEpi([], (epis.get(v.id) ?? []).map(entregaLida), hoje) : []),
         ...(veAcidentes
           ? (acidentes.get(v.id) ?? []).flatMap((a) =>
@@ -1574,7 +1577,12 @@ export class ServicoSesmt {
         v.admissao,
       );
     else if (e.tipo === 'dosimetria')
-      recusa = conferirDosimetria({ periodoInicio: e.periodoInicio, data: e.data, doseMsv: e.doseMsv }, hoje);
+      recusa =
+        conferirDosimetria({ periodoInicio: e.periodoInicio, data: e.data, doseMsv: e.doseMsv }, hoje) ??
+        conferirLeituraRepetida((await this.porta.registrosEpi(s.porta, v.id)).map(leituraLida), {
+          dosimetro: e.dosimetro,
+          periodoInicio: e.periodoInicio,
+        });
     else if (diasEntre(hoje, e.data) > 0)
       recusa = { codigo: 'data-futura', mensagem: 'A data da exposição não pode ser futura.', campo: 'data' };
     if (recusa) throw recusar(recusa);
@@ -1772,6 +1780,16 @@ function entregaLida(x: RegistroProtecao): EntregaLida {
     caValidade: x.caValidade,
     assinatura: x.assinatura,
     doseMsv: x.doseMsv,
+    cancelada: x.canceladoEm !== null,
+  };
+}
+
+function leituraLida(x: RegistroProtecao): LeituraDosimetriaLida {
+  return {
+    tipo: x.tipo,
+    dosimetro: x.dosimetro,
+    periodoInicio: x.periodoInicio,
+    cancelada: x.canceladoEm !== null,
   };
 }
 
