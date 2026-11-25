@@ -56,6 +56,7 @@ import {
   podeConsolidarNota,
   type PropostaCotacao,
   proximoAFechar,
+  quantidadeDoadaApos,
   type TipoMovimento,
   valorPelosVencedores,
   conferirRecontagem,
@@ -1426,7 +1427,7 @@ function usuarioDe(tx: TxOperacao): number {
 /** O saldo do item no local, travado; sem linha: cria a linha zerada. */
 async function saldoTravado(tx: TxOperacao, est: number, local: number, insumo: number): Promise<Linha> {
   const [s] = await tx.consultarParaAtualizar<Linha>(
-    `SELECT id, versao, quantidade, custo_medio FROM saldo_estoque
+    `SELECT id, versao, quantidade, custo_medio, quantidade_doada FROM saldo_estoque
       WHERE local_estoque_id = ? AND insumo_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [local, insumo, est],
   );
@@ -1438,7 +1439,7 @@ async function saldoTravado(tx: TxOperacao, est: number, local: number, insumo: 
     quantidade: 0,
     custo_medio: 0,
   });
-  return { id, versao: 1, quantidade: 0, custo_medio: 0 };
+  return { id, versao: 1, quantidade: 0, custo_medio: 0, quantidade_doada: 0 };
 }
 
 /** O lote do item no estabelecimento pelo número e validade; com `criar`, inclui o que faltar (entrada). */
@@ -1544,6 +1545,8 @@ export interface Movimento {
   readonly motivoAjuste?: number | null;
   readonly faturavel?: boolean;
   readonly consignado?: boolean;
+  /** C1-126: entrada de produto recebido em doação (soma na parte doada do saldo; propriedade "doacao"). */
+  readonly doacao?: boolean;
 }
 
 /**
@@ -1589,10 +1592,18 @@ export async function movimentar(
     }
   }
   const agora = new Date();
+  // C1-126: a parte doada do saldo soma na entrada doada e nunca passa do saldo que fica (regra do domínio).
+  const doadaAntes = n(s['quantidade_doada']);
+  const doada = quantidadeDoadaApos(doadaAntes, depois, {
+    natureza: m.natureza,
+    quantidade: m.quantidade,
+    doacao: m.doacao ?? false,
+  });
   await tx.alterar('saldo_estoque', n(s['id']), n(s['versao']), {
     quantidade: depois,
     custo_medio: custo,
     ultima_movimentacao_em: agora,
+    ...(doada !== doadaAntes ? { quantidade_doada: doada } : {}),
     ...(m.natureza === 'entrada' && m.notaItem
       ? { ultima_entrada_em: agora, ultimo_custo_entrada: m.quantidade > 0 ? valor / m.quantidade : 0 }
       : {}),
@@ -1607,7 +1618,7 @@ export async function movimentar(
     competencia: `${m.hoje.slice(0, 7)}-01`,
     tipo_movimento_estoque_id: m.tipoMovimento,
     natureza: m.natureza,
-    propriedade: m.consignado ? 'consignado' : 'proprio',
+    propriedade: m.doacao ? 'doacao' : m.consignado ? 'consignado' : 'proprio',
     insumo_id: m.insumo,
     unidade_medida_id: n(u?.['estoque_unidade_medida_id']),
     quantidade: m.quantidade,
@@ -1759,7 +1770,7 @@ async function exigirSaldo(
 }
 
 /** Os lotes da entrada (rastreável exige lote e validade válidos; o lote que falta é incluído). */
-async function lotesDaEntrada(
+export async function lotesDaEntrada(
   tx: TxOperacao,
   est: number,
   insumo: Linha,
