@@ -7,7 +7,13 @@ import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { aplicarRecebida, gravarPerfil, lerPerfis, recebidasDoAtendimento } from '../api-comunicacao.js';
+import {
+  aplicarRecebida,
+  enviarPerfisTriagem,
+  gravarPerfil,
+  lerPerfis,
+  recebidasDoAtendimento,
+} from '../api-comunicacao.js';
 
 const CONDICOES = [
   'gestante',
@@ -41,6 +47,10 @@ const { t } = useI18n({
       aplicar: 'Aplicar ao atendimento',
       aplicada: 'Classificação aplicada ao atendimento.',
       reclassificada: 'Classificação aplicada: a classificação interna anterior foi reclassificada.',
+      envioSistema: 'Enviar ao sistema de triagem',
+      enviar: 'Enviar perfis',
+      enviado: 'Perfis na fila de saída ({n} perfis): o sistema de triagem recebe pelo canal HL7.',
+      repetido: 'Este mesmo pacote de perfis já foi enviado hoje; nada novo na fila.',
     },
   },
 });
@@ -76,6 +86,34 @@ async function salvar() {
     await cliente.invalidateQueries({ queryKey: ['integracoes', 'classificacao'] });
   } catch (e) {
     falha.value = e instanceof Error ? e.message : String(e);
+  }
+}
+// O envio ativo: os sistemas de triagem vêm dos próprios perfis (sem digitar o código).
+const sistemas = computed(() => [
+  ...new Set((perfis.data.value?.itens ?? []).map((x) => x.sistemaCodigo).filter((x): x is string => !!x)),
+]);
+const sistemaEnvio = ref('');
+const sistemaEscolhido = computed({
+  get: () => sistemaEnvio.value || sistemas.value[0] || '',
+  set: (v: string) => {
+    sistemaEnvio.value = v;
+  },
+});
+const opcoesSistema = computed(() => sistemas.value.map((s) => ({ valor: s, rotulo: s })));
+const enviando = ref(false);
+async function enviarPerfis() {
+  aviso.value = '';
+  falha.value = '';
+  const s = sistemaEscolhido.value;
+  if (!s) return;
+  enviando.value = true;
+  try {
+    const r = await enviarPerfisTriagem(s);
+    aviso.value = r.repetida ? t('repetido') : t('enviado', { n: r.perfis });
+  } catch (e) {
+    falha.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    enviando.value = false;
   }
 }
 const atendimento = ref<number | null>(null);
@@ -116,6 +154,12 @@ const data = (v: string) => new Date(v).toLocaleString('pt-BR');
         <td>{{ x.condicaoPreferencial ?? '' }}</td>
       </tr>
     </table>
+    <form v-if="sistemas.length" data-testid="classificacao-envio" @submit.prevent="enviarPerfis">
+      <SanteSelecao v-model="sistemaEscolhido" :rotulo="t('envioSistema')" :opcoes="opcoesSistema" />
+      <button type="submit" data-testid="classificacao-enviar-perfis" :disabled="enviando">
+        {{ t('enviar') }}
+      </button>
+    </form>
     <form data-testid="classificacao-perfil-novo" @submit.prevent="salvar">
       <label
         >{{ t('codigo') }} <input v-model="f.codigo" required maxlength="30" pattern="[A-Za-z0-9_-]+"

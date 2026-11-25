@@ -2,7 +2,8 @@
 // núcleo), então as respostas destas rotas são simuladas com massa SINTÉTICA; o que se prova é a tela: as recebidas do
 // atendimento digitado, o botão de aplicar só na vigente, o pedido de aplicação na rota certa e a lista relida depois.
 // O efeito no banco (interna gerada, recebida aplicada e ligada, reclassificação sem apagar) está no contrato de efeito
-// apps/api/src/modulos/integracao/comunicacao-pacotes-triagem-propria.int.spec.ts.
+// apps/api/src/modulos/integracao/comunicacao-pacotes-triagem-propria.int.spec.ts; o envio ativo dos perfis (MFN^M13 na
+// fila de saída) e a entrada pela credencial do sistema de triagem em classificacao-externa-propria.int.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 
@@ -63,5 +64,53 @@ test.describe('F3.9 classificação de risco externa @F3.9', () => {
     expect(aplicacoes).toEqual(['POST /api/integracoes/classificacao-externa/recebidas/12/aplicacao']);
     await expect(page.getByTestId('classificacao-aplicar-12')).toHaveCount(0);
     await expect(tabela).toContainText('aplicada');
+  });
+
+  test('envia os perfis ao sistema de triagem com um clique, sem digitar o código do sistema @C1-027', async ({
+    page,
+  }) => {
+    const envios: { metodo: string; caminho: string; corpo: unknown }[] = [];
+    let vezes = 0;
+    await page.route('**/api/integracoes/classificacao-externa/perfis', (r) =>
+      json(r, {
+        itens: [
+          {
+            id: 1,
+            codigo: 'ido',
+            descricao: 'Idoso',
+            sistemaCodigo: 'TRIAGEM-SINT',
+            codigoExterno: 'I',
+            condicaoPreferencial: 'idoso',
+            ordemPrioridade: 1,
+            ativo: true,
+            versao: 1,
+          },
+        ],
+      }),
+    );
+    await page.route('**/api/integracoes/classificacao-externa/perfis/envio', (r) => {
+      envios.push({
+        metodo: r.request().method(),
+        caminho: new URL(r.request().url()).pathname,
+        corpo: r.request().postDataJSON(),
+      });
+      vezes += 1;
+      return json(r, { id: 900, repetida: vezes > 1, perfis: 1, chave: 'perfis:sint' }, 201);
+    });
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto('/pa/classificacao-externa');
+    await expect(page.getByTestId('classificacao-envio')).toContainText('TRIAGEM-SINT');
+    await semViolacaoAxe(page, 'classificação externa: envio dos perfis');
+    await page.getByTestId('classificacao-enviar-perfis').click();
+    await expect(page.getByRole('status')).toContainText('Perfis na fila de saída (1 perfis)');
+    expect(envios).toEqual([
+      {
+        metodo: 'POST',
+        caminho: '/api/integracoes/classificacao-externa/perfis/envio',
+        corpo: { sistema: 'TRIAGEM-SINT' },
+      },
+    ]);
+    await page.getByTestId('classificacao-enviar-perfis').click();
+    await expect(page.getByRole('status')).toContainText('já foi enviado hoje');
   });
 });

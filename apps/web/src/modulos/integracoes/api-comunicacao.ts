@@ -174,6 +174,14 @@ export const lerPerfis = () => ler(`${C}/perfis`, itens<PerfilPrioridade>());
 export const gravarPerfil = (c: Record<string, unknown>) => substituir<{ id: number }>(`${C}/perfis`, c);
 export const recebidasDoAtendimento = (a: number) =>
   ler(`${C}/atendimento/${a}`, itens<ClassificacaoRecebida>());
+/** Põe a mensagem HL7 dos perfis na fila de saída do sistema de triagem (F3.9, 08-INTG L140). */
+export const enviarPerfisTriagem = (sistema: string) =>
+  enviar(
+    `${C}/perfis/envio`,
+    { sistema },
+    confiar<{ id: number; repetida: boolean; perfis: number }>(),
+    novaChave('perfis-envio'),
+  );
 /** Aplica a classificação recebida: gera a classificação interna do atendimento (F3.9, 08-INTG L140). */
 export const aplicarRecebida = (id: number) =>
   enviar(

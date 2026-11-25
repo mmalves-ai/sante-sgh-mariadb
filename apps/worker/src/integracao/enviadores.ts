@@ -17,6 +17,7 @@ import {
   destinoRia,
   documentoRia,
   emMllp,
+  EVENTO_ENVIO_PERFIS_TRIAGEM,
   eventoRia,
   imunizacaoDoRegistro,
   lerAck,
@@ -26,6 +27,7 @@ import {
 } from '@sgh/dominio-integracao';
 import { itemMwlDicom } from '@sgh/dominio-sadt';
 import { destinoDaWorklistNoEstabelecimento } from './destino-worklist.js';
+import { conteudoPerfisTriagem } from './perfis-triagem.js';
 import type { Leitor } from '@sgh/nucleo';
 import { ErroEntrega, type Enviador } from './entrega.js';
 import {
@@ -142,6 +144,12 @@ export async function conteudoHl7(
       solicitadoEm: x.solicitadoEm ?? c.agora(),
       urgente: x.urgente,
     });
+  }
+  // F3.9 (L140): os perfis de prioridade ao sistema de triagem, exatamente como gravados na fila pela API.
+  if (e.tipoEvento === EVENTO_ENVIO_PERFIS_TRIAGEM) {
+    const m = await c.ler(hospital, (l) => conteudoPerfisTriagem(l, hospital, e.id));
+    if (!m) throw new ErroEntrega('envio de perfis sem a mensagem HL7 gravada: nada enviado');
+    return m;
   }
   if (e.tipoEvento !== 'integracao.teste')
     throw new ErroEntrega(

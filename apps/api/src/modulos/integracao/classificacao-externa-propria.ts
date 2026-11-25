@@ -7,18 +7,30 @@
 //   - a aplicação: a recebida vigente gera a classificação interna (`classificacao_risco`, origem integração, concluída,
 //     com a versão vigente do protocolo do estabelecimento) e passa a aplicada, ligada à interna; se o atendimento já
 //     tinha classificação interna concluída, a nova a reclassifica (nada é apagado);
-//   - a visão do atendimento: as classificações recebidas, com o prazo do atendimento médico.
+//   - a visão do atendimento: as classificações recebidas, com o prazo do atendimento médico;
+//   - o ENVIO ATIVO dos perfis: a mensagem MFN^M13 montada pelo perfil de mensagem HL7 do sistema de triagem vai à fila
+//     de saída (`mensagem_integracao_saida`), que o enviador HL7 do worker entrega por MLLP ao canal do parceiro;
+//   - a ENTRADA pela credencial do sistema de triagem (cliente da API ligado ao sistema, usuário técnico na trilha):
+//     o sistema que envia é o da credencial, nunca o informado no corpo.
+import { createHash } from 'node:crypto';
 import {
   CONDICOES_PREFERENCIAIS,
   type CondicaoPreferencial,
   conferirClassificacaoRecebida,
+  conferirCredencialTriagem,
+  conferirEnvioPerfis,
+  EVENTO_ENVIO_PERFIS_TRIAGEM,
+  EVENTO_HL7_PERFIS_TRIAGEM,
+  montarPerfisHl7,
   perfisParaEnvio,
   planoAplicacao,
   prazoAtendimento,
   situacaoNaChegada,
   validarPerfilPrioridade,
 } from '@sgh/dominio-integracao';
+import { ErroOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
+import { lerAutorizacaoBasica, segredoConfere } from './aplicacao/credencial.js';
 import {
   BaseComunicacaoPropria,
   bool,
@@ -26,6 +38,7 @@ import {
   type ContextoComunicacao,
   dataOuNull,
   entradaValida,
+  fusoDoEstabelecimento,
   naoEncontrado,
   num,
   numOuNull,
@@ -158,9 +171,10 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
           ordem_prioridade: x.ordemPrioridade,
           ativo: x.ativo,
         };
-        const a = await tx.uma(
-          'SELECT id, versao FROM perfil_prioridade_externa WHERE codigo = ? FOR UPDATE',
+        const [a] = await tx.consultarParaAtualizar(
+          'SELECT id, versao FROM perfil_prioridade_externa WHERE codigo = ?',
           [x.codigo],
+          { teto: 1 },
         );
         if (a) {
           if (x.versao === null || x.versao !== num(a['versao'])) throw conflito();
@@ -215,10 +229,11 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
             encerrado: a['saida_em'] !== null,
           },
         );
-        const vigentes = await tx.consultar(
+        const vigentes = await tx.consultarParaAtualizar(
           `SELECT id, versao, classificado_em FROM classificacao_externa_recebida
-            WHERE atendimento_id = ? AND situacao IN ('recebida','aplicada') AND excluido_em IS NULL FOR UPDATE`,
+            WHERE atendimento_id = ? AND situacao IN ('recebida','aplicada') AND excluido_em IS NULL`,
           [x.atendimentoId],
+          { teto: 500 },
         );
         const chegada = situacaoNaChegada(
           erros.length > 0,
@@ -447,4 +462,241 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
       }),
     );
   }
+
+  /**
+   * Envio ativo dos perfis ao sistema de triagem: monta a MFN^M13 pelo perfil de mensagem HL7 do sistema e põe na
+   * fila de saída do parceiro HL7 dele (o worker entrega por MLLP). O mesmo pacote de perfis no mesmo dia não entra
+   * duas vezes (a chave é o resumo do pacote e a data local); pacote mudado entra de novo.
+   */
+  enviarPerfis(
+    c: ContextoComunicacao,
+    entrada: unknown,
+    agora: Date = new Date(),
+  ): Promise<{ id: number; repetida: boolean; perfis: number; chave: string }> {
+    const { sistema } = entradaValida(z.object({ sistema: z.string().min(1).max(40) }).strict(), entrada);
+    return this.gravar(
+      c,
+      'integracao.classificacao_externa.enviar_perfis',
+      ['mensagem_integracao_saida', 'ponto_integracao'],
+      async (tx, est) => {
+        const s = await tx.uma(
+          'SELECT id, categoria, ativo FROM sistema_externo WHERE codigo = ? AND excluido_em IS NULL',
+          [sistema],
+        );
+        if (!s) throw naoEncontrado('Sistema externo');
+        const sid = num(s['id']);
+        const par = await tx.uma(
+          `SELECT id, codigo, nome, canal, limite_tentativas FROM parceiro_dados
+            WHERE sistema_externo_id = ? AND tipo IN ('hl7','apoio') AND ativo = TRUE AND excluido_em IS NULL
+            ORDER BY id LIMIT 1`,
+          [sid],
+        );
+        const pm = await tx.uma(
+          `SELECT pm.versao_hl7, pm.separador_campo, pm.caracteres_codificacao, pm.ativo, pm.evento_hl7_id,
+                  pm.canal_hl7_id
+             FROM perfil_mensagem_hl7 pm JOIN evento_hl7 ev ON ev.id = pm.evento_hl7_id
+            WHERE pm.sistema_externo_id = ? AND ev.codigo_hl7 = ?
+            ORDER BY pm.ativo DESC, pm.id DESC LIMIT 1`,
+          [sid, EVENTO_HL7_PERFIS_TRIAGEM],
+        );
+        const lidos = await tx.consultar(
+          `SELECT codigo, descricao, codigo_externo, condicao_preferencial, ordem_prioridade, ativo
+             FROM perfil_prioridade_externa
+            WHERE (sistema_externo_id IS NULL OR sistema_externo_id = ?) AND ativo = TRUE
+            ORDER BY ordem_prioridade, codigo LIMIT 300`,
+          [sid],
+        );
+        const perfis = perfisParaEnvio(
+          lidos.map((x) => ({
+            codigo: String(x['codigo']),
+            descricao: String(x['descricao']),
+            codigoExterno: txtOuNull(x['codigo_externo']),
+            condicaoPreferencial: txtOuNull(x['condicao_preferencial']) as CondicaoPreferencial | null,
+            ordemPrioridade: num(x['ordem_prioridade']),
+            ativo: bool(x['ativo']),
+          })),
+        );
+        const perfilMensagem = pm
+          ? {
+              versaoHl7: String(pm['versao_hl7']),
+              separadorCampo: String(pm['separador_campo']),
+              caracteresCodificacao: String(pm['caracteres_codificacao']),
+              ativo: bool(pm['ativo']),
+            }
+          : null;
+        const erros = conferirEnvioPerfis({
+          sistemaTriagemAtivo: String(s['categoria']) === 'triagem' && bool(s['ativo']),
+          parceiroHl7ComCanal: !!par && !!txtOuNull(par['canal']),
+          perfilMensagem,
+          perfis,
+        });
+        if (erros.length > 0 || !par || !pm || !perfilMensagem) throw recusa(erros, 'Envio recusado');
+        const fuso = await fusoDoEstabelecimento(tx, est, agora);
+        const local = new Date(agora.getTime() + fuso * 60_000);
+        const resumoPacote = createHash('sha256')
+          .update(JSON.stringify({ v: perfilMensagem.versaoHl7, perfis }))
+          .digest('hex');
+        const chave = `perfis:${sistema}:${resumoPacote.slice(0, 32)}:${local.toISOString().slice(0, 10)}`;
+        const codigoPonto = `parceiro.${String(par['codigo'])}.saida`;
+        let ponto = await tx.uma(
+          'SELECT id, ativo FROM ponto_integracao WHERE estabelecimento_id = ? AND codigo = ? AND excluido_em IS NULL',
+          [est, codigoPonto],
+        );
+        if (ponto && !bool(ponto['ativo']))
+          throw recusa([
+            {
+              campo: 'ponto',
+              codigo: 'ponto-desativado',
+              mensagem: 'O ponto de saída do sistema de triagem está desativado.',
+            },
+          ]);
+        if (ponto) {
+          const ja = await tx.uma(
+            'SELECT id FROM mensagem_integracao_saida WHERE ponto_integracao_id = ? AND chave_idempotencia = ?',
+            [num(ponto['id']), chave],
+          );
+          if (ja) return { id: num(ja['id']), repetida: true, perfis: perfis.length, chave };
+        } else {
+          const padrao = await tx.uma(
+            "SELECT id FROM padrao_troca WHERE familia = 'hl7v2' AND ativo = TRUE ORDER BY id LIMIT 1",
+            [],
+          );
+          if (!padrao)
+            throw recusa([
+              {
+                campo: 'ponto',
+                codigo: 'padrao-troca-nao-cadastrado',
+                mensagem: 'O padrão de troca HL7 v2 não está cadastrado neste cliente.',
+              },
+            ]);
+          ponto = {
+            id: await tx.incluir('ponto_integracao', {
+              estabelecimento_id: est,
+              codigo: codigoPonto,
+              nome: `${String(par['nome'])} (saida)`.slice(0, 150),
+              sistema_externo_id: sid,
+              padrao_troca_id: num(padrao['id']),
+              direcao: 'saida',
+              transporte: 'mllp',
+              formato_conteudo: 'hl7v2',
+              versao_padrao: perfilMensagem.versaoHl7,
+              ativo: true,
+            }),
+            ativo: true,
+          };
+        }
+        const conteudo = montarPerfisHl7(
+          {
+            aplicacaoOrigem: 'SGH',
+            instituicaoOrigem: c.hospital.toUpperCase().slice(0, 20),
+            aplicacaoDestino: sistema.toUpperCase().slice(0, 20),
+            dataHora: local,
+            controle: `PRF${resumoPacote.slice(0, 12)}${local.toISOString().slice(5, 10).replace('-', '')}`,
+            processamento: process.env['SGH_AMBIENTE'] === 'producao' ? 'P' : 'T',
+          },
+          perfilMensagem,
+          perfis,
+        );
+        const id = await tx.incluir('mensagem_integracao_saida', {
+          estabelecimento_id: est,
+          ponto_integracao_id: num(ponto['id']),
+          sistema_externo_id: sid,
+          canal_hl7_id: numOuNull(pm['canal_hl7_id']),
+          evento_hl7_id: num(pm['evento_hl7_id']),
+          chave_idempotencia: chave,
+          correlacao: `perfis.${sistema}`.slice(0, 64),
+          tipo_mensagem: EVENTO_ENVIO_PERFIS_TRIAGEM,
+          formato: 'hl7v2',
+          conteudo,
+          hash_sha256: createHash('sha256').update(conteudo).digest('hex'),
+          situacao: 'pendente',
+          tentativas: 0,
+          tentativas_maximas: Math.max(1, num(par['limite_tentativas']) || 5),
+        });
+        return { id, repetida: false, perfis: perfis.length, chave };
+      },
+    );
+  }
+
+  /**
+   * Entrada da classificação pela credencial do sistema de triagem (Basic cliente:segredo): conferida em tempo
+   * constante pelo resumo da chave ativa; a credencial tem de ser de um sistema de triagem ativo, no estabelecimento,
+   * com usuário técnico (autor da trilha) e o escopo. O sistema é o da credencial: corpo com outro sistema é recusado.
+   */
+  async receberPelaCredencial(
+    hospital: string,
+    autorizacao: unknown,
+    corpo: unknown,
+    agora: Date = new Date(),
+  ): Promise<{ id: number; situacao: string; repetida: boolean; motivos: string[] }> {
+    const negar = () =>
+      new ErroOperacao(401, 'nao-autenticado', 'Credencial inválida', 'Confira o cliente e o segredo.');
+    const cred = lerAutorizacaoBasica(autorizacao);
+    if (!cred) throw negar();
+    const base: ContextoComunicacao = {
+      cliente: this.cliente,
+      hospital,
+      usuario: null,
+      correlacao: 'integracao.triagem.entrada',
+    };
+    const x = await this.ler(base, 'classificacaoExterna.credencial', async (l, est) => {
+      const r = await l.uma(
+        `SELECT ca.situacao, ca.estabelecimento_id, ca.usuario_id, s.codigo AS sistema, s.categoria,
+                s.ativo AS sistema_ativo, k.hash_chave, p.escopos
+           FROM cliente_api ca
+           JOIN chave_api k ON k.cliente_api_id = ca.id AND k.situacao = 'ativa' AND k.excluido_em IS NULL
+                AND k.valida_desde <= CURRENT_TIMESTAMP(3) AND (k.valida_ate IS NULL OR k.valida_ate > CURRENT_TIMESTAMP(3))
+           LEFT JOIN sistema_externo s ON s.id = ca.sistema_externo_id AND s.excluido_em IS NULL
+           LEFT JOIN parceiro_dados p ON p.cliente_api_id = ca.id AND p.ativo = TRUE AND p.excluido_em IS NULL
+          WHERE ca.identificador_cliente = ? AND ca.excluido_em IS NULL
+          ORDER BY k.sequencia DESC, p.id LIMIT 1`,
+        [cred.clienteId],
+      );
+      return r ? { r, est } : null;
+    });
+    if (!x || !segredoConfere(cred.segredo, String(x.r['hash_chave']))) throw negar();
+    const erros = conferirCredencialTriagem({
+      categoriaSistema: txtOuNull(x.r['categoria']),
+      sistemaAtivo: bool(x.r['sistema_ativo']),
+      situacaoCliente: String(x.r['situacao']),
+      restritoA: numOuNull(x.r['estabelecimento_id']),
+      estabelecimento: x.est,
+      usuarioTecnico: numOuNull(x.r['usuario_id']),
+      escopos: listaEscopos(x.r['escopos']),
+    });
+    if (erros.length > 0)
+      throw new ErroOperacao(
+        403,
+        erros[0]!.codigo,
+        'Credencial recusada',
+        erros.map((e) => e.mensagem).join(' '),
+      );
+    const sistema = String(x.r['sistema']);
+    const dados = (corpo !== null && typeof corpo === 'object' ? corpo : {}) as Record<string, unknown>;
+    if (dados['sistemaCodigo'] !== undefined && dados['sistemaCodigo'] !== sistema)
+      throw new ErroOperacao(
+        403,
+        'sistema-da-credencial',
+        'Sistema diferente da credencial',
+        'A classificação só entra em nome do sistema de triagem da credencial.',
+      );
+    return this.receber(
+      { ...base, usuario: num(x.r['usuario_id']), correlacao: `triagem.${sistema}`.slice(0, 64) },
+      { ...dados, sistemaCodigo: sistema },
+      agora,
+    );
+  }
+}
+
+/** A lista de escopos gravada em JSON (o driver devolve texto ou já a lista). */
+function listaEscopos(v: unknown): string[] {
+  let x: unknown = v;
+  if (typeof v === 'string') {
+    try {
+      x = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(x) ? x.filter((e): e is string => typeof e === 'string') : [];
 }

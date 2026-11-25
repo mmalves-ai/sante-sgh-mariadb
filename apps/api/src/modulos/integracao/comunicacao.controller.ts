@@ -19,6 +19,8 @@
 //   GET  /api/integracoes/classificacao-externa/perfis         perfis de prioridade
 //   PUT  /api/integracoes/classificacao-externa/perfis         inclui ou altera o perfil (com a versão lida)
 //   GET  /api/integracoes/classificacao-externa/perfis/envio   o que vai ao sistema de triagem (?sistema=)
+//   POST /api/integracoes/classificacao-externa/perfis/envio   põe a mensagem HL7 dos perfis na fila de saída do sistema
+//   POST /api/integracoes/classificacao-externa/entrada/:hospital  a classificação pela credencial do sistema de triagem
 //   POST /api/integracoes/classificacao-externa/recebidas      recebe a classificação do atendimento (idempotente)
 //   POST /api/integracoes/classificacao-externa/recebidas/:id/aplicacao  gera a classificação interna da recebida
 //   GET  /api/integracoes/classificacao-externa/atendimento/:a as recebidas do atendimento, com o prazo
@@ -37,7 +39,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { PERMISSOES_CLASSIFICACAO_CODIGOS as PC, PERMISSOES_M34_CODIGOS as P } from '@sgh/contratos';
-import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao, Publica } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -236,6 +238,35 @@ export class ComunicacaoController {
       sistema: sistema ?? null,
       perfis: await p.perfisParaSistema(c, sistema ?? ''),
     }));
+  }
+
+  @Post('classificacao-externa/perfis/envio')
+  @AuditadoNoHandler('executor: trilha na mesma transação da comunicação')
+  @HttpCode(201)
+  @Permissao(P.classificacaoExternaConfigurar)
+  enviarPerfis(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+    return com(this.classificacao, req, (p, c) => p.enviarPerfis(c, corpo));
+  }
+
+  @Post('classificacao-externa/entrada/:hospital')
+  @HttpCode(201)
+  @Publica(
+    'entrada do sistema de triagem: a credencial do cliente da API é conferida na porta (resumo, sistema e escopo); a trilha é do usuário técnico',
+  )
+  entradaTriagem(
+    @Param('hospital') hospital: string,
+    @Body() corpo: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    if (!this.classificacao)
+      throw new ErroProblema('indisponivel', 503, 'Recurso sem banco próprio neste ambiente');
+    if (!/^[A-Za-z0-9_-]{1,20}$/.test(hospital))
+      throw new ErroProblema('nao-encontrado', 404, 'Estabelecimento não encontrado');
+    return this.classificacao
+      .receberPelaCredencial(hospital, req.headers['authorization'], corpo)
+      .catch((e: unknown) => {
+        throw problemaDoCadastro(e);
+      });
   }
 
   @Post('classificacao-externa/recebidas')
