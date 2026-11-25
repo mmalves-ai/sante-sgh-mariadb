@@ -14,6 +14,8 @@ import { armazemSusLocal, armazemSusMemoria } from './armazem.js';
 import { PORTA_SUS, type PortaSus, portaSusIndisponivel } from './porta.js';
 import { PortaSusMemoria } from './porta-memoria.js';
 import { PortaSusPropria } from './porta-propria.js';
+import { ApacComplementosController } from './apac-complementos.controller.js';
+import { PORTA_APAC_COMPLEMENTOS, PortaApacComplementosPropria } from './apac-complementos-propria.js';
 import { ProgramacaoSusController } from './programacao.controller.js';
 import { PORTA_PROGRAMACAO_SUS, PortaProgramacaoSusPropria } from './programacao-propria.js';
 import type { ArmazemArquivoSus } from './servico.js';
@@ -59,6 +61,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
       LeitosUtiSusController,
       TransplanteSusController,
       ProgramacaoSusController,
+      ApacComplementosController,
     ],
     providers: [
       { provide: PORTA_SUS, useValue: porta },
@@ -88,6 +91,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaProgramacaoSusPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F7 (06-SUS linha 56): laudos específicos (oncologia, auditiva, medicamento, odontologia) e sessões da APAC.
+      {
+        provide: PORTA_APAC_COMPLEMENTOS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaApacComplementosPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
     ],

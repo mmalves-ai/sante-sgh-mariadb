@@ -15,6 +15,7 @@ export * from './bpa.js';
 export * from './bpa-leiaute.js';
 export * from './apac.js';
 export * from './apac-leiaute.js';
+export * from './apac-laudos-especificos.js';
 export * from './aih.js';
 export * from './sisaih-leiaute.js';
 export * from './retorno.js';

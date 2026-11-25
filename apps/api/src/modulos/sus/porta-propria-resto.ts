@@ -467,11 +467,7 @@ export class GravacoesLinhasSusPropria {
               )?.['id'],
             )
           : null;
-      const apac = await this.tx.incluir('apac', {
-        estabelecimento_id: this.est,
-        autorizacao_apac_id: autorizacao,
-        competencia_sus_id: competencia.id,
-        numero_apac: numero,
+      const camposApac = {
         tipo_apac: tipo,
         anterior_apac_id: anterior,
         atendimento_id: numOuNulo(a['atendimento_id']),
@@ -483,7 +479,26 @@ export class GravacoesLinhasSusPropria {
         codigo_cid10_causa_associada: txtOuNulo(a['codigo_cid10_causa_associada']),
         remessa_apac_id: remessa,
         situacao: 'apresentada',
-      });
+      };
+      // A APAC da competência aberta pelas sessões (apac-complementos-propria.ts) é a que vai na remessa: as
+      // sessões ficam ligadas a ela.
+      const aberta = await this.tx.uma(
+        `SELECT id, versao FROM apac WHERE autorizacao_apac_id = ? AND competencia_sus_id = ? AND situacao = 'aberta'
+            AND excluido_em IS NULL LIMIT 1`,
+        [autorizacao, competencia.id],
+      );
+      let apac: number;
+      if (aberta) {
+        apac = num(aberta['id']);
+        await this.tx.alterar('apac', apac, num(aberta['versao']), { ...camposApac, numero_apac: numero });
+      } else
+        apac = await this.tx.incluir('apac', {
+          estabelecimento_id: this.est,
+          autorizacao_apac_id: autorizacao,
+          competencia_sus_id: competencia.id,
+          numero_apac: numero,
+          ...camposApac,
+        });
       let k = 0;
       for (const x of ls) {
         k += 1;
