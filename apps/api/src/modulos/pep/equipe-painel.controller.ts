@@ -13,6 +13,12 @@
 //   POST   /api/pep/equipe/membro/:membro/saida         encerra a participação { motivo }
 //   POST   /api/pep/equipe/atendimento/:atendimento/encerramento  encerra a equipe no fim do atendimento { motivo }
 //   GET    /api/pep/equipe/profissional/:profissional/especialidades  especialidades do profissional (para a tela)
+//   GET    /api/pep/equipe/minha-fila                   pacientes cujas pendências chegam à conta pela equipe (C2-064)
+//   GET    /api/pep/equipe/padroes?atendimento=         equipes padrão do setor ou serviço, com as sugeridas ao atendimento
+//   POST   /api/pep/equipe/padroes                      grava equipe padrão { nome, setor?, especialidade?, membros }
+//   POST   /api/pep/equipe/padroes/:padrao/desativacao  desativa { versao } (nada apagado)
+//   POST   /api/pep/equipe/atendimento/:atendimento/padrao/:padrao  aplica a equipe padrão (uma transação)
+// O vínculo pela equipe (conta na equipe vigente de atendimento aberto) é a forma "equipe" da guarda do prontuário.
 // A equipe é dado do paciente: ler, incluir e encerrar passam pela mesma guarda de vínculo assistencial do prontuário
 // (AcessoPacientePep), e a leitura vai à trilha de acesso ao prontuário.
 // A configuração que vale usa o padrão do ESTABELECIMENTO (assinatura do parâmetro pep.prontuario.assinaturaExigida;
@@ -55,6 +61,7 @@ import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/public-api
 import { AcessoPacientePep } from './acesso-paciente.js';
 import { PORTA_EQUIPE_PAINEL, type PortaEquipePainelPropria } from './equipe-painel-propria.js';
 import { ESTADO_PRONTUARIO } from './prontuario.controller.js';
+import { vinculoPelaEquipe } from './vinculo-pela-equipe.js';
 import type { EstadoProntuario } from './sessao-prontuario.js';
 
 export const PERMISSOES_EQUIPE_PAINEL = {
@@ -87,7 +94,15 @@ export class EquipePainelController {
     @Optional() @Inject(VINCULO_ASSISTENCIAL) vinculo: VinculoAssistencialPort = new VinculoSintetico(),
     @Optional() @Inject(REGISTRO_EMERGENCIA) emergencia: RegistroEmergencia | null = null,
   ) {
-    this.acesso = new AcessoPacientePep({ estado, trilha, alerta, configuracao, vinculo, emergencia });
+    this.acesso = new AcessoPacientePep({
+      estado,
+      trilha,
+      alerta,
+      configuracao,
+      vinculo,
+      emergencia,
+      vinculoNoCliente: vinculoPelaEquipe(porta),
+    });
   }
 
   private async com<T>(
@@ -269,5 +284,50 @@ export class EquipePainelController {
     @Body() corpo: unknown,
   ) {
     return this.com(req, (p, c) => p.encerrarMembro(c, membro, corpo));
+  }
+
+  @Get('equipe/minha-fila')
+  @Permissao(PERMISSOES_EQUIPE_PAINEL.painelLer)
+  minhaFila(@Req() req: RequisicaoAutorizada) {
+    return this.com(req, async (p, c) => ({ itens: await p.filaDaEquipe(c) }));
+  }
+
+  @Get('equipe/padroes')
+  @Permissao(PERMISSOES_EQUIPE_PAINEL.painelLer)
+  padroes(@Req() req: RequisicaoAutorizada, @Query('atendimento') atendimento?: string) {
+    const a = atendimento && /^\d+$/.test(atendimento) ? Number(atendimento) : null;
+    return this.com(req, (p, c) => p.padroes(c, a));
+  }
+
+  @Post('equipe/padroes')
+  @AuditadoNoHandler('executor: trilha na mesma transação do painel e da equipe')
+  @Permissao(PERMISSOES_EQUIPE_PAINEL.setorEditar)
+  gravarPadrao(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+    return this.com(req, (p, c) => p.gravarPadrao(c, corpo));
+  }
+
+  @Post('equipe/padroes/:padrao/desativacao')
+  @AuditadoNoHandler('executor: trilha na mesma transação do painel e da equipe')
+  @Permissao(PERMISSOES_EQUIPE_PAINEL.setorEditar)
+  desativarPadrao(
+    @Req() req: RequisicaoAutorizada,
+    @Param('padrao', ParseIntPipe) padrao: number,
+    @Body() corpo: unknown,
+  ) {
+    return this.com(req, (p, c) => p.desativarPadrao(c, padrao, corpo));
+  }
+
+  @Post('equipe/atendimento/:atendimento/padrao/:padrao')
+  @AuditadoNoHandler('executor: trilha na mesma transação do painel e da equipe')
+  @Permissao(PERMISSOES_EQUIPE_PAINEL.equipeGerenciar)
+  aplicarPadrao(
+    @Req() req: RequisicaoAutorizada,
+    @Param('atendimento', ParseIntPipe) atendimento: number,
+    @Param('padrao', ParseIntPipe) padrao: number,
+  ) {
+    return this.com(req, async (p, c, s) => {
+      await this.pacienteGuardado(p, c, s, atendimento, PERMISSOES_EQUIPE_PAINEL.equipeGerenciar);
+      return p.aplicarPadrao(c, atendimento, padrao);
+    });
   }
 }

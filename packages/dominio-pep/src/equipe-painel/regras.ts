@@ -405,3 +405,173 @@ export function destinatariosDePendencias(membros: readonly MembroEquipe[]): num
     ),
   ];
 }
+
+// ── Fim do atendimento, equipe padrão e fila de pendências (03-PEP L94, C2-064) ─────────────────────
+
+/** Motivo gravado nos membros fechados pelo fim do atendimento (alta ou encerramento); a reabertura o reconhece. */
+export const MOTIVO_FIM_DO_ATENDIMENTO = 'Fim do atendimento';
+
+/**
+ * Cancelamento da alta: a equipe volta a valer. Quem saiu JUNTO com o fim do atendimento (mesmo instante e motivo do
+ * encerramento automático) volta como participação NOVA; a antiga fica no histórico. Quem saiu antes, por outro
+ * motivo, não volta.
+ */
+export function planoReaberturaEquipe(
+  situacao: string,
+  fimEquipe: string | null,
+  membros: readonly (MembroEquipe & { readonly motivoSaida: string | null })[],
+): { readonly reabrir: boolean; readonly membrosAVoltar: number[] } {
+  if (situacao !== 'encerrada' || fimEquipe === null) return { reabrir: false, membrosAVoltar: [] };
+  const fim = fimEquipe.slice(0, 19);
+  const voltam = membros.filter(
+    (m) => m.fim !== null && m.fim.slice(0, 19) === fim && m.motivoSaida === MOTIVO_FIM_DO_ATENDIMENTO,
+  );
+  // Nunca dois responsáveis: se um responsável voltaria junto com outro já vigente, o vigente prevalece.
+  const temResponsavel = vigentes(membros).some((m) => m.responsavelPrincipal);
+  return {
+    reabrir: true,
+    membrosAVoltar: voltam.filter((m) => !(m.responsavelPrincipal && temResponsavel)).map((m) => m.id),
+  };
+}
+
+export interface MembroPadrao {
+  readonly sequencia: number;
+  readonly funcao: number;
+  readonly profissional: number | null;
+  readonly responsavel: boolean;
+}
+
+export interface EquipePadraoNova {
+  readonly nome: string;
+  readonly setor: number | null;
+  readonly especialidade: number | null;
+  readonly membros: readonly {
+    readonly funcao: FuncaoEquipe;
+    readonly profissional: number | null;
+    readonly responsavel: boolean;
+  }[];
+}
+
+/** Equipe padrão do setor ou serviço: nome, alvo (setor ou especialidade), membros sem repetir e um só responsável. */
+export function validarEquipePadrao(x: EquipePadraoNova): ErroRegraPainel[] {
+  const erros: ErroRegraPainel[] = [];
+  const nome = x.nome.trim();
+  if (nome.length < 3 || nome.length > 100)
+    erros.push({
+      campo: 'nome',
+      codigo: 'nome-invalido',
+      mensagem: 'O nome da equipe padrão vai de 3 a 100 caracteres.',
+    });
+  if (x.setor === null && x.especialidade === null)
+    erros.push({
+      campo: 'setor',
+      codigo: 'padrao-sem-alvo',
+      mensagem: 'Informe o setor ou a especialidade da equipe padrão.',
+    });
+  if (!x.membros.length)
+    erros.push({
+      campo: 'membros',
+      codigo: 'padrao-vazio',
+      mensagem: 'A equipe padrão precisa de pelo menos um membro.',
+    });
+  const chaves = x.membros
+    .filter((m) => m.profissional !== null)
+    .map((m) => `${m.profissional}:${m.funcao.id}`);
+  if (new Set(chaves).size !== chaves.length)
+    erros.push({
+      campo: 'membros',
+      codigo: 'membro-repetido',
+      mensagem: 'O mesmo profissional aparece duas vezes na mesma função.',
+    });
+  const responsaveis = x.membros.filter((m) => m.responsavel);
+  if (responsaveis.length > 1)
+    erros.push({
+      campo: 'membros',
+      codigo: 'responsavel-duplicado',
+      mensagem: 'A equipe padrão tem um só responsável.',
+    });
+  if (responsaveis.some((m) => m.funcao.categoria !== 'medica'))
+    erros.push({
+      campo: 'membros',
+      codigo: 'responsavel-nao-medico',
+      mensagem: 'O responsável tem de ser de função médica.',
+    });
+  if (x.membros.some((m) => !m.funcao.ativo))
+    erros.push({
+      campo: 'membros',
+      codigo: 'funcao-inativa',
+      mensagem: 'Há função inativa na equipe padrão.',
+    });
+  return erros;
+}
+
+export interface EquipePadraoResumo {
+  readonly id: number;
+  readonly setor: number | null;
+  readonly especialidade: number | null;
+  readonly sugerir: boolean;
+  readonly ativo: boolean;
+}
+
+/** As equipes padrão que servem ao atendimento: ativas; primeiro as do setor, depois as da especialidade. */
+export function padroesDoAtendimento<T extends EquipePadraoResumo>(
+  padroes: readonly T[],
+  setor: number | null,
+  especialidade: number | null,
+): T[] {
+  const ativos = padroes.filter((p) => p.ativo);
+  const doSetor = ativos.filter((p) => setor !== null && p.setor === setor);
+  const daEsp = ativos.filter(
+    (p) =>
+      !doSetor.includes(p) && especialidade !== null && p.especialidade === especialidade && p.setor === null,
+  );
+  return [...doSetor, ...daEsp];
+}
+
+/**
+ * Aplicar a equipe padrão ao atendimento: inclui os membros nomeados que ainda não estão (mesmo profissional e
+ * função), um só responsável; a função reservada sem profissional e a repetida ficam de fora com o motivo.
+ */
+export function planoEquipePadrao(
+  atuais: readonly MembroEquipe[],
+  modelo: readonly MembroPadrao[],
+): {
+  readonly incluir: MembroPadrao[];
+  readonly ignorados: { readonly sequencia: number; readonly codigo: string }[];
+} {
+  const v = vigentes(atuais);
+  let temResponsavel = v.some((m) => m.responsavelPrincipal);
+  const incluir: MembroPadrao[] = [];
+  const ignorados: { sequencia: number; codigo: string }[] = [];
+  for (const m of [...modelo].sort((a, b) => a.sequencia - b.sequencia)) {
+    if (m.profissional === null)
+      ignorados.push({ sequencia: m.sequencia, codigo: 'funcao-sem-profissional' });
+    else if (v.some((x) => x.profissional === m.profissional && x.funcao === m.funcao))
+      ignorados.push({ sequencia: m.sequencia, codigo: 'ja-na-equipe' });
+    else if (m.responsavel && temResponsavel)
+      ignorados.push({ sequencia: m.sequencia, codigo: 'responsavel-duplicado' });
+    else {
+      if (m.responsavel) temResponsavel = true;
+      incluir.push(m);
+    }
+  }
+  return { incluir, ignorados };
+}
+
+/**
+ * A fila de pendências pela equipe: dos atendimentos abertos, aqueles em que o profissional é destinatário (marcado
+ * para receber ou responsável principal), com o papel dele.
+ */
+export function filaDePendenciasDaEquipe<T extends { readonly membros: readonly MembroEquipe[] }>(
+  equipes: readonly T[],
+  profissionais: readonly number[],
+): (T & { readonly responsavel: boolean })[] {
+  return equipes
+    .filter((e) => destinatariosDePendencias(e.membros).some((p) => profissionais.includes(p)))
+    .map((e) => ({
+      ...e,
+      responsavel: vigentes(e.membros).some(
+        (m) => m.responsavelPrincipal && profissionais.includes(m.profissional),
+      ),
+    }));
+}

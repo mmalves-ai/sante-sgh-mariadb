@@ -14,6 +14,10 @@ import { randomUUID } from 'node:crypto';
 import {
   atendimentoAberto,
   categoriaDoCbo,
+  filaDePendenciasDaEquipe,
+  padroesDoAtendimento,
+  planoEquipePadrao,
+  validarEquipePadrao,
   type ConfiguracaoProntuario,
   type ConfiguracaoSetor,
   type ErroRegraPainel,
@@ -118,6 +122,61 @@ export const esquemaMembro = z
     recebeNotificacao: z.boolean().default(false),
   })
   .strict();
+export const esquemaEquipePadrao = z
+  .object({
+    nome: z.string().min(1).max(100),
+    setor: z.number().int().positive().nullable().default(null),
+    especialidade: z.number().int().positive().nullable().default(null),
+    sugerirAutomaticamente: z.boolean().default(true),
+    membros: z
+      .array(
+        z
+          .object({
+            funcao: z.number().int().positive(),
+            profissional: z.number().int().positive().nullable().default(null),
+            responsavel: z.boolean().default(false),
+          })
+          .strict(),
+      )
+      .max(30),
+  })
+  .strict();
+export const esquemaVersao = z.object({ versao: z.number().int().positive() }).strict();
+
+export interface EquipePadraoLida {
+  readonly id: number;
+  readonly nome: string;
+  readonly setor: number | null;
+  readonly setorNome: string | null;
+  readonly especialidade: number | null;
+  readonly sugerir: boolean;
+  readonly ativo: boolean;
+  readonly versao: number;
+  readonly membros: {
+    readonly sequencia: number;
+    readonly funcao: number;
+    readonly funcaoDescricao: string;
+    readonly profissional: number | null;
+    readonly profissionalNome: string | null;
+    readonly responsavel: boolean;
+  }[];
+}
+
+export interface ItemFilaEquipe {
+  readonly equipe: number;
+  readonly atendimento: number;
+  readonly numero: string;
+  readonly paciente: number;
+  readonly pacienteNome: string;
+  readonly responsavel: boolean;
+}
+
+/** Profissionais da conta no estabelecimento (vínculo vigente da conta com o cadastro do profissional). */
+const SQL_PROFISSIONAIS_DO_USUARIO = `
+  SELECT DISTINCT profissional_id FROM usuario_vinculo_profissional
+   WHERE usuario_id = ? AND estabelecimento_id = ? AND profissional_id IS NOT NULL AND excluido_em IS NULL
+     AND vigencia_inicio <= CURRENT_DATE AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)`;
+
 export const esquemaSaida = z.object({ motivo: z.string().min(1).max(500) }).strict();
 
 /** Violação de chave única (a outra transação gravou primeiro). */
@@ -170,6 +229,8 @@ const TABELAS = [
   'configuracao_setor_prontuario',
   'equipe_assistencial_paciente',
   'equipe_assistencial_membro',
+  'equipe_assistencial_padrao',
+  'equipe_assistencial_padrao_membro',
 ];
 
 const SQL_MEMBROS = `
@@ -826,5 +887,381 @@ export class PortaEquipePainelPropria {
       });
       return { tabela: 'equipe_assistencial_membro', id: membro };
     });
+  }
+
+  // ── Vínculo pela equipe, fila de pendências e equipe padrão (03-PEP L94, C2-064) ─────────────────
+
+  private async profissionaisDoUsuario(l: Pick<Leitor, 'consultar'>, est: Est, usuario: number | null) {
+    if (usuario === null) return [];
+    return (await l.consultar(SQL_PROFISSIONAIS_DO_USUARIO, [usuario, est.id])).map((x) =>
+      num(x['profissional_id']),
+    );
+  }
+
+  /**
+   * Vínculo assistencial pela equipe para a CONTA da sessão: algum profissional ligado à conta no estabelecimento está
+   * na equipe vigente de um atendimento ABERTO do paciente. É a fonte real da forma "equipe" da guarda do prontuário.
+   */
+  vinculoDoUsuario(c: ContextoDocs, paciente: number): Promise<boolean> {
+    return this.ler(c, 'vinculo-usuario', async (l, est) => {
+      const profs = await this.profissionaisDoUsuario(l, est, c.usuario);
+      if (!profs.length) return false;
+      const r = await l.consultar(
+        `SELECT m.id, m.profissional_id, m.funcao_equipe_assistencial_id, m.responsavel_principal,
+                m.recebe_notificacao, m.inicio_em, m.fim_em, a.situacao AS atd_situacao, a.saida_em AS atd_saida
+           FROM equipe_assistencial_membro m
+           JOIN equipe_assistencial_paciente e ON e.id = m.equipe_assistencial_paciente_id
+           JOIN atendimento a ON a.id = e.atendimento_id AND a.excluido_em IS NULL
+          WHERE e.paciente_id = ? AND e.estabelecimento_id = ? AND e.situacao = 'ativa' AND e.excluido_em IS NULL
+            AND m.excluido_em IS NULL AND m.fim_em IS NULL AND m.profissional_id IN (${profs.map(() => '?').join(', ')})`,
+        [paciente, est.id, ...profs],
+      );
+      const abertos = r
+        .filter((x) => atendimentoAberto(String(x['atd_situacao']), (x['atd_saida'] as Date | null) ?? null))
+        .map((x) => membroLido({ ...x, nome: '', descricao: '' }, est.fuso));
+      return profs.some((p) => temVinculoPelaEquipe(abertos, p));
+    });
+  }
+
+  /** A fila de pendências pela equipe: os pacientes de atendimento aberto cujas pendências chegam à conta da sessão. */
+  filaDaEquipe(c: ContextoDocs): Promise<ItemFilaEquipe[]> {
+    return this.ler(c, 'fila-equipe', async (l, est) => {
+      const profs = await this.profissionaisDoUsuario(l, est, c.usuario);
+      if (!profs.length) return [];
+      const equipes = await l.consultar(
+        `SELECT e.id, e.atendimento_id, e.paciente_id, a.numero, a.situacao, a.saida_em, pf.nome
+           FROM equipe_assistencial_paciente e
+           JOIN atendimento a ON a.id = e.atendimento_id AND a.excluido_em IS NULL
+           LEFT JOIN paciente p ON p.id = e.paciente_id
+           LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+          WHERE e.estabelecimento_id = ? AND e.situacao = 'ativa' AND e.excluido_em IS NULL
+            AND EXISTS (SELECT 1 FROM equipe_assistencial_membro m
+                         WHERE m.equipe_assistencial_paciente_id = e.id AND m.fim_em IS NULL AND m.excluido_em IS NULL
+                           AND m.profissional_id IN (${profs.map(() => '?').join(', ')}))
+          ORDER BY e.inicio_em LIMIT 200`,
+        [est.id, ...profs],
+      );
+      const abertas = [];
+      for (const e of equipes) {
+        if (!atendimentoAberto(String(e['situacao']), (e['saida_em'] as Date | null) ?? null)) continue;
+        abertas.push({
+          equipe: num(e['id']),
+          atendimento: num(e['atendimento_id']),
+          numero: String(e['numero'] ?? ''),
+          paciente: num(e['paciente_id']),
+          pacienteNome: String(e['nome'] ?? `Paciente ${num(e['paciente_id'])}`),
+          membros: (await l.consultar(SQL_MEMBROS, [e['id']])).map((x) => membroLido(x, est.fuso)),
+        });
+      }
+      return filaDePendenciasDaEquipe(abertas, profs).map((x) => ({
+        equipe: x.equipe,
+        atendimento: x.atendimento,
+        numero: x.numero,
+        paciente: x.paciente,
+        pacienteNome: x.pacienteNome,
+        responsavel: x.responsavel,
+      }));
+    });
+  }
+
+  /** As equipes padrão do estabelecimento; com o atendimento, as que servem a ele (setor, depois especialidade). */
+  padroes(
+    c: ContextoDocs,
+    atendimento: number | null,
+  ): Promise<{ itens: EquipePadraoLida[]; sugeridos: number[] }> {
+    return this.ler(c, 'padroes', async (l, est) => {
+      const linhas = await l.consultar(
+        `SELECT q.id, q.nome, q.setor_funcional_id, s.nome AS setor_nome, q.especialidade_medica_id,
+                q.sugerir_automaticamente, q.ativo, q.versao
+           FROM equipe_assistencial_padrao q LEFT JOIN setor_funcional s ON s.id = q.setor_funcional_id
+          WHERE q.estabelecimento_id = ? ORDER BY q.ativo DESC, q.nome LIMIT 200`,
+        [est.id],
+      );
+      const itens: EquipePadraoLida[] = [];
+      for (const x of linhas) {
+        const membros = await l.consultar(
+          `SELECT pm.sequencia, pm.funcao_equipe_assistencial_id, f.descricao, pm.profissional_id, pm.responsavel,
+                  pf.nome
+             FROM equipe_assistencial_padrao_membro pm
+             JOIN funcao_equipe_assistencial f ON f.id = pm.funcao_equipe_assistencial_id
+             LEFT JOIN profissional p ON p.id = pm.profissional_id
+             LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+            WHERE pm.equipe_assistencial_padrao_id = ? AND pm.excluido_em IS NULL ORDER BY pm.sequencia`,
+          [x['id']],
+        );
+        itens.push({
+          id: num(x['id']),
+          nome: String(x['nome']),
+          setor: numOuNull(x['setor_funcional_id']),
+          setorNome: txt(x['setor_nome']),
+          especialidade: numOuNull(x['especialidade_medica_id']),
+          sugerir: bool(x['sugerir_automaticamente']),
+          ativo: bool(x['ativo']),
+          versao: num(x['versao']),
+          membros: membros.map((m) => ({
+            sequencia: num(m['sequencia']),
+            funcao: num(m['funcao_equipe_assistencial_id']),
+            funcaoDescricao: String(m['descricao'] ?? ''),
+            profissional: numOuNull(m['profissional_id']),
+            profissionalNome: txt(m['nome']),
+            responsavel: bool(m['responsavel']),
+          })),
+        });
+      }
+      let sugeridos: number[] = [];
+      if (atendimento !== null) {
+        const a = await l.uma(
+          `SELECT setor_funcional_id, especialidade_medica_id FROM atendimento
+            WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+          [atendimento, est.id],
+        );
+        if (!a) throw naoEncontrado('Atendimento');
+        sugeridos = padroesDoAtendimento(
+          itens.filter((p) => p.sugerir),
+          numOuNull(a['setor_funcional_id']),
+          numOuNull(a['especialidade_medica_id']),
+        ).map((p) => p.id);
+      }
+      return { itens, sugeridos };
+    });
+  }
+
+  /** Grava a equipe padrão do setor ou serviço (pelas regras do domínio), com os membros na ordem dada. */
+  async gravarPadrao(c: ContextoDocs, entrada: unknown): Promise<{ id: number }> {
+    const x = entradaValida(esquemaEquipePadrao, entrada);
+    return this.gravar(
+      c,
+      'pep.equipe.gravar_padrao',
+      ['equipe_assistencial_padrao', 'equipe_assistencial_padrao_membro'],
+      async (tx, est) => {
+        if (x.setor !== null) {
+          const s = await tx.uma('SELECT id FROM setor_funcional WHERE id = ? AND estabelecimento_id = ?', [
+            x.setor,
+            est.id,
+          ]);
+          if (!s) throw naoEncontrado('Setor');
+        }
+        const funcoes = new Map<number, FuncaoEquipe>();
+        for (const m of x.membros) {
+          if (funcoes.has(m.funcao)) continue;
+          const f = await tx.uma(
+            'SELECT id, categoria, responsavel_principal, ativo FROM funcao_equipe_assistencial WHERE id = ?',
+            [m.funcao],
+          );
+          if (!f) throw naoEncontrado('Função');
+          funcoes.set(m.funcao, {
+            id: num(f['id']),
+            categoria: String(f['categoria']) as FuncaoEquipe['categoria'],
+            responsavelPrincipal: bool(f['responsavel_principal']),
+            ativo: bool(f['ativo']),
+          });
+        }
+        const erros = validarEquipePadrao({
+          nome: x.nome,
+          setor: x.setor,
+          especialidade: x.especialidade,
+          membros: x.membros.map((m) => ({
+            funcao: funcoes.get(m.funcao)!,
+            profissional: m.profissional,
+            responsavel: m.responsavel,
+          })),
+        });
+        if (erros.length) throw recusaRegra(erros);
+        const id = await tx
+          .incluir('equipe_assistencial_padrao', {
+            estabelecimento_id: est.id,
+            nome: x.nome.trim(),
+            setor_funcional_id: x.setor,
+            especialidade_medica_id: x.especialidade,
+            sugerir_automaticamente: x.sugerirAutomaticamente,
+          })
+          .catch((err: unknown) => {
+            if (duplicada(err)) throw conflito('nome-repetido', 'Já existe equipe padrão com este nome.');
+            throw err;
+          });
+        let sequencia = 0;
+        for (const m of x.membros)
+          await tx.incluir('equipe_assistencial_padrao_membro', {
+            equipe_assistencial_padrao_id: id,
+            sequencia: ++sequencia,
+            funcao_equipe_assistencial_id: m.funcao,
+            profissional_id: m.profissional,
+            responsavel: m.responsavel,
+          });
+        return { tabela: 'equipe_assistencial_padrao', id };
+      },
+    );
+  }
+
+  /** Desativa a equipe padrão (deixa de ser sugerida; o histórico de quem a usou fica). */
+  async desativarPadrao(c: ContextoDocs, padrao: number, entrada: unknown): Promise<{ id: number }> {
+    const x = entradaValida(esquemaVersao, entrada);
+    return this.gravar(c, 'pep.equipe.desativar_padrao', ['equipe_assistencial_padrao'], async (tx, est) => {
+      const p = await tx.uma(
+        'SELECT id FROM equipe_assistencial_padrao WHERE id = ? AND estabelecimento_id = ? AND ativo = TRUE',
+        [padrao, est.id],
+      );
+      if (!p) throw naoEncontrado('Equipe padrão');
+      await tx.alterar('equipe_assistencial_padrao', padrao, x.versao, { ativo: false });
+      return { tabela: 'equipe_assistencial_padrao', id: padrao };
+    });
+  }
+
+  /**
+   * Aplica a equipe padrão ao atendimento numa transação só: abre a equipe se preciso (marcando o padrão de partida),
+   * inclui os membros nomeados que faltam com as mesmas regras da inclusão manual e devolve os ignorados com o motivo.
+   */
+  async aplicarPadrao(
+    c: ContextoDocs,
+    atendimento: number,
+    padrao: number,
+  ): Promise<{
+    id: number;
+    equipe: number;
+    incluidos: number;
+    ignorados: { sequencia: number; codigo: string }[];
+  }> {
+    return this.gravar(
+      c,
+      'pep.equipe.aplicar_padrao',
+      ['equipe_assistencial_paciente', 'equipe_assistencial_membro'],
+      async (tx, est) => {
+        const a = await tx.uma(
+          `SELECT id, paciente_id, situacao, saida_em FROM atendimento
+            WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+          [atendimento, est.id],
+        );
+        if (!a) throw naoEncontrado('Atendimento');
+        if (!atendimentoAberto(String(a['situacao']), (a['saida_em'] as Date | null) ?? null))
+          throw recusaRegra([
+            { campo: 'atendimento', codigo: 'atendimento-encerrado', mensagem: 'O atendimento já terminou.' },
+          ]);
+        const q = await tx.uma(
+          'SELECT id FROM equipe_assistencial_padrao WHERE id = ? AND estabelecimento_id = ? AND ativo = TRUE',
+          [padrao, est.id],
+        );
+        if (!q) throw naoEncontrado('Equipe padrão');
+        const modelo = (
+          await tx.consultar(
+            `SELECT pm.sequencia, pm.funcao_equipe_assistencial_id, pm.profissional_id, pm.responsavel
+               FROM equipe_assistencial_padrao_membro pm
+              WHERE pm.equipe_assistencial_padrao_id = ? AND pm.excluido_em IS NULL`,
+            [padrao],
+          )
+        ).map((m) => ({
+          sequencia: num(m['sequencia']),
+          funcao: num(m['funcao_equipe_assistencial_id']),
+          profissional: numOuNull(m['profissional_id']),
+          responsavel: bool(m['responsavel']),
+        }));
+        const agora = new Date();
+        const e = await umaTravada(
+          tx,
+          `SELECT id, situacao, equipe_assistencial_padrao_id, versao FROM equipe_assistencial_paciente
+            WHERE atendimento_id = ? AND excluido_em IS NULL`,
+          [atendimento],
+        );
+        if (e && String(e['situacao']) === 'encerrada')
+          throw recusaRegra([
+            {
+              campo: 'equipe',
+              codigo: 'equipe-encerrada',
+              mensagem: 'A equipe deste atendimento foi encerrada.',
+            },
+          ]);
+        let equipe: number;
+        if (e) {
+          equipe = num(e['id']);
+          if (e['equipe_assistencial_padrao_id'] === null)
+            await tx.alterar('equipe_assistencial_paciente', equipe, num(e['versao']), {
+              equipe_assistencial_padrao_id: padrao,
+            });
+        } else
+          equipe = await tx
+            .incluir('equipe_assistencial_paciente', {
+              estabelecimento_id: est.id,
+              atendimento_id: atendimento,
+              paciente_id: num(a['paciente_id']),
+              equipe_assistencial_padrao_id: padrao,
+              inicio_em: agora,
+              situacao: 'ativa',
+            })
+            .catch((err: unknown) => {
+              if (duplicada(err))
+                throw conflito(
+                  'equipe-concorrente',
+                  'Outra pessoa abriu a equipe agora; recarregue e aplique de novo.',
+                );
+              throw err;
+            });
+        const atuais = (await tx.consultarParaAtualizar(SQL_MEMBROS, [equipe])).map((m) =>
+          membroLido(m, est.fuso),
+        );
+        const plano = planoEquipePadrao(atuais, modelo);
+        const ignorados = [...plano.ignorados];
+        const seq = await tx.uma(
+          'SELECT COALESCE(MAX(sequencia), 0) AS s FROM equipe_assistencial_membro WHERE equipe_assistencial_paciente_id = ?',
+          [equipe],
+        );
+        let sequencia = num(seq?.['s'] ?? 0);
+        let incluidos = 0;
+        const ja: MembroEquipe[] = [...atuais];
+        for (const m of plano.incluir) {
+          const f = await tx.uma(
+            'SELECT id, categoria, responsavel_principal, ativo FROM funcao_equipe_assistencial WHERE id = ?',
+            [m.funcao],
+          );
+          const lotacoes = await tx.consultar(
+            `SELECT o.codigo_cbo FROM lotacao_profissional lp JOIN ocupacao_cbo o ON o.id = lp.ocupacao_cbo_id
+              WHERE lp.profissional_id = ? AND lp.estabelecimento_id = ? AND lp.ativo = TRUE AND lp.excluido_em IS NULL
+                AND lp.vigencia_inicio <= CURRENT_DATE AND (lp.vigencia_fim IS NULL OR lp.vigencia_fim >= CURRENT_DATE)`,
+            [m.profissional, est.id],
+          );
+          const funcao: FuncaoEquipe | null = f
+            ? {
+                id: num(f['id']),
+                categoria: String(f['categoria']) as FuncaoEquipe['categoria'],
+                responsavelPrincipal: bool(f['responsavel_principal']),
+                ativo: bool(f['ativo']),
+              }
+            : null;
+          const erros = funcao
+            ? validarInclusaoMembro(ja, {
+                profissional: m.profissional!,
+                funcao,
+                recebeNotificacao: m.responsavel,
+                categoriasNoEstabelecimento: lotacoes.map((x) => categoriaDoCbo(txt(x['codigo_cbo']))),
+                especialidade: null,
+                especialidadesDoProfissional: [],
+              })
+            : [{ campo: 'funcao', codigo: 'funcao-inexistente', mensagem: 'Função não encontrada.' }];
+          if (erros.length) {
+            ignorados.push({ sequencia: m.sequencia, codigo: erros[0]!.codigo });
+            continue;
+          }
+          const id = await tx.incluir('equipe_assistencial_membro', {
+            equipe_assistencial_paciente_id: equipe,
+            sequencia: ++sequencia,
+            profissional_id: m.profissional,
+            funcao_equipe_assistencial_id: funcao!.id,
+            responsavel_principal: funcao!.responsavelPrincipal,
+            recebe_notificacao: m.responsavel || funcao!.responsavelPrincipal,
+            inicio_em: agora,
+          });
+          ja.push({
+            id,
+            profissional: m.profissional!,
+            funcao: funcao!.id,
+            responsavelPrincipal: funcao!.responsavelPrincipal,
+            recebeNotificacao: true,
+            inicio: '',
+            fim: null,
+          });
+          incluidos += 1;
+        }
+        ignorados.sort((x, y) => x.sequencia - y.sequencia);
+        return { tabela: 'equipe_assistencial_paciente', id: equipe, equipe, incluidos, ignorados };
+      },
+    );
   }
 }

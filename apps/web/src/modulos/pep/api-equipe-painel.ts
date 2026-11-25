@@ -157,3 +157,48 @@ export const encerrarEquipe = (atendimento: number, motivo: string) =>
   });
 export const encerrarMembro = (membro: number, motivo: string) =>
   pedir<{ id: number }>(`${P}/equipe/membro/${membro}/saida`, 'POST', { motivo });
+
+// C2-064: fila de pendências pela equipe e equipe padrão do setor.
+export interface ItemFilaEquipe {
+  equipe: number;
+  atendimento: number;
+  numero: string;
+  paciente: number;
+  pacienteNome: string;
+  responsavel: boolean;
+}
+export const lerMinhaFilaEquipe = () => pedir<{ itens: ItemFilaEquipe[] }>(`${P}/equipe/minha-fila`);
+export interface EquipePadrao {
+  id: number;
+  nome: string;
+  setor: number | null;
+  setorNome: string | null;
+  especialidade: number | null;
+  sugerir: boolean;
+  ativo: boolean;
+  versao: number;
+  membros: {
+    sequencia: number;
+    funcao: number;
+    funcaoDescricao: string;
+    profissional: number | null;
+    profissionalNome: string | null;
+    responsavel: boolean;
+  }[];
+}
+export const lerEquipesPadrao = (atendimento?: number) =>
+  pedir<{ itens: EquipePadrao[]; sugeridos: number[] }>(
+    `${P}/equipe/padroes${atendimento ? `?atendimento=${atendimento}` : ''}`,
+  );
+export const aplicarEquipePadrao = (atendimento: number, padrao: number) =>
+  pedir<{ equipe: number; incluidos: number; ignorados: { sequencia: number; codigo: string }[] }>(
+    `${P}/equipe/atendimento/${atendimento}/padrao/${padrao}`,
+    'POST',
+    {},
+  );
+export const gravarEquipePadrao = (p: {
+  nome: string;
+  setor: number | null;
+  especialidade: number | null;
+  membros: { funcao: number; profissional: number | null; responsavel: boolean }[];
+}) => pedir<{ id: number }>(`${P}/equipe/padroes`, 'POST', p);

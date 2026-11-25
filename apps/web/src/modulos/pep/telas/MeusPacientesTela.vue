@@ -19,6 +19,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import FilaPendenciasEquipe from '../componentes/FilaPendenciasEquipe.vue';
 import { usarSessao } from '../../../casca/sessao/sessao.js';
 import { lerPainel, type RecortesPainel } from '../api-documentos.js';
 import { dataHoraBr } from '../formato.js';
@@ -622,6 +623,7 @@ async function alternarColuna(c: ColunaPainel): Promise<void> {
         </tbody>
       </table>
     </template>
+    <FilaPendenciasEquipe />
   </section>
 </template>
 

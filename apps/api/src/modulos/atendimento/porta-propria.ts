@@ -127,6 +127,10 @@ import type {
   PreviaCancelamentoDados,
   SinaisRecentes,
 } from './tipos.js';
+import {
+  encerrarEquipeNoFimDoAtendimento,
+  TABELAS_EQUIPE_ATENDIMENTO,
+} from '../pep/equipe-fim-atendimento.js';
 
 /** O que a porta usa do NucleoProprio (os testes trocam). */
 export interface NucleoAtendimento {
@@ -1221,6 +1225,8 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
 // ---- operações (Executor) ----
 
 const TABELAS_ATENDIMENTO = [
+  // 03-PEP L94: o fim do atendimento (encerrar ou cancelar) encerra a equipe assistencial na mesma transação.
+  ...TABELAS_EQUIPE_ATENDIMENTO,
   // F3.0: a conta aberta na entrada (consulta, PA e exame que gerem cobrança) e as taxas de abertura.
   ...TABELAS_CONTA_ENTRADA,
   'atendimento',
@@ -1432,6 +1438,8 @@ const OPERACAO_ENCERRAR = definirOperacao({
       },
       { profissional_id: e.profissional ?? null, observacao: e.destino ?? null },
     );
+    // A equipe assistencial termina junto (os vigentes saem com o motivo; nada apagado).
+    await encerrarEquipeNoFimDoAtendimento(tx, a.id, agora);
     // A observação em curso termina junto (o leito fica livre).
     await tx.executar(
       "UPDATE ocupacao_leito_observacao SET data_hora_saida = ?, situacao = 'encerrada', versao = versao + 1 WHERE atendimento_id = ? AND situacao = 'ativa'",
@@ -1498,6 +1506,7 @@ const OPERACAO_CANCELAR = definirOperacao({
       efeito_conta: 'nenhum',
     });
     await mudarSituacao(tx, a, 'cancelado', {}, { observacao: e.justificativa });
+    await encerrarEquipeNoFimDoAtendimento(tx, a.id, new Date());
     const agora = new Date();
     // A observação em curso termina (o leito não fica preso a um atendimento excluído).
     const obs = await tx.uma<{ id: unknown; versao: unknown }>(

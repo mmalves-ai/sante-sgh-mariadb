@@ -77,6 +77,11 @@ import {
   gravarGuiaNoHistorico,
   OPERACOES_REGISTROS_INTERNACAO,
 } from './registros-internacao.js';
+import {
+  encerrarEquipeNoFimDoAtendimento,
+  reabrirEquipeDoAtendimento,
+  TABELAS_EQUIPE_ATENDIMENTO,
+} from '../pep/equipe-fim-atendimento.js';
 
 type Linha = Record<string, unknown>;
 export const n = (v: unknown) => Number(v ?? 0);
@@ -783,6 +788,7 @@ const DESTINO_DO_TIPO_SAIDA: Readonly<Record<string, string>> = {
 const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
   nome: 'internacao.dar-alta',
   tabelas: [
+    ...TABELAS_EQUIPE_ATENDIMENTO,
     ...TABELAS_CONTA_ENTRADA,
     'internacao',
     'ocupacao_leito',
@@ -876,6 +882,9 @@ const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
         desfecho: m['tipo_saida'] === 'transferencia' ? 'transferencia' : 'alta',
         alta_profissional_id: e.medicoAlta,
       });
+    // 03-PEP L94: a alta encerra a equipe assistencial do atendimento (vigentes saem com o motivo; nada apagado).
+    // Pelo instante do registro (a hora da saída informada pode ser anterior à inclusão de um membro).
+    await encerrarEquipeNoFimDoAtendimento(tx, n(i['atendimento_id']), agora);
     // A saída pede a limpeza terminal do leito e o deixa em higienização até a liberação (mesma transação).
     const leito = nn(i['leito_hospitalar_id']);
     const solicitacao =
@@ -903,6 +912,7 @@ const darAlta = definirOperacao<DarAltaEntrada, ResultadoOperacao>({
 const cancelarAlta = definirOperacao<CancelarAltaBancoEntrada, ResultadoOperacao>({
   nome: 'internacao.cancelar-alta',
   tabelas: [
+    ...TABELAS_EQUIPE_ATENDIMENTO,
     ...TABELAS_CONTA_ENTRADA,
     'internacao',
     'ocupacao_leito',
@@ -999,6 +1009,8 @@ const cancelarAlta = definirOperacao<CancelarAltaBancoEntrada, ResultadoOperacao
         saida_em: null,
         desfecho: null,
       });
+    // 03-PEP L94: com a alta desfeita, a equipe volta a valer (quem saiu junto volta como participação nova).
+    await reabrirEquipeDoAtendimento(tx, n(i['atendimento_id']), new Date());
     await situarLeito(tx, leito);
     // F3.0: a alta cancelada reabre a contagem das diárias.
     await apurarContasDoAtendimento(tx, estabelecimentoDe(ctx), n(i['atendimento_id']));

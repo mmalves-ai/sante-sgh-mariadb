@@ -15,7 +15,7 @@ import {
   PERMISSOES_ACESSO,
   type ValorParametro,
 } from '@sgh/contratos';
-import { decidir, exigeVinculo, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
+import { decidir, exigeVinculo, type FormaVinculo, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
 import { resolverParametro, type SujeitoParametro, valorTipado } from '@sgh/dominio-config';
 import { avaliarLeitura, horaLocal, LIMITES_PADRAO, type LimitesLeitura } from '@sgh/dominio-pep';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -35,6 +35,11 @@ export interface DependenciasAcessoPaciente {
   readonly configuracao: FonteConfiguracao | null;
   readonly vinculo: VinculoAssistencialPort;
   readonly emergencia: RegistroEmergencia | null;
+  /**
+   * 03-PEP L94: o vínculo pela equipe assistencial no banco do cliente (a conta da sessão está na equipe vigente de um
+   * atendimento aberto do paciente). Consultado quando a porta de vínculo não dá vínculo; sem ele, nada muda.
+   */
+  readonly vinculoNoCliente?: ((s: SessaoCadastro, paciente: number) => Promise<boolean>) | null;
 }
 
 /** Recurso na trilha: o prontuário ao vivo (M15) ou os registros clínicos (M22). */
@@ -58,6 +63,14 @@ export function chaveSessaoPep(s: SessaoCadastro) {
 export class AcessoPacientePep {
   constructor(private readonly d: DependenciasAcessoPaciente) {}
 
+  /** A forma do vínculo: a da porta de vínculo; sem ela, a da equipe assistencial do cliente (falha fechada). */
+  private async formaDoVinculo(s: SessaoCadastro, paciente: number): Promise<FormaVinculo | null> {
+    const forma = await this.d.vinculo.vinculo(s.login, { idPaciente: paciente });
+    if (forma !== null || !this.d.vinculoNoCliente) return forma;
+    const pelaEquipe = await this.d.vinculoNoCliente(s, paciente).catch(() => false);
+    return pelaEquipe ? 'equipe' : null;
+  }
+
   /**
    * Com a restrição do estabelecimento ligada, a mesma decisão do M06 (vínculo assistencial, ou quebra de vidro
    * vigente). Sem vínculo: 403 `sem-vinculo`, com a quebra de vidro quando o perfil pode pedi-la; a tentativa vai
@@ -72,7 +85,7 @@ export class AcessoPacientePep {
     const a = s.req.sgh;
     if (!a || a.sessao.restricaoVinculo !== true) return;
     const [forma, vigente] = await Promise.all([
-      this.d.vinculo.vinculo(s.login, { idPaciente: paciente }),
+      this.formaDoVinculo(s, paciente),
       this.d.emergencia ? this.d.emergencia.vigente(s.hospital, s.login, paciente) : Promise.resolve(null),
     ]);
     const decisao = decidir({
@@ -120,7 +133,7 @@ export class AcessoPacientePep {
     const ok = new Set<number>();
     for (const p of unicos) {
       const [forma, vigente] = await Promise.all([
-        this.d.vinculo.vinculo(s.login, { idPaciente: p }),
+        this.formaDoVinculo(s, p),
         this.d.emergencia ? this.d.emergencia.vigente(s.hospital, s.login, p) : Promise.resolve(null),
       ]);
       if (forma !== null || vigente !== null) ok.add(p);
