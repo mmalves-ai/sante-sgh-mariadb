@@ -327,10 +327,16 @@ export const opAplicarAdiantamento = definirOperacao({
       [e.contaId, conta['paciente_id'], est],
       { teto: 500 },
     );
+    // O pedido de devolução em aberto reserva o saldo: só o disponível entra na conta.
+    const reservado = new Map<number, number>();
+    for (const s of saldos) {
+      const pendentes = await pedidosEmAberto(tx, n(s['id']));
+      reservado.set(n(s['id']), r2(n(s['saldo']) - disponivelParaDevolver(n(s['saldo']), pendentes)));
+    }
     const plano = planejarAplicacao(
       saldos.map((s) => ({
         id: n(s['id']),
-        saldo: n(s['saldo']),
+        saldo: r2(n(s['saldo']) - (reservado.get(n(s['id'])) ?? 0)),
         recebidoEm: new Date(s['recebido_em'] as Date).toISOString(),
         situacao: txt(s['situacao']) as SituacaoAdiantamento,
         jaNaConta: n(s['na_conta']) > 0,
@@ -339,6 +345,12 @@ export const opAplicarAdiantamento = definirOperacao({
       e.valor,
       e.adiantamentos,
     );
+    const totalReservado = r2([...reservado.values()].reduce((t, v) => t + v, 0));
+    if (totalReservado > 0)
+      for (const k of ['valor', 'adiantamentos'] as const)
+        if (plano.erros[k])
+          plano.erros[k] +=
+            ` Há ${totalReservado.toFixed(2)} reservado por devolução pedida: decida ou cancele o pedido.`;
     exigirValido(plano.erros);
     const agora = new Date();
     const aplicacoes: number[] = [];

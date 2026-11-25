@@ -507,6 +507,18 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
     ]).toEqual(['solicitada', ids['usuario'], null, null, null, ids['sessao']]);
     const intacto = await uma('SELECT saldo FROM adiantamento_paciente WHERE id = ?', [ids['a2']]);
     expect(Number(intacto!['saldo'])).toBe(500);
+    // O pedido em aberto reserva o saldo também contra o uso na conta: aplicar além dos 200 livres é recusado.
+    expect(
+      await codigoDo(
+        s.gravar('adiantamento.aplicar', op(), {
+          contaId: ids['conta'],
+          valor: 250,
+          adiantamentos: [ids['a2']],
+        }),
+      ),
+    ).toBe('entrada-invalida');
+    const semAplicar = await uma('SELECT saldo FROM adiantamento_paciente WHERE id = ?', [ids['a2']]);
+    expect(Number(semAplicar!['saldo'])).toBe(500);
     // Outro pedido acima do disponível (500 − 300 reservados) é recusado.
     expect(await codigoDo(devolver(250, 'pix', 'chave-sintetica'))).toBe('entrada-invalida');
     // Quem pediu não aprova.
