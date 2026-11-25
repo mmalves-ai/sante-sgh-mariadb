@@ -24,6 +24,7 @@ import { ContabilFiscalController } from './contabil-fiscal.controller.js';
 import { EscrituracaoEfdController } from './escrituracao-efd.controller.js';
 import { RetencaoSofridaController } from './retencao-sofrida.controller.js';
 import { FinanceiroController } from './financeiro.controller.js';
+import { FluxoAprovacaoController } from './fluxo-aprovacao.controller.js';
 import { GestaoFinanceiroController } from './gestao.controller.js';
 import { PagamentoEletronicoController } from './pagamento-eletronico.controller.js';
 import { NotaCessaoController } from './nota-cessao.controller.js';
@@ -91,6 +92,8 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       CartaoController,
       // F3.8, 07-FIN linha 63: alterar o título a pagar não pago.
       AlteracaoTituloPagarController,
+      // F8, 07-FIN linha 65: fluxo de aprovação configurável (título, pedido de compra e contrato; celular).
+      FluxoAprovacaoController,
     ],
     providers: [
       { provide: PORTA_FINANCEIRO, useValue: porta },

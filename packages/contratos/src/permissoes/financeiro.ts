@@ -233,6 +233,23 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
     concessaoPorPerfil: 'por-perfil',
     perfis: ['administrador-sistema'],
   }),
+  // F8, 07-FIN linha 65: fluxo de aprovação configurável; recurso novo, concedido ao administrador do sistema e dado
+  // pelo cargo.
+  p(
+    'financeiro.fluxoAprovacao.configurar',
+    'Configurar os fluxos de aprovação (etapas, aprovadores, agrupadores e respostas padrão) do título, da compra e do contrato',
+    { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
+  p(
+    'financeiro.fluxoAprovacao.submeter',
+    'Enviar o título a pagar, o pedido de compra ou o contrato para o fluxo de aprovação',
+    { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
+  p(
+    'financeiro.fluxoAprovacao.decidir',
+    'Decidir na etapa em que é aprovador (aprova, reprova ou devolve), também pelo celular quando liberado',
+    { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+  ),
   p(
     'financeiro.cessaoRecebivel.ler',
     'Consultar os portadores e as operações de desconto e cessão de recebíveis',
