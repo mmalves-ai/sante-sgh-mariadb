@@ -157,7 +157,7 @@ export function conferirDeParaAnalito(
   return p;
 }
 
-export interface ExameDaAmostra {
+export interface ExameNoEquipamento {
   /** O exame pedido (item da requisição). */
   readonly item: number;
   readonly exame: number;
@@ -183,7 +183,7 @@ export interface PedidoEquipamento {
  */
 export function montarPedidoEquipamento(
   amostra: string,
-  exames: readonly ExameDaAmostra[],
+  exames: readonly ExameNoEquipamento[],
   deParaExames: readonly DeParaExameEquipamento[],
   deParaAnalitos: readonly DeParaAnalitoEquipamento[],
 ): PedidoEquipamento {
@@ -272,7 +272,7 @@ export function converterValor(
 export function interpretarLeituras(
   leituras: readonly LeituraEquipamento[],
   deParaAnalitos: readonly DeParaAnalitoEquipamento[],
-  exames: readonly ExameDaAmostra[],
+  exames: readonly ExameNoEquipamento[],
 ): LeiturasInterpretadas {
   const ultima = new Map<string, string>();
   for (const l of leituras) ultima.set(l.codigo.trim(), l.valor);
