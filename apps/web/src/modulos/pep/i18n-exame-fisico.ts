@@ -4,7 +4,7 @@ export const mensagensExameFisico = {
   atalho: 'Exame físico',
   registro: 'Registro clínico',
   semRegistro:
-    'Nenhum registro seu em vigor para este paciente: finalize a evolução e volte aqui para o exame físico.',
+    'Nenhum registro seu aceita o exame agora: o complemento vale no registro seu, desta unidade, ainda não assinado e lançado há até 24 horas. Registre uma evolução nova e volte aqui.',
   mapa: 'Mapa do corpo',
   mapaDica: 'Escolha a região no desenho ou na lista; o sistema filtra os achados.',
   semDesenho: 'Regiões sem desenho no mapa',

@@ -2,9 +2,12 @@
 // (@sgh/dominio-pep, exame-fisico.ts); aqui ficam a leitura (catálogo do mapa do corpo e o exame por paciente) e a
 // gravação pelo executor (trilha na mesma transação). exame_fisico_achado guarda cada achado ligado ao registro
 // clínico, numerado no registro, com sistema, região, lado, achado padronizado, normal e descrição. Nada é apagado
-// nem reescrito: só o autor acrescenta achados enquanto o registro está em vigor; a correção é suspender o registro
-// pelo fluxo próprio e registrar de novo. Sistemas, regiões (com o desenho do mapa) e achados padronizados são
+// nem reescrito: o acréscimo é um complemento datado (regra registroAceitaExame: só o autor, registro em vigor e da
+// unidade da sessão, sem assinatura concluída, dentro da janela de complemento) com o selo do lote na trilha; a
+// correção é suspender o registro pelo fluxo próprio e registrar de novo. textosDoExameFisico leva os achados ao texto
+// do registro (linha do tempo, leitura, busca e o documento como emitido). Sistemas, regiões (com o desenho do mapa) e achados padronizados são
 // mantidos no cadastro genérico da configuração.
+import { createHash } from 'node:crypto';
 import {
   type CatalogoExame,
   faixaEtariaExame,
@@ -15,6 +18,7 @@ import {
   registroAceitaExame,
   resumirExamePorSistema,
   textoAchadoExame,
+  textoExameDoRegistro,
   validarExameFisico,
 } from '@sgh/dominio-pep';
 import {
@@ -108,6 +112,8 @@ export interface AchadoLido {
   readonly normal: boolean | null;
   readonly descricao: string | null;
   readonly texto: string;
+  /** Lançamento do achado (o complemento é datado). */
+  readonly lancadoEm: string | null;
 }
 export interface ExameDoRegistro {
   readonly registro: number;
@@ -143,8 +149,103 @@ export interface ResultadoExame {
   readonly de: number;
   readonly ate: number;
   readonly quantidade: number;
-  readonly [campo: string]: number;
+  /** SHA-256 das linhas gravadas no lote (vai também à trilha encadeada da operação). */
+  readonly selo: string;
+  readonly [campo: string]: number | string;
 }
+
+/** Selo do lote: SHA-256 das linhas gravadas, lidas como texto pelo próprio banco (recalculável na prova). */
+export async function seloDoExame(
+  l: Pick<Leitor, 'consultar'>,
+  registro: number,
+  de: number,
+  ate: number,
+): Promise<string> {
+  const linhas = await l.consultar(
+    `SELECT CAST(id AS CHAR) AS id, CAST(registro_assistencial_id AS CHAR) AS registro, CAST(sequencia AS CHAR) AS seq,
+            CAST(sistema_corporal_id AS CHAR) AS sistema, CAST(regiao_corporal_id AS CHAR) AS regiao,
+            CAST(achado_exame_fisico_padrao_id AS CHAR) AS padrao, lateralidade, CAST(normal AS CHAR) AS normal,
+            descricao, CAST(criado_por AS CHAR) AS autor, CAST(versao AS CHAR) AS versao,
+            CAST(alterado_em AS CHAR) AS alterado, CAST(excluido_em AS CHAR) AS excluido
+       FROM exame_fisico_achado WHERE registro_assistencial_id = ? AND sequencia BETWEEN ? AND ? ORDER BY sequencia`,
+    [registro, de, ate],
+  );
+  const valores = (x: Record<string, unknown>) =>
+    Object.keys(x)
+      .sort()
+      .map((k) => [k, x[k] ?? null]);
+  return createHash('sha256')
+    .update(JSON.stringify(linhas.map(valores)), 'utf8')
+    .digest('hex');
+}
+
+/** "dd/mm/aaaa hh:mm" no fuso do estabelecimento. */
+function quandoLocal(v: unknown, fuso: string): string | null {
+  const d = dataDe(v);
+  if (!d || Number.isNaN(d.getTime())) return null;
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('pt-BR', {
+      timeZone: fuso,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(d)
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p['day']}/${p['month']}/${p['year']} ${p['hour']}:${p['minute']}`;
+}
+
+/** Achados do exame físico como texto, por registro (bloco datado por lote); só os registros com achados. */
+export async function textosDoExameFisico(
+  l: Pick<Leitor, 'consultar'>,
+  registros: readonly number[],
+  fuso: string,
+): Promise<Map<number, string>> {
+  const fora = new Map<number, string>();
+  if (!registros.length) return fora;
+  const linhas = await l.consultar(
+    `SELECT a.registro_assistencial_id, a.sequencia, a.criado_em, a.lateralidade, a.normal, a.descricao,
+            s.descricao AS sistema, rc.descricao AS regiao, ap.descricao AS padrao
+       FROM exame_fisico_achado a
+       LEFT JOIN sistema_corporal s ON s.id = a.sistema_corporal_id
+       LEFT JOIN regiao_corporal rc ON rc.id = a.regiao_corporal_id
+       LEFT JOIN achado_exame_fisico_padrao ap ON ap.id = a.achado_exame_fisico_padrao_id
+      WHERE a.registro_assistencial_id IN (${registros.map(() => '?').join(',')}) AND a.excluido_em IS NULL
+      ORDER BY a.registro_assistencial_id, a.sequencia`,
+    [...registros],
+  );
+  const por = new Map<number, { lancadoEm: string; texto: string }[]>();
+  for (const a of linhas) {
+    const k = num(a['registro_assistencial_id']);
+    por.set(k, [
+      ...(por.get(k) ?? []),
+      {
+        lancadoEm: quandoLocal(a['criado_em'], fuso) ?? 'data desconhecida',
+        texto: textoAchadoExame({
+          sistema: txt(a['sistema']),
+          regiao: txt(a['regiao']),
+          lateralidade: String(a['lateralidade']),
+          achado: txt(a['padrao']),
+          normal: boolOuNull(a['normal']),
+          descricao: txt(a['descricao']),
+        }),
+      },
+    ]);
+  }
+  for (const [k, v] of por) fora.set(k, textoExameDoRegistro(v));
+  return fora;
+}
+
+/** Assinatura concluída do registro: a do próprio registro ou a do documento dele. */
+const SQL_ASSINADO = `(EXISTS (SELECT 1 FROM situacao_assinatura_documento sa
+                         WHERE sa.id = r.situacao_assinatura_documento_id AND sa.categoria = 'assinado')
+                    OR EXISTS (SELECT 1 FROM documento_prontuario dp
+                                 JOIN situacao_documento_prontuario sd ON sd.id = dp.situacao_documento_prontuario_id
+                                WHERE dp.id = r.documento_prontuario_id AND sd.categoria = 'assinado'))`;
 
 /** Registros recentes do paciente lidos na visão por paciente (os mais novos primeiro). */
 const REGISTROS_NA_VISAO = 30;
@@ -161,6 +262,7 @@ export class ExameFisicoPropria {
     entrada: esquemaExameFisico as unknown as z.ZodType<EntradaExameFisico>,
     gravar: (tx, e) => this.gravar(tx, e),
     alvo: (_e, r) => ({ tabela: 'exame_fisico_achado', id: r.primeiro }),
+    trilha: (_e, r) => ({ dados: { selo: r.selo, registro: r.registro, de: r.de, ate: r.ate } }),
   });
 
   constructor(
@@ -259,7 +361,8 @@ export class ExameFisicoPropria {
           [paciente],
         );
         const regs = await l.consultar(
-          `SELECT r.id, r.data_hora_clinica, r.situacao, r.autor_usuario_id, m.titulo, pf.nome AS autor
+          `SELECT r.id, r.data_hora_clinica, r.data_hora_lancamento, r.situacao, r.autor_usuario_id,
+                  r.estabelecimento_id, ${SQL_ASSINADO} AS assinado, m.titulo, pf.nome AS autor
              FROM registro_assistencial r
              JOIN modelo_documento_clinico m ON m.id = r.modelo_documento_clinico_id
              LEFT JOIN profissional pr ON pr.id = r.autor_profissional_id
@@ -273,7 +376,7 @@ export class ExameFisicoPropria {
           ? await l.consultar(
               `SELECT a.id, a.registro_assistencial_id, a.sequencia, a.sistema_corporal_id, s.descricao AS sistema,
                       a.regiao_corporal_id, rc.descricao AS regiao, a.achado_exame_fisico_padrao_id,
-                      ap.descricao AS padrao, a.lateralidade, a.normal, a.descricao
+                      ap.descricao AS padrao, a.lateralidade, a.normal, a.descricao, a.criado_em
                  FROM exame_fisico_achado a
                  LEFT JOIN sistema_corporal s ON s.id = a.sistema_corporal_id
                  LEFT JOIN regiao_corporal rc ON rc.id = a.regiao_corporal_id
@@ -311,6 +414,7 @@ export class ExameFisicoPropria {
               normal: boolOuNull(a['normal']),
               descricao: txt(a['descricao']),
             }),
+            lancadoEm: iso(a['criado_em']),
           };
           const k = num(a['registro_assistencial_id']);
           porRegistro.set(k, [...(porRegistro.get(k) ?? []), lido]);
@@ -326,9 +430,16 @@ export class ExameFisicoPropria {
             autor: txt(x['autor']),
             podeAcrescentar:
               q.usuario !== null &&
+              num(x['estabelecimento_id']) === q.estabelecimento &&
               registroAceitaExame(
-                { situacao: String(x['situacao']), autorUsuarioId: num(x['autor_usuario_id']) },
+                {
+                  situacao: String(x['situacao']),
+                  autorUsuarioId: num(x['autor_usuario_id']),
+                  lancadoEm: dataDe(x['data_hora_lancamento']),
+                  assinado: bool(x['assinado']),
+                },
                 q.usuario,
+                this.agora(),
               ).length === 0,
             achados: lista,
             resumo: resumirExamePorSistema(
@@ -423,23 +534,30 @@ export class ExameFisicoPropria {
 
   private async gravar(tx: TxOperacao, e: EntradaExameFisico) {
     const reg = await tx.uma(
-      `SELECT r.id, r.situacao, r.autor_usuario_id, r.data_hora_clinica, pf.data_nascimento
+      `SELECT r.id, r.situacao, r.autor_usuario_id, r.data_hora_clinica, r.data_hora_lancamento,
+              ${SQL_ASSINADO} AS assinado, pf.data_nascimento
          FROM registro_assistencial r
          JOIN paciente p ON p.id = r.paciente_id
          JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
-        WHERE r.id = ? AND r.excluido_em IS NULL`,
-      [e.registro],
+        WHERE r.id = ? AND r.estabelecimento_id = ? AND r.excluido_em IS NULL`,
+      [e.registro, tx.contexto.estabelecimento],
     );
     if (!reg)
       throw new ErroOperacao(
         404,
         'registro-inexistente',
         'Registro clínico não encontrado',
-        'O registro clínico não existe neste cliente.',
+        'O registro clínico não existe neste estabelecimento.',
       );
     const aceita = registroAceitaExame(
-      { situacao: String(reg['situacao']), autorUsuarioId: num(reg['autor_usuario_id']) },
+      {
+        situacao: String(reg['situacao']),
+        autorUsuarioId: num(reg['autor_usuario_id']),
+        lancadoEm: dataDe(reg['data_hora_lancamento']),
+        assinado: bool(reg['assinado']),
+      },
       Number(tx.contexto.usuario ?? 0),
+      this.agora(),
     );
     if (aceita.length) recusar(aceita);
     const itens: ItemExame[] = e.itens.map((i) => ({
@@ -496,13 +614,16 @@ export class ExameFisicoPropria {
       );
       sequencias.push(seq);
     }
+    const de = sequencias[0]!;
+    const ate = sequencias[sequencias.length - 1]!;
     return {
       registro: e.registro,
       primeiro: achados[0]!,
       ultimo: achados[achados.length - 1]!,
-      de: sequencias[0]!,
-      ate: sequencias[sequencias.length - 1]!,
+      de,
+      ate,
       quantidade: achados.length,
+      selo: await seloDoExame(tx, e.registro, de, ate),
     };
   }
 }

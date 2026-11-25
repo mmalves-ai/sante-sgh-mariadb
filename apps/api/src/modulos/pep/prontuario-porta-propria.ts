@@ -22,6 +22,7 @@
 // Regra de negócio (marcas, sigilo, categoria pelo CBO, busca da palavra) fica no serviço e no domínio.
 import { liberacaoDaLeitura } from '@sgh/dominio-pep';
 import { ErroOperacao, type Leitor, type Linha } from '@sgh/nucleo';
+import { textosDoExameFisico } from './exame-fisico-propria.js';
 import type { ContextoProntuario, PortaProntuario, ResumoProntuarioLido } from './porta.js';
 import { dataHora, fusoValido, type NucleoLeituraPep } from './registro-porta-propria.js';
 import {
@@ -466,8 +467,11 @@ export class PortaProntuarioPropria implements PortaProntuario {
         `SELECT r.texto_consolidado FROM registro_assistencial r WHERE r.id = ? AND ${vis}`,
         [registro, est.id],
       );
-      const texto = textoOuNull(x?.['texto_consolidado']);
-      if (!texto) return null;
+      const consolidado = textoOuNull(x?.['texto_consolidado']);
+      if (!consolidado) return null;
+      // O exame físico estruturado ligado ao registro (03-PEP L97) entra no texto, em bloco datado por lote.
+      const exame = (await textosDoExameFisico(l, [registro], est.fuso)).get(registro);
+      const texto = exame ? `${consolidado}\n\n${exame}` : consolidado;
       // O banco próprio não guarda o formulário da época (XML): a parte xml volta vazia.
       return { rtf: partes.rtf ? comoTextoFormatado(texto) : null, xml: null, bytes: texto.length };
     });
@@ -651,9 +655,16 @@ export class PortaProntuarioPropria implements PortaProntuario {
           ORDER BY r.data_hora_clinica DESC, r.id DESC LIMIT ${t + 1}`,
         [paciente, est.id, ...per.p],
       );
+      const exames = await textosDoExameFisico(
+        l,
+        linhas.slice(0, t).map((x) => num(x['id'])),
+        est.fuso,
+      );
       return {
         registros: linhas.slice(0, t).map((x) => {
-          const texto = textoOuNull(x['texto_consolidado']);
+          const consolidado = textoOuNull(x['texto_consolidado']);
+          const exame = exames.get(num(x['id']));
+          const texto = consolidado && exame ? `${consolidado}\n\n${exame}` : consolidado;
           return {
             id: num(x['id']),
             dataHora: dataHora(x['data_hora_clinica'], est.fuso),

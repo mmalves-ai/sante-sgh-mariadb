@@ -8,6 +8,7 @@ import {
   registroAceitaExame,
   resumirExamePorSistema,
   textoAchadoExame,
+  textoExameDoRegistro,
   validarExameFisico,
 } from './exame-fisico.js';
 
@@ -166,13 +167,47 @@ describe('exame físico estruturado: validação dos achados', () => {
 });
 
 describe('exame físico estruturado: registro, resumo e texto', () => {
-  it('só o autor, com o registro em vigor', () => {
-    expect(registroAceitaExame({ situacao: 'finalizado', autorUsuarioId: 7 }, 7)).toEqual([]);
-    expect(registroAceitaExame({ situacao: 'aguardando_coassinatura', autorUsuarioId: 7 }, 7)).toEqual([]);
-    expect(codigos({ falhas: registroAceitaExame({ situacao: 'suspenso', autorUsuarioId: 7 }, 8) })).toEqual([
+  it('só o autor, com o registro em vigor, sem assinatura concluída e dentro da janela de complemento', () => {
+    const lancadoEm = new Date('2026-11-20T10:00:00Z');
+    const agora = new Date('2026-11-20T18:00:00Z');
+    const reg = { situacao: 'finalizado', autorUsuarioId: 7, lancadoEm, assinado: false };
+    expect(registroAceitaExame(reg, 7, agora)).toEqual([]);
+    expect(registroAceitaExame({ ...reg, situacao: 'aguardando_coassinatura' }, 7, agora)).toEqual([]);
+    expect(codigos({ falhas: registroAceitaExame({ ...reg, situacao: 'suspenso' }, 8, agora) })).toEqual([
       'registro-fora-de-vigor',
       'nao-e-autor',
     ]);
+    // O conteúdo assinado não recebe acréscimo.
+    expect(codigos({ falhas: registroAceitaExame({ ...reg, assinado: true }, 7, agora) })).toEqual([
+      'registro-assinado',
+    ]);
+    // Janela: 24 horas do lançamento valem; um minuto depois, não; sem lançamento conhecido, não.
+    expect(registroAceitaExame(reg, 7, new Date('2026-11-21T10:00:00Z'))).toEqual([]);
+    expect(codigos({ falhas: registroAceitaExame(reg, 7, new Date('2026-11-21T10:01:00Z')) })).toEqual([
+      'janela-de-complemento-encerrada',
+    ]);
+    expect(codigos({ falhas: registroAceitaExame({ ...reg, lancadoEm: null }, 7, agora) })).toEqual([
+      'janela-de-complemento-encerrada',
+    ]);
+  });
+  it('texto do exame no registro: um cabeçalho datado por lote, uma linha por achado', () => {
+    expect(textoExameDoRegistro([])).toBe('');
+    expect(
+      textoExameDoRegistro([
+        { lancadoEm: '20/11/2026 10:05', texto: 'Cardiovascular: sem alterações' },
+        { lancadoEm: '20/11/2026 10:05', texto: 'Tórax: alterado; Estertores' },
+        { lancadoEm: '20/11/2026 14:30', texto: 'Braço (direito): sem alterações' },
+      ]),
+    ).toBe(
+      [
+        'Exame físico estruturado (lançado em 20/11/2026 10:05):',
+        '- Cardiovascular: sem alterações',
+        '- Tórax: alterado; Estertores',
+        '',
+        'Exame físico estruturado (lançado em 20/11/2026 14:30):',
+        '- Braço (direito): sem alterações',
+      ].join('\n'),
+    );
   });
   it('resumo por sistema e linha de texto', () => {
     expect(

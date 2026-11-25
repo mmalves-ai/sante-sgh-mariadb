@@ -3,9 +3,10 @@
 // regiões e achados padronizados C2069_*), limpa antes e depois (a trilha pelo utilitário comum). Prova o que fica no
 // banco: cada achado em exame_fisico_achado ligado ao registro clínico, numerado no registro, com o sistema e a região
 // completados pelo achado padronizado, o lado, o normal e a descrição; o acréscimo continua a numeração; a repetição
-// pela mesma chave não grava de novo; as recusas (não autor, registro suspenso, lado faltando, achado de outro público,
-// normal contra o já gravado) sem gravar nada; a visão por paciente com o resumo por sistema; e as rotas com o vínculo
-// assistencial. SGH_NUCLEO_SEM_BANCO=1 pula.
+// pela mesma chave não grava de novo; o selo do lote na trilha; as recusas (não autor, registro suspenso, registro
+// assinado, janela de complemento encerrada, registro de outro estabelecimento, lado faltando, achado de outro público,
+// normal contra o já gravado) sem gravar nada; os achados no texto do registro (leitura do prontuário e busca); a visão
+// por paciente com o resumo por sistema; e as rotas com o vínculo assistencial. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { criarAbility, regrasDeAcesso, VinculoSintetico } from '@sgh/dominio-acesso';
@@ -15,7 +16,8 @@ import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ExameFisicoController } from './exame-fisico.controller.js';
-import { ExameFisicoPropria } from './exame-fisico-propria.js';
+import { ExameFisicoPropria, seloDoExame, textosDoExameFisico } from './exame-fisico-propria.js';
+import { PortaProntuarioPropria } from './prontuario-porta-propria.js';
 import { EstadoProntuario } from './sessao-prontuario.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
@@ -36,6 +38,10 @@ describe.skipIf(SEM_BANCO)('exame físico estruturado (banco próprio, MariaDB)'
     paciente: 0,
     registro: 0,
     suspenso: 0,
+    antigo: 0,
+    assinado: 0,
+    outraUnidade: 0,
+    estB: 0,
     cardio: 0,
     resp: 0,
     torax: 0,
@@ -62,10 +68,12 @@ describe.skipIf(SEM_BANCO)('exame físico estruturado (banco próprio, MariaDB)'
       'DELETE FROM registro_assistencial WHERE paciente_id IN (SELECT id FROM paciente WHERE numero_prontuario = ?)',
       [PRONTUARIO],
     );
+    await e.executar('DELETE FROM documento_prontuario WHERE titulo = ?', [`Documento sintético ${P}`]);
     await e.executar(
       'DELETE FROM atendimento WHERE paciente_id IN (SELECT id FROM paciente WHERE numero_prontuario = ?)',
       [PRONTUARIO],
     );
+    await e.executar('DELETE FROM situacao_documento_prontuario WHERE codigo = ?', [`${M}_ASS`]);
     await e.executar('DELETE FROM modelo_documento_clinico WHERE codigo LIKE ?', [`${M}_%`]);
     await e.executar('DELETE FROM tipo_documento_clinico WHERE codigo LIKE ?', [`${M}_%`]);
     await e.executar('DELETE FROM paciente WHERE numero_prontuario = ?', [PRONTUARIO]);
@@ -76,7 +84,7 @@ describe.skipIf(SEM_BANCO)('exame físico estruturado (banco próprio, MariaDB)'
     await e.executar('DELETE FROM categoria_atendimento WHERE codigo LIKE ?', [`${P}%`]);
     await e.executar('DELETE FROM carater_atendimento_tiss WHERE codigo_tiss LIKE ?', [`${P}%`]);
     await e.executar('DELETE FROM fonte_pagadora WHERE codigo LIKE ?', [`${P}%`]);
-    await limparTrilhaDaMassa(e, { codigos: [P] });
+    await limparTrilhaDaMassa(e, { codigos: [P, `${P}b`] });
     await e.executar('DELETE FROM usuario WHERE login IN (?, ?)', [AUTOR, OUTRO]);
   };
   const ler = <T = Record<string, unknown>>(sql: string, p: unknown[]) =>
@@ -129,6 +137,13 @@ describe.skipIf(SEM_BANCO)('exame físico estruturado (banco próprio, MariaDB)'
           cpf,
           agora,
         ]);
+      const estB = await e.uma<{ id: unknown }>('SELECT id FROM estabelecimento WHERE codigo = ?', [`${P}b`]);
+      ids.estB = estB
+        ? Number(estB.id)
+        : await ins(
+            'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+            [`${P}b`, `Hospital sintético ${P}b`, `Hospital sintético ${P}b (fictício)`, agora],
+          );
       ids.autor = await usuario(AUTOR, '20690690001');
       const outro = await usuario(OUTRO, '20690690002');
       const pessoa = (sufixo: string, nascimento: string | null = null) =>
@@ -191,14 +206,17 @@ describe.skipIf(SEM_BANCO)('exame físico estruturado (banco próprio, MariaDB)'
           agora,
         ],
       );
-      const registro = (clinica: string, suspenso = false) =>
+      // Lançados há 1 hora (dentro da janela de complemento), menos o antigo (há 3 dias).
+      const horasAtras = (h: number) => new Date(agora.getTime() - h * 3_600_000).toISOString();
+      const registro = (clinica: string, suspenso = false, est = ids.est) =>
         ins(
           `INSERT INTO registro_assistencial (estabelecimento_id, paciente_id, atendimento_id, modelo_documento_clinico_id,
              tipo_documento_clinico_id, autor_profissional_id, autor_usuario_id, data_hora_clinica, data_hora_lancamento,
-             impressao_digital, situacao, suspenso_em, suspenso_por_usuario_id, justificativa_suspensao, criado_em)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             impressao_digital, situacao, suspenso_em, suspenso_por_usuario_id, justificativa_suspensao, texto_consolidado,
+             criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            ids.est,
+            est,
             ids.paciente,
             atend,
             modelo,
@@ -212,11 +230,44 @@ describe.skipIf(SEM_BANCO)('exame físico estruturado (banco próprio, MariaDB)'
             suspenso ? agora : null,
             suspenso ? ids.autor : null,
             suspenso ? `Lançado no paciente errado ${P}` : null,
+            `Evolução sintética ${P}`,
             agora,
           ],
         );
-      ids.registro = await registro('2026-11-20T12:30:00Z');
-      ids.suspenso = await registro('2026-11-21T12:30:00Z', true);
+      ids.registro = await registro(horasAtras(2));
+      ids.suspenso = await registro(horasAtras(1), true);
+      ids.antigo = await registro(horasAtras(72));
+      ids.assinado = await registro(horasAtras(1));
+      ids.outraUnidade = await registro(horasAtras(1), false, ids.estB);
+      // O documento do registro "assinado" com assinatura concluída (situação sintética da categoria assinado).
+      const situacaoAssinada = await ins(
+        `INSERT INTO situacao_documento_prontuario (codigo, descricao, categoria, criado_em) VALUES (?, ?, 'assinado', ?)`,
+        [`${M}_ASS`, 'Assinado sintético', agora],
+      );
+      const documento = await ins(
+        `INSERT INTO documento_prontuario (estabelecimento_id, paciente_id, atendimento_id, tipo_documento_clinico_id,
+           modelo_documento_clinico_id, situacao_documento_prontuario_id, entidade_origem, entidade_origem_id, titulo,
+           profissional_id, referencia_em, lancado_em, numero_versao, confidencial, origem, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'registro_assistencial', ?, ?, ?, ?, ?, 1, FALSE, 'sistema', ?)`,
+        [
+          ids.est,
+          ids.paciente,
+          atend,
+          tipo,
+          modelo,
+          situacaoAssinada,
+          ids.assinado,
+          `Documento sintético ${P}`,
+          medico,
+          new Date(horasAtras(1)),
+          new Date(horasAtras(1)),
+          agora,
+        ],
+      );
+      await e.executar('UPDATE registro_assistencial SET documento_prontuario_id = ? WHERE id = ?', [
+        documento,
+        ids.assinado,
+      ]);
       const sistema = (codigo: string, descricao: string, ordem: number) =>
         ins('INSERT INTO sistema_corporal (codigo, descricao, ordem, criado_em) VALUES (?, ?, ?, ?)', [
           `${M}_${codigo}`,
@@ -286,6 +337,17 @@ describe.skipIf(SEM_BANCO)('exame físico estruturado (banco próprio, MariaDB)'
     const r = await exame.gravarExame(ctx(AUTOR, chave), entrada);
     expect(r.repetida).toBe(false);
     expect(r.resultado).toMatchObject({ de: 1, ate: 3, quantidade: 3 });
+    // O complemento é selado: o SHA-256 das linhas do lote vai à trilha encadeada e confere com o recalculado.
+    const selo = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `selo-${P}` }, (l) =>
+      seloDoExame(l, ids.registro, 1, 3),
+    );
+    expect(r.resultado.selo).toBe(selo);
+    const trilha = await ler<{ selo: string; est: number }>(
+      `SELECT JSON_VALUE(dados_depois, '$.dados.selo') AS selo, estabelecimento_id AS est FROM trilha_auditoria
+        WHERE entidade = 'exame_fisico_achado' AND entidade_id = ?`,
+      [r.resultado.primeiro],
+    );
+    expect(trilha).toEqual([{ selo, est: ids.est }]);
     const linhas = await achados();
     expect(linhas).toHaveLength(3);
     expect(linhas[0]).toMatchObject({
@@ -336,6 +398,27 @@ describe.skipIf(SEM_BANCO)('exame físico estruturado (banco próprio, MariaDB)'
 
   it('recusas sem gravar nada: não autor, registro suspenso, lado faltando, achado de outro público', async () => {
     const antes = await contar();
+    // Complemento recusado: registro com assinatura concluída, fora da janela e de outro estabelecimento.
+    await expect(
+      exame.gravarExame(ctx(), { registro: ids.assinado, itens: [{ sistema: ids.resp, normal: true }] }),
+    ).rejects.toMatchObject(recusada('registro-assinado'));
+    await expect(
+      exame.gravarExame(ctx(), { registro: ids.antigo, itens: [{ sistema: ids.resp, normal: true }] }),
+    ).rejects.toMatchObject(recusada('janela-de-complemento-encerrada'));
+    await expect(
+      exame.gravarExame(ctx(), { registro: ids.outraUnidade, itens: [{ sistema: ids.resp, normal: true }] }),
+    ).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'registro-inexistente', status: 404 }),
+    });
+    // A sessão no estabelecimento B não grava no registro da unidade A.
+    await expect(
+      exame.gravarExame(
+        { ...ctx(), hospital: `${P}b` },
+        { registro: ids.registro, itens: [{ sistema: ids.resp, normal: true }] },
+      ),
+    ).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'registro-inexistente', status: 404 }),
+    });
     await expect(
       exame.gravarExame(ctx(OUTRO), { registro: ids.registro, itens: [{ sistema: ids.resp, normal: true }] }),
     ).rejects.toMatchObject(recusada('nao-e-autor'));
@@ -365,6 +448,10 @@ describe.skipIf(SEM_BANCO)('exame físico estruturado (banco próprio, MariaDB)'
       ]),
     );
     expect(v.registros.find((x) => x.registro === ids.suspenso)!.podeAcrescentar).toBe(false);
+    expect(v.registros.find((x) => x.registro === ids.assinado)!.podeAcrescentar).toBe(false);
+    expect(v.registros.find((x) => x.registro === ids.antigo)!.podeAcrescentar).toBe(false);
+    expect(v.registros.find((x) => x.registro === ids.outraUnidade)!.podeAcrescentar).toBe(false);
+    expect(reg.achados[0]!.lancadoEm).not.toBeNull();
     const outro = await exame.doPaciente({ hospital: P, login: OUTRO }, ids.paciente);
     expect(outro.registros.every((x) => !x.podeAcrescentar)).toBe(true);
     const cat = await exame.catalogo();
@@ -373,6 +460,34 @@ describe.skipIf(SEM_BANCO)('exame físico estruturado (banco próprio, MariaDB)'
       admiteLateralidade: true,
     });
     expect(cat.padroes.find((p) => p.id === ids.pediatrico)).toMatchObject({ publicoAlvo: 'pediatrico' });
+  });
+
+  it('os achados entram no texto do registro: leitura do prontuário (como emitido) e busca, em bloco datado', async () => {
+    const textos = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `texto-${P}` }, (l) =>
+      textosDoExameFisico(l, [ids.registro, ids.antigo], 'America/Sao_Paulo'),
+    );
+    expect(textos.has(ids.antigo)).toBe(false);
+    const texto = textos.get(ids.registro)!;
+    expect(texto).toMatch(/^Exame físico estruturado \(lançado em \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}\):\n/);
+    expect(texto).toContain('- Cardiovascular sintético: Ritmo regular em dois tempos, sem sopros');
+    expect(texto).toContain('- Braço sintético (esquerdo): Edema; Cacifo ++/4+');
+    expect(texto).toContain('- Respiratório sintético · Tórax sintético: alterado; Estertores em base');
+    const prontuario = new PortaProntuarioPropria(nucleo, CLIENTE);
+    const C = {
+      rede: CLIENTE,
+      hospital: P,
+      cliente: CLIENTE,
+      estabelecimento: null,
+      usuario: null,
+      correlacao: P,
+    };
+    const conteudo = await prontuario.conteudo(C, ids.registro, { rtf: true, xml: false });
+    expect(conteudo?.rtf).toContain(`Evolu\\u231?\\u227?o sint\\u233?tica ${P}`);
+    expect(conteudo?.rtf).toContain('Ritmo regular em dois tempos, sem sopros');
+    expect(conteudo?.rtf).toContain('Cacifo ++/4+');
+    const busca = await prontuario.textos(C, ids.paciente, {}, 50);
+    expect(busca.registros.find((x) => x.id === ids.registro)?.rtf).toContain('Estertores em base');
+    expect(busca.registros.find((x) => x.id === ids.antigo)?.rtf).not.toContain('Exame f');
   });
 
   it('as rotas exigem o vínculo assistencial com o paciente e a leitura vai à trilha', async () => {
@@ -430,7 +545,7 @@ describe.skipIf(SEM_BANCO)('exame físico estruturado (banco próprio, MariaDB)'
     expect(await contar()).toBe(antes);
     const com = montar(true);
     const tela = await com.ctrl.doPaciente(ids.paciente, com.req());
-    expect(tela.registros.length).toBe(2);
+    expect(tela.registros.length).toBe(5);
     expect(
       com.trilha.eventos.filter(
         (e) =>

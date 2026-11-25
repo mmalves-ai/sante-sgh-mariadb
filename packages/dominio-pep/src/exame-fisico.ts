@@ -2,8 +2,10 @@
 // como o achado padronizado (seleção rápida) preenche o sistema, a região e o "normal", o lado do corpo quando a
 // região o exige, o público a que o achado se aplica (idade do paciente no momento clínico), achados repetidos ou
 // contraditórios no mesmo registro e o resumo por sistema. O achado é parte do registro clínico: nunca é apagado;
-// corrigir é suspender o registro pelo fluxo próprio e registrar de novo. Só o autor do registro acrescenta achados,
-// enquanto o registro está finalizado ou aguardando a coassinatura.
+// corrigir é suspender o registro pelo fluxo próprio e registrar de novo. O exame acrescentado ao registro já gravado
+// é um complemento datado (cada lote leva a data do próprio lançamento, aparece assim no texto do registro e tem o
+// selo do conteúdo guardado na trilha): só o autor, com o registro em vigor, sem assinatura concluída e dentro da
+// janela de complemento contada do lançamento do registro. Depois disso o exame vai num registro novo.
 import type { FalhaRegra } from './farmacovigilancia.js';
 
 export const LATERALIDADES_EXAME = ['direito', 'esquerdo', 'bilateral', 'nao_se_aplica'] as const;
@@ -16,6 +18,8 @@ export const DESCRICAO_ACHADO_MAXIMA = 2000;
 export const ITENS_EXAME_MAXIMO = 200;
 /** Situações do registro clínico que aceitam achados novos do autor. */
 export const SITUACOES_REGISTRO_COM_EXAME = ['finalizado', 'aguardando_coassinatura'] as const;
+/** Horas, contadas do lançamento do registro, em que o autor ainda complementa o exame físico nele. */
+export const JANELA_COMPLEMENTO_EXAME_HORAS = 24;
 
 const falha = (codigo: string, mensagem: string): FalhaRegra => ({ codigo, mensagem });
 const DIA = 86_400_000;
@@ -235,11 +239,22 @@ export function validarExameFisico(
   return falhas.length ? { itens: [], falhas } : { itens: resolvidos, falhas: [] };
 }
 
-/** O registro aceita achados novos desta pessoa? Só o autor, e só com o registro em vigor. */
-export function registroAceitaExame(
-  registro: { readonly situacao: string; readonly autorUsuarioId: number },
-  usuario: number,
-): FalhaRegra[] {
+/** O registro clínico como a regra do complemento o vê. */
+export interface RegistroParaExame {
+  readonly situacao: string;
+  readonly autorUsuarioId: number;
+  /** Lançamento do registro no sistema (nulo no registro sem lançamento conhecido, como o migrado). */
+  readonly lancadoEm: Date | null;
+  /** O documento do registro já tem assinatura concluída (o conteúdo assinado não recebe acréscimo). */
+  readonly assinado: boolean;
+}
+
+/**
+ * O registro aceita o complemento do exame físico desta pessoa agora? Só o autor; o registro em vigor (nem suspenso
+ * nem corrigido); sem assinatura concluída (o conteúdo assinado não muda); e dentro da janela de complemento contada do
+ * lançamento. Fora disso, o exame vai num registro novo, com data e assinatura próprias.
+ */
+export function registroAceitaExame(registro: RegistroParaExame, usuario: number, agora: Date): FalhaRegra[] {
   const f: FalhaRegra[] = [];
   if (!(SITUACOES_REGISTRO_COM_EXAME as readonly string[]).includes(registro.situacao))
     f.push(
@@ -250,6 +265,25 @@ export function registroAceitaExame(
     );
   if (registro.autorUsuarioId !== usuario)
     f.push(falha('nao-e-autor', 'Só o autor do registro acrescenta achados do exame físico.'));
+  if (registro.assinado)
+    f.push(
+      falha(
+        'registro-assinado',
+        'O registro já está assinado: o conteúdo assinado não recebe acréscimo; registre o exame num registro novo.',
+      ),
+    );
+  const lancado = registro.lancadoEm?.getTime();
+  if (
+    lancado === undefined ||
+    Number.isNaN(lancado) ||
+    agora.getTime() - lancado > JANELA_COMPLEMENTO_EXAME_HORAS * 3_600_000
+  )
+    f.push(
+      falha(
+        'janela-de-complemento-encerrada',
+        `O complemento do exame vale até ${JANELA_COMPLEMENTO_EXAME_HORAS} horas depois do lançamento do registro: registre o exame num registro novo.`,
+      ),
+    );
   return f;
 }
 
@@ -301,4 +335,24 @@ export function textoAchadoExame(a: {
     .filter(Boolean)
     .join('; ');
   return `${onde}: ${oque}`;
+}
+
+/**
+ * Bloco do exame físico no texto do registro (linha do tempo, leitura e impressão): um cabeçalho por lote, com a data
+ * do lançamento do próprio lote (o complemento é datado, não assume a data clínica do registro), e uma linha por achado
+ * na ordem da numeração. Sem achados, texto vazio.
+ */
+export function textoExameDoRegistro(
+  achados: readonly { readonly lancadoEm: string; readonly texto: string }[],
+): string {
+  const linhas: string[] = [];
+  let lote: string | null = null;
+  for (const a of achados) {
+    if (a.lancadoEm !== lote) {
+      lote = a.lancadoEm;
+      linhas.push(`${linhas.length ? '\n' : ''}Exame físico estruturado (lançado em ${a.lancadoEm}):`);
+    }
+    linhas.push(`- ${a.texto}`);
+  }
+  return linhas.join('\n');
 }

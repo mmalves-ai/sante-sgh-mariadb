@@ -59,6 +59,8 @@ const esquemaRegistro = z.object({
       normal: z.boolean().nullable(),
       descricao: z.string().nullable(),
       texto: z.string(),
+      /** Lançamento do achado: o complemento é datado. */
+      lancadoEm: z.string().nullable().optional(),
     }),
   ),
   resumo: z.array(
