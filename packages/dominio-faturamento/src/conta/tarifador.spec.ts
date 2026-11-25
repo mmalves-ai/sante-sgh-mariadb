@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   classificarNumero,
+  conferirLigacaoDoAtendimento,
   dividirLinhaTarifador,
   type LayoutTarifador,
   lerArquivoTarifador,
@@ -174,5 +175,48 @@ describe('leitura do arquivo', () => {
     const r = lerArquivoTarifador(['x', ...linhas].join('\n'), LAYOUT);
     expect(r.ligacoes).toHaveLength(MAX_LINHAS_TARIFADOR);
     expect(r.recusadas).toEqual([{ linha: MAX_LINHAS_TARIFADOR + 2, motivo: 'limite_de_linhas' }]);
+  });
+});
+
+describe('conferirLigacaoDoAtendimento', () => {
+  const destino = { ramal: '201', entradaEm: '2026-01-20 08:00:00', saidaEm: '2026-01-25 18:00:00' };
+  it('do ramal do quarto e dentro do atendimento: ok (limites inclusos)', () => {
+    expect(conferirLigacaoDoAtendimento({ ramal: '201', iniciadaEm: '2026-01-20 10:00:00' }, destino)).toBe(
+      'ok',
+    );
+    expect(conferirLigacaoDoAtendimento({ ramal: '201', iniciadaEm: '2026-01-20 08:00:00' }, destino)).toBe(
+      'ok',
+    );
+    expect(conferirLigacaoDoAtendimento({ ramal: '201', iniciadaEm: '2026-01-25 18:00:00' }, destino)).toBe(
+      'ok',
+    );
+  });
+  it('outro ramal ou linha sem ramal ficam de fora quando o ramal foi pedido', () => {
+    expect(conferirLigacaoDoAtendimento({ ramal: '202', iniciadaEm: '2026-01-20 10:00:00' }, destino)).toBe(
+      'outro_ramal',
+    );
+    expect(conferirLigacaoDoAtendimento({ ramal: null, iniciadaEm: '2026-01-20 10:00:00' }, destino)).toBe(
+      'outro_ramal',
+    );
+  });
+  it('antes da entrada ou depois da saída: fora do atendimento (paciente anterior do mesmo ramal)', () => {
+    expect(conferirLigacaoDoAtendimento({ ramal: '201', iniciadaEm: '2026-01-19 23:59:59' }, destino)).toBe(
+      'fora_do_atendimento',
+    );
+    expect(conferirLigacaoDoAtendimento({ ramal: '201', iniciadaEm: '2026-01-25 18:00:01' }, destino)).toBe(
+      'fora_do_atendimento',
+    );
+  });
+  it('sem filtro de ramal (importação pelo número do atendimento) só confere o período', () => {
+    const semRamal = { ...destino, ramal: null };
+    expect(conferirLigacaoDoAtendimento({ ramal: null, iniciadaEm: '2026-01-21 09:00:00' }, semRamal)).toBe(
+      'ok',
+    );
+    expect(conferirLigacaoDoAtendimento({ ramal: '305', iniciadaEm: '2026-01-21 09:00:00' }, semRamal)).toBe(
+      'ok',
+    );
+    expect(conferirLigacaoDoAtendimento({ ramal: null, iniciadaEm: '2026-01-26 09:00:00' }, semRamal)).toBe(
+      'fora_do_atendimento',
+    );
   });
 });

@@ -7,10 +7,16 @@
 //   o ramal reconhecido pelo número e o atendimento pela coluna do arquivo ou pela conta de onde se importa. A
 //   ligação já registrada (mesmo atendimento, início, destino e duração) não se repete: reimportar o mesmo arquivo
 //   não duplica a cobrança. A linha recusada volta só com o número da linha e o motivo.
+// - A partir da conta, o ramal do quarto é obrigatório quando o layout traz o ramal (o arquivo da central tem todos os
+//   quartos), e a linha sem ramal conta como de outro ramal. Nos dois caminhos, a ligação que começou fora do período
+//   do atendimento (da entrada à saída, ou até agora se ainda aberto) é recusada como fora_do_atendimento: o ramal é
+//   reaproveitado por pacientes seguidos e o número do atendimento pode vir errado da central.
 // - O lançamento na conta continua sendo o das regras comerciais (lancar-ligacoes): preço da tabela ou valor do
 //   tarifador, conforme a regra do tipo.
 import {
   type AbrangenciaNumero,
+  conferirLigacaoDoAtendimento,
+  type DestinoLigacaoTarifador,
   FORMATOS_DATA_TARIFADOR,
   FORMATOS_DURACAO_TARIFADOR,
   type LayoutTarifador,
@@ -150,6 +156,7 @@ export type MotivoImportacao =
   | 'valor_invalido'
   | 'limite_de_linhas'
   | 'sem_atendimento'
+  | 'fora_do_atendimento'
   | 'sem_tipo';
 
 /** Resultado gravado na idempotência (só valores simples): as listas vão em JSON, sem dado de pessoa. */
@@ -198,16 +205,35 @@ export const opImportarLigacoes = definirOperacao({
         campos: ['layoutId'],
       });
     const layout = layoutDaLinha(lr);
-    let atendimentoFixo: number | null = null;
+    // Período do atendimento em texto no relógio do banco, comparável com o início lido do arquivo.
+    const destinoDe = (a: Linha, ramal: string | null): { id: number; destino: DestinoLigacaoTarifador } => ({
+      id: n(a['id']),
+      destino: { ramal, entradaEm: String(a['entrada']), saidaEm: String(a['saida']) },
+    });
+    let fixo: { id: number; destino: DestinoLigacaoTarifador } | null = null;
     if (e.contaId) {
       const c = await tx.uma<Linha>(
         'SELECT atendimento_id FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
         [e.contaId, est],
       );
       if (!c) throw recusa('nao-encontrado', 'Conta não encontrada.', { campos: ['contaId'] });
-      atendimentoFixo = nn(c['atendimento_id']);
-      if (atendimentoFixo === null)
+      const atendimentoId = nn(c['atendimento_id']);
+      if (atendimentoId === null)
         throw recusa('entrada-invalida', 'A conta não tem atendimento.', { campos: ['contaId'] });
+      if (layout.colunaRamal !== null && !e.ramal)
+        throw recusa(
+          'entrada-invalida',
+          'Informe o ramal do quarto: o arquivo da central traz as ligações de todos os ramais.',
+          { campos: ['ramal'] },
+        );
+      const a = await tx.uma<Linha>(
+        `SELECT id, DATE_FORMAT(entrada_em, '%Y-%m-%d %H:%i:%s') AS entrada,
+                DATE_FORMAT(COALESCE(saida_em, NOW()), '%Y-%m-%d %H:%i:%s') AS saida
+           FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [atendimentoId, est],
+      );
+      if (!a) throw recusa('nao-encontrado', 'Atendimento da conta não encontrado.', { campos: ['contaId'] });
+      fixo = destinoDe(a, layout.colunaRamal === null ? null : (e.ramal ?? null));
     } else if (layout.colunaAtendimento === null)
       throw recusa(
         'entrada-invalida',
@@ -237,7 +263,7 @@ export const opImportarLigacoes = definirOperacao({
       [est],
     ))
       regras.set(n(r['tipo_ligacao_tarifada_id']), n(r['id']));
-    const atendimentos = new Map<string, number | null>();
+    const atendimentos = new Map<string, { id: number; destino: DestinoLigacaoTarifador } | null>();
 
     const recusadas: { linha: number; motivo: MotivoImportacao }[] = [...leitura.recusadas];
     const porAbrangencia: Partial<Record<AbrangenciaNumero, number>> = {};
@@ -246,25 +272,33 @@ export const opImportarLigacoes = definirOperacao({
     let outroRamal = 0;
     let primeira = 0;
     for (const l of leitura.ligacoes) {
-      if (e.ramal && l.ramal !== null && l.ramal !== e.ramal) {
-        outroRamal++;
-        continue;
-      }
-      let atendimento = atendimentoFixo;
-      if (atendimento === null && l.atendimento !== null) {
+      let alvo = fixo;
+      if (alvo === null && l.atendimento !== null) {
         if (!atendimentos.has(l.atendimento)) {
           const a = await tx.uma<Linha>(
-            'SELECT id FROM atendimento WHERE estabelecimento_id = ? AND numero = ? AND excluido_em IS NULL',
+            `SELECT id, DATE_FORMAT(entrada_em, '%Y-%m-%d %H:%i:%s') AS entrada,
+                    DATE_FORMAT(COALESCE(saida_em, NOW()), '%Y-%m-%d %H:%i:%s') AS saida
+               FROM atendimento WHERE estabelecimento_id = ? AND numero = ? AND excluido_em IS NULL`,
             [est, l.atendimento],
           );
-          atendimentos.set(l.atendimento, nn(a?.['id']));
+          atendimentos.set(l.atendimento, a ? destinoDe(a, null) : null);
         }
-        atendimento = atendimentos.get(l.atendimento) ?? null;
+        alvo = atendimentos.get(l.atendimento) ?? null;
       }
-      if (atendimento === null) {
+      if (alvo === null) {
         recusadas.push({ linha: l.linha, motivo: 'sem_atendimento' });
         continue;
       }
+      const confere = conferirLigacaoDoAtendimento(l, alvo.destino);
+      if (confere === 'outro_ramal') {
+        outroRamal++;
+        continue;
+      }
+      if (confere === 'fora_do_atendimento') {
+        recusadas.push({ linha: l.linha, motivo: 'fora_do_atendimento' });
+        continue;
+      }
+      const atendimento = alvo.id;
       const tipo = tipos.get(l.abrangencia);
       if (!tipo) {
         recusadas.push({ linha: l.linha, motivo: 'sem_tipo' });

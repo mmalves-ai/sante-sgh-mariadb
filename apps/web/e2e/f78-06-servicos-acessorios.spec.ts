@@ -156,7 +156,6 @@ test.describe('@C1-015 serviços acessórios da conta (06-FAT linha 23)', () => 
     await page.getByTestId('sa-conta-importar').click();
     await escolher(page.getByTestId('sa-imp-layout'), { rotulo: 'CENTRAL SINTETICA' });
     await expect(page.getByTestId('sa-imp-conta')).toHaveValue(String(CONTA));
-    await page.getByTestId('sa-imp-ramal').fill('201');
     await page.getByTestId('sa-imp-arquivo').setInputFiles({
       name: 'bilhetes.csv',
       mimeType: 'text/csv',
@@ -171,6 +170,11 @@ test.describe('@C1-015 serviços acessórios da conta (06-FAT linha 23)', () => 
     });
     await expect(page.getByTestId('sa-previa')).toContainText('3 linha(s), 2 legível(is), 1 com problema');
     await expect(page.getByTestId('sa-previa')).toContainText('Local');
+    // Sem o ramal do quarto, o arquivo da central (todos os ramais) não vai para a conta.
+    await expect(page.getByTestId('sa-imp-erros')).toContainText('ramal do quarto');
+    await expect(page.getByTestId('sa-imp-gravar')).toBeDisabled();
+    await page.getByTestId('sa-imp-ramal').fill('201');
+    await expect(page.getByTestId('sa-imp-erros')).toBeHidden();
     await page.getByTestId('sa-imp-gravar').click();
     await expect(page.getByTestId('sa-mensagem')).toContainText('1 registrada(s)');
     await expect(page.getByTestId('sa-imp-recusadas')).toContainText('data inválida');

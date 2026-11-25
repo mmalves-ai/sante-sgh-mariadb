@@ -1,9 +1,10 @@
 // Contrato de efeito da importação do arquivo do tarifador (F8, 06-FAT linha 23) contra o MariaDB real.
 // Massa SINTÉTICA com códigos "F815" (nenhuma pessoa real; números de telefone inventados): o layout gravado com
 // autoria (coluna repetida recusada, descrição repetida recusada, alteração pela versão); a importação a partir da
-// conta só com o ramal do paciente registra as ligações pendentes (origem integracao, ramal reconhecido, tipo da
-// mesma abrangência) e devolve as linhas ruins só com número e motivo; reimportar não duplica; o layout com a coluna
-// do atendimento acha o atendimento pelo número; o lançamento na conta usa o valor do tarifador. No fim, a massa é
+// conta exige o ramal quando o layout o traz e só com o ramal do paciente registra as ligações pendentes (origem integracao, ramal reconhecido, tipo da
+// mesma abrangência) e devolve as linhas ruins só com número e motivo; a linha sem ramal conta como de outro ramal e a
+// do mesmo ramal antes da entrada (paciente anterior do quarto) é recusada sem registro; reimportar não duplica; o
+// layout com a coluna do atendimento acha o atendimento pelo número e recusa a ligação fora do período dele; o lançamento na conta usa o valor do tarifador. No fim, a massa é
 // apagada. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
@@ -252,6 +253,11 @@ describe.skipIf(SEM_BANCO)('importação do arquivo do tarifador (MariaDB)', () 
     expect(await codigoDo(importar({ layoutId: ids['layout'], conteudo: 'x\n201;1' }))).toBe(
       'entrada-invalida',
     );
+    expect(
+      await codigoDo(
+        importar({ layoutId: ids['layout'], conteudo: '201;1', contaId: ids['conta'], ramal: null }),
+      ),
+    ).toBe('entrada-invalida');
     const arquivo = [
       'RAMAL;DATA;DURACAO;NUMERO;VALOR',
       '201;20/01/2026 10:00:00;00:02:05;32221234;0,80',
@@ -259,11 +265,16 @@ describe.skipIf(SEM_BANCO)('importação do arquivo do tarifador (MariaDB)', () 
       '202;20/01/2026 11:30:00;00:01:00;32229999;0,40',
       '201;31/02/2026 10:00;00:01:00;32221234;1,00',
       '201;20/01/2026 12:00:00;00:03:00;0215132221234;2,50',
+      '201;19/01/2026 22:00:00;00:04:00;32227777;3,10',
+      ';20/01/2026 13:00:00;00:01:00;32226666;0,40',
     ].join('\n');
     const corpo = { layoutId: ids['layout'], conteudo: arquivo, contaId: ids['conta'], ramal: '201' };
     const r = await importar(corpo);
-    expect(r).toMatchObject({ lidas: 5, registradas: 3, repetidas: 0, outroRamal: 1, recusadas: 1 });
-    expect(r.linhasRecusadas).toEqual([{ linha: 5, motivo: 'data_invalida' }]);
+    expect(r).toMatchObject({ lidas: 7, registradas: 3, repetidas: 0, outroRamal: 2, recusadas: 2 });
+    expect(r.linhasRecusadas).toEqual([
+      { linha: 5, motivo: 'data_invalida' },
+      { linha: 7, motivo: 'fora_do_atendimento' },
+    ]);
     expect(r.porAbrangencia).toEqual({ local: 1, celular_local: 1, interurbano: 1 });
     const ls = await linhas(
       `SELECT l.atendimento_id, l.ramal_telefonico_id, l.tipo_ligacao, l.situacao, l.origem, l.valor, l.duracao_segundos,
@@ -301,11 +312,17 @@ describe.skipIf(SEM_BANCO)('importação do arquivo do tarifador (MariaDB)', () 
     ]);
     expect(ls.every((x) => Number(x['criado_por']) === ids['usuario'])).toBe(true);
     const r2 = await importar(corpo);
-    expect(r2).toMatchObject({ registradas: 0, repetidas: 3, outroRamal: 1, recusadas: 1 });
+    expect(r2).toMatchObject({ registradas: 0, repetidas: 3, outroRamal: 2, recusadas: 2 });
     const [c] = await linhas('SELECT COUNT(*) AS n FROM ligacao_tarifada WHERE estabelecimento_id = ?', [
       ids['est'],
     ]);
     expect(Number(c?.['n'])).toBe(3);
+    const [fora] = await linhas(
+      `SELECT COUNT(*) AS n FROM ligacao_tarifada WHERE estabelecimento_id = ?
+          AND (iniciada_em < '2026-01-20 08:00:00' OR telefone_destino IN ('32227777', '32226666'))`,
+      [ids['est']],
+    );
+    expect(Number(fora?.['n'])).toBe(0);
   });
 
   it('layout com a coluna do atendimento: acha pelo número; atendimento desconhecido volta como linha recusada', async () => {
@@ -324,10 +341,18 @@ describe.skipIf(SEM_BANCO)('importação do arquivo do tarifador (MariaDB)', () 
     });
     const r = await importar({
       layoutId: Number(l['id']),
-      conteudo: `${P}-1\t2026-01-21\t09:15\t61\t32224321\n${P}-NAO\t2026-01-21\t09:20\t61\t32224321\n`,
+      conteudo: `${P}-1\t2026-01-21\t09:15\t61\t32224321\n${P}-NAO\t2026-01-21\t09:20\t61\t32224321\n${P}-1\t2026-01-19\t09:20\t61\t32224321\n`,
     });
-    expect(r).toMatchObject({ lidas: 2, registradas: 1, recusadas: 1 });
-    expect(r.linhasRecusadas).toEqual([{ linha: 2, motivo: 'sem_atendimento' }]);
+    expect(r).toMatchObject({ lidas: 3, registradas: 1, recusadas: 2 });
+    expect(r.linhasRecusadas).toEqual([
+      { linha: 2, motivo: 'sem_atendimento' },
+      { linha: 3, motivo: 'fora_do_atendimento' },
+    ]);
+    const [antes] = await linhas(
+      `SELECT COUNT(*) AS n FROM ligacao_tarifada WHERE estabelecimento_id = ? AND iniciada_em = '2026-01-19 09:20:00'`,
+      [ids['est']],
+    );
+    expect(Number(antes?.['n'])).toBe(0);
     const [x] = await linhas(
       `SELECT atendimento_id, ramal_telefonico_id, valor FROM ligacao_tarifada
         WHERE estabelecimento_id = ? AND iniciada_em = '2026-01-21 09:15:00'`,

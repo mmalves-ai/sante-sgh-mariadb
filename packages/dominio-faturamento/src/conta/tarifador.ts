@@ -299,3 +299,27 @@ export function lerArquivoTarifador(conteudo: string, l: LayoutTarifador): Leitu
   });
   return { lidas, ligacoes, recusadas };
 }
+
+/** O atendimento onde a ligação seria registrada: o ramal pedido na importação e o período, da entrada à saída. */
+export interface DestinoLigacaoTarifador {
+  /** Ramal do quarto (só na importação a partir da conta); null quando a linha não é filtrada por ramal. */
+  readonly ramal: string | null;
+  /** Entrada do atendimento, 'AAAA-MM-DD hh:mm:ss'. */
+  readonly entradaEm: string;
+  /** Saída do atendimento (ou o momento da importação, se ainda aberto), 'AAAA-MM-DD hh:mm:ss'. */
+  readonly saidaEm: string;
+}
+
+/**
+ * Se a ligação lida pertence ao atendimento: com o ramal pedido, a linha de outro ramal ou sem ramal fica de fora
+ * (o arquivo da central traz todos os quartos); e a ligação que começou antes da entrada ou depois da saída é de
+ * outro paciente do mesmo ramal ou de outro atendimento com o mesmo número, e é recusada.
+ */
+export function conferirLigacaoDoAtendimento(
+  l: Pick<LigacaoDoArquivo, 'ramal' | 'iniciadaEm'>,
+  d: DestinoLigacaoTarifador,
+): 'ok' | 'outro_ramal' | 'fora_do_atendimento' {
+  if (d.ramal !== null && l.ramal !== d.ramal) return 'outro_ramal';
+  if (l.iniciadaEm < d.entradaEm || l.iniciadaEm > d.saidaEm) return 'fora_do_atendimento';
+  return 'ok';
+}

@@ -106,6 +106,7 @@ const { t } = useI18n({
       ramal: 'Só o ramal do quarto',
       grande: 'O arquivo passa do tamanho aceito por importação: divida-o por período.',
       semConta: 'Este layout não traz o atendimento: informe a conta do paciente.',
+      semRamal: 'Informe o ramal do quarto: o arquivo da central traz as ligações de todos os ramais.',
       previa: 'Prévia: {lidas} linha(s), {boas} legível(is), {ruins} com problema.',
       gravarImportacao: 'Registrar as ligações',
       resultado:
@@ -127,6 +128,7 @@ const { t } = useI18n({
       m_valor_invalido: 'valor inválido',
       m_limite_de_linhas: 'passou do limite de linhas',
       m_sem_atendimento: 'atendimento não encontrado',
+      m_fora_do_atendimento: 'fora do período do atendimento (entrada à alta)',
       m_sem_tipo: 'sem tipo de ligação cadastrado',
       abrirConta: 'Abrir',
       numeroConta: 'Conta {n} · {s}',
@@ -411,6 +413,8 @@ const errosImportacao = computed(() => {
   if (conteudo.value.length > MAX_CONTEUDO_TARIFADOR) e.push(t('grande'));
   if (layoutEscolhido.value && layoutEscolhido.value.colunaAtendimento === null && !imp.contaId)
     e.push(t('semConta'));
+  if (layoutEscolhido.value && layoutEscolhido.value.colunaRamal !== null && imp.contaId && !imp.ramal.trim())
+    e.push(t('semRamal'));
   return e;
 });
 async function lerArquivo(ev: Event) {
