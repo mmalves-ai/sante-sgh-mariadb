@@ -3,7 +3,8 @@
 // vigilância criadas aqui (uma fechada, outra aberta) num ano passado sorteado. Prova o que fica no banco: o envio
 // inicial pendente com o retrato (operação e dados), o andamento com a versão conferida e a anterior na trilha, a
 // competência que passa a "enviada" no primeiro formulário transmitido, a retificação com motivo, as recusas da regra
-// e a leitura restrita ao estabelecimento.
+// e a leitura restrita ao estabelecimento. Um componente cirúrgico sintético no cadastro torna a cirurgia devida: sem
+// envio, ela aparece com a última situação nula e atrasa a competência vencida; o envio grava o componente.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -33,6 +34,7 @@ describe.skipIf(SEM_BANCO)('notificação de IRAS ao órgão sanitário (porta p
   let fechada = 0;
   let aberta = 0;
   let envio = 0;
+  let componente = 0;
   const ano = 2001 + Math.floor(Math.random() * 20);
   const mes = 1 + Math.floor(Math.random() * 11);
   const proxima = `${String(ano)}-${String(mes + 1).padStart(2, '0')}-05`;
@@ -73,10 +75,16 @@ describe.skipIf(SEM_BANCO)('notificação de IRAS ao órgão sanitário (porta p
          VALUES (?, ?, 12, 'aberta', 'sistema', ?, ?, 1)`,
         [m!.base.est, ano, agora, m!.base.usuario],
       );
-      return { f, a };
+      const cv = await e.inserir(
+        `INSERT INTO componente_vigilancia (codigo, descricao, ativo, tipo_componente, criado_em, criado_por, versao)
+         VALUES (?, 'Componente cirúrgico sintético', TRUE, 'cirurgico', ?, ?, 1)`,
+        [`SINT-NIR-${String(Date.now()).slice(-10)}`, agora, m!.base.usuario],
+      );
+      return { f, a, cv };
     });
     fechada = ids.f;
     aberta = ids.a;
+    componente = ids.cv;
   }, 120_000);
 
   afterAll(async () => {
@@ -87,6 +95,7 @@ describe.skipIf(SEM_BANCO)('notificação de IRAS ao órgão sanitário (porta p
           aberta,
         ]);
         await e.executar('DELETE FROM fechamento_vigilancia_iras WHERE id IN (?, ?)', [fechada, aberta]);
+        if (componente) await e.executar('DELETE FROM componente_vigilancia WHERE id = ?', [componente]);
       });
     await limparMassaSadt(nucleo, m);
     await nucleo.encerrar();
@@ -281,12 +290,41 @@ describe.skipIf(SEM_BANCO)('notificação de IRAS ao órgão sanitário (porta p
     expect(c!.competencia).toBe(`${String(ano)}-${String(mes).padStart(2, '0')}`);
     expect(c!.prazo).toBe(`${String(ano)}-${String(mes + 1).padStart(2, '0')}-15`);
     expect(c!.situacao).toBe('enviada');
-    expect(c!.atrasada).toBe(false);
-    expect(c!.formularios).toEqual([{ formulario: 'uti_adulto', ultima: 'transcrita', atrasado: false }]);
+    expect(c!.formularios).toContainEqual({
+      formulario: 'uti_adulto',
+      ultima: 'transcrita',
+      atrasado: false,
+    });
+    // A cirurgia, devida pelo componente vigiado e nunca enviada, atrasa a competência vencida.
+    expect(c!.formularios).toContainEqual({ formulario: 'cirurgia', ultima: null, atrasado: true });
+    expect(c!.atrasada).toBe(true);
     expect(c!.envios).toHaveLength(2);
     expect(cs.some((x) => x.id === aberta)).toBe(false);
     const outro = { ...ctx(), estabelecimento: m!.base.est + 9_999_999 };
     expect(await porta.envios(outro, fechada)).toEqual([]);
     expect((await porta.competencias(outro)).some((x) => x.id === fechada)).toBe(false);
+  });
+  it('o envio do formulário devido grava o componente vigiado e tira o formulário do atraso', async () => {
+    const r = await porta.registrar(
+      ctx(),
+      m!.base.login,
+      fechada,
+      entrada({
+        formulario: 'cirurgia',
+        situacao: 'transcrita',
+        enviadoEm: proxima,
+        protocolo: 'PROT-SINT-3',
+      }),
+      t,
+    );
+    const [x] = await ler<Record<string, unknown>>(
+      `SELECT cv.tipo_componente FROM notificacao_iras_envio ne
+         JOIN componente_vigilancia cv ON cv.id = ne.componente_vigilancia_id WHERE ne.id = ?`,
+      [r.id],
+    );
+    expect(x?.['tipo_componente']).toBe('cirurgico');
+    const c = (await porta.competencias(ctx())).find((y) => y.id === fechada);
+    expect(c!.formularios).toContainEqual({ formulario: 'cirurgia', ultima: 'transcrita', atrasado: false });
+    expect(c!.formularios.filter((y) => y.atrasado).every((y) => y.ultima === null)).toBe(true);
   });
 });

@@ -4,7 +4,9 @@ import {
   avaliarEnvioIras,
   envioAtrasado,
   fimDaCompetencia,
+  formularioDoComponente,
   prazoDoEnvio,
+  situacaoDosFormularios,
 } from './notificacao-iras.js';
 
 const base = { competencia: '2026-02', situacaoCompetencia: 'fechada', anteriores: [], hoje: '2026-03-10' };
@@ -102,5 +104,31 @@ describe('envio da notificação de IRAS ao órgão sanitário', () => {
     expect(envioAtrasado('2026-02', '2026-03-16', 'rejeitada')).toBe(true);
     expect(envioAtrasado('2026-02', '2026-03-16', 'transcrita')).toBe(false);
     expect(envioAtrasado('2026-02', '2026-04-01', 'aceita')).toBe(false);
+  });
+  it('o formulário devido pelo componente vigiado, sem envio, fica atrasado depois do prazo e atrasa a competência', () => {
+    expect(formularioDoComponente('cirurgico')).toBe('cirurgia');
+    expect(formularioDoComponente('uti_neonatal')).toBe('uti_neonatal');
+    expect(formularioDoComponente('geral')).toBeNull();
+    const ultimas = new Map([['uti_adulto', 'transcrita']] as const);
+    const depois = situacaoDosFormularios('2026-02', '2026-03-16', ['cirurgia', 'uti_adulto'], ultimas);
+    expect(depois.formularios).toEqual([
+      { formulario: 'uti_adulto', ultima: 'transcrita', atrasado: false },
+      { formulario: 'cirurgia', ultima: null, atrasado: true },
+    ]);
+    expect(depois.atrasada).toBe(true);
+    // No prazo nada atrasa; com todos os devidos transmitidos, a competência sai do atraso.
+    expect(situacaoDosFormularios('2026-02', '2026-03-15', ['cirurgia'], ultimas).atrasada).toBe(false);
+    const todos = new Map([
+      ['uti_adulto', 'transcrita'],
+      ['cirurgia', 'aceita'],
+    ] as const);
+    expect(situacaoDosFormularios('2026-02', '2026-04-01', ['cirurgia', 'uti_adulto'], todos).atrasada).toBe(
+      false,
+    );
+    // Sem formulário devido nem envio: atrasa depois do prazo.
+    expect(situacaoDosFormularios('2026-02', '2026-03-16', [], new Map())).toEqual({
+      formularios: [],
+      atrasada: true,
+    });
   });
 });

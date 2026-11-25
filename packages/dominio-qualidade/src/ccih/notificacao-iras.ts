@@ -150,3 +150,46 @@ export function envioAtrasado(competencia: string, hoje: string, ultima: Situaca
   if (dia(hoje) <= prazoDoEnvio(competencia)) return false;
   return ultima === null || !transmitido(ultima);
 }
+
+/**
+ * O formulário que o componente da vigilância obriga a enviar (UTI adulto, pediátrica, neonatal e cirurgia); o
+ * componente geral não tem formulário próprio.
+ */
+export const FORMULARIO_DO_COMPONENTE: Readonly<Record<string, FormularioIras>> = {
+  uti_adulto: 'uti_adulto',
+  uti_pediatrica: 'uti_pediatrica',
+  uti_neonatal: 'uti_neonatal',
+  cirurgico: 'cirurgia',
+};
+
+export const formularioDoComponente = (tipoComponente: string): FormularioIras | null =>
+  FORMULARIO_DO_COMPONENTE[tipoComponente] ?? null;
+
+export interface SituacaoDoFormulario {
+  readonly formulario: FormularioIras;
+  /** A situação do envio mais recente (nula: o formulário devido nunca teve envio). */
+  readonly ultima: SituacaoEnvioIras | null;
+  readonly atrasado: boolean;
+}
+
+/**
+ * Os formulários da competência: os devidos pelos componentes vigiados (mesmo sem envio) e os que já têm envio, na
+ * ordem da lista oficial, cada um com o atraso. A competência fica atrasada quando qualquer formulário devido ou
+ * registrado está atrasado; sem formulário nenhum, quando passou o prazo sem envio.
+ */
+export function situacaoDosFormularios(
+  competencia: string,
+  hoje: string,
+  devidos: readonly FormularioIras[],
+  ultimas: ReadonlyMap<FormularioIras, SituacaoEnvioIras>,
+): { readonly formularios: readonly SituacaoDoFormulario[]; readonly atrasada: boolean } {
+  const presentes = new Set<FormularioIras>([...devidos, ...ultimas.keys()]);
+  const formularios = FORMULARIOS_IRAS.filter((f) => presentes.has(f)).map((formulario) => {
+    const ultima = ultimas.get(formulario) ?? null;
+    return { formulario, ultima, atrasado: envioAtrasado(competencia, hoje, ultima) };
+  });
+  const atrasada = formularios.length
+    ? formularios.some((f) => f.atrasado)
+    : envioAtrasado(competencia, hoje, null);
+  return { formularios, atrasada };
+}

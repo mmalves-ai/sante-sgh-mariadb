@@ -31,7 +31,7 @@ const esquemaCompetencia = z.object({
   situacao: z.string(),
   prazo: z.string(),
   atrasada: z.boolean(),
-  formularios: z.array(z.object({ formulario, ultima: situacao, atrasado: z.boolean() })),
+  formularios: z.array(z.object({ formulario, ultima: situacao.nullable(), atrasado: z.boolean() })),
   envios: z.array(esquemaEnvio),
   versao: z.number(),
 });

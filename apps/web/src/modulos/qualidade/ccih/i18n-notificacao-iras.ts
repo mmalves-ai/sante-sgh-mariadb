@@ -10,6 +10,7 @@ export const mensagensNotificacaoIras = {
   atrasada: 'Atrasada',
   enviada: 'Enviada',
   semEnvio: 'Nenhum envio registrado.',
+  semEnvioFormulario: 'Sem envio',
   formulario: 'Formulário',
   situacao: 'Situação',
   enviadoEm: 'Data do envio',

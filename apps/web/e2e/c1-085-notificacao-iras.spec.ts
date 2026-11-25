@@ -51,6 +51,18 @@ function competencia(situacaoUti: string, versao: number) {
   };
 }
 
+/** Competência vencida com o formulário da cirurgia devido pelo componente vigiado e nunca enviado. */
+const competenciaAtrasada = {
+  id: COMPETENCIA + 1,
+  competencia: '2026-08',
+  situacao: 'fechada',
+  prazo: '2026-09-15',
+  atrasada: true,
+  formularios: [{ formulario: 'cirurgia', ultima: null, atrasado: true }],
+  envios: [],
+  versao: 1,
+};
+
 test.describe('Notificação mensal de IRAS e condutas da cultura @C1-085 @fase7', () => {
   test.setTimeout(180_000);
 
@@ -64,7 +76,7 @@ test.describe('Notificação mensal de IRAS e condutas da cultura @C1-085 @fase7
       const req = rota.request();
       const caminho = new URL(req.url()).pathname.replace(/^\/api\/qualidade\/ccih\/notificacao\/?/, '');
       if (req.method() === 'GET') {
-        if (caminho === '') return json(rota, [competencia(situacaoUti, versaoUti)]);
+        if (caminho === '') return json(rota, [competencia(situacaoUti, versaoUti), competenciaAtrasada]);
         return rota.fallback();
       }
       pedidos.push({ caminho, corpo: (req.postDataJSON() ?? {}) as Record<string, unknown> });
@@ -87,6 +99,10 @@ test.describe('Notificação mensal de IRAS e condutas da cultura @C1-085 @fase7
     await expect(comp).toContainText('15/10/2026');
     await expect(comp.getByTestId('notificacao-enviada')).toBeVisible();
     await expect(comp.getByTestId('notificacao-formulario-2026-09-uti_adulto')).toContainText('UTI adulto');
+    // O formulário devido sem envio aparece e atrasa a competência vencida.
+    const vencida = page.getByTestId('notificacao-competencia-2026-08');
+    await expect(vencida.getByTestId('notificacao-atrasada')).toBeVisible();
+    await expect(vencida.getByTestId('notificacao-formulario-2026-08-cirurgia')).toContainText('Sem envio');
     await semViolacaoAxe(page, '/qualidade/ccih/notificacao (competências)');
 
     // Novo envio: o que falta aparece na hora; o formulário com envio vira retificação e pede o motivo.

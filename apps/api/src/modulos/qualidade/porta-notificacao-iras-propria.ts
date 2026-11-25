@@ -8,17 +8,22 @@
 // linha, confere a versão vista, guarda o retrato no próprio registro (operação e dados) e a versão anterior na trilha.
 // Este registro não transmite nada para fora: a pessoa da comissão envia pelo formulário do órgão e registra aqui a data
 // e o protocolo (situação "transcrita"); a transmissão automática ("enviada") fica para a mensagem de integração.
+// Os formulários devidos vêm dos componentes vigiados: os dos denominadores da competência (do estabelecimento) ou, sem
+// denominador, os componentes ativos do cadastro. O formulário devido sem envio aparece com a última situação nula e
+// atrasa a competência depois do prazo; o envio grava o componente a que o formulário pertence.
 import {
   avaliarAndamentoIras,
   avaliarEnvioIras,
   type EntradaEnvioIras,
-  envioAtrasado,
   type FormularioIras,
+  formularioDoComponente,
   MENSAGENS_NOTIFICACAO_IRAS,
   prazoDoEnvio,
   type RecusaNotificacaoIras,
+  type SituacaoDoFormulario,
   type SituacaoEnvioIras,
   type TipoEnvioIras,
+  situacaoDosFormularios,
   transmitido,
 } from '@sgh/dominio-qualidade';
 import { type Executor, recusa, type TxOperacao } from '@sgh/nucleo';
@@ -39,6 +44,11 @@ import {
 } from './apoio-propria.js';
 
 export const TABELAS_NOTIFICACAO_IRAS = ['notificacao_iras_envio', 'fechamento_vigilancia_iras'] as const;
+type Leitor = Pick<TxOperacao, 'consultar'>;
+interface ComponenteVigiado {
+  readonly id: number;
+  readonly formulario: FormularioIras;
+}
 const TETO = 120;
 
 export interface EnvioIras {
@@ -55,19 +65,15 @@ export interface EnvioIras {
   readonly versao: number;
 }
 
-export interface FormularioDaCompetencia {
-  readonly formulario: FormularioIras;
-  /** A situação do envio mais recente do formulário. */
-  readonly ultima: SituacaoEnvioIras;
-  readonly atrasado: boolean;
-}
+/** O formulário devido ou registrado da competência (ultima nula: devido e nunca enviado). */
+export type FormularioDaCompetencia = SituacaoDoFormulario;
 
 export interface CompetenciaNotificacao {
   readonly id: number;
   readonly competencia: string;
   readonly situacao: string;
   readonly prazo: string;
-  /** Passou o prazo sem nenhum formulário transmitido. */
+  /** Passou o prazo com algum formulário devido ou registrado sem envio transmitido. */
   readonly atrasada: boolean;
   readonly formularios: readonly FormularioDaCompetencia[];
   readonly envios: readonly EnvioIras[];
@@ -94,6 +100,45 @@ const SQL_ENVIOS = `
   SELECT ne.*, u.login AS registrado_por
     FROM notificacao_iras_envio ne
     LEFT JOIN usuario u ON u.id = ne.criado_por`;
+
+const SQL_COMPONENTES_DA_COMPETENCIA = `
+  SELECT DISTINCT d.fechamento_vigilancia_iras_id AS fechamento, cv.id, cv.tipo_componente
+    FROM denominador_vigilancia d
+    JOIN componente_vigilancia cv ON cv.id = d.componente_vigilancia_id
+   WHERE d.excluido_em IS NULL AND cv.ativo = TRUE AND d.fechamento_vigilancia_iras_id IN `;
+
+const SQL_COMPONENTES_ATIVOS = `
+  SELECT cv.id, cv.tipo_componente FROM componente_vigilancia cv WHERE cv.ativo = TRUE ORDER BY cv.id`;
+
+const vigiados = (rs: readonly Linha[]): ComponenteVigiado[] =>
+  rs.flatMap((r) => {
+    const formulario = formularioDoComponente(texto(r['tipo_componente']));
+    return formulario ? [{ id: n(r['id']), formulario }] : [];
+  });
+
+/**
+ * Os componentes vigiados de cada competência: os dos denominadores dela ou, sem denominador, os ativos do cadastro.
+ */
+async function componentesDevidos(
+  l: Leitor,
+  ids: readonly number[],
+): Promise<Map<number, ComponenteVigiado[]>> {
+  const m = new Map<number, ComponenteVigiado[]>();
+  if (!ids.length) return m;
+  const daCompetencia = await l.consultar<Linha>(
+    `${SQL_COMPONENTES_DA_COMPETENCIA}(${ids.map(() => '?').join(', ')}) ORDER BY cv.id`,
+    [...ids],
+    { teto: TETO * 4 },
+  );
+  for (const r of daCompetencia) {
+    const k = n(r['fechamento']);
+    m.set(k, [...(m.get(k) ?? []), ...vigiados([r])]);
+  }
+  if (ids.every((id) => m.has(id))) return m;
+  const ativos = vigiados(await l.consultar<Linha>(SQL_COMPONENTES_ATIVOS, [], { teto: TETO }));
+  for (const id of ids) if (!m.has(id)) m.set(id, ativos);
+  return m;
+}
 
 const competenciaDe = (r: Linha) => `${texto(r['ano'])}-${String(n(r['mes'])).padStart(2, '0')}`;
 
@@ -148,30 +193,27 @@ export class PortaNotificacaoIrasPropria {
     return lerNoEstabelecimento(this.nucleo, c, async (l, est) => {
       const hoje = (await relogioDoEstabelecimento(l, est)).slice(0, 10);
       const fs = await l.consultar<Linha>(SQL_COMPETENCIAS, [est], { teto: 24 });
-      const envios = await this.enviosDe(
-        l,
-        fs.map((f) => n(f['id'])),
-      );
+      const ids = fs.map((f) => n(f['id']));
+      const envios = await this.enviosDe(l, ids);
+      const devidos = await componentesDevidos(l, ids);
       return fs.map((f) => {
         const competencia = competenciaDe(f);
         const lista = envios.get(n(f['id'])) ?? [];
         const ultimas = new Map<FormularioIras, SituacaoEnvioIras>();
         for (const e of lista) if (!ultimas.has(e.formulario)) ultimas.set(e.formulario, e.situacao);
+        const { formularios, atrasada } = situacaoDosFormularios(
+          competencia,
+          hoje,
+          (devidos.get(n(f['id'])) ?? []).map((x) => x.formulario),
+          ultimas,
+        );
         return {
           id: n(f['id']),
           competencia,
           situacao: texto(f['situacao']),
           prazo: prazoDoEnvio(competencia),
-          atrasada: envioAtrasado(
-            competencia,
-            hoje,
-            lista.some((e) => transmitido(e.situacao)) ? 'transcrita' : null,
-          ),
-          formularios: [...ultimas].map(([formulario, ultima]) => ({
-            formulario,
-            ultima,
-            atrasado: envioAtrasado(competencia, hoje, ultima),
-          })),
+          atrasada,
+          formularios,
           envios: lista,
           versao: n(f['versao']),
         };
@@ -261,11 +303,15 @@ export class PortaNotificacaoIrasPropria {
       if (a.recusa) throw recusaIras(a.recusa);
       const enviadoEm = e.situacao === 'transcrita' && e.enviadoEm ? paraBanco(e.enviadoEm) : null;
       const motivo = a.tipo === 'retificacao' ? (e.motivoRetificacao ?? '').trim() : null;
+      const componente =
+        (await componentesDevidos(tx, [competencia]))
+          .get(competencia)
+          ?.find((x) => x.formulario === e.formulario)?.id ?? null;
       const protocolo = e.protocolo?.trim() || null;
       const id = await tx.inserir(
         `INSERT INTO notificacao_iras_envio (fechamento_vigilancia_iras_id, operacao, dados, ocorrido_em, usuario_id,
-           formulario, tipo_envio, situacao, enviado_em, protocolo, motivo_retificacao, criado_em, criado_por, versao)
-         VALUES (?, 'inclusao', ?, NOW(3), ?, ?, ?, ?, ?, ?, ?, NOW(3), ?, 1)`,
+           componente_vigilancia_id, formulario, tipo_envio, situacao, enviado_em, protocolo, motivo_retificacao, criado_em, criado_por, versao)
+         VALUES (?, 'inclusao', ?, NOW(3), ?, ?, ?, ?, ?, ?, ?, ?, NOW(3), ?, 1)`,
         [
           competencia,
           retrato({
@@ -276,8 +322,10 @@ export class PortaNotificacaoIrasPropria {
             enviadoEm,
             protocolo,
             motivo,
+            componente,
           }),
           usuario,
+          componente,
           e.formulario,
           a.tipo,
           e.situacao,

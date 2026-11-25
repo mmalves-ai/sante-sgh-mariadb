@@ -26,6 +26,7 @@ import {
   registrarAndamentoIras,
   registrarEnvioIras,
 } from '../api-notificacao-iras.js';
+import { hojeNoEstabelecimento } from '../../../internacao/formato.js';
 import ErroCcih from '../componentes/ErroCcih.vue';
 import NavCcih from '../componentes/NavCcih.vue';
 
@@ -33,7 +34,8 @@ const { t } = useI18n();
 const cliente = useQueryClient();
 const podeRegistrar = pode('qualidade.iras.registrar');
 const lista = useQuery({ queryKey: ['ccih', 'notificacao'], queryFn: lerCompetenciasNotificacao });
-const hoje = new Date().toISOString().slice(0, 10);
+// Hoje no fuso do estabelecimento, como o relógio da API (a data em UTC já vira o dia seguinte às 21h).
+const hoje = hojeNoEstabelecimento();
 const erro = ref<unknown>(null);
 const aviso = ref<string | null>(null);
 const recusa = computed(() => {
@@ -232,7 +234,7 @@ async function gravarAndamento(): Promise<void> {
           @acionar="abrir(c)"
         />
       </div>
-      <p v-if="!c.envios.length" class="secundario">{{ t('ccih.notificacao.semEnvio') }}</p>
+      <p v-if="!c.formularios.length" class="secundario">{{ t('ccih.notificacao.semEnvio') }}</p>
       <ul v-else class="lista-ccih" :aria-label="t('ccih.notificacao.ultimoEnvio')">
         <li
           v-for="x in c.formularios"
@@ -240,7 +242,7 @@ async function gravarAndamento(): Promise<void> {
           :data-testid="`notificacao-formulario-${c.competencia}-${x.formulario}`"
         >
           <strong>{{ nomeFormulario(x.formulario) }}</strong>
-          <span>{{ nomeSituacao(x.ultima) }}</span>
+          <span>{{ x.ultima ? nomeSituacao(x.ultima) : t('ccih.notificacao.semEnvioFormulario') }}</span>
           <span v-if="x.atrasado" class="selo selo--grave">{{ t('ccih.notificacao.atrasada') }}</span>
         </li>
       </ul>
