@@ -359,6 +359,11 @@ const rotuloObrigacao = (c: ObrigacaoAns) => a.value?.obrigacoes.find((o) => o.c
 
     <GrupoDominiosTela subitem="operadoraAns" embutida />
     <p>
+      <RouterLink to="/operadora/ans/declaracoes" data-testid="link-declaracoes-ans">{{
+        t('operadoraDeclaracoes.link')
+      }}</RouterLink>
+    </p>
+    <p>
       <RouterLink :to="`/consultas/item/${ITEM_ANS}`" data-testid="operadora-outras-tabelas">{{
         t('operadora.telas.ans.outrasTabelas')
       }}</RouterLink>

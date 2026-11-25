@@ -50,6 +50,7 @@ import { rotasRepasse } from './modulos/repasse/rotas.js';
 import { rotasAssinatura } from './modulos/assinatura/rotas.js';
 import { rotasOperadora } from './modulos/operadora/rotas.js';
 import { rotasContratoAlteracoes } from './modulos/operadora/rotas-contrato-alteracoes.js';
+import { rotasDeclaracoesAns } from './modulos/operadora/rotas-declaracoes-ans.js';
 import { rotasProgramaSaude } from './modulos/operadora/rotas-programa-saude.js';
 import { rotasRemuneracaoRede } from './modulos/operadora/rotas-remuneracao-rede.js';
 import { rotasPessoas } from './modulos/pessoas/rotas.js';
@@ -182,6 +183,7 @@ export function rotas(desenvolvimento: boolean): RouteRecordRaw[] {
     ...rotasOperadora,
     // C2-108 (08-SGO L94): aditivos e cancelamento do contrato de plano da operadora.
     ...rotasContratoAlteracoes,
+    ...rotasDeclaracoesAns,
     // C2-102 (08-SGO L115): promoção da saúde e gestão de crônicos da operadora.
     ...rotasProgramaSaude,
     // C2-120 (08-SGO L102): remuneração e pagamento do prestador da rede.

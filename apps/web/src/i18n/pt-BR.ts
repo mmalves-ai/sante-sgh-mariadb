@@ -109,6 +109,7 @@ import { mensagensRedeOperadora } from '../modulos/operadora/i18n-rede.js';
 import { mensagensCobrancaOperadora } from '../modulos/operadora/i18n-cobranca.js';
 import { mensagensAutorizacaoOperadora } from '../modulos/operadora/i18n-autorizacao.js';
 import { mensagensAnsOperadora } from '../modulos/operadora/i18n-ans.js';
+import { mensagensDeclaracoesAns } from '../modulos/operadora/i18n-declaracoes.js';
 import { mensagensContasOperadora } from '../modulos/operadora/i18n-contas.js';
 import { mensagensComercialOperadora } from '../modulos/operadora/i18n-comercial.js';
 import {
@@ -2515,6 +2516,8 @@ export const mensagensWeb = {
   operadoraAutorizacao: mensagensAutorizacaoOperadora,
   operadoraContas: mensagensContasOperadora,
   operadoraAns: mensagensAnsOperadora,
+  // 08-SGO L110 (C1-036): TPS apurada, conferência cadastral e DMED.
+  operadoraDeclaracoes: mensagensDeclaracoesAns,
   // 08-SGO L100 (C2-095): o comercial da operadora (proposta de adesão, força de venda, metas, comissão).
   operadoraComercial: mensagensComercialOperadora,
   operadoraAtendimento: mensagensAtendimentoOperadora,
