@@ -77,6 +77,13 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     meta: { permissao: 'qualidade.ccih.ler', menu: `${M} > Profilaxia antimicrobiana` },
   },
   {
+    // F8, 04-CC L108: projetos e mutirões cirúrgicos do SUS (metas SIGTAP, AIH e APAC marcadas, meta x produção).
+    path: '/cirurgia/mutiroes',
+    name: 'cirurgia.mutiroes',
+    component: () => import('./telas/MutiroesCirurgicosTela.vue'),
+    meta: { permissao: 'faturamento.sus.ler', menu: `${M} > Mutirões cirúrgicos (SUS)` },
+  },
+  {
     // F3.4, 04-CC L91: cadastro do procedimento cirúrgico (grupo, porte, especialidade, natureza, caráter).
     path: '/cirurgia/procedimentos-cirurgicos',
     name: 'cirurgia.procedimentos-cirurgicos',

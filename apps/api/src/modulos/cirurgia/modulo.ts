@@ -45,9 +45,13 @@ import { GradeSalaController } from './grade-sala.controller.js';
 import { PORTA_GRADE_SALA, PortaGradeSalaPropria } from './grade-sala-propria.js';
 import { PORTA_GASTO_SALA, PortaGastoSalaPropria } from './gasto-sala-propria.js';
 import { KitAgendamentoController } from './kit-agendamento.controller.js';
+import { CmeController } from './cme.controller.js';
+import { PORTA_CME, PortaCmePropria } from './cme-propria.js';
 import { ReservaCirurgiaController } from './reserva-cirurgia.controller.js';
 import { DocumentosCirurgiaController } from './documentos-cirurgia.controller.js';
 import { ProfilaxiaCirurgicaController } from './profilaxia-cirurgica.controller.js';
+import { MutiraoCirurgicoController } from './mutirao-cirurgico.controller.js';
+import { PORTA_MUTIRAO_CIRURGICO, PortaMutiraoCirurgicoPropria } from './mutirao-cirurgico-propria.js';
 import {
   PORTA_PROFILAXIA_CIRURGICA,
   PortaProfilaxiaCirurgicaPropria,
@@ -140,10 +144,12 @@ export async function moduloCirurgia(
       GastoSalaController,
       GradeSalaController,
       KitAgendamentoController,
+      CmeController,
       EquipeRealizadaController,
       ReservaCirurgiaController,
       DocumentosCirurgiaController,
       ProfilaxiaCirurgicaController,
+      MutiraoCirurgicoController,
       ProcedimentoCirurgicoController,
     ],
     providers: [
@@ -195,6 +201,14 @@ export async function moduloCirurgia(
             ? new PortaEquipeRealizadaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
+      // F7 (05-SUP linha 29): central de material esterilizado (caixas, ciclos, etiqueta, rastreio); sem núcleo, 503.
+      {
+        provide: PORTA_CME,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCmePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       // F3.6 (05-SUP linha 13): kit padrão sugerido e aplicado no agendamento cirúrgico; sem núcleo, 503.
       {
         provide: PORTA_KIT_AGENDAMENTO,
@@ -225,6 +239,14 @@ export async function moduloCirurgia(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaProfilaxiaCirurgicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (04-CC linha 108): projetos e mutirões cirúrgicos do SUS (metas SIGTAP, AIH e APAC marcadas); sem núcleo, 503.
+      {
+        provide: PORTA_MUTIRAO_CIRURGICO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaMutiraoCirurgicoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.4 (04-CC linha 91): cadastro do procedimento cirúrgico no banco do cliente; sem núcleo, 503.
