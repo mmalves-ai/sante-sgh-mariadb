@@ -1,8 +1,8 @@
 // E2E @C2-034 (F3.4, 04-INT linha 69): os documentos da internação conforme o convênio. A partir da internação admitida
 // no convênio sintético 901, a tela de impressos lista os documentos configurados para o momento (combo do tema, nada
-// de <select> cru), emite o termo do convênio em PDF (endereço blob:) com o aviso das cópias da regra e marca o
+// de <select> cru), emite o termo do convênio em PDF (endereço blob:) com as cópias da regra dentro do mesmo PDF e marca o
 // documento como emitido; trocar o momento relê a lista; o atalho abre a configuração dos documentos com a internação
-// na prévia. O efeito no banco (linha na trilha com o modelo, o momento e as cópias; o obrigatório emitido lido da
+// na prévia, e a prévia acha a internação pelo nome do paciente. O efeito no banco (linha na trilha com o modelo, o momento e as cópias; o obrigatório emitido lido da
 // trilha) é provado no contrato de efeito apps/api/src/modulos/adt/documentos-internacao.int.spec.ts. Sessão real sobre
 // a fonte sintética e as portas em MEMÓRIA (dados SINTÉTICOS; nada vai à cópia). Axe sem violação séria.
 import { expect, type Page, test } from '@playwright/test';
@@ -77,7 +77,7 @@ test.describe('@C2-034 documentos da internação conforme o convênio', () => {
     await page.getByTestId('imp-ficha-2').click();
     const pdfs = page.getByTestId('imp-pdfs');
     await expect(pdfs).toContainText('TERMO DO CONVENIO');
-    await expect(pdfs).toContainText('imprima 2 cópias');
+    await expect(pdfs).toContainText('2 cópias no mesmo PDF');
     await expect(pdfs.locator('a').first()).toHaveAttribute('href', /^blob:/);
     await expect(page.getByTestId('imp-emitido-2')).toBeVisible();
     await expect(page.getByTestId('imp-mensagem')).toBeVisible();
@@ -92,6 +92,16 @@ test.describe('@C2-034 documentos da internação conforme o convênio', () => {
     await expect(page.getByTestId('tela-documentos-internacao')).toBeVisible();
     await esperarSemSelectNativo(page.locator('body'));
     await semViolacaoAxe(page, '/internacao/documentos');
+
+    // Visão por paciente: a prévia acha a internação pelo nome, sem o número.
+    await page.goto('/internacao/documentos');
+    await expect(page.getByTestId('tela-documentos-internacao')).toBeVisible();
+    await expect(page.getByTestId('doc-buscar-paciente')).toBeDisabled();
+    await page.getByTestId('doc-busca-paciente').fill('JOSE');
+    await page.getByTestId('doc-buscar-paciente').click();
+    await page.getByTestId(`doc-paciente-${reg}`).click();
+    await expect(page.getByTestId('doc-reg')).toHaveValue(String(reg));
+    await expect(page.getByTestId('doc-previa-lista')).toContainText('TERMO DO CONVENIO');
 
     expect(externas).toEqual([]);
   });

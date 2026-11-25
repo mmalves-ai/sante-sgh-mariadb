@@ -5,6 +5,11 @@
 export interface CampoDocumento {
   readonly rotulo: string;
   readonly valor: string;
+  /**
+   * 'marcado' (04-INT L69): o valor é texto com marcação restrita — `**negrito**` e quebras de linha (linha em branco
+   * abre parágrafo). Tudo é escapado antes; só essas marcas viram HTML. Sem formato, o valor sai como texto puro.
+   */
+  readonly formato?: 'texto' | 'marcado';
 }
 
 export interface DadosDocumento {
@@ -31,6 +36,26 @@ export interface DadosDocumento {
    * apta mais recente). Só com ele o rodapé diz "Sistema certificado SBIS nº"; sem certificado, o rodapé não o cita.
    */
   readonly certificadoSbis?: string | null;
+  /**
+   * 04-INT L69: as cópias que saem no mesmo PDF (1 a 20). Cada cópia começa em página nova e leva "Cópia k de n";
+   * sem o campo, ou com 1, sai uma só, sem a marca.
+   */
+  readonly copias?: number;
+}
+
+/** Texto com marcação restrita em HTML: escapa tudo e só então troca `**x**` por negrito e as quebras de linha. */
+export function htmlMarcado(texto: string): string {
+  return escaparHtml(texto.replace(/\r\n?/g, '\n').trim())
+    .replace(/\*\*([^*\n](?:[^*\n]|\*(?!\*))*?)\*\*/g, '<strong>$1</strong>')
+    .split(/\n{2,}/)
+    .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+/** As cópias do documento, de 1 a 20 (fora disso, o número inteiro mais próximo dentro da faixa). */
+export function copiasDoDocumento(copias: number | undefined): number {
+  if (copias === undefined || !Number.isFinite(copias)) return 1;
+  return Math.min(20, Math.max(1, Math.round(copias)));
 }
 
 /** O trecho do rodapé com a certificação SBIS (SBIS-42): só com o número do certificado; sem ele, vazio. */
@@ -53,8 +78,26 @@ export function htmlDocumento(d: DadosDocumento): string {
     throw new Error('O documento não pode citar recurso externo (fonte ou imagem por URL).');
   }
   const campos = d.campos
-    .map((c) => `<tr><th scope="row">${escaparHtml(c.rotulo)}</th><td>${escaparHtml(c.valor)}</td></tr>`)
+    .map(
+      (c) =>
+        `<tr><th scope="row">${escaparHtml(c.rotulo)}</th><td>${c.formato === 'marcado' ? htmlMarcado(c.valor) : escaparHtml(c.valor)}</td></tr>`,
+    )
     .join('');
+  const n = copiasDoDocumento(d.copias);
+  const corpo = (k: number) =>
+    [
+      `<section class="copia">`,
+      `<header><div>${d.logoSvg ?? ''}<div>${escaparHtml(d.estabelecimento)}</div></div>`,
+      `${d.via ? `<div class="via">${escaparHtml(d.via)}</div>` : ''}${n > 1 ? `<div class="via">Cópia ${k} de ${n}</div>` : ''}</header>`,
+      `<h1>${escaparHtml(d.titulo)}</h1>`,
+      d.marcaSuporte ? `<p class="suporte">${escaparHtml(d.marcaSuporte)}</p>` : '',
+      `<table>${campos}</table>`,
+      `<footer>${d.qrSvg}<div>Emitido em ${escaparHtml(d.emitidoEm)} por ${escaparHtml(d.produto)}.`,
+      ` Valide pelo QR (código ${escaparHtml(d.identificadorQr)}).`,
+      d.certificadoSbis ? ` ${escaparHtml(rodapeCertificacaoSbis(d.certificadoSbis))}` : '',
+      '</div></footer>',
+      '</section>',
+    ].join('');
   return [
     '<!doctype html>',
     '<html lang="pt-BR"><head><meta charset="utf-8">',
@@ -67,16 +110,9 @@ export function htmlDocumento(d: DadosDocumento): string {
     'table{border-collapse:collapse;width:100%}th,td{text-align:left;border-bottom:1px solid #ccc;padding:4px 6px;vertical-align:top}',
     'th{width:35%;font-weight:600}footer{margin-top:18px;display:flex;gap:12px;align-items:center;font-size:9pt}',
     '.suporte{margin:10px 0;border:2px solid #000;padding:4px 8px;font-weight:700}',
+    'td p{margin:0 0 6px}.copia+.copia{break-before:page}header .via+.via{margin-left:6px}',
     '</style></head><body>',
-    `<header><div>${d.logoSvg ?? ''}<div>${escaparHtml(d.estabelecimento)}</div></div>`,
-    `${d.via ? `<div class="via">${escaparHtml(d.via)}</div>` : ''}</header>`,
-    `<h1>${escaparHtml(d.titulo)}</h1>`,
-    d.marcaSuporte ? `<p class="suporte">${escaparHtml(d.marcaSuporte)}</p>` : '',
-    `<table>${campos}</table>`,
-    `<footer>${d.qrSvg}<div>Emitido em ${escaparHtml(d.emitidoEm)} por ${escaparHtml(d.produto)}.`,
-    ` Valide pelo QR (código ${escaparHtml(d.identificadorQr)}).`,
-    d.certificadoSbis ? ` ${escaparHtml(rodapeCertificacaoSbis(d.certificadoSbis))}` : '',
-    '</div></footer>',
+    Array.from({ length: n }, (_, i) => corpo(i + 1)).join(''),
     '</body></html>',
   ].join('');
 }

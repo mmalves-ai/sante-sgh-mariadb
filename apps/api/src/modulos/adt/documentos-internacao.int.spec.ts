@@ -14,6 +14,7 @@ import {
   PortaDocumentosInternacao,
   esquemaModeloDocumento,
   esquemaRegraDocumento,
+  textoDoModelo,
 } from './documentos-internacao.js';
 import {
   CLIENTE_ADT,
@@ -337,15 +338,20 @@ describe.skipIf(SEM_BANCO_ADT)(
     it('emissão pela rota: PDF com os campos preenchidos, trilha com modelo, momento e cópias; pendente pela trilha', async () => {
       const mod = await modelo('EMIT', {
         momento: 'admissao',
-        conteudo: '<p>Termo de {paciente} no leito {leito}</p>',
+        conteudo: '<p>Termo de <strong>{paciente}</strong> no leito {leito}</p>',
       });
       await regra(mod.id, { obrigatorio: true, copias: 2 });
       desligarMapaEstabelecimentos();
       await ligarMapaEstabelecimentos(CLIENTE_ADT, M().nucleo);
-      const emitidos: { modelo: string; campos: { rotulo: string; valor: string }[] }[] = [];
+      type Pedido = {
+        modelo: string;
+        copias?: number;
+        campos: { rotulo: string; valor: string; formato?: string }[];
+      };
+      const emitidos: Pedido[] = [];
       const documento = {
         emissao: {
-          emitir: async (p: { modelo: string; campos: { rotulo: string; valor: string }[] }) => {
+          emitir: async (p: Pedido) => {
             emitidos.push(p);
             return { pdf: new Uint8Array([37, 80, 68, 70]) };
           },
@@ -419,8 +425,15 @@ describe.skipIf(SEM_BANCO_ADT)(
       );
       expect(r).toMatchObject({ formato: 'pdf', nomeArquivo: `ficha-${mod.id}-${internacao}.pdf` });
       expect(emitidos.at(-1)?.modelo).toBe(`internacao-ficha-${mod.id}`);
-      const texto = emitidos.at(-1)?.campos.find((c) => c.rotulo === 'Documento')?.valor ?? '';
-      expect(texto).toMatch(/^Termo de .+ no leito .+$/);
+      const campo = emitidos.at(-1)?.campos.find((c) => c.rotulo === 'Documento');
+      const texto = campo?.valor ?? '';
+      // O negrito do editor chega marcado (o PDF o leva) e as 2 cópias da regra saem dentro do mesmo PDF.
+      expect(texto).toMatch(/^Termo de \*\*[^*]+\*\* no leito .+$/);
+      expect(campo?.formato).toBe('marcado');
+      expect(emitidos.at(-1)?.copias).toBe(2);
+      expect(textoDoModelo('<p>A <b class="x">B</b><strong></strong></p><p>C<br>D</p>')).toBe(
+        'A **B**\nC\nD',
+      );
       expect(texto).not.toMatch(/\{(paciente|leito)\}/);
       const gravadas = await linhas();
       expect(gravadas).toHaveLength(1);

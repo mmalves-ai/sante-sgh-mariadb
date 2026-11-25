@@ -18,7 +18,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import { lerApoioInternacao, novaChave } from '../api-adt.js';
+import { lerApoioInternacao, listarInternacoes, novaChave } from '../api-adt.js';
 import {
   lerConfiguracaoDocumentos,
   lerDocumentosDaInternacao,
@@ -178,6 +178,22 @@ const opModelosAtivos = computed(() => [
     .map((m) => ({ valor: m.id, rotulo: m.titulo })),
 ]);
 
+// Visão por paciente: a prévia acha a internação pelo nome ou prontuário (3 letras ou mais), sem decorar o número.
+const termoPaciente = ref('');
+const termoBuscado = ref('');
+const buscarPaciente = () => {
+  termoBuscado.value = termoPaciente.value.trim();
+};
+const pacientes = useQuery({
+  queryKey: computed(() => ['adt', 'documentos', 'pacientes', termoBuscado.value]),
+  queryFn: () => listarInternacoes({ termo: termoBuscado.value }),
+  enabled: computed(() => termoBuscado.value.length >= 3),
+});
+const escolherInternacao = (r: number) => {
+  reg.value = r;
+  termoBuscado.value = '';
+};
+
 const previa = useQuery({
   queryKey: computed(() => ['adt', 'documentos', 'previa', reg.value, momentoPrevia.value]),
   queryFn: () => lerDocumentosDaInternacao(reg.value!, momentoPrevia.value),
@@ -195,6 +211,46 @@ const numero = (v: string) => (v === '' ? null : Number(v));
     <template v-else>
       <section class="painel" aria-labelledby="doc-previa">
         <h2 id="doc-previa">{{ t('adt.documentos.previa') }}</h2>
+        <form class="acoes" role="search" @submit.prevent="buscarPaciente">
+          <label for="doc-busca-paciente">{{ t('adt.documentos.buscarPaciente') }}</label>
+          <input
+            id="doc-busca-paciente"
+            v-model="termoPaciente"
+            type="search"
+            minlength="3"
+            autocomplete="off"
+            data-testid="doc-busca-paciente"
+          />
+          <SanteBotao
+            tipo="submit"
+            :rotulo="t('adt.documentos.buscar')"
+            :desabilitado="termoPaciente.trim().length < 3"
+            data-testid="doc-buscar-paciente"
+          />
+        </form>
+        <ErroAdt v-if="pacientes.isError.value" :erro="pacientes.error.value" />
+        <ul
+          v-else-if="termoBuscado && pacientes.data.value"
+          class="lista-simples"
+          data-testid="doc-pacientes"
+        >
+          <li v-if="pacientes.data.value.itens.length === 0">{{ t('adt.documentos.nenhumPaciente') }}</li>
+          <li v-for="p in pacientes.data.value.itens" :key="p.reg">
+            <SanteBotao
+              variante="texto"
+              :rotulo="
+                t('adt.documentos.pacienteInternado', {
+                  nome: p.nome,
+                  prontuario: p.prontuario,
+                  reg: p.reg,
+                  convenio: p.convenio.nome,
+                })
+              "
+              :data-testid="`doc-paciente-${p.reg}`"
+              @acionar="escolherInternacao(p.reg)"
+            />
+          </li>
+        </ul>
         <label for="doc-reg">{{ t('adt.documentos.internacao') }}</label>
         <input
           id="doc-reg"

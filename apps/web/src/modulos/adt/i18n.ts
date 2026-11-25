@@ -292,7 +292,7 @@ export const mensagensAdt = {
     emitidoEm: 'emitido em {quando}',
     agora: 'agora',
     emitidos: 'Documentos emitidos: {n}.',
-    imprimaCopias: 'imprima {n} cópias',
+    imprimaCopias: '{n} cópias no mesmo PDF',
     sobDemanda: 'sob demanda',
   },
   documentos: {
@@ -301,6 +301,10 @@ export const mensagensAdt = {
       'Modelos de fichas, termos e guias e as regras que escolhem quais saem conforme o convênio, a especialidade e a modalidade. O que fica vazio vale para todos; a regra mais específica vence.',
     previa: 'Quais documentos saem para uma internação',
     internacao: 'Número da internação',
+    buscarPaciente: 'Paciente (nome ou prontuário)',
+    buscar: 'Buscar',
+    nenhumPaciente: 'Nenhuma internação encontrada para o paciente.',
+    pacienteInternado: '{nome} · prontuário {prontuario} · internação {reg} · {convenio}',
     momento: 'Momento',
     momentos: {
       admissao: 'Admissão',

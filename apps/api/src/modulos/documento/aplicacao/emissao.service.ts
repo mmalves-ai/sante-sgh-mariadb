@@ -123,6 +123,8 @@ export interface PedidoEmissao {
    * própria emissão, ao lado do motivo da reemissão, para toda impressão dizer por quê.
    */
   readonly justificativa?: string | null;
+  /** 04-INT L69: as cópias que saem dentro do mesmo PDF (cada uma em página nova, "Cópia k de n"); padrão 1. */
+  readonly copias?: number;
 }
 
 /** Tentativas da reemissão quando outra pegou a mesma via ao mesmo tempo. */
@@ -240,6 +242,7 @@ export class EmissaoService {
       identificadorQr,
       fontesCss: fontesCss(this.d.raiz ?? process.cwd()),
       marcaSuporte: pedido.marcaSuporte ?? null,
+      ...(pedido.copias !== undefined ? { copias: pedido.copias } : {}),
     });
     const rotulo = rotuloVia(via);
     const { pdf, ms } = await converterHtmlEmPdfA(this.d.gotenbergUrl, html, {

@@ -93,9 +93,14 @@ const n = (v: unknown) => Number(v);
 const nulo = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const sim = (v: unknown) => v === true || v === 1 || v === '1';
 
-/** O texto do modelo para a emissão (o PDF recebe texto: as marcas do editor saem). */
+/**
+ * O texto do modelo para a emissão: o negrito do editor vira `**...**` (o PDF o leva como texto marcado), as quebras
+ * e os parágrafos viram linhas, e as demais marcas saem.
+ */
 export function textoDoModelo(conteudo: string): string {
   return conteudo
+    .replace(/<\/?(strong|b)(\s[^>]*)?>/gi, '**')
+    .replace(/\*\*(\s*)\*\*/g, '$1')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
     .replace(/<[^>]*>/g, '')
