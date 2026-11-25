@@ -156,13 +156,14 @@ interface PlantaoDigitado {
   data: string;
   inicio: string;
   fim: string;
-  capacidade: string;
+  /** O campo numérico: o v-model do input type="number" entrega número quando há valor e texto vazio quando não. */
+  capacidade: string | number;
 }
 interface ExameDigitado {
   exame: number;
-  limite: string;
+  limite: string | number;
   grupo: string;
-  vagas: string;
+  vagas: string | number;
 }
 const plantaoVazio = (): PlantaoDigitado => ({
   quando: '2',
@@ -189,7 +190,9 @@ const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const camposServidor = ref<string[]>([]);
 
-const inteiro = (v: string): number => (v.trim() === '' ? Number.NaN : Number(v));
+/** O valor do campo numérico como texto aparado ('' quando vazio), venha ele como número ou como texto. */
+const digitado = (v: string | number): string => String(v).trim();
+const inteiro = (v: string | number): number => (digitado(v) === '' ? Number.NaN : Number(v));
 const corpo = computed<CorpoEscala | null>(() =>
   setor.value === ''
     ? null
@@ -211,9 +214,9 @@ const corpo = computed<CorpoEscala | null>(() =>
         })),
         exames: nova.value.exames.map((x) => ({
           exame: x.exame,
-          limitePorTurno: x.limite.trim() === '' ? null : Number(x.limite),
+          limitePorTurno: digitado(x.limite) === '' ? null : Number(x.limite),
           grupoPrioridade: x.grupo ? Number(x.grupo) : null,
-          vagasReservadas: x.vagas.trim() === '' ? 0 : Number(x.vagas),
+          vagasReservadas: digitado(x.vagas) === '' ? 0 : Number(x.vagas),
         })),
       },
 );

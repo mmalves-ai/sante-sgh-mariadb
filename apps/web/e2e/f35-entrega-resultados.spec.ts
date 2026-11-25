@@ -112,7 +112,7 @@ test.describe('Entrega de resultados @F3.5-13 @fase3', () => {
       return json(rota, { codigo: 'nao-simulado' }, 500);
     });
 
-    await entrar(page, 'SINT.LABORATORIO');
+    await entrar(page, 'SINT.BIOMEDICO');
     await page.goto('/sadt/entregas');
     await expect(page.getByTestId('entrega-resultados')).toBeVisible();
     await expect(page.getByTestId('entrega-buscar')).toBeDisabled();

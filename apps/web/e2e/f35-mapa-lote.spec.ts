@@ -27,7 +27,8 @@ const json = (rota: Route, corpo: unknown, status = 200) =>
 
 const exame = (id: number, nome: string, paciente: string, urgente: boolean) => ({
   id,
-  chave: String(id),
+  // A chave natural do exame como o contrato do mapa a devolve (objeto de 7 colunas, não texto).
+  chave: { data: '2026-03-15', reg: id + 3000, conta: 0, atend: 'E', ato: 15, exame: 'SINT', sequencia: 1 },
   versao: null,
   paciente: {
     id: id + 1000,

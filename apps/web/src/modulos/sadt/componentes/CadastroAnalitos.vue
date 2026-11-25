@@ -223,7 +223,8 @@ onMounted(() => buscar().catch((e) => (erro.value = e instanceof Error ? e.messa
 
 <style scoped>
 .inativo {
-  opacity: 0.55;
+  /* Sem opacidade: a cor secundária do tema mantém o contraste (WCAG AA) do texto e dos botões da linha. */
+  color: var(--sgh-texto-secundario);
   text-decoration: line-through;
 }
 .erro {

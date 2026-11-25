@@ -312,7 +312,7 @@ test.describe('@F3.5-01 respostas, textos padrão e fórmula do exame', () => {
     page,
   }) => {
     simularDigitacao(page);
-    await entrar(page, 'SINT.LABORATORIO');
+    await entrar(page, 'SINT.BIOMEDICO');
     await page.goto('/sadt/resultados/digitacao?exame=900');
     const ficha = page.getByTestId('digitacao-ficha');
     await expect(ficha).toBeVisible();
