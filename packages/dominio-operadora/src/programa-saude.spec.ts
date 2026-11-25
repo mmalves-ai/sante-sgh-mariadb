@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   adesaoAsAtividades,
   agendaDeVisitas,
-  avaliarElegibilidade,
+  avaliarElegibilidadePrograma,
   classificarRisco,
   type CriterioElegibilidade,
   custoDoParticipante,
   direitoABonificacao,
-  idadeEm,
+  idadeNoPrograma,
   inicioDaJanela,
   type PerfilElegibilidade,
   type PerguntaQuestionario,
@@ -96,14 +96,14 @@ describe('critério e elegibilidade', () => {
   });
   it('CID com ocorrências mínimas na janela elege e diz o motivo', () => {
     const c = [crit({ termo: 7, ocorrenciasMinimas: 2 })];
-    expect(avaliarElegibilidade(c, perfil({ ocorrencias: { 'cid:7': 1 } })).elegivel).toBe(false);
-    const r = avaliarElegibilidade(c, perfil({ ocorrencias: { 'cid:7': 3 } }));
+    expect(avaliarElegibilidadePrograma(c, perfil({ ocorrencias: { 'cid:7': 1 } })).elegivel).toBe(false);
+    const r = avaliarElegibilidadePrograma(c, perfil({ ocorrencias: { 'cid:7': 3 } }));
     expect(r).toEqual({ elegivel: true, motivos: ['diagnóstico em 3 conta(s)'], forma: 'sugerir' });
-    expect(avaliarElegibilidade(c, perfil({ ocorrencias: { 'cid:8': 3 } })).elegivel).toBe(false);
+    expect(avaliarElegibilidadePrograma(c, perfil({ ocorrencias: { 'cid:8': 3 } })).elegivel).toBe(false);
   });
   it('grupo de doenças conta pelo grupo', () => {
     const c = [crit({ grupoPatologia: 4 })];
-    expect(avaliarElegibilidade(c, perfil({ ocorrencias: { 'grupo:4': 1 } })).elegivel).toBe(true);
+    expect(avaliarElegibilidadePrograma(c, perfil({ ocorrencias: { 'grupo:4': 1 } })).elegivel).toBe(true);
   });
   it('a idade é recorte; os demais são gatilhos (basta um) e a forma mais forte vence', () => {
     const c = [
@@ -111,47 +111,51 @@ describe('critério e elegibilidade', () => {
       crit({ tipo: 'internacao', ocorrenciasMinimas: 2 }),
       crit({ tipo: 'custo', custoPeriodoMinimo: 10000, formaAlerta: 'incluir_automaticamente' }),
     ];
-    expect(avaliarElegibilidade(c, perfil({ idade: 59, internacoes: 3 })).elegivel).toBe(false);
-    expect(avaliarElegibilidade(c, perfil({ idade: 70 })).elegivel).toBe(false);
-    const r = avaliarElegibilidade(c, perfil({ idade: 70, internacoes: 2, custoPeriodo: 12000 }));
+    expect(avaliarElegibilidadePrograma(c, perfil({ idade: 59, internacoes: 3 })).elegivel).toBe(false);
+    expect(avaliarElegibilidadePrograma(c, perfil({ idade: 70 })).elegivel).toBe(false);
+    const r = avaliarElegibilidadePrograma(c, perfil({ idade: 70, internacoes: 2, custoPeriodo: 12000 }));
     expect(r.elegivel).toBe(true);
     expect(r.forma).toBe('incluir_automaticamente');
     expect(r.motivos).toHaveLength(3);
   });
   it('só idade: o recorte elege; critério inativo não conta; sem critério ninguém é elegível', () => {
     expect(
-      avaliarElegibilidade([crit({ tipo: 'idade', idadeMaxima: 12 })], perfil({ idade: 8 })).elegivel,
+      avaliarElegibilidadePrograma([crit({ tipo: 'idade', idadeMaxima: 12 })], perfil({ idade: 8 })).elegivel,
     ).toBe(true);
     expect(
-      avaliarElegibilidade([crit({ termo: 7, ativo: false })], perfil({ ocorrencias: { 'cid:7': 9 } }))
-        .elegivel,
+      avaliarElegibilidadePrograma(
+        [crit({ termo: 7, ativo: false })],
+        perfil({ ocorrencias: { 'cid:7': 9 } }),
+      ).elegivel,
     ).toBe(false);
-    expect(avaliarElegibilidade([], perfil({})).elegivel).toBe(false);
+    expect(avaliarElegibilidadePrograma([], perfil({})).elegivel).toBe(false);
   });
   it('custo mensal pela média da janela e escore da avaliação', () => {
     expect(
-      avaliarElegibilidade(
+      avaliarElegibilidadePrograma(
         [crit({ tipo: 'custo', custoMensalMinimo: 1000 })],
         perfil({ custoPeriodo: 11000 }),
       ).elegivel,
     ).toBe(false);
     expect(
-      avaliarElegibilidade(
+      avaliarElegibilidadePrograma(
         [crit({ tipo: 'custo', custoMensalMinimo: 1000 })],
         perfil({ custoPeriodo: 12000 }),
       ).elegivel,
     ).toBe(true);
     expect(
-      avaliarElegibilidade([crit({ tipo: 'escore', escoreMinimo: 5 })], perfil({ escore: 6 })).elegivel,
+      avaliarElegibilidadePrograma([crit({ tipo: 'escore', escoreMinimo: 5 })], perfil({ escore: 6 }))
+        .elegivel,
     ).toBe(true);
     expect(
-      avaliarElegibilidade([crit({ tipo: 'escore', escoreMinimo: 5 })], perfil({ escore: null })).elegivel,
+      avaliarElegibilidadePrograma([crit({ tipo: 'escore', escoreMinimo: 5 })], perfil({ escore: null }))
+        .elegivel,
     ).toBe(false);
   });
   it('idade em anos completos e início da janela', () => {
-    expect(idadeEm('1960-12-01', '2026-11-25')).toBe(65);
-    expect(idadeEm('1960-11-25', '2026-11-25')).toBe(66);
-    expect(idadeEm(null, '2026-11-25')).toBeNull();
+    expect(idadeNoPrograma('1960-12-01', '2026-11-25')).toBe(65);
+    expect(idadeNoPrograma('1960-11-25', '2026-11-25')).toBe(66);
+    expect(idadeNoPrograma(null, '2026-11-25')).toBeNull();
     expect(inicioDaJanela('2026-11-25', 12)).toBe('2025-11-26');
   });
 });

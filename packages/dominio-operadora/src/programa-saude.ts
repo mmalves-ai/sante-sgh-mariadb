@@ -192,7 +192,7 @@ export interface PerfilElegibilidade {
   escore: number | null;
 }
 
-export interface ResultadoElegibilidade {
+export interface ResultadoElegibilidadePrograma {
   elegivel: boolean;
   motivos: string[];
   forma: FormaAlertaPrograma | null;
@@ -240,14 +240,14 @@ function atende(c: CriterioElegibilidade, p: PerfilElegibilidade): string | null
 }
 
 /** A idade é recorte (todas juntas); os demais critérios são gatilhos (basta um). Inativos não contam. */
-export function avaliarElegibilidade(
+export function avaliarElegibilidadePrograma(
   criterios: readonly CriterioElegibilidade[],
   perfil: PerfilElegibilidade,
-): ResultadoElegibilidade {
+): ResultadoElegibilidadePrograma {
   const ativos = criterios.filter((c) => c.ativo);
   const idades = ativos.filter((c) => c.tipo === 'idade');
   const gatilhos = ativos.filter((c) => c.tipo !== 'idade');
-  const nao: ResultadoElegibilidade = { elegivel: false, motivos: [], forma: null };
+  const nao: ResultadoElegibilidadePrograma = { elegivel: false, motivos: [], forma: null };
   if (!ativos.length) return nao;
   const motivos: string[] = [];
   for (const c of idades) {
@@ -278,7 +278,7 @@ export function avaliarElegibilidade(
 }
 
 /** Idade em anos completos na data. */
-export function idadeEm(nascimento: string | null, data: string): number | null {
+export function idadeNoPrograma(nascimento: string | null, data: string): number | null {
   if (!nascimento || !DATA.test(nascimento) || !DATA.test(data)) return null;
   let a = Number(data.slice(0, 4)) - Number(nascimento.slice(0, 4));
   if (data.slice(5) < nascimento.slice(5)) a -= 1;

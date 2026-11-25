@@ -200,6 +200,27 @@ export const PERMISSOES_OPERADORA_M56: readonly DeclaracaoPermissao[] = [
     [GESTOR, 'operadora-cobranca'],
     { categoria: 'financeira', criticidade: 'sensivel' },
   ),
+  // Promoção da saúde e gestão de crônicos (08-SGO linha 115, C2-102; F8; RN ANS 264 e 265/2011): a coordenação
+  // configura o programa, os critérios de elegibilidade, a bonificação, os grupos de risco e os questionários; a equipe
+  // do programa inclui e encerra participantes, agenda e registra os contatos e aplica a avaliação de risco.
+  p(
+    'operadora.promocao.ler',
+    'Consultar programas de saúde, elegíveis, participantes, agenda de visitas, custo do crônico e bonificação',
+    [GESTOR, 'operadora-auditor', 'operadora-cadastro'],
+    { criticidade: 'sensivel' },
+  ),
+  p(
+    'operadora.promocao.configurar',
+    'Cadastrar programas de saúde, critérios de elegibilidade, bonificações, grupos de risco e questionários de risco',
+    [GESTOR, 'operadora-auditor'],
+    { criticidade: 'sensivel' },
+  ),
+  p(
+    'operadora.promocao.registrar',
+    'Incluir e encerrar participantes, agendar e registrar contatos e aplicar a avaliação de risco do programa',
+    [GESTOR, 'operadora-auditor'],
+    { criticidade: 'sensivel' },
+  ),
   // Envios à ANS (F6): gerar o arquivo da competência; o envio real só em produção. Os catálogos da ANS ficam em
   // `catalogo.ans.ler` (catalogos.ts), do hospital e destes perfis (D-ANS-HOSPITAL-56).
   p('operadora.ans.ler', 'Consultar os envios à ANS (SIB, SIP, DIOPS, TPS), com arquivo, hash e recibo', [

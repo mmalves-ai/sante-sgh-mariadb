@@ -48,6 +48,12 @@ import { BeneficiariosOperadoraController } from './beneficiarios.controller.js'
 import { DeclaracoesAnsController } from './ans-declaracoes.controller.js';
 import { ComercialOperadoraController } from './comercial.controller.js';
 import { METODOS_COMERCIAL, PORTA_COMERCIAL, PortaComercialPropria } from './comercial-propria.js';
+import { ProgramaSaudeOperadoraController } from './programa-saude.controller.js';
+import {
+  METODOS_PROGRAMA_SAUDE,
+  PORTA_PROGRAMA_SAUDE,
+  PortaProgramaSaudePropria,
+} from './programa-saude-propria.js';
 import { ReajusteColetivoOperadoraController } from './reajuste-coletivo.controller.js';
 import {
   METODOS_REAJUSTE_COLETIVO,
@@ -271,6 +277,7 @@ export async function moduloOperadora(
       CadastroComplementarOperadoraController,
       DeclaracoesAnsController,
       ReajusteColetivoOperadoraController,
+      ProgramaSaudeOperadoraController,
       ComercialOperadoraController,
       ContaConferenciaOperadoraController,
       ReembolsoOperadoraController,
@@ -333,6 +340,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaComercialPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaComercialPropria>(METODOS_COMERCIAL),
+      },
+      // 08-SGO L115 (C2-102): promoção da saúde e gestão de crônicos só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_PROGRAMA_SAUDE,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaProgramaSaudePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaProgramaSaudePropria>(METODOS_PROGRAMA_SAUDE),
       },
       // 08-SGO L96 (C1-086): índice, regra por sinistralidade e agrupamento do coletivo pequeno só no banco (sem núcleo, 503).
       {
