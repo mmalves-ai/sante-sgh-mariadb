@@ -28,7 +28,7 @@ import { CadastroVinculosProprio } from './paciente-vinculos-proprio.js';
 import { PacienteVinculosController, VINCULOS_CADASTRO } from './paciente-vinculos.controller.js';
 import { PacientesController } from './pacientes.controller.js';
 import { PORTA_CADASTRO, type PortaCadastro, portaCadastroIndisponivel } from './porta.js';
-import { PortaCadastroMemoria } from './porta-memoria.js';
+import { lembrarCadastroMemoria, PortaCadastroMemoria } from './porta-memoria.js';
 import { PortaCadastroPropria } from './porta-propria.js';
 import { TISS_CONFIGURACAO, TissConfiguracaoPropria } from './tiss-configuracao-proprio.js';
 import { ProfissionaisController } from './profissionais.controller.js';
@@ -52,7 +52,7 @@ export async function portaDoCadastro(ctx: ContextoModulo): Promise<PortaCadastr
     await ligarMapaEstabelecimentos(cliente, ctx.nucleo);
     return new PortaCadastroPropria(ctx.nucleo, cliente);
   }
-  if (!ctx.nucleo && fontesSinteticas(ctx.env)) return new PortaCadastroMemoria();
+  if (!ctx.nucleo && fontesSinteticas(ctx.env)) return lembrarCadastroMemoria(new PortaCadastroMemoria());
   return portaCadastroIndisponivel();
 }
 

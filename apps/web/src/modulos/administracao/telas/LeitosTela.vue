@@ -1,10 +1,9 @@
 <script setup lang="ts">
 // "Blocos, acomodações e leitos" (M10, ficha seções 5 e 7; cap-06a §6.1): um cadastro só, em árvore bloco →
 // acomodação → leito, com as contagens de ativos e ocupados; incluir e alterar acomodação, incluir leito, alterar o
-// ramal, inativar e reativar (as receitas do executor, sempre com a senha de novo; o registro de conferência é dos
-// gatilhos do banco). A inclusão pede o que o banco sempre tem preenchido (andar, centro de custo, local de conta,
-// tipo TISS); idades e diária vazias ficam com o valor do banco, nunca vazio. Na aba
-// Conferência, onde o cadastro e o registro de conferência discordam, com a orientação de cada divergência.
+// ramal, inativar e reativar (as receitas do executor, sempre com a senha de novo). A inclusão pede o que o banco
+// sempre tem preenchido (andar, centro de custo, local de conta, tipo TISS); idades e diária vazias ficam com o
+// valor do banco, nunca vazio. A conferência com o espelho do sistema de origem saiu (ADR 0003; a rota também).
 // A ocupação vem da internação (M15) e não se edita aqui; leito ocupado não se inativa (o servidor recusa).
 import {
   CONVENIOS_ACOMODACAO,
@@ -20,20 +19,14 @@ import { useI18n } from 'vue-i18n';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
-import { buscarConferencia, buscarLeitos, gravarLeito } from '../api.js';
+import { buscarLeitos, gravarLeito } from '../api.js';
 import DominiosIndiceTela from '../../config/telas/DominiosIndiceTela.vue';
 import EstadoGravacoes from '../componentes/EstadoGravacoes.vue';
 import SenhaConfirmacao from '../componentes/SenhaConfirmacao.vue';
 
 const { t } = useI18n();
 const cliente = useQueryClient();
-const aba = ref<'cadastro' | 'conferencia'>('cadastro');
 const leitos = useQuery({ queryKey: ['adm', 'leitos'], queryFn: () => buscarLeitos() });
-const conferencia = useQuery({
-  queryKey: ['adm', 'leitos-conferencia'],
-  queryFn: () => buscarConferencia(),
-  enabled: computed(() => aba.value === 'conferencia'),
-});
 const podeEditar = computed(() => pode('organizacao.leito.editar'));
 const ligada = (op: string) =>
   leitos.data.value?.operacoes.find((o) => o.operacao === `organizacao.${op}`)?.ligada ?? false;
@@ -51,7 +44,6 @@ async function executar(op: string, entrada: unknown): Promise<boolean> {
     await gravarLeito(op, entrada, senha.value);
     aviso.value = t('adm.comum.gravado');
     await cliente.invalidateQueries({ queryKey: ['adm', 'leitos'] });
-    await cliente.invalidateQueries({ queryKey: ['adm', 'leitos-conferencia'] });
     return true;
   } catch (e) {
     if (e instanceof ErroApi && e.problema && tipoDoProblema(e.problema) === 'recusa-de-negocio')
@@ -200,203 +192,143 @@ async function incluirLeito(): Promise<void> {
   <section class="tela" aria-labelledby="leitos-titulo">
     <h1 id="leitos-titulo">{{ t('adm.leitos.titulo') }}</h1>
     <p>{{ t('adm.leitos.texto') }}</p>
-    <div class="abas" role="group" :aria-label="t('adm.leitos.titulo')">
-      <SanteBotao
-        :rotulo="t('adm.leitos.abaCadastro')"
-        :variante="aba === 'cadastro' ? 'primario' : 'secundario'"
-        :aria-pressed="aba === 'cadastro'"
-        data-testid="aba-cadastro"
-        @acionar="aba = 'cadastro'"
-      />
-      <SanteBotao
-        :rotulo="t('adm.leitos.abaConferencia')"
-        :variante="aba === 'conferencia' ? 'primario' : 'secundario'"
-        :aria-pressed="aba === 'conferencia'"
-        data-testid="aba-conferencia"
-        @acionar="aba = 'conferencia'"
-      />
-    </div>
     <SanteAlerta v-if="aviso" :texto="aviso" variante="info" anunciar data-testid="leitos-aviso" />
     <SanteAlerta v-if="recusa" :texto="recusa" variante="aviso" anunciar data-testid="leitos-recusa" />
     <MensagemErro v-if="erro" :erro="erro" />
 
-    <template v-if="aba === 'cadastro'">
-      <MensagemErro v-if="leitos.isError.value" :erro="leitos.error.value" />
-      <p v-else-if="leitos.isPending.value">{{ t('adm.comum.carregando') }}</p>
-      <template v-else-if="leitos.data.value">
-        <EstadoGravacoes :operacoes="leitos.data.value.operacoes" />
-        <p role="status">
-          {{ t('adm.leitos.totais', leitos.data.value.totais) }}
-          <span v-if="leitos.data.value.destino === 'memoria'"> · {{ t('adm.comum.memoria') }}</span>
-        </p>
-        <div v-if="podeEditar" class="senha-acoes">
-          <p>{{ t('adm.leitos.senhaAcoes') }}</p>
-          <SenhaConfirmacao v-model="senha" testid="leitos-senha" />
-        </div>
-        <p v-if="leitos.data.value.orfaos.length">
-          {{ t('adm.leitos.orfaos', { n: leitos.data.value.orfaos.length }) }}
-        </p>
-        <ul class="arvore" data-testid="arvore-leitos">
-          <li v-for="b in leitos.data.value.blocos" :key="b.bloco" :data-testid="`bloco-${b.bloco}`">
-            <strong>{{ b.bloco }} — {{ b.nome }}</strong>
-            <span>
-              ({{
-                t('adm.leitos.leitosDaAcomodacao', {
-                  ativos: b.ativos,
-                  total: b.acomodacoes.reduce((s, a) => s + a.leitos.length, 0),
-                  ocupados: b.ocupados,
-                })
-              }})</span
+    <MensagemErro v-if="leitos.isError.value" :erro="leitos.error.value" />
+    <p v-else-if="leitos.isPending.value">{{ t('adm.comum.carregando') }}</p>
+    <template v-else-if="leitos.data.value">
+      <EstadoGravacoes :operacoes="leitos.data.value.operacoes" />
+      <p role="status">
+        {{ t('adm.leitos.totais', leitos.data.value.totais) }}
+        <span v-if="leitos.data.value.destino === 'memoria'"> · {{ t('adm.comum.memoria') }}</span>
+      </p>
+      <div v-if="podeEditar" class="senha-acoes">
+        <p>{{ t('adm.leitos.senhaAcoes') }}</p>
+        <SenhaConfirmacao v-model="senha" testid="leitos-senha" />
+      </div>
+      <p v-if="leitos.data.value.orfaos.length">
+        {{ t('adm.leitos.orfaos', { n: leitos.data.value.orfaos.length }) }}
+      </p>
+      <ul class="arvore" data-testid="arvore-leitos">
+        <li v-for="b in leitos.data.value.blocos" :key="b.bloco" :data-testid="`bloco-${b.bloco}`">
+          <strong>{{ b.bloco }} — {{ b.nome }}</strong>
+          <span>
+            ({{
+              t('adm.leitos.leitosDaAcomodacao', {
+                ativos: b.ativos,
+                total: b.acomodacoes.reduce((s, a) => s + a.leitos.length, 0),
+                ocupados: b.ocupados,
+              })
+            }})</span
+          >
+          <SanteBotao
+            v-if="podeEditar && ligada('incluirAcomodacao')"
+            :rotulo="t('adm.leitos.novaAcomodacao')"
+            variante="texto"
+            :data-testid="`nova-acomodacao-${b.bloco}`"
+            @acionar="abrirAcomodacao(b.bloco)"
+          />
+          <ul>
+            <li
+              v-for="a in b.acomodacoes"
+              :key="a.acomodacao"
+              :data-testid="`acomodacao-${b.bloco}-${a.acomodacao}`"
             >
-            <SanteBotao
-              v-if="podeEditar && ligada('incluirAcomodacao')"
-              :rotulo="t('adm.leitos.novaAcomodacao')"
-              variante="texto"
-              :data-testid="`nova-acomodacao-${b.bloco}`"
-              @acionar="abrirAcomodacao(b.bloco)"
-            />
-            <ul>
-              <li
-                v-for="a in b.acomodacoes"
-                :key="a.acomodacao"
-                :data-testid="`acomodacao-${b.bloco}-${a.acomodacao}`"
-              >
-                {{ t('adm.leitos.acomodacao', { codigo: a.acomodacao, nome: a.nome }) }} ·
-                {{
-                  t('adm.leitos.leitosDaAcomodacao', {
-                    ativos: a.ativos,
-                    total: a.leitos.length,
-                    ocupados: a.ocupados,
-                  })
-                }}
-                <SanteBotao
-                  v-if="podeEditar && ligada('alterarAcomodacao')"
-                  :rotulo="t('adm.leitos.alterarAcomodacao')"
-                  variante="texto"
-                  :data-testid="`alterar-acomodacao-${b.bloco}-${a.acomodacao}`"
-                  @acionar="abrirAlterar(b.bloco, a)"
-                />
-                <SanteBotao
-                  v-if="podeEditar && ligada('incluirLeito')"
-                  :rotulo="t('adm.leitos.novoLeito')"
-                  variante="texto"
-                  :data-testid="`novo-leito-${b.bloco}-${a.acomodacao}`"
-                  @acionar="abrirLeito(b.bloco, a)"
-                />
-                <table v-if="a.leitos.length">
-                  <caption class="oculto">
-                    {{
-                      t('adm.leitos.acomodacao', { codigo: a.acomodacao, nome: a.nome })
-                    }}
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{{ t('adm.leitos.leito') }}</th>
-                      <th scope="col">{{ t('adm.comum.situacao') }}</th>
-                      <th scope="col">{{ t('adm.leitos.ramal') }}</th>
-                      <th v-if="podeEditar" scope="col">
-                        <span class="oculto">{{ t('adm.comum.alterar') }}</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="l in a.leitos"
-                      :key="l.id"
-                      :data-testid="`leito-${b.bloco}-${a.acomodacao}-${l.leito}`"
-                    >
-                      <th scope="row">{{ l.leito }}</th>
-                      <td>
-                        {{ l.ativo ? t('adm.comum.ativo') : t('adm.comum.inativo') }} ·
-                        {{ l.ocupado ? t('adm.leitos.ocupado') : t('adm.leitos.livre') }}
-                      </td>
-                      <td>
-                        <template v-if="podeEditar && ligada('alterarLeito')">
-                          <label class="oculto" :for="`ramal-${l.id}`">{{ t('adm.leitos.ramal') }}</label>
-                          <input
-                            :id="`ramal-${l.id}`"
-                            :value="ramais[l.id] ?? l.ramal ?? ''"
-                            inputmode="numeric"
-                            size="6"
-                            @input="ramais[l.id] = ($event.target as HTMLInputElement).value"
-                          />
-                          <SanteBotao
-                            :rotulo="t('adm.comum.salvar')"
-                            variante="texto"
-                            @acionar="salvarRamal(l)"
-                          />
-                        </template>
-                        <template v-else>{{ l.ramal ?? '—' }}</template>
-                      </td>
-                      <td v-if="podeEditar">
-                        <SanteBotao
-                          v-if="l.ativo && ligada('inativarLeito')"
-                          :rotulo="t('adm.leitos.inativar')"
-                          variante="destrutivo"
-                          :confirmacao="t('adm.leitos.confirmarInativar', { leito: l.leito })"
-                          :data-testid="`inativar-${l.id}`"
-                          @acionar="situacao(l, true)"
+              {{ t('adm.leitos.acomodacao', { codigo: a.acomodacao, nome: a.nome }) }} ·
+              {{
+                t('adm.leitos.leitosDaAcomodacao', {
+                  ativos: a.ativos,
+                  total: a.leitos.length,
+                  ocupados: a.ocupados,
+                })
+              }}
+              <SanteBotao
+                v-if="podeEditar && ligada('alterarAcomodacao')"
+                :rotulo="t('adm.leitos.alterarAcomodacao')"
+                variante="texto"
+                :data-testid="`alterar-acomodacao-${b.bloco}-${a.acomodacao}`"
+                @acionar="abrirAlterar(b.bloco, a)"
+              />
+              <SanteBotao
+                v-if="podeEditar && ligada('incluirLeito')"
+                :rotulo="t('adm.leitos.novoLeito')"
+                variante="texto"
+                :data-testid="`novo-leito-${b.bloco}-${a.acomodacao}`"
+                @acionar="abrirLeito(b.bloco, a)"
+              />
+              <table v-if="a.leitos.length">
+                <caption class="oculto">
+                  {{
+                    t('adm.leitos.acomodacao', { codigo: a.acomodacao, nome: a.nome })
+                  }}
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{{ t('adm.leitos.leito') }}</th>
+                    <th scope="col">{{ t('adm.comum.situacao') }}</th>
+                    <th scope="col">{{ t('adm.leitos.ramal') }}</th>
+                    <th v-if="podeEditar" scope="col">
+                      <span class="oculto">{{ t('adm.comum.alterar') }}</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="l in a.leitos"
+                    :key="l.id"
+                    :data-testid="`leito-${b.bloco}-${a.acomodacao}-${l.leito}`"
+                  >
+                    <th scope="row">{{ l.leito }}</th>
+                    <td>
+                      {{ l.ativo ? t('adm.comum.ativo') : t('adm.comum.inativo') }} ·
+                      {{ l.ocupado ? t('adm.leitos.ocupado') : t('adm.leitos.livre') }}
+                    </td>
+                    <td>
+                      <template v-if="podeEditar && ligada('alterarLeito')">
+                        <label class="oculto" :for="`ramal-${l.id}`">{{ t('adm.leitos.ramal') }}</label>
+                        <input
+                          :id="`ramal-${l.id}`"
+                          :value="ramais[l.id] ?? l.ramal ?? ''"
+                          inputmode="numeric"
+                          size="6"
+                          @input="ramais[l.id] = ($event.target as HTMLInputElement).value"
                         />
                         <SanteBotao
-                          v-if="!l.ativo && ligada('reativarLeito')"
-                          :rotulo="t('adm.leitos.reativar')"
+                          :rotulo="t('adm.comum.salvar')"
                           variante="texto"
-                          :data-testid="`reativar-${l.id}`"
-                          @acionar="situacao(l, false)"
+                          @acionar="salvarRamal(l)"
                         />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </li>
-            </ul>
-          </li>
-        </ul>
-        <h2>{{ t('adm.leitos.blocos') }}</h2>
-        <DominiosIndiceTela subitem="estruturaLeitos" :embutido="true" />
-      </template>
-    </template>
-
-    <template v-else>
-      <p>{{ t('adm.leitos.conferenciaTexto') }}</p>
-      <MensagemErro v-if="conferencia.isError.value" :erro="conferencia.error.value" />
-      <p v-else-if="conferencia.isPending.value">{{ t('adm.comum.carregando') }}</p>
-      <template v-else-if="conferencia.data.value">
-        <div role="status">
-          <ul data-testid="conferencia-resumo">
-            <li>{{ t('adm.leitos.divergencias', { n: conferencia.data.value.divergencias.length }) }}</li>
-            <li>{{ t('adm.leitos.iguais', { n: conferencia.data.value.contagens.iguais }) }}</li>
-            <li>
-              {{ t('adm.leitos.externo', { n: conferencia.data.value.contagens.leitosEspelhoExterno }) }}
+                      </template>
+                      <template v-else>{{ l.ramal ?? '—' }}</template>
+                    </td>
+                    <td v-if="podeEditar">
+                      <SanteBotao
+                        v-if="l.ativo && ligada('inativarLeito')"
+                        :rotulo="t('adm.leitos.inativar')"
+                        variante="destrutivo"
+                        :confirmacao="t('adm.leitos.confirmarInativar', { leito: l.leito })"
+                        :data-testid="`inativar-${l.id}`"
+                        @acionar="situacao(l, true)"
+                      />
+                      <SanteBotao
+                        v-if="!l.ativo && ligada('reativarLeito')"
+                        :rotulo="t('adm.leitos.reativar')"
+                        variante="texto"
+                        :data-testid="`reativar-${l.id}`"
+                        @acionar="situacao(l, false)"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </li>
-            <li>{{ t('adm.leitos.retratos', { n: conferencia.data.value.retratos }) }}</li>
-            <li>{{ t('adm.leitos.tempo', { ms: conferencia.data.value.tempoMs }) }}</li>
           </ul>
-        </div>
-        <table v-if="conferencia.data.value.divergencias.length" data-testid="tabela-divergencias">
-          <caption>
-            {{
-              t('adm.leitos.divergencias', { n: conferencia.data.value.divergencias.length })
-            }}
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">{{ t('adm.leitos.leito') }}</th>
-              <th scope="col">{{ t('adm.comum.situacao') }}</th>
-              <th scope="col">
-                <span class="oculto">{{ t('adm.leitos.conferenciaTexto') }}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(d, i) in conferencia.data.value.divergencias" :key="i">
-              <th scope="row">{{ d.chave }}</th>
-              <td>{{ t(`adm.leitos.tipos.${d.tipo}`) }}</td>
-              <td>{{ d.orientacao }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </template>
+        </li>
+      </ul>
+      <h2>{{ t('adm.leitos.blocos') }}</h2>
+      <DominiosIndiceTela subitem="estruturaLeitos" :embutido="true" />
     </template>
 
     <SanteDialogo v-model:visivel="dialogoAcomodacao" :titulo="t('adm.leitos.novaAcomodacao')">
@@ -598,7 +530,6 @@ async function incluirLeito(): Promise<void> {
 .senha-acoes {
   margin: var(--sgh-espaco-2) 0;
 }
-.abas,
 .acoes {
   display: flex;
   flex-wrap: wrap;

@@ -313,7 +313,7 @@ test.describe('Acesso, organização e auditoria @M10', () => {
     await expect(page.getByTestId('tabela-registros')).toContainText('SINT.MEDICO');
   });
 
-  test('leitos: incluir um leito, contagens e a conferência com a divergência; axe', async ({ page }) => {
+  test('leitos: alterar a acomodação e incluir um leito, com as contagens; axe', async ({ page }) => {
     await entrar(page, 'SINT.ADMIN');
     await page.goto('/cadastros/estrutura/leitos');
     await expect(page.getByRole('heading', { level: 1, name: 'Blocos, acomodações e leitos' })).toBeVisible();
@@ -336,9 +336,8 @@ test.describe('Acesso, organização e auditoria @M10', () => {
     await semViolacaoAxe(page, 'novo leito');
     await page.getByTestId('salvar-leito').click();
     await expect(page.getByTestId('leito-INT-1-102-E2E')).toBeVisible();
-    await page.getByTestId('aba-conferencia').click();
-    await expect(page.getByTestId('tabela-divergencias')).toContainText('UTI-1|UTI-A|03');
-    await semViolacaoAxe(page, 'conferência de leitos');
+    // A conferência com o espelho do sistema de origem saiu (ADR 0003): a tela não tem mais a aba nem a rota.
+    await expect(page.getByTestId('aba-conferencia')).toHaveCount(0);
   });
 
   test('X-01: atalho "Profissional vinculado" na ficha do usuário, com e sem vínculo; axe @X-01', async ({

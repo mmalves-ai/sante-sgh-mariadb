@@ -15,6 +15,7 @@ import { fontesSinteticas } from '../../sessao/montar.js';
 import { AuditoriaController } from './auditoria.controller.js';
 import { EstruturaController } from './estrutura.controller.js';
 import { FONTE_ADMINISTRACAO, type FonteAdministracao, fonteAdministracaoIndisponivel } from './fonte.js';
+import { cadastroMemoriaAtual } from '../cadastro/porta-memoria.js';
 import { fonteAdministracaoMemoria } from './fonte-memoria.js';
 import { PermissoesController } from './permissoes.controller.js';
 import { RedeCpfController } from './rede-cpf.controller.js';
@@ -66,7 +67,15 @@ export async function fonteDaAdministracao(ctx: ContextoModulo): Promise<FonteAd
     const { FonteAdministracaoPropria } = await import('./fonte-propria.js');
     return new FonteAdministracaoPropria(ctx.nucleo, cliente, { rede: ctx.configuracao.rede });
   }
-  if (!ctx.nucleo && fontesSinteticas(ctx.env)) return fonteAdministracaoMemoria(ctx.trilha);
+  // X-01: o profissional do login vem da memória do cadastro do mesmo processo (a aba Login do sistema grava ali).
+  if (!ctx.nucleo && fontesSinteticas(ctx.env))
+    return fonteAdministracaoMemoria(
+      ctx.trilha,
+      null,
+      'dev',
+      () => [],
+      (c, login) => cadastroMemoriaAtual()?.profissionalDoLogin(c as never, login) ?? null,
+    );
   return fonteAdministracaoIndisponivel();
 }
 

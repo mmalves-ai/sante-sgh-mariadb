@@ -13,13 +13,11 @@ import {
   type InventarioContasBancoResposta,
   type ArvorePermissoes,
   type Backup,
-  type ConferenciaLeitos,
   type DadosFiscais,
   type Estrutura,
   esquemaAlertas,
   esquemaArvorePermissoes,
   esquemaBackup,
-  esquemaConferenciaLeitos,
   esquemaDadosFiscais,
   esquemaEstrutura,
   esquemaExclusoes,
@@ -296,8 +294,6 @@ export const revisarQuebra = (id: string, classificacao: 'justificado' | 'nao-ju
 const E = '/api/cadastros/estrutura';
 export const buscarEstrutura = (): Promise<Estrutura> => ler(E, esquemaEstrutura);
 export const buscarLeitos = (): Promise<Leitos> => ler(`${E}/leitos`, esquemaLeitos);
-export const buscarConferencia = (): Promise<ConferenciaLeitos> =>
-  ler(`${E}/leitos/conferencia`, esquemaConferenciaLeitos);
 /** Acomodação e leito pelas receitas, com a senha (reautenticação; ficha seção 5). */
 export const gravarLeito = (operacao: string, entrada: unknown, senha: string) =>
   gravar<{ id?: number }>(`${E}/leitos/${operacao}`, { entrada, senha });

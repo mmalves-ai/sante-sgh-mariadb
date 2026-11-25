@@ -447,6 +447,19 @@ function retrato(l: Linha, id: number, usuario: string): VersaoCadastro {
 
 const txt = (v: unknown) => (v === null || v === undefined ? '' : String(v).trim());
 
+/**
+ * X-01: a porta em memória que o módulo cadastro do processo usa (dev e E2E sobre a fonte sintética). A ficha do
+ * usuário em memória (módulo administracao) lê dela o profissional do login, para as duas fichas nunca se desmentirem.
+ */
+let cadastroMemoriaDoProcesso: PortaCadastroMemoria | null = null;
+export function lembrarCadastroMemoria(porta: PortaCadastroMemoria): PortaCadastroMemoria {
+  cadastroMemoriaDoProcesso = porta;
+  return porta;
+}
+export function cadastroMemoriaAtual(): PortaCadastroMemoria | null {
+  return cadastroMemoriaDoProcesso;
+}
+
 export class PortaCadastroMemoria implements PortaCadastro {
   readonly destino = 'memoria' as const;
   private readonly porHospital = new Map<string, Estado>();
