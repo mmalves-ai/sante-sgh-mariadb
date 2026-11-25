@@ -515,6 +515,7 @@ export class ServicoRepasse {
     competencia: string,
     outro: { lancamentos: number; daApuracao: number },
     porBeneficiario: ApuracaoResposta['porBeneficiario'],
+    itensPendentes: ApuracaoResposta['itensPendentes'] = [],
   ): ApuracaoResposta {
     if (!a)
       return {
@@ -534,6 +535,7 @@ export class ServicoRepasse {
         base: 0,
         valor: 0,
         porBeneficiario: [],
+        itensPendentes: [],
         lancamentosOutroSistema: outro.daApuracao,
         aviso:
           outro.daApuracao > 0
@@ -557,6 +559,7 @@ export class ServicoRepasse {
       base: a.base,
       valor: a.valor,
       porBeneficiario,
+      itensPendentes,
       lancamentosOutroSistema: outro.daApuracao,
       aviso: a.simulacao
         ? 'Apuração em simulação: a memória de cálculo fica no novo; a gravação da apuração continua no outro sistema.'
@@ -564,9 +567,13 @@ export class ServicoRepasse {
     };
   }
 
-  private async porBeneficiario(s: SessaoCadastro, a: ApuracaoRepasseRegistrada | null) {
+  private async porBeneficiario(
+    s: SessaoCadastro,
+    a: ApuracaoRepasseRegistrada | null,
+    carregadas?: readonly MemoriaCalculoRegistrada[],
+  ) {
     if (!a) return [];
-    const ms = await this.porta.memorias(ctx(s), a.id, null);
+    const ms = carregadas ?? (await this.porta.memorias(ctx(s), a.id, null));
     const mapa = new Map<number, { itens: number; base: number; valor: number }>();
     for (const m of ms) {
       if (m.pendencia || m.prestador === null) continue;
@@ -586,7 +593,17 @@ export class ServicoRepasse {
       this.porta.apuracaoDoPeriodo(ctx(s), empresa, competencia),
       this.porta.estadoPeriodo(ctx(s), empresa, competencia),
     ]);
-    return this.apuracaoResposta(a, empresa, competencia, outro, await this.porBeneficiario(s, a));
+    // A memória dos itens pendentes (sem beneficiário ou sem regra) vai à tela da apuração: o de cada médico abre no
+    // demonstrativo dele.
+    const ms = a ? await this.porta.memorias(ctx(s), a.id, null) : [];
+    return this.apuracaoResposta(
+      a,
+      empresa,
+      competencia,
+      outro,
+      await this.porBeneficiario(s, a, ms),
+      ms.filter((m) => m.pendencia).map(memoriaRegistradaResposta),
+    );
   }
 
   async apurar(s: SessaoCadastro, e: ApurarRepasseEntrada): Promise<ResultadoRepasse> {

@@ -29,7 +29,7 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-test.describe('repasse médico @M33', () => {
+test.describe('repasse médico @M33 @C1-138', () => {
   test.setTimeout(300_000);
 
   test('regra → simular → aprovar → apurar → conferir → aprovar → ajuste e estorno → RPA → título; axe @M42', async ({
@@ -80,9 +80,16 @@ test.describe('repasse médico @M33', () => {
     await expect(page.getByTestId('ap-mensagem')).toContainText('Período apurado');
     await expect(page.getByTestId('ap-totais')).toBeVisible();
     await expect(page.getByTestId('ap-pendencias')).toContainText('Item sem executante');
+    // @C1-138: a memória do item pendente (sem profissional, o motivo e a conta) e quem apurou, ainda sem conferência.
+    await expect(page.getByTestId('ap-itens-pendentes')).toContainText('Item sem executante');
+    await expect(page.getByTestId('ap-itens-pendentes')).toContainText('Sem profissional');
+    await expect(page.getByTestId('ap-itens-pendentes')).toContainText('sem repasse');
+    await expect(page.getByTestId('ap-apurado-por')).toContainText('SINT.REP.ANALISTA');
+    await expect(page.getByTestId('ap-conferido-por')).toContainText('Ainda não');
     await semViolacaoAxe(page, '/repasse/apuracao');
     await page.getByTestId('ap-conferir').click();
     await expect(page.getByTestId('ap-mensagem')).toContainText('conferida');
+    await expect(page.getByTestId('ap-conferido-por')).toContainText('SINT.REP.ANALISTA');
     await entrar(page, 'SINT.REP.SUPERVISOR');
     await page.goto('/repasse/apuracao');
     await expect(page.getByTestId('ap-competencia')).not.toHaveValue('');

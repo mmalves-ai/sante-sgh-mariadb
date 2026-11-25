@@ -109,6 +109,17 @@ export const mensagensRepasse = {
     repasseTotal: 'Repasse total',
     memoria: 'Memória de cálculo',
     demonstrativo: 'Demonstrativo',
+    apuradoPor: 'Apurada por',
+    conferidoPor: 'Conferida por',
+    aprovadoPor: 'Aprovada por',
+    ninguem: 'Ainda não',
+    itensPendentes: 'Itens pendentes, com a memória de cálculo',
+    motivo: 'Motivo',
+    regrasDescartadas: 'Regras consideradas e descartadas',
+    regraDescartada: 'Regra {regra}: {motivo}',
+    semDescartadas: 'Nenhuma regra candidata',
+    profissional: 'Profissional',
+    semProfissional: 'Sem profissional',
     simulacao:
       'Simulação: esta apuração ainda não é gravada. O período continua sendo apurado no sistema em uso.',
     apuradaFora:

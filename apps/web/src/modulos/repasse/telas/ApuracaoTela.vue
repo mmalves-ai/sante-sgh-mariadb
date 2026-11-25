@@ -3,7 +3,8 @@
 // (regra 10: o período apurado no outro sistema é mostrado e não se grava outra); apurar ou recalcular a aberta, os
 // totais com as parcelas por beneficiário, as pendências por motivo, conferir, aprovar (quem apurou não aprova; regra
 // 9) ou devolver, e os lançamentos de cada beneficiário pela apuração aprovada. O demonstrativo de cada um abre com a
-// memória de cálculo. Os indicadores do repasse com as parcelas impressas.
+// memória de cálculo; a dos itens pendentes (sem executante, sem regra...) fica nesta tela, com o motivo e as regras
+// descartadas, e quem apurou, conferiu e aprovou à vista. Os indicadores do repasse com as parcelas impressas.
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
@@ -91,8 +92,21 @@ const lancar = () => agir(() => lancarApuracao(a.value!.id!, Number(evento.value
       <p v-if="a.aviso" role="note" data-testid="ap-aviso">{{ a.aviso }}</p>
       <p v-if="a.sistema === 'novo'" data-testid="ap-estado">
         {{ t('repasse.apuracao.titulo') }} {{ a.id }} — {{ t(`repasse.apuracao.estado.${a.estado}`) }}
-        <span class="secundario"> · {{ a.apuradoPor }}{{ a.aprovadoPor ? ` · ${a.aprovadoPor}` : '' }}</span>
       </p>
+      <dl v-if="a.sistema === 'novo'" class="totais" data-testid="ap-quem">
+        <div>
+          <dt>{{ t('repasse.apuracao.apuradoPor') }}</dt>
+          <dd data-testid="ap-apurado-por">{{ a.apuradoPor ?? t('repasse.apuracao.ninguem') }}</dd>
+        </div>
+        <div>
+          <dt>{{ t('repasse.apuracao.conferidoPor') }}</dt>
+          <dd data-testid="ap-conferido-por">{{ a.conferidoPor ?? t('repasse.apuracao.ninguem') }}</dd>
+        </div>
+        <div>
+          <dt>{{ t('repasse.apuracao.aprovadoPor') }}</dt>
+          <dd data-testid="ap-aprovado-por">{{ a.aprovadoPor ?? t('repasse.apuracao.ninguem') }}</dd>
+        </div>
+      </dl>
       <div class="acoes">
         <button
           v-if="a.sistema !== 'outro-sistema' && (a.estado === null || a.estado === 'aberta')"
@@ -173,6 +187,41 @@ const lancar = () => agir(() => lancarApuracao(a.value!.id!, Number(evento.value
           {{ t(`repasse.apuracao.pendencia.${m}`) }}: {{ n }}
         </li>
       </ul>
+      <table v-if="a.itensPendentes.length" class="tabela" data-testid="ap-itens-pendentes">
+        <caption>
+          {{
+            t('repasse.apuracao.itensPendentes')
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ t('repasse.item') }}</th>
+            <th scope="col">{{ t('repasse.apuracao.profissional') }}</th>
+            <th scope="col">{{ t('repasse.apuracao.motivo') }}</th>
+            <th scope="col">{{ t('repasse.apuracao.memoria') }}</th>
+            <th scope="col">{{ t('repasse.apuracao.regrasDescartadas') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="i in a.itensPendentes" :key="i.item" :data-testid="`ap-pendente-${i.item}`">
+            <td>{{ i.item }}</td>
+            <td>{{ i.beneficiario ?? t('repasse.apuracao.semProfissional') }}</td>
+            <td>{{ i.pendencia ? t(`repasse.apuracao.pendencia.${i.pendencia}`) : '—' }}</td>
+            <td>
+              {{ i.conta
+              }}<span v-if="i.dimensoes.length" class="secundario"> ({{ i.dimensoes.join(', ') }})</span>
+            </td>
+            <td>
+              <template v-if="i.ignoradas.length">
+                <span v-for="g in i.ignoradas" :key="g.regra" class="opcao">
+                  {{ t('repasse.apuracao.regraDescartada', { regra: g.regra, motivo: g.motivo }) }}
+                </span>
+              </template>
+              <span v-else class="secundario">{{ t('repasse.apuracao.semDescartadas') }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
       <table v-if="a.porBeneficiario.length" class="tabela" data-testid="ap-beneficiarios">
         <thead>
           <tr>

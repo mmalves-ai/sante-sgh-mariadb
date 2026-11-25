@@ -158,6 +158,11 @@ describe('repasse médico pela HTTP (memória)', { timeout: 30_000 }, () => {
       { prestador: 7002, itens: 2, base: 800, valor: 100 },
     ]);
     expect(ap.valor).toBe(433);
+    // A memória do item pendente (sem executante): sem beneficiário, valor zero, a conta com o motivo.
+    expect(ap.itensPendentes).toHaveLength(1);
+    expect(ap.itensPendentes[0]).toMatchObject({ beneficiario: null, valor: 0, pendencia: 'sem-executante' });
+    expect(ap.itensPendentes[0].conta).toBe('sem repasse (sem-executante)');
+    expect(ap.conferidoPor).toBeNull();
     expect((await post(a, `/repasse/apuracoes/${id}/decisao`, { acao: 'aprovar' })).statusCode).toBe(403);
     // A negação da permissão de agir vai à trilha de permissão negada (como a da rota).
     expect(
@@ -169,6 +174,10 @@ describe('repasse médico pela HTTP (memória)', { timeout: 30_000 }, () => {
       ),
     ).toBe(true);
     expect((await post(a, `/repasse/apuracoes/${id}/decisao`, { acao: 'conferir' })).statusCode).toBe(200);
+    // Quem conferiu fica à vista na apuração.
+    const conferida = (await get(a, `/repasse/apuracoes?competencia=${competencia}`)).json();
+    expect(conferida.estado).toBe('conferida');
+    expect(conferida.conferidoPor).toBe('SINT.REP.ANALISTA');
     const sup = await entrar('SINT.REP.SUPERVISOR');
     expect((await post(sup, `/repasse/apuracoes/${id}/decisao`, { acao: 'aprovar' })).statusCode).toBe(200);
     // Apurada e aprovada não muda (a correção entra no período seguinte).

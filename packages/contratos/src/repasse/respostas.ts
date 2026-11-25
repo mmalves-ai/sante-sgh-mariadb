@@ -114,6 +114,8 @@ export interface ApuracaoResposta {
   readonly valor: number;
   /** Parcelas do total (a soma é `valor`). */
   readonly porBeneficiario: readonly BeneficiarioApuracao[];
+  /** A memória de cálculo de cada item pendente (sem executante, sem regra, sem conciliação...), com o motivo. */
+  readonly itensPendentes: readonly MemoriaItemResposta[];
   /** Lançamentos do outro sistema no período (quando o período é dele). */
   readonly lancamentosOutroSistema: number;
   readonly aviso: string | null;
