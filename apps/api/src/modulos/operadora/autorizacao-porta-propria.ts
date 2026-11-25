@@ -53,6 +53,7 @@ import {
   type DadosItemDominioAutorizacao,
   type DadosPrestadorParaAutorizacao,
   type DadosProcedimentoTuss,
+  type DadosRegrasRol,
   type DominioAutorizacao,
   type EntradaRegistroAutorizacao,
   type FiltroAutorizacoesPorta,
@@ -70,6 +71,8 @@ export const TABELAS_AUTORIZACAO = [
   'pedido_autorizacao_plano_historico',
   'junta_divergencia_tecnica',
   'auditor_plano',
+  'critica_pedido_autorizacao',
+  'negativa_cobertura',
 ] as const;
 
 const SITUACAO_DO_BANCO = (s: string): SituacaoAutorizacaoPorta =>
@@ -257,6 +260,68 @@ export class PortaAutorizacaoOperadoraPropria
         [cod, cod.length > 3 ? `${cod.slice(0, 3)}.${cod.slice(3)}` : cod],
       );
       return r ? txt(r['descricao']) : null;
+    });
+  }
+
+  /**
+   * C2-122: as regras de cobertura do rol vigentes hoje da operadora para os procedimentos (pelo código do item), o
+   * procedimento no rol da ANS e a diretriz de utilização (a da regra ou a do rol); e o sexo e o nascimento do beneficiário.
+   */
+  regrasDoRol(
+    c: ContextoAutorizacao,
+    operadora: number,
+    beneficiario: number,
+    codigos: readonly string[],
+  ): Promise<DadosRegrasRol> {
+    return this.ler(c, async (l) => {
+      const b = await l.uma(
+        `SELECT pf.data_nascimento, sx.sigla
+           FROM beneficiario_plano b JOIN pessoa_fisica pf ON pf.id = b.pessoa_fisica_id
+           LEFT JOIN sexo sx ON sx.id = pf.sexo_id
+          WHERE b.id = ?`,
+        [beneficiario],
+      );
+      const marcas = codigos.map(() => '?').join(', ');
+      const regras = codigos.length
+        ? await l.consultar(
+            `SELECT f.codigo, r.rol_procedimento_ans_id, r.exige_junta, r.exige_pericia, r.sexo_permitido,
+                    r.idade_minima, r.idade_maxima, r.quantidade_maxima_solicitacao,
+                    COALESCE(dr.codigo_rol, dp.codigo_rol) AS diretriz_codigo, COALESCE(dr.titulo, dp.titulo) AS diretriz_titulo
+               FROM regra_cobertura_rol r
+               JOIN item_faturavel f ON f.id = r.item_faturavel_id
+               LEFT JOIN rol_procedimento_ans rp ON rp.id = r.rol_procedimento_ans_id
+               LEFT JOIN diretriz_utilizacao_ans dr ON dr.id = r.diretriz_utilizacao_ans_id
+               LEFT JOIN diretriz_utilizacao_ans dp ON dp.id = rp.diretriz_utilizacao_ans_id
+              WHERE r.operadora_saude_id = ? AND f.codigo IN (${marcas})
+                AND r.ativo = TRUE AND r.vigencia_inicio <= CURRENT_DATE
+                AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= CURRENT_DATE)
+              ORDER BY r.vigencia_inicio DESC, r.id DESC`,
+            [operadora, ...codigos],
+          )
+        : [];
+      const vistos = new Set<string>();
+      return {
+        sexo: b ? txt(b['sigla']) : '',
+        nascimento: b ? (data(b['data_nascimento']) ?? '') : '',
+        regras: regras
+          .filter((r) => !vistos.has(txt(r['codigo'])) && vistos.add(txt(r['codigo'])))
+          .map((r) => {
+            const sexo = txtOuNulo(r['sexo_permitido']);
+            return {
+              codigo: txt(r['codigo']),
+              noRol: numOuNulo(r['rol_procedimento_ans_id']) !== null,
+              diretriz: r['diretriz_codigo']
+                ? `${txt(r['diretriz_codigo'])} ${txt(r['diretriz_titulo'])}`.trim()
+                : null,
+              exigeJunta: bool(r['exige_junta']),
+              exigePericia: bool(r['exige_pericia']),
+              sexoPermitido: sexo === 'feminino' || sexo === 'masculino' ? sexo : null,
+              idadeMinima: numOuNulo(r['idade_minima']),
+              idadeMaxima: numOuNulo(r['idade_maxima']),
+              quantidadeMaximaSolicitacao: numOuNulo(r['quantidade_maxima_solicitacao']),
+            };
+          }),
+      };
     });
   }
 
@@ -730,6 +795,19 @@ export class PortaAutorizacaoOperadoraPropria
           }
         }
         await historico(d.id, 'decisao', d.situacao, d.parecer, { fundamento: d.fundamento });
+        // C2-122: a negativa formal (RN 395) fica registrada, com o fundamento e o comunicado ao beneficiário.
+        if (d.negativa && (d.situacao === 'negada' || d.situacao === 'parcial'))
+          await tx.incluir('negativa_cobertura', {
+            estabelecimento_id: est,
+            numero: d.negativa.numero,
+            beneficiario_plano_id: num(p['beneficiario_plano_id']),
+            pedido_autorizacao_plano_id: d.id,
+            motivo_decisao_autorizacao_id: d.critica,
+            fundamento: d.negativa.fundamento,
+            clausula_contratual: d.negativa.clausula,
+            descricao: d.negativa.descricao,
+            situacao: 'emitida',
+          });
         return { id: d.id, versao };
       },
       async cancelar(a) {
@@ -941,6 +1019,25 @@ async function registrarPedido(
       quantidade_solicitada: i.e.quantidade,
       situacao: 'pendente',
     });
+  // C2-122: as críticas automáticas na hora do registro ficam gravadas por pedido, pela crítica do cadastro.
+  let sequencia = 0;
+  for (const c of r.criticas ?? []) {
+    const cad = await tx.uma('SELECT id FROM critica_autorizacao WHERE codigo = ?', [c.codigo]);
+    if (!cad)
+      throw recusa(
+        'critica-nao-cadastrada',
+        `A crítica automática ${c.codigo} não está no cadastro de críticas.`,
+      );
+    await tx.incluir('critica_pedido_autorizacao', {
+      pedido_autorizacao_plano_id: id,
+      sequencia: ++sequencia,
+      critica_autorizacao_id: num(cad['id']),
+      tipo_ocorrencia: 'critica',
+      descricao: c.texto.slice(0, 2000),
+      forma_registro: 'automatica',
+      ocorrido_em: new Date(),
+    });
+  }
   // O CID fica no histórico do registro até o catálogo CID-10 chegar (pedido_autorizacao_plano_diagnostico pede o id).
   await historico(id, 'registro', 'em_analise', null, { cid: r.cid });
   return { id, versao: 1 };

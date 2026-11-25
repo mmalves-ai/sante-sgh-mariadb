@@ -465,6 +465,8 @@ export interface EntradaDecisao extends AcaoAutorizacao {
   readonly senha: string | null;
   readonly senhaValidade: string | null;
   readonly parecerJunta?: string | null;
+  /** C2-122: a negativa formal a registrar (só na negada e na parcial). */
+  readonly negativa?: NegativaDaDecisao | null;
 }
 
 export interface EntradaDesignacao {
@@ -1071,6 +1073,40 @@ export interface EntradaRegistroAutorizacao {
   } | null;
   readonly itens: readonly EntradaItemRegistro[];
   readonly usuario: string;
+  /** C2-122: as críticas automáticas do pedido na hora do registro, gravadas por pedido (critica_pedido_autorizacao). */
+  readonly criticas?: readonly CriticaDoPedido[];
+}
+
+/** C2-122: uma crítica automática do pedido (o código do cadastro de críticas, o texto e se bloqueia). */
+export interface CriticaDoPedido {
+  readonly codigo: string;
+  readonly texto: string;
+  readonly bloqueia: boolean;
+}
+
+/** C2-122: a regra de cobertura do rol vigente de um procedimento do pedido, e o sexo e a idade do beneficiário. */
+export interface DadosRegrasRol {
+  readonly sexo: string;
+  readonly nascimento: string;
+  readonly regras: readonly {
+    readonly codigo: string;
+    readonly noRol: boolean;
+    readonly diretriz: string | null;
+    readonly exigeJunta: boolean;
+    readonly exigePericia: boolean;
+    readonly sexoPermitido: 'feminino' | 'masculino' | null;
+    readonly idadeMinima: number | null;
+    readonly idadeMaxima: number | null;
+    readonly quantidadeMaximaSolicitacao: number | null;
+  }[];
+}
+
+/** C2-122: a negativa formal (RN 395) registrada na decisão negada ou parcial. */
+export interface NegativaDaDecisao {
+  readonly numero: string;
+  readonly fundamento: string;
+  readonly clausula: string | null;
+  readonly descricao: string;
 }
 
 export interface EntradaRegistroProtocolo {

@@ -437,6 +437,7 @@ export class AutorizacaoOperadoraController {
           senha,
           senhaValidade: autorizada ? validadeDaSenha(x.hoje) : null,
           ...(junta ? { parecerJunta: e.parecerDesempatador ?? '' } : {}),
+          negativa: x.negativa,
           usuario: s.login,
         });
       },

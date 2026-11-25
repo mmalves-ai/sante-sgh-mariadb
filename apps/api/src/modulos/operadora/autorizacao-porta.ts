@@ -21,6 +21,7 @@ import {
   type DadosOperadora,
   type DadosPrestadorParaAutorizacao,
   type DadosProcedimentoTuss,
+  type DadosRegrasRol,
   type DominioAutorizacao,
   type EntradaDecisao,
   type EntradaDesignacao,
@@ -96,6 +97,13 @@ export interface PortaAutorizacaoOperadora {
   procedimentosTuss(c: ContextoAutorizacao, codigos: readonly string[]): Promise<DadosProcedimentoTuss[]>;
   buscarTuss(c: ContextoAutorizacao, termo: string): Promise<DadosProcedimentoTuss[]>;
   nomeDoCid(c: ContextoAutorizacao, codigo: string): Promise<string | null>;
+  /** C2-122: as regras de cobertura do rol vigentes da operadora para os procedimentos, com o sexo e o nascimento. */
+  regrasDoRol(
+    c: ContextoAutorizacao,
+    operadora: number,
+    beneficiario: number,
+    codigos: readonly string[],
+  ): Promise<DadosRegrasRol>;
   autorizacoes(
     c: ContextoAutorizacao,
     f: FiltroAutorizacoesPorta,
@@ -131,6 +139,7 @@ export const METODOS_PORTA_AUTORIZACAO: ReadonlySet<string> = new Set([
   'procedimentosTuss',
   'buscarTuss',
   'nomeDoCid',
+  'regrasDoRol',
   'autorizacoes',
   'totais',
   'autorizacao',

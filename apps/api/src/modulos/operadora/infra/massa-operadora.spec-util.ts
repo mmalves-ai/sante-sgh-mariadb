@@ -337,6 +337,11 @@ export async function limparNegocio(nucleo: NucleoProprio, m: MassaOperadora): P
     await e.executar('DELETE FROM envio_ans WHERE estabelecimento_id IN (?, ?) ORDER BY id DESC', est);
     await e.executar('DELETE FROM junta_divergencia_tecnica WHERE estabelecimento_id IN (?, ?)', est);
     await e.executar(
+      'DELETE c FROM critica_pedido_autorizacao c JOIN pedido_autorizacao_plano p ON p.id = c.pedido_autorizacao_plano_id WHERE p.estabelecimento_id IN (?, ?)',
+      est,
+    );
+    await e.executar('DELETE FROM negativa_cobertura WHERE estabelecimento_id IN (?, ?)', est);
+    await e.executar(
       'DELETE h FROM pedido_autorizacao_plano_historico h JOIN pedido_autorizacao_plano p ON p.id = h.pedido_autorizacao_plano_id WHERE p.estabelecimento_id IN (?, ?)',
       est,
     );

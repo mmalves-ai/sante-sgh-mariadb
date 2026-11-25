@@ -228,6 +228,11 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
     return CIDS_SINTETICOS[codigo] ?? null;
   }
 
+  /** C2-122: a fonte sintética não tem regras de cobertura do rol cadastradas. */
+  async regrasDoRol() {
+    return { sexo: '', nascimento: '', regras: [] };
+  }
+
   private vencida(p: PedidoMem): boolean {
     return EM_ABERTO.has(p.situacao) && p.prazoEm < this.agora();
   }

@@ -32,7 +32,9 @@ import {
   conferirDecisao,
   conselhoDoAuditor,
   criticasAutomaticas,
+  criticasDaRegraRol,
   designacaoVigente,
+  negativaParaRegistro,
   nomeDeBusca,
   PARAMETROS_AUTORIZACAO,
   prazoDaResposta,
@@ -53,6 +55,7 @@ import {
   type EntradaItemRegistro,
   type EntradaRegistroAutorizacao,
   type FiltroAutorizacoesPorta,
+  type NegativaDaDecisao,
 } from './dados-portas.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoAutorizacao, PortaAutorizacaoOperadora } from './autorizacao-porta.js';
@@ -254,14 +257,53 @@ export class ServicoAutorizacaoOperadora {
       comGuiaPrincipal: boolean;
       prestador: number;
       executante: number | null;
+      /** C2-122: os procedimentos do pedido, para as regras de cobertura do rol da operadora. */
+      rol?: {
+        operadora: number;
+        beneficiario: number;
+        itens: readonly { codigo: string; quantidade: number }[];
+      };
     },
     hoje: string,
   ): Promise<CriticaAutomatica[]> {
-    const [{ el, avaliada }, prestador, executante] = await Promise.all([
+    const [{ el, avaliada }, prestador, executante, rol] = await Promise.all([
       this.elegibilidadeNaData(c, p.carteirinha, hoje),
       this.porta.prestador(c, p.prestador),
       p.executante ? this.porta.prestador(c, p.executante) : Promise.resolve(null),
+      p.rol
+        ? this.porta.regrasDoRol(
+            c,
+            p.rol.operadora,
+            p.rol.beneficiario,
+            p.rol.itens.map((i) => i.codigo),
+          )
+        : Promise.resolve(null),
     ]);
+    const doRol =
+      rol && p.rol
+        ? criticasDaRegraRol(rol.regras, {
+            sexo: rol.sexo,
+            nascimento: rol.nascimento,
+            hoje,
+            itens: p.rol.itens,
+          })
+        : [];
+    return [...this.criticasDoPlano(p, el, avaliada, prestador, executante), ...doRol];
+  }
+
+  private criticasDoPlano(
+    p: {
+      carater: 'E' | 'U';
+      tipoGuia: number;
+      internacaoTipo: number | null;
+      comGuiaPrincipal: boolean;
+      executante: number | null;
+    },
+    el: Awaited<ReturnType<ServicoAutorizacaoOperadora['elegibilidadeNaData']>>['el'],
+    avaliada: Awaited<ReturnType<ServicoAutorizacaoOperadora['elegibilidadeNaData']>>['avaliada'],
+    prestador: { situacao: string; regime: number } | null,
+    executante: { situacao: string; regime: number } | null,
+  ): CriticaAutomatica[] {
     return criticasAutomaticas({
       elegibilidade: avaliada,
       produto: el
@@ -336,6 +378,11 @@ export class ServicoAutorizacaoOperadora {
         comGuiaPrincipal: e.guiaPrincipal !== null,
         prestador: e.prestador,
         executante: e.executante,
+        rol: {
+          operadora: operadora.id,
+          beneficiario: el.beneficiario.id,
+          itens: e.itens.map((i) => ({ codigo: i.codigo, quantidade: i.quantidade })),
+        },
       },
       relogio.hoje,
     );
@@ -362,6 +409,7 @@ export class ServicoAutorizacaoOperadora {
         profissional: { ...e.profissional },
         internacao: e.internacao ? { ...e.internacao } : null,
         itens,
+        criticas: criticas.map((x) => ({ codigo: x.codigo, texto: x.texto, bloqueia: x.bloqueia })),
       },
     };
   }
@@ -543,6 +591,7 @@ export class ServicoAutorizacaoOperadora {
     resultado: ResultadoDecisao;
     registroAns: string;
     hoje: string;
+    negativa: NegativaDaDecisao | null;
   }> {
     const a = await this.pedido(c, id, junta ? 'concluirJunta' : 'decidir');
     const [auditor, itens, dominios, relogio, operadoras] = await Promise.all([
@@ -562,6 +611,11 @@ export class ServicoAutorizacaoOperadora {
         comGuiaPrincipal: a.guiaPrincipal !== null,
         prestador: a.prestador,
         executante: a.executante,
+        rol: {
+          operadora: a.operadora,
+          beneficiario: a.beneficiario,
+          itens: itens.map((i) => ({ codigo: i.codigo, quantidade: i.quantidadeSolicitada })),
+        },
       },
       relogio.hoje,
     );
@@ -579,7 +633,30 @@ export class ServicoAutorizacaoOperadora {
     if (resultado.problemas.length || !auditor) throw recusaDasRegras(resultado.problemas);
     const registroAns = operadoras.find((o) => o.id === a.operadora)?.registroAns;
     if (!registroAns) throw recusaDasRegras([{ codigo: 'operadora-inexistente' }]);
-    return { a, auditor, resultado, registroAns, hoje: relogio.hoje };
+    // C2-122: a negativa formal (RN 395) da decisão negada ou parcial, com o comunicado ao beneficiário.
+    const decididos = new Map(resultado.itens.map((i) => [i.id, i]));
+    const negativa = negativaParaRegistro({
+      situacao: resultado.situacao,
+      numeroGuia: a.protocolo,
+      criticas: criticas.map((x) => x.codigo),
+      fundamento: e.fundamento,
+      comunicado: comunicadoDaNegativa({
+        situacao: resultado.situacao,
+        protocolo: a.protocolo,
+        beneficiario: a.beneficiarioNome,
+        decididaEm: relogio.hoje,
+        critica: dominios.critica.find((x) => x.codigo === e.critica)?.rotulo ?? null,
+        fundamento: e.fundamento,
+        parecer: null,
+        negados: itens
+          .filter((i) => decididos.get(i.id)?.situacao !== 'autorizado')
+          .map(
+            (i) =>
+              `${i.codigo} ${i.descricao} (${decididos.get(i.id)?.quantidade ?? 0} de ${i.quantidadeSolicitada} autorizados)`,
+          ),
+      }),
+    });
+    return { a, auditor, resultado, registroAns, hoje: relogio.hoje, negativa };
   }
 
   conferirCancelamento(c: ContextoAutorizacao, id: number): Promise<DadosAutorizacao> {
