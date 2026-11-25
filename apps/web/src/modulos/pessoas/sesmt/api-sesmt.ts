@@ -134,8 +134,13 @@ export const gerarCatEsocial = (id: number, empresa: number): Promise<ResultadoG
     novaChave('sesmt.acidente.esocial'),
   );
 
-export const cancelarEntregaEpi = (id: number, motivo: string): Promise<ResultadoSesmt> =>
-  enviar(`${P}/epi/entregas/${id}/cancelamento`, { motivo }, ok(), novaChave('sesmt.epi.cancelamento'));
+/** O tipo vai junto do id: a entrega, a leitura do dosímetro e a exposição têm numerações próprias (C1-119). */
+export const cancelarEntregaEpi = (
+  id: number,
+  motivo: string,
+  tipo: 'epi' | 'dosimetria' | 'quimio' = 'epi',
+): Promise<ResultadoSesmt> =>
+  enviar(`${P}/epi/entregas/${id}/cancelamento`, { motivo, tipo }, ok(), novaChave('sesmt.epi.cancelamento'));
 
 export const lerMapaRiscos = (funcao: string, vigentes: boolean): Promise<MapaRiscos> =>
   ler(`${P}/riscos${qs({ funcao: funcao || undefined, vigentes: String(vigentes) })}`, confiar<MapaRiscos>());

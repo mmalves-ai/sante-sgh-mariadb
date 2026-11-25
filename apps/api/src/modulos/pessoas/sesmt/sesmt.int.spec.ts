@@ -1,7 +1,7 @@
 // Integração da porta PRÓPRIA do SESMT (F2.2, lote 03-10) contra o MariaDB do cliente de teste da onda 3 (f22_o3), com
 // massa SINTÉTICA: o contrato de efeito de cada gravação (as linhas, a versão e a trilha com o motivo e a correção) e as
-// recusas (vínculo de outro estabelecimento, versão desatualizada, EPI fora do cadastro), mais a leitura do dosímetro,
-// que aguarda o contrato endereçar o registro pelo tipo (recusa 409, nunca silêncio). Cada gravação confere a linha da trilha (ação, entidade e
+// recusas (vínculo de outro estabelecimento, versão desatualizada, EPI fora do cadastro), mais a leitura do dosímetro e
+// a exposição a quimioterápico endereçadas pelo tipo junto do id (C1-119). Cada gravação confere a linha da trilha (ação, entidade e
 // entidade_id) e a versão; a hora do acidente perto da meia-noite prova o fuso do estabelecimento; o mapa de riscos usa
 // um fator semeado e dois ambientes (o do setor da função, o ambíguo e o inexistente).
 import { chaveFuncao } from '@sgh/dominio-pessoas';
@@ -152,7 +152,7 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do SESMT contra o MariaDB (f22_o3)
     expect(await porta.ocupacional(fora, m.vinculo)).toEqual([]);
   });
 
-  it('recusas: vínculo de outro estabelecimento, anti-HBs e dosimetria sem modelo', async () => {
+  it('recusas: vínculo de outro estabelecimento; o anti-HBs grava', async () => {
     expect(
       await codigo(
         porta.gravarSgh(fora, trilha('aso'), (g) =>
@@ -199,28 +199,6 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do SESMT contra o MariaDB (f22_o3)
       antiHbs: 50,
       dose: null,
     });
-    expect(
-      await codigo(
-        porta.gravarSgh(c, trilha('entrega_epi'), (g) =>
-          g.incluirRegistroEpi({
-            vinculo: m.vinculo,
-            tipo: 'dosimetria',
-            data: '2026-02-01',
-            epi: null,
-            caNumero: null,
-            caValidade: null,
-            quantidade: null,
-            periodoInicio: '2026-01-01',
-            doseMsv: 0.1,
-            dosimetro: 'D1',
-            agente: null,
-            duracaoMin: null,
-            observacao: null,
-            por: m.login,
-          }),
-        ),
-      ),
-    ).toBe('modelo-pendente');
   });
 
   it('vacina: a dose do colaborador com a sequência e o cadastro da vacina garantido', async () => {
@@ -574,7 +552,7 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do SESMT contra o MariaDB (f22_o3)
     const [ve] = await ler<{ versao: number }>('SELECT versao FROM entrega_epi WHERE id = ?', [id]);
     expect(Number(ve?.versao)).toBe(2);
     await porta.gravarSgh(c, trilha('entrega_epi', id), (g) =>
-      g.cancelarEntregaEpi({ id, motivo: 'entregue ao colaborador errado', por: m.login }),
+      g.cancelarEntregaEpi({ id, tipo: 'epi', motivo: 'entregue ao colaborador errado', por: m.login }),
     );
     await conferirTrilha('entrega_epi', id);
     r = await porta.registroEpi(c, id);
@@ -602,6 +580,165 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do SESMT contra o MariaDB (f22_o3)
         ),
       ),
     ).toBe('epi-nao-cadastrado');
+  });
+
+  it('dosimetria e quimioterápico (C1-119): grava na tabela do tipo, lê pelo tipo, cancela com motivo e libera o período', async () => {
+    const base = {
+      vinculo: m.vinculo,
+      epi: null,
+      caNumero: null,
+      caValidade: null,
+      quantidade: null,
+      observacao: null,
+      por: m.login,
+    };
+    const leitura = (dose: number) => ({
+      ...base,
+      tipo: 'dosimetria' as const,
+      data: '2026-03-31',
+      periodoInicio: '2026-03-01',
+      doseMsv: dose,
+      dosimetro: 'DOS-SINT-119',
+      agente: null,
+      duracaoMin: null,
+    });
+    const idL = await porta.gravarSgh(c, trilha('leitura_dosimetria'), (g) =>
+      g.incluirRegistroEpi(leitura(0.35)),
+    );
+    await conferirTrilha('leitura_dosimetria', idL);
+    const [linhaL] = await ler<Record<string, unknown>>(
+      'SELECT vinculo_trabalho_id, DATE_FORMAT(periodo_inicio, "%Y-%m-%d") AS periodo_inicio, periodo_fim, dosimetro, dose_msv, situacao, versao, criado_por FROM leitura_dosimetria WHERE id = ?',
+      [idL],
+    );
+    expect({
+      vinculo: Number(linhaL?.['vinculo_trabalho_id']),
+      inicio: linhaL?.['periodo_inicio'],
+      dosimetro: linhaL?.['dosimetro'],
+      dose: Number(linhaL?.['dose_msv']),
+      situacao: linhaL?.['situacao'],
+      versao: Number(linhaL?.['versao']),
+      autor: Number(linhaL?.['criado_por']),
+    }).toEqual({
+      vinculo: m.vinculo,
+      inicio: '2026-03-01',
+      dosimetro: 'DOS-SINT-119',
+      dose: 0.35,
+      situacao: 'ativo',
+      versao: 1,
+      autor: m.usuario,
+    });
+    expect(await porta.registroEpi(c, idL, 'dosimetria')).toMatchObject({
+      tipo: 'dosimetria',
+      data: '2026-03-31',
+      periodoInicio: '2026-03-01',
+      doseMsv: 0.35,
+      dosimetro: 'DOS-SINT-119',
+      canceladoEm: null,
+    });
+    // O mesmo dosímetro e período ativo recusa; outro estabelecimento não vê nem grava.
+    expect(
+      await codigo(
+        porta.gravarSgh(c, trilha('leitura_dosimetria'), (g) => g.incluirRegistroEpi(leitura(0.4))),
+      ),
+    ).toBe('leitura-repetida');
+    expect(
+      await codigo(
+        porta.gravarSgh(fora, trilha('leitura_dosimetria'), (g) => g.incluirRegistroEpi(leitura(0.4))),
+      ),
+    ).toBe('nao-encontrado');
+    expect(await porta.registroEpi(fora, idL, 'dosimetria')).toBeNull();
+
+    const idQ = await porta.gravarSgh(c, trilha('exposicao_quimioterapico'), (g) =>
+      g.incluirRegistroEpi({
+        ...base,
+        tipo: 'quimio',
+        data: '2026-03-20',
+        periodoInicio: null,
+        doseMsv: null,
+        dosimetro: null,
+        agente: 'Ciclofosfamida (sintético)',
+        duracaoMin: 45,
+      }),
+    );
+    await conferirTrilha('exposicao_quimioterapico', idQ);
+    const [linhaQ] = await ler<Record<string, unknown>>(
+      'SELECT agente, duracao_minutos, situacao, versao FROM exposicao_quimioterapico WHERE id = ?',
+      [idQ],
+    );
+    expect(linhaQ).toMatchObject({ agente: 'Ciclofosfamida (sintético)', situacao: 'ativo' });
+    expect(Number(linhaQ?.['duracao_minutos'])).toBe(45);
+    expect(await porta.registroEpi(c, idQ, 'quimio')).toMatchObject({
+      tipo: 'quimio',
+      data: '2026-03-20',
+      agente: 'Ciclofosfamida (sintético)',
+      duracaoMin: 45,
+    });
+    const lista = await porta.registrosEpi(c, m.vinculo);
+    expect(lista.filter((x) => x.tipo === 'dosimetria').map((x) => x.id)).toContain(idL);
+    expect(lista.filter((x) => x.tipo === 'quimio').map((x) => x.id)).toContain(idQ);
+    expect((await porta.resumo(c, 2026)).epis.some((x) => x.tipo === 'dosimetria' && x.id === idL)).toBe(
+      true,
+    );
+
+    // Cancelamento pelo tipo: marca a linha (nunca apaga), com o motivo e a versão nova; a entrega de mesmo id não muda.
+    await porta.gravarSgh(c, trilha('leitura_dosimetria', idL), (g) =>
+      g.cancelarEntregaEpi({
+        id: idL,
+        tipo: 'dosimetria',
+        motivo: 'leitura de outro dosímetro',
+        por: m.login,
+      }),
+    );
+    await conferirTrilha('leitura_dosimetria', idL);
+    const [canc] = await ler<Record<string, unknown>>(
+      'SELECT situacao, motivo_cancelamento, versao, excluido_em FROM leitura_dosimetria WHERE id = ?',
+      [idL],
+    );
+    expect(canc).toMatchObject({
+      situacao: 'cancelado',
+      motivo_cancelamento: 'leitura de outro dosímetro',
+      excluido_em: null,
+    });
+    expect(Number(canc?.['versao'])).toBe(2);
+    expect(await porta.registroEpi(c, idL, 'dosimetria')).toMatchObject({
+      canceladoPor: m.login,
+      motivoCancelamento: 'leitura de outro dosímetro',
+    });
+    expect(
+      await codigo(
+        porta.gravarSgh(c, trilha('leitura_dosimetria', idL), (g) =>
+          g.cancelarEntregaEpi({ id: idL, tipo: 'dosimetria', motivo: 'de novo', por: m.login }),
+        ),
+      ),
+    ).toBe('registro-cancelado');
+    // A leitura certa do mesmo período entra depois do cancelamento.
+    const idL2 = await porta.gravarSgh(c, trilha('leitura_dosimetria'), (g) =>
+      g.incluirRegistroEpi(leitura(0.12)),
+    );
+    expect(idL2).not.toBe(idL);
+    expect(await porta.registroEpi(c, idL2, 'dosimetria')).toMatchObject({
+      doseMsv: 0.12,
+      canceladoEm: null,
+    });
+
+    await porta.gravarSgh(c, trilha('exposicao_quimioterapico', idQ), (g) =>
+      g.cancelarEntregaEpi({
+        id: idQ,
+        tipo: 'quimio',
+        motivo: 'lançada no colaborador errado',
+        por: m.login,
+      }),
+    );
+    const [cq] = await ler<Record<string, unknown>>(
+      'SELECT situacao, motivo_cancelamento FROM exposicao_quimioterapico WHERE id = ?',
+      [idQ],
+    );
+    expect(cq).toMatchObject({ situacao: 'cancelado', motivo_cancelamento: 'lançada no colaborador errado' });
+    const [n] = await ler<{ n: number }>(
+      'SELECT (SELECT COUNT(*) FROM leitura_dosimetria WHERE id IN (?, ?)) + (SELECT COUNT(*) FROM exposicao_quimioterapico WHERE id = ?) AS n',
+      [idL, idL2, idQ],
+    );
+    expect(Number(n?.n)).toBe(3);
   });
 
   it('mapa de riscos: o EPI exigido da função e o fim da vigência; o painel lê o vínculo ativo', async () => {

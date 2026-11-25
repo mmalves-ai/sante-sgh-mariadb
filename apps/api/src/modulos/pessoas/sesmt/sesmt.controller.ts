@@ -406,7 +406,7 @@ export class SesmtController {
   @Post('epi/:vinculo')
   @HttpCode(200)
   @Permissao('pessoas.epi.entregar')
-  @AuditadoNoHandler(NA_TABELA('entrega_epi'))
+  @AuditadoNoHandler(NA_TABELA('entrega_epi, leitura_dosimetria ou exposicao_quimioterapico'))
   registrarEpi(
     @Param('vinculo') v: string,
     @Body() b: unknown,
@@ -468,7 +468,7 @@ export class SesmtController {
   @Post('epi/entregas/:id/cancelamento')
   @HttpCode(200)
   @Permissao('pessoas.epi.entregar')
-  @AuditadoNoHandler(NA_TABELA('entrega_epi e trilha_auditoria'))
+  @AuditadoNoHandler(NA_TABELA('entrega_epi, leitura_dosimetria ou exposicao_quimioterapico'))
   cancelarEpi(
     @Param('id') id: string,
     @Body() b: unknown,

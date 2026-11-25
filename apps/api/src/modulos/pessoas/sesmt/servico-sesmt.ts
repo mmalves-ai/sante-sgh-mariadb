@@ -120,6 +120,7 @@ import type {
   RegistroProtecao,
   SorologiaAcidente,
 } from './porta-sesmt.js';
+import { TABELA_PROTECAO } from './porta-sesmt.js';
 
 /** O vínculo de trabalho como a gestão de pessoas o lê. */
 type VinculoPessoa = NonNullable<Awaited<ReturnType<PortaPessoas['vinculo']>>>;
@@ -1519,11 +1520,18 @@ export class ServicoSesmt {
       this.porta.registrosEpi(s.porta, v.id),
       this.nomesUnidades(s),
     ]);
-    const correcoes = await this.porta.correcoes(
-      s.porta,
-      'entrega_epi',
-      registros.map((r) => r.id),
-    );
+    // As correções de cada tabela de proteção (o id só é único dentro do tipo).
+    const correcoes = (
+      await Promise.all(
+        (['epi', 'dosimetria', 'quimio'] as const).map((tipo) =>
+          this.porta.correcoes(
+            s.porta,
+            TABELA_PROTECAO[tipo],
+            registros.filter((r) => r.tipo === tipo).map((r) => r.id),
+          ),
+        ),
+      )
+    ).flat();
     const vigentes = linhasDaFuncao(mapa, funcao, v.unidade, hoje);
     const entregas = registros.filter((r) => r.canceladoEm === null).map(entregaLida);
     const dose = doseNoAno(entregas, Number(hoje.slice(0, 4)));
@@ -1574,7 +1582,7 @@ export class ServicoSesmt {
       s,
       E.pessoasEpiRegistrado.codigo,
       CHAVE_PESSOAS_SESMT,
-      (x: { id: number }) => ({ tabela: 'entrega_epi', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: TABELA_PROTECAO[e.tipo], id: String(x.id) }),
       async (g) => ({
         id: await g.incluirRegistroEpi({
           vinculo: v.id,
@@ -1627,19 +1635,20 @@ export class ServicoSesmt {
   /** W0-06: cancelamento da entrega (ou da leitura, ou da exposição) com motivo; nunca se apaga. */
   async cancelarEpi(s: SessaoCadastro, e: CancelarEpiEntrada): Promise<ResultadoSesmt> {
     await this.apoio.exigirLiberacao(s);
-    const x = await this.porta.registroEpi(s.porta, e.entrega);
+    const x = await this.porta.registroEpi(s.porta, e.entrega, e.tipo);
     if (!x) throw naoEncontrado('Registro de EPI');
     await this.vinculoOu404(s, x.vinculo);
     if (x.canceladoEm) throw recusaRegra('ja-cancelada', 'Este registro já foi cancelado.');
+    const tabela = TABELA_PROTECAO[x.tipo];
     await this.apoio.sgh(
       s,
       E.pessoasEpiCancelado.codigo,
       CHAVE_PESSOAS_SESMT,
-      { tabela: 'entrega_epi', id: String(x.id), chave: 'cancelamento' },
+      { tabela, id: String(x.id), chave: 'cancelamento' },
       async (g) => {
-        await g.cancelarEntregaEpi({ id: x.id, motivo: e.motivo, por: s.login });
+        await g.cancelarEntregaEpi({ id: x.id, tipo: x.tipo, motivo: e.motivo, por: s.login });
         await g.registrarCorrecao({
-          tabela: 'entrega_epi',
+          tabela,
           registro: x.id,
           operacao: 'epi.cancelado',
           antes: { cancelado: false, assinatura: x.assinatura },

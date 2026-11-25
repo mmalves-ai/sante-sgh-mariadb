@@ -23,10 +23,10 @@
 // na comunicação (encerrado_em, quem e o motivo) e, com exposição, a exposição recebe a alta; a profilaxia guarda a
 // situação, a data e a observação; o anti-HBs é a dose "sorologia" com o título; a retificação liga o registro novo ao
 // anterior (retifica_aso_id com o motivo, retifica_vacina_colaborador_id).
-// Pendência de contrato (pedido em docs/obra/fatias/f24/saida/02-pessoas-2.json): a leitura do dosímetro e a exposição
-// a quimioterápico têm tabela própria, mas o registro de proteção do contrato é endereçado só pelo id, que se repetiria
-// entre as três tabelas (o cancelamento pegaria o registro errado). Até o contrato levar o tipo junto do id, as duas
-// gravações recusam com 409, dizendo o motivo.
+// C1-119: a leitura do dosímetro (leitura_dosimetria: período, dosímetro e dose em mSv) e a exposição a quimioterápico
+// (exposicao_quimioterapico: agente e duração) têm tabela própria; o registro de proteção é endereçado pelo tipo junto
+// do id (o id se repete entre as três tabelas). O cancelamento marca a linha (situacao 'cancelado' com o motivo), nunca
+// apaga; a leitura cancelada libera o mesmo período para a leitura certa (migração 15_RH/94).
 import { DOSES_VACINA_SESMT, type DoseVacinaSesmt, VACINAS_SESMT, type VacinaSesmt } from '@sgh/contratos';
 import { chaveFuncao, prazoCat } from '@sgh/dominio-pessoas';
 import {
@@ -63,6 +63,7 @@ import {
   type RegistroOcupacional,
   type RegistroProtecao,
   type ResumoSesmt,
+  type TipoProtecao,
   type SorologiaAcidente,
   type VinculoAtivoSesmt,
 } from './porta-sesmt.js';
@@ -85,6 +86,8 @@ export const TABELAS_SESMT = [
   'risco_funcao',
   'epi_funcao',
   'entrega_epi',
+  'leitura_dosimetria',
+  'exposicao_quimioterapico',
   'sequencia_negocio',
 ] as const;
 
@@ -233,13 +236,6 @@ function duracaoDe(min: unknown): string | null {
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
 
-const modeloPendente = (operacao: string, falta: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Operação indisponível',
-    `${operacao} aguarda o modelo do banco (${falta}): pedido registrado na obra.`,
-  );
 const naoEncontrado = (o: string) =>
   new ErroOperacao(404, 'nao-encontrado', `${o} não encontrado`, `${o} não existe neste estabelecimento.`);
 
@@ -296,6 +292,24 @@ const SQL_ENTREGA = `
     FROM entrega_epi x
     JOIN vinculo_trabalho v ON v.id = x.vinculo_trabalho_id
     JOIN equipamento_protecao ep ON ep.id = x.equipamento_protecao_id
+    LEFT JOIN usuario uc ON uc.id = x.criado_por
+    LEFT JOIN usuario ua ON ua.id = x.alterado_por
+   WHERE v.estabelecimento_id = ? AND x.excluido_em IS NULL`;
+
+const SQL_DOSIMETRIA = `
+  SELECT x.id, x.vinculo_trabalho_id, x.periodo_inicio, x.periodo_fim, x.dosimetro, x.dose_msv, x.observacao,
+         x.situacao, x.motivo_cancelamento, x.alterado_em, uc.login AS criado_login, ua.login AS alterado_login
+    FROM leitura_dosimetria x
+    JOIN vinculo_trabalho v ON v.id = x.vinculo_trabalho_id
+    LEFT JOIN usuario uc ON uc.id = x.criado_por
+    LEFT JOIN usuario ua ON ua.id = x.alterado_por
+   WHERE v.estabelecimento_id = ? AND x.excluido_em IS NULL`;
+
+const SQL_QUIMIO = `
+  SELECT x.id, x.vinculo_trabalho_id, x.data_exposicao, x.agente, x.duracao_minutos, x.observacao,
+         x.situacao, x.motivo_cancelamento, x.alterado_em, uc.login AS criado_login, ua.login AS alterado_login
+    FROM exposicao_quimioterapico x
+    JOIN vinculo_trabalho v ON v.id = x.vinculo_trabalho_id
     LEFT JOIN usuario uc ON uc.id = x.criado_por
     LEFT JOIN usuario ua ON ua.id = x.alterado_por
    WHERE v.estabelecimento_id = ? AND x.excluido_em IS NULL`;
@@ -517,6 +531,51 @@ function entregaDe(r: Linha, fuso: string): RegistroProtecao {
   };
 }
 
+/** A leitura do dosímetro ou a exposição a quimioterápico no formato do registro de proteção. */
+function protecaoDe(r: Linha, tipo: 'dosimetria' | 'quimio', fuso: string): RegistroProtecao {
+  const cancelada = texto(r['situacao']) === 'cancelado';
+  const dose = tipo === 'dosimetria';
+  return {
+    id: Number(r['id']),
+    vinculo: Number(r['vinculo_trabalho_id']),
+    tipo,
+    data: dataIso(dose ? r['periodo_fim'] : r['data_exposicao']) ?? '',
+    epi: null,
+    caNumero: null,
+    caValidade: null,
+    quantidade: null,
+    assinatura: null,
+    assinadaEm: null,
+    periodoInicio: dose ? dataIso(r['periodo_inicio']) : null,
+    doseMsv: dose ? num(r['dose_msv']) : null,
+    dosimetro: dose ? ou(r['dosimetro']) : null,
+    agente: dose ? null : ou(r['agente']),
+    duracaoMin: dose ? null : num(r['duracao_minutos']),
+    observacao: ou(r['observacao']),
+    criadoPor: texto(r['criado_login']),
+    canceladoEm: cancelada ? dataHora(r['alterado_em'], fuso) : null,
+    canceladoPor: cancelada ? ou(r['alterado_login']) : null,
+    motivoCancelamento: ou(r['motivo_cancelamento']),
+  };
+}
+
+/** Os registros de proteção do estabelecimento (as três tabelas), com o filtro opcional do vínculo, por data e id. */
+async function protecoesDe(l: Ler, est: number, vinculo: number | null): Promise<RegistroProtecao[]> {
+  const fuso = await fusoDe(l, est);
+  const filtro = vinculo === null ? '' : ' AND x.vinculo_trabalho_id = ?';
+  const p = vinculo === null ? [est] : [est, vinculo];
+  const [entregas, leituras, exposicoes] = await Promise.all([
+    l.consultar(`${SQL_ENTREGA}${filtro}`, p),
+    l.consultar(`${SQL_DOSIMETRIA}${filtro}`, p),
+    l.consultar(`${SQL_QUIMIO}${filtro}`, p),
+  ]);
+  return [
+    ...entregas.map((r) => entregaDe(r, fuso)),
+    ...leituras.map((r) => protecaoDe(r, 'dosimetria', fuso)),
+    ...exposicoes.map((r) => protecaoDe(r, 'quimio', fuso)),
+  ].sort((a, b) => (a.data === b.data ? a.id - b.id : a.data < b.data ? -1 : 1));
+}
+
 function riscoDe(r: Linha): LinhaRiscoFuncao {
   const funcao = texto(r['funcao']);
   return {
@@ -606,6 +665,18 @@ async function sorologiasDe(l: Ler, est: number, acidentes: readonly number[]): 
 async function entregaPorId(l: Ler, est: number, id: number): Promise<RegistroProtecao | null> {
   const r = await l.uma(`${SQL_ENTREGA} AND x.id = ?`, [est, id]);
   return r ? entregaDe(r, await fusoDe(l, est)) : null;
+}
+
+/** O registro de proteção pelo id e pelo tipo (o id só é único dentro da tabela do tipo). */
+async function protecaoPorId(
+  l: Ler,
+  est: number,
+  id: number,
+  tipo: TipoProtecao,
+): Promise<RegistroProtecao | null> {
+  if (tipo === 'epi') return entregaPorId(l, est, id);
+  const r = await l.uma(`${tipo === 'dosimetria' ? SQL_DOSIMETRIA : SQL_QUIMIO} AND x.id = ?`, [est, id]);
+  return r ? protecaoDe(r, tipo, await fusoDe(l, est)) : null;
 }
 
 function contextoDe(c: ContextoSesmt): ContextoNucleo {
@@ -826,19 +897,11 @@ export class PortaSesmtPropria implements PortaSesmt {
   }
 
   registrosEpi(c: ContextoSesmt, vinculo: number): Promise<RegistroProtecao[]> {
-    return this.ler(c, async (l, est) => {
-      const fuso = await fusoDe(l, est);
-      return (
-        await l.consultar(`${SQL_ENTREGA} AND x.vinculo_trabalho_id = ? ORDER BY x.data_entrega, x.id`, [
-          est,
-          vinculo,
-        ])
-      ).map((r) => entregaDe(r, fuso));
-    });
+    return this.ler(c, (l, est) => protecoesDe(l, est, vinculo));
   }
 
-  registroEpi(c: ContextoSesmt, id: number): Promise<RegistroProtecao | null> {
-    return this.ler(c, (l, est) => entregaPorId(l, est, id));
+  registroEpi(c: ContextoSesmt, id: number, tipo: TipoProtecao = 'epi'): Promise<RegistroProtecao | null> {
+    return this.ler(c, (l, est) => protecaoPorId(l, est, id, tipo));
   }
 
   resumo(c: ContextoSesmt, ano: number): Promise<ResumoSesmt> {
@@ -863,7 +926,7 @@ export class PortaSesmtPropria implements PortaSesmt {
           `${SQL_VACINA} AND v.situacao IN ('ativo', 'afastado') ORDER BY vc.data_aplicacao, vc.id`,
           [est],
         ),
-        l.consultar(`${SQL_ENTREGA} ORDER BY x.data_entrega, x.id`, [est]),
+        protecoesDe(l, est, null),
         l.consultar(`${SQL_ACIDENTE} ORDER BY ca.id`, [est]),
       ]);
       const ac = acidentes.map((r) => acidenteDe(r, fuso));
@@ -881,7 +944,7 @@ export class PortaSesmtPropria implements PortaSesmt {
         vinculos: ativos,
         asos: asos.map((r) => asoDe(r, fuso)),
         vacinas: vacinas.map(vacinaDe),
-        epis: epis.map((r) => entregaDe(r, fuso)),
+        epis,
         acidentes: ac,
         sorologias: await sorologiasDe(
           l,
@@ -1049,7 +1112,7 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
     vacinas: (v) => vacinasDe(tx, est, v),
     acidente: (id) => acidentePorId(tx, est, id),
     sorologias: (a) => sorologiasDe(tx, est, [a]),
-    registroEpi: (id) => entregaPorId(tx, est, id),
+    registroEpi: (id, tipo = 'epi') => protecaoPorId(tx, est, id, tipo),
 
     async incluirAso(a) {
       const v = await vinculoOu(a.vinculo);
@@ -1396,11 +1459,40 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
     },
 
     async incluirRegistroEpi(x) {
-      if (x.tipo !== 'epi')
-        throw modeloPendente(
-          x.tipo === 'dosimetria' ? 'A leitura do dosímetro' : 'A exposição a quimioterápico',
-          'o registro de proteção do contrato precisa levar o tipo junto do id (pedido de contrato registrado)',
+      if (x.tipo === 'dosimetria') {
+        const v = await vinculoOu(x.vinculo);
+        const dosimetro = (x.dosimetro ?? '').trim();
+        // A leitura ativa do mesmo dosímetro e período já existe: recusa com o motivo (a chave única é a garantia).
+        const repetida = await tx.uma(
+          `SELECT id FROM leitura_dosimetria
+            WHERE vinculo_trabalho_id = ? AND dosimetro = ? AND periodo_inicio = ? AND situacao = 'ativo'
+              AND excluido_em IS NULL`,
+          [v.id, dosimetro, x.periodoInicio],
         );
+        if (repetida)
+          throw recusa(
+            'leitura-repetida',
+            'Já há leitura deste dosímetro para o mesmo período: cancele a anterior para lançar a correta.',
+          );
+        return tx.incluir('leitura_dosimetria', {
+          vinculo_trabalho_id: v.id,
+          periodo_inicio: x.periodoInicio,
+          periodo_fim: x.data,
+          dosimetro,
+          dose_msv: x.doseMsv,
+          observacao: x.observacao,
+        });
+      }
+      if (x.tipo === 'quimio') {
+        const v = await vinculoOu(x.vinculo);
+        return tx.incluir('exposicao_quimioterapico', {
+          vinculo_trabalho_id: v.id,
+          data_exposicao: x.data,
+          agente: (x.agente ?? '').trim(),
+          duracao_minutos: x.duracaoMin,
+          observacao: x.observacao,
+        });
+      }
       const v = await vinculoOu(x.vinculo);
       const ep = await equipamento(x.epi ?? '');
       const seq = await tx.uma<{ s: number }>(
@@ -1463,6 +1555,28 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
     },
 
     async cancelarEntregaEpi(x) {
+      if (x.tipo === 'dosimetria' || x.tipo === 'quimio') {
+        const tabela = x.tipo === 'dosimetria' ? 'leitura_dosimetria' : 'exposicao_quimioterapico';
+        const sql =
+          x.tipo === 'dosimetria'
+            ? `SELECT x.versao, x.situacao FROM leitura_dosimetria x
+                 JOIN vinculo_trabalho v ON v.id = x.vinculo_trabalho_id
+                WHERE x.id = ? AND v.estabelecimento_id = ? AND x.excluido_em IS NULL`
+            : `SELECT x.versao, x.situacao FROM exposicao_quimioterapico x
+                 JOIN vinculo_trabalho v ON v.id = x.vinculo_trabalho_id
+                WHERE x.id = ? AND v.estabelecimento_id = ? AND x.excluido_em IS NULL`;
+        const p = await tx.uma<{ versao: number; situacao: string }>(sql, [x.id, est]);
+        if (!p)
+          throw naoEncontrado(
+            x.tipo === 'dosimetria' ? 'Leitura do dosímetro' : 'Exposição a quimioterápico',
+          );
+        if (p.situacao === 'cancelado') throw recusa('registro-cancelado', 'O registro já está cancelado.');
+        await tx.alterar(tabela, x.id, Number(p.versao), {
+          situacao: 'cancelado',
+          motivo_cancelamento: x.motivo.slice(0, 400),
+        });
+        return;
+      }
       const r = await tx.uma<{ versao: number; situacao: string }>(
         `SELECT x.versao, x.situacao FROM entrega_epi x JOIN vinculo_trabalho v ON v.id = x.vinculo_trabalho_id
           WHERE x.id = ? AND v.estabelecimento_id = ? AND x.excluido_em IS NULL`,

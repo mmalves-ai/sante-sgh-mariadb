@@ -395,8 +395,19 @@ export interface AnulacaoAcidente {
   readonly por: string;
 }
 
+/** O tipo do registro de proteção: cada um tem tabela própria, e o id só é único junto do tipo (C1-119). */
+export type TipoProtecao = RegistroProtecao['tipo'];
+
+/** A tabela de cada tipo de registro de proteção (C1-119). */
+export const TABELA_PROTECAO: Readonly<Record<TipoProtecao, string>> = {
+  epi: 'entrega_epi',
+  dosimetria: 'leitura_dosimetria',
+  quimio: 'exposicao_quimioterapico',
+};
+
 export interface CancelamentoProtecao {
   readonly id: number;
+  readonly tipo: TipoProtecao;
   readonly motivo: string;
   readonly por: string;
 }
@@ -452,7 +463,7 @@ export interface GravadorSesmt {
   vacinas(vinculo: number): Promise<DoseVacinaColaborador[]>;
   acidente(id: number): Promise<AcidenteTrabalho | null>;
   sorologias(acidente: number): Promise<SorologiaAcidente[]>;
-  registroEpi(id: number): Promise<RegistroProtecao | null>;
+  registroEpi(id: number, tipo?: TipoProtecao): Promise<RegistroProtecao | null>;
   incluirAso(a: NovoAso): Promise<number>;
   incluirExame(x: NovoExameOcupacional): Promise<number>;
   incluirVacina(v: NovaVacina): Promise<number>;
@@ -496,7 +507,8 @@ export interface PortaSesmt extends PortaGravacaoM18<GravadorSesmt> {
   sorologias(c: ContextoSesmt, acidentes: readonly number[]): Promise<SorologiaAcidente[]>;
   mapaRiscos(c: ContextoSesmt, f: FiltroRiscosPorta): Promise<LinhaRiscoFuncao[]>;
   registrosEpi(c: ContextoSesmt, vinculo: number): Promise<RegistroProtecao[]>;
-  registroEpi(c: ContextoSesmt, id: number): Promise<RegistroProtecao | null>;
+  /** O registro pelo id e pelo tipo (sem o tipo, a entrega de EPI). */
+  registroEpi(c: ContextoSesmt, id: number, tipo?: TipoProtecao): Promise<RegistroProtecao | null>;
   resumo(c: ContextoSesmt, ano: number): Promise<ResumoSesmt>;
   /** W0-06: o histórico de retificações (o valor anterior e o novo) dos registros de uma tabela do SESMT. */
   correcoes(c: ContextoSesmt, tabela: string, registros: readonly number[]): Promise<CorrecaoSesmt[]>;

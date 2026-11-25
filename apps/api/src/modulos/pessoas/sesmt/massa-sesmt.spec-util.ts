@@ -69,6 +69,14 @@ export async function limparSesmt(
     ests,
   );
   await e.executar(
+    `DELETE x FROM leitura_dosimetria x JOIN vinculo_trabalho v ON v.id = x.vinculo_trabalho_id WHERE v.estabelecimento_id IN (${em})`,
+    ests,
+  );
+  await e.executar(
+    `DELETE x FROM exposicao_quimioterapico x JOIN vinculo_trabalho v ON v.id = x.vinculo_trabalho_id WHERE v.estabelecimento_id IN (${em})`,
+    ests,
+  );
+  await e.executar(
     `DELETE x FROM epi_funcao x JOIN funcao f ON f.id = x.funcao_id WHERE f.estabelecimento_id IN (${em})`,
     ests,
   );

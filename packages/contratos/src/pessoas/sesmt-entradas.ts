@@ -408,5 +408,8 @@ export const esquemaAssinaturaEpi = z.object({ entrega: id, conferida: z.literal
 export type AssinaturaEpiEntrada = z.infer<typeof esquemaAssinaturaEpi>;
 
 /** W0-06: cancelamento da entrega de EPI (ou da leitura do dosímetro, ou da exposição) com motivo; nunca se apaga. */
-export const esquemaCancelarEpi = z.object({ entrega: id, motivo }).strict();
+// C1-119: o tipo vai junto do id (a entrega, a leitura e a exposição têm tabelas próprias); sem ele, a entrega de EPI.
+export const esquemaCancelarEpi = z
+  .object({ entrega: id, tipo: z.enum(['epi', 'dosimetria', 'quimio']).default('epi'), motivo })
+  .strict();
 export type CancelarEpiEntrada = z.infer<typeof esquemaCancelarEpi>;

@@ -525,6 +525,39 @@ describe('SESMT pela HTTP', () => {
       e = (await s.get(`${P}/epi/${vinculo}`)).json();
       expect(e.dose).toEqual({ ano: 2026, totalMsv: 20.5, parcelasMsv: [8.5, 12], situacao: 'acima-limite' });
       expect(e.pendencias.map((x: { codigo: string }) => x.codigo)).toEqual(['dose-acima-limite']);
+      // C1-119: o cancelamento leva o tipo junto do id; a leitura lançada por engano sai da dose do ano e fica na lista.
+      const errada = await s.post(`${P}/epi/${vinculo}`, {
+        tipo: 'dosimetria',
+        periodoInicio: '2026-07-01',
+        data: '2026-07-31',
+        doseMsv: 3,
+        dosimetro: 'DOS-SINT-2',
+      });
+      expect(errada.statusCode).toBe(200);
+      const idErrada = errada.json().id as number;
+      expect((await s.get(`${P}/epi/${vinculo}`)).json().dose.totalMsv).toBe(23.5);
+      expect(
+        (
+          await s.post(`${P}/epi/entregas/${idErrada}/cancelamento`, {
+            tipo: 'quimio',
+            motivo: 'Tipo trocado.',
+          })
+        ).statusCode,
+      ).toBe(404);
+      expect(
+        (
+          await s.post(`${P}/epi/entregas/${idErrada}/cancelamento`, {
+            tipo: 'dosimetria',
+            motivo: 'Leitura de outro dosímetro.',
+          })
+        ).statusCode,
+      ).toBe(200);
+      e = (await s.get(`${P}/epi/${vinculo}`)).json();
+      expect(e.dose).toMatchObject({ totalMsv: 20.5, parcelasMsv: [8.5, 12] });
+      expect(
+        e.registros.find((x: { id: number; tipo: string }) => x.id === idErrada && x.tipo === 'dosimetria'),
+      ).toMatchObject({ motivoCancelamento: 'Leitura de outro dosímetro.' });
+      expect(e.correcoes.some((x: { registro: number }) => x.registro === idErrada)).toBe(true);
       const mapa = (await s.get(`${P}/riscos?funcao=tecnico de enfermagem`)).json();
       expect(mapa.linhas).toHaveLength(2);
       expect(

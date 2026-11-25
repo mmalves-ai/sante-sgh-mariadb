@@ -7,6 +7,7 @@
 // quimioterápico; e os domínios do item embutidos (CRUD genérico).
 import {
   type ColaboradorSesmt,
+  type EpiDoColaborador,
   esquemaEncerrarLinhaRisco,
   esquemaLinhaRisco,
   esquemaRegistroEpi,
@@ -249,14 +250,17 @@ async function conferirAssinatura(id: number): Promise<void> {
   }
 }
 // W0-06: o registro lançado por engano se cancela com motivo (fica guardado; não conta na pendência nem na dose).
-const cancelando = ref<number | null>(null);
+// C1-119: o registro é endereçado pelo tipo junto do id (cada tipo tem numeração própria).
+type RegistroLista = EpiDoColaborador['registros'][number];
+const cancelando = ref<{ id: number; tipo: RegistroLista['tipo'] } | null>(null);
+const chaveRegistro = (r: RegistroLista) => (r.tipo === 'epi' ? String(r.id) : `${r.tipo}-${r.id}`);
 const dlgCancelar = computed({
   get: () => cancelando.value !== null,
   set: (v: boolean) => {
     if (!v) cancelando.value = null;
   },
 });
-const cancelar = (motivo: string) => cancelarEntregaEpi(cancelando.value!, motivo);
+const cancelar = (motivo: string) => cancelarEntregaEpi(cancelando.value!.id, motivo, cancelando.value!.tipo);
 const situacaoDose = (s: string) =>
   t(
     `sesmt.riscos.doseSituacao.${s === 'acima-limite' ? 'acimaLimite' : s === 'acima-teto' ? 'acimaTeto' : 'normal'}`,
@@ -522,13 +526,13 @@ const situacaoDose = (s: string) =>
               <tbody>
                 <tr
                   v-for="r in e.registros"
-                  :key="r.id"
+                  :key="chaveRegistro(r)"
                   :class="{ secundario: r.canceladoEm }"
-                  :data-testid="`registro-epi-${r.id}`"
+                  :data-testid="`registro-epi-${chaveRegistro(r)}`"
                 >
                   <td>
                     {{ dataBr(r.data) }}
-                    <div v-if="r.canceladoEm" :data-testid="`epi-cancelada-${r.id}`">
+                    <div v-if="r.canceladoEm" :data-testid="`epi-cancelada-${chaveRegistro(r)}`">
                       {{
                         t('sesmt.riscos.cancelada', {
                           d: dataBr(r.canceladoEm.slice(0, 10)),
@@ -574,8 +578,8 @@ const situacaoDose = (s: string) =>
                       v-if="a.acoes.epi && !r.canceladoEm"
                       :rotulo="t('sesmt.riscos.cancelar')"
                       variante="texto"
-                      :data-testid="`cancelar-epi-${r.id}`"
-                      @acionar="cancelando = r.id"
+                      :data-testid="`cancelar-epi-${chaveRegistro(r)}`"
+                      @acionar="cancelando = { id: r.id, tipo: r.tipo }"
                     />
                   </td>
                 </tr>
@@ -585,7 +589,7 @@ const situacaoDose = (s: string) =>
             <HistoricoSesmt :correcoes="e.correcoes ?? []" testid="epi-historico" />
             <DialogoMotivo
               v-model:visivel="dlgCancelar"
-              :titulo="t('sesmt.riscos.cancelarTitulo', { id: cancelando ?? '' })"
+              :titulo="t('sesmt.riscos.cancelarTitulo', { id: cancelando?.id ?? '' })"
               :texto="t('sesmt.riscos.cancelarTexto')"
               :confirmar="t('sesmt.riscos.cancelar')"
               :acao="cancelar"

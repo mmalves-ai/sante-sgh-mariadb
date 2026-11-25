@@ -476,7 +476,11 @@ describe('W0-06: cancelamento da entrega de EPI', () => {
       quantidade: 2,
       observacao: null,
     } as never);
-    const r = await m.sesmt.cancelarEpi(m.s, { entrega: id, motivo: 'Entrega lançada em dobro no posto' });
+    const r = await m.sesmt.cancelarEpi(m.s, {
+      entrega: id,
+      tipo: 'epi',
+      motivo: 'Entrega lançada em dobro no posto',
+    });
     expect(r.mensagem).toBe('Registro cancelado.');
     const epi = await m.sesmt.epiDoColaborador(m.s, m.v);
     const lido = epi.registros.find((x) => x.id === id)!;
@@ -487,9 +491,9 @@ describe('W0-06: cancelamento da entrega de EPI', () => {
       motivoCancelamento: 'Entrega lançada em dobro no posto',
       canceladoPor: 'SINT.SESMT',
     });
-    expect(await codigo(m.sesmt.cancelarEpi(m.s, { entrega: id, motivo: 'De novo por engano aqui' }))).toBe(
-      'ja-cancelada',
-    );
+    expect(
+      await codigo(m.sesmt.cancelarEpi(m.s, { entrega: id, tipo: 'epi', motivo: 'De novo por engano aqui' })),
+    ).toBe('ja-cancelada');
     expect(await codigo(m.sesmt.assinarEpi(m.s, { entrega: id, conferida: true }))).toBe('ja-cancelada');
     expect((await m.porta.correcoes(CTX, 'entrega_epi', [id]))[0]).toMatchObject({
       operacao: 'epi.cancelado',

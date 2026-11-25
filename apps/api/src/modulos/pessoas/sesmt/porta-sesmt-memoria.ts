@@ -17,6 +17,7 @@ import {
   type PortaSesmt,
   type RegistroOcupacional,
   type RegistroProtecao,
+  type TipoProtecao,
   type ResumoSesmt,
   type SorologiaAcidente,
   type VinculoAtivoSesmt,
@@ -173,7 +174,7 @@ export class PortaSesmtMemoria implements PortaSesmt {
       vacinas: async (v) => s.vacinas.filter((x) => x.vinculo === v),
       acidente: async (i) => s.acidentes.find((a) => a.id === i) ?? null,
       sorologias: async (a) => s.sorologias.filter((x) => x.acidente === a),
-      registroEpi: async (i) => s.epis.find((x) => x.id === i) ?? null,
+      registroEpi: async (i, tipo = 'epi') => s.epis.find((x) => x.id === i && x.tipo === tipo) ?? null,
       incluirAso: async (a) => {
         const n = id();
         s.ocupacional.push({
@@ -429,7 +430,7 @@ export class PortaSesmtMemoria implements PortaSesmt {
         });
       },
       cancelarEntregaEpi: async (x) => {
-        const r = s.epis.find((y) => y.id === x.id && y.canceladoEm === null);
+        const r = s.epis.find((y) => y.id === x.id && y.tipo === x.tipo && y.canceladoEm === null);
         if (!r) throw desatualizado();
         Object.assign(r, { canceladoEm: agora.agora, canceladoPor: x.por, motivoCancelamento: x.motivo });
       },
@@ -511,8 +512,8 @@ export class PortaSesmtMemoria implements PortaSesmt {
   async registrosEpi(c: ContextoSesmt, v: number) {
     return this.e(c).epis.filter((x) => x.vinculo === v);
   }
-  async registroEpi(c: ContextoSesmt, id: number) {
-    return this.e(c).epis.find((x) => x.id === id) ?? null;
+  async registroEpi(c: ContextoSesmt, id: number, tipo: TipoProtecao = 'epi') {
+    return this.e(c).epis.find((x) => x.id === id && x.tipo === tipo) ?? null;
   }
   async resumo(c: ContextoSesmt, ano: number): Promise<ResumoSesmt> {
     const vinculos: VinculoAtivoSesmt[] = [];
