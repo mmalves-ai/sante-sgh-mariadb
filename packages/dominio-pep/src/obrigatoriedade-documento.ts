@@ -52,6 +52,8 @@ export interface RegraObrigatoriedadeEntrada {
   readonly intervaloDias: number | null;
   readonly vigenciaInicio: string;
   readonly vigenciaFim: string | null;
+  /** Regra de todos os estabelecimentos do cliente (sem estabelecimento): não aceita setor, que é de um só. */
+  readonly todosEstabelecimentos?: boolean;
 }
 
 /** A regra como o avaliador precisa: a entrada gravada, o id e o título do documento exigido. */
@@ -140,6 +142,12 @@ export function validarRegraObrigatoriedade(e: RegraObrigatoriedadeEntrada): Fal
     f.push({ codigo: 'vigencia-invalida', mensagem: 'Informe o início da vigência (AAAA-MM-DD).' });
   if (e.vigenciaFim !== null && (!DATA.test(e.vigenciaFim) || e.vigenciaFim < e.vigenciaInicio))
     f.push({ codigo: 'vigencia-invertida', mensagem: 'O fim da vigência é anterior ao início.' });
+  if (e.todosEstabelecimentos && e.setor !== null)
+    f.push({
+      codigo: 'setor-em-regra-global',
+      mensagem:
+        'A regra de todos os estabelecimentos não pode ter setor: o setor é de um estabelecimento só.',
+    });
   if (e.cids.length > TETO_CIDS_REGRA)
     f.push({ codigo: 'cids-demais', mensagem: `No máximo ${TETO_CIDS_REGRA} diagnósticos por regra.` });
   const vistos = new Set<string>();
@@ -244,7 +252,9 @@ export function pendenciasObrigatorias(
     if (regra.momento === 'periodico' && regra.intervaloDias) {
       const passo = regra.intervaloDias * DIA;
       const inicio = new Date(desde).getTime();
-      const ciclos = Math.max(0, Math.floor((t - inicio) / passo));
+      // Depois da saída não há ciclo novo: o último ciclo é o que estava correndo quando o atendimento fechou.
+      const fim = a.saida ? Math.min(t, new Date(a.saida).getTime()) : t;
+      const ciclos = Math.max(0, Math.floor((fim - inicio) / passo));
       desde = new Date(inicio + ciclos * passo).toISOString();
     }
     const base = regra.momento === 'periodico' ? new Date(desde).getTime() : new Date(a.entrada).getTime();

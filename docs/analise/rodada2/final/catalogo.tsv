@@ -2018,7 +2018,7 @@ regra_classificacao_risco	PEP	configuracao	F3	Regra condicional da versão do pr
 regra_duplicidade_terapeutica	PEP	configuracao	F3	Regra de duplicidade: mesmo princípio, mesma classe ou mesma via ao mesmo tempo	SPDATA: PRVALIDARMEDDUPLICPRESC (2)	03	1
 regra_grupo_estadio	PEP	configuracao	F8	Tabela que deriva o grupo de estádio a partir de T, N e M por topografia	MV: GRUPAMENTO_ESTADIO	03	5
 regra_obrigatoriedade_cid	PEP	vinculo	F7	Diagnósticos que tornam um documento obrigatório	MV: PW_CONFIG_DOCUMENTO_OBGT_CID	03	2
-regra_obrigatoriedade_documento	PEP	configuracao	F7	Documento exigido por setor, tipo de atendimento, faixa etária ou momento (admissão, alta), com prazo	MV: DOCUMENTO_OBRIGATORIO*; depende: pendencia_prontuario (04)	03	6
+regra_obrigatoriedade_documento	PEP	configuracao	F7	Documento exigido por setor, tipo de atendimento, faixa etária ou momento (admissão, alta), com prazo	MV: DOCUMENTO_OBRIGATORIO*; depende: pendencia_prontuario (04); estabelecimento de origem da regra de todos os estabelecimentos, que só ele altera, e sem setor (estabelecimento_origem_id; C2-028; migração 06_PEP/99_obrigatoriedade_origem)	03	6
 regra_pendencia_prescricao	PEP	configuracao	F7	Quando item prescrito sem registro gera pendência no prontuário, por setor, esquema e tipo de item, com tolerância	rodada2:nova	03	3
 regra_prescricao_transferencia	PEP	configuracao	F3	O que acontece com a prescrição ativa quando o paciente muda de setor: mantém, suspende ou exige nova, por origem e destino	rodada2:nova	03	1
 regra_reducao_quantidade_prescricao	PEP	configuracao	F7	Esquemas e itens cuja quantidade é recalculada quando se aplica um percentual de redução à prescrição	rodada2:nova	03	2

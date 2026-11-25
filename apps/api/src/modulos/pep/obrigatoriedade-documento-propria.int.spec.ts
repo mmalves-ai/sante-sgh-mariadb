@@ -8,7 +8,9 @@
 // diagnóstico nos dois pacientes e a do setor e idade só no paciente de 70 anos, vencida e bloqueante primeiro; o
 // registro clínico do modelo exigido tira a pendência; a alteração pela versão (conflito 409), o CID retirado marcado
 // (não apagado) e recolocado pela mesma linha; a regra desativada fica no banco e sai da lista; a sessão de outro
-// estabelecimento recebe 404 sem escrita.
+// estabelecimento recebe 404 sem escrita; o atendimento encerrado há poucos dias sem o documento do fechamento continua
+// na lista (o encerrado há mais de 30 dias e o cancelado não); a regra de todos os estabelecimentos guarda a origem,
+// recusa setor sem escrita e só é alterada ou desativada pelo estabelecimento que a criou (403 no outro, sem escrita).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -26,15 +28,13 @@ const AGORA = new Date('2030-03-10T12:00:00.000Z');
 
 async function limpar(e: Escritor): Promise<void> {
   const ests = 'SELECT id FROM estabelecimento WHERE codigo IN (?, ?)';
-  const regras = `SELECT id FROM regra_obrigatoriedade_documento WHERE estabelecimento_id IN (${ests})`;
+  const daMassa = `estabelecimento_id IN (${ests}) OR estabelecimento_origem_id IN (${ests})`;
+  const regras = `SELECT id FROM regra_obrigatoriedade_documento WHERE ${daMassa}`;
   await e.executar(
     `DELETE FROM regra_obrigatoriedade_cid WHERE regra_obrigatoriedade_documento_id IN (${regras})`,
-    [P, P2],
+    [P, P2, P, P2],
   );
-  await e.executar(`DELETE FROM regra_obrigatoriedade_documento WHERE estabelecimento_id IN (${ests})`, [
-    P,
-    P2,
-  ]);
+  await e.executar(`DELETE FROM regra_obrigatoriedade_documento WHERE ${daMassa}`, [P, P2, P, P2]);
   await e.executar(`DELETE FROM registro_assistencial WHERE estabelecimento_id IN (${ests})`, [P, P2]);
   const mods = 'SELECT id FROM modelo_documento_clinico WHERE codigo LIKE ?';
   await e.executar(
@@ -75,6 +75,10 @@ describe.skipIf(SEM_BANCO)(
       atA: number;
       atB: number;
       pacienteA: number;
+      pacienteB: number;
+      categoriaAt: number;
+      caraterTiss: number;
+      fonte: number;
       profissional: number;
     };
     const ctx = (hospital = P) => ({ cliente: CLIENTE, hospital, usuario: m.usuario, correlacao: P });
@@ -231,6 +235,10 @@ describe.skipIf(SEM_BANCO)(
           atA,
           atB,
           pacienteA,
+          pacienteB,
+          categoriaAt: categoria,
+          caraterTiss,
+          fonte,
           profissional,
         };
       });
@@ -391,6 +399,109 @@ describe.skipIf(SEM_BANCO)(
         ativo: false,
         setorNome: 'SETOR SINTETICO',
       });
+    });
+
+    it('o atendimento encerrado sem o documento do fechamento continua na lista do profissional', async () => {
+      const encerrado = (n: string, situacao: string, alta: string, saida: string) =>
+        nucleo.escrever({ cliente: CLIENTE, correlacao: `enc-${P}` }, (e) =>
+          inserirMinimo(
+            e,
+            'atendimento',
+            {
+              estabelecimento_id: m.est,
+              numero: `${P}-${n}`,
+              paciente_id: m.pacienteB,
+              categoria_atendimento_id: m.categoriaAt,
+              carater_atendimento_tiss_id: m.caraterTiss,
+              fonte_pagadora_id: m.fonte,
+              profissional_id: m.profissional,
+              situacao,
+              desfecho: 'alta',
+              entrada_em: new Date(new Date(alta).getTime() - 86_400_000),
+              alta_medica_em: new Date(alta),
+              saida_em: new Date(saida),
+            },
+            P,
+          ),
+        );
+      const atC = await encerrado('C', 'encerrado', '2030-03-09T08:00:00.000Z', '2030-03-09T09:00:00.000Z');
+      const atD = await encerrado('D', 'encerrado', '2029-12-01T08:00:00.000Z', '2029-12-01T09:00:00.000Z');
+      const atE = await encerrado('E', 'cancelado', '2030-03-09T08:00:00.000Z', '2030-03-09T09:00:00.000Z');
+      const r = await porta.incluir(ctx(), {
+        modelo: m.modelo2,
+        momento: 'fechamento_atendimento',
+        exigencia: 'alertar',
+        prazoMinutos: 120,
+        vigenciaInicio: '2030-01-01',
+      });
+      const lista = await porta.pendencias(ctx(), {});
+      const c = lista.itens.find((x) => x.atendimento === atC);
+      expect(c?.pendencias).toEqual([
+        expect.objectContaining({
+          regra: Number(r['id']),
+          momento: 'fechamento_atendimento',
+          exigidoDesde: '2030-03-09T09:00:00.000Z',
+          vencida: true,
+        }),
+      ]);
+      // Os abertos ainda não fecharam: a regra do fechamento não pesa neles.
+      const doFechamento = lista.itens.filter((x) => x.pendencias.some((p) => p.regra === Number(r['id'])));
+      expect(doFechamento.map((x) => x.atendimento)).toEqual([atC]);
+      expect(lista.itens.some((x) => x.atendimento === atD || x.atendimento === atE)).toBe(false);
+      await porta.ativar(ctx(), Number(r['id']), { versao: 1, ativo: false });
+    });
+
+    it('a regra de todos os estabelecimentos guarda a origem e só ela a altera ou desativa', async () => {
+      const base = {
+        modelo: m.modelo1,
+        momento: 'alta',
+        exigencia: 'alertar',
+        vigenciaInicio: '2030-01-01',
+        todosEstabelecimentos: true,
+      };
+      const antes = await contar(
+        'SELECT COUNT(*) AS n FROM regra_obrigatoriedade_documento WHERE estabelecimento_origem_id = ?',
+        [m.est],
+      );
+      await expect(porta.incluir(ctx(), { ...base, setor: m.setor })).rejects.toMatchObject({
+        problema: { status: 422 },
+      });
+      expect(
+        await contar(
+          'SELECT COUNT(*) AS n FROM regra_obrigatoriedade_documento WHERE estabelecimento_origem_id = ?',
+          [m.est],
+        ),
+      ).toBe(antes);
+      const g = Number((await porta.incluir(ctx(), base))['id']);
+      const linha = async () =>
+        (
+          await ler(
+            'SELECT estabelecimento_id, estabelecimento_origem_id, ativo, versao FROM regra_obrigatoriedade_documento WHERE id = ?',
+            [g],
+          )
+        )[0];
+      expect(await linha()).toMatchObject({
+        estabelecimento_id: null,
+        estabelecimento_origem_id: m.est,
+        versao: 1,
+      });
+      const noOutro = await porta.regras(ctx(P2));
+      expect(noOutro.regras.find((x) => x.id === g)).toMatchObject({
+        todosEstabelecimentos: true,
+        editavel: false,
+      });
+      expect((await porta.regras(ctx())).regras.find((x) => x.id === g)?.editavel).toBe(true);
+      await expect(
+        porta.alterar(ctx(P2), g, { ...base, versao: 1, todosEstabelecimentos: false }),
+      ).rejects.toMatchObject({ problema: { status: 403 } });
+      await expect(porta.ativar(ctx(P2), g, { versao: 1, ativo: false })).rejects.toMatchObject({
+        problema: { status: 403 },
+      });
+      expect(await linha()).toMatchObject({ estabelecimento_id: null, versao: 1 });
+      expect(Number((await linha())?.['ativo'])).toBe(1);
+      await porta.ativar(ctx(), g, { versao: 1, ativo: false });
+      expect(await linha()).toMatchObject({ estabelecimento_id: null, versao: 2 });
+      expect(Number((await linha())?.['ativo'])).toBe(0);
     });
   },
 );

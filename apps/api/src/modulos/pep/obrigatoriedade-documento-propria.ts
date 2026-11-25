@@ -9,7 +9,9 @@
 //   - alterar: pela versão lida (conflito: 409), regrava os campos; o diagnóstico retirado recebe a marca de exclusão
 //     (nunca apagado) e o recolocado volta pela mesma linha;
 //   - ativar e desativar pela versão (nada apagado);
-//   - pendências: para os atendimentos abertos do estabelecimento (ou um atendimento, na visão por paciente), lê o
+//   - a regra de todos os estabelecimentos guarda o estabelecimento de origem, só ele a altera ou desativa (403 nos
+//     outros, sem escrita), e não aceita setor (regra do domínio);
+//   - pendências: para os atendimentos abertos do estabelecimento e os encerrados nos últimos 30 dias (ou um atendimento, na visão por paciente), lê o
 //     tipo pela categoria, o setor, o sexo, a data de nascimento, os diagnósticos ativos (CID-10), a entrada, a alta,
 //     a saída, a primeira prescrição e os registros clínicos não suspensos por modelo, e aplica a regra do domínio: a
 //     lista do profissional com o documento que falta, o prazo, se venceu e se bloqueia o passo seguinte.
@@ -29,7 +31,7 @@ import {
   tipoAtendimentoDaCategoria,
   validarRegraObrigatoriedade,
 } from '@sgh/dominio-pep';
-import type { Leitor, TxOperacao } from '@sgh/nucleo';
+import { ErroOperacao, type Leitor, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
 import {
   bool,
@@ -49,6 +51,11 @@ const REGRA = 'regra_obrigatoriedade_documento';
 const CID = 'regra_obrigatoriedade_cid';
 /** Teto de atendimentos abertos avaliados de uma vez na lista do profissional. */
 export const TETO_ATENDIMENTOS_PENDENCIAS = 300;
+/**
+ * Dias em que o atendimento encerrado continua na lista do profissional: o documento da alta e o do fechamento só são
+ * exigidos a partir da alta médica e da saída, e a falta não some quando o atendimento fecha.
+ */
+export const DIAS_ENCERRADO_NA_LISTA = 30;
 
 type Linha = Record<string, unknown>;
 
@@ -87,6 +94,8 @@ const esquemaFiltro = z
 export interface RegraObrigatoriedadeLida extends RegraObrigatoriedade {
   readonly versao: number;
   readonly todosEstabelecimentos: boolean;
+  /** A sessão pode alterar e desativar: regra do estabelecimento ou regra de todos criada por ele. */
+  readonly editavel: boolean;
   readonly setorNome: string | null;
 }
 
@@ -111,21 +120,22 @@ const dataIso = (v: unknown): string | null => {
 };
 
 const SQL_REGRAS = `
-  SELECT r.id, r.versao, r.ativo, r.estabelecimento_id, r.modelo_documento_clinico_id, m.titulo,
+  SELECT r.id, r.versao, r.ativo, r.estabelecimento_id, r.estabelecimento_origem_id, r.modelo_documento_clinico_id, m.titulo,
          r.setor_funcional_id, sf.nome AS setor_nome, r.sexo_id, r.tipo_atendimento, r.idade_minima_dias,
          r.idade_maxima_dias, r.momento, r.exigencia, r.prazo_minutos, r.intervalo_dias, r.vigencia_inicio,
          r.vigencia_fim
     FROM regra_obrigatoriedade_documento r
     JOIN modelo_documento_clinico m ON m.id = r.modelo_documento_clinico_id
-    LEFT JOIN setor_funcional sf ON sf.id = r.setor_funcional_id
+    LEFT JOIN setor_funcional sf ON sf.id = r.setor_funcional_id AND sf.estabelecimento_id = ?
    WHERE (r.estabelecimento_id = ? OR r.estabelecimento_id IS NULL)`;
 
-function regraLida(r: Linha, cids: readonly string[]): RegraObrigatoriedadeLida {
+function regraLida(r: Linha, cids: readonly string[], est: number): RegraObrigatoriedadeLida {
   return {
     id: num(r['id']),
     versao: num(r['versao']),
     ativo: bool(r['ativo']),
     todosEstabelecimentos: r['estabelecimento_id'] === null || r['estabelecimento_id'] === undefined,
+    editavel: numOuNull(r['estabelecimento_id'] ?? r['estabelecimento_origem_id']) === est,
     modelo: num(r['modelo_documento_clinico_id']),
     titulo: String(r['titulo'] ?? ''),
     setor: numOuNull(r['setor_funcional_id']),
@@ -148,6 +158,7 @@ function regraLida(r: Linha, cids: readonly string[]): RegraObrigatoriedadeLida 
 async function lerRegras(l: Leitor, est: number, filtro = ''): Promise<RegraObrigatoriedadeLida[]> {
   const linhas = await l.consultar<Linha>(`${SQL_REGRAS}${filtro} ORDER BY r.ativo DESC, m.titulo, r.id`, [
     est,
+    est,
   ]);
   if (!linhas.length) return [];
   const ids = linhas.map((r) => num(r['id']));
@@ -162,11 +173,12 @@ async function lerRegras(l: Leitor, est: number, filtro = ''): Promise<RegraObri
     const k = num(c['regra']);
     porRegra.set(k, [...(porRegra.get(k) ?? []), String(c['codigo_cid10'])]);
   }
-  return linhas.map((r) => regraLida(r, porRegra.get(num(r['id'])) ?? []));
+  return linhas.map((r) => regraLida(r, porRegra.get(num(r['id'])) ?? [], est));
 }
 
 function paraDominio(e: z.infer<typeof esquemaRegra>): RegraObrigatoriedadeEntrada {
   return {
+    todosEstabelecimentos: e.todosEstabelecimentos,
     modelo: e.modelo,
     setor: e.setor,
     sexo: e.sexo,
@@ -209,10 +221,12 @@ async function lerPendencias(
   filtro: { readonly atendimento?: number },
   agora: Date,
 ): Promise<AtendimentoComPendencias[]> {
-  const params: unknown[] = filtro.atendimento ? [est, filtro.atendimento] : [est];
+  // Na lista: os abertos e os encerrados há até DIAS_ENCERRADO_NA_LISTA dias (a alta e o fechamento vencem depois).
+  const desde = new Date(agora.getTime() - DIAS_ENCERRADO_NA_LISTA * 86_400_000);
+  const params: unknown[] = filtro.atendimento ? [est, filtro.atendimento] : [est, desde];
   const where = filtro.atendimento
     ? ' AND a.id = ?'
-    : " AND a.situacao IN ('aberto','em_atendimento','em_observacao')";
+    : " AND (a.situacao IN ('aberto','em_atendimento','em_observacao') OR (a.situacao = 'encerrado' AND a.saida_em >= ?))";
   const linhas = await l.consultar<Linha>(
     `${SQL_ATENDIMENTOS}${where} ORDER BY a.entrada_em DESC, a.id DESC LIMIT ${TETO_ATENDIMENTOS_PENDENCIAS}`,
     params,
@@ -336,6 +350,25 @@ export class PortaObrigatoriedadeDocumentoPropria extends PortaEstabelecimentoPr
     return [...new Set(e.cids.map(normalizarCid))];
   }
 
+  /**
+   * A regra que a sessão pode alterar ou desativar: a do estabelecimento, ou a de todos os estabelecimentos criada por
+   * ele. A de todos criada em outro estabelecimento é recusada sem escrita (403); a de outro estabelecimento, 404.
+   */
+  private async regraEditavel(tx: TxOperacao, est: number, regra: number): Promise<void> {
+    const atual = await tx.uma(
+      'SELECT id, estabelecimento_id, estabelecimento_origem_id FROM regra_obrigatoriedade_documento WHERE id = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)',
+      [regra, est],
+    );
+    if (!atual) throw naoEncontrado('Regra de documento exigido');
+    if (atual['estabelecimento_id'] === null && numOuNull(atual['estabelecimento_origem_id']) !== est)
+      throw new ErroOperacao(
+        403,
+        'regra-de-outro-estabelecimento',
+        'Regra de todos os estabelecimentos',
+        'A regra que vale para todos os estabelecimentos só é alterada ou desativada pelo estabelecimento que a criou.',
+      );
+  }
+
   private colunas(e: z.infer<typeof esquemaRegra>) {
     return {
       modelo_documento_clinico_id: e.modelo,
@@ -360,6 +393,7 @@ export class PortaObrigatoriedadeDocumentoPropria extends PortaEstabelecimentoPr
       const cids = await this.conferir(tx, est.id, e);
       const regra = await tx.incluir(REGRA, {
         estabelecimento_id: e.todosEstabelecimentos ? null : est.id,
+        estabelecimento_origem_id: est.id,
         ...this.colunas(e),
         ativo: true,
       });
@@ -373,11 +407,7 @@ export class PortaObrigatoriedadeDocumentoPropria extends PortaEstabelecimentoPr
   async alterar(c: ContextoPortaPropria, regra: number, entrada: unknown) {
     const e = entradaValida(esquemaAlterar, entrada);
     return this.gravar(c, 'pep.obrigatoriedade.regra-alterar', [REGRA, CID], async (tx, est, usuario) => {
-      const atual = await tx.uma(
-        'SELECT id, estabelecimento_id FROM regra_obrigatoriedade_documento WHERE id = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)',
-        [regra, est.id],
-      );
-      if (!atual) throw naoEncontrado('Regra de documento exigido');
+      await this.regraEditavel(tx, est.id, regra);
       const cids = await this.conferir(tx, est.id, e);
       await tx.alterar(REGRA, regra, e.versao, {
         ...this.colunas(e),
@@ -413,11 +443,7 @@ export class PortaObrigatoriedadeDocumentoPropria extends PortaEstabelecimentoPr
   async ativar(c: ContextoPortaPropria, regra: number, entrada: unknown) {
     const e = entradaValida(esquemaAtivo, entrada);
     return this.gravar(c, 'pep.obrigatoriedade.regra-ativo', [REGRA], async (tx, est) => {
-      const atual = await tx.uma(
-        'SELECT id FROM regra_obrigatoriedade_documento WHERE id = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)',
-        [regra, est.id],
-      );
-      if (!atual) throw naoEncontrado('Regra de documento exigido');
+      await this.regraEditavel(tx, est.id, regra);
       await tx.alterar(REGRA, regra, e.versao, { ativo: e.ativo });
       return { tabela: REGRA, id: regra, ativo: e.ativo };
     });

@@ -56,6 +56,8 @@ const regra = z.object({
   titulo: z.string(),
   setor: z.number().nullable(),
   setorNome: z.string().nullable(),
+  /** Regra de todos os estabelecimentos criada em outro estabelecimento: só leitura nesta sessão. */
+  editavel: z.boolean(),
   sexo: z.number().nullable(),
   tipoAtendimento: z.enum(TIPOS_ATENDIMENTO_OBRIGATORIEDADE),
   idadeMinimaDias: z.number().nullable(),

@@ -137,6 +137,27 @@ describe('obrigatoriedade de documentos (03-PEP L132)', () => {
     ).toEqual([]);
   });
 
+  it('regra de todos os estabelecimentos não aceita setor; atendimento encerrado não abre ciclo periódico novo', () => {
+    const global = {
+      ...regra({ setor: 5 }),
+      todosEstabelecimentos: true,
+    };
+    expect(validarRegraObrigatoriedade(global).map((f) => f.codigo)).toEqual(['setor-em-regra-global']);
+    expect(validarRegraObrigatoriedade({ ...global, setor: null })).toEqual([]);
+    expect(validarRegraObrigatoriedade({ ...global, todosEstabelecimentos: false })).toEqual([]);
+    // Saída em 23/11 15h: o ciclo que vale é o de 23/11 10h, não o de 24/11 (o atendimento já fechou).
+    const periodica = regra({ momento: 'periodico', intervaloDias: 1, prazoMinutos: 60 });
+    const encerrado = atendimento({ entrada: '2026-11-22T10:00:00.000Z', saida: '2026-11-23T15:00:00.000Z' });
+    const [c] = pendenciasObrigatorias([periodica], encerrado, [], agora);
+    expect(c).toMatchObject({ exigidoDesde: '2026-11-23T10:00:00.000Z', vencida: true });
+    expect(
+      pendenciasObrigatorias([periodica], encerrado, [{ modelo: 10, em: '2026-11-23T11:00:00.000Z' }], agora),
+    ).toEqual([]);
+    // O documento do fechamento continua exigido depois da saída.
+    const [f] = pendenciasObrigatorias([regra({ momento: 'fechamento_atendimento' })], encerrado, [], agora);
+    expect(f).toMatchObject({ exigidoDesde: '2026-11-23T15:00:00.000Z', vencida: true });
+  });
+
   it('ordena vencidas e bloqueantes primeiro e não repete o mesmo documento no mesmo momento', () => {
     const l = pendenciasObrigatorias(
       [

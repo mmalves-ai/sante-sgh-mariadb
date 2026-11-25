@@ -63,7 +63,31 @@ function simular(page: Page) {
       ],
     },
   ];
-  const regras: Record<string, unknown>[] = [];
+  // A regra de todos os estabelecimentos criada em outro estabelecimento: aparece só para leitura.
+  const regras: Record<string, unknown>[] = [
+    {
+      id: 39,
+      versao: 1,
+      ativo: true,
+      titulo: 'PROTOCOLO FICTICIO DE DOR TORACICA',
+      modelo: 101,
+      setor: null,
+      setorNome: null,
+      editavel: false,
+      todosEstabelecimentos: true,
+      sexo: null,
+      tipoAtendimento: 'todos',
+      idadeMinimaDias: null,
+      idadeMaximaDias: null,
+      cids: [],
+      momento: 'alta',
+      exigencia: 'alertar',
+      prazoMinutos: null,
+      intervaloDias: null,
+      vigenciaInicio: '2026-01-01',
+      vigenciaFim: null,
+    },
+  ];
   const opcoes = {
     modelos: [{ id: 101, rotulo: 'PROTOCOLO FICTICIO DE DOR TORACICA' }],
     setores: [{ id: 3, rotulo: 'UTI FICTICIA' }],
@@ -99,13 +123,14 @@ function simular(page: Page) {
         if (rota.request().method() === 'GET') return json(rota, { regras, opcoes });
         const c = rota.request().postDataJSON() as Record<string, unknown>;
         corpos.push(c);
-        const id = 40 + regras.length;
+        const id = 39 + regras.length;
         regras.push({
           id,
           versao: 1,
           ativo: true,
           titulo: opcoes.modelos.find((m) => m.id === c['modelo'])!.rotulo,
           setorNome: c['setor'] ? 'UTI FICTICIA' : null,
+          editavel: true,
           ...c,
           cids: (c['cids'] as string[]).map((x) => x.replace('.', '').toUpperCase()),
         });
@@ -162,8 +187,21 @@ test.describe('@C2-028 documentos exigidos por diagnóstico, idade ou setor', ()
     await expect(page.getByTestId('docexig-atendimento-11')).toBeVisible();
     await semViolacaoAxe(page, '/pep/documentos-exigidos');
 
-    // Regras: a faixa etária invertida é recusada na hora e o gravar fica desabilitado.
+    // Regras: a regra de todos os estabelecimentos criada em outro fica só para leitura.
     await page.getByTestId('docexig-aba-regras').click();
+    await expect(page.getByTestId('docexig-regra-39')).toContainText('Vale para todos os estabelecimentos');
+    await expect(page.getByTestId('docexig-regra-editar-39')).toHaveCount(0);
+    await expect(page.getByTestId('docexig-regra-alternar-39')).toHaveCount(0);
+
+    // A regra de todos os estabelecimentos não aceita setor: recusada na hora.
+    await escolher(page.getByTestId('docexig-modelo'), '101');
+    await escolher(page.getByTestId('docexig-regra-setor'), '3');
+    await page.getByTestId('docexig-todos-est').check();
+    await expect(page.getByTestId('docexig-problema').first()).toContainText('não pode ter setor');
+    await expect(page.getByTestId('docexig-gravar')).toBeDisabled();
+    await page.getByTestId('docexig-todos-est').uncheck();
+
+    // A faixa etária invertida é recusada na hora e o gravar fica desabilitado.
     await escolher(page.getByTestId('docexig-modelo'), '101');
     await escolher(page.getByTestId('docexig-exigencia'), 'bloquear');
     await page.getByTestId('docexig-idade-min').locator('input').fill('65');
