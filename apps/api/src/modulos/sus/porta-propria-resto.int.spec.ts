@@ -57,6 +57,9 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
     paciente: 0,
     laudo: 0,
     laudoSolicitado: 0,
+    aut: 0,
+    autSolicitada: 0,
+    sig: 0,
     cbo: '',
     ciha: 0,
     bpa: 0,
@@ -153,6 +156,10 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
       await e.executar('DELETE FROM producao_ambulatorial_sus WHERE estabelecimento_id = ?', [est]);
       await e.executar(
         'DELETE p FROM apac_procedimento p JOIN apac a ON a.id = p.apac_id WHERE a.estabelecimento_id = ?',
+        [est],
+      );
+      await e.executar(
+        'DELETE s FROM apac_sessao s JOIN apac a ON a.id = s.apac_id WHERE a.estabelecimento_id = ?',
         [est],
       );
       await e.executar('DELETE FROM apac WHERE estabelecimento_id = ?', [est]);
@@ -363,6 +370,8 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
       ids.laudo = await laudo(`${P}-L1`);
       // A autorização do gestor: autorizada, validade de 10/03 a 09/06 (competências 202603 a 202606).
       const aut = await autorizacao(ids.laudo, NUM_APAC);
+      ids.aut = aut;
+      ids.sig = Number(sigId);
       await e.executar(
         `UPDATE autorizacao_apac SET situacao = 'autorizada', data_autorizacao = '2026-03-12', validade_inicio = '2026-03-10',
            validade_fim = '2026-06-09', ultima_competencia = '202606' WHERE id = ?`,
@@ -371,6 +380,7 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
       // Um laudo com a autorização só solicitada (tem número, mas o gestor não autorizou).
       ids.laudoSolicitado = await laudo(`${P}-L2`);
       const sol = await autorizacao(ids.laudoSolicitado, NUM_APAC_SOLICITADA);
+      ids.autSolicitada = sol;
       await e.executar(
         `UPDATE autorizacao_apac SET situacao = 'solicitada', data_autorizacao = NULL, validade_inicio = NULL,
            validade_fim = NULL, ultima_competencia = NULL WHERE id = ?`,
@@ -561,7 +571,7 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
   });
 
   /** A APAC gravada na operação: a remessa e as linhas do laudo na competência dada. */
-  const gravarApac = (laudo: number, competencia: string, conta: number) =>
+  const gravarApac = (laudo: number, competencia: string, conta: number, quantidade = 1) =>
     gravar(async (tx) => {
       const id = await proximoNumeroArquivo(tx);
       const { remessa } = await gravarRemessa(tx, ids.est, novo(id, ids.apac, 'apac', 1), 'apac', {
@@ -578,7 +588,7 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
             procedimento: SIG,
             principal: true,
             cbo: ids.cbo,
-            quantidade: 1,
+            quantidade,
             conta,
           },
         ],
@@ -647,6 +657,68 @@ describe.skipIf(SEM_BANCO)('linhas guardadas dos arquivos do SUS na porta própr
       });
       expect([Number(x?.['principais']), Number(x?.['qtd'])]).toEqual([1, 5]);
     }
+  });
+
+  it('APAC: as sessões conferem a quantidade, passam à APAC apresentada e a aberta com sessões fora da remessa recusa', async () => {
+    // A APAC aberta pelas sessões (como em apac-complementos-propria.ts): duas com comparecimento e uma falta.
+    const abrir = (aut: number, numero: string) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-sessao` }, async (e) => {
+        const agora = new Date();
+        const apac = await e.inserir(
+          `INSERT INTO apac (estabelecimento_id, autorizacao_apac_id, competencia_sus_id, numero_apac, tipo_apac,
+             data_inicio, data_fim, principal_procedimento_sigtap_id, codigo_cid10_principal, situacao, criado_em)
+           VALUES (?, ?, ?, ?, 'inicial', '2026-03-10', '2026-03-31', ?, 'N180', 'aberta', ?)`,
+          [ids.est, aut, ids.apac, numero, ids.sig, agora],
+        );
+        const sessoes: [number, string, string][] = [
+          [1, '2026-03-11', 'compareceu'],
+          [2, '2026-03-13', 'compareceu'],
+          [3, '2026-03-16', 'faltou'],
+        ];
+        for (const [k, d, c] of sessoes)
+          await e.inserir(
+            `INSERT INTO apac_sessao (apac_id, sequencia, data_sessao, procedimento_sigtap_id, quantidade, comparecimento,
+               criado_em) VALUES (?, ?, ?, ?, 1, ?, ?)`,
+            [apac, k, d, ids.sig, c, agora],
+          );
+        return apac;
+      });
+    const aberta = await abrir(ids.aut, NUM_APAC);
+    const antes = await contagens();
+    // A remessa com 1 do procedimento que tem 2 sessões com comparecimento recusa, sem gravar.
+    await expect(gravarApac(ids.laudo, COMP, ids.conta, 1)).rejects.toMatchObject({
+      problema: { codigo: 'apac-sessoes-divergentes' },
+    });
+    // Outra APAC aberta com sessões na competência, fora da remessa: recusa, sem gravar.
+    const outra = await abrir(ids.autSolicitada, NUM_APAC_SOLICITADA);
+    await expect(gravarApac(ids.laudo, COMP, ids.conta, 2)).rejects.toMatchObject({
+      problema: { codigo: 'apac-sessoes-fora-da-remessa' },
+    });
+    expect((await contagens()).map((x, i) => (i === 5 ? x - 1 : x))).toEqual(antes);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-sessao` }, (e) =>
+      e.executar("UPDATE apac SET situacao = 'cancelada' WHERE id = ?", [outra]),
+    );
+    // Com a quantidade das sessões: a aberta vai na remessa; refeita, as sessões passam à APAC nova.
+    expect(await gravarApac(ids.laudo, COMP, ids.conta, 2)).toBe(1);
+    const sessoesDa = (apac: number) =>
+      n('SELECT COUNT(*) AS n FROM apac_sessao WHERE apac_id = ? AND excluido_em IS NULL', [apac]);
+    expect(
+      await uma('SELECT situacao, remessa_apac_id IS NOT NULL AS r FROM apac WHERE id = ?', [aberta]),
+    ).toMatchObject({ situacao: 'apresentada', r: 1 });
+    expect(await sessoesDa(aberta)).toBe(3);
+    expect(await gravarApac(ids.laudo, COMP, ids.conta, 2)).toBe(1);
+    const nova = Number(
+      (
+        await uma('SELECT MAX(id) AS id FROM apac WHERE autorizacao_apac_id = ? AND excluido_em IS NULL', [
+          ids.aut,
+        ])
+      )?.['id'],
+    );
+    expect(nova).toBeGreaterThan(aberta);
+    expect([await sessoesDa(aberta), await sessoesDa(nova)]).toEqual([0, 3]);
+    expect(await n('SELECT COUNT(DISTINCT sequencia) AS n FROM apac_sessao WHERE apac_id = ?', [nova])).toBe(
+      3,
+    );
   });
 
   it('leituras: o médico solicitante pelo CRM e os parâmetros ambulatoriais do banco', async () => {

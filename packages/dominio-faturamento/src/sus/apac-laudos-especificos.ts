@@ -376,9 +376,39 @@ export interface ApacParaSessao extends ApacParaComplemento {
   readonly dataEncerramento: string | null;
 }
 
-/** A sessão entra na APAC autorizada, no período autorizado, até hoje e até o encerramento. */
-export function problemasDaSessao(a: ApacParaSessao, s: NovaSessaoApac, hoje: string): ProblemaApac[] {
+/** Uma sessão já registrada (não excluída) na mesma autorização: a data e o código SIGTAP. */
+export interface SessaoRegistradaApac {
+  readonly data: string;
+  readonly procedimento: string;
+}
+
+/**
+ * O procedimento da sessão cabe na APAC quando é da mesma família do laudo autorizado; na família "outro" (sem laudo
+ * complementar), quando é do mesmo grupo e subgrupo da tabela unificada (seis primeiros dígitos).
+ */
+export function procedimentoCabeNaApac(procedimentoApac: string, procedimentoSessao: string): boolean {
+  const fa = familiaLaudoDoProcedimento(procedimentoApac);
+  if (fa !== familiaLaudoDoProcedimento(procedimentoSessao)) return false;
+  return fa !== 'outro' || codigo(procedimentoApac).slice(0, 6) === codigo(procedimentoSessao).slice(0, 6);
+}
+
+/**
+ * A sessão entra na APAC autorizada, no período autorizado, até hoje e até o encerramento; o procedimento da sessão
+ * é da família do autorizado; a mesma data com o mesmo procedimento já registrada na autorização é repetição
+ * (duplo clique ou reenvio) e recusa.
+ */
+export function problemasDaSessao(
+  a: ApacParaSessao,
+  s: NovaSessaoApac,
+  hoje: string,
+  registradas: readonly SessaoRegistradaApac[] = [],
+): ProblemaApac[] {
   const p: ProblemaApac[] = [];
+  if (s.procedimento && !procedimentoCabeNaApac(a.procedimento, s.procedimento))
+    p.push({
+      campo: 'procedimento',
+      mensagem: 'O procedimento da sessão não é da família do procedimento autorizado na APAC.',
+    });
   if (a.situacao !== 'autorizada')
     p.push({ campo: 'situacao', mensagem: 'A sessão só é registrada na APAC autorizada.' });
   if (!diaValido(s.data) || !s.data) {
@@ -392,6 +422,12 @@ export function problemasDaSessao(a: ApacParaSessao, s: NovaSessaoApac, hoje: st
     p.push({ campo: 'data', mensagem: 'A sessão passa da validade da APAC.' });
   if (a.dataEncerramento && s.data > a.dataEncerramento)
     p.push({ campo: 'data', mensagem: 'A sessão é posterior ao encerramento da APAC.' });
+  const efetivo = codigo(s.procedimento || a.procedimento);
+  if (registradas.some((r) => r.data === s.data && codigo(r.procedimento) === efetivo))
+    p.push({
+      campo: 'data',
+      mensagem: 'Já existe sessão deste procedimento nesta data na APAC; cancele a anterior para corrigir.',
+    });
   if (!(s.quantidade > 0)) p.push({ campo: 'quantidade', mensagem: 'A quantidade é maior que zero.' });
   const familia = familiaLaudoDoProcedimento(s.procedimento || a.procedimento);
   if (familia === 'nefrologia') {
@@ -403,6 +439,41 @@ export function problemasDaSessao(a: ApacParaSessao, s: NovaSessaoApac, hoje: st
     if (s.modalidade === null || !PERITONEAL.includes(s.modalidade))
       p.push({ campo: 'kits', mensagem: 'Kits só na diálise peritoneal.' });
     else if (s.kits <= 0) p.push({ campo: 'kits', mensagem: 'A quantidade de kits é maior que zero.' });
+  }
+  return p;
+}
+
+// ── Sessões na remessa ───────────────────────────────────────────────────────────────────────────────────
+
+/** A quantidade de um procedimento: a apresentada na remessa ou a soma das sessões com comparecimento. */
+export interface QuantidadeProcedimentoApac {
+  readonly procedimento: string;
+  readonly quantidade: number;
+}
+
+/**
+ * Na remessa, cada procedimento com sessão registrada na competência é apresentado com a mesma quantidade das sessões
+ * em que o paciente compareceu (a falta não é produção); o procedimento sem sessão registrada não é conferido.
+ */
+export function problemasDasSessoesNaRemessa(
+  apresentados: readonly QuantidadeProcedimentoApac[],
+  sessoes: readonly QuantidadeProcedimentoApac[],
+): ProblemaApac[] {
+  const soma = (l: readonly QuantidadeProcedimentoApac[]) => {
+    const m = new Map<string, number>();
+    for (const x of l)
+      m.set(codigo(x.procedimento), (m.get(codigo(x.procedimento)) ?? 0) + Number(x.quantidade));
+    return m;
+  };
+  const ap = soma(apresentados);
+  const p: ProblemaApac[] = [];
+  for (const [proc, q] of soma(sessoes)) {
+    const r = ap.get(proc) ?? 0;
+    if (Math.abs(r - q) > 1e-6)
+      p.push({
+        campo: 'quantidade',
+        mensagem: `O procedimento ${proc} tem ${q} sessão(ões) registrada(s) na competência e ${r} apresentada(s) na remessa.`,
+      });
   }
   return p;
 }

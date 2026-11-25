@@ -7,7 +7,8 @@
 //     família do complemento (catálogo tipo_laudo_apac; sem o tipo, recusa catalogo-incompleto sem gravar);
 //   - retirar o complemento: a linha fica marcada como excluída (registro clínico nunca é apagado) e o laudo volta
 //     ao tipo "outro";
-//   - registrar a sessão: uma linha em apac_sessao, na APAC da competência da sessão (apac, aberta); sem ela, a APAC
+//   - registrar a sessão: recusa o procedimento de outra família que a do autorizado e a repetição (mesma data e
+//     mesmo procedimento já registrados na autorização); senão, uma linha em apac_sessao, na APAC da competência da sessão (apac, aberta); sem ela, a APAC
 //     da competência nasce aberta (inicial na primeira competência da validade, continuidade depois, ligada à
 //     anterior), na competência de APAC do estabelecimento (aberta ou criada aberta); competência fechada recusa;
 //   - cancelar a sessão: marcada como excluída com a versão vista (nunca apagada), só na APAC ainda aberta.
@@ -668,6 +669,17 @@ export class PortaApacComplementosPropria extends PortaEstabelecimentoPropria {
       const a = (await tx.consultarParaAtualizar(SQL_APAC, [laudo, est.id]))[0];
       if (!a) throw naoEncontrado('APAC');
       if (num(a['versao']) !== e.versao) throw conflito();
+      // As sessões não excluídas da autorização na data (a linha do laudo está travada: o duplo clique espera e cai
+      // na repetição).
+      const registradas = (
+        await tx.consultar<Linha>(
+          `SELECT ps.codigo_sigtap FROM apac_sessao s JOIN apac x ON x.id = s.apac_id
+             JOIN procedimento_sigtap ps ON ps.id = s.procedimento_sigtap_id
+            WHERE x.autorizacao_apac_id = ? AND x.estabelecimento_id = ? AND s.data_sessao = ?
+              AND s.excluido_em IS NULL AND x.excluido_em IS NULL AND x.situacao <> 'cancelada'`,
+          [num(a['autorizacao_id']), est.id, e.data],
+        )
+      ).map((r) => ({ data: e.data, procedimento: String(r['codigo_sigtap']) }));
       const problemas = problemasDaSessao(
         {
           situacao: String(a['situacao']) as never,
@@ -679,6 +691,7 @@ export class PortaApacComplementosPropria extends PortaEstabelecimentoPropria {
         },
         e,
         hojeNo(est.fuso),
+        registradas,
       );
       if (problemas.length) throw recusaRegra('Sessão recusada', problemas);
       let procedimento = num(a['sigtap']);

@@ -11,6 +11,8 @@ import {
   laudoEspecificoDaFamilia,
   competenciasDoPeriodoApac,
   problemasDaSessao,
+  problemasDasSessoesNaRemessa,
+  procedimentoCabeNaApac,
   problemasDoComplemento,
 } from './apac-laudos-especificos.js';
 
@@ -271,5 +273,54 @@ describe('sessão da APAC', () => {
     expect(
       campos(problemasDaSessao({ ...a, procedimento: '0304010090' }, { ...s, quantidade: 0 }, HOJE)),
     ).toEqual(['quantidade', 'modalidade']);
+  });
+
+  it('o procedimento da sessão é da família do autorizado (outro: mesmo grupo e subgrupo)', () => {
+    expect(problemasDaSessao(a, { ...s, procedimento: '0305010115' }, HOJE)).toEqual([]);
+    expect(
+      campos(problemasDaSessao(a, { ...s, procedimento: '0304010090', modalidade: null }, HOJE)),
+    ).toEqual(['procedimento']);
+    const odonto = { ...a, procedimento: '0307040011' };
+    expect(campos(problemasDaSessao(odonto, { ...s, procedimento: '0305010107' }, HOJE))).toContain(
+      'procedimento',
+    );
+    expect(procedimentoCabeNaApac('0701070099', '0307010015')).toBe(true);
+    expect(procedimentoCabeNaApac('0309010010', '0309010029')).toBe(true);
+    expect(procedimentoCabeNaApac('0309010010', '0301010072')).toBe(false);
+  });
+
+  it('a mesma data com o mesmo procedimento já registrada é repetição; outra data ou outro código passa', () => {
+    const r = [{ data: '2026-03-10', procedimento: '03.05.01.010-7' }];
+    expect(campos(problemasDaSessao(a, s, HOJE, r))).toEqual(['data']);
+    expect(campos(problemasDaSessao(a, { ...s, procedimento: '0305010107' }, HOJE, r))).toEqual(['data']);
+    expect(problemasDaSessao(a, { ...s, data: '2026-03-11' }, HOJE, r)).toEqual([]);
+    expect(problemasDaSessao(a, { ...s, procedimento: '0305010115' }, HOJE, r)).toEqual([]);
+  });
+});
+
+describe('sessões na remessa da APAC', () => {
+  it('a quantidade apresentada de cada procedimento com sessão é a soma das sessões', () => {
+    const sessoes = [
+      { procedimento: '0305010107', quantidade: 1 },
+      { procedimento: '0305010107', quantidade: 1 },
+    ];
+    expect(problemasDasSessoesNaRemessa([{ procedimento: '0305010107', quantidade: 2 }], sessoes)).toEqual(
+      [],
+    );
+    expect(
+      problemasDasSessoesNaRemessa(
+        [
+          { procedimento: '0305010107', quantidade: 1 },
+          { procedimento: '0305010107', quantidade: 1 },
+          { procedimento: '0301010072', quantidade: 3 },
+        ],
+        sessoes,
+      ),
+    ).toEqual([]);
+    expect(
+      campos(problemasDasSessoesNaRemessa([{ procedimento: '0305010107', quantidade: 3 }], sessoes)),
+    ).toEqual(['quantidade']);
+    expect(campos(problemasDasSessoesNaRemessa([], sessoes))).toEqual(['quantidade']);
+    expect(problemasDasSessoesNaRemessa([{ procedimento: '0305010107', quantidade: 9 }], [])).toEqual([]);
   });
 });

@@ -371,6 +371,22 @@ describe.skipIf(SEM_BANCO)('PortaApacComplementosPropria contra o MariaDB (contr
     await expect(
       porta.registrarSessao(ctx(), laudo.onco, { versao: await versao(laudo.onco), data: '2026-10-20' }),
     ).rejects.toMatchObject({ problema: { status: 422 } });
+    // A sessão de quimioterapia na APAC de terapia renal e a repetição (mesma data e procedimento: duplo clique ou
+    // reenvio do mesmo corpo) recusam sem gravar.
+    await expect(
+      porta.registrarSessao(ctx(), laudo.nefro, { versao: v, data: '2026-10-20', procedimento: SIG.onco }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    await expect(
+      porta.registrarSessao(ctx(), laudo.nefro, { versao: v, data: '2026-10-15', modalidade: 'hemodialise' }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
+    await expect(
+      porta.registrarSessao(ctx(), laudo.nefro, {
+        versao: v,
+        data: '2026-10-15',
+        procedimento: SIG.nefro,
+        modalidade: 'hemodialise',
+      }),
+    ).rejects.toMatchObject({ problema: { status: 422 } });
     expect(
       await ler(
         'SELECT s.id FROM apac_sessao s JOIN apac a ON a.id = s.apac_id WHERE a.estabelecimento_id = ?',

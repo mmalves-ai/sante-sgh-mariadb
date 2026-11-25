@@ -7,12 +7,16 @@
 //     e as linhas em producao_ambulatorial_sus_item, com a SIGTAP e o CBO pelo código e o paciente pela conta;
 //   - APAC (autorização de procedimento de alta complexidade): uma `apac` por laudo apresentado na competência, com o
 //     número e o tipo da autorização, os CID do laudo e os procedimentos em apac_procedimento; a continuidade aponta a
-//     APAC anterior da mesma autorização;
+//     APAC anterior da mesma autorização; as sessões da competência (apac_sessao, apac-complementos-propria.ts)
+//     passam à APAC apresentada, a quantidade de cada procedimento com sessão é a das sessões com comparecimento
+//     (senão recusa 'apac-sessoes-divergentes') e a APAC aberta com sessões que fica fora da remessa recusa
+//     ('apac-sessoes-fora-da-remessa');
 // - as leituras do cadastro: o médico solicitante (CRM do cadastro de profissionais) e os parâmetros ambulatoriais
 //   (a competência do BPA aberta e o leiaute e o órgão de destino da última remessa).
 // A AIH (autorização de internação hospitalar) já grava as contas apresentadas em porta-propria-aih.ts.
 // A geração nova da competência substitui a remessa; as linhas da anterior ficam (histórico nunca apagado: a chave única
 // das folhas e das APACs inclui a remessa, migração 94). O paciente lido aqui vai só ao banco: nunca à trilha nem ao log.
+import { problemasDasSessoesNaRemessa } from '@sgh/dominio-faturamento';
 import { type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import type {
   LinhaApacParaGravar,
@@ -41,6 +45,7 @@ export const TABELAS_SUS_RESTO = [
   'producao_ambulatorial_sus_item',
   'apac',
   'apac_procedimento',
+  'apac_sessao',
 ] as const;
 
 /** O registro da CIHA com os procedimentos e as quantidades (a montagem os tem em `r.procedimentos`). */
@@ -467,6 +472,29 @@ export class GravacoesLinhasSusPropria {
               )?.['id'],
             )
           : null;
+      // As sessões com comparecimento da autorização na competência (em qualquer APAC não cancelada dela).
+      const sessoes = await this.tx.consultar(
+        `SELECT ps.codigo_sigtap, SUM(s.quantidade) AS quantidade
+           FROM apac_sessao s JOIN apac x ON x.id = s.apac_id
+           JOIN procedimento_sigtap ps ON ps.id = s.procedimento_sigtap_id
+          WHERE x.autorizacao_apac_id = ? AND x.competencia_sus_id = ? AND x.estabelecimento_id = ?
+            AND x.excluido_em IS NULL AND x.situacao <> 'cancelada' AND s.excluido_em IS NULL
+            AND s.comparecimento = 'compareceu'
+          GROUP BY ps.codigo_sigtap`,
+        [autorizacao, competencia.id, this.est],
+        { teto: 500 },
+      );
+      const divergencias = problemasDasSessoesNaRemessa(
+        ls.map((x) => ({ procedimento: x.procedimento, quantidade: x.quantidade })),
+        sessoes.map((x) => ({ procedimento: txt(x['codigo_sigtap']), quantidade: num(x['quantidade']) })),
+      );
+      if (divergencias.length)
+        throw recusa(
+          'apac-sessoes-divergentes',
+          `A APAC ${numero} não confere com as sessões registradas na competência: ${divergencias
+            .map((d) => d.mensagem)
+            .join(' ')}`,
+        );
       const camposApac = {
         tipo_apac: tipo,
         anterior_apac_id: anterior,
@@ -499,6 +527,31 @@ export class GravacoesLinhasSusPropria {
           numero_apac: numero,
           ...camposApac,
         });
+      // As sessões da competência que ficaram noutra APAC (a apresentada na remessa substituída) passam a esta.
+      const outras = await this.tx.consultar(
+        `SELECT s.id, s.versao FROM apac_sessao s JOIN apac x ON x.id = s.apac_id
+          WHERE x.autorizacao_apac_id = ? AND x.competencia_sus_id = ? AND x.estabelecimento_id = ? AND x.id <> ?
+            AND x.excluido_em IS NULL AND x.situacao <> 'cancelada' AND s.excluido_em IS NULL
+          ORDER BY s.data_sessao, s.id`,
+        [autorizacao, competencia.id, this.est, apac],
+        { teto: 2000 },
+      );
+      if (outras.length) {
+        let seq = num(
+          (
+            await this.tx.uma('SELECT COALESCE(MAX(sequencia), 0) AS s FROM apac_sessao WHERE apac_id = ?', [
+              apac,
+            ])
+          )?.['s'],
+        );
+        for (const s of outras) {
+          seq += 1;
+          await this.tx.alterar('apac_sessao', num(s['id']), num(s['versao']), {
+            apac_id: apac,
+            sequencia: seq,
+          });
+        }
+      }
       let k = 0;
       for (const x of ls) {
         k += 1;
@@ -513,6 +566,17 @@ export class GravacoesLinhasSusPropria {
         });
       }
     }
+    // A APAC aberta da competência com sessões que não entrou nesta remessa é produção que ficaria sem apresentar.
+    const fora = await this.tx.uma(
+      `SELECT COUNT(DISTINCT x.id) AS n FROM apac x JOIN apac_sessao s ON s.apac_id = x.id AND s.excluido_em IS NULL
+        WHERE x.estabelecimento_id = ? AND x.competencia_sus_id = ? AND x.situacao = 'aberta' AND x.excluido_em IS NULL`,
+      [this.est, competencia.id],
+    );
+    if (num(fora?.['n']) > 0)
+      throw recusa(
+        'apac-sessoes-fora-da-remessa',
+        `${num(fora?.['n'])} APAC aberta(s) da competência com sessões registradas ficou(aram) fora da remessa: inclua o laudo ou cancele as sessões.`,
+      );
     return porLaudo.size;
   }
 }
