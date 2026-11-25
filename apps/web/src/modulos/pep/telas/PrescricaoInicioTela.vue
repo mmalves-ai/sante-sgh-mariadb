@@ -13,7 +13,7 @@ import { buscarPacientesPep } from '../api-pep.js';
 import { aRenovar } from '../api-prescricao.js';
 import { dataHoraBr } from '../formato.js';
 
-type Destino = 'prescricao' | 'hemoterapia' | 'montar' | 'futura' | 'reconciliacao';
+type Destino = 'prescricao' | 'hemoterapia' | 'montar' | 'futura' | 'reconciliacao' | 'farmacovigilancia';
 const props = withDefaults(defineProps<{ destino?: Destino }>(), { destino: 'prescricao' });
 const { t } = useI18n();
 const termo = ref('');
@@ -65,6 +65,8 @@ function rotaDe(paciente: number): string {
       return `${base}/prescricao/futura`;
     case 'reconciliacao':
       return `${base}/reconciliacao`;
+    case 'farmacovigilancia':
+      return `${base}/farmacovigilancia`;
     default:
       return `${base}/prescricao`;
   }

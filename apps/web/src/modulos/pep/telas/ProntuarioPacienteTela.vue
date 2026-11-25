@@ -150,6 +150,12 @@ async function exportar(): Promise<void> {
             }"
             >{{ t('pep.doc.prontuario.multiprofissional') }}</RouterLink
           >
+          <RouterLink
+            v-if="pode('pep.reconciliacao.ler') || pode('pep.farmacovigilancia.avaliar')"
+            :to="`/pep/paciente/${id}/farmacovigilancia`"
+            data-testid="atalho-farmacovigilancia"
+            >{{ t('pep.doc.prontuario.farmacovigilancia') }}</RouterLink
+          >
           <SanteBotao
             variante="secundario"
             :rotulo="t('pep.doc.prontuario.exportar')"

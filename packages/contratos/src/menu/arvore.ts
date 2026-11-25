@@ -25,7 +25,10 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // mão (mesmo motivo); a contagem acompanha.
 // Obra carga-painel (ADR 0010): o item "Carga e sincronismo" do Técnico entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":426,"M":198,"P":57,"N":171};
+// F8 (02-CAD linha 11): o item "Programas e linhas de cuidado" entrou à mão (mesmo motivo); a contagem acompanha.
+// F7 (03-PEP L103): o item "Reação adversa a medicamento" da farmácia clínica entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":428,"M":198,"P":57,"N":173};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -162,6 +165,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"farmacia-clinica.avaliacao-farmaceutica-da-prescricao-fila-e-triagem","area":"ASSISTÊNCIA","grupo":"Farmácia clínica","caminho":["Farmácia clínica","Avaliação farmacêutica da prescrição"],"titulo":"Avaliação farmacêutica da prescrição","selo":"P","fase":3,"rota":"/farmacia/avaliacao","permissao":"suprimentos.avaliacao.ler"},
   {"id":"farmacia-clinica.fichas-de-antimicrobiano-justificativa","area":"ASSISTÊNCIA","grupo":"Farmácia clínica","caminho":["Farmácia clínica","Fichas de antimicrobiano"],"titulo":"Fichas de antimicrobiano","selo":"P","fase":2,"rota":"/farmacia-clinica/antimicrobianos","permissao":"pep.antimicrobiano.ler"},
   {"id":"farmacia-clinica.interacoes-medicamentosas-e-validacao-de-dose","area":"ASSISTÊNCIA","grupo":"Farmácia clínica","caminho":["Farmácia clínica","Interações medicamentosas e validação de dose"],"titulo":"Interações medicamentosas e validação de dose","selo":"P","fase":2,"rota":"/farmacia-clinica/interacoes","permissao":"pep.regraAlerta.ler"},
+  {"id":"farmacia-clinica.reacao-adversa-a-medicamento-farmacovigilancia","area":"ASSISTÊNCIA","grupo":"Farmácia clínica","caminho":["Farmácia clínica","Reação adversa a medicamento"],"titulo":"Reação adversa a medicamento","selo":"N","fase":7,"rota":"/farmacia-clinica/farmacovigilancia","permissao":"pep.farmacovigilancia.avaliar"},
   {"id":"diagnostico-sadt.atendimento-sadt-ficha-e-requisicao","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Atendimento SADT"],"titulo":"Atendimento SADT","selo":"M","fase":2,"rota":"/sadt/atendimentos","permissao":"sadt.requisicao.ler"},
   {"id":"diagnostico-sadt.lancamento-e-solicitacao-de-exames","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Lançamento e solicitação de exames"],"titulo":"Lançamento e solicitação de exames","selo":"M","fase":2,"rota":"/sadt/exames","permissao":"sadt.lancamento.ler"},
   {"id":"diagnostico-sadt.pedido-de-exames","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Pedido de exames"],"titulo":"Pedido de exames","selo":"M","fase":2,"rota":"/sadt/pedido","permissao":"sadt.requisicao.criar"},
@@ -366,6 +370,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"cadastros.pacientes-cadastro-unico.cadastro-e-busca-de-paciente","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Cadastro e busca de paciente"],"titulo":"Cadastro e busca de paciente","selo":"M","fase":1,"rota":"/cadastros/pacientes","permissao":"cadastro.paciente.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.unificacao-de-prontuarios","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Unificação de prontuários"],"titulo":"Unificação de prontuários","selo":"P","fase":1,"rota":"/cadastros/pacientes/duplicidades","permissao":"cadastro.duplicidade.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.historico-de-alteracoes-do-cadastro","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Histórico de alterações do cadastro"],"titulo":"Histórico de alterações do cadastro","selo":"M","fase":1,"rota":"/cadastros/pacientes/historico","permissao":"cadastro.historico.ler"},
+  {"id":"cadastros.pacientes-cadastro-unico.programas-e-linhas-de-cuidado","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Programas e linhas de cuidado"],"titulo":"Programas e linhas de cuidado","selo":"N","fase":7,"rota":"/cadastros/pacientes/linhas-cuidado","permissao":"cadastro.linhaCuidado.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.campos-obrigatorios-do-cadastro","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Campos obrigatórios do cadastro"],"titulo":"Campos obrigatórios do cadastro","selo":"M","fase":1,"rota":"/cadastros/regras-campo","permissao":"config.parametro.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.pessoas-cpf-cnpj","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","Pessoas"],"titulo":"Pessoas","selo":"M","fase":1,"rota":"/cadastros/pessoas","permissao":"cadastro.pessoa.ler"},
   {"id":"cadastros.pacientes-cadastro-unico.mpi-da-rede-paciente-unico-entre-os-dois-hospitais","area":"CADASTROS","grupo":null,"caminho":["Cadastros","Pacientes","MPI da Rede"],"titulo":"MPI da Rede","selo":"N","fase":7,"rota":"/cadastros/pacientes/rede","permissao":"rede.mpi.ler"},

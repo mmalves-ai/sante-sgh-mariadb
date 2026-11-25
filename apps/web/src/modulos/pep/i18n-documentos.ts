@@ -67,6 +67,7 @@ export const mensagensDocumentos = {
     prazoInvalido: 'Informe um prazo de 1 a 720 horas, ou deixe em branco.',
     abrirPedido: 'Abrir o pedido',
     multiprofissional: 'Evolução multiprofissional',
+    farmacovigilancia: 'Reação adversa a medicamento',
     exportar: 'Exportar o prontuário',
     exportarTexto: 'A exportação do prontuário completo fica registrada com a justificativa.',
     alertas: 'Alertas do atendimento',

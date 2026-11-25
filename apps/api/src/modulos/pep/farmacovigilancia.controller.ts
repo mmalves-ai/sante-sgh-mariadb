@@ -1,6 +1,7 @@
 // Rotas da farmacovigilância no paciente (03-PEP L103) e da lista de uso contínuo com a reconciliação que parte
 // dela (03-PEP L104). Ler: quem vê a reconciliação medicamentosa (pep.reconciliacao.ler). Reação adversa: quem
-// registra no prontuário (pep.evolucao.criar), inclusive a avaliação da farmácia clínica e a notificação. Uso
+// registra no prontuário (pep.evolucao.criar), inclusive a notificação; a avaliação (causalidade) é ato próprio da
+// farmácia clínica (pep.farmacovigilancia.avaliar), que também lê a tela do paciente sem precisar da reconciliação. Uso
 // contínuo e reconciliação pela lista: pep.reconciliacao.registrar. Sem banco próprio, 503.
 // Como as vizinhas do prontuário: toda rota confere o vínculo assistencial com o paciente (AcessoPacientePep, 403
 // `sem-vinculo` com a tentativa na trilha); a leitura vai à trilha (primeira leitura do paciente na sessão) e conta
@@ -18,7 +19,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
-import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
@@ -31,7 +32,7 @@ import {
 } from '../acesso/emergencia.controller.js';
 import { contextoGravacao } from '../agenda/apoio.js';
 import { corpo } from '../agenda/agendas.controller.js';
-import { sessaoDe, type SessaoCadastro } from '../cadastro/comum.js';
+import { exigir, sessaoDe, type SessaoCadastro } from '../cadastro/comum.js';
 import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/public-api.js';
 import { AcessoPacientePep, chaveSessaoPep } from './acesso-paciente.js';
 import { ESTADO_PRONTUARIO } from './prontuario.controller.js';
@@ -44,6 +45,8 @@ import {
 } from './farmacovigilancia-propria.js';
 
 export const FARMACOVIGILANCIA = Symbol('FARMACOVIGILANCIA');
+/** A avaliação da reação pela farmácia clínica (03-PEP L103): permissão própria, concedida ao perfil da farmácia. */
+export const PERMISSAO_AVALIAR_REACAO = 'pep.farmacovigilancia.avaliar';
 
 @Controller('pep/farmacovigilancia')
 export class FarmacovigilanciaController {
@@ -51,7 +54,7 @@ export class FarmacovigilanciaController {
 
   constructor(
     @Inject(ESTADO_PRONTUARIO) private readonly estado: EstadoProntuario,
-    @Inject(REGISTRADOR_TRILHA) trilha: RegistradorTrilha,
+    @Inject(REGISTRADOR_TRILHA) private readonly trilha: RegistradorTrilha,
     @Optional() @Inject(FARMACOVIGILANCIA) private readonly fv: FarmacovigilanciaPropria | null = null,
     @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(ALERTA_AUDITOR) alerta: AlertaAuditor | null = null,
@@ -116,23 +119,29 @@ export class FarmacovigilanciaController {
 
   @Get('paciente/:paciente')
   @Permissao('pep.reconciliacao.ler')
+  @PermissaoOu(PERMISSAO_AVALIAR_REACAO)
   async doPaciente(
     @Param('paciente', ParseIntPipe) paciente: number,
     @Req() req: RequisicaoAutorizada,
   ): Promise<FarmacovigilanciaDoPaciente> {
     const s = sessaoDe(req);
-    await this.paciente(s, paciente, 'pep.reconciliacao.ler', true);
+    const lida = s.pode('pep.reconciliacao.ler') ? 'pep.reconciliacao.ler' : PERMISSAO_AVALIAR_REACAO;
+    await this.paciente(s, paciente, lida, true);
     return this.banco().doPaciente({ hospital: s.hospital, login: s.login }, paciente);
   }
 
   @Post('reacoes')
   @HttpCode(200)
   @Permissao('pep.evolucao.criar')
+  @PermissaoOu(PERMISSAO_AVALIAR_REACAO)
   @AuditadoNoHandler('pep.reacao_adversa pelo executor (trilha na mesma transação)')
   async reacao(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const e = corpo(esquemaReacao, b);
     const s = sessaoDe(req);
-    await this.paciente(s, await this.pacienteDaGravacao('reacao', e), 'pep.evolucao.criar', false);
+    // A avaliação é só da farmácia clínica; os demais passos, de quem registra no prontuário. A negação vai à trilha.
+    const exigida = e.acao === 'avaliar' ? PERMISSAO_AVALIAR_REACAO : 'pep.evolucao.criar';
+    await exigir(s, exigida, this.trilha);
+    await this.paciente(s, await this.pacienteDaGravacao('reacao', e), exigida, false);
     const r = await this.banco().reacao(this.ctx(req, 'pep.reacaoAdversa'), e);
     return { ok: true, ...r };
   }

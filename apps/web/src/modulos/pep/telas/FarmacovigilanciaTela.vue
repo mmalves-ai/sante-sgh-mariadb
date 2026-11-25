@@ -4,11 +4,14 @@
 // cada reação com a situação, o histórico e os passos que ela aceita (avaliar, notificar, encerrar, reabrir,
 // inativar, evoluir). A regra (avaliação antes de encerrar, grave só encerra notificada) é do servidor; a tela
 // mostra a recusa como veio. A lista de uso contínuo atravessa os atendimentos: incluir e suspender com justificativa.
+// Cada um vê só os passos que pode dar: a avaliação (causalidade) é da farmácia clínica (pep.farmacovigilancia.avaliar);
+// registrar e os demais passos, de quem registra no prontuário (pep.evolucao.criar).
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import { pode } from '../../../casca/sessao/pode.js';
 import {
   gravarReacao,
   gravarUsoContinuo,
@@ -100,6 +103,12 @@ const ACOES: Readonly<Record<string, readonly string[]>> = {
   encerrada: ['reabrir'],
   inativa: [],
 };
+const podeAvaliar = computed(() => pode('pep.farmacovigilancia.avaliar'));
+const podeRegistrar = computed(() => pode('pep.evolucao.criar'));
+const podeLista = computed(() => pode('pep.reconciliacao.registrar'));
+/** Os passos que a reação aceita e que esta pessoa pode dar. */
+const acoesDe = (r: ReacaoTela): readonly string[] =>
+  (ACOES[r.situacao] ?? []).filter((a) => (a === 'avaliar' ? podeAvaliar.value : podeRegistrar.value));
 function executar(r: ReacaoTela, acao: string): Promise<void> {
   const c = campos(r);
   const texto = c.texto.trim() || null;
@@ -149,7 +158,7 @@ const suspender = (u: UsoContinuoTela) =>
     <p v-if="!d">{{ t('pep.carregando') }}</p>
     <template v-else>
       <h2>{{ t('pep.farmaco.reacoes') }}</h2>
-      <form class="farmaco__nova" data-testid="farmaco-nova" @submit.prevent="registrar">
+      <form v-if="podeRegistrar" class="farmaco__nova" data-testid="farmaco-nova" @submit.prevent="registrar">
         <SanteSelecao v-model="nova.item" :rotulo="t('pep.farmaco.itemPrescrito')" :opcoes="opcoesItem" />
         <label v-if="nova.item === SEM_ITEM">
           {{ t('pep.farmaco.medicamentoNome') }}
@@ -187,15 +196,15 @@ const suspender = (u: UsoContinuoTela) =>
           >
         </p>
         <p>{{ t('pep.farmaco.historico', { etapas: r.eventos.map((e) => e.etapa).join(' → ') }) }}</p>
-        <div v-if="(ACOES[r.situacao] ?? []).length" class="farmaco__passo">
+        <div v-if="acoesDe(r).length" class="farmaco__passo">
           <SanteSelecao
-            v-if="(ACOES[r.situacao] ?? []).includes('avaliar')"
+            v-if="acoesDe(r).includes('avaliar')"
             v-model="campos(r).causalidade"
             :rotulo="t('pep.farmaco.causalidade')"
             :opcoes="opcoesCausalidade"
           />
           <SanteSelecao
-            v-if="(ACOES[r.situacao] ?? []).includes('encerrar')"
+            v-if="acoesDe(r).includes('encerrar')"
             v-model="campos(r).desfecho"
             :rotulo="t('pep.farmaco.desfecho')"
             :opcoes="opcoesDesfecho"
@@ -205,7 +214,7 @@ const suspender = (u: UsoContinuoTela) =>
             <input v-model="campos(r).texto" maxlength="1000" :data-testid="`farmaco-texto-${r.id}`" />
           </label>
           <SanteBotao
-            v-for="a in ACOES[r.situacao]"
+            v-for="a in acoesDe(r)"
             :key="a"
             variante="secundario"
             :data-testid="`farmaco-${a}-${r.id}`"
@@ -216,7 +225,12 @@ const suspender = (u: UsoContinuoTela) =>
       </article>
 
       <h2>{{ t('pep.farmaco.usoContinuo') }}</h2>
-      <form class="farmaco__nova" data-testid="farmaco-uso-novo" @submit.prevent="incluirUso">
+      <form
+        v-if="podeLista"
+        class="farmaco__nova"
+        data-testid="farmaco-uso-novo"
+        @submit.prevent="incluirUso"
+      >
         <label>
           {{ t('pep.farmaco.medicamentoNome') }}
           <input v-model="uso.nome" maxlength="200" required data-testid="farmaco-uso-nome" />
@@ -235,7 +249,7 @@ const suspender = (u: UsoContinuoTela) =>
           <span v-if="u.suspenso">
             · {{ t('pep.farmaco.suspenso', { motivo: u.justificativaSuspensao ?? '' }) }}</span
           >
-          <template v-else>
+          <template v-else-if="podeLista">
             <input
               v-model="motivoSuspensao[u.id]"
               maxlength="250"

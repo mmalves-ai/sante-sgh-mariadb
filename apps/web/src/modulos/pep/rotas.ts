@@ -199,7 +199,19 @@ export const rotasPep: RouteRecordRaw[] = [
     name: 'pep.farmacovigilancia',
     component: () => import('./telas/FarmacovigilanciaTela.vue'),
     props: true,
-    meta: { permissao: 'pep.reconciliacao.ler' },
+    meta: { permissao: 'pep.reconciliacao.ler', permissaoOu: ['pep.farmacovigilancia.avaliar'] },
+  },
+  {
+    // Entrada pelo menu: a busca do paciente leva à farmacovigilância dele (a farmácia clínica avalia daqui).
+    path: '/farmacia-clinica/farmacovigilancia',
+    name: 'farmacia.farmacovigilancia',
+    component: () => import('./telas/PrescricaoInicioTela.vue'),
+    props: { destino: 'farmacovigilancia' },
+    meta: {
+      permissao: 'pep.farmacovigilancia.avaliar',
+      permissaoOu: ['pep.reconciliacao.ler'],
+      menu: 'Farmácia clínica > Reação adversa a medicamento',
+    },
   },
   {
     path: '/farmacia-clinica/interacoes',

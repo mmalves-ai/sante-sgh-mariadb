@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('426 itens: M 198, P 57, N 171, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 426, M: 198, P: 57, N: 171 });
+  it('428 itens: M 198, P 57, N 173, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 428, M: 198, P: 57, N: 173 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(426);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(428);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -264,6 +264,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/cadastros/pacientes',
         '/cadastros/pacientes/duplicidades',
         '/cadastros/pacientes/historico',
+        '/cadastros/pacientes/linhas-cuidado', // F8 (02-CAD linha 11)
         '/cadastros/pacientes/rede', // M57 (etapa 1): MPI da Rede
         '/cadastros/regras-campo', // F3.1 (02-CAD linha 2)
         '/cadastros/pessoas',
@@ -299,6 +300,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/enfermagem/turno',
         '/enfermagem/turno?secao=cuidados', // M45 (etapa 4): a prescrição de enfermagem no turno
         '/farmacia-clinica/antimicrobianos',
+        '/farmacia-clinica/farmacovigilancia', // F7 (03-PEP L103)
         '/farmacia-clinica/interacoes',
         '/faturamento/auditoria', // M30
         '/faturamento/competencias', // M31

@@ -16,7 +16,7 @@ import { criarAbility, regrasDeAcesso, VinculoSintetico } from '@sgh/dominio-ace
 import { achados, type ItemAvaliado, type ProdutoAlerta, REGRAS_PADRAO } from '@sgh/dominio-pep';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { FarmacovigilanciaController } from './farmacovigilancia.controller.js';
+import { FarmacovigilanciaController, PERMISSAO_AVALIAR_REACAO } from './farmacovigilancia.controller.js';
 import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
 import { PortaPrescricaoPropria } from './prescricao-porta-propria.js';
 import { EstadoProntuario } from './sessao-prontuario.js';
@@ -589,8 +589,13 @@ describe.skipIf(SEM_BANCO)('farmacovigilância e uso contínuo (banco próprio, 
   });
 
   it('as rotas exigem o vínculo assistencial com o paciente e a leitura vai à trilha', async () => {
-    const PERMS = ['pep.reconciliacao.ler', 'pep.evolucao.criar', 'pep.reconciliacao.registrar'];
-    const montar = (vinculo: boolean) => {
+    const PERMS = [
+      'pep.reconciliacao.ler',
+      'pep.evolucao.criar',
+      'pep.reconciliacao.registrar',
+      PERMISSAO_AVALIAR_REACAO,
+    ];
+    const montar = (vinculo: boolean, perms: readonly string[] = PERMS) => {
       const trilha = new RegistradorTrilhaMemoria();
       const ctrl = new FarmacovigilanciaController(
         new EstadoProntuario(),
@@ -609,14 +614,14 @@ describe.skipIf(SEM_BANCO)('farmacovigilância e uso contínuo (banco próprio, 
           ip: '127.0.0.1',
           sgh: {
             real: false,
-            ability: criarAbility(regrasDeAcesso(PERMS, null)),
+            ability: criarAbility(regrasDeAcesso([...perms], null)),
             sessao: {
               usuario: { id: String(ids.usuario), nome: 'Conta sintética', login: LOGIN },
               rede: 'rede-f78fv',
               estabelecimentos: [],
               estabelecimentoAtivo: EST,
               unidadeAtiva: null,
-              permissoes: PERMS,
+              permissoes: [...perms],
               restricaoVinculo: true,
               sintetica: true,
               bloqueioInatividadeSegundos: 0,
@@ -667,5 +672,103 @@ describe.skipIf(SEM_BANCO)('farmacovigilância e uso contínuo (banco próprio, 
       ),
     ).toHaveLength(1);
     await expect(com.ctrl.doPaciente(999_999_999, com.req())).rejects.toMatchObject({ status: 404 });
+  });
+  it('a avaliação é da farmácia clínica (permissão própria): quem só registra recebe 403 e nada muda', async () => {
+    const trilha = new RegistradorTrilhaMemoria();
+    const ctrl = new FarmacovigilanciaController(
+      new EstadoProntuario(),
+      trilha,
+      fv,
+      null,
+      null,
+      new VinculoSintetico([{ login: LOGIN, idPaciente: ids.paciente, forma: 'atendimento-em-curso' }]),
+      null,
+    );
+    const req = (perms: readonly string[]) =>
+      ({
+        headers: { 'idempotency-key': `f78fv-aval-${randomUUID()}`, 'x-correlation-id': 'f78fv-aval' },
+        ip: '127.0.0.1',
+        sgh: {
+          real: false,
+          ability: criarAbility(regrasDeAcesso([...perms], null)),
+          sessao: {
+            usuario: { id: String(ids.usuario), nome: 'Conta sintética', login: LOGIN },
+            rede: 'rede-f78fv',
+            estabelecimentos: [],
+            estabelecimentoAtivo: EST,
+            unidadeAtiva: null,
+            permissoes: [...perms],
+            restricaoVinculo: true,
+            sintetica: true,
+            bloqueioInatividadeSegundos: 0,
+            expiraEm: '',
+          },
+        },
+      }) as unknown as RequisicaoAutorizada;
+    const MEDICO = ['pep.reconciliacao.ler', 'pep.evolucao.criar'];
+    const FARMACIA = [PERMISSAO_AVALIAR_REACAO];
+    const negadas = (recurso: string) =>
+      trilha.eventos.filter(
+        (e) => e.evento === EVENTOS_AUDITAVEIS.permissaoNegada.codigo && e.recurso === recurso,
+      ).length;
+
+    // O médico registra pela rota; a farmácia, que não registra evolução, não registra a reação.
+    const registrada = await ctrl.reacao(
+      {
+        acao: 'registrar',
+        paciente: ids.paciente,
+        itemPrescritivel: ids.produto,
+        descricao: 'Exantema após a dose',
+        inicio: new Date(Date.now() - 3_600_000).toISOString(),
+        gravidade: ids.leve,
+      },
+      req(MEDICO),
+    );
+    const id = Number(registrada.resultado.reacao);
+    await expect(
+      ctrl.reacao(
+        {
+          acao: 'registrar',
+          paciente: ids.paciente,
+          itemPrescritivel: ids.produto,
+          descricao: 'Tentativa sem a permissão',
+          inicio: new Date(Date.now() - 3_600_000).toISOString(),
+          gravidade: ids.leve,
+        },
+        req(FARMACIA),
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(negadas('pep.evolucao.criar')).toBe(1);
+
+    // O médico não avalia: 403, negação na trilha e a reação segue como estava.
+    const antes = await versao(id);
+    await expect(
+      ctrl.reacao({ acao: 'avaliar', reacao: id, versao: antes, causalidade: ids.causalidade }, req(MEDICO)),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(negadas(PERMISSAO_AVALIAR_REACAO)).toBe(1);
+    expect(await versao(id)).toBe(antes);
+    const [semAval] = await ler('SELECT situacao, avaliado_em FROM reacao_adversa_paciente WHERE id = ?', [
+      id,
+    ]);
+    expect(semAval).toMatchObject({ situacao: 'registrada', avaliado_em: null });
+
+    // A farmácia lê a tela do paciente e avalia: a causalidade e o passo ficam no banco.
+    const tela = await ctrl.doPaciente(ids.paciente, req(FARMACIA));
+    expect(tela.reacoes.some((r) => r.id === id)).toBe(true);
+    await ctrl.reacao(
+      { acao: 'avaliar', reacao: id, versao: antes, causalidade: ids.causalidade },
+      req(FARMACIA),
+    );
+    const [aval] = await ler<{ situacao: string; avaliado_em: Date | null }>(
+      'SELECT situacao, avaliado_em FROM reacao_adversa_paciente WHERE id = ?',
+      [id],
+    );
+    expect(aval!.avaliado_em).not.toBeNull();
+    expect(aval!.situacao).toBe('avaliada');
+    const ev = await ler<{ etapa: string }>(
+      'SELECT etapa FROM reacao_adversa_evento WHERE reacao_adversa_paciente_id = ? ORDER BY id',
+      [id],
+    );
+    expect(ev.map((e) => e.etapa)).toEqual(['registro', 'avaliacao_farmacia']);
   });
 });
