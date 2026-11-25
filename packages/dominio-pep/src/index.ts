@@ -120,3 +120,5 @@ export * from './farmacovigilancia.js';
 // 03-PEP L102: notas e lembretes livres sobre o paciente.
 export * from './nota-paciente.js';
 export * from './obrigatoriedade-documento.js';
+// F3.5 (05-SADT linha 10): a caixa de avisos clínicos do destinatário na central de avisos.
+export * from './aviso-clinico-caixa.js';
