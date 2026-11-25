@@ -11,3 +11,5 @@ export * from './catalogo.js';
 export * from './agendamento.js';
 // M57 (etapa 3): consolidação da Rede (mesma ficha; Σ numeradores ÷ Σ denominadores; parcelas impressas).
 export * from './indicador/consolidacao.js';
+// 01-ADM L115: registro da carga do data mart pela rotina do worker (regra pura, sem node:crypto).
+export * from './datamart-registro.js';
