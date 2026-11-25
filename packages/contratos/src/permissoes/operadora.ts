@@ -154,6 +154,32 @@ export const PERMISSOES_OPERADORA_M56: readonly DeclaracaoPermissao[] = [
     [GESTOR, 'operadora-cobranca'],
     { categoria: 'financeira', criticidade: 'sensivel' },
   ),
+  // Reembolso ao beneficiário (08-SGO linha 106, C2-047; F7; RN ANS 566/2022): o atendimento registra o pedido com os
+  // comprovantes; o auditor mantém a tabela de referência e a regra do plano e analisa com glosa por item; a área
+  // financeira paga (crédito na conta corrente do beneficiário) ou cancela.
+  p(
+    'operadora.reembolso.ler',
+    'Consultar os pedidos de reembolso, as tabelas de referência e as regras dos planos',
+    [GESTOR, 'operadora-atendimento', 'operadora-auditor', 'operadora-cobranca'],
+  ),
+  p(
+    'operadora.reembolso.registrar',
+    'Registrar o pedido de reembolso do beneficiário com os comprovantes',
+    [GESTOR, 'operadora-atendimento'],
+    { criticidade: 'sensivel' },
+  ),
+  p(
+    'operadora.reembolso.analisar',
+    'Analisar o pedido de reembolso com glosa por item e manter a tabela de referência e a regra do plano',
+    [GESTOR, 'operadora-auditor'],
+    { criticidade: 'sensivel' },
+  ),
+  p(
+    'operadora.reembolso.pagar',
+    'Pagar o reembolso aprovado (crédito na conta do beneficiário) ou cancelar o pedido',
+    [GESTOR, 'operadora-cobranca'],
+    { categoria: 'financeira', criticidade: 'sensivel' },
+  ),
   // Envios à ANS (F6): gerar o arquivo da competência; o envio real só em produção. Os catálogos da ANS ficam em
   // `catalogo.ans.ler` (catalogos.ts), do hospital e destes perfis (D-ANS-HOSPITAL-56).
   p('operadora.ans.ler', 'Consultar os envios à ANS (SIB, SIP, DIOPS, TPS), com arquivo, hash e recibo', [
