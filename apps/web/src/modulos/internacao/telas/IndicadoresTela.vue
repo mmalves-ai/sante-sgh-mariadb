@@ -34,6 +34,11 @@ const hoje = hojeNoEstabelecimento();
   <section class="tela" aria-labelledby="ind-titulo">
     <h1 id="ind-titulo">{{ t('internacao.indicadores.titulo') }}</h1>
     <p>{{ t('internacao.indicadores.texto') }}</p>
+    <p>
+      <RouterLink to="/relatorios/apuracao-indicadores" data-testid="link-apuracao-indicadores">
+        {{ t('internacao.indicadores.apuracao') }}
+      </RouterLink>
+    </p>
     <form class="linha" @submit.prevent="aplicar">
       <label for="ind-de">{{ t('internacao.comum.de') }}</label>
       <input id="ind-de" v-model="de" type="month" min="2020-01" />

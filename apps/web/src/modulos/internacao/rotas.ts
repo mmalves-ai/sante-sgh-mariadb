@@ -40,6 +40,13 @@ export const rotasInternacao: RouteRecordRaw[] = [
     meta: { permissao: 'relatorio.paineis.ler', menu: 'Relatórios e BI > Painéis gerenciais' },
   },
   {
+    // 01-REL L112: apuração mensal dos indicadores obrigatórios de internação (aberta pelos Indicadores hospitalares).
+    path: '/relatorios/apuracao-indicadores',
+    name: 'relatorio.apuracaoIndicadores',
+    component: () => import('./telas/ApuracaoIndicadoresTela.vue'),
+    meta: { permissao: 'relatorio.indicadores.ler' },
+  },
+  {
     path: '/relatorios/indicadores',
     name: 'relatorio.indicadores',
     component: () => import('./telas/IndicadoresTela.vue'),

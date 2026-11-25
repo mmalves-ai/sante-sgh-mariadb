@@ -133,6 +133,7 @@ export const mensagensInternacao = {
   },
   indicadores: {
     titulo: 'Indicadores hospitalares',
+    apuracao: 'Apuração mensal dos indicadores de internação',
     texto:
       'Indicadores da Portaria SAS 312/2002 e da ANAHP, cada um com a ficha técnica. Cada valor mostra o numerador e o denominador; o mês corrente é parcial.',
     indicador: 'Indicador',
