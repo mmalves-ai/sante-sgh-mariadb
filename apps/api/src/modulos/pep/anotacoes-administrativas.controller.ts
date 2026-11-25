@@ -80,8 +80,12 @@ export class AnotacoesAdministrativasController {
     return this.anotacoes;
   }
 
-  private permissaoDe(req: RequisicaoAutorizada, padrao: string): string {
-    return (req.sgh as { permissao?: string } | undefined)?.permissao ?? padrao;
+  /** A permissão que abriu a rota (a guarda grava em req.sgh.permissao); sem ela, a primeira que a sessão tem. */
+  private permissaoDe(req: RequisicaoAutorizada, opcoes: readonly string[]): string {
+    const sgh = req.sgh as { permissao?: string; sessao?: { permissoes?: readonly string[] } } | undefined;
+    if (sgh?.permissao) return sgh.permissao;
+    const tem = sgh?.sessao?.permissoes ?? [];
+    return opcoes.find((p) => tem.includes(p)) ?? opcoes[0]!;
   }
 
   /** Paciente do cliente + vínculo assistencial + (na leitura) a leitura na trilha, como o prontuário. */
@@ -120,7 +124,7 @@ export class AnotacoesAdministrativasController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<AnotacoesDoPaciente> {
     const s = sessaoDe(req);
-    await this.paciente(s, paciente, this.permissaoDe(req, LER), true);
+    await this.paciente(s, paciente, this.permissaoDe(req, [LER, ...LER_OU]), true);
     return this.banco().doPaciente({ hospital: s.hospital, login: s.login }, paciente);
   }
 
@@ -134,7 +138,7 @@ export class AnotacoesAdministrativasController {
     const s = sessaoDe(req);
     const paciente = e.acao === 'registrar' ? e.paciente : await this.banco().pacienteDaAnotacao(e.anotacao);
     if (paciente === null) throw new ErroProblema('nao-encontrado', 404, 'Anotação não encontrada');
-    await this.paciente(s, paciente, this.permissaoDe(req, ESCREVER), false);
+    await this.paciente(s, paciente, this.permissaoDe(req, [ESCREVER, ...ESCREVER_OU]), false);
     const g = contextoGravacao(s, 'pep.anotacaoAdministrativa', true);
     const r = await this.banco().gravarAnotacao(
       {
