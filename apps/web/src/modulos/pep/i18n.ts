@@ -16,12 +16,15 @@ import { mensagensProntuarioRestrito } from './i18n-prontuario-restrito.js';
 import { mensagensPedidoVaga } from './i18n-pedido-vaga.js';
 import { mensagensAnotacoesAdministrativas } from './i18n-anotacoes-administrativas.js';
 import { mensagensCopiasProntuario } from './i18n-copias-prontuario.js';
+import { mensagensPadroesPrescricao } from './i18n-padroes-prescricao.js';
 
 export const mensagensPep = {
   // M22: registros clínicos e administração do PEP.
   reg: mensagensRegistroClinico,
   // M24: prescrição eletrônica, farmácia clínica e horários-padrão.
   presc: mensagensPrescricao,
+  // 03-PEP L107: protocolos, kits e receitas padrão editáveis e favoritos do prescritor.
+  padroes: mensagensPadroesPrescricao,
   // M23: prontuário de uso diário.
   doc: mensagensDocumentos,
   // M45, etapa 1: construtor de formulários novos.
