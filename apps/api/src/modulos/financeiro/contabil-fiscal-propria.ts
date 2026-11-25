@@ -22,7 +22,8 @@ import {
   MOMENTOS_RETENCAO,
   PARTICIPANTES_RETENCAO,
   periodoApuracao,
-  receitaDoRecolhimento,
+  gruposDoRecolhimento,
+  tipoGuiaDaEsfera,
   type RecusaFinanceiro,
   type RegraDeParaConta,
   type RegraRetencao,
@@ -714,21 +715,29 @@ export const esquemaRecolhimento = z
   .strict();
 export type RecolhimentoEntrada = z.infer<typeof esquemaRecolhimento>;
 
-/** O retido em aberto (sem título de recolhimento) por tributo na competência. */
+/**
+ * O retido em aberto (sem título de recolhimento) por tributo e código de receita na competência: a retenção sem código
+ * herda o do tributo (nulo quando nem o tributo tem; a tela pede o código). Cada linha vira uma guia.
+ */
 export async function retidoEmAberto(l: Leitor, est: number, competencia: string) {
   const linhas = await l.consultar(
-    `SELECT tr.id, tr.codigo, tr.codigo_receita, COUNT(*) AS retencoes, SUM(r.valor_retido) AS valor
+    `SELECT tr.id, tr.codigo, tr.esfera, COALESCE(c.codigo_receita, tr.codigo_receita) AS receita, COUNT(*) AS retencoes,
+            SUM(r.valor_retido) AS valor
        FROM retencao_titulo r JOIN parcela_pagar p ON p.id = r.parcela_pagar_id
        JOIN titulo_pagar t ON t.id = p.titulo_pagar_id JOIN tributo tr ON tr.id = r.tributo_id
+       LEFT JOIN codigo_receita_federal c ON c.id = r.codigo_receita_federal_id
       WHERE t.estabelecimento_id = ? AND r.competencia = ? AND r.excluido_em IS NULL AND t.excluido_em IS NULL
         AND t.situacao <> 'cancelado' AND p.excluido_em IS NULL AND r.retencao_dispensada = FALSE AND r.recolhimento_titulo_pagar_id IS NULL
-      GROUP BY tr.id, tr.codigo, tr.codigo_receita ORDER BY tr.codigo`,
+      GROUP BY tr.id, tr.codigo, tr.esfera, COALESCE(c.codigo_receita, tr.codigo_receita)
+      ORDER BY tr.codigo, receita`,
     [est, `${competencia}-01`],
   );
   return linhas.map((r) => ({
     tributo: numero(r['id']),
     sigla: texto(r['codigo']),
-    codigoReceita: r['codigo_receita'] ? texto(r['codigo_receita']) : null,
+    esfera: texto(r['esfera']),
+    tipoGuia: tipoGuiaDaEsfera(texto(r['esfera'])),
+    codigoReceita: r['receita'] ? texto(r['receita']) : null,
     retencoes: numero(r['retencoes']),
     valor: centavos(numero(r['valor'])),
   }));
@@ -750,7 +759,7 @@ const gerarRecolhimento = definirOperacao<RecolhimentoEntrada, ResultadoOperacao
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
     const trib = await tx.uma<Record<string, unknown>>(
-      'SELECT codigo, codigo_receita, dia_vencimento, natureza_financeira_id FROM tributo WHERE id = ?',
+      'SELECT codigo, codigo_receita, esfera, dia_vencimento, natureza_financeira_id FROM tributo WHERE id = ?',
       [e.tributo],
     );
     if (!trib) throw recusa('tributo-inexistente', 'O tributo não existe.', { campos: ['tributo'] });
@@ -766,20 +775,25 @@ const gerarRecolhimento = definirOperacao<RecolhimentoEntrada, ResultadoOperacao
       [est, e.tributo, `${e.competencia}-01`],
       { teto: 5000 },
     );
-    // 07-FIN linha 110: o código de receita do DARF é o das retenções (um só por guia), senão o informado ou o do tributo.
-    const receita = receitaDoRecolhimento(
+    // 07-FIN linha 110: uma guia por código de receita (a retenção sem código herda o do tributo); o informado escolhe um
+    // código. O tipo da guia vem da esfera: federal no DARF (código de quatro dígitos), estadual no DAE, municipal na guia
+    // do município.
+    const esfera = texto(trib['esfera']);
+    const tipoGuia = tipoGuiaDaEsfera(esfera);
+    const plano = gruposDoRecolhimento(
       retidos.map((r) => ({ codigoReceita: r['codigo_receita'] ? texto(r['codigo_receita']) : null })),
       e.codigoReceita,
       trib['codigo_receita'] ? texto(trib['codigo_receita']) : null,
+      esfera,
     );
-    recusar(receita.recusa);
-    const codigoReceita = receita.codigo;
-    recusar(
-      conferirRecolhimento(
-        retidos.map((r) => ({ valor: numero(r['valor_retido']) })),
-        codigoReceita,
-      ),
-    );
+    recusar(plano.recusa);
+    for (const g of plano.grupos)
+      recusar(
+        conferirRecolhimento(
+          g.indices.map((i) => ({ valor: numero(retidos[i]?.['valor_retido']) })),
+          g.codigo,
+        ),
+      );
     const natureza = e.natureza ?? nulo(trib['natureza_financeira_id']);
     if (natureza === null)
       throw recusa('sem-natureza', 'Escolha a natureza do recolhimento (ou cadastre-a no tributo).', {
@@ -802,123 +816,156 @@ const gerarRecolhimento = definirOperacao<RecolhimentoEntrada, ResultadoOperacao
         sentido: 'pagar',
         nativo_sistema: true,
       }));
-    const valor = centavos(retidos.reduce((s, r) => s + numero(r['valor_retido']), 0));
     const vencimento = vencimentoRecolhimento(e.competencia, nulo(trib['dia_vencimento']) ?? 20);
     const hoje = new Date().toISOString().slice(0, 10);
+    const agora = new Date();
     await garantirSequencia(
       tx,
       { tipo: 'titulo_pagar', estabelecimento: est, prefixo: 'TP-' },
-      { usuario: ctx.usuario, agora: new Date() },
+      { usuario: ctx.usuario, agora },
     );
-    const num = await tx.proximoNumero('titulo_pagar');
-    const titulo = await tx.incluir('titulo_pagar', {
-      estabelecimento_id: est,
-      numero: num.formatado,
-      tipo_credor_id: Number(tc.id),
-      empresa_fornecedora_id: e.credor,
-      tipo_documento_financeiro_id: Number(tipoDoc),
-      numero_documento: `${codigoReceita}-${e.competencia}`.slice(0, 30),
-      data_emissao: hoje,
-      data_entrada: hoje,
-      data_lancamento: hoje,
-      valor_bruto: valor,
-      valor_retencoes: 0,
-      valor_liquido: valor,
-      quantidade_parcelas: 1,
-      natureza_financeira_id: natureza,
-      referente:
-        `Recolhimento ${texto(trib['codigo'])} retido ${e.competencia} (receita ${codigoReceita})`.slice(
-          0,
-          200,
-        ),
-    });
-    await tx.incluir('parcela_pagar', {
-      titulo_pagar_id: titulo,
-      sequencia: 1,
-      vencimento,
-      vencimento_original: vencimento,
-      valor,
-      saldo: valor,
-    });
-    for (const r of retidos)
-      await tx.alterar('retencao_titulo', numero(r['id']), numero(r['versao']), {
-        recolhimento_titulo_pagar_id: titulo,
-      });
-    // 07-FIN linha 110: a guia (DARF) com o código de receita e a apuração do retido com as retenções que ela recolhe.
-    const receitaFederal = await tx.uma<{ id: number }>(
-      "SELECT id FROM codigo_receita_federal WHERE documento_arrecadacao = 'darf' AND codigo_receita = ? ORDER BY id LIMIT 1",
-      [codigoReceita],
-    );
-    const receitaId = receitaFederal ? Number(receitaFederal.id) : null;
     await garantirSequencia(
       tx,
       { tipo: 'guia_recolhimento', estabelecimento: est, prefixo: 'GR-' },
-      { usuario: ctx.usuario, agora: new Date() },
+      { usuario: ctx.usuario, agora },
     );
-    const numGuia = await tx.proximoNumero('guia_recolhimento');
-    const guiaId = await tx.incluir('guia_recolhimento', {
-      estabelecimento_id: est,
-      numero: numGuia.valor,
-      tipo_guia: 'darf',
-      codigo_receita_federal_id: receitaId,
-      codigo_receita: receitaId === null ? codigoReceita : null,
-      competencia: `${e.competencia}-01`,
-      periodo_apuracao: periodoApuracao(e.competencia),
-      data_vencimento: vencimento,
-      valor_principal: valor,
-      valor_total: valor,
-      titulo_pagar_id: titulo,
-      situacao: 'emitida',
-    });
-    const ja = await tx.uma(
-      "SELECT COUNT(*) AS n FROM apuracao_retencao WHERE estabelecimento_id = ? AND tributo_id = ? AND sentido = 'retido_de_terceiros'",
-      [est, e.tributo],
-    );
-    const agora = new Date();
-    const numeroApuracao = `RT-${e.competencia}-${e.tributo}-${numero(ja?.['n']) + 1}`.slice(0, 30);
-    const apuracao = await tx.incluir('apuracao_retencao', {
-      estabelecimento_id: est,
-      numero: numeroApuracao,
-      descricao: `Retido ${texto(trib['codigo'])} ${e.competencia} (receita ${codigoReceita})`.slice(0, 150),
-      tributo_id: e.tributo,
-      codigo_receita_federal_id: receitaId,
-      sentido: 'retido_de_terceiros',
-      competencia_inicio: `${e.competencia}-01`,
-      competencia_fim: `${e.competencia}-01`,
-      data_vencimento: vencimento,
-      valor_base_total: centavos(retidos.reduce((s, r) => s + numero(r['base_calculo']), 0)),
-      valor_total: valor,
-      guia_recolhimento_id: guiaId,
-      titulo_pagar_id: titulo,
-      situacao: 'recolhida',
-      aberto_em: agora,
-      abridor_usuario_id: ctx.usuario,
-      fechado_em: agora,
-      fechador_usuario_id: ctx.usuario,
-    });
-    for (const r of retidos)
-      await tx.incluir('apuracao_retencao_item', {
-        apuracao_retencao_id: apuracao,
-        retencao_titulo_id: numero(r['id']),
-        parcela_pagar_id: numero(r['parcela_pagar_id']),
-        valor_base: numero(r['base_calculo']),
-        aliquota: numero(r['aliquota']),
-        valor_retido: numero(r['valor_retido']),
+    const recolhimentos: {
+      tituloPagar: number;
+      guia: number;
+      apuracao: number;
+      codigoReceita: string;
+      retencoes: number;
+      valor: number;
+    }[] = [];
+    for (const g of plano.grupos) {
+      const codigoReceita = g.codigo;
+      const doGrupo = g.indices.map((i) => retidos[i] as Record<string, unknown>);
+      const valor = centavos(doGrupo.reduce((s, r) => s + numero(r['valor_retido']), 0));
+      const num = await tx.proximoNumero('titulo_pagar');
+      const titulo = await tx.incluir('titulo_pagar', {
+        estabelecimento_id: est,
+        numero: num.formatado,
+        tipo_credor_id: Number(tc.id),
+        empresa_fornecedora_id: e.credor,
+        tipo_documento_financeiro_id: Number(tipoDoc),
+        numero_documento: `${codigoReceita}-${e.competencia}`.slice(0, 30),
+        data_emissao: hoje,
+        data_entrada: hoje,
+        data_lancamento: hoje,
+        valor_bruto: valor,
+        valor_retencoes: 0,
+        valor_liquido: valor,
+        quantidade_parcelas: 1,
+        natureza_financeira_id: natureza,
+        referente:
+          `Recolhimento ${texto(trib['codigo'])} retido ${e.competencia} (receita ${codigoReceita})`.slice(
+            0,
+            200,
+          ),
       });
+      await tx.incluir('parcela_pagar', {
+        titulo_pagar_id: titulo,
+        sequencia: 1,
+        vencimento,
+        vencimento_original: vencimento,
+        valor,
+        saldo: valor,
+      });
+      for (const r of doGrupo)
+        await tx.alterar('retencao_titulo', numero(r['id']), numero(r['versao']), {
+          recolhimento_titulo_pagar_id: titulo,
+        });
+      // A guia com o código de receita (o federal ligado ao catálogo da Receita; o do ente, em texto) e a apuração do
+      // retido com as retenções que ela recolhe: emitida e fechada até a baixa do título (guia-recolhimento-titulo.ts).
+      const receitaFederal =
+        tipoGuia === 'darf'
+          ? await tx.uma<{ id: number }>(
+              "SELECT id FROM codigo_receita_federal WHERE documento_arrecadacao = 'darf' AND codigo_receita = ? ORDER BY id LIMIT 1",
+              [codigoReceita],
+            )
+          : null;
+      const receitaId = receitaFederal ? Number(receitaFederal.id) : null;
+      const numGuia = await tx.proximoNumero('guia_recolhimento');
+      const guiaId = await tx.incluir('guia_recolhimento', {
+        estabelecimento_id: est,
+        numero: numGuia.valor,
+        tipo_guia: tipoGuia,
+        codigo_receita_federal_id: receitaId,
+        codigo_receita: receitaId === null ? codigoReceita : null,
+        competencia: `${e.competencia}-01`,
+        periodo_apuracao: periodoApuracao(e.competencia),
+        data_vencimento: vencimento,
+        valor_principal: valor,
+        valor_total: valor,
+        titulo_pagar_id: titulo,
+        situacao: 'emitida',
+      });
+      const ja = await tx.uma(
+        "SELECT COUNT(*) AS n FROM apuracao_retencao WHERE estabelecimento_id = ? AND tributo_id = ? AND sentido = 'retido_de_terceiros'",
+        [est, e.tributo],
+      );
+      const numeroApuracao = `RT-${e.competencia}-${e.tributo}-${numero(ja?.['n']) + 1}`.slice(0, 30);
+      const apuracao = await tx.incluir('apuracao_retencao', {
+        estabelecimento_id: est,
+        numero: numeroApuracao,
+        descricao: `Retido ${texto(trib['codigo'])} ${e.competencia} (receita ${codigoReceita})`.slice(
+          0,
+          150,
+        ),
+        tributo_id: e.tributo,
+        codigo_receita_federal_id: receitaId,
+        sentido: 'retido_de_terceiros',
+        competencia_inicio: `${e.competencia}-01`,
+        competencia_fim: `${e.competencia}-01`,
+        data_vencimento: vencimento,
+        valor_base_total: centavos(doGrupo.reduce((s, r) => s + numero(r['base_calculo']), 0)),
+        valor_total: valor,
+        guia_recolhimento_id: guiaId,
+        titulo_pagar_id: titulo,
+        situacao: 'fechada',
+        aberto_em: agora,
+        abridor_usuario_id: ctx.usuario,
+        fechado_em: agora,
+        fechador_usuario_id: ctx.usuario,
+      });
+      for (const r of doGrupo)
+        await tx.incluir('apuracao_retencao_item', {
+          apuracao_retencao_id: apuracao,
+          retencao_titulo_id: numero(r['id']),
+          parcela_pagar_id: numero(r['parcela_pagar_id']),
+          valor_base: numero(r['base_calculo']),
+          aliquota: numero(r['aliquota']),
+          valor_retido: numero(r['valor_retido']),
+        });
+      recolhimentos.push({
+        tituloPagar: titulo,
+        guia: guiaId,
+        apuracao,
+        codigoReceita,
+        retencoes: doGrupo.length,
+        valor,
+      });
+    }
+    const [primeiro] = recolhimentos;
     return {
-      tituloPagar: titulo,
-      guia: guiaId,
-      apuracao,
-      retencoes: retidos.length,
-      valor,
+      tituloPagar: primeiro?.tituloPagar ?? 0,
+      guia: primeiro?.guia ?? 0,
+      apuracao: primeiro?.apuracao ?? 0,
+      codigoReceita: primeiro?.codigoReceita ?? null,
+      tipoGuia,
+      retencoes: recolhimentos.reduce((s, x) => s + x.retencoes, 0),
+      valor: centavos(recolhimentos.reduce((s, x) => s + x.valor, 0)),
       vencimento,
-      codigoReceita,
+      guias: recolhimentos.length,
+      recolhimentos: JSON.stringify(recolhimentos),
     };
   },
   alvo: (_e, r) => ({ tabela: 'titulo_pagar', id: numero(r['tituloPagar']) || null }),
-  eventos: (_e, r) => [
-    { tipo: 'financeiro.titulo_pagar.lancado', carga: { titulo: numero(r['tituloPagar']), parcelas: 1 } },
-  ],
+  eventos: (_e, r) =>
+    (JSON.parse(String(r['recolhimentos'] ?? '[]')) as { tituloPagar: number }[]).map((x) => ({
+      tipo: 'financeiro.titulo_pagar.lancado',
+      carga: { titulo: x.tituloPagar, parcelas: 1 },
+    })),
 });
 
 /** As operações desta parte, pelo nome da rota. */

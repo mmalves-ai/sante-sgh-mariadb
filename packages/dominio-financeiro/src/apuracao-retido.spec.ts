@@ -5,31 +5,69 @@ import {
   montarDarf,
   parcelasPorReceita,
   periodoApuracao,
-  receitaDoRecolhimento,
+  gruposDoRecolhimento,
+  situacaoDoRecolhimento,
+  tipoGuiaDaEsfera,
 } from './apuracao-retido.js';
 
 describe('apuração do retido e DARF (07-FIN linha 110)', () => {
-  it('código de receita: o das retenções vence; diferentes ou divergentes recusam; senão o informado ou o do tributo', () => {
-    expect(receitaDoRecolhimento([{ codigoReceita: '1708' }, { codigoReceita: null }], null, '0561')).toEqual(
-      {
-        codigo: '1708',
-        recusa: null,
-      },
-    );
-    expect(receitaDoRecolhimento([{ codigoReceita: null }], '5952', '1708').codigo).toBe('5952');
-    expect(receitaDoRecolhimento([{ codigoReceita: null }], '  ', '1708').codigo).toBe('1708');
-    expect(receitaDoRecolhimento([{ codigoReceita: null }], null, null)).toEqual({
-      codigo: null,
+  it('guias por código de receita: sem código herda o do tributo ou o informado; o informado escolhe um código', () => {
+    const ret = [
+      { codigoReceita: '1708' },
+      { codigoReceita: null },
+      { codigoReceita: '3280' },
+      { codigoReceita: '1708' },
+    ];
+    expect(gruposDoRecolhimento(ret, null, '1708', 'federal')).toEqual({
+      grupos: [
+        { codigo: '1708', indices: [0, 1, 3] },
+        { codigo: '3280', indices: [2] },
+      ],
       recusa: null,
     });
-    expect(
-      receitaDoRecolhimento([{ codigoReceita: '1708' }, { codigoReceita: '3280' }], null, null).recusa
-        ?.codigo,
-    ).toBe('receitas-distintas');
-    expect(receitaDoRecolhimento([{ codigoReceita: '1708' }], '5952', null).recusa?.codigo).toBe(
-      'receita-divergente',
+    // Sem código no tributo, a retenção sem código recebe o informado, que escolhe só o grupo dele.
+    expect(gruposDoRecolhimento(ret, ' 1708 ', null, 'federal').grupos).toEqual([
+      { codigo: '1708', indices: [0, 1, 3] },
+    ]);
+    expect(gruposDoRecolhimento(ret, '3280', '0588', 'federal').grupos).toEqual([
+      { codigo: '3280', indices: [2] },
+    ]);
+    expect(gruposDoRecolhimento(ret, null, null, 'federal').recusa?.codigo).toBe('sem-codigo-receita');
+    expect(gruposDoRecolhimento(ret, '5952', '1708', 'federal').recusa?.codigo).toBe('sem-retido-no-codigo');
+    expect(gruposDoRecolhimento([], null, '1708', 'federal').recusa?.codigo).toBe('sem-retido');
+    expect(gruposDoRecolhimento([{ codigoReceita: null }], null, '17A8', 'federal').recusa?.codigo).toBe(
+      'receita-invalida',
     );
-    expect(receitaDoRecolhimento([], '17A8', null).recusa?.codigo).toBe('receita-invalida');
+  });
+
+  it('esfera: ISS municipal vai na guia do município, sem a regra dos quatro dígitos do DARF', () => {
+    expect([
+      tipoGuiaDaEsfera('federal'),
+      tipoGuiaDaEsfera('Estadual'),
+      tipoGuiaDaEsfera('municipal'),
+    ]).toEqual(['darf', 'dae', 'guia_municipal']);
+    expect(gruposDoRecolhimento([{ codigoReceita: null }], null, '1401-ISS', 'municipal')).toEqual({
+      grupos: [{ codigo: '1401-ISS', indices: [0] }],
+      recusa: null,
+    });
+  });
+
+  it('situação da guia e da apuração acompanha o título: emitida/fechada, paga/recolhida, cancelada', () => {
+    const t = { excluido: false, cancelado: false, quitado: false, dataPagamento: null };
+    expect(situacaoDoRecolhimento(t)).toEqual({ guia: 'emitida', apuracao: 'fechada', dataPagamento: null });
+    expect(situacaoDoRecolhimento({ ...t, quitado: true, dataPagamento: '2026-09-20' })).toEqual({
+      guia: 'paga',
+      apuracao: 'recolhida',
+      dataPagamento: '2026-09-20',
+    });
+    expect(situacaoDoRecolhimento({ ...t, excluido: true }).guia).toBe('cancelada');
+    expect(
+      situacaoDoRecolhimento({ ...t, cancelado: true, quitado: true, dataPagamento: '2026-09-20' }),
+    ).toEqual({
+      guia: 'cancelada',
+      apuracao: 'cancelada',
+      dataPagamento: null,
+    });
   });
 
   it('período de apuração: último dia da competência, inclusive fevereiro bissexto', () => {

@@ -25,6 +25,23 @@ const { t } = useI18n({
       total: 'Total apurado',
       vencimento: 'Vencimento',
       guia: 'Guia',
+      situacao: 'Situação',
+      situacoes: {
+        fechada: 'Apurada, a pagar',
+        recolhida: 'Recolhida',
+        cancelada: 'Cancelada',
+        aberta: 'Aberta',
+        emitida: 'Emitida',
+        paga: 'Paga',
+        rascunho: 'Rascunho',
+        retificada: 'Retificada',
+      },
+      tiposGuia: {
+        darf: 'DARF',
+        darf_numerado: 'DARF numerado',
+        dae: 'DAE',
+        guia_municipal: 'Guia do município',
+      },
       titulo_pagar: 'Título',
       darf: 'Ver DARF',
       imprimir: 'Imprimir DARF',
@@ -87,6 +104,7 @@ const reais = (v: number) =>
           <th scope="col">{{ t('total') }}</th>
           <th scope="col">{{ t('vencimento') }}</th>
           <th scope="col">{{ t('guia') }}</th>
+          <th scope="col">{{ t('situacao') }}</th>
           <th scope="col">{{ t('titulo_pagar') }}</th>
           <th scope="col">
             <span class="sr-only">{{ t('darf') }}</span>
@@ -105,10 +123,24 @@ const reais = (v: number) =>
           </td>
           <td>{{ reais(a.total) }}</td>
           <td>{{ a.vencimento ?? '' }}</td>
-          <td>{{ a.guiaNumero ?? '' }}</td>
+          <td>
+            {{ a.guiaNumero ?? '' }}
+            <small v-if="a.tipoGuia" class="secundario">{{ t(`tiposGuia.${a.tipoGuia}`) }}</small>
+          </td>
+          <td :data-testid="`ar-situacao-${a.id}`">
+            {{ t(`situacoes.${a.situacao}`) }}
+            <small v-if="a.guiaSituacao" class="secundario">
+              {{ t('guia') }}: {{ t(`situacoes.${a.guiaSituacao}`) }}
+            </small>
+          </td>
           <td>{{ a.titulo ?? '' }}</td>
           <td>
-            <button v-if="a.guia" type="button" :data-testid="`ar-darf-${a.id}`" @click="abrirDarf(a.guia)">
+            <button
+              v-if="a.guia && (a.tipoGuia === 'darf' || a.tipoGuia === 'darf_numerado')"
+              type="button"
+              :data-testid="`ar-darf-${a.id}`"
+              @click="abrirDarf(a.guia)"
+            >
               {{ t('darf') }}
             </button>
           </td>

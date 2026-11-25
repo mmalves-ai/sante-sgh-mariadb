@@ -40,6 +40,7 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { ligarArquivo, registrarArquivoGuardado, retencaoAte } from '../tiss/armazem-xml.js';
+import { acompanharGuiasDosTitulos, TABELAS_GUIA_DO_TITULO } from './guia-recolhimento-titulo.js';
 import { exigirPeriodoAberto } from './periodo-propria.js';
 import { dataIso, instanteIso, LANCAMENTO_PAGAMENTO, numero, texto } from './vocabulario.js';
 
@@ -102,6 +103,7 @@ const processarRetorno = definirOperacao<z.infer<typeof esquemaProcessarRetorno>
     'movimento_bancario',
     'parcela_pagar',
     'titulo_pagar',
+    ...TABELAS_GUIA_DO_TITULO,
   ],
   entrada: esquemaProcessarRetorno as never,
   async gravar(tx, e, ctx) {
@@ -261,6 +263,8 @@ const processarRetorno = definirOperacao<z.infer<typeof esquemaProcessarRetorno>
           situacao: numero(r['abertas']) > 0 ? 'pago_parcial' : 'pago',
         });
     }
+    // 07-FIN linha 110: a guia do recolhimento quitado pelo retorno fica paga e a apuração do retido, recolhida.
+    await acompanharGuiasDosTitulos(tx, titulos, usuario);
     await tx.alterar('remessa_bancaria', e.remessa, numero(remessa['versao']), {
       situacao: plano.situacaoRemessa,
     });

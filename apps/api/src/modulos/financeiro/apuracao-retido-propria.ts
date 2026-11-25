@@ -21,7 +21,7 @@ export async function apuracoesRetido(l: Leitor, est: number, competencia: strin
   const linhas = await l.consultar(
     `SELECT a.id, a.numero, a.situacao, a.data_vencimento, a.valor_total, a.valor_base_total, tr.codigo AS sigla,
             COALESCE(c.codigo_receita, g.codigo_receita) AS receita, g.id AS guia, g.numero AS guia_numero,
-            g.situacao AS guia_situacao, t.numero AS titulo
+            g.situacao AS guia_situacao, g.tipo_guia, t.numero AS titulo
        FROM apuracao_retencao a JOIN tributo tr ON tr.id = a.tributo_id
        LEFT JOIN guia_recolhimento g ON g.id = a.guia_recolhimento_id
        LEFT JOIN codigo_receita_federal c ON c.id = COALESCE(a.codigo_receita_federal_id, g.codigo_receita_federal_id)
@@ -68,6 +68,7 @@ export async function apuracoesRetido(l: Leitor, est: number, competencia: strin
       guia: r['guia'] == null ? null : numero(r['guia']),
       guiaNumero: r['guia_numero'] == null ? null : numero(r['guia_numero']),
       guiaSituacao: textoOuNulo(r['guia_situacao']),
+      tipoGuia: textoOuNulo(r['tipo_guia']),
       titulo: textoOuNulo(r['titulo']),
     };
   });
@@ -112,6 +113,13 @@ export async function darfDaGuia(l: Leitor, est: number, guia: number) {
 }
 
 /**
+ * Os eventos da Reinf em que o hospital é o tomador ou a fonte pagadora (retido por ele): R-2010 (serviço tomado com
+ * cessão de mão de obra), R-4010 (pagamento a pessoa física) e R-4020 (pagamento a pessoa jurídica). R-2020 e R-4080
+ * (retido pelos tomadores do hospital) e os demais grupos ficam fora do batimento do retido pelo hospital.
+ */
+export const EVENTOS_TOMADOR = ['R-2010', 'R-4010', 'R-4020'] as const;
+
+/**
  * O batimento da competência: o retido pelo hospital (títulos a pagar vivos, retenção não dispensada) por tributo
  * contra os totais dos eventos vigentes da Reinf (sem os rejeitados, os cancelados, as exclusões e os já retificados).
  */
@@ -131,10 +139,11 @@ export async function batimentoReinf(l: Leitor, est: number, competencia: string
             COALESCE(SUM(i.valor_inss), 0) AS inss, COUNT(DISTINCT e.id) AS eventos
        FROM evento_reinf e JOIN evento_reinf_item i ON i.evento_reinf_id = e.id AND i.excluido_em IS NULL
       WHERE e.estabelecimento_id = ? AND e.competencia = ? AND e.excluido_em IS NULL
+        AND e.codigo_evento IN (?, ?, ?)
         AND e.situacao NOT IN ('rejeitado', 'cancelado') AND e.acao <> 'exclusao'
         AND NOT EXISTS (SELECT 1 FROM evento_reinf x WHERE x.retificado_evento_reinf_id = e.id
                          AND x.excluido_em IS NULL AND x.situacao NOT IN ('rejeitado', 'cancelado'))`,
-    [est, inicio],
+    [est, inicio, ...EVENTOS_TOMADOR],
   );
   const porTributo = apurado.map((r) => ({ sigla: texto(r['sigla']), valor: numero(r['valor']) }));
   return {

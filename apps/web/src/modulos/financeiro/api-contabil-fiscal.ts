@@ -49,6 +49,10 @@ export interface RegraRetencao {
 export interface RetidoEmAberto {
   readonly tributo: number;
   readonly sigla: string;
+  /** Esfera do tributo e o tipo da guia que ela gera (DARF federal, DAE estadual, guia do município). */
+  readonly esfera: string;
+  readonly tipoGuia: 'darf' | 'dae' | 'guia_municipal';
+  /** O código de receita das retenções desta linha (a sem código herda o do tributo); nulo: a tela pede o código. */
   readonly codigoReceita: string | null;
   readonly retencoes: number;
   readonly valor: number;
@@ -119,6 +123,7 @@ export interface ApuracaoRetido {
   readonly guia: number | null;
   readonly guiaNumero: number | null;
   readonly guiaSituacao: string | null;
+  readonly tipoGuia: string | null;
   readonly titulo: string | null;
 }
 export interface DarfGuia {

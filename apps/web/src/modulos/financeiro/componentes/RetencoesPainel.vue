@@ -78,7 +78,7 @@ const erro = ref<unknown>(null);
 const ok = ref('');
 const credor = ref<number | null>(null);
 const natureza = ref<number | null>(null);
-const receitas = ref<Record<number, string>>({});
+const receitas = ref<Record<string, string>>({});
 const hoje = () => new Date().toISOString().slice(0, 10);
 const apoio = useQuery({ queryKey: ['financeiro', 'apoio-retencao'], queryFn: () => lerApoioRetencao() });
 const MOMENTOS = ['emissao', 'pagamento', 'recebimento'] as const;
@@ -178,15 +178,24 @@ async function agir(fn: () => Promise<{ mensagem: string }>) {
 }
 const encerrar = (id: number) =>
   agir(() => gravarRegraRetencao({ acao: 'encerrar', id, vigenciaFim: hoje() }, novaChave('regra')));
-const recolher = (tributo: number, receita: string | null) =>
+// 07-FIN linha 110: uma linha por tributo e código de receita das retenções; o botão recolhe só aquele código (uma
+// guia). O código digitado só entra na linha sem código (nem na retenção nem no tributo).
+const chaveAberto = (a: { tributo: number; codigoReceita: string | null }) =>
+  `${a.tributo}-${a.codigoReceita ?? ''}`;
+// O botão leva a sigla; com mais de um código no mesmo tributo, a sigla e o código (rt-gerar-IRRF-3280).
+const idGerar = (a: { tributo: number; sigla: string; codigoReceita: string | null }) =>
+  (aberto.data.value ?? []).filter((x) => x.tributo === a.tributo).length > 1
+    ? `rt-gerar-${a.sigla}-${a.codigoReceita ?? 'sem-codigo'}`
+    : `rt-gerar-${a.sigla}`;
+const recolher = (a: { tributo: number; codigoReceita: string | null }) =>
   agir(() =>
     gerarRecolhimento(
       {
         competencia: props.competencia,
-        tributo,
+        tributo: a.tributo,
         credor: credor.value,
         natureza: natureza.value,
-        codigoReceita: receitas.value[tributo]?.trim() || receita,
+        codigoReceita: a.codigoReceita ?? (receitas.value[chaveAberto(a)]?.trim() || null),
       },
       novaChave('recolhimento'),
     ),
@@ -355,24 +364,30 @@ const recolher = (tributo: number, receita: string | null) =>
       </span>
       <table class="tabela" data-testid="rt-aberto">
         <tbody>
-          <tr v-for="a in aberto.data.value" :key="a.tributo">
+          <tr v-for="a in aberto.data.value" :key="chaveAberto(a)">
             <th scope="row">{{ a.sigla }}</th>
             <td>{{ a.retencoes }}</td>
             <td>{{ a.valor.toFixed(2) }}</td>
             <td>
+              <span v-if="a.codigoReceita">
+                {{ a.codigoReceita }}
+              </span>
               <input
-                v-model="receitas[a.tributo]"
-                :placeholder="a.codigoReceita ?? ''"
+                v-else
+                v-model="receitas[chaveAberto(a)]"
                 :aria-label="`${t('receita')} ${a.sigla}`"
+                :data-testid="`rt-receita-${a.sigla}`"
                 maxlength="10"
               />
             </td>
             <td>
               <button
                 type="button"
-                :disabled="!podeRecolher || !credor"
-                :data-testid="`rt-gerar-${a.sigla}`"
-                @click="recolher(a.tributo, a.codigoReceita)"
+                :disabled="
+                  !podeRecolher || !credor || (!a.codigoReceita && !receitas[chaveAberto(a)]?.trim())
+                "
+                :data-testid="idGerar(a)"
+                @click="recolher(a)"
               >
                 {{ t('gerar') }}
               </button>

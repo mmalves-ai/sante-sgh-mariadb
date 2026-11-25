@@ -69,7 +69,29 @@ function simularApi(page: Page): string[] {
     if (caminho === '/em-aberto')
       return json(
         r,
-        recolhido ? [] : [{ tributo: 5, sigla: 'IRRF', codigoReceita: '1708', retencoes: 2, valor: 45 }],
+        recolhido
+          ? []
+          : [
+              // Uma linha por tributo e código de receita: cada uma vira uma guia.
+              {
+                tributo: 5,
+                sigla: 'IRRF',
+                esfera: 'federal',
+                tipoGuia: 'darf',
+                codigoReceita: '1708',
+                retencoes: 2,
+                valor: 45,
+              },
+              {
+                tributo: 5,
+                sigla: 'IRRF',
+                esfera: 'federal',
+                tipoGuia: 'darf',
+                codigoReceita: '3280',
+                retencoes: 1,
+                valor: 6,
+              },
+            ],
       );
     if (caminho === '/apuracoes')
       return json(
@@ -81,7 +103,7 @@ function simularApi(page: Page): string[] {
                 numero: 'RT-2026-10-5-1',
                 sigla: 'IRRF',
                 codigoReceita: '1708',
-                situacao: 'recolhida',
+                situacao: 'fechada',
                 vencimento: '2026-11-20',
                 base: 3000,
                 total: 45,
@@ -90,7 +112,25 @@ function simularApi(page: Page): string[] {
                 guia: 31,
                 guiaNumero: 12,
                 guiaSituacao: 'emitida',
+                tipoGuia: 'darf',
                 titulo: 'TP-88',
+              },
+              {
+                id: 8,
+                numero: 'RT-2026-10-7-1',
+                sigla: 'ISS',
+                codigoReceita: '1401',
+                situacao: 'fechada',
+                vencimento: '2026-11-10',
+                base: 1000,
+                total: 20,
+                parcelas: [{ codigoReceita: '1401', retencoes: 1, base: 1000, valor: 20 }],
+                somaParcelas: 20,
+                guia: 32,
+                guiaNumero: 13,
+                guiaSituacao: 'emitida',
+                tipoGuia: 'guia_municipal',
+                titulo: 'TP-89',
               },
             ]
           : [],
@@ -137,7 +177,9 @@ test.describe('financeiro: apuração do retido e DARF @C1-098', () => {
     // O recolhimento no painel das retenções: credor pelo nome e um clique.
     await page.getByTestId('rt-credor-busca').fill('Fazenda');
     await page.getByTestId('rt-credor-achados').getByRole('button').first().click();
-    await page.getByTestId('rt-gerar-IRRF').click();
+    // Dois códigos de receita do IRRF na competência: um botão (e uma guia) por código.
+    await expect(page.getByTestId('rt-gerar-IRRF-3280')).toBeVisible();
+    await page.getByTestId('rt-gerar-IRRF-1708').click();
     await expect(page.getByTestId('rt-ok')).toContainText('Título do recolhimento gerado');
     expect(enviados).toContain('/recolhimento');
     // A apuração aparece sem recarregar, com a parcela por código e a soma.
@@ -145,6 +187,10 @@ test.describe('financeiro: apuração do retido e DARF @C1-098', () => {
     await expect(linha).toContainText('1708: 45,00 (2)');
     await expect(linha).toContainText('soma 45,00');
     await expect(linha).toContainText('TP-88');
+    // Apurada e a pagar até a baixa do título; o ISS sai na guia do município, sem DARF.
+    await expect(page.getByTestId('ar-situacao-7')).toContainText('Apurada, a pagar');
+    await expect(page.getByTestId('ar-apuracao-8')).toContainText('Guia do município');
+    await expect(page.getByTestId('ar-darf-8')).toHaveCount(0);
     await semViolacaoAxe(page, '/financeiro/fiscal/reinf (apuração do retido)');
     // O DARF abre na tela com os dez campos do modelo.
     await page.getByTestId('ar-darf-7').click();

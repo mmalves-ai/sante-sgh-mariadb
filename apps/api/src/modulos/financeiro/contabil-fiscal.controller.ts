@@ -224,7 +224,7 @@ export class ContabilFiscalController {
       req,
       'financeiro.gerarRecolhimentoRetencao',
       corpo(esquemaRecolhimento, b),
-      'Título do recolhimento gerado; as retenções da competência ficam ligadas a ele.',
+      'Recolhimento gerado: um título e uma guia por código de receita, com as retenções da competência ligadas.',
     );
   }
 

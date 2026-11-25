@@ -15,43 +15,104 @@ const rec = (codigo: string, mensagem: string, campos: string[]): RecusaFinancei
 /** Código de receita do DARF: quatro dígitos (a variação, quando existe, não entra no campo 04). */
 export const CODIGO_RECEITA_DARF = /^\d{4}$/;
 
+/** Tipo da guia de recolhimento pela esfera do tributo: federal no DARF, estadual no DAE e municipal na guia do município. */
+export type TipoGuiaRecolhimento = 'darf' | 'dae' | 'guia_municipal';
+export function tipoGuiaDaEsfera(esfera: string): TipoGuiaRecolhimento {
+  const e = esfera.trim().toLowerCase();
+  return e === 'municipal' ? 'guia_municipal' : e === 'estadual' ? 'dae' : 'darf';
+}
+
+export interface GrupoRecolhimento {
+  /** O código de receita da guia deste grupo. */
+  readonly codigo: string;
+  /** As posições, na lista recebida, das retenções que a guia recolhe. */
+  readonly indices: readonly number[];
+}
+
 /**
- * O código de receita da guia: o das retenções (todas iguais), senão o informado, senão o do tributo. Retenções com
- * códigos diferentes não cabem num DARF só, e o informado não pode contrariar o das retenções.
+ * As guias do recolhimento: uma por código de receita. A retenção sem código herda o do tributo e, sem este, o
+ * informado. O código informado escolhe só as retenções daquele código (uma guia); sem ele, sai uma guia por código. Só a
+ * guia federal (DARF) exige o código de quatro dígitos da Receita Federal; a estadual e a municipal levam o código do
+ * ente, preenchido.
  */
-export function receitaDoRecolhimento(
+export function gruposDoRecolhimento(
   retidos: readonly { readonly codigoReceita: string | null }[],
   informado: string | null,
   doTributo: string | null,
-): { readonly codigo: string | null; readonly recusa: RecusaFinanceiro | null } {
-  const proprios = [...new Set(retidos.map((r) => r.codigoReceita?.trim()).filter((c): c is string => !!c))];
-  if (proprios.length > 1)
-    return {
-      codigo: null,
-      recusa: rec(
-        'receitas-distintas',
-        `As retenções da competência têm códigos de receita diferentes (${proprios.join(', ')}): cada código vai num DARF.`,
-        ['codigoReceita'],
-      ),
-    };
+  esfera: string,
+): { readonly grupos: readonly GrupoRecolhimento[]; readonly recusa: RecusaFinanceiro | null } {
   const dado = informado?.trim() || null;
-  const [proprio] = proprios;
-  if (proprio && dado && dado !== proprio)
+  if (retidos.length === 0)
     return {
-      codigo: null,
+      grupos: [],
+      recusa: rec('sem-retido', 'Não há retenção em aberto deste tributo na competência.', ['competencia']),
+    };
+  const porCodigo = new Map<string, number[]>();
+  for (const [i, r] of retidos.entries()) {
+    const c = r.codigoReceita?.trim() || doTributo?.trim() || dado;
+    if (!c)
+      return {
+        grupos: [],
+        recusa: rec(
+          'sem-codigo-receita',
+          'Há retenção sem código de receita e o tributo não tem código padrão: informe o código da guia.',
+          ['codigoReceita'],
+        ),
+      };
+    porCodigo.set(c, [...(porCodigo.get(c) ?? []), i]);
+  }
+  const grupos = [...porCodigo.entries()]
+    .filter(([c]) => !dado || c === dado)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([codigo, indices]) => ({ codigo, indices }));
+  if (grupos.length === 0)
+    return {
+      grupos: [],
       recusa: rec(
-        'receita-divergente',
-        `As retenções foram lançadas com o código de receita ${proprio}; o informado (${dado}) não confere.`,
+        'sem-retido-no-codigo',
+        `Não há retenção em aberto com o código de receita ${dado} na competência (há: ${[...porCodigo.keys()].sort().join(', ')}).`,
         ['codigoReceita'],
       ),
     };
-  const codigo = proprio ?? dado ?? (doTributo?.trim() || null);
-  if (codigo && !CODIGO_RECEITA_DARF.test(codigo))
-    return {
-      codigo: null,
-      recusa: rec('receita-invalida', 'O código de receita do DARF tem quatro dígitos.', ['codigoReceita']),
-    };
-  return { codigo, recusa: null };
+  if (tipoGuiaDaEsfera(esfera) === 'darf') {
+    const invalido = grupos.find((g) => !CODIGO_RECEITA_DARF.test(g.codigo));
+    if (invalido)
+      return {
+        grupos: [],
+        recusa: rec(
+          'receita-invalida',
+          `O código de receita do DARF tem quatro dígitos (${invalido.codigo} não serve).`,
+          ['codigoReceita'],
+        ),
+      };
+  }
+  return { grupos, recusa: null };
+}
+
+/** O título que paga a guia, como a guia e a apuração o acompanham. */
+export interface TituloDaGuia {
+  readonly excluido: boolean;
+  readonly cancelado: boolean;
+  /** Todas as parcelas quitadas. */
+  readonly quitado: boolean;
+  /** A data da última quitação, quando quitado. */
+  readonly dataPagamento: string | null;
+}
+
+/**
+ * A situação da guia e da apuração pelo título que as paga: gerado o título, a guia está emitida e a apuração fechada
+ * (apurada, ainda não paga); quitado o título, a guia fica paga (com a data) e a apuração recolhida; excluído ou cancelado
+ * o título, as duas ficam canceladas. A guia retificada não volta atrás.
+ */
+export function situacaoDoRecolhimento(t: TituloDaGuia): {
+  readonly guia: 'emitida' | 'paga' | 'cancelada';
+  readonly apuracao: 'fechada' | 'recolhida' | 'cancelada';
+  readonly dataPagamento: string | null;
+} {
+  if (t.excluido || t.cancelado) return { guia: 'cancelada', apuracao: 'cancelada', dataPagamento: null };
+  if (t.quitado && t.dataPagamento)
+    return { guia: 'paga', apuracao: 'recolhida', dataPagamento: t.dataPagamento };
+  return { guia: 'emitida', apuracao: 'fechada', dataPagamento: null };
 }
 
 /** Período de apuração do retido mensal: o último dia da competência (AAAA-MM). */

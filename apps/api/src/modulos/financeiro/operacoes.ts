@@ -68,6 +68,7 @@ import {
   tipoCredorDe,
   versaoDoTexto,
 } from './vocabulario.js';
+import { acompanharGuiasDosTitulos, TABELAS_GUIA_DO_TITULO } from './guia-recolhimento-titulo.js';
 
 type Linha = Record<string, unknown>;
 const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
@@ -377,6 +378,7 @@ export const TABELAS_TITULO_PAGAR: readonly string[] = [
   'retencao_titulo',
   'rateio_lancamento',
   'sequencia_negocio',
+  ...TABELAS_GUIA_DO_TITULO,
 ];
 
 async function incluirTituloPagar(
@@ -617,6 +619,8 @@ async function excluirTituloPagar(
     excluido_em: agora,
     excluido_por: usuario,
   });
+  // 07-FIN linha 110: o título do recolhimento excluído cancela a guia e a apuração; o retido volta ao aberto.
+  await acompanharGuiasDosTitulos(tx, [titulo], usuario);
   const credor = numero(p['empresa_fornecedora_id'] ?? p['profissional_id'] ?? p['colaborador_id']);
   return {
     titulo: e.titulo,
@@ -848,6 +852,8 @@ async function pagar(
         situacao: numero(r['abertas']) > 0 ? 'pago_parcial' : 'pago',
       });
   }
+  // 07-FIN linha 110: a guia do recolhimento quitado fica paga e a apuração do retido, recolhida.
+  await acompanharGuiasDosTitulos(tx, titulos, usuario);
   return {
     cenario: e.porBordero ? 'pagar-por-bordero' : 'pagar-sem-bordero',
     titulos: lidos.length,
@@ -973,6 +979,7 @@ const baixarTitulo = definirOperacao<BaixarTituloEntrada, ResultadoOperacao>({
     'parcela_receber',
     'recebimento',
     'sequencia_negocio',
+    ...TABELAS_GUIA_DO_TITULO,
   ],
   entrada: ESQUEMAS_OPERACAO_FINANCEIRO['financeiro.baixarTitulo'] as never,
   async gravar(tx, e, ctx) {

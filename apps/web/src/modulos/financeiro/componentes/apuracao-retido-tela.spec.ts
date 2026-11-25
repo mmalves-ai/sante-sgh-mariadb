@@ -18,7 +18,7 @@ const APURACAO = {
   numero: 'RT-2026-10-5-1',
   sigla: 'IRRF',
   codigoReceita: '1708',
-  situacao: 'recolhida',
+  situacao: 'fechada',
   vencimento: '2026-11-20',
   base: 3000,
   total: 45,
@@ -27,7 +27,21 @@ const APURACAO = {
   guia: 31,
   guiaNumero: 12,
   guiaSituacao: 'emitida',
+  tipoGuia: 'darf',
   titulo: 'TP-88',
+};
+const ISS = {
+  ...APURACAO,
+  id: 8,
+  sigla: 'ISS',
+  codigoReceita: '1401',
+  situacao: 'recolhida',
+  parcelas: [{ codigoReceita: '1401', retencoes: 1, base: 1000, valor: 20 }],
+  total: 20,
+  somaParcelas: 20,
+  guia: 32,
+  guiaSituacao: 'paga',
+  tipoGuia: 'guia_municipal',
 };
 const CAMPOS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'].map((n) => ({
   numero: n,
@@ -48,7 +62,7 @@ describe('apuração do retido e DARF na tela', () => {
       vi.fn(async (url: string) => {
         const u = String(url);
         urls.push(u);
-        if (u.includes('/retencao/apuracoes')) return json([APURACAO]);
+        if (u.includes('/retencao/apuracoes')) return json([APURACAO, ISS]);
         if (u.includes('/retencao/darf'))
           return json({
             guia: 31,
@@ -86,6 +100,12 @@ describe('apuração do retido e DARF na tela', () => {
     const linha = w.get('[data-testid="ar-apuracao-7"]').text();
     expect(linha).toContain('1708: 45,00 (2)');
     expect(linha).toContain('soma 45,00');
+    // Situação da apuração e da guia pelo título; o ISS (guia do município) não oferece DARF.
+    expect(w.get('[data-testid="ar-situacao-7"]').text()).toContain('Apurada, a pagar');
+    expect(w.get('[data-testid="ar-situacao-8"]').text()).toContain('Recolhida');
+    expect(w.get('[data-testid="ar-situacao-8"]').text()).toContain('Paga');
+    expect(w.get('[data-testid="ar-apuracao-8"]').text()).toContain('Guia do município');
+    expect(w.find('[data-testid="ar-darf-8"]').exists()).toBe(false);
     expect(w.get('[data-testid="ar-batimento-irrf"]').text()).toContain('5,00');
     expect(w.get('[data-testid="ar-batimento-irrf"]').text()).toContain('Não confere');
     expect(w.text()).toContain('Fora da Reinf: ISS.');
