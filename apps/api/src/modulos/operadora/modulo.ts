@@ -46,6 +46,12 @@ import { PortaAutorizacaoOperadoraMemoria } from './autorizacao-porta-memoria.js
 import { PortaAutorizacaoOperadoraPropria } from './autorizacao-porta-propria.js';
 import { BeneficiariosOperadoraController } from './beneficiarios.controller.js';
 import { DeclaracoesAnsController } from './ans-declaracoes.controller.js';
+import { ReajusteColetivoOperadoraController } from './reajuste-coletivo.controller.js';
+import {
+  METODOS_REAJUSTE_COLETIVO,
+  PORTA_REAJUSTE_COLETIVO,
+  PortaReajusteColetivoPropria,
+} from './reajuste-coletivo-propria.js';
 import {
   METODOS_DECLARACOES_ANS,
   PORTA_DECLARACOES_ANS,
@@ -246,6 +252,7 @@ export async function moduloOperadora(
       PortalPrestadorController,
       CadastroComplementarOperadoraController,
       DeclaracoesAnsController,
+      ReajusteColetivoOperadoraController,
     ],
     providers: [
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
@@ -263,6 +270,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaCadastroComplementarPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaCadastroComplementarPropria>(METODOS_CADASTRO_COMPLEMENTAR),
+      },
+      // 08-SGO L96 (C1-086): índice, regra por sinistralidade e agrupamento do coletivo pequeno só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_REAJUSTE_COLETIVO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaReajusteColetivoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaReajusteColetivoPropria>(METODOS_REAJUSTE_COLETIVO),
       },
       // 08-SGO L110: TPS apurada, conferência cadastral e DMED só no banco do cliente (sem núcleo, 503).
       {

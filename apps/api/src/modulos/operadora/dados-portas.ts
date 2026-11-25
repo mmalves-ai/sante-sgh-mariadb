@@ -985,6 +985,8 @@ export interface DadosReajuste extends EntradaReajuste {
 }
 
 export interface EntradaReajuste {
+  /** C1-086: o índice cadastrado de onde veio o teto (nulo quando digitado). */
+  readonly indice?: number | null;
   readonly operadora: number;
   readonly contrato: number;
   readonly competencia: string;

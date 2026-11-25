@@ -750,7 +750,13 @@ export class PortaCobrancaOperadoraPropria
   situacaoReajuste(
     c: ContextoCobranca,
     contrato: number,
-  ): Promise<{ vigentes: string[]; ultimaMensalidade: string | null; vidas: number }> {
+    competencia?: string,
+  ): Promise<{
+    vigentes: string[];
+    ultimaMensalidade: string | null;
+    vidas: number;
+    teto: { id: number; percentual: number; protocolo: string | null } | null;
+  }> {
     return this.ler(c, async (l) => {
       const est = c.estabelecimento ?? 0;
       const vig = await l.consultar(
@@ -771,10 +777,27 @@ export class PortaCobrancaOperadoraPropria
             AND b.excluido_em IS NULL`,
         [contrato, est],
       );
+      // C1-086: o teto da ANS cadastrado (indice_reajuste_plano) que vale no primeiro dia da competência.
+      const teto = competencia
+        ? await l.uma(
+            `SELECT id, percentual, protocolo_autorizacao FROM indice_reajuste_plano
+              WHERE tipo_indice = 'teto_individual_ans' AND vigencia_inicio <= ?
+                AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
+              ORDER BY vigencia_inicio DESC LIMIT 1`,
+            [`${competencia}-01`, `${competencia}-01`],
+          )
+        : null;
       return {
         vigentes: vig.map((r) => competenciaDe(r['data_base'])),
         ultimaMensalidade: ult?.['c'] ? competenciaDe(ult['c']) : null,
         vidas: num(vidas?.['n']),
+        teto: teto
+          ? {
+              id: num(teto['id']),
+              percentual: Number(teto['percentual']),
+              protocolo: teto['protocolo_autorizacao'] ? txt(teto['protocolo_autorizacao']) : null,
+            }
+          : null,
       };
     });
   }
@@ -1014,6 +1037,7 @@ async function registrarReajuste(
     throw recusa('reajuste-duplicado', 'Já existe reajuste vigente deste contrato nesta competência.');
   const valores = {
     percentual: r.percentual,
+    indice_reajuste_plano_id: r.indice ?? null,
     quantidade_vidas: r.vidas,
     situacao: 'aplicado',
     aplicado_em: new Date(),

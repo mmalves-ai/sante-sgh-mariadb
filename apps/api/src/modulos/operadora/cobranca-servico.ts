@@ -947,12 +947,16 @@ export class ServicoCobrancaOperadora {
   async reajustar(s: SessaoCadastro, e: ReajusteEntrada): Promise<ResultadoCobranca> {
     await this.exigirFatia(s);
     const k = await this.contratoDe(s, e.contrato);
-    const sit = await this.porta.situacaoReajuste(s.porta, k.id);
+    const sit = await this.porta.situacaoReajuste(s.porta, k.id, e.competencia);
+    // C1-086: no individual ou familiar sem teto digitado, vale o teto da ANS cadastrado para a competência.
+    const doIndice = k.tipoContratacao === 1 && e.tetoAns == null && sit.teto ? sit.teto : null;
+    const tetoAns = e.tetoAns ?? doIndice?.percentual ?? null;
+    const oficioAns = e.oficioAns ?? doIndice?.protocolo ?? null;
     const { problemas, avisos } = conferirReajuste({
       competencia: e.competencia,
       percentual: e.percentual,
-      tetoAns: e.tetoAns ?? null,
-      oficioAns: e.oficioAns ?? null,
+      tetoAns,
+      oficioAns,
       contrato: {
         situacao: k.situacao,
         inicio: k.inicio,
@@ -976,8 +980,9 @@ export class ServicoCobrancaOperadora {
           contrato: k.id,
           competencia: e.competencia,
           percentual: e.percentual,
-          tetoAns: e.tetoAns ?? null,
-          oficioAns: e.oficioAns ?? null,
+          tetoAns,
+          oficioAns,
+          indice: doIndice?.id ?? null,
           vidas: sit.vidas,
           motivo: e.motivo,
           por: s.login,

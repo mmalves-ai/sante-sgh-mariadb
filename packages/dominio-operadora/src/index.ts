@@ -16,6 +16,8 @@ export * from './elegibilidade.js';
 export * from './sinteticos.js';
 export * from './rede.js';
 export * from './cobranca.js';
+// F7 (08-SGO L96, C1-086): índice de reajuste, agrupamento do coletivo pequeno e regra por sinistralidade.
+export * from './reajuste-coletivo.js';
 // F7 (08-SGO linha 98): coparticipação com tetos por evento, mês e ano.
 export * from './coparticipacao.js';
 export * from './autorizacao.js';

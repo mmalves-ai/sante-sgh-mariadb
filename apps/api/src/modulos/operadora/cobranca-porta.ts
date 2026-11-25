@@ -165,7 +165,14 @@ export interface PortaCobrancaOperadora {
   situacaoReajuste(
     c: ContextoCobranca,
     contrato: number,
-  ): Promise<{ vigentes: string[]; ultimaMensalidade: string | null; vidas: number }>;
+    competencia?: string,
+  ): Promise<{
+    vigentes: string[];
+    ultimaMensalidade: string | null;
+    vidas: number;
+    /** C1-086: o teto da ANS cadastrado e vigente no primeiro dia da competência (só na porta do banco). */
+    teto?: { id: number; percentual: number; protocolo: string | null } | null;
+  }>;
   gravar<T>(
     c: ContextoCobranca,
     trilha: RegistroTrilhaTela | ((r: T) => RegistroTrilhaTela),
