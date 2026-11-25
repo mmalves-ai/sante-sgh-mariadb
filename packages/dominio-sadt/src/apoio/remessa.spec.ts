@@ -4,9 +4,13 @@ import {
   conferirCodigoApoio,
   conferirFatorConversao,
   conferirMeioEnvio,
+  etiquetaApoioZpl,
   etiquetaDoApoio,
+  pendenciasDeParaAnalito,
+  pendenciasDeParaMaterial,
   RecusaApoio,
   situacaoDaRemessaDepois,
+  situacaoDaRemessaDepoisDoRetorno,
 } from './remessa.js';
 
 const codigo = (fn: () => unknown) => {
@@ -124,5 +128,60 @@ describe('remessa do laboratório de apoio', () => {
     expect(conferirFatorConversao(0.0555)).toBe(0.0555);
     expect(codigo(() => conferirFatorConversao(0))).toBe('fator-invalido');
     expect(codigo(() => conferirFatorConversao(Number.NaN))).toBe('fator-invalido');
+  });
+});
+
+describe('retorno do apoio na remessa, etiqueta de impressora e conferência do de-para novo', () => {
+  it('a remessa enviada fica recebida enquanto falta item e concluída com todos de volta', () => {
+    expect(situacaoDaRemessaDepoisDoRetorno('enviada', { ativos: 3, comResultado: 1 })).toBe('recebida');
+    expect(situacaoDaRemessaDepoisDoRetorno('recebida', { ativos: 3, comResultado: 2 })).toBe('recebida');
+    expect(situacaoDaRemessaDepoisDoRetorno('recebida', { ativos: 3, comResultado: 3 })).toBe('concluida');
+    expect(situacaoDaRemessaDepoisDoRetorno('enviada', { ativos: 1, comResultado: 1 })).toBe('concluida');
+    expect(situacaoDaRemessaDepoisDoRetorno('enviada', { ativos: 2, comResultado: 0 })).toBe('enviada');
+  });
+
+  it('a remessa que não saiu, a cancelada e a concluída não mudam pelo retorno', () => {
+    for (const s of ['aberta', 'fechada', 'cancelada', 'concluida'] as const)
+      expect(situacaoDaRemessaDepoisDoRetorno(s, { ativos: 1, comResultado: 1 })).toBe(s);
+  });
+
+  it('a etiqueta de impressora traz o código de barras e as linhas, com os comandos em hexadecimal', () => {
+    const zpl = etiquetaApoioZpl({ codigo: 'H01-RA-7-001', linhas: ['APOIO ^X', 'Remessa RA-7 / 001'] });
+    expect(zpl.startsWith('^XA')).toBe(true);
+    expect(zpl.endsWith('^XZ')).toBe(true);
+    expect(zpl).toContain('^BCN,60,Y,N,N^FH_^FDH01-RA-7-001^FS');
+    expect(zpl).toContain('^FDAPOIO _5EX^FS');
+    expect(zpl).toContain('^FDRemessa RA-7 / 001^FS');
+    // O sublinhado do código vai em hexadecimal (é o caractere de escape do campo).
+    expect(etiquetaApoioZpl({ codigo: 'A_1', linhas: [] })).toContain('^FDA_5F1^FS');
+  });
+
+  it('a etiqueta de impressora recusa código fora do que o leitor lê e caractere de controle', () => {
+    expect(codigo(() => etiquetaApoioZpl({ codigo: 'H^01', linhas: [] }))).toBe('etiqueta-invalida');
+    expect(codigo(() => etiquetaApoioZpl({ codigo: '', linhas: [] }))).toBe('etiqueta-invalida');
+    expect(codigo(() => etiquetaApoioZpl({ codigo: 'H01', linhas: ['a\nb'] }))).toBe('etiqueta-invalida');
+  });
+
+  it('o de-para novo diz na hora o que falta e fica sem pendência quando completo', () => {
+    expect(
+      pendenciasDeParaAnalito({
+        exame: null,
+        analito: null,
+        codigoExameApoio: '',
+        codigoAnalitoApoio: 'G U',
+        fatorConversao: 0,
+      }),
+    ).toHaveLength(5);
+    expect(
+      pendenciasDeParaAnalito({
+        exame: 1,
+        analito: 2,
+        codigoExameApoio: 'GLI',
+        codigoAnalitoApoio: 'GLU',
+        fatorConversao: 1,
+      }),
+    ).toEqual([]);
+    expect(pendenciasDeParaMaterial({ material: null, codigoApoio: '' })).toHaveLength(2);
+    expect(pendenciasDeParaMaterial({ material: 3, codigoApoio: 'SOR' })).toEqual([]);
   });
 });

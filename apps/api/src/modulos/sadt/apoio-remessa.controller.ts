@@ -1,12 +1,13 @@
 // Laboratório de apoio no banco do cliente (F3.5, 05-SADT linha 14):
 //   GET  /api/sadt/apoio/:laboratorio/pendentes        as amostras coletadas do apoio que ainda não saíram
 //   GET  /api/sadt/apoio/:laboratorio/de-para          o de-para de analito e de material (ativos e inativos)
+//   GET  /api/sadt/apoio/:laboratorio/de-para/opcoes   os exames do apoio com os analitos e os materiais a incluir
 //   POST /api/sadt/apoio/de-para/analito               inclui ou altera (desativa) o de-para de analito
 //   POST /api/sadt/apoio/de-para/material              inclui ou altera (desativa) o de-para de material
 //   GET  /api/sadt/apoio/remessas?laboratorio=         as remessas (abertas e fechadas primeiro)
 //   POST /api/sadt/apoio/remessas                      abre a remessa com as pendentes (ou as amostras escolhidas)
 //   GET  /api/sadt/apoio/remessas/:id                  a remessa com os itens e o que falta de de-para
-//   GET  /api/sadt/apoio/remessas/:id/etiquetas        as etiquetas do apoio (só identificadores)
+//   GET  /api/sadt/apoio/remessas/:id/etiquetas        as etiquetas do apoio (só identificadores; texto e impressora)
 //   POST /api/sadt/apoio/remessas/:id/acao             fechar, reabrir, enviar ou cancelar (com motivo)
 //   POST /api/sadt/apoio/remessas/:id/retirar          retira um item da remessa aberta (fica cancelado)
 // Tudo ligado para todos: o que cada cargo faz vem só da permissão de cada rota.
@@ -93,6 +94,12 @@ export class ApoioRemessaController {
   @Permissao(P.apoioLer)
   async pendentes(@Param('laboratorio') lab: string, @Req() req: RequisicaoAutorizada) {
     return { itens: await this.s.pendentes(sessaoDe(req).porta, idDaRota(lab)) };
+  }
+
+  @Get(':laboratorio/de-para/opcoes')
+  @Permissao(P.apoioLer)
+  opcoesDePara(@Param('laboratorio') lab: string, @Req() req: RequisicaoAutorizada) {
+    return this.s.opcoesDePara(sessaoDe(req).porta, idDaRota(lab));
   }
 
   @Get(':laboratorio/de-para')

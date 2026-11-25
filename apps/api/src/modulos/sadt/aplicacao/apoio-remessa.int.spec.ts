@@ -74,6 +74,12 @@ describe.skipIf(SEM_BANCO)(
          VALUES (?, ?, 'GLI-T', 'GLICOSE APOIO SINTETICA', ?)`,
           [m!.exameLab, ids.lab, agora],
         );
+        // O segundo apoio é integrado e tem o exame no catálogo dele (o envio pela integração publica o pedido).
+        await ins(
+          `INSERT INTO exame_laboratorio_apoio (exame_id, laboratorio_apoio_id, codigo_exame_apoio, nome_exame_apoio, criado_em)
+         VALUES (?, ?, 'GLI-2', 'GLICOSE APOIO DOIS', ?)`,
+          [m!.exameLab, ids.outroLab, agora],
+        );
         // Dois itens do laboratório (a massa) e dois a mais na mesma requisição: um sem código no apoio (exame de imagem
         // não tem de-para), um de outro apoio.
         const novoItem = (seq: number, exame: number, lab: number) =>
@@ -132,6 +138,10 @@ describe.skipIf(SEM_BANCO)(
             labs,
           );
           await x('DELETE FROM remessa_laboratorio_apoio WHERE laboratorio_apoio_id IN (?, ?)', labs);
+          await x(
+            "DELETE FROM integracao_mensagem WHERE ponto = 'fato.exame.apoio' AND estabelecimento_id = ?",
+            [m!.base.est],
+          );
           await x('DELETE FROM de_para_analito_apoio WHERE laboratorio_apoio_id IN (?, ?)', labs);
           await x('DELETE FROM de_para_material_apoio WHERE laboratorio_apoio_id IN (?, ?)', labs);
           await x('DELETE FROM exame_laboratorio_apoio WHERE laboratorio_apoio_id IN (?, ?)', labs);
@@ -248,13 +258,20 @@ describe.skipIf(SEM_BANCO)(
         [semCodigo.id],
       );
       expect([itemRetirado?.['situacao'], itemRetirado?.['excluido_em']]).toEqual(['cancelado', null]);
-      expect(await servico.agir(c, r.id, { acao: 'fechar' })).toEqual({ id: r.id, situacao: 'fechada' });
+      expect(await servico.agir(c, r.id, { acao: 'fechar' })).toEqual({
+        id: r.id,
+        situacao: 'fechada',
+        pedidos: 0,
+      });
       expect(await falha(servico.agir(c, r.id, { acao: 'enviar', meio: 'integracao' }))).toBe(
         'meio-incompativel',
       );
       const etiquetas = await servico.etiquetas(c, r.id);
       expect(etiquetas.map((e) => e.codigo)).toEqual([`H01-${r.numero}-001`]);
       expect(etiquetas[0]!.linhas.join(' ')).toContain('Material SOR');
+      // A mesma etiqueta na linguagem da impressora: o código de barras com o código que o apoio lê.
+      expect(etiquetas[0]!.zpl).toContain(`^FDH01-${r.numero}-001^FS`);
+      expect(etiquetas[0]!.zpl.startsWith('^XA')).toBe(true);
       await servico.agir(c, r.id, { acao: 'enviar', meio: 'portal', protocolo: 'P-123', temperaturaC: 4 });
       expect(await falha(servico.agir(c, r.id, { acao: 'cancelar', motivo: 'Desistência do envio' }))).toBe(
         'remessa-ja-enviada',
@@ -294,6 +311,51 @@ describe.skipIf(SEM_BANCO)(
       ).toBe(1);
       expect(await falha(servico.remessa(contexto(m!, m!.base.outroEst), r.id))).toBe('remessa-inexistente');
       expect((await servico.remessas(c, ids.lab)).length).toBe(2);
+    });
+
+    it('envio pela integração: publica o pedido de cada exame na fila comum, na mesma transação do envio', async () => {
+      const c = contexto(m!);
+      const fila = () =>
+        conta(
+          "SELECT COUNT(*) AS n FROM integracao_mensagem WHERE ponto = 'fato.exame.apoio' AND estabelecimento_id = ? AND direcao = 'saida'",
+          [m!.base.est],
+        );
+      // O envio pelo portal do primeiro teste não publicou nada.
+      expect(await fila()).toBe(0);
+      const r = await servico.abrir(c, { laboratorio: ids.outroLab });
+      expect([r.itens, r.semDePara]).toEqual([1, 0]);
+      await servico.agir(c, r.id, { acao: 'fechar' });
+      expect(await fila()).toBe(0);
+      const enviada = await servico.agir(c, r.id, { acao: 'enviar', meio: 'integracao' });
+      expect(enviada).toEqual({ id: r.id, situacao: 'enviada', pedidos: 1 });
+      const msg = await um(
+        `SELECT situacao, entidade, entidade_id, JSON_VALUE(conteudo, '$.exame') AS exame, JSON_VALUE(conteudo, '$.remessa') AS remessa,
+                JSON_VALUE(conteudo, '$.paciente') IS NOT NULL AS paciente
+           FROM integracao_mensagem WHERE ponto = 'fato.exame.apoio' AND estabelecimento_id = ?`,
+        [m!.base.est],
+      );
+      expect([
+        msg?.['situacao'],
+        msg?.['entidade'],
+        Number(msg?.['entidade_id']),
+        Number(msg?.['exame']),
+        Number(msg?.['remessa']),
+        Number(msg?.['paciente']),
+      ]).toEqual(['pendente', 'remessa_laboratorio_apoio', r.id, ids.item4, r.id, 1]);
+      expect(await fila()).toBe(1);
+      const g = await um('SELECT situacao, meio_envio FROM remessa_laboratorio_apoio WHERE id = ?', [r.id]);
+      expect([g?.['situacao'], g?.['meio_envio']]).toEqual(['enviada', 'integracao']);
+    });
+
+    it('opções do de-para: os exames do apoio com os analitos e os materiais, marcando o que já tem de-para', async () => {
+      const o = await servico.opcoesDePara(contexto(m!), ids.lab);
+      const exame = o.exames.find((e) => e.exame === m!.exameLab);
+      expect(exame?.codigoExameApoio).toBe('GLI-T');
+      expect(exame?.analitos.find((a) => a.analito === m!.analito)?.comDePara).toBe(true);
+      expect(o.materiais.find((x) => x.material === ids.material)?.comDePara).toBe(true);
+      expect(await falha(servico.opcoesDePara(contexto(m!, m!.base.outroEst), ids.lab))).toBe(
+        'laboratorio-inexistente',
+      );
     });
   },
 );

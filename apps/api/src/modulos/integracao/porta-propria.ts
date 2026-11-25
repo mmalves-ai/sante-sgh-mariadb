@@ -23,6 +23,7 @@
 import { randomUUID } from 'node:crypto';
 import { aplicarTratamento } from '@sgh/dominio-integracao';
 import { idadeEmDias, interpretarValorApoio } from './aplicacao/interpretacao-apoio.js';
+import { marcarRetornoNaRemessa, TABELAS_RETORNO_REMESSA } from '../sadt/public-api.js';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -88,6 +89,8 @@ const TABELAS_RESULTADO_APOIO = [
   'resultado_analito',
   'aviso_valor_critico',
   'mensagem_integracao_entrada',
+  // O item da remessa que levou a amostra fica com o resultado recebido, e a remessa, recebida ou concluída.
+  ...TABELAS_RETORNO_REMESSA,
 ] as const;
 
 // ---- conversões (banco → negócio) ----
@@ -1057,6 +1060,7 @@ async function gravarResultadoApoio(
     liberado_em: agora,
     liberado_por_usuario_id: tx.contexto.usuario,
   });
+  await marcarRetornoNaRemessa(tx, est, e.exame, resultado, agora);
   // A mensagem que trouxe o resultado sai da fila na mesma transação (sem resultado gravado com mensagem presa).
   if (e.recebida !== null) {
     const n = await new GravadorIntegracaoBanco(tx, est).concluirRecebida(e.recebida, {

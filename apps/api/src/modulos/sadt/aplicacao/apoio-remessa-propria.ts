@@ -10,6 +10,7 @@ import {
   conferirCodigoApoio,
   conferirFatorConversao,
   conferirMeioEnvio,
+  etiquetaApoioZpl,
   etiquetaDoApoio,
   type EtiquetaApoio,
   RecusaApoio,
@@ -19,6 +20,7 @@ import {
 import {
   type ContextoNucleo,
   definirOperacao,
+  type EventoOperacao,
   type Executor,
   type Leitor,
   recusa,
@@ -37,6 +39,8 @@ const TABELAS = [
   'de_para_material_apoio',
 ];
 export const TIPO_NUMERO_REMESSA = 'remessa_laboratorio_apoio';
+/** O fato que o parceiro do apoio assina: um pedido por exame da remessa enviada pela integração. */
+export const EVENTO_PEDIDO_APOIO = 'fato.exame.apoio';
 
 const id = z.number().int().positive();
 export const esquemaAbrirRemessa = z.object({
@@ -163,6 +167,7 @@ export class ServicoApoioRemessa {
     nome: string,
     tabela: string,
     fn: (tx: TxOperacao, est: number) => Promise<T>,
+    eventosDe?: () => readonly EventoOperacao[],
   ): Promise<T> {
     const est = this.est(c);
     let saida: { valor: T } | null = null;
@@ -174,6 +179,8 @@ export class ServicoApoioRemessa {
         saida = { valor: await fn(tx, est) };
         return { valor: JSON.stringify(saida.valor) };
       },
+      // Os fatos da gravação (ex.: o pedido de cada exame ao apoio) saem na fila comum, na mesma transação.
+      eventos: () => (eventosDe ? eventosDe() : []),
       alvo: () => ({ tabela, id: saida ? saida.valor.id : null }),
       trilha: () => ({ dados: { evento: nome }, motivo: null }),
     });
@@ -319,7 +326,7 @@ export class ServicoApoioRemessa {
   }
 
   /** As etiquetas do apoio de cada item ativo da remessa (só identificadores). */
-  etiquetas(c: ContextoSadt, remessa: number): Promise<(EtiquetaApoio & { item: number })[]> {
+  etiquetas(c: ContextoSadt, remessa: number): Promise<(EtiquetaApoio & { item: number; zpl: string })[]> {
     return this.ler(c, async (l, est) => {
       const r = await this.lerRemessa(l, est, remessa);
       const lab = await l.uma('SELECT nome, codigo_cliente_no_apoio FROM laboratorio_apoio WHERE id = ?', [
@@ -327,9 +334,8 @@ export class ServicoApoioRemessa {
       ]);
       return r.itens
         .filter((i) => i.situacao !== 'cancelado')
-        .map((i) => ({
-          item: i.id,
-          ...daRegra(() =>
+        .map((i) => {
+          const e = daRegra(() =>
             etiquetaDoApoio({
               laboratorio: String(lab?.['nome'] ?? r.laboratorioNome),
               codigoCliente: t(lab?.['codigo_cliente_no_apoio']),
@@ -339,8 +345,10 @@ export class ServicoApoioRemessa {
               codigoExameApoio: i.codigoExameApoio,
               codigoMaterialApoio: i.codigoMaterialApoio,
             }),
-          ),
-        }));
+          );
+          // A mesma etiqueta na linguagem da impressora térmica (o arquivo que a tela baixa).
+          return { item: i.id, ...e, zpl: daRegra(() => etiquetaApoioZpl(e)) };
+        });
     });
   }
 
@@ -389,6 +397,67 @@ export class ServicoApoioRemessa {
   }
 
   // ── Gravações ─────────────────────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * O que a tela oferece ao incluir de-para: os exames já ligados a este apoio com os analitos de cada um (os que
+   * recebem valor) e os materiais ativos. Quem já tem de-para ativo vem marcado, para a tela não oferecer de novo.
+   */
+  opcoesDePara(c: ContextoSadt, lab: number) {
+    return this.ler(c, async (l, est) => {
+      await this.laboratorio(l, est, lab);
+      const linhas = await l.consultar(
+        `SELECT ex.id AS exame, ex.nome AS exame_nome, ela.codigo_exame_apoio, an.id AS analito, an.nome AS analito_nome,
+                (SELECT COUNT(*) FROM de_para_analito_apoio d WHERE d.laboratorio_apoio_id = ela.laboratorio_apoio_id
+                    AND d.exame_id = ex.id AND d.analito_id = an.id AND d.excluido_em IS NULL) AS ja
+           FROM exame_laboratorio_apoio ela
+           JOIN exame ex ON ex.id = ela.exame_id
+           JOIN exame_analito ea ON ea.exame_id = ex.id AND ea.ativo AND NOT ea.titulo
+           JOIN analito an ON an.id = ea.analito_id
+          WHERE ela.laboratorio_apoio_id = ? AND ela.ativo ORDER BY ex.nome, ea.ordem`,
+        [lab],
+        { teto: 5000 },
+      );
+      const exames = new Map<
+        number,
+        {
+          exame: number;
+          nome: string;
+          codigoExameApoio: string;
+          analitos: { analito: number; nome: string; comDePara: boolean }[];
+        }
+      >();
+      for (const x of linhas) {
+        const e = exames.get(n(x['exame'])) ?? {
+          exame: n(x['exame']),
+          nome: String(x['exame_nome']),
+          codigoExameApoio: String(x['codigo_exame_apoio']),
+          analitos: [],
+        };
+        e.analitos.push({
+          analito: n(x['analito']),
+          nome: String(x['analito_nome']),
+          comDePara: n(x['ja']) > 0,
+        });
+        exames.set(e.exame, e);
+      }
+      const materiais = await l.consultar(
+        `SELECT mb.id, mb.descricao,
+                (SELECT COUNT(*) FROM de_para_material_apoio d WHERE d.laboratorio_apoio_id = ?
+                    AND d.material_biologico_id = mb.id AND d.excluido_em IS NULL) AS ja
+           FROM material_biologico mb WHERE mb.ativo ORDER BY mb.descricao`,
+        [lab],
+        { teto: 1000 },
+      );
+      return {
+        exames: [...exames.values()],
+        materiais: materiais.map((x) => ({
+          material: n(x['id']),
+          nome: String(x['descricao']),
+          comDePara: n(x['ja']) > 0,
+        })),
+      };
+    });
+  }
 
   /** Abre a remessa com as amostras pendentes do laboratório (ou só as escolhidas), numerada pela sequência. */
   abrir(
@@ -497,60 +566,91 @@ export class ServicoApoioRemessa {
     c: ContextoSadt,
     remessa: number,
     entrada: unknown,
-  ): Promise<{ id: number; situacao: SituacaoRemessa }> {
+  ): Promise<{ id: number; situacao: SituacaoRemessa; pedidos: number }> {
     const p = esquemaAcaoRemessa.parse(entrada);
-    return this.gravar(c, `sadt.apoio.remessa.${p.acao}`, 'remessa_laboratorio_apoio', async (tx, est) => {
-      const [r] = await tx.consultarParaAtualizar(
-        `SELECT id, situacao, versao, laboratorio_apoio_id, aberta_em, observacao FROM remessa_laboratorio_apoio
+    // O envio pela integração publica o pedido de cada exame ao apoio na fila comum, na mesma transação do envio.
+    const pedidos: EventoOperacao[] = [];
+    return this.gravar(
+      c,
+      `sadt.apoio.remessa.${p.acao}`,
+      'remessa_laboratorio_apoio',
+      async (tx, est) => {
+        const [r] = await tx.consultarParaAtualizar(
+          `SELECT id, situacao, versao, laboratorio_apoio_id, aberta_em, observacao FROM remessa_laboratorio_apoio
           WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
-        [remessa, est],
-      );
-      if (!r) throw recusa('remessa-inexistente', 'A remessa não existe neste estabelecimento.');
-      const q = await tx.uma(
-        `SELECT COUNT(*) AS itens, SUM(codigo_exame_apoio IS NULL) AS sem FROM remessa_laboratorio_apoio_item
-          WHERE remessa_laboratorio_apoio_id = ? AND excluido_em IS NULL AND situacao <> 'cancelado'`,
-        [remessa],
-      );
-      const nova = daRegra(() =>
-        situacaoDaRemessaDepois(String(r['situacao']) as SituacaoRemessa, p.acao, {
-          itens: n(q?.['itens'] ?? 0),
-          semDePara: n(q?.['sem'] ?? 0),
-          motivo: p.motivo,
-        }),
-      );
-      const agora = new Date();
-      const dados: Record<string, unknown> = { situacao: nova };
-      if (p.acao === 'fechar') dados['fechada_em'] = agora;
-      if (p.acao === 'reabrir') dados['fechada_em'] = null;
-      if (p.acao === 'enviar') {
-        const lab = await this.laboratorio(tx, est, n(r['laboratorio_apoio_id']));
-        daRegra(() => conferirMeioEnvio(lab.canal, p.meio));
-        Object.assign(dados, {
-          enviada_em: agora,
-          enviada_por_usuario_id: tx.contexto.usuario,
-          meio_envio: p.meio,
-          protocolo_apoio: p.protocolo,
-          transportador: p.transportador,
-          temperatura_envio_c: p.temperaturaC,
-        });
-      }
-      if (p.acao === 'cancelar') {
-        const antes = t(r['observacao']);
-        dados['observacao'] = `${antes ? `${antes}\n` : ''}Cancelada: ${p.motivo}`.slice(0, 60000);
-        const itens = await tx.consultarParaAtualizar(
-          `SELECT id, versao FROM remessa_laboratorio_apoio_item
-            WHERE remessa_laboratorio_apoio_id = ? AND excluido_em IS NULL AND situacao <> 'cancelado'`,
-          [remessa],
-          { teto: 1000 },
+          [remessa, est],
         );
-        for (const i of itens)
-          await tx.alterar('remessa_laboratorio_apoio_item', n(i['id']), n(i['versao']), {
-            situacao: 'cancelado',
+        if (!r) throw recusa('remessa-inexistente', 'A remessa não existe neste estabelecimento.');
+        const q = await tx.uma(
+          `SELECT COUNT(*) AS itens, SUM(codigo_exame_apoio IS NULL) AS sem FROM remessa_laboratorio_apoio_item
+          WHERE remessa_laboratorio_apoio_id = ? AND excluido_em IS NULL AND situacao <> 'cancelado'`,
+          [remessa],
+        );
+        const nova = daRegra(() =>
+          situacaoDaRemessaDepois(String(r['situacao']) as SituacaoRemessa, p.acao, {
+            itens: n(q?.['itens'] ?? 0),
+            semDePara: n(q?.['sem'] ?? 0),
+            motivo: p.motivo,
+          }),
+        );
+        const agora = new Date();
+        const dados: Record<string, unknown> = { situacao: nova };
+        if (p.acao === 'fechar') dados['fechada_em'] = agora;
+        if (p.acao === 'reabrir') dados['fechada_em'] = null;
+        if (p.acao === 'enviar') {
+          const lab = await this.laboratorio(tx, est, n(r['laboratorio_apoio_id']));
+          daRegra(() => conferirMeioEnvio(lab.canal, p.meio));
+          Object.assign(dados, {
+            enviada_em: agora,
+            enviada_por_usuario_id: tx.contexto.usuario,
+            meio_envio: p.meio,
+            protocolo_apoio: p.protocolo,
+            transportador: p.transportador,
+            temperatura_envio_c: p.temperaturaC,
           });
-      }
-      await tx.alterar('remessa_laboratorio_apoio', remessa, n(r['versao']), dados);
-      return { id: remessa, situacao: nova };
-    });
+          if (p.meio === 'integracao') {
+            const itens = await tx.consultar(
+              `SELECT ri.id, ri.exame_item_id, q.paciente_id, q.atendimento_id
+               FROM remessa_laboratorio_apoio_item ri
+               JOIN exame_item ei ON ei.id = ri.exame_item_id AND ei.excluido_em IS NULL
+               JOIN requisicao_exame q ON q.id = ei.requisicao_exame_id
+              WHERE ri.remessa_laboratorio_apoio_id = ? AND ri.excluido_em IS NULL AND ri.situacao <> 'cancelado'
+                AND ei.situacao NOT IN ('cancelado', 'recusado') ORDER BY ri.sequencia`,
+              [remessa],
+              { teto: 1000 },
+            );
+            for (const i of itens)
+              pedidos.push({
+                tipo: EVENTO_PEDIDO_APOIO,
+                carga: {
+                  exame: n(i['exame_item_id']),
+                  paciente: nn(i['paciente_id']),
+                  atendimento: nn(i['atendimento_id']),
+                  remessa,
+                  item: n(i['id']),
+                },
+              });
+          }
+        }
+        if (p.acao === 'cancelar') {
+          const antes = t(r['observacao']);
+          dados['observacao'] = `${antes ? `${antes}\n` : ''}Cancelada: ${p.motivo}`.slice(0, 60000);
+          const itens = await tx.consultarParaAtualizar(
+            `SELECT id, versao FROM remessa_laboratorio_apoio_item
+            WHERE remessa_laboratorio_apoio_id = ? AND excluido_em IS NULL AND situacao <> 'cancelado'`,
+            [remessa],
+            { teto: 1000 },
+          );
+          for (const i of itens)
+            await tx.alterar('remessa_laboratorio_apoio_item', n(i['id']), n(i['versao']), {
+              situacao: 'cancelado',
+            });
+        }
+        await tx.alterar('remessa_laboratorio_apoio', remessa, n(r['versao']), dados);
+        return { id: remessa, situacao: nova, pedidos: pedidos.length };
+      },
+      () => pedidos,
+    );
   }
 
   /** Inclui ou altera o de-para de analito (desativar é ativo=false; nunca se apaga). */

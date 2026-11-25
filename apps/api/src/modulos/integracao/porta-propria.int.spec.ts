@@ -49,6 +49,8 @@ async function limparApoio(e: Escritor): Promise<void> {
     const res = `SELECT r.id FROM resultado_exame r WHERE r.exame_item_id IN (${itens})`;
     await e.executar(`DELETE FROM aviso_valor_critico WHERE resultado_exame_id IN (${res})`);
     await e.executar(`DELETE FROM resultado_analito WHERE resultado_exame_id IN (${res})`);
+    await e.executar(`DELETE FROM remessa_laboratorio_apoio_item WHERE exame_item_id IN (${itens})`);
+    await e.executar("DELETE FROM remessa_laboratorio_apoio WHERE numero LIKE 'f2241-ap-%'");
     await e.executar(`DELETE FROM resultado_exame WHERE exame_item_id IN (${itens})`);
     await e.executar(`DELETE FROM exame_item WHERE id IN (SELECT id FROM (${itens}) x)`);
     await e.executar("DELETE FROM requisicao_exame WHERE numero LIKE 'f2241-ap-%'");
@@ -449,6 +451,26 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
 
   it('resultado do apoio pelas regras do SADT: referência, anormal, crítico com aviso, liberação e mensagem concluída juntos', async () => {
     const m = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f2241' }, (e) => montarApoio(e));
+    // A amostra do exame saiu numa remessa enviada ao apoio (05-SADT linha 14): o retorno fecha o item e a remessa.
+    const remessa = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f2241' }, async (e) => {
+      const agora = new Date();
+      const id = await e.inserir(
+        `INSERT INTO remessa_laboratorio_apoio (estabelecimento_id, numero, laboratorio_apoio_id, situacao, aberta_em, enviada_em, meio_envio, quantidade_amostras, criado_em)
+         VALUES (?, 'f2241-ap-rem1', ?, 'enviada', ?, ?, 'integracao', 1, ?)`,
+        [m.est, m.lab, agora, agora, agora],
+      );
+      await e.executar('SET FOREIGN_KEY_CHECKS = 0');
+      try {
+        await e.inserir(
+          `INSERT INTO remessa_laboratorio_apoio_item (remessa_laboratorio_apoio_id, sequencia, amostra_biologica_id, exame_item_id, codigo_exame_apoio, situacao, criado_em)
+           VALUES (?, 1, 0, ?, 'AP-K', 'enviado', ?)`,
+          [id, m.item, agora],
+        );
+      } finally {
+        await e.executar('SET FOREIGN_KEY_CHECKS = 1');
+      }
+      return id;
+    });
     const { recebida } = await porta.gravar(
       A,
       trilha('mensagem_integracao_entrada', 'integracao.mensagem.recebida'),
@@ -539,6 +561,20 @@ describe.skipIf(SEM_BANCO)('porta própria das integrações contra o MariaDB (c
       { situacao: 'liberado', versao: 2 },
     ]);
     expect((await porta.recebida(A, recebida.id))?.situacao).toBe('processada');
+    // O item da remessa com o resultado recebido (ligado ao resultado gravado) e a remessa concluída, na mesma transação.
+    const [ri] = await sql(
+      `SELECT ri.situacao, ri.resultado_exame_id, ri.resultado_recebido_em IS NOT NULL AS recebido, ri.versao, r.situacao AS remessa
+         FROM remessa_laboratorio_apoio_item ri JOIN remessa_laboratorio_apoio r ON r.id = ri.remessa_laboratorio_apoio_id
+        WHERE r.id = ?`,
+      [remessa],
+    );
+    expect([
+      ri?.['situacao'],
+      Number(ri?.['resultado_exame_id']),
+      Number(ri?.['recebido']),
+      Number(ri?.['versao']),
+      ri?.['remessa'],
+    ]).toEqual(['resultado_recebido', r.resultado, 1, 2, 'concluida']);
     const t = await sql(
       "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'resultado_exame' AND entidade_id = ?",
       [r.resultado],

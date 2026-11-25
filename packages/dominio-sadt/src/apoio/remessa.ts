@@ -148,3 +148,95 @@ export function conferirFatorConversao(fator: number): number {
     throw new RecusaApoio('fator-invalido', 'O fator de conversão precisa ser positivo (até 1.000.000).');
   return fator;
 }
+
+/**
+ * A situação da remessa depois que um resultado volta do apoio: enquanto falta item, fica `recebida`; com todos os
+ * itens ativos de volta, `concluida`. A remessa que não saiu (aberta, fechada, cancelada) não muda pelo retorno.
+ */
+export function situacaoDaRemessaDepoisDoRetorno(
+  atual: SituacaoRemessa,
+  itens: { readonly ativos: number; readonly comResultado: number },
+): SituacaoRemessa {
+  if (atual !== 'enviada' && atual !== 'recebida') return atual;
+  if (itens.comResultado <= 0) return atual;
+  return itens.comResultado >= itens.ativos ? 'concluida' : 'recebida';
+}
+
+/** Campo de texto da etiqueta: os caracteres de comando da impressora (^ ~ _) saem em hexadecimal, nunca crus. */
+function campoEtiqueta(texto: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(texto))
+    throw new RecusaApoio('etiqueta-invalida', 'A etiqueta tem caractere de controle: confira o cadastro.');
+  let s = '';
+  for (const ch of texto)
+    s += ch === '_' || ch === '^' || ch === '~' ? `_${ch.charCodeAt(0).toString(16).toUpperCase()}` : ch;
+  return `^FH_^FD${s}^FS`;
+}
+
+/**
+ * A etiqueta do apoio na linguagem da impressora térmica (ZPL, 50 x 25 mm a 8 pontos/mm): o código de barras (Code
+ * 128) com o código que o apoio lê e as linhas de identificação. Só identificadores, como a etiqueta em texto.
+ */
+export function etiquetaApoioZpl(e: EtiquetaApoio): string {
+  if (!/^[A-Za-z0-9 ._\-/]{1,30}$/.test(e.codigo))
+    throw new RecusaApoio(
+      'etiqueta-invalida',
+      'O código da etiqueta aceita só letras, números, espaço, ".", "-", "_" e "/": confira o código do hospital no apoio.',
+    );
+  const linhas = e.linhas.slice(0, 4).map((l, i) => `^FO20,${110 + i * 22}^A0N,20,20${campoEtiqueta(l)}`);
+  return [
+    '^XA',
+    '^CI28',
+    '^PW400',
+    '^LL200',
+    `^FO20,15^BY2^BCN,60,Y,N,N${campoEtiqueta(e.codigo)}`,
+    ...linhas,
+    '^XZ',
+  ].join('\n');
+}
+
+export interface DeParaAnalitoNovo {
+  readonly exame: number | null;
+  readonly analito: number | null;
+  readonly codigoExameApoio: string;
+  readonly codigoAnalitoApoio: string;
+  readonly fatorConversao: number;
+}
+
+/** O que impede gravar o de-para de analito, para a tela conferir na hora (vazio: pode gravar). */
+export function pendenciasDeParaAnalito(d: DeParaAnalitoNovo): string[] {
+  const p: string[] = [];
+  if (d.exame === null) p.push('Escolha o exame.');
+  if (d.analito === null) p.push('Escolha o analito do exame.');
+  for (const [valor, campo] of [
+    [d.codigoExameApoio, 'código do exame'],
+    [d.codigoAnalitoApoio, 'código do analito'],
+  ] as const) {
+    try {
+      conferirCodigoApoio(valor, campo);
+    } catch (e) {
+      p.push((e as Error).message);
+    }
+  }
+  try {
+    conferirFatorConversao(d.fatorConversao);
+  } catch (e) {
+    p.push((e as Error).message);
+  }
+  return p;
+}
+
+/** O que impede gravar o de-para de material, para a tela conferir na hora (vazio: pode gravar). */
+export function pendenciasDeParaMaterial(d: {
+  readonly material: number | null;
+  readonly codigoApoio: string;
+}): string[] {
+  const p: string[] = [];
+  if (d.material === null) p.push('Escolha o material.');
+  try {
+    conferirCodigoApoio(d.codigoApoio, 'código do material');
+  } catch (e) {
+    p.push((e as Error).message);
+  }
+  return p;
+}
