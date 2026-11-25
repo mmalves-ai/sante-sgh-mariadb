@@ -88,7 +88,7 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     path: '/cirurgia/mutiroes',
     name: 'cirurgia.mutiroes',
     component: () => import('./telas/MutiroesCirurgicosTela.vue'),
-    meta: { permissao: 'faturamento.sus.ler', menu: `${M} > Mutirões cirúrgicos (SUS)` },
+    meta: { permissao: 'faturamento.sus.ler', menu: `${M} > Mutirões cirúrgicos do SUS` },
   },
   {
     // F3.4, 04-CC L91: cadastro do procedimento cirúrgico (grupo, porte, especialidade, natureza, caráter).

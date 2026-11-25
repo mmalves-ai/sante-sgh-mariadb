@@ -83,7 +83,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // a contagem acompanha.
 // C2-043 (06-FAT linha 19): o item "Descontos por volume e franquias" do motor de preços entrou à mão (mesmo motivo; F8 vai
 // como fase 7, o teto da escala do menu); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":463,"M":198,"P":57,"N":208};
+// C2-041 (04-CC linha 108): o item "Mutirões cirúrgicos do SUS" do centro cirúrgico entrou à mão (mesmo motivo;
+// F8 vai como fase 7, o teto da escala do menu); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":464,"M":198,"P":57,"N":209};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -172,6 +174,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"centro-cirurgico.procedimentos-cirurgicos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Procedimentos cirúrgicos"],"titulo":"Procedimentos cirúrgicos","selo":"N","fase":3,"rota":"/cirurgia/procedimentos-cirurgicos","permissao":"cirurgia.sala.ler"},
   {"id":"centro-cirurgico.documentos-exigidos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Documentos exigidos"],"titulo":"Documentos exigidos","selo":"N","fase":5,"rota":"/cirurgia/documentos-exigidos","permissao":"cirurgia.sala.ler"},
   {"id":"centro-cirurgico.profilaxia-antimicrobiana","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Profilaxia antimicrobiana"],"titulo":"Profilaxia antimicrobiana","selo":"N","fase":5,"rota":"/cirurgia/profilaxia","permissao":"qualidade.ccih.ler"},
+  {"id":"centro-cirurgico.mutiroes-cirurgicos-do-sus","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Mutirões cirúrgicos do SUS"],"titulo":"Mutirões cirúrgicos do SUS","selo":"N","fase":7,"rota":"/cirurgia/mutiroes","permissao":"faturamento.sus.ler"},
   {"id":"centro-cirurgico.nota-de-sala-e-consumo-para-a-conta","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Nota de sala e consumo para a conta"],"titulo":"Nota de sala e consumo para a conta","selo":"M","fase":3,"rota":"/cirurgia/notas-sala","permissao":"cirurgia.nota.ler"},
   {"id":"centro-cirurgico.avaliacao-pre-anestesica-apa","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Avaliação pré-anestésica"],"titulo":"Avaliação pré-anestésica","selo":"N","fase":5,"rota":"/bloco/apa","permissao":"cirurgia.apa.ler"},
   {"id":"centro-cirurgico.checklist-de-cirurgia-segura-oms","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Checklist de cirurgia segura"],"titulo":"Checklist de cirurgia segura","selo":"N","fase":5,"rota":"/bloco/checklist","permissao":"cirurgia.checklist.ler"},
