@@ -1,6 +1,7 @@
 // F3.8, 07-FIN linha 89: taxa vigente da administradora e parcelas a receber, líquidas e com data prevista.
 import { describe, expect, it } from 'vitest';
 import {
+  conferirCartaoNoRecebimento,
   conferirTaxaAdministradora,
   escolherTaxa,
   gerarParcelasRecebivel,
@@ -174,5 +175,27 @@ describe('repartirCreditoCartao', () => {
     });
     const r = repartirCreditoCartao([10, 96.99], 50);
     expect('recusa' in r && r.recusa.codigo).toBe('credito-cartao-invalido');
+  });
+});
+
+describe('conferirCartaoNoRecebimento', () => {
+  const venda = { emCartao: true, administradorasAtivas: 1, cartaoInformado: true, comprovante: 'NSU-1' };
+  it('fora do cartão nada é exigido; em cartão sem administradora cadastrada o recebimento segue', () => {
+    expect(conferirCartaoNoRecebimento({ ...venda, emCartao: false, cartaoInformado: false })).toBeNull();
+    expect(
+      conferirCartaoNoRecebimento({ ...venda, administradorasAtivas: 0, cartaoInformado: false }),
+    ).toBeNull();
+    expect(conferirCartaoNoRecebimento(venda)).toBeNull();
+  });
+  it('com administradora ativa, o cartão sem administradora e bandeira é recusado', () => {
+    expect(conferirCartaoNoRecebimento({ ...venda, cartaoInformado: false })?.codigo).toBe(
+      'cartao-sem-administradora',
+    );
+  });
+  it('o comprovante que não cabe inteiro é recusado, nunca cortado', () => {
+    expect(conferirCartaoNoRecebimento({ ...venda, comprovante: 'X'.repeat(20) })).toBeNull();
+    expect(conferirCartaoNoRecebimento({ ...venda, comprovante: 'X'.repeat(21) })?.codigo).toBe(
+      'comprovante-cartao-longo',
+    );
   });
 });

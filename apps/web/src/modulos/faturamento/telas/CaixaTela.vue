@@ -45,6 +45,9 @@ const rec = ref({ orcamento: '', forma: 'pix', valor: '', comprovante: '' });
 // F3.8 (07-FIN linha 89): a administradora, a bandeira e as parcelas do cartão (nulo fora do cartão).
 const cartao = ref<CartaoEscolhido | null>(null);
 const emCartao = computed(() => rec.value.forma.startsWith('cartao'));
+// O que falta escolher no cartão (texto), '' enquanto as opções carregam, nulo quando pode receber.
+const pendenciaCartao = ref<string | null>(null);
+const motivoCartao = computed(() => (emCartao.value ? pendenciaCartao.value : null));
 const pagamentoDaTela = () => {
   const c = emCartao.value ? cartao.value : null;
   return {
@@ -149,12 +152,25 @@ const opcoesOrcamento = computed(() => [
             ><label for="cx-valor">{{ t('faturamento.valor') }}</label
             ><input id="cx-valor" v-model="rec.valor" inputmode="decimal" size="8" data-testid="cx-valor"
           /></span>
-          <CartaoRecebimento v-if="emCartao" v-model="cartao" :forma="rec.forma" :valor="numero(rec.valor)" />
+          <CartaoRecebimento
+            v-if="emCartao"
+            v-model="cartao"
+            v-model:pendencia="pendenciaCartao"
+            :forma="rec.forma"
+            :valor="numero(rec.valor)"
+          />
           <span class="campo"
             ><label for="cx-comp">{{ t('faturamento.caixa.comprovante') }}</label
-            ><input id="cx-comp" v-model="rec.comprovante" maxlength="40"
+            ><input
+              id="cx-comp"
+              v-model="rec.comprovante"
+              :maxlength="emCartao && cartao ? 20 : 40"
+              data-testid="cx-comprovante"
           /></span>
-          <button type="submit" data-testid="cx-receber">{{ t('faturamento.caixa.receber') }}</button>
+          <button type="submit" :disabled="motivoCartao !== null" data-testid="cx-receber">
+            {{ t('faturamento.caixa.receber') }}
+          </button>
+          <p v-if="motivoCartao" role="status" data-testid="cx-cartao-pendencia">{{ motivoCartao }}</p>
         </form>
         <form
           v-if="pode('emitirRecibo') && recibo.pagamento"

@@ -1245,6 +1245,10 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
           'DELETE p FROM parcela_recebivel_cartao p JOIN transacao_cartao x ON x.id = p.transacao_cartao_id WHERE x.estabelecimento_id = ?',
           [ids.est],
         );
+        await e.executar(
+          'DELETE m FROM meio_recebimento_particular m JOIN transacao_cartao x ON x.id = m.transacao_cartao_id WHERE x.estabelecimento_id = ?',
+          [ids.est],
+        );
         await e.executar('DELETE FROM transacao_cartao WHERE estabelecimento_id = ?', [ids.est]);
         await e.executar('DELETE FROM taxa_administradora WHERE estabelecimento_id = ?', [ids.est]);
         await e.executar('DELETE FROM administradora_cartao WHERE estabelecimento_id = ?', [ids.est]);
@@ -1286,7 +1290,11 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
         [ids.est],
       );
       const sessao = await porta.gravarSgh(c, t, (g) => g.abrirCaixa({ usuario: 'x', saldoInicial: 0 }));
-      const receber = (comprovante: string, cartao: { administradora: number; bandeira: number }) =>
+      const receber = (
+        comprovante: string,
+        cartao: { administradora: number; bandeira: number } | null,
+        forma: 'cartao-credito' | 'cartao-debito' = 'cartao-credito',
+      ) =>
         porta.gravarSgh(c, t, (g) =>
           g.receberParticular({
             caixa: sessao,
@@ -1294,11 +1302,11 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
             conta: null,
             pagamentos: [
               {
-                forma: 'cartao-credito',
+                forma,
                 valor: 100,
                 comprovante,
-                parcelas: 2,
-                cartao: { ...cartao, finalCartao: '4321' },
+                parcelas: forma === 'cartao-credito' ? 2 : 1,
+                ...(cartao ? { cartao: { ...cartao, finalCartao: '4321' } } : {}),
               },
             ],
             usuario: 'x',
@@ -1309,6 +1317,14 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
       expect(codigoDe(await erroDe(receber('CARTAO-SINT-0', { ...cad, bandeira: 999_999_999 })))).toBe(
         'bandeira-cartao-inexistente',
       );
+      // Com administradora ativa no estabelecimento, o cartão sem administradora e bandeira é recusado (crédito e
+      // débito): a venda não entra no caixa sem o que a administradora tem a creditar.
+      expect(codigoDe(await erroDe(receber('CARTAO-SINT-0', null)))).toBe('cartao-sem-administradora');
+      expect(codigoDe(await erroDe(receber('CARTAO-SINT-0', null, 'cartao-debito')))).toBe(
+        'cartao-sem-administradora',
+      );
+      // O comprovante que não cabe inteiro é recusado, nunca cortado.
+      expect(codigoDe(await erroDe(receber('C'.repeat(21), cad)))).toBe('comprovante-cartao-longo');
       const ler = (sql: string, p: unknown[]) =>
         nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'teste-f38-07' }, (l) => l.consultar(sql, p));
       expect(
@@ -1344,6 +1360,33 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
         Number(tr?.['valor_taxa']),
         Number(tr?.['valor_liquido']),
       ]).toEqual([100, 2, 98]);
+      // A ligação: o meio do recebimento do particular guarda a transação, a administradora e as parcelas; do
+      // movimento do caixa chega-se à venda em cartão (e de volta) sem depender do texto do comprovante.
+      const elo = await ler(
+        `SELECT m.transacao_cartao_id, m.administradora_cartao_id, m.quantidade_parcelas, m.valor, m.nsu, m.sequencia,
+                rp.movimento_caixa_id, rp.cartao_nsu, rp.cartao_parcelas
+           FROM meio_recebimento_particular m JOIN recebimento_particular rp ON rp.id = m.recebimento_particular_id
+          WHERE rp.movimento_caixa_id = ?`,
+        [r.pagamentos[0]],
+      );
+      expect(elo).toHaveLength(1);
+      expect(elo[0]).toMatchObject({
+        transacao_cartao_id: tr?.['id'],
+        administradora_cartao_id: cad.administradora,
+        quantidade_parcelas: 2,
+        nsu: 'CARTAO-SINT-1',
+        sequencia: 1,
+        cartao_nsu: 'CARTAO-SINT-1',
+        cartao_parcelas: 2,
+      });
+      expect(Number(elo[0]?.['valor'])).toBe(100);
+      expect(
+        Number(
+          (
+            await ler('SELECT COUNT(*) AS q FROM transacao_cartao WHERE estabelecimento_id = ?', [ids.est])
+          )[0]?.['q'],
+        ),
+      ).toBe(1);
       const ps = await ler(
         `SELECT sequencia, valor_bruto, valor_taxa, valor_liquido, situacao, DATEDIFF(data_prevista, CURDATE()) AS dias
            FROM parcela_recebivel_cartao WHERE transacao_cartao_id = ? ORDER BY sequencia`,

@@ -103,6 +103,39 @@ export function conferirParcelasCartao(
   return null;
 }
 
+/** O comprovante do cartão cabe inteiro no código de autorização: nunca é cortado ao gravar. */
+export const COMPROVANTE_CARTAO_MAXIMO = 20;
+
+/**
+ * Recebimento em cartão no caixa. Quando o estabelecimento trabalha com administradora de cartão (há alguma ativa), a
+ * venda em cartão só é aceita com a administradora e a bandeira: é delas que saem a transação e as parcelas a receber.
+ * Sem isso o dinheiro do cartão ficaria fora do fluxo de caixa projetado e da baixa do crédito. O comprovante digitado
+ * identifica a venda na administradora e por isso não pode passar do tamanho guardado.
+ */
+export function conferirCartaoNoRecebimento(p: {
+  readonly emCartao: boolean;
+  readonly administradorasAtivas: number;
+  readonly cartaoInformado: boolean;
+  readonly comprovante?: string | null;
+}): RecusaFinanceiro | null {
+  if (!p.emCartao) return null;
+  if (!p.cartaoInformado)
+    return p.administradorasAtivas > 0
+      ? recusaFin(
+          'cartao-sem-administradora',
+          'Escolha a administradora e a bandeira do cartão: sem elas a venda não entra no que a administradora tem a creditar.',
+          ['cartao'],
+        )
+      : null;
+  if ((p.comprovante ?? '').trim().length > COMPROVANTE_CARTAO_MAXIMO)
+    return recusaFin(
+      'comprovante-cartao-longo',
+      `O comprovante do cartão (NSU ou autorização) tem até ${COMPROVANTE_CARTAO_MAXIMO} caracteres.`,
+      ['comprovante'],
+    );
+  return null;
+}
+
 /** Uma parcela a receber da administradora. Valores em reais, já fechados em centavos. */
 export interface ParcelaRecebivel {
   readonly sequencia: number;

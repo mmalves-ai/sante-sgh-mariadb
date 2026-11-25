@@ -2,8 +2,10 @@
 // F3.8, 07-FIN linha 89: o bloco do cartão no recebimento do caixa. Quem recebe escolhe só a administradora, a
 // bandeira e as parcelas; a taxa vigente é achada pelo servidor e a tela mostra na hora quanto a administradora vai
 // creditar e quando (ou por que a venda não pode ser registrada assim, por exemplo sem taxa vigente). Uma só
-// administradora ou bandeira possível já vem escolhida. Sem administradora cadastrada o bloco não aparece e o
-// recebimento segue como antes.
+// administradora ou bandeira possível já vem escolhida. Com administradora cadastrada a escolha é obrigatória: enquanto
+// faltar, o bloco avisa a tela (pendencia) para prender o botão de receber e dizer o motivo; o servidor recusa do mesmo
+// jeito. Sem administradora cadastrada o bloco não aparece e o recebimento segue como antes. Se as opções não puderem
+// ser lidas, o erro aparece (nunca some em silêncio).
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
@@ -19,7 +21,11 @@ export interface CartaoEscolhido {
 }
 
 const props = defineProps<{ forma: string; valor: number }>();
-const emit = defineEmits<{ 'update:modelValue': [CartaoEscolhido | null] }>();
+const emit = defineEmits<{
+  'update:modelValue': [CartaoEscolhido | null];
+  /** O motivo que impede receber agora (texto), '' enquanto as opções carregam, ou nulo quando pode. */
+  'update:pendencia': [string | null];
+}>();
 const { t } = useI18n();
 const credito = computed(() => props.forma === 'cartao-credito');
 const opcoes = useQuery({
@@ -79,6 +85,14 @@ const escolhido = computed<CartaoEscolhido | null>(() =>
     : null,
 );
 watch(escolhido, (e) => emit('update:modelValue', e), { immediate: true });
+const pendencia = computed<string | null>(() =>
+  opcoes.isLoading.value
+    ? ''
+    : administradoras.value.length && !escolhido.value
+      ? t('financeiro.cartao.caixa.falta')
+      : null,
+);
+watch(pendencia, (p) => emit('update:pendencia', p), { immediate: true });
 const pedido = computed(() =>
   escolhido.value && props.valor > 0
     ? {
@@ -97,7 +111,8 @@ const previa = useQuery({
 </script>
 
 <template>
-  <template v-if="administradoras.length">
+  <ErroFaturamento v-if="opcoes.error.value" :erro="opcoes.error.value" />
+  <template v-else-if="administradoras.length">
     <span class="campo">
       <SanteSelecao
         v-model="administradora"

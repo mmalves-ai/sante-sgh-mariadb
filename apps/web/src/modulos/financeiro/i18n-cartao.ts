@@ -86,6 +86,8 @@ export const mensagensCartaoFinanceiro = {
     bandeira: 'Bandeira',
     parcelas: 'Parcelas',
     escolha: 'Escolha',
+    falta:
+      'Escolha a administradora e a bandeira do cartão: é por elas que a venda entra no que a administradora vai creditar.',
     previa:
       'A administradora credita {liquido} ({bruto} menos {taxa} de taxa) em {parcelas} parcela(s), a primeira em {data}.',
   },

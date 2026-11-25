@@ -10,6 +10,7 @@
 // movimento é o que a conciliação bancária casa com a linha do extrato. A conferência contra a agenda da adquirente
 // (arquivo dela) fica para a integração.
 import {
+  conferirCartaoNoRecebimento,
   escolherTaxa,
   gerarParcelasRecebivel,
   type ModalidadeCartao,
@@ -327,6 +328,8 @@ export interface VendaCartao extends PedidoCartao {
   readonly caixa?: number | null;
   readonly sessaoCaixa?: number | null;
   readonly operador?: number | null;
+  /** O atendimento da conta recebida, quando a venda é de uma conta do paciente (visão por paciente). */
+  readonly atendimento?: number | null;
 }
 
 /** Tabelas que a venda em cartão grava (a operação que chama declara estas). */
@@ -370,6 +373,7 @@ export async function gravarRecebivelCartao(
     caixa_id: v.caixa ?? null,
     sessao_caixa_id: v.sessaoCaixa ?? null,
     operador_usuario_id: v.operador ?? null,
+    atendimento_id: v.atendimento ?? null,
     tipo_operacao: 'venda',
     tipo_cartao: v.modalidade,
     modalidade: v.parcelas > 1 ? 'parcelado_estabelecimento' : 'a_vista',
@@ -397,6 +401,62 @@ export async function gravarRecebivelCartao(
       situacao: 'prevista',
     });
   return { transacao, plano };
+}
+
+/** Tabelas do recebimento do particular em cartão: a venda e o meio que a liga ao recebimento. */
+export const TABELAS_CARTAO_NO_RECEBIMENTO = [
+  ...TABELAS_RECEBIVEL_CARTAO,
+  'meio_recebimento_particular',
+] as const;
+
+/**
+ * Recebimento do particular em cartão: confere a regra do domínio contra o cadastro do estabelecimento (com
+ * administradora ativa, a venda em cartão exige a administradora e a bandeira; o comprovante não é cortado).
+ */
+export async function exigirCartaoNoRecebimento(
+  l: Leitor,
+  est: number,
+  p: { emCartao: boolean; cartaoInformado: boolean; comprovante: string | null },
+): Promise<void> {
+  if (!p.emCartao) return;
+  const ativas = p.cartaoInformado
+    ? 1
+    : numero(
+        (
+          await l.uma(
+            `SELECT COUNT(*) AS q FROM administradora_cartao
+              WHERE estabelecimento_id = ? AND ativo = TRUE AND cartao_corporativo = FALSE AND excluido_em IS NULL`,
+            [est],
+          )
+        )?.['q'],
+      );
+  const r = conferirCartaoNoRecebimento({ ...p, administradorasAtivas: ativas });
+  if (r) throw recusa(r.codigo, r.mensagem, r.campos ? { campos: r.campos } : {});
+}
+
+/**
+ * Grava a venda em cartão de um recebimento do particular e a liga a ele: o meio do recebimento guarda a transação, a
+ * administradora, as parcelas e o comprovante. É por essa ligação que se chega do recebimento do paciente às parcelas
+ * a receber da administradora (e de volta), sem depender do texto do comprovante.
+ */
+export async function gravarCartaoDoRecebimento(
+  tx: Leitor & Pick<TxOperacao, 'incluir'>,
+  est: number,
+  v: VendaCartao & { readonly recebimento: number; readonly formaRecebimento: number },
+): Promise<{ transacao: number; meio: number; plano: PlanoCartao }> {
+  const { transacao, plano } = await gravarRecebivelCartao(tx, est, v);
+  const meio = await tx.incluir('meio_recebimento_particular', {
+    recebimento_particular_id: v.recebimento,
+    sequencia: 1,
+    forma_recebimento_id: v.formaRecebimento,
+    valor: plano.bruto,
+    quantidade_parcelas: v.parcelas,
+    administradora_cartao_id: v.administradora,
+    transacao_cartao_id: transacao,
+    codigo_autorizacao: v.autorizacao.trim().slice(0, 30),
+    nsu: v.nsu.trim().slice(0, 30),
+  });
+  return { transacao, meio, plano };
 }
 
 // ── Operações ──

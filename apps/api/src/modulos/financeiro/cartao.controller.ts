@@ -10,6 +10,8 @@
 //   GET  /api/financeiro/cartao/recebiveis?de=&ate=      parcelas a receber das administradoras, pela data prevista
 //   POST /api/financeiro/cartao/recebiveis/baixa         { parcelas, conta, dataCredito, valorCreditado? }
 // A gravação vai pelo executor do núcleo (trilha, outbox e idempotência na mesma transação); sem núcleo: 503.
+// Na sessão sintética (sem banco do cliente) só as opções e a prévia do recebimento respondem, pela regra do domínio
+// (cartao-memoria.ts); o cadastro, a venda e a baixa seguem só no banco.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import type { ResultadoFinanceiro } from '@sgh/contratos';
 import type { Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
@@ -30,7 +32,9 @@ import {
   recebiveisCartao,
   taxasDaAdministradora,
 } from './cartao-propria.js';
+import { opcoesCartaoMemoria, planoDoCartaoMemoria } from './cartao-memoria.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
+import { PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
 import { resultadoFin } from './servico.js';
 
 const reais = (v: unknown) =>
@@ -55,11 +59,15 @@ function somarDias(d: string, dias: number): string {
 @Controller('financeiro/cartao')
 export class CartaoController {
   private readonly executor: Executor | null;
+  /** Sessão sintética (E2E, sem banco do cliente): só as opções e a prévia respondem; com banco, nunca. */
+  private readonly sintetica: boolean;
 
   constructor(
     @Optional() @Inject(NUCLEO_PERIODO_FINANCEIRO) private readonly nucleo: NucleoProprio | null = null,
+    @Optional() @Inject(PORTA_FINANCEIRO) porta: PortaFinanceiro | null = null,
   ) {
     this.executor = nucleo ? nucleo.criarExecutor() : null;
+    this.sintetica = !nucleo && porta?.destino === 'memoria';
   }
 
   private ler<T>(req: RequisicaoAutorizada, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
@@ -155,6 +163,10 @@ export class CartaoController {
   @Get('opcoes')
   @Permissao('faturamento.recibo.emitir')
   opcoes(@Req() req: RequisicaoAutorizada) {
+    if (this.sintetica) {
+      sessaoDe(req);
+      return opcoesCartaoMemoria();
+    }
     return this.ler(req, (l, est) => opcoesCartao(l, est, true));
   }
 
@@ -173,6 +185,14 @@ export class CartaoController {
       valor,
       dataVenda: data(q['data'], hojeIso()),
     };
+    if (this.sintetica) {
+      sessaoDe(req);
+      try {
+        return planoDoCartaoMemoria(pedido);
+      } catch (e) {
+        throw problemaDoCadastro(e);
+      }
+    }
     return this.ler(req, (l, est) => planoDoCartao(l, est, pedido));
   }
 
