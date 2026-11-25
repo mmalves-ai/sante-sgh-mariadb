@@ -77,6 +77,14 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     meta: { permissao: 'qualidade.ccih.ler', menu: `${M} > Profilaxia antimicrobiana` },
   },
   {
+    // F7, 05-SUP L29: central de material esterilizado (pedido, pacote com etiqueta, carga, indicadores, entrega e
+    // rastreio até o paciente; RDC 15/2012).
+    path: '/cirurgia/cme',
+    name: 'cirurgia.cme',
+    component: () => import('./telas/CmeTela.vue'),
+    meta: { permissao: 'cirurgia.cme.ler', menu: `${M} > Central de material esterilizado` },
+  },
+  {
     // F7, 04-CME L115: cadastro da CME (produtos reprocessáveis, caixas e kits com composição, fases e foto).
     path: '/cirurgia/cme/cadastro',
     name: 'cirurgia.cme.cadastro',
