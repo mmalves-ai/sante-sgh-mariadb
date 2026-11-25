@@ -62,7 +62,8 @@ export interface GravadorEspecialidades {
   }): Promise<number>;
   /** Devolve a versão anterior relida na transação (com a linha travada). */
   ajustarCiclo(x: AjusteCiclo): Promise<VersaoCicloAnterior>;
-  desligarPrescricao(x: { ciclo: number; prescricao: number }): Promise<number>;
+  /** O motivo fica na ligação desfeita (e no evento do ciclo). */
+  desligarPrescricao(x: { ciclo: number; prescricao: number; motivo?: string }): Promise<number>;
   /** Devolve a ordem como estava, relida na transação (com a linha travada). */
   alterarOrdem(x: AlteracaoOrdemLactario): Promise<OrdemLactarioAnterior>;
   cancelarOrdem(x: { id: number; motivo: string; usuario: string }): Promise<number>;

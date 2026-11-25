@@ -928,6 +928,8 @@ export class EspecialidadesController {
           doses,
           curso,
           motivoCurso: e.novoTratamento ?? null,
+          diagnostico: e.diagnostico ?? null,
+          intencao: e.intencao ?? null,
           vinculo: v.vinculo,
           usuario: s.login,
         }),
@@ -1978,7 +1980,7 @@ export class EspecialidadesController {
         chave: `${c.codigoProtocolo}:curso${c.curso}:ciclo${c.numero}:prescricao${prescricao}:desligada`,
       },
       async (g) => {
-        await g.desligarPrescricao({ ciclo: c.id, prescricao });
+        await g.desligarPrescricao({ ciclo: c.id, prescricao, motivo: e.motivo });
         return g.registrarEventoOnco({
           evento: 'prescricao-desligada',
           codigoProtocolo: c.codigoProtocolo,

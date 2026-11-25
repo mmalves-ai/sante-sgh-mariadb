@@ -15,9 +15,8 @@
 // (preparo_lactario_evento); a acuidade visual e a graduação vêm dos cadastros.
 // O exame oftalmológico consolidado grava e lê em exame_oftalmologico (tipo nulo), exame_oftalmologico_valor e
 // exame_oftalmologico_item.
-// Pendências (pedido em docs/obra/fatias/f24/saida/p2-clinicos.json): a oncologia (publicação do protocolo, o ciclo
-// com o tratamento oncológico e as operações sobre eles). Essas leituras voltam vazias (nada foi gravado por esta
-// porta) e as gravações recusam com 'modelo-pendente' (409), dizendo o que falta; nada é gravado pela metade.
+// A oncologia (protocolo versionado, ciclo no tratamento oncológico, validação, ligação com a prescrição e eventos)
+// lê e grava pelo adaptador próprio (oncologia-propria.ts, C2-090).
 import { randomUUID } from 'node:crypto';
 import type { CicloDependente, LadoExame, LiquidoAmniotico } from '@sgh/contratos';
 import {
@@ -48,6 +47,7 @@ import {
   type TrilhaDaGravacao,
 } from '../exames/public-api.js';
 import { civil, FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
+import * as onco from './oncologia-propria.js';
 import {
   type ContextoEspecialidades,
   FASE_ATIVA_CM_PADRAO,
@@ -98,6 +98,7 @@ const TABELAS_GRAVACAO = [
   'exame_oftalmologico',
   'exame_oftalmologico_valor',
   'exame_oftalmologico_item',
+  ...onco.TABELAS_ONCOLOGIA,
 ] as const;
 
 /** Evento do histórico do lactário (tela) ↔ evento do modelo. */
@@ -668,8 +669,6 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
     });
   }
 
-  // Leituras da oncologia: nada foi gravado por esta porta (as gravações recusam com 'modelo-pendente'); as linhas
-  // que vierem da migração entram com o pedido de modelo.
   /** Os exames oftalmológicos consolidados da internação (tipo nulo: os tipos estão nos itens), o mais recente primeiro. */
   exames(c: ContextoEspecialidades, internacao: number): Promise<ExameOftalmologicoRegistrado[]> {
     return this.ler(c, async (l, est) => {
@@ -753,42 +752,46 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
       });
     });
   }
-  async protocolos() {
-    return [];
+  // ── Oncologia (oncologia-propria.ts) ──
+  protocolos(c: ContextoEspecialidades) {
+    return this.ler(c, async (l, est) => onco.lerProtocolos(l, est, await this.fuso(l, est), null));
   }
-  async protocolo() {
-    return null;
+  protocolo(c: ContextoEspecialidades, id: number) {
+    return this.ler(
+      c,
+      async (l, est) => (await onco.lerProtocolos(l, est, await this.fuso(l, est), id))[0] ?? null,
+    );
   }
-  async ciclosDoPaciente() {
-    return [];
+  ciclosDoPaciente(c: ContextoEspecialidades, paciente: number) {
+    return this.ler(c, async (l, est) =>
+      onco.lerCiclos(l, est, await this.fuso(l, est), 'paciente', paciente),
+    );
   }
-  async ciclo() {
-    return null;
+  ciclo(c: ContextoEspecialidades, id: number) {
+    return this.ler(
+      c,
+      async (l, est) => (await onco.lerCiclos(l, est, await this.fuso(l, est), 'id', id))[0] ?? null,
+    );
   }
-  async ciclosAValidar() {
-    return [];
+  ciclosAValidar(c: ContextoEspecialidades) {
+    return this.ler(c, async (l, est) => onco.lerCiclos(l, est, await this.fuso(l, est), 'a-validar', null));
   }
-  async eventosProtocolos() {
-    return [];
+  eventosProtocolos(c: ContextoEspecialidades) {
+    return this.ler(c, async (l, est) => onco.lerEventos(l, est, await this.fuso(l, est), null));
   }
-  async eventosCiclos() {
-    return [];
+  eventosCiclos(c: ContextoEspecialidades, ciclos: readonly number[]) {
+    return this.ler(c, async (l, est) => onco.lerEventos(l, est, await this.fuso(l, est), ciclos));
   }
-  async ciclosDaVersao(): Promise<{
-    total: number;
-    emAndamento: number;
-    cortada: boolean;
-    itens: CicloDependente[];
-  }> {
-    return { total: 0, emAndamento: 0, cortada: false, itens: [] };
+  ciclosDaVersao(
+    c: ContextoEspecialidades,
+    protocolo: number,
+  ): Promise<{ total: number; emAndamento: number; cortada: boolean; itens: CicloDependente[] }> {
+    return this.ler(c, async (l, est) => onco.lerCiclosDaVersao(l, est, await this.fuso(l, est), protocolo));
   }
 }
 
 /** O gravador das telas sobre a transação da operação (o estabelecimento vem do contexto). */
 function gravadorSobre(tx: TxOperacao, est: number): GravadorEspecialidades {
-  const pendente = (oQue: string) => async (): Promise<never> => {
-    throw pendenteModelo(oQue);
-  };
   return {
     registrarPartograma: (x) => registrarPontoPartograma(tx, est, x),
     registrarRecemNascido: (x) => registrarRecemNascido(tx, est, x),
@@ -799,15 +802,16 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorEspecialidades {
     marcarEtiqueta: (x) => marcarEtiquetaLactario(tx, est, x.id),
     registrarAlteracao: (x) => registrarAlteracaoLactario(tx, est, x),
     registrarExame: (x) => registrarExameOftalmologico(tx, est, x),
-    publicarProtocolo: pendente('O protocolo oncológico versionado'),
-    registrarCiclo: pendente('O ciclo oncológico'),
-    validarCiclo: pendente('A validação do ciclo oncológico'),
-    vincularPrescricao: pendente('A ligação do ciclo com a prescrição'),
-    registrarEventoOnco: pendente('O evento do tratamento oncológico'),
-    revogarVersao: pendente('A revogação da versão do protocolo'),
-    mudarAndamentoCiclo: pendente('O andamento do ciclo oncológico'),
-    ajustarCiclo: pendente('O ajuste do ciclo oncológico'),
-    desligarPrescricao: pendente('O desligamento da prescrição do ciclo'),
+    publicarProtocolo: (x) => onco.publicarProtocolo(tx, est, x),
+    registrarCiclo: async (x) =>
+      onco.registrarCiclo(tx, est, await internacaoAberta(tx, est, x, 'o ciclo não é registrado'), x),
+    validarCiclo: (x) => onco.validarCiclo(tx, est, x),
+    vincularPrescricao: (x) => onco.vincularPrescricao(tx, est, x),
+    registrarEventoOnco: (x) => onco.registrarEventoOnco(tx, est, x),
+    revogarVersao: (x) => onco.revogarVersao(tx, est, x),
+    mudarAndamentoCiclo: (x) => onco.mudarAndamentoCiclo(tx, est, x),
+    ajustarCiclo: (x) => onco.ajustarCiclo(tx, est, x),
+    desligarPrescricao: (x) => onco.desligarPrescricao(tx, est, x),
   };
 }
 
