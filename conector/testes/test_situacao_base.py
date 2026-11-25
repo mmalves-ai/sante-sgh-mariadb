@@ -1,5 +1,8 @@
 """Situação da base do painel de carga (situacao_base): fontes em ordem de preferência, subida com as gravadas, fim de
-tabela (resumo regravado), reprocessamento das recusadas e nome genérico. Sem banco: cursor falso; só dados falsos."""
+tabela (resumo regravado), reprocessamento das recusadas, nome genérico e a contagem das recusadas em SEGUNDO PLANO
+(o início da execução nunca espera contagem pesada). Sem banco: cursor falso; só dados falsos."""
+import threading
+import time
 import unittest
 
 from sante_conector import carga, situacao_base
@@ -23,13 +26,15 @@ class _Cur:
             self._r = [(e,) for e in self.dono.execucoes]
         elif "conector_tabela_concluida" in sql:
             self._r = self.dono.concluidas
-        elif "SELECT DISTINCT entidade_destino" in sql:
-            self._r = [("paciente",), ("exame",), (None,)]
         elif "regra_recusa IS NOT NULL" in sql:
+            self.dono.args_recusas.append(args)
+            if self.dono.portao is not None:
+                self.dono.portao.wait(5)
+            if self.dono.demora:
+                time.sleep(self.dono.demora)
             if self.dono.recusas is None:
-                raise RuntimeError("sem indice")
-            self.dono.args_recusas = args
-            self._r = self.dono.recusas
+                raise RuntimeError("max_statement_time")
+            self._r = [(dict(self.dono.recusas).get(args[0], 0),)]
         else:
             self._r = []
 
@@ -40,13 +45,16 @@ class _Cur:
 class _Conn:
     autocommit_mode = True
 
-    def __init__(self, resumo=(), execucoes=(), concluidas=(), recusas=()):
+    def __init__(self, resumo=(), execucoes=(), concluidas=(), recusas=(), portao=None, demora=0):
         self.resumo, self.execucoes, self.concluidas, self.sql = list(resumo), list(execucoes), list(concluidas), []
         self.recusas = None if recusas is None else list(recusas)
-        self.args_recusas = None
+        self.args_recusas, self.portao, self.demora, self.fechada = [], portao, demora, False
 
     def cursor(self):
         return _Cur(self)
+
+    def close(self):
+        self.fechada = True
 
 
 def _placar():
@@ -56,12 +64,19 @@ def _placar():
 
 
 class SituacaoBaseTeste(unittest.TestCase):
-    def _sb(self, reprocessar=False, recusas=()):
-        conn = _Conn(resumo=[("A", 90, 10)], execucoes=[12, 11], concluidas=[("C", 40), ("B", 1)], recusas=recusas)
+    def _sb(self, reprocessar=False, recusas=(), fundo=False, ctds_extra=None, concluidas=None, **kw):
+        conn = _Conn(resumo=[("A", 90, 10)], execucoes=[12, 11],
+                     concluidas=concluidas or [("C", 40, 12), ("B", 1, 11)])
+        fundo_conn = _Conn(recusas=recusas, portao=kw.pop("portao", None), demora=kw.pop("demora", 0))
         ctds = {12: {"entidades": {"x": {"tabela_origem": "B", "registros_destino": 45, "recusados": 2}}},
                 11: {"entidades": {"y": {"tabela_origem": "B", "registros_destino": 1, "recusados": 0}}}}
+        for e, v in (ctds_extra or {}).items():
+            ctds.setdefault(e, {}).update(v)
         pl = _placar()
-        return situacao_base.SituacaoBase(conn, "ctl", 20, pl, ctds.get, reprocessar=reprocessar), pl, conn
+        sb = situacao_base.SituacaoBase(conn, "ctl", 20, pl, ctds.get, reprocessar=reprocessar,
+                                        conectar=lambda: fundo_conn, fundo=fundo, **kw)
+        sb.fundo_conn = fundo_conn
+        return sb, pl, conn
 
     def test_fontes_em_ordem_e_totais(self):
         sb, _, _ = self._sb()
@@ -96,22 +111,68 @@ class SituacaoBaseTeste(unittest.TestCase):
         sb2.fim("A")  # reprocessadas e nenhuma recusada de novo
         self.assertEqual(sb2.tabela("A"), (100, 100, 0))
 
-    def test_concluida_com_recusadas_nao_conta_como_na_base(self):
-        sb, _, conn = self._sb(recusas=[("C", 7)])
+    def test_resumo_exato_e_concluida_aproximada_sem_contagem_no_inicio(self):
+        sb, _, conn = self._sb()
         b = sb.calcular()
+        # A (resumo) e B (conciliação) são exatas; só C, que depende da marca de concluída, é aproximada
+        self.assertEqual(sb.recusas_desconhecidas, {"C"})
+        self.assertEqual(b["tabelas_recusas_desconhecidas"], 1)
+        self.assertEqual(b["recusas_contagem"]["estado"], "desligada")
+        # nenhuma contagem do conector_origem na conexão do motor
+        self.assertFalse([q for q, _ in conn.sql if "conector_origem" in q])
+
+    def test_inicio_nao_espera_a_contagem_de_fundo(self):
+        portao = threading.Event()
+        sb, _, conn = self._sb(recusas=[("C", 7)], fundo=True, portao=portao)
+        t0 = time.monotonic()
+        b = sb.calcular()
+        self.assertLess(time.monotonic() - t0, 2.0)
+        self.assertEqual(b["tabelas_recusas_desconhecidas"], 1)
+        self.assertEqual(b["recusas_contagem"]["estado"], "em_andamento")
+        self.assertEqual(sb.tabela("C"), (40, 40, 0))
+        portao.set()
+        sb.esperar_contagem(5)
+        b = sb.json()  # o batimento seguinte (contadores.progresso.base) já traz o exato
         self.assertEqual(sb.tabela("C"), (40, 33, 7))
         self.assertEqual((b["linhas_na_base"], b["linhas_recusadas"]), (168, 19))
         self.assertEqual(b["tabelas_recusas_desconhecidas"], 0)
-        # a contagem só pede as tabelas que dependem da marca de concluída (B veio da conciliação)
-        self.assertEqual(conn.args_recusas, ("paciente", "exame", "C"))
+        self.assertEqual(b["recusas_contagem"]["estado"], "concluida")
+        self.assertEqual(sb.fundo_conn.args_recusas, [("C",)])
+        self.assertTrue(sb.fundo_conn.fechada)
+        self.assertFalse([q for q, _ in conn.sql if "conector_origem" in q])
+        q = [x for x, _ in sb.fundo_conn.sql if "regra_recusa" in x][0]
+        self.assertIn("max_statement_time=10.0", q)
+        self.assertIn("FORCE INDEX (uq_conector_origem_chave)", q)
 
-    def test_concluida_sem_contagem_de_recusadas_fica_aproximada(self):
-        sb, _, _ = self._sb(recusas=None)
-        b = sb.calcular()
+    def test_contagem_de_fundo_que_falha_fica_aproximada(self):
+        sb, _, _ = self._sb(recusas=None, fundo=True)
+        sb.calcular()
+        sb.esperar_contagem(5)
+        b = sb.json()
         self.assertEqual(b["tabelas_recusas_desconhecidas"], 1)
+        self.assertEqual(b["recusas_contagem"]["estado"], "estourou")
         self.assertEqual(b["fontes"]["concluida"], 1)
         sb.fim("C")  # lida inteira nesta execução: deixa de ser aproximada
         self.assertEqual(sb.json()["tabelas_recusas_desconhecidas"], 0)
+
+    def test_limite_total_da_contagem_de_fundo(self):
+        sb, _, _ = self._sb(recusas=[("C", 7), ("D", 1)], fundo=True, demora=0.4, total_s=0.6,
+                            concluidas=[("C", 40, 12), ("D", 10, 12)])
+        sb.calcular()
+        sb.esperar_contagem(5)
+        b = sb.json()
+        # D (menor) é contada primeiro; C não cabe no limite total e fica aproximada
+        self.assertEqual(sb.tabela("D"), (10, 9, 1))
+        self.assertEqual(sb.recusas_desconhecidas, {"C"})
+        self.assertEqual(b["recusas_contagem"]["estado"], "estourou")
+        self.assertEqual(b["recusas_contagem"]["contadas"], 1)
+
+    def test_recusas_baratas_dos_contadores_da_execucao_que_concluiu(self):
+        prog = {"progresso": {"recusas_por_tabela": [{"tabela": "exame", "recusadas": 5}]}}
+        sb, _, _ = self._sb(ctds_extra={12: prog})
+        sb.calcular()
+        self.assertEqual(sb.tabela("C"), (40, 35, 5))
+        self.assertEqual(sb.json()["tabelas_recusas_desconhecidas"], 1)  # estimativa: segue aproximada
 
     def test_nome_na_contagem(self):
         from sante_conector import motor

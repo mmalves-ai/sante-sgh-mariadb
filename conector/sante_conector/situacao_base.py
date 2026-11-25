@@ -1,62 +1,77 @@
 """Situação da base (obra carga-painel): quanto da origem já está no banco do cliente, por execução.
 
 O painel mostra primeiro "Já na base: X de Y linhas" e, à parte, a conferência desta execução. Contar o
-`conector_origem` a cada execução não serve: com dezenas de milhões de linhas, o agrupamento por tabela passa de
-2 minutos (medido em 24/11: mais de 150 s só pelo índice da chave). Por isso a situação sai de um RESUMO POR TABELA,
-mantido aqui no fim de cada tabela (`conector_resumo_tabela`), e, para a tabela que ainda não tem resumo, das
-fontes já gravadas pelas execuções anteriores do cliente, em ordem de preferência:
+`conector_origem` a cada execução não serve: com dezenas de milhões de linhas, o agrupamento das recusadas passa de
+4 minutos (medido em 25/11: 259 s em 94 M linhas). Por isso NENHUMA contagem pesada roda no início da execução: a
+situação sai de um RESUMO POR TABELA, mantido aqui no fim de cada tabela (`conector_resumo_tabela`), e, para a tabela
+que ainda não tem resumo, das fontes já gravadas pelas execuções anteriores do cliente, em ordem de preferência:
 
-1. `resumo`: o resumo desta tabela (gravado no fim dela, numa execução que a leu inteira);
+1. `resumo`: o resumo desta tabela (gravado no fim dela, numa execução que a leu inteira): exato;
 2. `conciliacao`: a conciliação por entidade da execução mais recente que a trouxe (`contadores.entidades`:
    registros no destino e recusados);
-3. `concluida`: a marca de tabela concluída (`conector_tabela_concluida`) com a contagem da imagem daquela execução;
-   as recusadas dessas tabelas saem de uma contagem agrupada das linhas RECUSADAS no `conector_origem` (id_destino
-   nulo com regra de recusa), pelo índice (entidade_destino, id_destino), só dessas tabelas: na base = contagem -
-   recusadas. Se essa contagem falhar, a tabela entra em `tabelas_recusas_desconhecidas` e a tela avisa que o "Já na
-   base" dela é aproximado (nunca se afirma em silêncio que as recusadas estão na base);
+3. `concluida`: a marca de tabela concluída (`conector_tabela_concluida`) com a contagem da imagem daquela execução.
+   As recusadas começam pela fonte barata: as recusas por tabela da execução que concluiu a tabela
+   (`contadores.progresso.recusas_por_tabela`, quando o nome de destino é só dela). Essas tabelas ficam em
+   `tabelas_recusas_desconhecidas` (a tela avisa que o "Já na base" é aproximado) até a CONTAGEM EM SEGUNDO PLANO
+   (uma linha de execução com conexão própria, por tabela, pelo índice da chave (tabela_origem, ...), no máximo
+   CONSULTA_S por consulta e TOTAL_S no todo) contar as recusadas abertas dela; o `contadores.progresso.base` do
+   batimento seguinte já traz o valor exato. Se a contagem estourar, a tabela continua aproximada;
 4. sem situação: conta como faltante (`tabelas_sem_situacao`).
 
 Ao longo da execução, `linhas_na_base` sobe com as gravadas da tabela (limitado à contagem da origem); no fim de
-cada tabela lida inteira nesta fotografia, a tabela passa a valer contagem - recusadas, e o resumo é regravado.
-Só contagens e nomes de tabela de destino (regra 5); a falha aqui nunca derruba a carga."""
+cada tabela lida inteira nesta fotografia, a tabela passa a valer contagem - recusadas, e o resumo é regravado (com o
+tempo a base fica exata). Só contagens e nomes de tabela de destino (regra 5); a falha aqui nunca derruba a carga."""
 import datetime
+import threading
 import time
 
-DDL = """CREATE TABLE IF NOT EXISTS `{ctl}`.conector_resumo_tabela (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  tabela_origem VARCHAR(63) NOT NULL,
-  registros_origem BIGINT UNSIGNED NOT NULL COMMENT 'Contagem da origem na fotografia em que a tabela foi lida inteira',
-  na_base BIGINT UNSIGNED NOT NULL COMMENT 'Linhas da origem registradas no destino (gravadas ou iguais)',
-  recusadas BIGINT UNSIGNED NOT NULL COMMENT 'Linhas recusadas abertas',
-  execucao_id BIGINT UNSIGNED NOT NULL COMMENT 'conector_execucao.id que leu a tabela inteira',
-  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL,
-  alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1,
-  UNIQUE KEY uq_conector_resumo_tabela (tabela_origem)
-) COMMENT='Situação da base por tabela da origem, no fim de cada tabela lida inteira (painel de carga)'"""
+from .controle import DDL_RESUMO_TABELA
+
+DDL = DDL_RESUMO_TABELA.replace("{b}", "`{ctl}`")
 
 TOP = 20
+CONSULTA_S = 10   # limite de cada contagem em segundo plano (max_statement_time)
+TOTAL_S = 120     # limite total da contagem em segundo plano
 
 
 def _cap(x, lim):
     return max(0, min(int(x or 0), int(lim or 0)))
 
 
-class SituacaoBase:
-    """Um por execução, no coordenador. `placar`: carga.Placar (contagens do plano, nomes de destino, por tabela)."""
+def _clonar(conn):
+    """Conexão própria para a contagem em segundo plano, com os mesmos dados de acesso (a conexão do motor não é
+    dividida entre linhas de execução). Nunca imprime a senha."""
+    import pymysql
+    db = getattr(conn, "db", None)
+    return pymysql.connect(host=conn.host, port=conn.port, user=conn.user, password=conn.password,
+                           database=db.decode() if isinstance(db, bytes) else db, charset="utf8mb4",
+                           autocommit=True, connect_timeout=10, read_timeout=CONSULTA_S + 5)
 
-    def __init__(self, conn, ctl, eid, placar, contadores_de=None, reprocessar=False):
+
+class SituacaoBase:
+    """Um por execução, no coordenador. `placar`: carga.Placar (contagens do plano, nomes de destino, por tabela).
+    `conectar`: fábrica da conexão da contagem em segundo plano (padrão: clone da `conn`); `fundo=False` desliga."""
+
+    def __init__(self, conn, ctl, eid, placar, contadores_de=None, reprocessar=False, conectar=None, fundo=True,
+                 consulta_s=CONSULTA_S, total_s=TOTAL_S):
         self.conn, self.ctl, self.eid, self.placar = conn, ctl, int(eid), placar
         self.contadores_de = contadores_de or (lambda e: None)
         self.reprocessar = bool(reprocessar)
+        self.conectar = conectar or (lambda: _clonar(conn))
+        self.fundo, self.consulta_s, self.total_s = bool(fundo), float(consulta_s), float(total_s)
         self.base = {}      # tabela -> [na_base, recusadas] antes desta execução
         self.atual = {}     # tabela -> [na_base, recusadas] das tabelas lidas inteiras nesta execução
         self.fontes = {"resumo": 0, "conciliacao": 0, "concluida": 0, "sem_situacao": 0}
-        self.recusas_desconhecidas = set()  # tabelas `concluida` cuja contagem de recusadas falhou
+        self.recusas_desconhecidas = set()  # tabelas `concluida` sem a contagem exata das recusadas
+        self._concluidas = {}               # tabela -> contagem da imagem (fonte `concluida`)
+        self.contagem = {"estado": "sem_tabelas", "contadas": 0, "estouradas": 0, "ms": None}
+        self._trava = threading.Lock()
+        self._linha = None
         self.recusas_ms = None
         self.calculo_ms = None
         self.calculada_em = None
 
-    # ----- cálculo inicial (uma vez por execução) -----
+    # ----- cálculo inicial (uma vez por execução, sem contagem pesada) -----
     def _cur(self):
         return self.conn.cursor()
 
@@ -70,13 +85,27 @@ class SituacaoBase:
             c.execute("SELECT DISTINCT execucao_id FROM `%s`.imagem WHERE execucao_id<>%%s ORDER BY execucao_id DESC"
                       % self.ctl, (self.eid,))
             anteriores = [int(e) for (e,) in c.fetchall()]
-            c.execute("SELECT c.tabela_origem, MAX(it.registros) FROM `%s`.conector_tabela_concluida c"
+            c.execute("SELECT c.tabela_origem, MAX(it.registros), MAX(c.execucao_id)"
+                      " FROM `%s`.conector_tabela_concluida c"
                       " JOIN `%s`.imagem_tabela it ON it.imagem_id=c.imagem_id AND it.tabela_origem=c.tabela_origem"
                       " GROUP BY c.tabela_origem" % (self.ctl, self.ctl))
-            concluidas = {t: int(n or 0) for t, n in c.fetchall() if t in plano}
+            concluidas, concluiu = {}, {}
+            for row in c.fetchall():
+                if row[0] in plano:
+                    concluidas[row[0]] = int(row[1] or 0)
+                    concluiu[row[0]] = int(row[2]) if len(row) > 2 and row[2] is not None else None
+        ctds = {}
+
+        def contadores(e):
+            if e not in ctds:
+                try:
+                    ctds[e] = self.contadores_de(e) or {}
+                except Exception:  # noqa: BLE001 - sem os contadores daquela execução, a fonte não vale
+                    ctds[e] = {}
+            return ctds[e]
         conciliacao = {}
         for e in anteriores:  # da mais recente para a mais antiga: a primeira que traz a tabela vale
-            ents = (self.contadores_de(e) or {}).get("entidades") or {}
+            ents = contadores(e).get("entidades") or {}
             vista = {}
             for v in ents.values():
                 t = (v or {}).get("tabela_origem")
@@ -86,49 +115,104 @@ class SituacaoBase:
                     a[1] = max(a[1], int(v.get("recusados") or 0))
             conciliacao.update(vista)
         so_concluida = sorted(t for t in concluidas if t not in resumo and t not in conciliacao)
-        recusas = self._recusadas_registradas(so_concluida)
+        baratas = self._recusas_baratas(so_concluida, concluiu, contadores)
         for t in plano:
             if t in resumo:
                 self.base[t], f = resumo[t], "resumo"
             elif t in conciliacao:
                 self.base[t], f = conciliacao[t], "conciliacao"
             elif t in concluidas:
-                rec = _cap((recusas or {}).get(t, 0), concluidas[t])
+                rec = _cap(baratas.get(t, 0), concluidas[t])
                 self.base[t], f = [concluidas[t] - rec, rec], "concluida"
-                if recusas is None:
-                    self.recusas_desconhecidas.add(t)
+                self.recusas_desconhecidas.add(t)
+                self._concluidas[t] = concluidas[t]
             else:
                 f = "sem_situacao"
             self.fontes[f] += 1
         self.calculo_ms = int(1000 * (time.monotonic() - t0))
         self.calculada_em = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+        if self._concluidas:
+            self.contagem["estado"] = "desligada"
+            if self.fundo:
+                self.iniciar_contagem()
         return self.json()
 
-    def _recusadas_registradas(self, tabelas):
-        """{tabela: linhas recusadas registradas} das tabelas dadas, ou None se a contagem falhar. Recusada = linha do
-        `conector_origem` com id_destino nulo e regra de recusa (a mesma definição do reprocessamento). Pelo índice
-        (entidade_destino, id_destino): primeiro as entidades de destino (varredura solta do índice), depois o
-        trecho id_destino nulo de cada uma; só as recusadas são lidas na linha."""
-        if not tabelas:
-            return {}
+    def _recusas_baratas(self, tabelas, concluiu, contadores):
+        """Recusadas já gravadas nos contadores da execução que concluiu cada tabela: o top de recusas por tabela de
+        destino do `contadores.progresso`, só quando o nome de destino pertence a uma tabela só do plano. É estimativa
+        (a recusada já vista e pulada não entra na conta daquela execução): a tabela segue aproximada."""
+        nomes = {}
+        for t, n in (self.placar.nomes or {}).items():
+            if t in self.placar.contagens:
+                nomes.setdefault(n, []).append(t)
+        out = {}
+        for t in tabelas:
+            e, nome = concluiu.get(t), self.placar.nomes.get(t)
+            if e is None or not nome or len(nomes.get(nome, ())) != 1:
+                continue
+            for r in ((contadores(e).get("progresso") or {}).get("recusas_por_tabela") or []):
+                if (r or {}).get("tabela") == nome:
+                    out[t] = int(r.get("recusadas") or 0)
+        return out
+
+    # ----- contagem em segundo plano -----
+    def iniciar_contagem(self):
+        if self._linha is not None or not self._concluidas:
+            return self._linha
+        self.contagem["estado"] = "em_andamento"
+        self._linha = threading.Thread(target=self._contar, name="situacao-base-recusas", daemon=True)
+        self._linha.start()
+        return self._linha
+
+    def esperar_contagem(self, timeout=None):
+        if self._linha is not None:
+            self._linha.join(timeout)
+
+    def _contar(self):
+        """Recusadas abertas por tabela (id_destino nulo com regra de recusa, a mesma definição do reprocessamento),
+        pelo índice da chave (tabela_origem, chave_original): as menores primeiro, cada consulta com
+        max_statement_time; ao passar do total, as que faltam ficam aproximadas."""
         t0 = time.monotonic()
+        fim = t0 + self.total_s
+        contadas = estouradas = 0
+        cn = None
         try:
-            with self._cur() as c:
-                c.execute("SELECT DISTINCT entidade_destino FROM `%s`.conector_origem" % self.ctl)
-                ents = [e for (e,) in c.fetchall() if e is not None]
-                if not ents:
-                    return {}
-                c.execute("SELECT tabela_origem, COUNT(*) FROM `%s`.conector_origem"
-                          " FORCE INDEX (ix_conector_origem_destino)"
-                          " WHERE entidade_destino IN (%s) AND id_destino IS NULL AND regra_recusa IS NOT NULL"
-                          " AND tabela_origem IN (%s) GROUP BY tabela_origem"
-                          % (self.ctl, ",".join(["%s"] * len(ents)), ",".join(["%s"] * len(tabelas))),
-                          tuple(ents) + tuple(tabelas))
-                return {t: int(n or 0) for t, n in c.fetchall()}
-        except Exception:  # noqa: BLE001 - sem a contagem, as tabelas ficam marcadas como aproximadas
-            return None
+            cn = self.conectar()
+            for t in sorted(self._concluidas, key=lambda x: (self._concluidas[x], x)):
+                resta = fim - time.monotonic()
+                if resta <= 0.5:
+                    break
+                lim = max(1.0, min(self.consulta_s, resta))
+                try:
+                    with cn.cursor() as c:
+                        c.execute("SET STATEMENT max_statement_time=%.1f FOR SELECT COUNT(*) FROM `%s`.conector_origem"
+                                  " FORCE INDEX (uq_conector_origem_chave) WHERE tabela_origem=%%s"
+                                  " AND id_destino IS NULL AND regra_recusa IS NOT NULL" % (lim, self.ctl), (t,))
+                        r = c.fetchall()
+                    n = int((r[0][0] if r else 0) or 0)
+                except Exception:  # noqa: BLE001 - estourou o limite (ou falhou): a tabela fica aproximada
+                    estouradas += 1
+                    continue
+                contadas += 1
+                with self._trava:
+                    cont = self._concluidas[t]
+                    rec = _cap(n, cont)
+                    self.base[t] = [cont - rec, rec]
+                    self.recusas_desconhecidas.discard(t)
+        except Exception:  # noqa: BLE001 - sem conexão própria, tudo fica aproximado
+            pass
         finally:
-            self.recusas_ms = int(1000 * (time.monotonic() - t0))
+            try:
+                if cn is not None:
+                    cn.close()
+            except Exception:  # noqa: BLE001
+                pass
+            ms = int(1000 * (time.monotonic() - t0))
+            with self._trava:
+                falta = sum(1 for t in self._concluidas if t in self.recusas_desconhecidas and t not in self.atual)
+                self.contagem = {"estado": "concluida" if not falta else "estourou", "contadas": contadas,
+                                 "estouradas": estouradas, "ms": ms}
+                self.recusas_ms = ms
 
     # ----- fim de tabela -----
     def fim(self, t):
@@ -141,8 +225,9 @@ class SituacaoBase:
         # com o reprocessamento, toda recusada antiga foi tentada de novo (e a que voltou a falhar foi contada);
         # sem ele, a recusada já vista é pulada e continua aberta
         rec = _cap(rec_exec if self.reprocessar else max(rec_exec, rec0), cont)
-        self.atual[t] = [cont - rec, rec]
-        self.recusas_desconhecidas.discard(t)
+        with self._trava:
+            self.atual[t] = [cont - rec, rec]
+            self.recusas_desconhecidas.discard(t)
         try:
             with self._cur() as c:
                 c.execute("INSERT INTO `%s`.conector_resumo_tabela (tabela_origem, registros_origem, na_base,"
@@ -170,6 +255,10 @@ class SituacaoBase:
         return cont, na, rec
 
     def json(self):
+        with self._trava:
+            return self._json()
+
+    def _json(self):
         tot = [0, 0, 0]
         faltantes = []
         for t in self.placar.contagens:
@@ -187,6 +276,7 @@ class SituacaoBase:
             "tabelas_sem_situacao": self.fontes["sem_situacao"], "fontes": dict(self.fontes),
             "tabelas_recusas_desconhecidas": len(self.recusas_desconhecidas),
             "calculo_ms": self.calculo_ms, "recusas_ms": self.recusas_ms, "calculada_em": self.calculada_em,
+            "recusas_contagem": dict(self.contagem),
             "por_tabela_top": [{"tabela": nome, "linhas_origem": c, "na_base": na, "recusadas": r, "faltam": f}
                                for f, nome, c, na, r in faltantes[:TOP]],
         }
