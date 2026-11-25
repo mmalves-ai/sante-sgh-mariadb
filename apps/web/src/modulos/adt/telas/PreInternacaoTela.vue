@@ -19,6 +19,8 @@ import {
 } from '../api-adt.js';
 import AvisoAdt from '../componentes/AvisoAdt.vue';
 import ErroAdt from '../componentes/ErroAdt.vue';
+import FilaEsperaInternacao from '../componentes/FilaEsperaInternacao.vue';
+import PlanoPreInternacao from '../componentes/PlanoPreInternacao.vue';
 import { hhmm } from '../regras-tela.js';
 import { usarAdt } from '../usar-adt.js';
 
@@ -29,6 +31,8 @@ const podeAgendar = pode('internacao.preInternar');
 const podeCorrigir = pode('internacao.corrigirPreInternacao');
 const aviso = motivoDe('internacao.preInternar');
 const podeAdmitir = pode('internacao.internar');
+// C2-048: plano previsto (procedimentos, materiais, equipe) da pré-internação do paciente aberto na lista ou na fila.
+const planoDe = ref<number | null>(null);
 const saneamento = ref(false);
 const todas = ref(false);
 const lista = useQuery({
@@ -231,6 +235,13 @@ async function agendar(): Promise<void> {
                   @acionar="corrigir(p.paciente, p.versao)"
                 />
               </template>
+              <SanteBotao
+                v-if="p.situacao === 'pendente'"
+                variante="texto"
+                :rotulo="t('adt.prePlano.plano')"
+                :data-testid="`pre-plano-abrir-${p.paciente}`"
+                @acionar="planoDe = p.paciente"
+              />
               <RouterLink
                 v-if="podeAdmitir && p.situacao === 'pendente'"
                 :to="`/internacao/admissao?paciente=${p.paciente}`"
@@ -243,6 +254,14 @@ async function agendar(): Promise<void> {
       </table>
       <p v-if="lista.data.value.cortada" class="secundario">{{ t('adt.cortada') }}</p>
     </template>
+    <PlanoPreInternacao
+      v-if="planoDe !== null"
+      :key="planoDe"
+      :paciente="planoDe"
+      :pode-gravar="podeAgendar"
+      @fechar="planoDe = null"
+    />
+    <FilaEsperaInternacao :pode-gravar="podeAgendar" @plano="(x) => (planoDe = x)" />
     <p v-if="mensagem" role="status" data-testid="pre-mensagem">{{ mensagem }}</p>
     <ErroAdt v-if="erro" :erro="erro" />
 
