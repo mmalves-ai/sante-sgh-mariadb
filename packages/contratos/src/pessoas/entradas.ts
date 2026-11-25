@@ -52,6 +52,23 @@ export const esquemaAdmitirColaborador = z
     profissional: id.nullable().default(null),
     /** Usuário de acesso (id) a reusar, da prévia; null: sem login no estabelecimento. */
     usuario: id.nullable().default(null),
+    // Ficha da admissão (C1-111; eSocial S-2200): o vínculo de trabalho no banco próprio exige; a tela pede todos e
+    // o servidor confere de novo (regra no domínio, `conferirFichaAdmissao`).
+    nascimento: data.nullable().default(null),
+    /** Sexo (id do catálogo). */
+    sexo: id.nullable().default(null),
+    /** Grau de instrução: código oficial de 01 a 12. */
+    grauInstrucao: z
+      .string()
+      .regex(/^(0[1-9]|1[0-2])$/, 'Escolha o grau de instrução.')
+      .nullable()
+      .default(null),
+    /** Categoria do trabalhador do eSocial (id do catálogo). */
+    categoria: id.nullable().default(null),
+    /** Tipo de vínculo de trabalho (id do catálogo oficial). */
+    tipoVinculoTrabalho: id.nullable().default(null),
+    /** Salário-base do contrato, em reais. */
+    salario: z.number().positive('Informe o salário.').max(9_999_999_999_999).nullable().default(null),
   })
   .strict();
 export type AdmitirColaboradorEntrada = z.infer<typeof esquemaAdmitirColaborador>;

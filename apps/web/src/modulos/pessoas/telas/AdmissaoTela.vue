@@ -7,11 +7,12 @@ import {
   CODIGOS_TIPO_VINCULO,
   esquemaAdmitirColaborador,
   esquemaCpf,
+  GRAUS_INSTRUCAO,
   type PreviaAdmissao,
   TIPOS_VINCULO,
   type TipoVinculo,
 } from '@sgh/contratos';
-import { limiteCargaSemanal } from '@sgh/dominio-pessoas';
+import { conferirFichaAdmissao, limiteCargaSemanal } from '@sgh/dominio-pessoas';
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteData, SantePassos, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
@@ -70,6 +71,45 @@ const centroCusto = ref<number | null>(null);
 const unidade = ref<number | null>(null);
 const setor = ref('');
 const matricula = ref('');
+// Ficha da admissão (C1-111; eSocial S-2200): o contrato de trabalho exige; a regra do domínio confere na hora.
+const nascimento = ref<string | null>(null);
+const sexo = ref<number | null>(null);
+const grauInstrucao = ref<string | null>(null);
+const categoria = ref<number | null>(null);
+const tipoVinculoTrabalho = ref<number | null>(null);
+const salario = ref('');
+const salarioNumero = computed(() => {
+  const t = salario.value.trim().replace(/\./g, '').replace(',', '.');
+  return t === '' || Number.isNaN(Number(t)) ? null : Number(t);
+});
+const opcoesGrau = Object.entries(GRAUS_INSTRUCAO).map(([valor, rotulo]) => ({
+  valor,
+  rotulo: `${valor} - ${rotulo}`,
+}));
+const opcoesCatalogo = (xs: readonly { codigo: number; rotulo: string }[] | undefined) =>
+  (xs ?? []).map((x) => ({ valor: x.codigo, rotulo: x.rotulo }));
+const opcoesSexo = computed(() => opcoesCatalogo(a.value?.sexos));
+const opcoesCategoria = computed(() => opcoesCatalogo(a.value?.categoriasTrabalhador));
+const opcoesNatureza = computed(() => opcoesCatalogo(a.value?.tiposVinculoTrabalho));
+const ficha = computed(() =>
+  admissao.value
+    ? conferirFichaAdmissao({
+        nascimento: nascimento.value,
+        admissao: admissao.value,
+        grauInstrucao: grauInstrucao.value,
+        salario: salarioNumero.value,
+      })
+    : null,
+);
+const fichaErro = computed(() => (ficha.value && !ficha.value.ok ? ficha.value.mensagem : null));
+const fichaCompleta = computed(
+  () =>
+    ficha.value?.ok === true &&
+    sexo.value !== null &&
+    categoria.value !== null &&
+    tipoVinculoTrabalho.value !== null &&
+    matricula.value.trim() !== '',
+);
 const limite = computed(() => limiteCargaSemanal(tipo.value));
 const opcoesTipo = CODIGOS_TIPO_VINCULO.map((c) => ({ valor: c, rotulo: TIPOS_VINCULO[c] }));
 const opcoesCentro = computed(() =>
@@ -96,6 +136,12 @@ const entrada = computed(() =>
     matricula: matricula.value.trim() || null,
     profissional: previa.value?.profissional?.id ?? null,
     usuario: previa.value?.usuarios[0]?.id ?? null,
+    nascimento: nascimento.value,
+    sexo: sexo.value,
+    grauInstrucao: grauInstrucao.value,
+    categoria: categoria.value,
+    tipoVinculoTrabalho: tipoVinculoTrabalho.value,
+    salario: salarioNumero.value,
   }),
 );
 const camposInvalidos = computed(() =>
@@ -106,7 +152,7 @@ const acimaDoLimite = computed(() => Number(carga.value) > limite.value);
 // ── Passo 3: gravar ──
 const admitido = ref<number | null>(null);
 async function gravar(): Promise<void> {
-  if (!entrada.value.success || acimaDoLimite.value) return;
+  if (!entrada.value.success || acimaDoLimite.value || !fichaCompleta.value) return;
   erro.value = null;
   ocupado.value = true;
   try {
@@ -269,9 +315,57 @@ async function gravar(): Promise<void> {
             v-model="matricula"
             :rotulo="t('pessoas.admissao.matricula')"
             :max-bytes="20"
+            obrigatorio
             data-testid="admissao-matricula"
           />
         </div>
+        <h2 class="secundario">{{ t('pessoas.admissao.fichaTitulo') }}</h2>
+        <div class="campos">
+          <SanteData
+            v-model="nascimento"
+            :rotulo="t('pessoas.admissao.nascimento')"
+            editavel
+            data-testid="admissao-nascimento"
+          />
+          <SanteSelecao
+            v-model="sexo"
+            :rotulo="t('pessoas.admissao.sexo')"
+            :opcoes="opcoesSexo"
+            obrigatorio
+            data-testid="admissao-sexo"
+          />
+          <SanteSelecao
+            v-model="grauInstrucao"
+            :rotulo="t('pessoas.admissao.grauInstrucao')"
+            :opcoes="opcoesGrau"
+            obrigatorio
+            data-testid="admissao-grau-instrucao"
+          />
+          <SanteSelecao
+            v-model="categoria"
+            :rotulo="t('pessoas.admissao.categoria')"
+            :opcoes="opcoesCategoria"
+            obrigatorio
+            busca
+            data-testid="admissao-categoria"
+          />
+          <SanteSelecao
+            v-model="tipoVinculoTrabalho"
+            :rotulo="t('pessoas.admissao.tipoVinculoTrabalho')"
+            :opcoes="opcoesNatureza"
+            obrigatorio
+            busca
+            data-testid="admissao-natureza"
+          />
+          <SanteCampoTexto
+            v-model="salario"
+            :rotulo="t('pessoas.admissao.salario')"
+            :max-bytes="16"
+            obrigatorio
+            data-testid="admissao-salario"
+          />
+        </div>
+        <SanteAlerta v-if="fichaErro" :texto="fichaErro" variante="aviso" data-testid="admissao-ficha-erro" />
         <p class="secundario">{{ t('pessoas.admissao.cargaLimite', { limite }) }}</p>
         <SanteAlerta
           v-if="acimaDoLimite"
@@ -286,7 +380,7 @@ async function gravar(): Promise<void> {
           <SanteBotao
             :rotulo="t('pessoas.admissao.continuar')"
             tipo="submit"
-            :desabilitado="!entrada.success || acimaDoLimite"
+            :desabilitado="!entrada.success || acimaDoLimite || !fichaCompleta"
             data-testid="admissao-revisar"
           />
         </div>
@@ -307,6 +401,14 @@ async function gravar(): Promise<void> {
           <dd>{{ carga }}</dd>
           <dt>{{ t('pessoas.admissao.centroCusto') }}</dt>
           <dd>{{ opcoesCentro.find((o) => o.valor === centroCusto)?.rotulo ?? '' }}</dd>
+          <dt>{{ t('pessoas.admissao.nascimento') }}</dt>
+          <dd>{{ dataBr(nascimento) }}</dd>
+          <dt>{{ t('pessoas.admissao.categoria') }}</dt>
+          <dd>{{ opcoesCategoria.find((o) => o.valor === categoria)?.rotulo ?? '' }}</dd>
+          <dt>{{ t('pessoas.admissao.tipoVinculoTrabalho') }}</dt>
+          <dd>{{ opcoesNatureza.find((o) => o.valor === tipoVinculoTrabalho)?.rotulo ?? '' }}</dd>
+          <dt>{{ t('pessoas.admissao.salario') }}</dt>
+          <dd data-testid="admissao-resumo-salario">{{ salario }}</dd>
         </dl>
         <div class="acoes">
           <SanteBotao :rotulo="t('pessoas.voltar')" variante="texto" @acionar="passo = 'vinculo'" />

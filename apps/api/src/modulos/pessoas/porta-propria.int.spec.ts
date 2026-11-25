@@ -1,6 +1,8 @@
 // Integração da porta própria da gestão de pessoas contra o MariaDB real (cliente f22_o3, criado por
 // `python3 -I tools/db/criar_cliente.py f22_o3 "Teste F2.2 onda 3"`). Massa SINTÉTICA (CPF de dígito calculado sobre
 // base aleatória, contas e catálogos de teste), montada no beforeAll e apagada no afterAll. SGH_NUCLEO_SEM_BANCO=1 pula.
+// Contrato de efeito (C1-111): a admissão pela ficha rápida (colaborador, vínculo, histórico, reuso do CPF da rede)
+// e a versão nova do dependente (a anterior fechada na véspera, tipo da tabela 07, mesmo CPF).
 // Contrato de efeito: o desligamento (vínculo, versão, histórico e trilha), o bloqueio da conta pelo Executor (situação
 // e linha do tempo), a correção na trilha relida, e as recusas (versão, outro estabelecimento, modelo pendente).
 // A mudança com vigência (cargo no historico_cargo, lotação e correção na trilha, piso da vigência) e a conta mantida
@@ -266,9 +268,22 @@ describe.skipIf(SEM_BANCO)('porta própria da gestão de pessoas (MariaDB, clien
   }, 120_000);
   /** Tabela 07 do eSocial SINTÉTICA desta execução (versão da fonte própria), apagada no fim. */
   const tabela07: number[] = [];
+  /** C1-111: o que a admissão pela ficha rápida gravou nesta execução (apagado no fim). */
+  const admitidos: { vinculos: number[]; pessoas: number[]; cargo: number } = {
+    vinculos: [],
+    pessoas: [],
+    cargo: 0,
+  };
   afterAll(async () => {
     await limparMassa(nucleo, m, async (e) => {
-      if (m) await e.executar('DELETE FROM dependente WHERE colaborador_id = ?', [m.colab]);
+      // A versão nova aponta a anterior (chave estrangeira): apaga da mais nova para a mais antiga.
+      if (m) await e.executar('DELETE FROM dependente WHERE colaborador_id = ? ORDER BY id DESC', [m.colab]);
+      for (const v of admitidos.vinculos) {
+        await e.executar('DELETE FROM historico_cargo WHERE vinculo_trabalho_id = ?', [v]);
+        await e.executar('DELETE FROM vinculo_trabalho WHERE id = ?', [v]);
+      }
+      for (const p of admitidos.pessoas) await e.executar('DELETE FROM colaborador WHERE id = ?', [p]);
+      if (admitidos.cargo) await e.executar('DELETE FROM cargo WHERE id = ?', [admitidos.cargo]);
       for (const t of tabela07) {
         await e.executar('DELETE FROM codigo_esocial WHERE tabela_esocial_id = ?', [t]);
         await e.executar('DELETE FROM tabela_esocial WHERE id = ?', [t]);
@@ -501,7 +516,7 @@ describe.skipIf(SEM_BANCO)('porta própria da gestão de pessoas (MariaDB, clien
     ]);
   });
 
-  it('desligamento: versão, situação, histórico e trilha; versão velha recusa; admissão rápida e dependente novo ficam pendentes', async () => {
+  it('desligamento: versão, situação, histórico e trilha; versão velha recusa; a porta não deixa mais nada pendente de modelo', async () => {
     const v = (await porta.vinculo(ctx(m, m.rh), m.vinculo))!;
     expect(
       await codigo(
@@ -548,30 +563,6 @@ describe.skipIf(SEM_BANCO)('porta própria da gestão de pessoas (MariaDB, clien
       ),
     );
     expect(Number(t?.k)).toBeGreaterThanOrEqual(2);
-    expect(
-      await codigo(
-        porta.gravarSgh(ctx(m, m.rh), trilhaDe(m, m.rh, 'vinculo_trabalho'), (g) =>
-          g.incluirVinculo({
-            pessoa: null,
-            cpfHmac: 'x',
-            cpfCifrado: 'x',
-            nome: 'X',
-            profissional: null,
-            usuario: null,
-            tipo: 'clt',
-            matricula: 'X1',
-            cargo: 'X',
-            funcao: null,
-            cargaSemanal: 44,
-            centroCusto: m.centro,
-            unidade: null,
-            setor: null,
-            admissao: '2026-01-01',
-            por: 'rh',
-          }),
-        ),
-      ),
-    ).toBe('modelo-pendente');
     expect(await porta.ultimoRetrato(ctx(m, m.rh))).toMatchObject({ janelaDias: 30 });
   });
 
@@ -612,5 +603,222 @@ describe.skipIf(SEM_BANCO)('porta própria da gestão de pessoas (MariaDB, clien
     expect(await codigo(porta.executar(ctx(m, m.rh), 'acesso.bloquearUsuario', { login }, opCtx(m.rh)))).toBe(
       'ja-bloqueado',
     );
+  });
+
+  it('C1-111 dependente alterado: a versão em vigor fecha na véspera e a nova nasce ligada, com o tipo da tabela 07 e o mesmo CPF', async () => {
+    const [v1] = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conf-dep-v' }, (l) =>
+      l.consultar('SELECT id, cpf FROM dependente WHERE colaborador_id = ? AND sequencia = 1', [m.colab]),
+    );
+    const anterior = Number(v1!['id']);
+    const cpf = String(v1!['cpf']);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `massa-dep-v-${SUFIXO}` }, (e) =>
+      e.executar("UPDATE dependente SET data_inicio_dependencia = '2025-01-01' WHERE id = ?", [anterior]),
+    );
+    const versao = (desde: string, extra: Record<string, unknown> = {}) =>
+      porta.gravarSgh(ctx(m, m.rh), trilhaDe(m, m.rh, 'dependente'), (g) =>
+        g.versionarDependente({
+          vinculo: m.vinculo,
+          anterior,
+          desde,
+          motivo: 'Correção do tipo de dependente pela certidão',
+          nome: `DEPENDENTE SINTETICO ALTERADO ${SUFIXO}`,
+          nascimento: '2020-05-10',
+          parentesco: '99',
+          cpfHmac: cifra.hmac(cpf),
+          cpfCifrado: cifra.cifrar(cpf),
+          dependenteIr: true,
+          dependenteSalarioFamilia: false,
+          por: 'rh',
+          ...extra,
+        } as Parameters<GravadorPessoas['versionarDependente']>[0]),
+      );
+    // A alteração não vale antes da versão em vigor; vínculo de outro estabelecimento não acha.
+    expect(await codigo(versao('2025-01-01'))).toBe('desde-antes-da-versao');
+    expect(await codigo(versao('2026-03-01', { vinculo: m.vinculo2 }))).toBe('desatualizado');
+    const nova = Number(await versao('2026-03-01'));
+    const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conf-dep-v' }, (l) =>
+      l.consultar(
+        `SELECT dp.id, dp.dependente_anterior_id, dp.data_inicio_dependencia, dp.data_fim_dependencia, dp.cpf = ? AS cpf_ok,
+                dp.descricao_dependencia, dp.versao, dp.alterado_por, dp.criado_por, ce.codigo_esocial
+           FROM dependente dp JOIN codigo_esocial ce ON ce.id = dp.tipo_dependente_codigo_esocial_id
+          WHERE dp.id IN (?, ?) ORDER BY dp.id`,
+        [cpf, anterior, nova],
+      ),
+    );
+    const iso = (x: unknown) => (x instanceof Date ? x.toISOString().slice(0, 10) : x);
+    expect(
+      linhas.map((x) => [
+        Number(x['id']),
+        x['dependente_anterior_id'] === null ? null : Number(x['dependente_anterior_id']),
+        iso(x['data_inicio_dependencia']),
+        iso(x['data_fim_dependencia']),
+        Number(x['cpf_ok']),
+        String(x['codigo_esocial']),
+        Number(x['versao']),
+      ]),
+    ).toEqual([
+      [anterior, null, '2025-01-01', '2026-02-28', 1, '03', 2],
+      [nova, anterior, '2026-03-01', null, 1, '99', 1],
+    ]);
+    expect(Number(linhas[0]!['alterado_por'])).toBe(m.rh);
+    expect(Number(linhas[1]!['criado_por'])).toBe(m.rh);
+    expect(linhas[1]!['descricao_dependencia']).toBe('Agregado/Outros');
+    // A leitura mostra só a versão em vigor, desde a data da alteração; a anterior não volta a ser alterada.
+    const lidos = await porta.dependentes(ctx(m, m.rh), m.vinculo);
+    expect(lidos.find((x) => x.id === anterior)).toBeUndefined();
+    expect(lidos.find((x) => x.id === nova)).toMatchObject({ parentesco: '99', desde: '2026-03-01' });
+    expect(await codigo(versao('2026-04-01'))).toBe('desatualizado');
+  });
+
+  it('C1-111 admissão pela ficha rápida: pessoa nova grava colaborador, vínculo e histórico; o CPF da rede é reusado; ficha e matrícula conferidas', async () => {
+    const ids = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conf-adm' }, async (l) => ({
+      sexo: Number((await l.uma<{ id: number }>("SELECT id FROM sexo WHERE codigo = 'T'"))!.id),
+      categoria: Number(
+        (await l.uma<{ id: number }>("SELECT id FROM categoria_trabalhador WHERE codigo_esocial = '101'"))!
+          .id,
+      ),
+      tipoVinculo: Number(
+        (await l.uma<{ id: number }>("SELECT id FROM tipo_vinculo_trabalho WHERE codigo_cnes = '010101'"))!
+          .id,
+      ),
+    }));
+    const cargoNome = `Cargo de admissão ${SUFIXO}`;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `massa-adm-${SUFIXO}` }, async (e) => {
+      const cbo = await e.uma<{ id: number }>("SELECT id FROM ocupacao_cbo WHERE codigo_cbo = '322205'");
+      const id = await e.inserir(
+        `INSERT INTO cargo (codigo, nome, ocupacao_cbo_id, data_inicio, carga_semanal_horas_padrao, criado_em)
+         VALUES (?, ?, ?, '2020-01-01', 36, NOW(3))`,
+        [`ADM${SUFIXO}`, cargoNome, cbo!.id],
+      );
+      admitidos.cargo = id;
+      await e.executar('UPDATE sexo SET ativo = TRUE WHERE id = ?', [ids.sexo]);
+      await e.executar('UPDATE tipo_vinculo_trabalho SET ativo = TRUE WHERE id = ?', [ids.tipoVinculo]);
+    });
+    const ficha = (cpf: string, extra: Record<string, unknown> = {}) => ({
+      pessoa: null,
+      cpfHmac: cifra.hmac(cpf),
+      cpfCifrado: cifra.cifrar(cpf),
+      nome: `ADMITIDA SINTETICA ${SUFIXO}`,
+      profissional: null,
+      usuario: null,
+      tipo: 'clt',
+      matricula: `A${SUFIXO}`,
+      cargo: cargoNome,
+      funcao: null,
+      cargaSemanal: 36,
+      centroCusto: m.centro,
+      unidade: null,
+      setor: null,
+      admissao: '2026-11-03',
+      por: 'rh',
+      nascimento: '1995-08-20',
+      sexo: ids.sexo,
+      grauInstrucao: '09',
+      categoria: ids.categoria,
+      tipoVinculoTrabalho: ids.tipoVinculo,
+      salario: 4200.5,
+      ...extra,
+    });
+    const admitir = (f: ReturnType<typeof ficha>) =>
+      porta.gravarSgh(
+        ctx(m, m.rh),
+        (r: { id: number }) => ({
+          ...trilhaDe(m, m.rh, 'vinculo_trabalho'),
+          acao: 'inclusao' as const,
+          entidadeId: r.id,
+        }),
+        (g) => g.incluirVinculo(f as Parameters<GravadorPessoas['incluirVinculo']>[0]),
+      );
+    const novoCpf = cpfSintetico();
+    // A ficha incompleta ou fora do modelo recusa sem gravar.
+    expect(await codigo(admitir(ficha(novoCpf, { nascimento: null })))).toBe('nascimento-obrigatorio');
+    expect(await codigo(admitir(ficha(novoCpf, { nascimento: '2015-01-01' })))).toBe('idade-minima');
+    expect(await codigo(admitir(ficha(novoCpf, { salario: 0 })))).toBe('salario-invalido');
+    expect(await codigo(admitir(ficha(novoCpf, { tipo: 'pj' })))).toBe('tipo-invalido');
+    expect(await codigo(admitir(ficha(novoCpf, { sexo: null })))).toBe('sexo-inexistente');
+    expect(await codigo(admitir(ficha(novoCpf, { categoria: 999_999_999 })))).toBe('categoria-inexistente');
+    expect(await codigo(admitir(ficha(novoCpf, { matricula: null })))).toBe('matricula-obrigatoria');
+    expect(await codigo(admitir(ficha(novoCpf, { cargo: 'Cargo que não existe' })))).toBe(
+      'cargo-inexistente',
+    );
+    // Pessoa nova.
+    const a = await admitir(ficha(novoCpf));
+    admitidos.vinculos.push(a.id);
+    admitidos.pessoas.push(a.pessoa);
+    expect(a.pessoa).not.toBe(m.colab);
+    const banco = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conf-adm' }, async (l) => ({
+      c: await l.uma(
+        `SELECT cpf = ? AS cpf_ok, data_nascimento, sexo_id, grau_instrucao, origem, criado_por FROM colaborador WHERE id = ?`,
+        [novoCpf, a.pessoa],
+      ),
+      v: await l.uma(
+        `SELECT estabelecimento_id, colaborador_id, matricula, tipo_vinculo_trabalho_id, categoria_trabalhador_id, cargo_id,
+                regime_jornada_id, centro_custo_id, data_admissao, regime_trabalhista, salario_base, situacao, criado_por
+           FROM vinculo_trabalho WHERE id = ?`,
+        [a.id],
+      ),
+      h: await l.consultar(
+        'SELECT cargo_id, data_inicio, data_fim, motivo FROM historico_cargo WHERE vinculo_trabalho_id = ?',
+        [a.id],
+      ),
+      t: await l.uma<{ k: number }>(
+        "SELECT COUNT(*) AS k FROM trilha_auditoria WHERE entidade = 'vinculo_trabalho' AND entidade_id = ? AND acao = 'inclusao'",
+        [a.id],
+      ),
+    }));
+    const iso = (x: unknown) => (x instanceof Date ? x.toISOString().slice(0, 10) : x);
+    expect(banco.c).toMatchObject({ grau_instrucao: '09', origem: 'sistema' });
+    expect([
+      Number(banco.c!['cpf_ok']),
+      iso(banco.c!['data_nascimento']),
+      Number(banco.c!['sexo_id']),
+    ]).toEqual([1, '1995-08-20', ids.sexo]);
+    expect(Number(banco.c!['criado_por'])).toBe(m.rh);
+    expect({
+      est: Number(banco.v!['estabelecimento_id']),
+      pessoa: Number(banco.v!['colaborador_id']),
+      tipoVinculo: Number(banco.v!['tipo_vinculo_trabalho_id']),
+      categoria: Number(banco.v!['categoria_trabalhador_id']),
+      cargo: Number(banco.v!['cargo_id']),
+      regime: banco.v!['regime_jornada_id'],
+      centro: Number(banco.v!['centro_custo_id']),
+      admissao: iso(banco.v!['data_admissao']),
+      tipo: banco.v!['regime_trabalhista'],
+      salario: Number(banco.v!['salario_base']),
+      situacao: banco.v!['situacao'],
+      por: Number(banco.v!['criado_por']),
+    }).toEqual({
+      est: m.est,
+      pessoa: a.pessoa,
+      tipoVinculo: ids.tipoVinculo,
+      categoria: ids.categoria,
+      cargo: admitidos.cargo,
+      regime: null,
+      centro: m.centro,
+      admissao: '2026-11-03',
+      tipo: 'clt',
+      salario: 4200.5,
+      situacao: 'ativo',
+      por: m.rh,
+    });
+    expect(
+      banco.h.map((x) => [Number(x['cargo_id']), iso(x['data_inicio']), x['data_fim'], x['motivo']]),
+    ).toEqual([[admitidos.cargo, '2026-11-03', null, 'admissao']]);
+    expect(Number(banco.t?.k)).toBe(1);
+    // A leitura acha o vínculo pelo CPF (HMAC) e o histórico começa na admissão.
+    expect((await porta.vinculosPorCpf(ctx(m, m.rh), cifra.hmac(novoCpf))).map((x) => x.id)).toEqual([a.id]);
+    expect((await porta.historico(ctx(m, m.rh), a.id))[0]).toMatchObject({
+      tipo: 'admissao',
+      vigencia: '2026-11-03',
+    });
+    // A mesma matrícula no estabelecimento recusa; o CPF que já é colaborador na rede reusa a pessoa (nunca duplica).
+    expect(await codigo(admitir(ficha(cpfSintetico())))).toBe('matricula-em-uso');
+    const b = await admitir(ficha(m.cpf, { matricula: `B${SUFIXO}`, admissao: '2026-11-04' }));
+    admitidos.vinculos.push(b.id);
+    expect(b.pessoa).toBe(m.colab);
+    const k = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conf-adm' }, (l) =>
+      l.uma<{ k: number }>('SELECT COUNT(*) AS k FROM colaborador WHERE cpf = ?', [m.cpf]),
+    );
+    expect(Number(k?.k)).toBe(1);
   });
 });

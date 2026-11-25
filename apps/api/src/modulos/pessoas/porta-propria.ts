@@ -18,9 +18,10 @@
 // Melhoria: a conferência da habilitação trava pela versão lida na tela (quando vem) e guarda a observação na trilha.
 // fecho-1: o dependente novo grava o tipo de dependente do eSocial (tabela 07) pelo parentesco da tela (o mesmo código),
 // com a sequência por colaborador, o CPF como o do titular e a dependência a partir do dia da inclusão.
-// Pendências de modelo (pedidos do lote 03-09): a admissão pela ficha rápida (o modelo exige nascimento, sexo, grau
-// de instrução, categoria, tipo de vínculo, cargo do quadro e salário, que a entrada da tela não traz); a versão nova
-// do dependente; as unidades onde o registro atende; e o índice
+// C1-111: a admissão pela ficha rápida grava colaborador (ou reusa o do CPF na rede), vínculo e a linha inicial do
+// histórico de cargo, com a ficha conferida no domínio (nascimento, sexo, grau de instrução, categoria, tipo de vínculo
+// e salário); a alteração do dependente fecha a versão em vigor na véspera e abre a nova ligada a ela, com o tipo da
+// tabela 07 do eSocial vigente na data. Pendências de modelo: as unidades onde o registro atende; e o índice
 // do CPF por HMAC (até lá a busca por CPF compara o HMAC dos colaboradores do estabelecimento).
 import {
   alterarAuditado,
@@ -35,6 +36,7 @@ import {
   restricaoUnicaViolada,
 } from '@sgh/nucleo';
 import { PARENTESCOS_DEPENDENTE } from '@sgh/contratos';
+import { conferirFichaAdmissao } from '@sgh/dominio-pessoas';
 import { z } from 'zod';
 import {
   type GravacaoFeita,
@@ -55,7 +57,6 @@ import {
   type Linha,
   localNoFuso,
   marcadores,
-  modeloPendente,
   n,
   nn,
   registrarCorrecaoNaTrilha,
@@ -75,6 +76,7 @@ import {
   type RegistroConselhoBase,
 } from './porta.js';
 import type {
+  CatalogosAdmissao,
   DependenteColaborador,
   FiltroVinculos,
   HabilitacaoRegistro,
@@ -534,13 +536,207 @@ export class PortaPessoasPropria implements PortaPessoas {
         const datas = [dataIso(cargo?.d), dataIso(evento?.d)].filter((d): d is string => d !== null).sort();
         return datas.at(-1) ?? null;
       },
-      incluirVinculo: () =>
-        Promise.reject(
-          modeloPendente(
-            'A admissão pela ficha rápida',
-            'O vínculo de trabalho exige nascimento, sexo e grau de instrução do colaborador, a categoria do trabalhador, o tipo de vínculo, o cargo do quadro e o salário, que esta tela ainda não pede. Use a admissão completa.',
-          ),
-        ),
+      incluirVinculo: async (v) => {
+        // A ficha da admissão (regra do domínio) e o tipo de contrato que o modelo aceita.
+        const ficha = conferirFichaAdmissao({
+          nascimento: v.nascimento,
+          admissao: v.admissao,
+          grauInstrucao: v.grauInstrucao,
+          salario: v.salario,
+        });
+        if (!ficha.ok) throw recusa(ficha.recusa, ficha.mensagem, { campos: [ficha.campo] });
+        if (!REGIMES_TRABALHISTAS.has(v.tipo))
+          throw recusa(
+            'tipo-invalido',
+            'O contrato de trabalho é CLT ou estatutário; residente, estagiário e prestador entram pelo cadastro próprio.',
+            { campos: ['tipo'] },
+          );
+        if (!v.matricula)
+          throw recusa('matricula-obrigatoria', 'Informe a matrícula do colaborador.', {
+            campos: ['matricula'],
+          });
+        // Catálogos conferidos ativos e vigentes no dia da admissão (o id vem da lista da tela).
+        const doCatalogo = async (
+          achado: unknown,
+          idc: number | null | undefined,
+          campo: string,
+          oque: string,
+        ) => {
+          if (!idc || !achado)
+            throw recusa(`${campo}-inexistente`, `${oque}: escolha uma opção da lista.`, { campos: [campo] });
+          return idc;
+        };
+        const sexo = await doCatalogo(
+          v.sexo ? await e.uma('SELECT id FROM sexo WHERE id = ? AND ativo', [v.sexo]) : null,
+          v.sexo,
+          'sexo',
+          'Sexo',
+        );
+        const categoria = await doCatalogo(
+          v.categoria
+            ? await e.uma(
+                `SELECT id FROM categoria_trabalhador WHERE id = ?
+                   AND (vigencia_inicio IS NULL OR vigencia_inicio <= ?) AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
+                [v.categoria, v.admissao, v.admissao],
+              )
+            : null,
+          v.categoria,
+          'categoria',
+          'Categoria do trabalhador',
+        );
+        const tipoVinculo = await doCatalogo(
+          v.tipoVinculoTrabalho
+            ? await e.uma(
+                `SELECT id FROM tipo_vinculo_trabalho WHERE id = ? AND ativo
+                   AND (vigencia_inicio IS NULL OR vigencia_inicio <= ?) AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
+                [v.tipoVinculoTrabalho, v.admissao, v.admissao],
+              )
+            : null,
+          v.tipoVinculoTrabalho,
+          'tipoVinculoTrabalho',
+          'Tipo de vínculo',
+        );
+        // Cargo do quadro (rede), função, regime de jornada, centro de custo e setor: as mesmas regras da mudança.
+        const cargo = await unicoPorNome(
+          e,
+          'SELECT id FROM cargo WHERE nome = ? AND ativo AND excluido_em IS NULL',
+          [v.cargo],
+          'Cargo do quadro',
+          'cargo',
+        );
+        const funcao =
+          v.funcao === null
+            ? null
+            : await unicoPorNome(
+                e,
+                'SELECT id FROM funcao WHERE estabelecimento_id = ? AND nome = ? AND ativo AND excluido_em IS NULL',
+                [est, v.funcao],
+                'Função',
+                'funcao',
+              );
+        const cg = await e.uma<{ p: number | null }>(
+          'SELECT carga_semanal_horas_padrao AS p FROM cargo WHERE id = ?',
+          [cargo],
+        );
+        let regime: number | null = null;
+        if (cg?.p === null || cg?.p === undefined || Number(cg.p) !== v.cargaSemanal) {
+          const regimes = await e.consultar(
+            'SELECT id FROM regime_jornada WHERE carga_semanal_minutos = ? AND ativo',
+            [v.cargaSemanal * 60],
+          );
+          if (regimes.length !== 1)
+            throw recusa(
+              'regime-de-jornada-indefinido',
+              `Não há um regime de jornada único de ${v.cargaSemanal} h semanais: cadastre ou escolha o regime de jornada.`,
+              { campos: ['cargaSemanalHoras'] },
+            );
+          regime = n(regimes[0]!['id']);
+        }
+        const cc = await e.uma(
+          'SELECT id FROM centro_custo WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND ativo',
+          [v.centroCusto, est],
+        );
+        if (!cc) throw recusa('centro-de-custo-inexistente', 'Centro de custo inexistente ou inativo.');
+        let setor: number | null = null;
+        if (v.setor) {
+          const porUnidade = v.unidade !== null ? ' AND unidade_assistencial_id = ?' : '';
+          setor = await unicoPorNome(
+            e,
+            `SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND nome = ? AND excluido_em IS NULL AND ativo${porUnidade}`,
+            v.unidade !== null ? [est, v.setor, v.unidade] : [est, v.setor],
+            'Setor (nesta unidade)',
+            'setor',
+          );
+        } else if (v.unidade !== null)
+          throw recusa(
+            'setor-obrigatorio',
+            'A lotação numa unidade é pelo setor: escolha o setor da unidade.',
+          );
+        // A pessoa da rede: a do vínculo achado ou a do mesmo CPF (pode ter vínculo só em outro estabelecimento).
+        const cpf = this.cifra.decifrar(v.cpfCifrado);
+        if (!cpf || this.cifra.hmac(cpf) !== v.cpfHmac)
+          throw recusa('cpf-ilegivel', 'O CPF não confere com a chave deste ambiente.', { campos: ['cpf'] });
+        const agora = new Date();
+        const [ja] = await e.consultarParaAtualizar<{
+          id: number;
+          profissional_id: number | null;
+          usuario_id: number | null;
+          versao: number;
+        }>(
+          'SELECT id, profissional_id, usuario_id, versao FROM colaborador WHERE cpf = ? AND excluido_em IS NULL',
+          [cpf],
+        );
+        let pessoa: number;
+        if (ja) {
+          pessoa = Number(ja.id);
+          // A conta e o profissional achados na prévia passam a apontar a pessoa (nunca troca um já ligado).
+          const ligar: Record<string, unknown> = {};
+          if (ja.profissional_id === null && v.profissional !== null)
+            ligar['profissional_id'] = v.profissional;
+          if (ja.usuario_id === null && v.usuario !== null) ligar['usuario_id'] = v.usuario;
+          if (Object.keys(ligar).length)
+            await alterarAuditado(e, 'colaborador', pessoa, Number(ja.versao), ligar, carimboDe(c));
+        } else
+          pessoa = await e.inserir(
+            `INSERT INTO colaborador (nome, cpf, data_nascimento, sexo_id, grau_instrucao, profissional_id, usuario_id,
+               origem, criado_em, criado_por, versao) VALUES (?, ?, ?, ?, ?, ?, ?, 'sistema', ?, ?, 1)`,
+            [v.nome, cpf, v.nascimento, sexo, v.grauInstrucao, v.profissional, v.usuario, agora, c.usuario],
+          );
+        const id = await e
+          .inserir(
+            `INSERT INTO vinculo_trabalho (estabelecimento_id, colaborador_id, matricula, tipo_vinculo_trabalho_id,
+               categoria_trabalhador_id, cargo_id, funcao_id, setor_funcional_id, centro_custo_id, regime_jornada_id,
+               data_admissao, regime_trabalhista, salario_base, situacao, origem, criado_em, criado_por, versao)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativo', 'sistema', ?, ?, 1)`,
+            [
+              est,
+              pessoa,
+              v.matricula,
+              tipoVinculo,
+              categoria,
+              cargo,
+              funcao,
+              setor,
+              v.centroCusto,
+              regime,
+              v.admissao,
+              v.tipo,
+              v.salario,
+              agora,
+              c.usuario,
+            ],
+          )
+          .catch((x: unknown) => {
+            const k = restricaoUnicaViolada(x);
+            if (k === 'uq_vinculo_trabalho_matricula')
+              throw recusa(
+                'matricula-em-uso',
+                'Já existe colaborador com esta matrícula neste estabelecimento.',
+                {
+                  campos: ['matricula'],
+                },
+              );
+            if (k === 'uq_vinculo_trabalho_colaborador_admissao')
+              throw recusa(
+                'admissao-repetida',
+                'Esta pessoa já tem vínculo admitido nesta data neste estabelecimento.',
+                {
+                  campos: ['admissao'],
+                },
+              );
+            throw x;
+          });
+        // A linha inicial do histórico de cargo (motivo admissão), com a vigência da admissão.
+        await historico({
+          vinculo: id,
+          tipo: 'admissao',
+          vigencia: v.admissao,
+          antes: null,
+          depois: v.cargo,
+          motivo: 'Admissão',
+        });
+        return { id, pessoa };
+      },
       alterarVinculo: async (m) => {
         const v = await vigente(m.id, m.versao);
         if (v.desligamento !== null) throw desatualizado();
@@ -696,7 +892,7 @@ export class PortaPessoasPropria implements PortaPessoas {
             ],
           )
           .catch((x: unknown) => {
-            if (restricaoUnicaViolada(x) === 'uq_dependente_colaborador_id_cpf')
+            if (restricaoUnicaViolada(x) === 'uq_dependente_colaborador_cpf_vigente')
               throw recusa('cpf-repetido', 'Este CPF já é de outro dependente deste colaborador.', {
                 campos: ['cpf'],
               });
@@ -808,13 +1004,80 @@ export class PortaPessoasPropria implements PortaPessoas {
             carimboDe(c),
           );
       },
-      versionarDependente: () =>
-        Promise.reject(
-          modeloPendente(
-            'A alteração de dependente',
-            'A nova versão do dependente exige o tipo de dependente do eSocial, que o parentesco da tela ainda não indica.',
-          ),
-        ),
+      versionarDependente: async (d) => {
+        // A versão em vigor, do colaborador do vínculo do estabelecimento, travada: fecha na véspera da alteração.
+        const [x] = await e.consultarParaAtualizar<{
+          id: number;
+          colaborador_id: number;
+          versao: number;
+          data_inicio_dependencia: unknown;
+        }>(
+          `SELECT dp.id, dp.colaborador_id, dp.versao, dp.data_inicio_dependencia FROM dependente dp
+             JOIN vinculo_trabalho vt ON vt.colaborador_id = dp.colaborador_id
+            WHERE dp.id = ? AND vt.id = ? AND vt.estabelecimento_id = ? AND dp.excluido_em IS NULL
+              AND dp.data_fim_dependencia IS NULL`,
+          [d.anterior, d.vinculo, est],
+        );
+        if (!x) throw desatualizado();
+        const inicio = dataIso(x.data_inicio_dependencia);
+        if (inicio !== null && inicio >= d.desde)
+          throw recusa(
+            'desde-antes-da-versao',
+            `A versão atual vale desde ${inicio}: a alteração precisa valer depois.`,
+            {
+              campos: ['desde'],
+            },
+          );
+        // O tipo de dependente do eSocial (tabela 07) vigente na data da versão nova: o parentesco escolhido é o código.
+        const tipo = await tipoDependenteEsocial(e, d.parentesco, d.desde);
+        const cpf = d.cpfCifrado ? this.cifra.decifrar(d.cpfCifrado) : null;
+        if (d.cpfCifrado && !cpf)
+          throw recusa('cpf-ilegivel', 'O CPF do dependente não decifra com a chave deste ambiente.');
+        if (cpf && d.cpfHmac && this.cifra.hmac(cpf) !== d.cpfHmac)
+          throw recusa('cpf-ilegivel', 'O CPF do dependente não confere com a chave de busca.');
+        await alterarAuditado(
+          e,
+          'dependente',
+          Number(x.id),
+          Number(x.versao),
+          { data_fim_dependencia: vespera(d.desde) },
+          carimboDe(c),
+        );
+        const seq = await e.uma<{ s: unknown }>(
+          'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM dependente WHERE colaborador_id = ?',
+          [x.colaborador_id],
+        );
+        const agora = new Date();
+        return e
+          .inserir(
+            `INSERT INTO dependente (colaborador_id, dependente_anterior_id, sequencia, nome, cpf, data_nascimento,
+               tipo_dependente_codigo_esocial_id, descricao_dependencia, dependente_irrf, dependente_salario_familia,
+               data_inicio_dependencia, origem, criado_em, criado_por, versao)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sistema', ?, ?, 1)`,
+            [
+              n(x.colaborador_id),
+              n(x.id),
+              n(seq?.s),
+              d.nome,
+              cpf,
+              d.nascimento,
+              tipo,
+              d.parentesco === PARENTESCO_OUTROS ? PARENTESCOS_DEPENDENTE[PARENTESCO_OUTROS] : null,
+              d.dependenteIr,
+              d.dependenteSalarioFamilia,
+              d.desde,
+              agora,
+              c.usuario,
+            ],
+          )
+          .catch((y: unknown) => {
+            if (restricaoUnicaViolada(y) === 'uq_dependente_colaborador_cpf_vigente')
+              throw recusa('cpf-repetido', 'Este CPF já é de outro dependente deste colaborador.', {
+                campos: ['cpf'],
+              });
+            throw y;
+          });
+      },
       registrarCorrecao: async ({ vinculo, ...x }) => {
         if (!(await releitura(vinculo))) throw desatualizado();
         await registrarCorrecaoNaTrilha(e, c, { tabela: 'vinculo_trabalho', registro: vinculo, ...x });
@@ -865,6 +1128,33 @@ export class PortaPessoasPropria implements PortaPessoas {
   }
 
   /** Catálogo da rede inteira (o tipo de rescisão não tem estabelecimento). */
+  catalogosAdmissao(c: ContextoPessoas): Promise<CatalogosAdmissao> {
+    return this.ler(c, async (l, est) => {
+      const hoje = localNoFuso(new Date(), await fusoDoEstabelecimento(l, est)).slice(0, 10);
+      const vigente =
+        '(vigencia_inicio IS NULL OR vigencia_inicio <= ?) AND (vigencia_fim IS NULL OR vigencia_fim >= ?)';
+      const opcoes = (rs: Linha[]) => rs.map((r) => ({ codigo: n(r['id']), nome: texto(r['nome']) }));
+      return {
+        sexos: opcoes(
+          await l.consultar('SELECT id, descricao AS nome FROM sexo WHERE ativo ORDER BY descricao, id'),
+        ),
+        categorias: opcoes(
+          await l.consultar(
+            `SELECT id, CONCAT(codigo_esocial, ' - ', descricao) AS nome FROM categoria_trabalhador WHERE ${vigente}
+              ORDER BY codigo_esocial, id`,
+            [hoje, hoje],
+          ),
+        ),
+        tiposVinculo: opcoes(
+          await l.consultar(
+            `SELECT id, descricao AS nome FROM tipo_vinculo_trabalho WHERE ativo AND ${vigente} ORDER BY codigo_cnes, id`,
+            [hoje, hoje],
+          ),
+        ),
+      };
+    });
+  }
+
   tiposRescisao(c: ContextoPessoas): Promise<OpcaoCodigo[]> {
     return this.ler(c, async (l) =>
       (await l.consultar('SELECT id, descricao FROM tipo_rescisao WHERE ativo ORDER BY descricao, id')).map(

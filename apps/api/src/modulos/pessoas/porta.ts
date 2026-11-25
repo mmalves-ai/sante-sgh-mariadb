@@ -18,6 +18,7 @@ import type {
   FiltroVinculos,
   FimDependente,
   HabilitacaoRegistro,
+  CatalogosAdmissao,
   HistoricoVinculo,
   MudancaVinculo,
   NovoDependente,
@@ -104,6 +105,8 @@ export interface PortaPessoas extends PortaGravacaoM18<GravadorPessoas> {
   centrosDeCusto(c: ContextoPessoas): Promise<CentroCustoPessoas[]>;
   unidades(c: ContextoPessoas): Promise<OpcaoCodigo[]>;
   tiposRescisao(c: ContextoPessoas): Promise<OpcaoCodigo[]>;
+  /** C1-111: sexo, categoria do trabalhador e tipo de vínculo de trabalho vigentes, para a ficha da admissão. */
+  catalogosAdmissao(c: ContextoPessoas): Promise<CatalogosAdmissao>;
   /** Profissionais e contas pelo CPF (filtro exato; o número só existe aqui e no adaptador). */
   pessoaPorCpf(c: ContextoPessoas, cpf: number): Promise<PessoaPorCpf>;
   usuariosDoProfissional(c: ContextoPessoas, profissional: number): Promise<UsuarioDaPessoa[]>;
@@ -141,6 +144,7 @@ export const METODOS_PORTA_PESSOAS: ReadonlySet<string> = new Set([
   'centrosDeCusto',
   'unidades',
   'tiposRescisao',
+  'catalogosAdmissao',
   'pessoaPorCpf',
   'usuariosDoProfissional',
   'usuarioPorId',

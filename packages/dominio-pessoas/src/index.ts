@@ -13,6 +13,7 @@ export * from './colaborador/vinculo.js';
 export * from './colaborador/situacao-legada.js';
 export * from './colaborador/desligamento.js';
 export * from './colaborador/historico.js';
+export * from './colaborador/ficha-admissao.js';
 export * from './colaborador/experiencia.js';
 export * from './habilitacao/validade.js';
 export * from './escala/conselho-vencido.js';

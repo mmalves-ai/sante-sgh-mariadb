@@ -210,6 +210,10 @@ export interface ApoioColaboradores {
   readonly centrosCusto: readonly OpcaoPessoas[];
   readonly unidades: readonly OpcaoPessoas[];
   readonly tiposRescisao: readonly OpcaoPessoas[];
+  /** Catálogos da ficha da admissão (C1-111): sexo, categoria do trabalhador e tipo de vínculo de trabalho. */
+  readonly sexos?: readonly OpcaoPessoas[];
+  readonly categoriasTrabalhador?: readonly OpcaoPessoas[];
+  readonly tiposVinculoTrabalho?: readonly OpcaoPessoas[];
   readonly janelaAlertaDias: number;
   /** Liberação da chave `pessoas.colaborador` no estabelecimento e o motivo, se desligada. */
   readonly gravacao: { readonly ligada: boolean; readonly motivo: string | null };

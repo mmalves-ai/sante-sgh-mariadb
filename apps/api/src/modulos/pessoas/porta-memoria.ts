@@ -569,6 +569,18 @@ export class PortaPessoasMemoria implements PortaPessoas {
     return [...RESCISOES];
   }
 
+  /** C1-111: catálogos sintéticos da ficha da admissão (a porta em memória não exige a ficha). */
+  async catalogosAdmissao() {
+    return {
+      sexos: [
+        { codigo: 1, nome: 'Feminino' },
+        { codigo: 2, nome: 'Masculino' },
+      ],
+      categorias: [{ codigo: 101, nome: '101 - Empregado geral' }],
+      tiposVinculo: [{ codigo: 10101, nome: 'Empregatício: celetista (prazo indeterminado)' }],
+    };
+  }
+
   async pessoaPorCpf(_c: ContextoPessoas, cpf: number): Promise<PessoaPorCpf> {
     const d = String(cpf).padStart(11, '0');
     const P = PESSOAS_SINTETICAS_M52;

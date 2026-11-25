@@ -106,6 +106,14 @@ test.describe('gestão de pessoas, fatia F1: colaboradores e admissão @M52.1', 
     await page.getByLabel('Carga semanal (horas)').fill('36');
     await escolher(page.getByTestId('admissao-centro-custo'), { rotulo: /Enfermagem da clínica médica/ });
     await page.getByLabel('Matrícula').fill('E2E-0001');
+    // A ficha da admissão (C1-111): nascimento, sexo, grau de instrução, categoria, natureza do vínculo e salário.
+    await page.getByLabel('Data de nascimento').fill('20/08/1995');
+    await page.getByLabel('Data de nascimento').press('Tab');
+    await escolher(page.getByTestId('admissao-sexo'), { rotulo: 'Feminino' });
+    await escolher(page.getByTestId('admissao-grau-instrucao'), { rotulo: /^09 - / });
+    await escolher(page.getByTestId('admissao-categoria'), { rotulo: /^101 - / });
+    await escolher(page.getByTestId('admissao-natureza'), { rotulo: /^Empregatício/ });
+    await page.getByLabel('Salário-base (R$)').fill('4200,50');
     await semViolacaoAxe(page, 'admissão: vínculo');
     await page.getByTestId('admissao-revisar').click();
     await expect(page.getByTestId('admissao-resumo')).toContainText('Enfermeira assistencial');

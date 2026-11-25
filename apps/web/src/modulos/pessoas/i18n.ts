@@ -96,6 +96,13 @@ export const mensagensPessoas = {
     semUnidade: 'Sem unidade',
     nenhumaPrevia: 'Consulte o CPF para continuar.',
     abrirFicha: 'Abrir a ficha',
+    nascimento: 'Data de nascimento',
+    sexo: 'Sexo',
+    grauInstrucao: 'Grau de instrução',
+    categoria: 'Categoria do trabalhador (eSocial)',
+    tipoVinculoTrabalho: 'Natureza do vínculo',
+    salario: 'Salário-base (R$)',
+    fichaTitulo: 'Dados da pessoa e do contrato (eSocial)',
   },
   ficha: {
     titulo: 'Ficha do colaborador',

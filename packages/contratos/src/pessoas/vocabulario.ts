@@ -102,3 +102,20 @@ export const PARENTESCOS_DEPENDENTE = {
   '99': 'Agregado/Outros',
 } as const;
 export type ParentescoDependente = keyof typeof PARENTESCOS_DEPENDENTE;
+
+/** Grau de instrução, pelo código oficial (eSocial S-2200), para a ficha da admissão (C1-111). */
+export const GRAUS_INSTRUCAO = {
+  '01': 'Analfabeto',
+  '02': 'Até o 5º ano incompleto do ensino fundamental',
+  '03': '5º ano completo do ensino fundamental',
+  '04': 'Do 6º ao 9º ano do ensino fundamental incompleto',
+  '05': 'Ensino fundamental completo',
+  '06': 'Ensino médio incompleto',
+  '07': 'Ensino médio completo',
+  '08': 'Educação superior incompleta',
+  '09': 'Educação superior completa',
+  '10': 'Pós-graduação completa',
+  '11': 'Mestrado completo',
+  '12': 'Doutorado completo',
+} as const;
+export type GrauInstrucao = keyof typeof GRAUS_INSTRUCAO;

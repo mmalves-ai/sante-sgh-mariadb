@@ -238,14 +238,17 @@ export class ServicoPessoas {
   // ── Apoio ───────────────────────────────────────────────────────────────────────────────────────────────────
 
   async apoioTela(s: SessaoCadastro): Promise<ApoioColaboradores> {
-    const [hoje, centros, unidades, tipos, janela, gravacao] = await Promise.all([
+    const [hoje, centros, unidades, tipos, janela, gravacao, ficha] = await Promise.all([
       this.porta.hoje(s.porta),
       this.porta.centrosDeCusto(s.porta),
       this.porta.unidades(s.porta),
       this.porta.tiposRescisao(s.porta),
       this.janela(s),
       this.apoio.gravacao(s, { admitir: P.admitir }),
+      this.porta.catalogosAdmissao(s.porta),
     ]);
+    const opcoes = (xs: readonly { codigo: number; nome: string }[]) =>
+      xs.map((x) => ({ codigo: x.codigo, rotulo: x.nome }));
     const motivoCifra = this.cifra ? null : (semCifra().detalhe ?? null);
     const admitir = (gravacao.operacoes['admitir']?.pode ?? false) && this.cifra !== null;
     const desligar = (gravacao.operacoes[OPERACAO_BLOQUEIO]?.pode ?? false) && this.cifra !== null;
@@ -254,6 +257,9 @@ export class ServicoPessoas {
       centrosCusto: centros.filter((c) => c.ativo).map((c) => ({ codigo: c.codigo, rotulo: c.nome })),
       unidades: unidades.map((u) => ({ codigo: u.codigo, rotulo: u.nome })),
       tiposRescisao: tipos.map((t) => ({ codigo: t.codigo, rotulo: t.nome })),
+      sexos: opcoes(ficha.sexos),
+      categoriasTrabalhador: opcoes(ficha.categorias),
+      tiposVinculoTrabalho: opcoes(ficha.tiposVinculo),
       janelaAlertaDias: janela,
       gravacao: {
         ligada: gravacao.ligada && this.cifra !== null,
@@ -595,6 +601,12 @@ export class ServicoPessoas {
           setor: e.lotacao.setor,
           admissao: e.admissao,
           por: s.login,
+          nascimento: e.nascimento,
+          sexo: e.sexo,
+          grauInstrucao: e.grauInstrucao,
+          categoria: e.categoria,
+          tipoVinculoTrabalho: e.tipoVinculoTrabalho,
+          salario: e.salario,
         });
         await g.outbox({
           tipo: EVENTO_COLABORADOR_ADMITIDO,

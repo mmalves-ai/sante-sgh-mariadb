@@ -116,6 +116,25 @@ export interface NovoVinculo {
   readonly setor: string | null;
   readonly admissao: string;
   readonly por: string;
+  /** Ficha da admissão (C1-111): o vínculo de trabalho exige na porta própria; a porta em memória não usa. */
+  readonly nascimento?: string | null;
+  /** Sexo (id do catálogo). */
+  readonly sexo?: number | null;
+  /** Grau de instrução (código oficial 01 a 12). */
+  readonly grauInstrucao?: string | null;
+  /** Categoria do trabalhador do eSocial (id do catálogo). */
+  readonly categoria?: number | null;
+  /** Tipo de vínculo de trabalho (id do catálogo oficial). */
+  readonly tipoVinculoTrabalho?: number | null;
+  /** Salário-base do contrato. */
+  readonly salario?: number | null;
+}
+
+/** Catálogos da ficha da admissão (C1-111). */
+export interface CatalogosAdmissao {
+  readonly sexos: readonly { codigo: number; nome: string }[];
+  readonly categorias: readonly { codigo: number; nome: string }[];
+  readonly tiposVinculo: readonly { codigo: number; nome: string }[];
 }
 
 export interface MudancaVinculo {
