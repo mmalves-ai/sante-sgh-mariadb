@@ -101,12 +101,15 @@ export async function modulo(
     new Logger('suprimentos').warn(
       'OPME e manipulação fora do ar: dependem do módulo cirurgia em API_MODULOS (a porta do centro cirúrgico).',
     );
-  // O cadastro do estoque (F3.6) grava só no banco próprio; sem o núcleo, 503 em tudo.
+  // O cadastro do estoque (F3.6) grava no banco próprio; sem o núcleo, a memória só em dev/ci com as fontes
+  // sintéticas (a mesma regra do F2-L); fora disso, 503 em tudo.
   const cadastroEstoque =
     opcoes.cadastroEstoque ??
     (ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./cadastro-estoque-porta-propria.js')).PortaCadastroEstoquePropria(ctx.nucleo)
-      : portaCadastroEstoqueIndisponivel());
+      : !ctx.nucleo && fontesSinteticas(ctx.env)
+        ? new (await import('./cadastro-estoque-porta-memoria.js')).PortaCadastroEstoqueMemoria()
+        : portaCadastroEstoqueIndisponivel());
   // F3.6 (05-SUP linha 28): o vínculo do item com a referência de preço grava só no banco próprio; sem o núcleo, 503.
   const vinculoReferencia =
     ctx.nucleo && ctx.configuracao.clientePadrao

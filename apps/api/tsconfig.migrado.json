@@ -1453,6 +1453,8 @@
     "src/modulos/portal-paciente/porta-propria-leitura.spec.ts",
     "src/modulos/portal-paciente/porta-propria-leitura.int.spec.ts",
     "src/modulos/suprimentos/apoios.ts",
+    "src/modulos/suprimentos/cadastro-estoque-porta-memoria.ts",
+    "src/modulos/suprimentos/cadastro-estoque-porta-memoria.spec.ts",
     "src/modulos/suprimentos/consignado-manipulacao.spec.ts",
     "src/modulos/suprimentos/consignado-porta-memoria.ts",
     "src/modulos/suprimentos/consignado-porta.ts",
