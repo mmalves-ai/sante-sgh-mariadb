@@ -41,4 +41,10 @@ export const rotasPortalPrestador: RouteRecordRaw[] = [
     component: () => import('./telas/PortalPrestadorContaTela.vue'),
     meta: { publica: true, dispositivo: true },
   },
+  {
+    path: '/prestador/cadastro',
+    name: 'portal.prestador.cadastro',
+    component: () => import('./telas/PortalPrestadorCadastroTela.vue'),
+    meta: { publica: true, dispositivo: true },
+  },
 ];

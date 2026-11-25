@@ -43,3 +43,5 @@ export * from './cadastro-complementar.js';
 export * from './reembolso.js';
 // F7 (08-SGO linha 107, C2-061): troca TISS recebida pela operadora (pedido, cancelamento, comunicação) e demonstrativo de pagamento.
 export * from './troca-tiss.js';
+// F7 (08-SGO linha 113, C2-074): portal do prestador — pedido de cadastro e alteração, avisos e regras de arquivo.
+export * from './portal-prestador-pedidos.js';

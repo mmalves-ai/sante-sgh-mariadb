@@ -4907,6 +4907,29 @@ export const EVENTOS_AUDITAVEIS = {
       'Lote XML TISS enviado pelo prestador no portal (validado no XSD e no hash, guardado sem edição, com o protocolo)',
     legado: null,
   },
+  // C2-074 (08-SGO L113): pedido de cadastro e alteração do prestador, avisos e regras de arquivo do portal.
+  operadoraPortalPedidoEnviado: {
+    codigo: 'operadora.portal.pedido-enviado',
+    descricao:
+      'Pedido de alteração do próprio cadastro enviado pelo prestador no portal (guardado para a análise da operadora)',
+    legado: null,
+  },
+  operadoraPortalPedidoDecidido: {
+    codigo: 'operadora.portal.pedido-decidido',
+    descricao:
+      'Pedido do prestador analisado, aprovado, recusado com motivo ou cancelado pelo próprio prestador',
+    legado: null,
+  },
+  operadoraPortalAvisoPublicado: {
+    codigo: 'operadora.portal.aviso-publicado',
+    descricao: 'Aviso à rede credenciada publicado ou retirado do portal do prestador (nunca apagado)',
+    legado: null,
+  },
+  operadoraPortalRegraArquivo: {
+    codigo: 'operadora.portal.regra-arquivo',
+    descricao: 'Regra de documento exigido por tipo de prestador incluída ou inativada (nunca apagada)',
+    legado: null,
+  },
   // W0-10 (M8): o recurso de glosa por item enviado pelo prestador no portal.
   operadoraPortalRecursoItemEnviado: {
     codigo: 'operadora.portal.recurso-item-enviado',

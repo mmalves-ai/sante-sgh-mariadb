@@ -10,6 +10,7 @@ import {
   ROTULOS_SITUACAO_PROTOCOLO,
   ROTULOS_SOLICITANTE_PROTOCOLO,
 } from '@sgh/contratos';
+import { mensagensCadastroPortalPrestador } from '../portal-prestador/i18n-cadastro.js';
 
 export const mensagensAtendimentoOperadora = {
   titulo: 'Atendimento ao beneficiário (protocolos)',
@@ -226,7 +227,10 @@ export const mensagensPortalPrestador = {
     contas: 'Contas (lotes TISS)',
     protocolo: 'Consultar protocolo',
     conta: 'Minha conta',
+    cadastro: 'Meu cadastro e avisos',
   },
+  // C2-074: pedido de alteração do próprio cadastro, avisos da operadora e documentos exigidos.
+  cadastro: mensagensCadastroPortalPrestador,
   semSessao: 'Entre no portal com o e-mail, a senha e o código do aplicativo autenticador.',
   entrar: {
     titulo: 'Entrar no portal',

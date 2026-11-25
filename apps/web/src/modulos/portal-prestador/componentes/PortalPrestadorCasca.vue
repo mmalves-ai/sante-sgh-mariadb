@@ -44,6 +44,8 @@ const menu = computed(() => {
     // W0-10 (M8): os lotes de contas valem para qualquer conta ativa (D-W0-10-LOTE-PORTAL); o servidor confere.
     { nome: 'portal.prestador.contas', chave: 'contas' },
     // W0-10: a própria conta (senha e autenticador) vale para qualquer função liberada.
+    // C2-074: o próprio cadastro, os avisos e os documentos exigidos valem para qualquer conta ativa.
+    { nome: 'portal.prestador.cadastro', chave: 'cadastro' },
     { nome: 'portal.prestador.conta', chave: 'conta' },
   ];
 });

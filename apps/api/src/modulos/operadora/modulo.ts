@@ -72,6 +72,8 @@ import {
 import { PortaCobrancaOperadoraMemoria } from './cobranca-porta-memoria.js';
 import { PortaCobrancaOperadoraPropria } from './cobranca-porta-propria.js';
 import { ContaConferenciaOperadoraController } from './conta-conferencia.controller.js';
+import { METODOS_REEMBOLSO, PORTA_REEMBOLSO, PortaReembolsoPropria } from './reembolso-propria.js';
+import { ReembolsoOperadoraController } from './reembolso.controller.js';
 import {
   METODOS_CONFERENCIA_CONTA,
   PORTA_CONFERENCIA_CONTA,
@@ -80,6 +82,12 @@ import {
 import { ContasOperadoraController } from './contas.controller.js';
 import { METODOS_TROCA_TISS, PORTA_TROCA_TISS, PortaTrocaTissPropria } from './troca-tiss-propria.js';
 import { TrocaTissOperadoraController } from './troca-tiss.controller.js';
+import { PortalPrestadorPedidosController } from './portal-prestador-pedidos.controller.js';
+import {
+  METODOS_PORTAL_PRESTADOR_PEDIDOS,
+  PORTA_PORTAL_PRESTADOR_PEDIDOS,
+  PortaPortalPrestadorPedidosPropria,
+} from './portal-prestador-pedidos-propria.js';
 import { METODOS_PORTA_CONTAS, PORTA_CONTAS_OPERADORA, type PortaContasOperadora } from './contas-porta.js';
 import { PortaContasOperadoraMemoria } from './contas-porta-memoria.js';
 import { PortaContasOperadoraPropria } from './contas-porta-propria.js';
@@ -262,7 +270,9 @@ export async function moduloOperadora(
       DeclaracoesAnsController,
       ReajusteColetivoOperadoraController,
       ContaConferenciaOperadoraController,
+      ReembolsoOperadoraController,
       TrocaTissOperadoraController,
+      PortalPrestadorPedidosController,
     ],
     providers: [
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
@@ -296,6 +306,22 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaTrocaTissPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaTrocaTissPropria>(METODOS_TROCA_TISS),
+      },
+      // 08-SGO L113 (C2-074): pedidos do prestador, avisos e regras de arquivo do portal só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_PORTAL_PRESTADOR_PEDIDOS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaPortalPrestadorPedidosPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaPortalPrestadorPedidosPropria>(METODOS_PORTAL_PRESTADOR_PEDIDOS),
+      },
+      // 08-SGO L106 (C2-047): reembolso ao beneficiário só no banco (sem núcleo, 503); comprovantes pela porta de arquivos.
+      {
+        provide: PORTA_REEMBOLSO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaReembolsoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaReembolsoPropria>(METODOS_REEMBOLSO),
       },
       // 08-SGO L96 (C1-086): índice, regra por sinistralidade e agrupamento do coletivo pequeno só no banco (sem núcleo, 503).
       {
