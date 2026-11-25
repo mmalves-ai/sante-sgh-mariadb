@@ -7,6 +7,7 @@
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 // Melhoria: os tipos da porta são do próprio módulo (filtros, agregados e mensagem TISS), sem tipo de repositório
 // de outro sistema; o contexto é o da sessão (cliente, estabelecimento, usuário e correlação por id).
+import type { PagamentoPorta } from './demonstrativo-importacao-propria.js';
 import type {
   CompetenciaLida,
   ConfiguracaoTissLida,
@@ -141,6 +142,8 @@ export interface ImportacaoPorta {
   readonly itens: readonly ItemDemonstrativo[];
   readonly hashArquivo: string | null;
   readonly chaveObjeto: string | null;
+  /** Demonstrativo de pagamento: protocolos ou guias e os débitos e créditos (06-FAT linha 33). */
+  readonly pagamento?: PagamentoPorta | null;
 }
 
 /** Gravações diretas da porta, numa transação com a linha da trilha junto (o estabelecimento vem do contexto). */
@@ -228,6 +231,7 @@ export interface PortaTiss extends PortaGravacaoM18<GravadorSghTiss> {
   demonstrativo(
     c: ContextoTiss,
     id: number,
+    tipo?: 'analise' | 'pagamento',
   ): Promise<{ lote: number; convenio: number; itens: ItemDemonstrativoLido[] } | null>;
   configuracao(c: ContextoTiss): Promise<ConfiguracaoTissLida>;
   painel(

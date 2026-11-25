@@ -23,7 +23,9 @@ import {
   destinoEnvio,
   ErroDemonstrativo,
   filtroConvenios,
+  lerDemonstrativoPagamentoXml,
   lerDemonstrativoXml,
+  linhasPagamentoDosItens,
   prazoRecurso,
   sha256Hex,
 } from '@sgh/dominio-faturamento';
@@ -32,6 +34,7 @@ import type { SessaoCadastro } from '../cadastro/comum.js';
 import { escopoConvenios } from '../faturamento/servico.js';
 import type { ApoiosTiss, FuncionalidadeTiss } from './apoios.js';
 import { type ArmazemXmlTiss, ErroSobrescritaXml } from './armazem-xml.js';
+import type { PagamentoPorta } from './demonstrativo-importacao-propria.js';
 import type { ContextoTiss, GravadorSghTiss, PortaTiss } from './porta.js';
 import { simularOperadora } from './simulador.js';
 
@@ -312,12 +315,20 @@ export class ServicoTiss {
     let dataEmissao = e.dataEmissao;
     let hashArquivo: string | null = null;
     let chaveObjeto: string | null = null;
+    let pagamento: PagamentoPorta | null = null;
     if (e.xml) {
       try {
-        const d = lerDemonstrativoXml(e.xml);
-        itens = [...d.itens];
-        numero = d.numero;
-        dataEmissao = d.dataEmissao;
+        if (e.tipo === 'pagamento') {
+          const p = lerDemonstrativoPagamentoXml(e.xml);
+          pagamento = { dataPagamento: p.dataPagamento, linhas: p.linhas, deducoes: p.deducoes };
+          numero = p.numero;
+          dataEmissao = p.dataEmissao;
+        } else {
+          const d = lerDemonstrativoXml(e.xml);
+          itens = [...d.itens];
+          numero = d.numero;
+          dataEmissao = d.dataEmissao;
+        }
       } catch (x) {
         if (x instanceof ErroDemonstrativo)
           throw new ErroProblema('entrada-invalida', 400, 'Demonstrativo inválido', x.message, {
@@ -335,7 +346,9 @@ export class ServicoTiss {
         if (!(x instanceof ErroSobrescritaXml) && !/imutável/.test(String(x))) throw x;
       }
     }
-    if (itens.length === 0)
+    if (e.tipo === 'pagamento' && !pagamento && itens.length > 0)
+      pagamento = { dataPagamento: dataEmissao, linhas: linhasPagamentoDosItens(itens), deducoes: [] };
+    if (itens.length === 0 && !pagamento)
       throw new ErroProblema(
         'entrada-invalida',
         400,
@@ -349,7 +362,10 @@ export class ServicoTiss {
       s,
       'conciliacao',
       E.faturamentoDemonstrativoImportado.codigo,
-      (x) => ({ tabela: 'demonstrativo_analise_conta', id: String(x.id) }),
+      (x) => ({
+        tabela: e.tipo === 'pagamento' ? 'demonstrativo_pagamento' : 'demonstrativo_analise_conta',
+        id: String(x.id),
+      }),
       (g: GravadorSghTiss) =>
         g.importarDemonstrativo({
           usuario: s.login,
@@ -361,6 +377,7 @@ export class ServicoTiss {
           itens,
           hashArquivo,
           chaveObjeto,
+          pagamento,
         }),
     );
     return resultadoTiss(

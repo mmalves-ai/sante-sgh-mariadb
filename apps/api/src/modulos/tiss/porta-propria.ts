@@ -11,8 +11,8 @@
 // TISS vai à fila única de integração; a credencial do canal fica no cofre (só a referência no banco).
 // Melhoria: o acompanhamento conta as gravações de cada operação pela trilha do núcleo (operação no registro da
 // trilha), sem tabela espelho; o uso de outro sistema por grupo não existe mais (sem convivência): o bloco sai nulo.
-// Pendências de modelo (pedidos do lote 03-16): a baixa do demonstrativo por item, o recurso e o retorno (pagamento
-// por item), a importação do demonstrativo, a evidência do prontuário na decisão, o calendário
+// A importação do demonstrativo (análise casada item a item e pagamento com deduções) está em
+// demonstrativo-importacao-propria.ts. Pendências de modelo (pedidos do lote 03-16): a evidência do prontuário na decisão, o calendário
 // de entrega por convênio, o escopo de contas bancárias por usuário e os blocos de títulos e repasse do
 // acompanhamento: até lá, as gravações recusam com "operacao-pendente" e as leituras dizem o que falta.
 import { randomUUID } from 'node:crypto';
@@ -70,6 +70,12 @@ import { civil } from '../exames/relogio.js';
 import { versaoTexto } from '../faturamento/esquemas.js';
 import { sincronizarGlosaDoItem, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
 import type { ArmazemXmlTiss } from './armazem-xml.js';
+import {
+  importarDemonstrativoNoBanco,
+  lerPagamento,
+  listarPagamentos,
+  TABELAS_DEMONSTRATIVO,
+} from './demonstrativo-importacao-propria.js';
 import { nomeNaTrilha, OPERACOES_TISS_PENDENTES, operacoesTiss } from './operacoes.js';
 import {
   type ContextoTiss,
@@ -143,6 +149,7 @@ const TABELAS_GRAVACAO_DIRETA = [
   ...TABELAS_PRODUCAO_CONTA,
   'endpoint_tiss_fonte_pagadora',
   'integracao_mensagem',
+  ...TABELAS_DEMONSTRATIVO,
 ];
 
 /**
@@ -1069,7 +1076,7 @@ export class PortaTissPropria implements PortaTiss {
           ORDER BY d.data_emissao DESC, d.id DESC LIMIT 500`,
         [...p, ...e.p],
       );
-      return linhas.map((r) => ({
+      const analise: DemonstrativoLido[] = linhas.map((r) => ({
         id: n(r['id']),
         lote: n(r['lote_tiss_id']),
         convenio: n(r['fonte_pagadora_id']),
@@ -1086,14 +1093,17 @@ export class PortaTissPropria implements PortaTiss {
         importadoPor: texto(r['login']),
         importadoEm: instante(r['criado_em']) ?? '',
       }));
+      return [...analise, ...(await listarPagamentos(l, est, f))];
     });
   }
 
   demonstrativo(
     c: ContextoTiss,
     id: number,
+    tipo: 'analise' | 'pagamento' = 'analise',
   ): Promise<{ lote: number; convenio: number; itens: ItemDemonstrativoLido[] } | null> {
     return this.ler(c, async (l, est) => {
+      if (tipo === 'pagamento') return lerPagamento(l, est, id);
       const d = await l.uma<Linha>(
         `SELECT lote_tiss_id, fonte_pagadora_id FROM demonstrativo_analise_conta
           WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
@@ -1478,12 +1488,8 @@ function lerJson(v: unknown): Record<string, unknown> {
 /** As gravações diretas sobre a transação da operação (o estabelecimento vem do contexto). */
 function gravadorSobre(tx: TxOperacao, est: number): GravadorSghTiss {
   return {
-    async importarDemonstrativo() {
-      throw pendente(
-        'Importação do demonstrativo',
-        'o casamento e a baixa por item aguardam o modelo do pagamento por item no banco do estabelecimento',
-      );
-    },
+    // 06-FAT linha 33: análise de conta casada item a item, ou pagamento com linhas e deduções.
+    importarDemonstrativo: (d) => importarDemonstrativoNoBanco(tx, est, d),
     async decidirGlosa(d) {
       const [gi] = await tx.consultarParaAtualizar<Linha>(
         `SELECT gi.id, gi.versao, gi.glosa_id, gi.valor_glosado, gi.decisao, gi.recurso_glosa_id, gi.data_recuperacao,

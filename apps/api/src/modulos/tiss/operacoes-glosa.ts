@@ -31,6 +31,8 @@ import {
   MOTIVO_NAO_INFORMADO,
   prazoRecurso,
   situacaoDaGlosaNoRecurso,
+  type SituacaoConciliacao,
+  situacaoDoDemonstrativo,
   situacaoDoRecurso,
   valorPadraoDoRecurso,
   VERSAO_TISS_VIGENTE,
@@ -131,11 +133,60 @@ async function numeroNegocio(tx: TxOperacao, tipo: string, est: number, usuario:
   return String((await tx.proximoNumero(tipo)).valor).padStart(10, '0');
 }
 
+/** Marca como conciliadas as linhas do demonstrativo dos itens baixados e recalcula a situação do cabeçalho. */
+async function conciliarLinhasDoDemonstrativo(
+  tx: TxOperacao,
+  demonstrativo: number,
+  glosaDoItem: ReadonlyMap<number, number>,
+  itens: readonly { item: number }[],
+): Promise<void> {
+  for (const it of itens) {
+    const linha = await tx.uma<Linha>(
+      `SELECT id, versao FROM demonstrativo_analise_conta_item
+        WHERE demonstrativo_analise_conta_id = ? AND conta_hospitalar_item_id = ? AND excluido_em IS NULL`,
+      [demonstrativo, it.item],
+    );
+    if (!linha) continue;
+    const gi = glosaDoItem.get(it.item) ?? null;
+    await tx.alterar('demonstrativo_analise_conta_item', n(linha['id']), n(linha['versao']), {
+      situacao_conciliacao: 'conciliado',
+      glosa_item_id: gi,
+    });
+    if (gi !== null) {
+      const g = await tx.uma<Linha>('SELECT versao FROM glosa_item WHERE id = ?', [gi]);
+      await tx.alterar('glosa_item', gi, n(g?.['versao']), {
+        demonstrativo_analise_conta_item_id: n(linha['id']),
+      });
+    }
+  }
+  const situacoes = await tx.consultar<Linha>(
+    `SELECT situacao_conciliacao FROM demonstrativo_analise_conta_item
+      WHERE demonstrativo_analise_conta_id = ? AND excluido_em IS NULL`,
+    [demonstrativo],
+  );
+  const cab = await tx.uma<Linha>('SELECT versao, situacao FROM demonstrativo_analise_conta WHERE id = ?', [
+    demonstrativo,
+  ]);
+  const nova = situacaoDoDemonstrativo(
+    situacoes.map((r) => ({ situacao: texto(r['situacao_conciliacao']) as SituacaoConciliacao })),
+  );
+  if (cab && texto(cab['situacao']) !== nova)
+    await tx.alterar('demonstrativo_analise_conta', demonstrativo, n(cab['versao']), { situacao: nova });
+}
+
 // ── Baixa do retorno por item ───────────────────────────────────────────────────────────────────────────
 
 const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
   nome: 'faturamento.registrar-glosa',
-  tabelas: ['conta_hospitalar_item', 'glosa', 'glosa_item', 'sequencia_negocio', ...TABELAS_PRODUCAO_CONTA],
+  tabelas: [
+    'conta_hospitalar_item',
+    'glosa',
+    'glosa_item',
+    'sequencia_negocio',
+    'demonstrativo_analise_conta',
+    'demonstrativo_analise_conta_item',
+    ...TABELAS_PRODUCAO_CONTA,
+  ],
   entrada: esquemaBaixaComPrazo,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
@@ -178,6 +229,7 @@ const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
     const seq = new Map<number, number>();
     const somas = new Map<number, { apresentado: number; glosado: number }>();
     let glosados = 0;
+    const glosaDoItem = new Map<number, number>();
     for (const [k, it] of e.itens.entries()) {
       const l = linhas[k]!;
       const id = n(l['id']);
@@ -213,7 +265,7 @@ const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
       const s = (seq.get(g) ?? 0) + 1;
       seq.set(g, s);
       const q = n(l['quantidade']);
-      await tx.incluir('glosa_item', {
+      const giNovo = await tx.incluir('glosa_item', {
         glosa_id: g,
         sequencia: s,
         conta_hospitalar_item_id: id,
@@ -224,7 +276,9 @@ const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
         valor_apresentado: cobrado,
         valor_glosado: glosa,
         decisao: 'pendente',
+        demonstrativo_analise_conta_item_id: null,
       });
+      glosaDoItem.set(id, giNovo);
       const soma = somas.get(g) ?? { apresentado: 0, glosado: 0 };
       somas.set(g, { apresentado: r2(soma.apresentado + cobrado), glosado: r2(soma.glosado + glosa) });
       glosados += 1;
@@ -232,6 +286,8 @@ const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
     for (const [g, s] of somas) {
       await tx.alterar('glosa', g, 1, { valor_apresentado: s.apresentado, valor_glosado: s.glosado });
     }
+    // 06-FAT linha 33: a baixa pelo demonstrativo concilia as linhas dele (ligadas ao item glosado) e o cabeçalho.
+    if (demonstrativo !== null) await conciliarLinhasDoDemonstrativo(tx, demonstrativo, glosaDoItem, e.itens);
     // O item da conta e a produção do repasse acompanham a glosa (mesma transação, sem gatilho).
     for (const l of linhas) {
       await sincronizarGlosaDoItem(

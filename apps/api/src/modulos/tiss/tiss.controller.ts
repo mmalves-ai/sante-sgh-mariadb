@@ -398,13 +398,18 @@ export class TissController {
   @Auditar(E.faturamentoGlosasLidas.codigo)
   async demonstrativo(
     @Param('id') id: string,
+    @Query('tipo') tipo: string | undefined,
     @Req() req: RequisicaoAutorizada,
   ): Promise<{ lote: number; convenio: number; itens: ItemDemonstrativoLido[] }> {
     const s = sessaoDe(req);
-    const d = await this.porta.demonstrativo(ctx(s), idDaRota(id));
+    const pagamento = tipo === 'pagamento';
+    const d = await this.porta.demonstrativo(ctx(s), idDaRota(id), pagamento ? 'pagamento' : 'analise');
     if (!d) throw new ErroProblema('nao-encontrado', 404, 'Demonstrativo não encontrado');
     this.servico.exigirEscopoConvenio(s, d.convenio);
-    req.sghAlvo = { tabelaAlvo: 'demonstrativo_analise_conta', idAlvo: id };
+    req.sghAlvo = {
+      tabelaAlvo: pagamento ? 'demonstrativo_pagamento' : 'demonstrativo_analise_conta',
+      idAlvo: id,
+    };
     return d;
   }
 

@@ -261,3 +261,12 @@ export function demonstrativoPagamentoSinteticoXml(d: {
     .join('');
   return `<?xml version="1.0" encoding="ISO-8859-1"?><ans:mensagemTISS xmlns:ans="http://www.ans.gov.br/padroes/tiss/schemas"><ans:operadoraParaPrestador><ans:demonstrativosRetorno><ans:demonstrativoPagamento><ans:cabecalhoDemonstrativo><ans:registroANS>999999</ans:registroANS><ans:numeroDemonstrativo>${d.numero}</ans:numeroDemonstrativo><ans:nomeOperadora>OPERADORA SINTETICA</ans:nomeOperadora><ans:numeroCNPJ>00000000000000</ans:numeroCNPJ><ans:dataEmissao>${d.dataEmissao}</ans:dataEmissao></ans:cabecalhoDemonstrativo><ans:pagamentos><ans:pagamentosPorData><ans:dadosPagamento><ans:dataPagamento>${d.dataPagamento}</ans:dataPagamento></ans:dadosPagamento><ans:dadosResumo>${prot}</ans:dadosResumo>${desc}</ans:pagamentosPorData></ans:pagamentos></ans:demonstrativoPagamento></ans:demonstrativosRetorno></ans:operadoraParaPrestador></ans:mensagemTISS>`;
 }
+
+/** Situação da linha do pagamento: sem lote nem conta do hospital, sem correspondência; com glosa, divergente. */
+export function situacaoLinhaPagamento(l: {
+  readonly casada: boolean;
+  readonly valorGlosa: number;
+}): SituacaoConciliacao {
+  if (!l.casada) return 'sem_correspondencia';
+  return cent(l.valorGlosa) > 0 ? 'divergente' : 'conciliado';
+}

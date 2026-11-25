@@ -144,3 +144,12 @@ describe('demonstrativo de pagamento', () => {
     });
   });
 });
+
+describe('situação da linha do pagamento', () => {
+  it('casada sem glosa concilia; com glosa diverge; sem lote nem conta fica sem correspondência', async () => {
+    const { situacaoLinhaPagamento } = await import('./demonstrativo-conciliacao.js');
+    expect(situacaoLinhaPagamento({ casada: true, valorGlosa: 0 })).toBe('conciliado');
+    expect(situacaoLinhaPagamento({ casada: true, valorGlosa: 0.01 })).toBe('divergente');
+    expect(situacaoLinhaPagamento({ casada: false, valorGlosa: 0 })).toBe('sem_correspondencia');
+  });
+});
