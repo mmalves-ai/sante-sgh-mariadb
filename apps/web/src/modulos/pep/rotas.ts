@@ -289,6 +289,14 @@ export const rotasPep: RouteRecordRaw[] = [
     meta: { permissao: 'pep.prontuario.ler' },
   },
   {
+    // 03-PEP L141: curvas de crescimento do paciente (OMS e INTERGROWTH) com a medida de crescimento.
+    path: `/pep/paciente/:paciente${id}/crescimento`,
+    name: 'pep.crescimento',
+    component: () => import('./telas/CurvasCrescimentoTela.vue'),
+    props: true,
+    meta: { permissao: 'pep.prontuario.ler' },
+  },
+  {
     // 03-PEP L147: anotações administrativas do caso (registro não clínico da equipe) do paciente.
     path: `/pep/paciente/:paciente${id}/anotacoes-administrativas`,
     name: 'pep.anotacoesAdministrativas',
