@@ -10,4 +10,11 @@ export const rotasSessoes: RouteRecordRaw[] = [
     component: () => import('./telas/AgendaSessoesTela.vue'),
     meta: { permissao: P.ler },
   },
+  // C1-096 (03-PEP linha 146): reuso de dialisadores da hemodiálise (enfermagem da diálise; a agenda só consulta).
+  {
+    path: '/agenda/sessoes/dialisadores',
+    name: 'agenda.sessoes.dialisadores',
+    component: () => import('./telas/DialisadoresTela.vue'),
+    meta: { permissao: 'enfermagem.horario.ler', permissaoOu: [P.ler] },
+  },
 ];

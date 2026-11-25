@@ -16,6 +16,8 @@ import type { ContextoModulo } from '../registro.js';
 import { PORTA_SESSOES, type PortaSessoes } from './porta.js';
 import { type LerPacientesSinteticos, PortaSessoesMemoria } from './porta-memoria.js';
 import { portaSessoesIndisponivel, PortaSessoesPropria } from './porta-propria.js';
+import { DialisadorController } from './dialisador.controller.js';
+import { PORTA_DIALISADOR, PortaDialisadorPropria } from './dialisador-propria.js';
 import { SessoesController } from './sessoes.controller.js';
 
 /** Pacientes SINTÉTICOS da memória (dev/ci): nenhum nome é de pessoa real. */
@@ -56,9 +58,17 @@ export function moduloSessoes(ctx: ContextoModulo, opcoes: OpcoesModuloSessoes =
       : null);
   return {
     module: class ModuloSessoes {},
-    controllers: [SessoesController],
+    controllers: [SessoesController, DialisadorController],
     providers: [
       { provide: PORTA_SESSOES, useValue: porta },
+      // C1-096 (03-PEP linha 146): reuso do dialisador no banco do cliente; sem núcleo, 503.
+      {
+        provide: PORTA_DIALISADOR,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaDialisadorPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
     ],
   };

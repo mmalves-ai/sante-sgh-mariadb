@@ -1,5 +1,9 @@
 // Textos da agenda de sessões e recursos (M50, etapa 6). Textos de produto (ADR 0023): só o que a pessoa faz aqui.
+import { mensagensDialisador } from './i18n-dialisador.js';
+
 export const mensagensSessoes = {
+  // C1-096 (03-PEP linha 146): reuso do dialisador (i18n-dialisador.ts).
+  dialisador: mensagensDialisador,
   titulo: 'Agenda de sessões e recursos',
   texto:
     'As cadeiras e salas das terapias em série (quimioterapia, infusão, fisioterapia, hemodiálise) e as sessões de cada plano terapêutico. Uma cadeira ou sala não recebe duas sessões ao mesmo tempo, nem o paciente fica em dois lugares.',
