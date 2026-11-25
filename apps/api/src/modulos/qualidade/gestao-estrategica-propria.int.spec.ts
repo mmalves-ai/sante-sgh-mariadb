@@ -18,6 +18,8 @@ import { GestaoEstrategicaPropria } from './gestao-estrategica-propria.js';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L118E';
+// Segundo estabelecimento sintético, para provar o isolamento entre estabelecimentos.
+const P2 = 'L118F';
 
 async function codigo(p: Promise<unknown>): Promise<string> {
   try {
@@ -34,6 +36,7 @@ describe.skipIf(SEM_BANCO)('gestão estratégica no banco próprio', () => {
   let porta: GestaoEstrategicaPropria;
   const ids = {
     est: 0,
+    est2: 0,
     a: 0,
     b: 0,
     grupo: 0,
@@ -59,8 +62,8 @@ describe.skipIf(SEM_BANCO)('gestão estratégica no banco próprio', () => {
 
   async function limpar(): Promise<void> {
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-l118e' }, async (e) => {
-      if (ids.est) {
-        const est = [ids.est];
+      for (const estId of [ids.est, ids.est2].filter(Boolean)) {
+        const est = [estId];
         await e.executar(
           'DELETE d FROM reuniao_analise_critica_deliberacao d JOIN reuniao_analise_critica r ON r.id = d.reuniao_analise_critica_id WHERE r.estabelecimento_id = ?',
           est,
@@ -114,7 +117,7 @@ describe.skipIf(SEM_BANCO)('gestão estratégica no banco próprio', () => {
       await e.executar('DELETE FROM indicador WHERE codigo LIKE ?', [`${P}%`]);
       await e.executar('DELETE FROM grupo_indicador WHERE codigo = ?', [P]);
       await e.executar('DELETE FROM perspectiva_estrategica WHERE codigo = ?', [P]);
-      await limparTrilhaDaMassa(e, { codigos: [P] });
+      await limparTrilhaDaMassa(e, { codigos: [P, P2] });
     });
   }
 
@@ -132,6 +135,12 @@ describe.skipIf(SEM_BANCO)('gestão estratégica no banco próprio', () => {
         [P],
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [P, `ESTAB ${P} SINTETICO`, `ESTAB ${P} SINTETICO`, hoje],
+      );
+      ids.est2 = await g(
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [P2],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [P2, `ESTAB ${P2} SINTETICO`, `ESTAB ${P2} SINTETICO`, hoje],
       );
       for (const k of ['a', 'b'] as const)
         ids[k] = await g(
@@ -603,5 +612,104 @@ describe.skipIf(SEM_BANCO)('gestão estratégica no banco próprio', () => {
         }),
       ),
     ).toBe('reuniao-encerrada');
+  });
+
+  it('isolamento: referências e leituras de outro estabelecimento são recusadas', async () => {
+    // Massa do estabelecimento B (P2), gravada pela própria porta com a sessão dele.
+    const ctxB = () => ({ ...ctx(), hospital: P2 });
+    const mapaB = (
+      await porta.gravarMapaEstrategico(ctxB(), {
+        nome: `MAPA ${P2}`,
+        vigenciaInicio: '2026-01-01',
+        vigenciaFim: '2026-12-31',
+      })
+    ).resultado as { id: number };
+    const objB = (
+      await porta.gravarObjetivoEstrategico(ctxB(), {
+        mapa: mapaB.id,
+        perspectiva: ids.persp,
+        codigo: 'OB',
+        titulo: 'OBJETIVO SINTETICO B',
+        indicadores: [],
+      })
+    ).resultado as { id: number };
+    const iniB = (
+      await porta.gravarIniciativaEstrategica(ctxB(), {
+        titulo: 'INICIATIVA SINTETICA B',
+        responsavel: `${P}.A`,
+        inicioPrevisto: '2026-04-01',
+        terminoPrevisto: '2026-06-30',
+        objetivos: [objB.id],
+      })
+    ).resultado as { id: number };
+    const reuB = (
+      await porta.gravarReuniao(ctxB(), {
+        titulo: 'REUNIAO SINTETICA B',
+        competenciaInicio: '2026-01-01',
+        competenciaFim: '2026-03-31',
+        inicioPrevisto: '2026-04-10T09:00',
+        responsavel: `${P}.A`,
+        participantes: [{ usuario: `${P}.A` }],
+      })
+    ).resultado as { id: number };
+
+    // Sessão do estabelecimento A: ligar a iniciativa a objetivo ou mapa de B é recusado, sem gravar nada.
+    const iniA = {
+      titulo: 'INICIATIVA ISOLAMENTO',
+      responsavel: `${P}.A`,
+      inicioPrevisto: '2026-04-01',
+      terminoPrevisto: '2026-06-30',
+    };
+    const antes = await contar(
+      'SELECT COUNT(*) AS q FROM iniciativa_estrategica WHERE estabelecimento_id = ?',
+      [ids.est],
+    );
+    expect(await codigo(porta.gravarIniciativaEstrategica(ctx(), { ...iniA, objetivos: [objB.id] }))).toBe(
+      'objetivo-inexistente',
+    );
+    expect(await codigo(porta.gravarIniciativaEstrategica(ctx(), { ...iniA, mapa: mapaB.id }))).toBe(
+      'mapa-inexistente',
+    );
+    expect(
+      await contar('SELECT COUNT(*) AS q FROM iniciativa_estrategica WHERE estabelecimento_id = ?', [
+        ids.est,
+      ]),
+    ).toBe(antes);
+
+    // Reunião de A com o mapa de B: recusada.
+    const reuA = {
+      titulo: 'REUNIAO ISOLAMENTO',
+      competenciaInicio: '2026-01-01',
+      competenciaFim: '2026-03-31',
+      inicioPrevisto: '2026-04-20T09:00',
+      responsavel: `${P}.A`,
+      participantes: [{ usuario: `${P}.A` }],
+    };
+    expect(await codigo(porta.gravarReuniao(ctx(), { ...reuA, mapa: mapaB.id }))).toBe('mapa-inexistente');
+
+    // Deliberação numa reunião de A apontando para objetivo ou iniciativa de B: recusada, sem gravar nada.
+    const r = (await porta.gravarReuniao(ctx(), reuA)).resultado as { id: number };
+    expect(
+      await codigo(porta.gravarDeliberacao(ctx(), { reuniao: r.id, descricao: 'X', objetivo: objB.id })),
+    ).toBe('objetivo-inexistente');
+    expect(
+      await codigo(porta.gravarDeliberacao(ctx(), { reuniao: r.id, descricao: 'X', iniciativa: iniB.id })),
+    ).toBe('iniciativa-inexistente');
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS q FROM reuniao_analise_critica_deliberacao WHERE reuniao_analise_critica_id = ?',
+        [r.id],
+      ),
+    ).toBe(0);
+    // A deliberação também não alcança a reunião de B.
+    expect(await codigo(porta.gravarDeliberacao(ctx(), { reuniao: reuB.id, descricao: 'X' }))).toBe(
+      'nao-encontrado',
+    );
+
+    // Leituras de A sobre o mapa, a iniciativa e a reunião de B: não encontrado.
+    const leA = { hospital: P, login: `${P}.A` };
+    expect(await codigo(porta.mapa(leA, mapaB.id))).toBe('nao-encontrado');
+    expect(await codigo(porta.iniciativa(leA, iniB.id))).toBe('nao-encontrado');
+    expect(await codigo(porta.reuniao(leA, reuB.id))).toBe('nao-encontrado');
   });
 });

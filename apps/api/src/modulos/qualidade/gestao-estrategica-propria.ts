@@ -586,8 +586,29 @@ export class GestaoEstrategicaPropria {
     );
   }
 
+  /** Mapa do estabelecimento da sessão; o de outro estabelecimento é recusado como inexistente. */
+  private async mapaDoEstab(tx: TxOperacao, mapa: number, est: number) {
+    const x = await tx.uma(
+      'SELECT id FROM mapa_estrategico WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [mapa, est],
+    );
+    if (!x) throw recusa('mapa-inexistente', 'Mapa estratégico inexistente.');
+  }
+
+  /** Objetivo de um mapa do estabelecimento da sessão; o de outro estabelecimento é recusado como inexistente. */
+  private async objetivoDoEstab(tx: TxOperacao, objetivo: number, est: number) {
+    const x = await tx.uma(
+      `SELECT o.id FROM objetivo_estrategico o JOIN mapa_estrategico m ON m.id = o.mapa_estrategico_id
+        WHERE o.id = ? AND m.estabelecimento_id = ? AND o.excluido_em IS NULL AND m.excluido_em IS NULL`,
+      [objetivo, est],
+    );
+    if (!x) throw recusa('objetivo-inexistente', 'Objetivo estratégico inexistente.');
+  }
+
   private async gravarIniciativa(tx: TxOperacao, e: E<typeof esquemaIniciativa>, ctx: ContextoOperacao) {
     recusar(validarIniciativa(e));
+    if (e.mapa) await this.mapaDoEstab(tx, e.mapa, ctx.estabelecimento as number);
+    for (const o of e.objetivos) await this.objetivoDoEstab(tx, o, ctx.estabelecimento as number);
     const valores: Record<string, unknown> = {
       mapa_estrategico_id: e.mapa ?? null,
       titulo: e.titulo,
@@ -620,10 +641,6 @@ export class GestaoEstrategicaPropria {
         estabelecimento_id: ctx.estabelecimento,
         situacao: 'planejada',
       });
-    }
-    for (const o of e.objetivos) {
-      const x = await tx.uma('SELECT id FROM objetivo_estrategico WHERE id = ? AND excluido_em IS NULL', [o]);
-      if (!x) throw recusa('objetivo-inexistente', 'Objetivo estratégico inexistente.');
     }
     await this.sincronizar(
       await tx.consultar(
@@ -826,6 +843,7 @@ export class GestaoEstrategicaPropria {
       throw recusa('reuniao-competencia', 'O fim do período analisado não pode ser antes do início.');
     if (e.fimPrevisto && e.fimPrevisto < e.inicioPrevisto)
       throw recusa('reuniao-horario', 'O fim previsto não pode ser antes do início.');
+    if (e.mapa) await this.mapaDoEstab(tx, e.mapa, ctx.estabelecimento as number);
     const valores = {
       titulo: e.titulo,
       mapa_estrategico_id: e.mapa ?? null,
@@ -982,7 +1000,23 @@ export class GestaoEstrategicaPropria {
       situacao: e.situacao,
       concluida_em: e.situacao === 'concluida' ? new Date() : null,
     };
-    if (!fechada)
+    if (!fechada) {
+      // Cada referência tem de ser do estabelecimento da sessão (o indicador é do catálogo comum da conta).
+      const est = ctx.estabelecimento as number;
+      if (e.objetivo) await this.objetivoDoEstab(tx, e.objetivo, est);
+      if (e.iniciativa) {
+        const i = await tx.uma(
+          'SELECT id FROM iniciativa_estrategica WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [e.iniciativa, est],
+        );
+        if (!i) throw recusa('iniciativa-inexistente', 'Iniciativa estratégica inexistente.');
+      }
+      if (e.indicador) {
+        const i = await tx.uma('SELECT id FROM indicador WHERE id = ? AND excluido_em IS NULL', [
+          e.indicador,
+        ]);
+        if (!i) throw recusa('indicador-inexistente', 'Indicador inexistente.');
+      }
       Object.assign(valores, {
         descricao: e.descricao,
         objetivo_estrategico_id: e.objetivo ?? null,
@@ -991,6 +1025,7 @@ export class GestaoEstrategicaPropria {
         responsavel_usuario_id: e.responsavel ? await this.usuario(tx, e.responsavel) : null,
         prazo: e.prazo ?? null,
       });
+    }
     if (e.id) {
       const d = await this.travar(
         tx,
@@ -1242,8 +1277,9 @@ export class GestaoEstrategicaPropria {
       const objetivos = await l.consultar(
         `SELECT o.id, o.codigo, o.titulo FROM iniciativa_estrategica_objetivo x
            JOIN objetivo_estrategico o ON o.id = x.objetivo_estrategico_id
+           JOIN mapa_estrategico m ON m.id = o.mapa_estrategico_id AND m.estabelecimento_id = ?
           WHERE x.iniciativa_estrategica_id = ? AND x.excluido_em IS NULL ORDER BY o.codigo`,
-        [ini],
+        [est, ini],
       );
       const participantes = await l.consultar(
         `SELECT u.login, x.papel FROM iniciativa_estrategica_participante x JOIN usuario u ON u.id = x.usuario_id
