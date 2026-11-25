@@ -68,5 +68,7 @@ export const mensagensRegistros = {
     gravar: 'Gravar a lista',
     alterada: 'Há mudanças não gravadas.',
     semPermissao: 'Seu cargo só consulta quem opera as unidades.',
+    semBanco:
+      'A lista de quem opera cada unidade fica no banco do cliente e não está disponível nesta fonte de dados.',
   },
 };

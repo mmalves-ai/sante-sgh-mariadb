@@ -6,7 +6,8 @@
 import { SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { novaChave } from '../api-adt.js';
+import { ErroApi } from '../../../casca/erros/problem-details.js';
+import { codigoDaRecusa, novaChave } from '../api-adt.js';
 import {
   buscarCandidatosOperadores,
   type CandidatoOperador,
@@ -35,6 +36,13 @@ const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const ocupado = ref(false);
 const assinatura = (l: readonly OperadorUnidade[]) => JSON.stringify(l);
+// Sem o banco do cliente (fonte sintética) a API responde 503 "indisponivel": a tela diz isso em vez da mensagem geral.
+const semBanco = computed(
+  () =>
+    erro.value instanceof ErroApi &&
+    erro.value.status === 503 &&
+    codigoDaRecusa(erro.value) === 'indisponivel',
+);
 const alterada = computed(() => assinatura(lista.value) !== gravada.value);
 
 async function ler(): Promise<void> {
@@ -138,7 +146,10 @@ async function gravar(): Promise<void> {
         />
       </div>
       <p v-if="mensagem" role="status" data-testid="operadores-gravado">{{ mensagem }}</p>
-      <ErroAdt v-if="erro" :erro="erro" />
+      <p v-if="semBanco" role="status" class="secundario" data-testid="operadores-sem-banco">
+        {{ t('adt.registros.operadores.semBanco') }}
+      </p>
+      <ErroAdt v-else-if="erro" :erro="erro" />
 
       <section v-if="unidade" class="painel" aria-labelledby="operadores-lista">
         <h2 id="operadores-lista">{{ t('adt.registros.operadores.unidade') }}</h2>

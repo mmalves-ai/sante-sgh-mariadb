@@ -28,9 +28,11 @@ async function preencherAdmissao(page: Page): Promise<void> {
   const origem = ((await cartoes.first().getAttribute('data-testid')) ?? '').replace(/^leito-/, '');
   await page.getByTestId(`admitir-${origem}`).click();
   await expect(page.getByTestId('tela-admissao')).toBeVisible();
-  await page.getByTestId('admissao-termo').locator('input').fill('JOSE DA SILVA');
+  // Paciente próprio deste arquivo (a paciente 1005): a fonte sintética guarda as internações em memória durante o lote, e
+  // o 1001 já fica internado pelos outros arquivos que admitem (a segunda admissão é recusada, como deve ser).
+  await page.getByTestId('admissao-termo').locator('input').fill('MARIA APARECIDA');
   await page.getByTestId('admissao-buscar').click();
-  await page.getByTestId('admissao-paciente-1001').click();
+  await page.getByTestId('admissao-paciente-1005').click();
   await escolher(page.getByTestId('admissao-leito'), origem);
   await escolher(page.getByTestId('admissao-convenio'), '901');
   await escolher(page.getByTestId('admissao-especialidade'), '11');
