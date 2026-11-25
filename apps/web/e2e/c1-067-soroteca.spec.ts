@@ -159,7 +159,9 @@ test.describe('Soroteca @C1-067 @fase8', () => {
       return json(rota, { codigo: 'nao-simulado' }, 500);
     });
 
-    await entrar(page, 'SINT.LABORATORIO');
+    // A soroteca é rotina da bancada (sadt.amostra.ler da rota /sadt/amostras): o biomédico do rastreio, não o
+    // usuário das tabelas do laboratório (SINT.LABORATORIO só cadastra e cai em "Sem permissão" nesta tela).
+    await entrar(page, 'SINT.BIOMEDICO');
     await page.goto('/sadt/amostras');
     await page.getByTestId('amostras-aba-soroteca').click();
     await expect(page.getByTestId('soroteca')).toBeVisible();

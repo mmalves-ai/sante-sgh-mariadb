@@ -2513,7 +2513,14 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     senhaAlteradaEm: new Date(),
     concessoes: {
       grupo: 'CONTRATOS',
-      opcoesGrupo: [108, 2123, 2124, 2125, ...opcoesSuprimentos('suprimentos.fornecedor.ler')],
+      // C1-032: o pedido ligado ao contrato inclui o item pela busca do cadastro (GET /api/suprimentos/itens).
+      opcoesGrupo: [
+        108,
+        2123,
+        2124,
+        2125,
+        ...opcoesSuprimentos('suprimentos.fornecedor.ler', 'suprimentos.item.ler'),
+      ],
     },
   },
   'SINT.GERCOMPRAS': {
@@ -3205,10 +3212,12 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: {
       grupo: 'FINGESTOR',
       // F3.8, 07-FIN linha 108: abre a escrituração das entradas (classificar e gerar a EFD vêm do perfil).
+      // F8, 07-FIN linha 79 (C1-069): cadastra o portador do desconto e da cessão (parâmetro financeiro).
       opcoesGrupo: opcoesFinanceiro(
         'financeiro.tituloPagar.ler',
         'financeiro.tituloPagar.criar',
         'financeiro.escrituracao.ler',
+        'financeiro.parametro.editar',
       ),
     },
     perfisConcedidos: ['administrador-sistema'],
