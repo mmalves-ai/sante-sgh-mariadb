@@ -14,11 +14,13 @@
 //     o sistema que envia é o da credencial, nunca o informado no corpo.
 import { createHash } from 'node:crypto';
 import {
+  canalOie,
   CONDICOES_PREFERENCIAIS,
   type CondicaoPreferencial,
   conferirClassificacaoRecebida,
   conferirCredencialTriagem,
   conferirEnvioPerfis,
+  decidirEnvioPerfis,
   EVENTO_ENVIO_PERFIS_TRIAGEM,
   EVENTO_HL7_PERFIS_TRIAGEM,
   montarPerfisHl7,
@@ -466,7 +468,8 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
   /**
    * Envio ativo dos perfis ao sistema de triagem: monta a MFN^M13 pelo perfil de mensagem HL7 do sistema e põe na
    * fila de saída do parceiro HL7 dele (o worker entrega por MLLP). O mesmo pacote de perfis no mesmo dia não entra
-   * duas vezes (a chave é o resumo do pacote e a data local); pacote mudado entra de novo.
+   * duas vezes enquanto a mensagem dele está viva (a chave é o resumo do pacote e a data local); se ela morreu, o
+   * pedido é recusado apontando o reprocessamento; se foi descartada, entra uma nova. Pacote mudado entra de novo.
    */
   enviarPerfis(
     c: ContextoComunicacao,
@@ -526,7 +529,8 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
           : null;
         const erros = conferirEnvioPerfis({
           sistemaTriagemAtivo: String(s['categoria']) === 'triagem' && bool(s['ativo']),
-          parceiroHl7ComCanal: !!par && !!txtOuNull(par['canal']),
+          // O canal tem de ser um canal do motor que o enviador HL7 do worker conhece (senão a mensagem morreria lá).
+          parceiroHl7ComCanal: !!par && canalOie(txtOuNull(par['canal']) ?? '') !== undefined,
           perfilMensagem,
           perfis,
         });
@@ -550,13 +554,29 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
               mensagem: 'O ponto de saída do sistema de triagem está desativado.',
             },
           ]);
-        if (ponto) {
-          const ja = await tx.uma(
-            'SELECT id FROM mensagem_integracao_saida WHERE ponto_integracao_id = ? AND chave_idempotencia = ?',
-            [num(ponto['id']), chave],
-          );
-          if (ja) return { id: num(ja['id']), repetida: true, perfis: perfis.length, chave };
-        } else {
+        // As mensagens do mesmo pacote no mesmo dia (a chave base e as reenviadas ":r<n>"), com a situação: o domínio
+        // decide entre repetida (viva), recusada (morta, a reprocessar) e nova (a anterior foi descartada).
+        const anteriores = ponto
+          ? await tx.consultar(
+              `SELECT id, chave_idempotencia, situacao FROM mensagem_integracao_saida
+                WHERE ponto_integracao_id = ? AND LEFT(chave_idempotencia, ?) = ? ORDER BY id LIMIT 200`,
+              [num(ponto['id']), chave.length, chave],
+              { teto: 200 },
+            )
+          : [];
+        const decisao = decidirEnvioPerfis(
+          chave,
+          anteriores.map((a) => ({
+            chave: String(a['chave_idempotencia']),
+            situacao: String(a['situacao']),
+          })),
+        );
+        if (decisao.acao === 'recusar') throw recusa([decisao.erro], 'Envio recusado');
+        if (decisao.acao === 'repetida') {
+          const ja = anteriores.find((a) => String(a['chave_idempotencia']) === decisao.chave)!;
+          return { id: num(ja['id']), repetida: true, perfis: perfis.length, chave: decisao.chave };
+        }
+        if (!ponto) {
           const padrao = await tx.uma(
             "SELECT id FROM padrao_troca WHERE familia = 'hl7v2' AND ativo = TRUE ORDER BY id LIMIT 1",
             [],
@@ -591,7 +611,9 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
             instituicaoOrigem: c.hospital.toUpperCase().slice(0, 20),
             aplicacaoDestino: sistema.toUpperCase().slice(0, 20),
             dataHora: local,
-            controle: `PRF${resumoPacote.slice(0, 12)}${local.toISOString().slice(5, 10).replace('-', '')}`,
+            controle: decisao.sufixoControle
+              ? `PRF${resumoPacote.slice(0, 10)}${local.toISOString().slice(5, 10).replace('-', '')}${decisao.sufixoControle}`
+              : `PRF${resumoPacote.slice(0, 12)}${local.toISOString().slice(5, 10).replace('-', '')}`,
             processamento: process.env['SGH_AMBIENTE'] === 'producao' ? 'P' : 'T',
           },
           perfilMensagem,
@@ -603,7 +625,7 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
           sistema_externo_id: sid,
           canal_hl7_id: numOuNull(pm['canal_hl7_id']),
           evento_hl7_id: num(pm['evento_hl7_id']),
-          chave_idempotencia: chave,
+          chave_idempotencia: decisao.chave,
           correlacao: `perfis.${sistema}`.slice(0, 64),
           tipo_mensagem: EVENTO_ENVIO_PERFIS_TRIAGEM,
           formato: 'hl7v2',
@@ -613,7 +635,7 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
           tentativas: 0,
           tentativas_maximas: Math.max(1, num(par['limite_tentativas']) || 5),
         });
-        return { id, repetida: false, perfis: perfis.length, chave };
+        return { id, repetida: false, perfis: perfis.length, chave: decisao.chave };
       },
     );
   }

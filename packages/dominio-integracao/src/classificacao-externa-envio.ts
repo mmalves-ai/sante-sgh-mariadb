@@ -174,3 +174,59 @@ export function conferirCredencialTriagem(c: CredencialTriagem): ErroClassificac
     e.push(erro('credencial', 'fora-do-escopo', `A credencial não tem o escopo ${ESCOPO_ENTRADA_TRIAGEM}.`));
   return e;
 }
+
+/** A mensagem de perfis do mesmo pacote no mesmo dia que já está na fila de saída (a mais antiga primeiro). */
+export interface EnvioPerfisAnterior {
+  readonly chave: string;
+  readonly situacao: string;
+}
+
+export type DecisaoEnvioPerfis =
+  /** Nada vivo na fila para este pacote hoje: entra uma mensagem nova com esta chave e este MSH-10. */
+  | { readonly acao: 'nova'; readonly chave: string; readonly sufixoControle: string }
+  /** A mensagem do pacote está na fila, a caminho ou entregue: nada novo entra (devolve a existente). */
+  | { readonly acao: 'repetida'; readonly chave: string }
+  /** A mensagem do pacote morreu e segura a ordem do sistema de triagem: reprocessar pela fila de mortos. */
+  | { readonly acao: 'recusar'; readonly erro: ErroClassificacao };
+
+const VIVAS = new Set(['pendente', 'enviando', 'enviada', 'confirmada']);
+const MORTAS = new Set(['erro', 'rejeitada', 'expirada']);
+
+/**
+ * O que fazer com o pedido de envio do pacote, pela situação da última mensagem gravada com a chave do pacote do dia
+ * (a chave base ou a base com ":r<n>" das reenviadas). Viva (pendente, enviando, enviada, confirmada): repetida, sem
+ * dizer que chegou o que ainda não chegou (a tela mostra a situação). Morta (erro, rejeitada, expirada): recusada,
+ * porque a morta segura a ordem das mensagens do sistema de triagem até ser tratada; uma nova ficaria parada atrás dela.
+ * Cancelada (a morta descartada no tratamento): entra uma nova com a chave e o MSH-10 seguintes (o sistema de triagem
+ * deduplica pelo MSH-10). Situação desconhecida: falha fechada (recusa).
+ */
+export function decidirEnvioPerfis(
+  chaveBase: string,
+  anteriores: readonly EnvioPerfisAnterior[],
+): DecisaoEnvioPerfis {
+  const doPacote = anteriores.filter(
+    (a) => a.chave === chaveBase || /^:r\d{1,2}$/.test(a.chave.slice(chaveBase.length)),
+  );
+  const ultima = doPacote.at(-1);
+  if (!ultima) return { acao: 'nova', chave: chaveBase, sufixoControle: '' };
+  if (VIVAS.has(ultima.situacao)) return { acao: 'repetida', chave: ultima.chave };
+  if (ultima.situacao === 'cancelada') {
+    const n = doPacote.length;
+    if (n > 99)
+      return {
+        acao: 'recusar',
+        erro: erro('envio', 'reenvios-esgotados', 'O pacote de perfis já foi reenviado demais hoje.'),
+      };
+    return { acao: 'nova', chave: `${chaveBase}:r${n}`, sufixoControle: `R${n}` };
+  }
+  return {
+    acao: 'recusar',
+    erro: erro(
+      'envio',
+      'envio-anterior-falhou',
+      MORTAS.has(ultima.situacao)
+        ? `O envio de hoje deste pacote de perfis falhou (situação ${ultima.situacao}) e não chegou ao sistema de triagem: reprocesse-o na fila de mortos das integrações.`
+        : `O envio de hoje deste pacote de perfis está numa situação desconhecida (${ultima.situacao.slice(0, 30)}): confira a fila de saída das integrações.`,
+    ),
+  };
+}

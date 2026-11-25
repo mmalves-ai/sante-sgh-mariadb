@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   conferirCredencialTriagem,
   conferirEnvioPerfis,
+  decidirEnvioPerfis,
   type CredencialTriagem,
   ESCOPO_ENTRADA_TRIAGEM,
   montarPerfisHl7,
@@ -119,5 +120,40 @@ describe('entrada pela credencial do sistema de triagem', () => {
     expect(cod({ restritoA: 8 })).toEqual(['outro-estabelecimento']);
     expect(cod({ usuarioTecnico: null })).toEqual(['sem-usuario-tecnico']);
     expect(cod({ escopos: ['resultado.enviar'] })).toEqual(['fora-do-escopo']);
+  });
+});
+
+describe('reenvio do mesmo pacote de perfis no mesmo dia', () => {
+  const base = 'perfis:tri:abc:2026-11-25';
+  it('sem mensagem: nova com a chave base; viva (na fila, a caminho ou entregue): repetida', () => {
+    expect(decidirEnvioPerfis(base, [])).toEqual({ acao: 'nova', chave: base, sufixoControle: '' });
+    for (const situacao of ['pendente', 'enviando', 'enviada', 'confirmada'])
+      expect(decidirEnvioPerfis(base, [{ chave: base, situacao }])).toEqual({
+        acao: 'repetida',
+        chave: base,
+      });
+  });
+  it('morta (erro, rejeitada, expirada): recusada, apontando o reprocessamento; nada novo entra', () => {
+    for (const situacao of ['erro', 'rejeitada', 'expirada']) {
+      const d = decidirEnvioPerfis(base, [{ chave: base, situacao }]);
+      expect(d.acao).toBe('recusar');
+      if (d.acao === 'recusar') {
+        expect(d.erro.codigo).toBe('envio-anterior-falhou');
+        expect(d.erro.mensagem).toContain('fila de mortos');
+      }
+    }
+    expect(decidirEnvioPerfis(base, [{ chave: base, situacao: 'estranha' }]).acao).toBe('recusar');
+  });
+  it('cancelada (morta descartada): nova com a chave e o MSH-10 seguintes; a reenviada viva fica repetida', () => {
+    const c1 = [{ chave: base, situacao: 'cancelada' }];
+    expect(decidirEnvioPerfis(base, c1)).toEqual({ acao: 'nova', chave: `${base}:r1`, sufixoControle: 'R1' });
+    const c2 = [...c1, { chave: `${base}:r1`, situacao: 'cancelada' }];
+    expect(decidirEnvioPerfis(base, c2)).toMatchObject({ chave: `${base}:r2`, sufixoControle: 'R2' });
+    expect(decidirEnvioPerfis(base, [...c1, { chave: `${base}:r1`, situacao: 'pendente' }])).toEqual({
+      acao: 'repetida',
+      chave: `${base}:r1`,
+    });
+    // Outra chave que só começa igual (outro pacote) não conta.
+    expect(decidirEnvioPerfis(base, [{ chave: `${base}x`, situacao: 'pendente' }]).acao).toBe('nova');
   });
 });

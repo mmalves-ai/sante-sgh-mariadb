@@ -95,6 +95,21 @@ test.describe('F3.9 classificação de risco externa @F3.9', () => {
         corpo: r.request().postDataJSON(),
       });
       vezes += 1;
+      // O terceiro pedido encontra a mensagem do dia morta: recusa com o motivo apontando o reprocessamento.
+      if (vezes === 3)
+        return r.fulfill({
+          status: 422,
+          contentType: 'application/problem+json',
+          body: JSON.stringify({
+            type: 'about:blank',
+            title: 'Envio recusado',
+            status: 422,
+            codigo: 'envio-anterior-falhou',
+            detail:
+              'O envio de hoje deste pacote de perfis falhou (situação erro) e não chegou ao sistema de triagem: reprocesse-o na fila de mortos das integrações.',
+            campos: ['envio'],
+          }),
+        });
       return json(r, { id: 900, repetida: vezes > 1, perfis: 1, chave: 'perfis:sint' }, 201);
     });
     await entrar(page, 'SINT.ADMIN');
@@ -111,6 +126,9 @@ test.describe('F3.9 classificação de risco externa @F3.9', () => {
       },
     ]);
     await page.getByTestId('classificacao-enviar-perfis').click();
-    await expect(page.getByRole('status')).toContainText('já foi enviado hoje');
+    await expect(page.getByRole('status')).toContainText('já está na fila de saída hoje');
+    await page.getByTestId('classificacao-enviar-perfis').click();
+    await expect(page.getByRole('alert')).toContainText('Envio recusado: O envio de hoje deste pacote');
+    await expect(page.getByRole('alert')).toContainText('fila de mortos');
   });
 });

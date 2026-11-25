@@ -14,6 +14,7 @@ import {
   lerPerfis,
   recebidasDoAtendimento,
 } from '../api-comunicacao.js';
+import { mensagemDoErro } from '../../../casca/erros/problem-details.js';
 
 const CONDICOES = [
   'gestante',
@@ -50,7 +51,8 @@ const { t } = useI18n({
       envioSistema: 'Enviar ao sistema de triagem',
       enviar: 'Enviar perfis',
       enviado: 'Perfis na fila de saída ({n} perfis): o sistema de triagem recebe pelo canal HL7.',
-      repetido: 'Este mesmo pacote de perfis já foi enviado hoje; nada novo na fila.',
+      repetido:
+        'Este mesmo pacote de perfis já está na fila de saída hoje (aguardando, a caminho ou entregue); nada novo entrou.',
     },
   },
 });
@@ -111,7 +113,9 @@ async function enviarPerfis() {
     const r = await enviarPerfisTriagem(s);
     aviso.value = r.repetida ? t('repetido') : t('enviado', { n: r.perfis });
   } catch (e) {
-    falha.value = e instanceof Error ? e.message : String(e);
+    // A recusa de negócio traz o motivo da regra (ex.: o envio de hoje falhou; reprocessar na fila de mortos).
+    const motivo = mensagemDoErro(e).motivo;
+    falha.value = (e instanceof Error ? e.message : String(e)) + (motivo ? `: ${motivo}` : '');
   } finally {
     enviando.value = false;
   }

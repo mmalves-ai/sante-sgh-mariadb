@@ -2,8 +2,11 @@
 // o ENVIO ATIVO dos perfis (a MFN^M13 pelo perfil de mensagem HL7 do sistema de triagem na fila de saída, idempotente
 // pelo pacote e pelo dia, ponto de saída MLLP criado) e a ENTRADA pela credencial do sistema de triagem (resumo da
 // chave, escopo, usuário técnico como autor; sistema do corpo diferente recusado), seguida da APLICAÇÃO (a recebida
-// vira classificação interna concluída). Massa SINTÉTICA com o código do teste; usuário e profissional são ids já
-// existentes do cliente de teste (só lidos). SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+// vira classificação interna concluída, com o classificador sendo o profissional de quem aplica; quem aplica sem vínculo
+// profissional é recusado sem gravar nada). O reenvio do mesmo pacote decide pela situação da mensagem do dia (viva:
+// repetida; morta: recusada; descartada: nova). Massa SINTÉTICA com o código do teste (o aplicador e o usuário sem
+// vínculo são sintéticos; os demais usuários e o profissional do atendimento são ids já existentes, só lidos).
+// SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { createHash } from 'node:crypto';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -18,6 +21,9 @@ const SEGREDO = 'segredo-sintetico-c1027-0123456789';
 const SEGREDO_SEM = 'segredo-sintetico-c1027-sem-escopo';
 const FONTE = 'teste-c1027';
 const NOME_PAC = 'c1027 Paciente sintético';
+const NOME_CLASS = 'c1027 Classificador sintético';
+/** CPF fictício (só o formato): liga o usuário aplicador à pessoa e ao profissional sintéticos. */
+const CPF_CLASS = '99910270271';
 const basic = (id: string, s: string) => `Basic ${Buffer.from(`${id}:${s}`).toString('base64')}`;
 
 async function limpar(e: Escritor): Promise<void> {
@@ -55,6 +61,9 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar('DELETE FROM pessoa_fisica WHERE nome = ?', [NOME_PAC]);
   await limparTrilhaDaMassa(e, { codigos: [P] });
   await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+  await e.executar(`DELETE FROM profissional WHERE pessoa_fisica_id IN ${pf}`, [NOME_CLASS]);
+  await e.executar('DELETE FROM pessoa_fisica WHERE nome = ?', [NOME_CLASS]);
+  await e.executar("DELETE FROM usuario WHERE login IN ('c1027.aplicador', 'c1027.semvinculo')");
 }
 
 describe.skipIf(SEM_BANCO)(
@@ -62,7 +71,17 @@ describe.skipIf(SEM_BANCO)(
   () => {
     let nucleo: NucleoProprio;
     let cla: PortaClassificacaoExternaPropria;
-    let m: { est: number; usuario: number; tecnico: number; prof: number; atd: number; paciente: number };
+    let m: {
+      est: number;
+      usuario: number;
+      tecnico: number;
+      prof: number;
+      atd: number;
+      paciente: number;
+      aplicador: number;
+      classificador: number;
+      semVinculo: number;
+    };
     const ctx = () => ({ cliente: CLIENTE, usuario: m.usuario, correlacao: P, hospital: P });
     const ler = <T = Record<string, unknown>>(sql: string, p: unknown[] = []) =>
       nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) => l.consultar(sql, p)) as Promise<T[]>;
@@ -150,7 +169,7 @@ describe.skipIf(SEM_BANCO)(
         await e.executar(
           `INSERT INTO parceiro_dados (codigo, nome, tipo, sistema_externo_id, cliente_api_id, canal, escopos, finalidade,
            base_legal, criado_em)
-         VALUES ('c1027-par', 'Triagem (teste)', 'hl7', ?, ?, 'apoio', '["classificacao.enviar"]',
+         VALUES ('c1027-par', 'Triagem (teste)', 'hl7', ?, ?, 'oie-classificacao-adt', '["classificacao.enviar"]',
            'Classificação de risco (teste)', 'tutela-da-saude', ?)`,
           [sis, cTri, agora],
         );
@@ -188,7 +207,29 @@ describe.skipIf(SEM_BANCO)(
            VALUES (?, ?, ?, ?, 1, 1, ?, ?, ?)`,
             [est, `${P}-pa`, paciente, pa, prof['id'], new Date(agora.getTime() - 3_600_000), agora],
           );
+          // O aplicador: usuário com CPF da pessoa que tem vínculo profissional ativo (o caminho real da aplicação,
+          // pois nenhuma entrada grava o profissional na recebida); o outro, sem CPF nem vínculo.
+          const pfc = await e.inserir('INSERT INTO pessoa_fisica (nome, cpf, criado_em) VALUES (?, ?, ?)', [
+            NOME_CLASS,
+            CPF_CLASS,
+            agora,
+          ]);
+          const classificador = await e.inserir(
+            "INSERT INTO profissional (pessoa_fisica_id, tipo, situacao, criado_em) VALUES (?, 'corpo_clinico', 'ativo', ?)",
+            [pfc, agora],
+          );
+          const aplicador = await e.inserir(
+            "INSERT INTO usuario (login, nome, cpf, criado_em) VALUES ('c1027.aplicador', 'Aplicador (teste)', ?, ?)",
+            [CPF_CLASS, agora],
+          );
+          const semVinculo = await e.inserir(
+            "INSERT INTO usuario (login, nome, dispensa_cpf, criado_em) VALUES ('c1027.semvinculo', 'Sem vínculo (teste)', TRUE, ?)",
+            [agora],
+          );
           return {
+            aplicador,
+            classificador,
+            semVinculo,
             est,
             usuario: Number(us[0]!['id']),
             tecnico,
@@ -244,12 +285,24 @@ describe.skipIf(SEM_BANCO)(
           [SIS],
         ),
       );
+      // Canal que o motor de integração não conhece: recusado (a mensagem morreria no enviador do worker).
+      const canal = (c: string) =>
+        nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, (e) =>
+          e.executar("UPDATE parceiro_dados SET canal = ? WHERE codigo = 'c1027-par'", [c]),
+        );
+      await canal('apoio');
+      expect((await erro(cla.enviarPerfis(ctx(), { sistema: SIS }))).codigo).toBe('sem-parceiro-hl7');
+      await canal('oie-classificacao-adt');
       const agora = new Date();
       const a = await cla.enviarPerfis(ctx(), { sistema: SIS }, agora);
       expect(a.repetida).toBe(false);
       expect(a.perfis).toBeGreaterThanOrEqual(2);
       const b = await cla.enviarPerfis(ctx(), { sistema: SIS }, agora);
       expect(b).toMatchObject({ id: a.id, repetida: true });
+      const [base] = await ler(
+        'SELECT chave_idempotencia AS chave, conteudo FROM mensagem_integracao_saida WHERE id = ?',
+        [a.id],
+      );
       const [s] = await ler(
         `SELECT s.situacao, s.formato, s.tipo_mensagem, s.conteudo, s.hash_sha256, s.criado_por, s.evento_hl7_id,
               p.direcao, p.transporte, p.formato_conteudo, p.codigo AS ponto
@@ -300,6 +353,56 @@ describe.skipIf(SEM_BANCO)(
         [m.est],
       );
       expect(Number(fila[0]!['n'])).toBe(2);
+
+      // Reenvio do pacote do dia pela situação da mensagem. A morte e o descarte são o que o worker e o tratamento da
+      // fila de mortos gravam (aqui, pela mesma coluna). Morta: recusada, apontando o reprocessamento, e nada entra.
+      const situacao = (id: number, sit: string) =>
+        nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, (e) =>
+          e.executar('UPDATE mensagem_integracao_saida SET situacao = ? WHERE id = ?', [sit, id]),
+        );
+      const quantas = async () =>
+        Number(
+          (
+            await ler('SELECT COUNT(*) AS n FROM mensagem_integracao_saida WHERE estabelecimento_id = ?', [
+              m.est,
+            ])
+          )[0]!['n'],
+        );
+      // O pacote volta a ser o do primeiro envio (o perfil novo sai), para reenviar o mesmo pacote.
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, (e) =>
+        e.executar("UPDATE perfil_prioridade_externa SET ativo = FALSE WHERE codigo = 'c1027-mob'"),
+      );
+      for (const sit of ['erro', 'rejeitada', 'expirada']) {
+        await situacao(a.id, sit);
+        const r = await erro(cla.enviarPerfis(ctx(), { sistema: SIS }, agora));
+        expect([r.status, r.codigo]).toEqual([422, 'envio-anterior-falhou']);
+      }
+      expect(await quantas()).toBe(2);
+      // Ainda na fila ou entregue: repetida (nada novo).
+      for (const sit of ['enviando', 'enviada', 'confirmada']) {
+        await situacao(a.id, sit);
+        expect(await cla.enviarPerfis(ctx(), { sistema: SIS }, agora)).toMatchObject({
+          id: a.id,
+          repetida: true,
+        });
+      }
+      // Descartada no tratamento: entra uma nova, com a chave e o MSH-10 seguintes; a nova fica repetida depois.
+      await situacao(a.id, 'cancelada');
+      const d = await cla.enviarPerfis(ctx(), { sistema: SIS }, agora);
+      expect(d).toMatchObject({ repetida: false, chave: `${String(base!['chave'])}:r1` });
+      expect(d.id).not.toBe(a.id);
+      expect(await cla.enviarPerfis(ctx(), { sistema: SIS }, agora)).toMatchObject({
+        id: d.id,
+        repetida: true,
+      });
+      const [nova] = await ler('SELECT situacao, conteudo FROM mensagem_integracao_saida WHERE id = ?', [
+        d.id,
+      ]);
+      expect(nova!['situacao']).toBe('pendente');
+      const msh10 = (c: unknown) => String(c).split('\r')[0]!.split('|')[9];
+      expect(msh10(nova!['conteudo'])).toMatch(/R1$/);
+      expect(msh10(nova!['conteudo'])).not.toBe(msh10(base!['conteudo']));
+      expect(await quantas()).toBe(3);
     }, 120_000);
 
     it('entrada pela credencial do sistema de triagem, com o usuário técnico na trilha, e a aplicação', async () => {
@@ -351,20 +454,32 @@ describe.skipIf(SEM_BANCO)(
       );
       expect(Number(trilha[0]!['n'])).toBeGreaterThan(0);
 
-      // A aplicação (contrato de efeito pendente desde a 2ª volta): a recebida vira a classificação interna concluída.
-      await nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, (e) =>
-        e.executar('UPDATE classificacao_externa_recebida SET profissional_id = ? WHERE id = ?', [
-          m.prof,
-          r.id,
-        ]),
+      // A aplicação pelo caminho real: a recebida que entrou pela credencial não traz o profissional (nenhuma entrada o
+      // grava), então o classificador é o profissional de quem aplica.
+      const [semProf] = await ler('SELECT profissional_id FROM classificacao_externa_recebida WHERE id = ?', [
+        r.id,
+      ]);
+      expect(semProf!['profissional_id']).toBeNull();
+      // Quem aplica sem vínculo profissional ativo: recusado, e nada é gravado.
+      const ctxDe = (usuario: number) => ({ ...ctx(), usuario });
+      const rec = await erro(cla.aplicar(ctxDe(m.semVinculo), r.id));
+      expect([rec.status, rec.codigo]).toEqual([422, 'sem-vinculo-assistencial']);
+      const [intacta] = await ler(
+        `SELECT r.situacao, r.classificacao_risco_id AS liga, r.versao,
+                (SELECT COUNT(*) FROM classificacao_risco c WHERE c.atendimento_id = r.atendimento_id) AS internas
+           FROM classificacao_externa_recebida r WHERE r.id = ?`,
+        [r.id],
       );
-      const ap = await cla.aplicar(ctx(), r.id);
+      expect(intacta).toMatchObject({ situacao: 'recebida', liga: null });
+      expect(Number(intacta!['internas'])).toBe(0);
+      const ap = await cla.aplicar(ctxDe(m.aplicador), r.id);
       expect(ap.reclassificou).toBeNull();
-      expect((await erro(cla.aplicar(ctx(), r.id))).codigo).toBe('nao-vigente');
+      expect((await erro(cla.aplicar(ctxDe(m.aplicador), r.id))).codigo).toBe('nao-vigente');
       const [interna] = await ler(
         `SELECT c.situacao, c.origem, c.tempo_alvo_minutos AS t, n.codigo AS cor, c.paciente_id AS pac,
               TIMESTAMPDIFF(MINUTE, c.classificado_em, c.prazo_atendimento_em) AS prazo,
               r.situacao AS sr, r.classificacao_risco_id AS liga
+              , c.classificador_profissional_id AS classificador, c.criado_por
          FROM classificacao_risco c JOIN nivel_prioridade n ON n.id = c.nivel_prioridade_id
          JOIN classificacao_externa_recebida r ON r.id = ? WHERE c.id = ?`,
         [r.id, ap.classificacaoRiscoId],
@@ -381,6 +496,8 @@ describe.skipIf(SEM_BANCO)(
         m.paciente,
       ]);
       expect(Number(interna!['liga'])).toBe(ap.classificacaoRiscoId);
+      expect(Number(interna!['classificador'])).toBe(m.classificador);
+      expect(Number(interna!['criado_por'])).toBe(m.aplicador);
     }, 120_000);
   },
 );
