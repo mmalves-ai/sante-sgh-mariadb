@@ -167,12 +167,15 @@ const cumprido = (e: EstadoDocumentoCirurgia) => e === 'apresentado' || e === 'd
 export type ConferenciaDocumentos =
   { ok: true } | { ok: false; codigo: 'documentos-pendentes'; mensagem: string; faltam: number[] };
 
-/** Situações em que a cirurgia começa (entrada no bloco e início). */
-export const SITUACOES_DE_INICIO = ['no_bloco', 'em_andamento'] as const;
+/**
+ * Situações que passam pela sala: a entrada no bloco, o início e a cirurgia realizada (a ida direta de "confirmado" ou
+ * de "no bloco" a "realizado" e o registro do ato cirúrgico com a incisão). Todas exigem os documentos que bloqueiam.
+ */
+export const SITUACOES_DE_INICIO = ['no_bloco', 'em_andamento', 'realizado'] as const;
 
 /**
- * Pode a cirurgia ir à situação `nova`? A confirmação exige os documentos que geram pendência; a entrada no bloco e o
- * início exigem os que bloqueiam. Faltando, recusa com os tipos em falta.
+ * Pode a cirurgia ir à situação `nova`? A confirmação exige os documentos que geram pendência; a entrada no bloco, o
+ * início e a cirurgia realizada exigem os que bloqueiam. Faltando, recusa com os tipos em falta.
  */
 export function conferirDocumentosCirurgia(
   exigidos: readonly DocumentoExigido[],
@@ -190,9 +193,11 @@ export function conferirDocumentosCirurgia(
   return {
     ok: false,
     codigo: 'documentos-pendentes',
-    mensagem: inicio
-      ? `A cirurgia não começa sem os documentos obrigatórios: ${faltam.length} em falta, vencido ou recusado.`
-      : `A cirurgia não é confirmada com documento obrigatório em falta: ${faltam.length} pendente(s).`,
+    mensagem: !inicio
+      ? `A cirurgia não é confirmada com documento obrigatório em falta: ${faltam.length} pendente(s).`
+      : nova === 'realizado'
+        ? `A cirurgia não é registrada como realizada sem os documentos obrigatórios: ${faltam.length} em falta, vencido ou recusado.`
+        : `A cirurgia não começa sem os documentos obrigatórios: ${faltam.length} em falta, vencido ou recusado.`,
     faltam,
   };
 }
@@ -318,5 +323,37 @@ export function conferirTipoDocumento(e: {
     (!Number.isInteger(e.validadeDias) || e.validadeDias < 1 || e.validadeDias > 3650)
   )
     p.push({ campo: 'validadeDias', mensagem: 'A validade vai de 1 a 3650 dias.' });
+  return p;
+}
+
+/**
+ * Pode o tipo de documento ser desativado? O tipo é do cadastro comum do cliente (vale para todos os estabelecimentos):
+ * o exigido em toda cirurgia (cadastrado pela plataforma) não se desativa por aqui, e o tipo com regra ativa em algum
+ * estabelecimento só sai depois de desativadas as regras. Reativar sempre pode. Nada é apagado.
+ */
+export function conferirAtivacaoTipo(e: {
+  readonly ativo: boolean;
+  readonly obrigatorioGeral: boolean;
+  readonly regrasAtivasNoEstabelecimento: number;
+  readonly regrasAtivasEmOutros: number;
+}): ProblemaDocumento[] {
+  if (e.ativo) return [];
+  const p: ProblemaDocumento[] = [];
+  if (e.obrigatorioGeral)
+    p.push({
+      campo: 'tipo',
+      mensagem:
+        'O documento exigido em toda cirurgia é do cadastro da plataforma e não se desativa por aqui.',
+    });
+  if (e.regrasAtivasNoEstabelecimento > 0)
+    p.push({
+      campo: 'tipo',
+      mensagem: `Desative antes as ${e.regrasAtivasNoEstabelecimento} regra(s) ativa(s) deste estabelecimento com o tipo.`,
+    });
+  if (e.regrasAtivasEmOutros > 0)
+    p.push({
+      campo: 'tipo',
+      mensagem: `O tipo está em uso em ${e.regrasAtivasEmOutros} regra(s) ativa(s) de outros estabelecimentos.`,
+    });
   return p;
 }

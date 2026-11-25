@@ -55,6 +55,7 @@ function simular(page: Page) {
   const regras: Record<string, unknown>[] = [];
   const tipos = TIPOS.map((t) => ({
     ...t,
+    versao: 1,
     obrigatorio: false,
     validadeDias: null as number | null,
     geraPendencia: true,
@@ -122,12 +123,22 @@ function simular(page: Page) {
           codigo: String(c['codigo']),
           descricao: String(c['descricao']),
           categoria: String(c['categoria']),
+          versao: 1,
           ativo: true,
-          obrigatorio: Boolean(c['obrigatorio']),
+          obrigatorio: false,
           validadeDias: (c['validadeDias'] as number | null) ?? null,
           geraPendencia: true,
         });
         return json(rota, { id: 10 + tipos.length - 1 });
+      });
+      await page.route('**/api/cirurgia/documentos-exigidos/tipos/*/ativo', async (rota) => {
+        const c = rota.request().postDataJSON() as Record<string, unknown>;
+        corpos.push(c);
+        const id = Number(rota.request().url().split('/').at(-2));
+        const t = tipos.find((x) => x.id === id)!;
+        t.ativo = Boolean(c['ativo']);
+        t.versao += 1;
+        return json(rota, { id });
       });
       await page.route('**/api/cirurgia/documentos-exigidos/regras', async (rota) => {
         const c = rota.request().postDataJSON() as Record<string, unknown>;
@@ -226,6 +237,16 @@ test.describe('Documentos obrigatórios antes da cirurgia @C1-128', () => {
     await escolher(page.getByTestId('tipo-categoria'), 'avaliacao');
     await page.getByTestId('tipo-gravar').click();
     await expect(page.getByTestId('tipo-APA-FIC')).toBeVisible();
+    // O tipo entra sem a exigência geral (ela é a regra do estabelecimento sem procedimento).
+    await expect(page.getByTestId('tipo-dica-geral')).toBeVisible();
+    expect(api.corpos.at(-1)).not.toHaveProperty('obrigatorio');
+    // Desativar o tipo: fica na lista, inativo, pela versão; reativar volta.
+    await page.getByTestId('tipo-alternar-APA-FIC').click();
+    await expect(page.getByTestId('tipo-APA-FIC')).toHaveAttribute('data-ativo', 'false');
+    expect(api.corpos.at(-1)).toEqual({ versao: 1, ativo: false });
+    await page.getByTestId('tipo-alternar-APA-FIC').click();
+    await expect(page.getByTestId('tipo-APA-FIC')).toHaveAttribute('data-ativo', 'true');
+    expect(api.corpos.at(-1)).toEqual({ versao: 2, ativo: true });
 
     await escolher(page.getByTestId('regra-tipo'), '1');
     await expect(page.getByTestId('regra-bloqueia')).toBeChecked();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  conferirAtivacaoTipo,
   conferirDocumentosCirurgia,
   conferirRegistroDocumento,
   conferirRegraDocumento,
@@ -115,6 +116,14 @@ describe('bloqueio da confirmação e do início', () => {
     });
     expect(conferirDocumentosCirurgia(exigidos, [], 'agendado', null)).toEqual({ ok: true });
   });
+  it('a ida direta a realizado (de confirmado ou do bloco) exige os documentos que bloqueiam', () => {
+    const r = conferirDocumentosCirurgia(exigidos, [reg({ tipo: 2 })], 'realizado', '2030-03-10');
+    expect(r).toMatchObject({ ok: false, codigo: 'documentos-pendentes', faltam: [1] });
+    expect(r.ok ? '' : r.mensagem).toMatch(/realizada/);
+    expect(conferirDocumentosCirurgia(exigidos, [reg({ tipo: 1 })], 'realizado', '2030-03-10')).toEqual({
+      ok: true,
+    });
+  });
   it('vale o registro mais recente: recusado depois do apresentado volta a bloquear', () => {
     const regs = [reg({ tipo: 1, sequencia: 1 }), reg({ tipo: 1, sequencia: 2, situacao: 'recusado' })];
     expect(conferirDocumentosCirurgia(exigidos, regs, 'no_bloco', '2030-03-10').ok).toBe(false);
@@ -198,5 +207,24 @@ describe('cadastro da regra e do tipo', () => {
         (p) => p.campo,
       ),
     ).toEqual(['codigo', 'descricao', 'categoria', 'validadeDias']);
+  });
+  it('desativar o tipo: nunca o exigido em toda cirurgia nem o tipo com regra ativa; reativar sempre', () => {
+    const base = { obrigatorioGeral: false, regrasAtivasNoEstabelecimento: 0, regrasAtivasEmOutros: 0 };
+    expect(conferirAtivacaoTipo({ ...base, ativo: false })).toEqual([]);
+    expect(conferirAtivacaoTipo({ ...base, ativo: false, obrigatorioGeral: true })).toHaveLength(1);
+    expect(
+      conferirAtivacaoTipo({
+        ...base,
+        ativo: false,
+        regrasAtivasNoEstabelecimento: 1,
+        regrasAtivasEmOutros: 2,
+      }).map((p) => p.mensagem),
+    ).toEqual([
+      expect.stringMatching(/deste estabelecimento/),
+      expect.stringMatching(/outros estabelecimentos/),
+    ]);
+    expect(
+      conferirAtivacaoTipo({ ...base, ativo: true, obrigatorioGeral: true, regrasAtivasEmOutros: 3 }),
+    ).toEqual([]);
   });
 });

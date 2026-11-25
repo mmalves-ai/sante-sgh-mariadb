@@ -3,14 +3,17 @@
 // fictícia agendada para 2030 com um procedimento, dois tipos de documento fictícios (consentimento e exame) e um
 // documento digitalizado fictício do paciente; usuário, paciente, profissional, procedimento e tipo de documento do
 // arquivo são ids já existentes do cliente de teste (só os ids são lidos).
-// Prova o que fica no banco: a configuração (tipo com código único; regra do consentimento só aceita bloqueando; regra
-// repetida recusada; desativar grava ativo falso e a versão, sem apagar); a leitura com os exigidos e o estado; a
-// confirmação recusada com documento pendente; o exame apresentado vence na data da cirurgia; a dispensa do
+// Prova o que fica no banco: a configuração (tipo com código único e nunca exigido em toda cirurgia por aqui; tipo
+// desativado e reativado pela versão, recusado com regra ativa neste ou em outro estabelecimento; regra do
+// consentimento só aceita bloqueando; regra repetida recusada; desativar grava ativo falso e a versão, sem apagar); a
+// leitura com os exigidos e o estado; a confirmação recusada com documento pendente; sem o consentimento, a ida direta
+// de confirmado a realizado e o registro do ato cirúrgico do agendamento recusados sem escrita; o exame apresentado vence na data da cirurgia; a dispensa do
 // consentimento na eletiva é recusada sem escrita; o apresentado leva o arquivo do digitalizado; cada registro é uma
 // linha nova (sequência, conferente, instante), o recusado depois do apresentado volta a bloquear a entrada no bloco,
 // e nada é apagado; a sessão de outro estabelecimento recebe 404 sem escrita.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import type { EstadoAgendamento } from '@sgh/dominio-cirurgia';
+import { randomUUID } from 'node:crypto';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
@@ -21,7 +24,7 @@ const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const P = 'c1128dc';
 const P2 = `${P}b`;
-const TIPOS = [`${P}-TCLE`.toUpperCase(), `${P}-EXA`.toUpperCase()];
+const TIPOS = [`${P}-TCLE`.toUpperCase(), `${P}-EXA`.toUpperCase(), `${P}-OUT`.toUpperCase()];
 
 async function limpar(e: Escritor): Promise<void> {
   const est = 'SELECT id FROM estabelecimento WHERE codigo = ?';
@@ -29,7 +32,10 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM documento_cirurgia_apresentado WHERE agendamento_cirurgico_id IN (${ag})`, [
     P,
   ]);
-  await e.executar(`DELETE FROM documento_exigido_cirurgia WHERE estabelecimento_id = (${est})`, [P]);
+  await e.executar(
+    'DELETE FROM documento_exigido_cirurgia WHERE estabelecimento_id IN (SELECT id FROM estabelecimento WHERE codigo IN (?, ?))',
+    [P, P2],
+  );
   await e.executar(`DELETE FROM documento_digitalizado WHERE estabelecimento_id = (${est})`, [P]);
   await e.executar(`DELETE FROM arquivo WHERE estabelecimento_id = (${est})`, [P]);
   await e.executar(
@@ -41,7 +47,7 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM sala_cirurgica WHERE estabelecimento_id = (${est})`, [P]);
   await e.executar(`DELETE FROM unidade_cirurgica WHERE estabelecimento_id = (${est})`, [P]);
   await e.executar(`DELETE FROM unidade_assistencial WHERE estabelecimento_id = (${est})`, [P]);
-  await e.executar('DELETE FROM tipo_documento_pre_operatorio WHERE codigo IN (?, ?)', TIPOS);
+  await e.executar('DELETE FROM tipo_documento_pre_operatorio WHERE codigo IN (?, ?, ?)', TIPOS);
   await e.executar('DELETE FROM carater_cirurgia WHERE codigo = ?', [`${P}-ELE`]);
   await limparTrilhaDaMassa(e, { codigos: [P, P2] });
   await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, P2]);
@@ -56,11 +62,12 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosCirurgiaPropria contra o MariaDB (con
     login: string;
     est: number;
     ag: number;
+    sala: number;
     procedimento: number;
     digitalizado: number;
     arquivo: number;
   };
-  const tipo: Record<'tcle' | 'exa', number> = { tcle: 0, exa: 0 };
+  const tipo: Record<'tcle' | 'exa' | 'out', number> = { tcle: 0, exa: 0, out: 0 };
   const ctx = (hospital = P) => ({ cliente: CLIENTE, hospital, usuario: m.usuario, correlacao: P });
   const ctxCc = () => ({ cliente: CLIENTE, estabelecimento: m.est, usuario: m.usuario, correlacao: P });
   const ler = (sql: string, p: unknown[] = []) =>
@@ -76,7 +83,7 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosCirurgiaPropria contra o MariaDB (con
     );
   const situacao = async () =>
     String((await ler('SELECT situacao FROM agendamento_cirurgico WHERE id = ?', [m.ag]))[0]?.['situacao']);
-  const mudar = async (estado: 'confirmado' | 'no-bloco') => {
+  const mudar = async (estado: 'confirmado' | 'no-bloco' | 'realizado') => {
     const e = await cirurgia.estado(ctxCc(), m.ag);
     return cirurgia.gravarSgh(
       ctxCc(),
@@ -98,6 +105,44 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosCirurgiaPropria contra o MariaDB (con
     );
   };
   const recusa422 = { problema: { status: 422 } };
+  // O ato cirúrgico do agendamento (registro com a incisão); a conferência dos documentos vem antes do atendimento.
+  const registrarAto = () => {
+    const sem = { usado: false, descricao: null };
+    return cirurgia.executar(
+      ctxCc(),
+      'cirurgia.registrarCirurgia',
+      {
+        agendamento: m.ag,
+        reg: m.ag,
+        data: '2030-03-10',
+        sala: m.sala,
+        convenio: 0,
+        porte: 'P',
+        potencialContaminacao: 'L',
+        carater: 1,
+        tipoAnestesia: 0,
+        inicio: '08:10',
+        fim: '09:00',
+        inicioAnestesia: null,
+        fimAnestesia: null,
+        cid10: null,
+        pressao: null,
+        pulso: null,
+        supuracao: false,
+        usos: { tubo: sem, antimicrobiano: sem, sonda: sem, cateter: sem, puncao: sem },
+        procedimentos: [
+          {
+            procedimento: m.procedimento,
+            especialidade: 1,
+            tecnica: 1,
+            equipe: { cirurgiao: { id: 1, cod: 1 } },
+          },
+        ],
+        extensao: { entradaSala: '08:00', incisao: '08:10', saidaSala: '09:10', asa: null, observacao: null },
+      },
+      { ...ctxCc(), chaveIdempotencia: `${P}-${randomUUID()}` },
+    );
+  };
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
@@ -166,7 +211,7 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosCirurgiaPropria contra o MariaDB (con
          VALUES (?, ?, ?, ?, 'TERMO SINTETICO', ?, ?, ?)`,
         [est, paciente, tipoArquivo, arquivo, agora, usuario, agora],
       );
-      return { usuario, login, est, ag, procedimento, digitalizado, arquivo };
+      return { usuario, login, est, ag, sala, procedimento, digitalizado, arquivo };
     });
     porta = new PortaDocumentosCirurgiaPropria(nucleo, CLIENTE);
     cirurgia = new PortaCirurgiaPropria(nucleo);
@@ -194,8 +239,51 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosCirurgiaPropria contra o MariaDB (con
     tipo.exa = Number(
       (await ler('SELECT id FROM tipo_documento_pre_operatorio WHERE codigo = ?', [TIPOS[1]]))[0]?.['id'],
     );
+    // A exigência em toda cirurgia não se cria pelo estabelecimento: o pedido com ela é recusado, sem escrita.
+    await expect(
+      porta.incluirTipo(ctx(), {
+        codigo: TIPOS[2],
+        descricao: 'Outro sintético',
+        categoria: 'outro',
+        obrigatorio: true,
+      }),
+    ).rejects.toMatchObject({ problema: { status: 400 } });
+    expect(await ler('SELECT id FROM tipo_documento_pre_operatorio WHERE codigo = ?', [TIPOS[2]])).toEqual(
+      [],
+    );
+    await porta.incluirTipo(ctx(), { codigo: TIPOS[2], descricao: 'Outro sintético', categoria: 'outro' });
+    const versaoTipo = async (id: number) =>
+      (await porta.configuracao(ctx())).tipos.find((x) => x.id === id)!;
+    tipo.out = Number(
+      (await ler('SELECT id FROM tipo_documento_pre_operatorio WHERE codigo = ?', [TIPOS[2]]))[0]?.['id'],
+    );
+    await porta.ativarTipo(ctx(), tipo.out, { versao: (await versaoTipo(tipo.out)).versao, ativo: false });
+    await expect(
+      porta.incluirRegra(ctx(), { tipo: tipo.out, procedimento: m.procedimento }),
+    ).rejects.toMatchObject(recusa422);
+    await porta.ativarTipo(ctx(), tipo.out, { versao: (await versaoTipo(tipo.out)).versao, ativo: true });
+    expect(
+      await ler(
+        'SELECT codigo, ativo, obrigatorio, versao FROM tipo_documento_pre_operatorio WHERE codigo IN (?, ?, ?) ORDER BY codigo',
+        TIPOS,
+      ),
+    ).toEqual(
+      [
+        { codigo: TIPOS[0], ativo: 1, obrigatorio: 0, versao: 1 },
+        { codigo: TIPOS[1], ativo: 1, obrigatorio: 0, versao: 1 },
+        { codigo: TIPOS[2], ativo: 1, obrigatorio: 0, versao: 3 },
+      ].sort((a, b) => String(a.codigo).localeCompare(String(b.codigo))),
+    );
     await expect(porta.incluirRegra(ctx(), { tipo: tipo.tcle })).rejects.toMatchObject(recusa422);
     await porta.incluirRegra(ctx(), { tipo: tipo.tcle, bloqueiaEntradaSala: true, geraPendencia: false });
+    // O tipo com regra ativa (aqui e no outro hospital) não se desativa; a regra do outro hospital não vale aqui.
+    await porta.incluirRegra(ctx(P2), { tipo: tipo.out, procedimento: m.procedimento });
+    await expect(
+      porta.ativarTipo(ctx(), tipo.out, { versao: (await versaoTipo(tipo.out)).versao, ativo: false }),
+    ).rejects.toMatchObject(recusa422);
+    await expect(
+      porta.ativarTipo(ctx(), tipo.tcle, { versao: (await versaoTipo(tipo.tcle)).versao, ativo: false }),
+    ).rejects.toMatchObject(recusa422);
     await porta.incluirRegra(ctx(), { tipo: tipo.exa, procedimento: m.procedimento, validadeDias: 30 });
     await expect(
       porta.incluirRegra(ctx(), { tipo: tipo.exa, procedimento: m.procedimento }),
@@ -265,6 +353,11 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosCirurgiaPropria contra o MariaDB (con
       }),
     ).rejects.toMatchObject(recusa422);
     await expect(mudar('no-bloco')).rejects.toThrow(/não começa/);
+    // A ida direta de confirmado a realizado e o registro do ato com a incisão também exigem o consentimento.
+    await expect(mudar('realizado')).rejects.toThrow(/realizada/);
+    expect(await situacao()).toBe('confirmado');
+    await expect(registrarAto()).rejects.toThrow(/documentos-pendentes|realizada/);
+    expect(await ler('SELECT id FROM ato_cirurgico WHERE agendamento_cirurgico_id = ?', [m.ag])).toEqual([]);
     await porta.registrar(ctx(), m.ag, {
       tipo: tipo.tcle,
       situacao: 'apresentado',

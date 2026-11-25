@@ -57,6 +57,7 @@ const esquemaConfiguracao = z.object({
   tipos: z.array(
     z.object({
       id: z.number(),
+      versao: z.number(),
       codigo: z.string(),
       descricao: z.string(),
       categoria: z.string(),
@@ -113,8 +114,11 @@ export const incluirTipoDocumento = (p: {
   descricao: string;
   categoria: string;
   validadeDias: number | null;
-  obrigatorio: boolean;
 }) => enviar(`${C}/tipos`, p, gravado, novaChave('documento-tipo'));
+
+/** Ativa ou desativa o tipo pela versão lida (nada apagado; o servidor recusa o tipo em uso). */
+export const ativarTipoDocumento = (tipo: number, versao: number, ativo: boolean) =>
+  enviar(`${C}/tipos/${tipo}/ativo`, { versao, ativo }, gravado, novaChave('documento-tipo-ativo'));
 
 export const incluirRegraDocumento = (p: {
   tipo: number;

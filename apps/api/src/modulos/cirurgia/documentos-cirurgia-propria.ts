@@ -9,10 +9,13 @@
 //   - registrar: uma linha nova em documento_cirurgia_apresentado com a sequência seguinte (apresentado, dispensado ou
 //     recusado), o conferente e o instante da conferência; o apresentado pode levar o arquivo do documento
 //     digitalizado do mesmo paciente. O registro anterior fica (o mais recente é o que vale); nada é apagado;
-//   - configuração: o tipo de documento (código único) e a regra do estabelecimento (sem regra igual; consentimento e
-//     avaliação sempre bloqueiam); a regra é desativada pela versão, nunca apagada.
+//   - configuração: o tipo de documento (código único; cadastro comum do cliente, nunca exigido em toda cirurgia por
+//     aqui: a exigência geral de um estabelecimento é a regra dele sem procedimento, fonte nem faixa) e a regra do
+//     estabelecimento (sem regra igual; consentimento e avaliação sempre bloqueiam); o tipo e a regra são desativados
+//     pela versão, nunca apagados (o tipo exigido em toda cirurgia ou com regra ativa em algum estabelecimento fica).
 // Cirurgia de outro estabelecimento: 404 do agendamento, sem escrita.
 import {
+  conferirAtivacaoTipo,
   conferirRegistroDocumento,
   conferirRegraDocumento,
   conferirTipoDocumento,
@@ -234,7 +237,6 @@ const esquemaTipo = z
     descricao: z.string().max(150),
     categoria: z.string().max(30),
     validadeDias: z.number().int().nullish(),
-    obrigatorio: z.boolean().optional(),
     geraPendencia: z.boolean().optional(),
   })
   .strict();
@@ -382,7 +384,7 @@ export class PortaDocumentosCirurgiaPropria extends PortaEstabelecimentoPropria 
   configuracao(c: ContextoPortaPropria) {
     return this.ler(c, 'configuracao', async (l, est) => {
       const tipos = await l.consultar<Linha>(
-        `SELECT id, codigo, descricao, categoria, ativo, obrigatorio, validade_dias, gera_pendencia
+        `SELECT id, versao, codigo, descricao, categoria, ativo, obrigatorio, validade_dias, gera_pendencia
            FROM tipo_documento_pre_operatorio ORDER BY descricao`,
       );
       const regras = await l.consultar<Linha>(
@@ -411,6 +413,7 @@ export class PortaDocumentosCirurgiaPropria extends PortaEstabelecimentoPropria 
       return {
         tipos: tipos.map((t) => ({
           id: num(t['id']),
+          versao: num(t['versao']),
           codigo: String(t['codigo']),
           descricao: String(t['descricao']),
           categoria: String(t['categoria']),
@@ -450,7 +453,11 @@ export class PortaDocumentosCirurgiaPropria extends PortaEstabelecimentoPropria 
     });
   }
 
-  /** Inclui o tipo de documento (código único). */
+  /**
+   * Inclui o tipo de documento (código único). O tipo é do cadastro comum do cliente e entra sem a exigência geral: quem
+   * exige o documento é a regra do estabelecimento (a regra sem procedimento, fonte nem faixa vale para toda cirurgia
+   * dele), para um hospital nunca impor exigência aos outros.
+   */
   async incluirTipo(c: ContextoPortaPropria, entrada: unknown) {
     const e = entradaValida(esquemaTipo, entrada);
     return this.gravar(c, 'cirurgia.documentos.tipo-incluir', [TIPO], async (tx) => {
@@ -474,7 +481,7 @@ export class PortaDocumentosCirurgiaPropria extends PortaEstabelecimentoPropria 
         descricao: e.descricao.trim(),
         categoria: e.categoria,
         validade_dias: e.validadeDias ?? null,
-        obrigatorio: e.obrigatorio ?? false,
+        obrigatorio: false,
         gera_pendencia: e.geraPendencia ?? true,
       });
       return { tabela: TIPO, id: novo };
@@ -541,6 +548,35 @@ export class PortaDocumentosCirurgiaPropria extends PortaEstabelecimentoPropria 
       if (!r) throw naoEncontrado('Regra de documento');
       await tx.alterar(REGRA, regra, e.versao, { ativo: e.ativo });
       return { tabela: REGRA, id: regra };
+    });
+  }
+
+  /**
+   * Ativa ou desativa o tipo de documento pela versão lida (nunca apagado). Desativar recusa o tipo exigido em toda
+   * cirurgia e o tipo com regra ativa em algum estabelecimento (a deste primeiro se desativa; a dos outros fica).
+   */
+  async ativarTipo(c: ContextoPortaPropria, tipo: number, entrada: unknown) {
+    const e = entradaValida(esquemaAtivo, entrada);
+    return this.gravar(c, 'cirurgia.documentos.tipo-ativar', [TIPO], async (tx, est) => {
+      const [t] = await tx.consultarParaAtualizar<Linha>(
+        'SELECT id, obrigatorio FROM tipo_documento_pre_operatorio WHERE id = ?',
+        [tipo],
+      );
+      if (!t) throw naoEncontrado('Tipo de documento');
+      const uso = await tx.uma(
+        `SELECT COALESCE(SUM(estabelecimento_id = ?), 0) AS aqui, COALESCE(SUM(estabelecimento_id <> ?), 0) AS outros
+           FROM documento_exigido_cirurgia WHERE tipo_documento_pre_operatorio_id = ? AND ativo`,
+        [est.id, est.id, tipo],
+      );
+      const problemas = conferirAtivacaoTipo({
+        ativo: e.ativo,
+        obrigatorioGeral: bool(t['obrigatorio']),
+        regrasAtivasNoEstabelecimento: num(uso?.['aqui']),
+        regrasAtivasEmOutros: num(uso?.['outros']),
+      });
+      if (problemas.length) throw recusaRegra('Tipo de documento não desativado', problemas);
+      await tx.alterar(TIPO, tipo, e.versao, { ativo: e.ativo });
+      return { tabela: TIPO, id: tipo };
     });
   }
 }

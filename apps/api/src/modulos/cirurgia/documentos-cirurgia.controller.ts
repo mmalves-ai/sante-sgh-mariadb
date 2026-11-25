@@ -4,6 +4,7 @@
 //   POST /api/cirurgia/agendamentos/:id/documentos            { tipo, situacao, apresentadoEm?, validoAte?, ... }
 //   GET  /api/cirurgia/documentos-exigidos                    tipos, regras do estabelecimento e opções
 //   POST /api/cirurgia/documentos-exigidos/tipos              { codigo, descricao, categoria, validadeDias?, ... }
+//   POST /api/cirurgia/documentos-exigidos/tipos/:tipo/ativo  { versao, ativo } (nada apagado)
 //   POST /api/cirurgia/documentos-exigidos/regras             { tipo, procedimento?, fontePagadora?, ... }
 //   POST /api/cirurgia/documentos-exigidos/regras/:regra/ativo { versao, ativo } (nada apagado)
 import {
@@ -80,6 +81,18 @@ export class DocumentosCirurgiaController {
   @AuditadoNoHandler('tipo de documento pré-operatório incluído pelo executor (trilha na mesma transação)')
   incluirTipo(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.incluirTipo(c, corpo));
+  }
+
+  @Post('documentos-exigidos/tipos/:tipo/ativo')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_DOCUMENTOS_CIRURGIA.configuracaoEditar)
+  @AuditadoNoHandler('tipo de documento pré-operatório ativado ou desativado pelo executor (nada apagado)')
+  ativarTipo(
+    @Req() req: RequisicaoAutorizada,
+    @Param('tipo', ParseIntPipe) tipo: number,
+    @Body() corpo: unknown,
+  ) {
+    return this.com(req, (p, c) => p.ativarTipo(c, tipo, corpo));
   }
 
   @Post('documentos-exigidos/regras')

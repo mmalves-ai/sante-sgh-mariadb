@@ -17,6 +17,7 @@ import { useI18n } from 'vue-i18n';
 import { usarSessao } from '../../../casca/sessao/sessao.js';
 import {
   ativarRegraDocumento,
+  ativarTipoDocumento,
   incluirRegraDocumento,
   incluirTipoDocumento,
   lerConfiguracaoDocumentos,
@@ -44,7 +45,9 @@ const { t } = useI18n({
       descricao: 'Descrição',
       categoria: 'Categoria',
       validade: 'Validade (dias)',
-      obrigatorioTodas: 'Exigido em toda cirurgia',
+      obrigatorioTodas: 'Exigido em toda cirurgia (cadastro da plataforma)',
+      dicaGeral:
+        'Para exigir o documento em toda cirurgia deste estabelecimento, inclua a regra sem procedimento, fonte pagadora nem faixa etária.',
       incluirTipo: 'Incluir tipo',
       tipo: 'Documento',
       procedimento: 'Procedimento (vazio: todos)',
@@ -85,7 +88,6 @@ const nTipo = ref({
   descricao: '',
   categoria: 'consentimento',
   validade: '',
-  obrigatorio: false,
 });
 const validadeNum = (v: string) => (v.trim() === '' ? null : Number(v));
 const problemasTipo = computed(() =>
@@ -173,7 +175,6 @@ const gravarTipo = () =>
         descricao: nTipo.value.descricao.trim(),
         categoria: nTipo.value.categoria,
         validadeDias: validadeNum(nTipo.value.validade),
-        obrigatorio: nTipo.value.obrigatorio,
       }),
     () => {
       nTipo.value = {
@@ -181,7 +182,6 @@ const gravarTipo = () =>
         descricao: '',
         categoria: 'consentimento',
         validade: '',
-        obrigatorio: false,
       };
     },
   );
@@ -216,6 +216,12 @@ const alternar = (id: number, versao: number, ativo: boolean) =>
     () => ativarRegraDocumento(id, versao, ativo),
     () => undefined,
   );
+
+const alternarTipo = (id: number, versao: number, ativo: boolean) =>
+  rodar(
+    () => ativarTipoDocumento(id, versao, ativo),
+    () => undefined,
+  );
 </script>
 
 <template>
@@ -227,11 +233,18 @@ const alternar = (id: number, versao: number, ativo: boolean) =>
         <h2 id="tipos-titulo">{{ t('tipos') }}</h2>
         <p v-if="!d.tipos.length">{{ t('nenhumTipo') }}</p>
         <ul v-else data-testid="documentos-tipos">
-          <li v-for="x in d.tipos" :key="x.id" :data-testid="`tipo-${x.codigo}`">
+          <li v-for="x in d.tipos" :key="x.id" :data-testid="`tipo-${x.codigo}`" :data-ativo="x.ativo">
             <strong>{{ x.descricao }}</strong> ({{ x.codigo }}) · {{ t(`categorias.${x.categoria}`) }}
             <span v-if="x.obrigatorio"> · {{ t('obrigatorioTodas') }}</span>
             <span v-if="x.validadeDias"> · {{ t('efeitoValidade', { n: x.validadeDias }) }}</span>
             <span v-if="!x.ativo"> · {{ t('inativa') }}</span>
+            <SanteBotao
+              v-if="podeEditar && !x.obrigatorio"
+              variante="texto"
+              :rotulo="x.ativo ? t('desativar') : t('reativar')"
+              :data-testid="`tipo-alternar-${x.codigo}`"
+              @acionar="alternarTipo(x.id, x.versao, !x.ativo)"
+            />
           </li>
         </ul>
         <form v-if="podeEditar" class="formulario" data-testid="tipo-form" @submit.prevent="gravarTipo">
@@ -259,10 +272,7 @@ const alternar = (id: number, versao: number, ativo: boolean) =>
             :max-bytes="4"
             data-testid="tipo-validade"
           />
-          <label
-            ><input v-model="nTipo.obrigatorio" type="checkbox" data-testid="tipo-obrigatorio" />
-            {{ t('obrigatorioTodas') }}</label
-          >
+          <small data-testid="tipo-dica-geral">{{ t('dicaGeral') }}</small>
           <small v-for="p in problemasTipo" :key="p.campo" class="erro-campo" data-testid="tipo-problema">{{
             p.mensagem
           }}</small>

@@ -850,12 +850,6 @@ const registrar = definirOperacao<RegistrarCirurgiaEntrada, ResultadoOperacao>({
       throw recusa('tempos-invalidos', 'O término tem de vir depois do início.', { campos: ['fim'] });
     if (t.problemas.length > 0)
       throw recusa('tempos-invalidos', t.problemas[0]?.texto ?? 'Tempos inválidos.');
-    const atendimento = await tx.uma(
-      'SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-      [e.reg, est(tx)],
-    );
-    if (!atendimento)
-      throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento.');
     if (e.agendamento !== null) {
       const a =
         (
@@ -872,7 +866,23 @@ const registrar = definirOperacao<RegistrarCirurgiaEntrada, ResultadoOperacao>({
         [e.agendamento],
       );
       if (ja) throw recusa('agendamento-ja-registrado', 'O agendamento já tem a cirurgia registrada.');
+      // Documentos obrigatórios (04-CC linha 104): o ato com a incisão é a cirurgia realizada e exige os documentos
+      // que bloqueiam (consentimento e avaliação pré-anestésica sempre que exigidos), como a entrada no bloco.
+      const docs = await exigenciasDaCirurgia(tx, est(tx), e.agendamento);
+      const documentos = conferirDocumentosCirurgia(
+        docs.exigidos,
+        docs.registros,
+        'realizado',
+        docs.dataCirurgia,
+      );
+      if (!documentos.ok) throw recusa(documentos.codigo, documentos.mensagem);
     }
+    const atendimento = await tx.uma(
+      'SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [e.reg, est(tx)],
+    );
+    if (!atendimento)
+      throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento.');
     const fuso = await fusoDe(tx);
     // As horas são do dia do ato; as que vêm depois da incisão e são menores viram o dia seguinte (meia-noite).
     const base = instante(`${e.data} ${e.inicio}`, fuso);
