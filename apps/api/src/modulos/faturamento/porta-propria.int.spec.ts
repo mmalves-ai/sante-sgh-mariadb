@@ -678,6 +678,38 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
     expect(Number(depois[1]!['estorno'])).toBe(1);
     expect(Number(depois[1]!['estornado'])).toBe(Number(receita[0]!['id']));
     expect(Number(depois[1]!['valor'])).toBe(Number(receita[0]!['valor']));
+    // Reemissão: fechada de novo com o mesmo total, a conta ganha o terceiro fato, vivo e com impressão nova (a chave
+    // única não deixa repetir a do primeiro, já estornado); fechar não repete o fato vivo.
+    await porta.executar(
+      c,
+      'faturamento.fecharConta',
+      { conta: ids.conta, versao: await versaoDaConta() },
+      op(),
+    );
+    const reemitida = await fatosDaConta();
+    expect(reemitida).toHaveLength(3);
+    expect(reemitida[2]).toMatchObject({ codigo: 'receitaConta', situacao: 'pendente' });
+    expect(Number(reemitida[2]!['estorno'])).toBe(0);
+    expect(reemitida[2]!['estornado']).toBeNull();
+    expect(Number(reemitida[2]!['valor'])).toBe(Number(receita[0]!['valor']));
+    const impressoes = await nucleo.lerSomente(
+      { cliente: CLIENTE, correlacao: 'leitura-teste-c2-093' },
+      (l) =>
+        l.consultar<{ impressao: string }>(
+          "SELECT impressao FROM fato_contabil WHERE entidade_origem = 'conta_hospitalar' AND entidade_origem_id = ? AND estorno = 0",
+          [ids.conta],
+        ),
+    );
+    expect(new Set(impressoes.map((r) => r.impressao)).size).toBe(2);
+    await porta.executar(
+      c,
+      'faturamento.reabrirConta',
+      { conta: ids.conta, versao: await versaoDaConta(), motivo: 'Correção sintética 2' },
+      op(),
+    );
+    const final = await fatosDaConta();
+    expect(final).toHaveLength(4);
+    expect(Number(final[3]!['estornado'])).toBe(Number(reemitida[2]!['id']));
   });
 
   it('etapas: iniciar e concluir a conferência; iniciar duas vezes é recusado', async () => {
