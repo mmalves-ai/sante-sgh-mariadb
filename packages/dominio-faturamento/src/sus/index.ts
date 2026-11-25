@@ -31,3 +31,5 @@ export * from './estabelecimento-sus.js';
 export * from './transplante.js';
 // F7 (06-SUS linha 54): programação físico-orçamentária, tetos financeiros e cotas (leitor, saldo, crítica, remanejamento).
 export * from './programacao-orcamentaria.js';
+// F8 (06-SUS linha 64): RAAS da atenção psicossocial e da atenção domiciliar (registro, crítica, continuação e arquivo).
+export * from './raas.js';
