@@ -462,9 +462,9 @@ export class ItensAgendaveisPropria {
         [marcacao],
       );
       const eq = await l.consultar(
-        `SELECT me.equipamento_saude_id, me.quantidade, e.descricao
+        `SELECT me.equipamento_saude_id, me.quantidade, e.nome AS descricao
            FROM marcacao_equipamento me JOIN equipamento_saude e ON e.id = me.equipamento_saude_id
-          WHERE me.marcacao_horario_id = ? AND me.excluido_em IS NULL ORDER BY e.descricao`,
+          WHERE me.marcacao_horario_id = ? AND me.excluido_em IS NULL ORDER BY e.nome`,
         [marcacao],
       );
       return {
