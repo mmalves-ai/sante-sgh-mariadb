@@ -1,6 +1,13 @@
 // F3.8, 07-FIN linha 89: taxa vigente da administradora e parcelas a receber, líquidas e com data prevista.
 import { describe, expect, it } from 'vitest';
-import { escolherTaxa, gerarParcelasRecebivel, type TaxaAdministradora } from './recebivel-cartao.js';
+import {
+  conferirTaxaAdministradora,
+  escolherTaxa,
+  gerarParcelasRecebivel,
+  planejarVigenciaTaxa,
+  repartirCreditoCartao,
+  type TaxaAdministradora,
+} from './recebivel-cartao.js';
 
 const base: TaxaAdministradora = {
   id: 1,
@@ -103,5 +110,69 @@ describe('gerarParcelasRecebivel', () => {
     const t = { ...base, tipo: 'valor' as const, percentual: null, valor: 5 };
     const m = gerarParcelasRecebivel({ valor: 4, parcelas: 1, dataVenda: '2026-11-24', taxa: t });
     expect('recusa' in m && m.recusa.codigo).toBe('taxa-cartao-maior-que-valor');
+  });
+});
+
+describe('cadastro da taxa com vigência', () => {
+  const nova = {
+    administradora: 10,
+    bandeira: null,
+    modalidade: 'credito' as const,
+    parcelaInicial: 1,
+    parcelaFinal: 6,
+    tipo: 'percentual' as const,
+    percentual: 2.5,
+    valor: null,
+    diasRepasse: 30,
+    vigenciaInicio: '2026-12-01',
+  };
+
+  it('confere faixa, percentual, valor fixo e prazo; débito só de 1 a 1', () => {
+    expect(conferirTaxaAdministradora(nova)).toBeNull();
+    expect(conferirTaxaAdministradora({ ...nova, parcelaFinal: 25 })?.codigo).toBe(
+      'taxa-cartao-faixa-invalida',
+    );
+    expect(conferirTaxaAdministradora({ ...nova, parcelaInicial: 7 })?.codigo).toBe(
+      'taxa-cartao-faixa-invalida',
+    );
+    expect(conferirTaxaAdministradora({ ...nova, modalidade: 'debito' })?.codigo).toBe(
+      'parcelas-cartao-a-vista',
+    );
+    expect(conferirTaxaAdministradora({ ...nova, percentual: 100 })?.codigo).toBe(
+      'taxa-cartao-percentual-invalido',
+    );
+    expect(conferirTaxaAdministradora({ ...nova, tipo: 'valor', valor: null })?.codigo).toBe(
+      'taxa-cartao-valor-invalido',
+    );
+    expect(conferirTaxaAdministradora({ ...nova, diasRepasse: 401 })?.codigo).toBe(
+      'taxa-cartao-repasse-invalido',
+    );
+  });
+
+  it('a taxa nova encerra na véspera a que valia, só da mesma bandeira e faixa que se cruza', () => {
+    const outraBandeira = { ...base, id: 2, bandeira: 7 };
+    const outraFaixa = { ...base, id: 3, parcelaInicial: 7, parcelaFinal: 12 };
+    const jaEncerrada = { ...base, id: 4, vigenciaInicio: '2025-01-01', vigenciaFim: '2025-12-31' };
+    const r = planejarVigenciaTaxa([base, outraBandeira, outraFaixa, jaEncerrada], nova);
+    expect(r).toEqual({ encerrar: [{ id: 1, vigenciaFim: '2026-11-30' }] });
+  });
+
+  it('recusa a taxa nova que começa no mesmo dia ou antes de uma que ainda vale', () => {
+    const r = planejarVigenciaTaxa([{ ...base, vigenciaInicio: '2026-12-01' }], nova);
+    expect('recusa' in r && r.recusa.codigo).toBe('taxa-cartao-vigencia-posterior');
+  });
+});
+
+describe('repartirCreditoCartao', () => {
+  it('crédito igual ao previsto: cada parcela recebe o seu líquido', () => {
+    expect(repartirCreditoCartao([97.01, 96.99], 194)).toEqual({ recebidos: [97.01, 96.99], diferenca: 0 });
+  });
+  it('a diferença para o previsto vai à primeira parcela; crédito que não cobre é recusado', () => {
+    expect(repartirCreditoCartao([97.01, 96.99], 193.5)).toEqual({
+      recebidos: [96.51, 96.99],
+      diferenca: -0.5,
+    });
+    const r = repartirCreditoCartao([10, 96.99], 50);
+    expect('recusa' in r && r.recusa.codigo).toBe('credito-cartao-invalido');
   });
 });

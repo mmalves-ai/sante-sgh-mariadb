@@ -170,3 +170,109 @@ export function gerarParcelasRecebivel(p: {
     }),
   };
 }
+
+// ── Cadastro da taxa, com vigência (nada é apagado: a taxa nova encerra a anterior na véspera) ──
+
+/** O que a tela manda para cadastrar uma taxa. */
+export type NovaTaxaAdministradora = Omit<TaxaAdministradora, 'id' | 'vigenciaFim' | 'ativo'>;
+
+/** O prazo máximo de repasse aceito, em dias. */
+export const DIAS_REPASSE_MAXIMO = 400;
+
+/** Confere a taxa antes de gravar: faixa de parcelas, percentual ou valor e prazo de repasse. */
+export function conferirTaxaAdministradora(t: NovaTaxaAdministradora): RecusaFinanceiro | null {
+  const faixa =
+    Number.isInteger(t.parcelaInicial) &&
+    Number.isInteger(t.parcelaFinal) &&
+    t.parcelaInicial >= 1 &&
+    t.parcelaFinal >= t.parcelaInicial &&
+    t.parcelaFinal <= PARCELAS_CARTAO_MAXIMO;
+  if (!faixa)
+    return recusaFin(
+      'taxa-cartao-faixa-invalida',
+      `A faixa de parcelas vai de 1 a ${PARCELAS_CARTAO_MAXIMO}, com a final igual ou maior que a inicial.`,
+      ['parcelaInicial', 'parcelaFinal'],
+    );
+  if (t.modalidade !== 'credito' && (t.parcelaInicial !== 1 || t.parcelaFinal !== 1))
+    return recusaFin(
+      'parcelas-cartao-a-vista',
+      'Débito, pré-pago e voucher são recebidos em parcela única: a faixa é de 1 a 1.',
+      ['parcelaInicial', 'parcelaFinal'],
+    );
+  if (t.tipo === 'percentual') {
+    if (t.percentual === null || !(t.percentual >= 0) || t.percentual >= 100)
+      return recusaFin('taxa-cartao-percentual-invalido', 'O percentual da taxa vai de 0 a menos de 100.', [
+        'percentual',
+      ]);
+  } else if (t.valor === null || !(t.valor >= 0))
+    return recusaFin('taxa-cartao-valor-invalido', 'O valor fixo da taxa não pode ser negativo.', ['valor']);
+  if (!Number.isInteger(t.diasRepasse) || t.diasRepasse < 0 || t.diasRepasse > DIAS_REPASSE_MAXIMO)
+    return recusaFin(
+      'taxa-cartao-repasse-invalido',
+      `O prazo de repasse vai de 0 a ${DIAS_REPASSE_MAXIMO} dias.`,
+      ['diasRepasse'],
+    );
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t.vigenciaInicio))
+    return recusaFin('taxa-cartao-vigencia-invalida', 'Informe o início da vigência.', ['vigenciaInicio']);
+  return null;
+}
+
+/**
+ * A vigência da taxa nova contra as que já existem para a mesma administradora, bandeira e modalidade com faixa de
+ * parcelas que se cruza: as que ainda valem no início da nova são encerradas na véspera (ficam no histórico e seguem
+ * valendo para as vendas antigas); se já existe uma que começa no mesmo dia ou depois, a nova é recusada (a vigência
+ * nova tem de começar depois da última).
+ */
+export function planejarVigenciaTaxa(
+  existentes: readonly TaxaAdministradora[],
+  nova: NovaTaxaAdministradora,
+): { encerrar: { id: number; vigenciaFim: string }[] } | { recusa: RecusaFinanceiro } {
+  const recusa = conferirTaxaAdministradora(nova);
+  if (recusa) return { recusa };
+  const mesmas = existentes.filter(
+    (t) =>
+      t.ativo &&
+      t.administradora === nova.administradora &&
+      t.bandeira === nova.bandeira &&
+      t.modalidade === nova.modalidade &&
+      t.parcelaInicial <= nova.parcelaFinal &&
+      t.parcelaFinal >= nova.parcelaInicial &&
+      (t.vigenciaFim === null || t.vigenciaFim >= nova.vigenciaInicio),
+  );
+  if (mesmas.some((t) => t.vigenciaInicio >= nova.vigenciaInicio))
+    return {
+      recusa: recusaFin(
+        'taxa-cartao-vigencia-posterior',
+        'Já existe taxa desta bandeira e faixa de parcelas com vigência no mesmo dia ou depois: a nova tem de começar depois dela.',
+        ['vigenciaInicio'],
+      ),
+    };
+  const vespera = somarDias(nova.vigenciaInicio, -1);
+  return { encerrar: mesmas.map((t) => ({ id: t.id, vigenciaFim: vespera })) };
+}
+
+/** O crédito da administradora repartido entre as parcelas baixadas: a diferença para o previsto vai à primeira. */
+export function repartirCreditoCartao(
+  liquidos: readonly number[],
+  creditado: number,
+): { recebidos: number[]; diferenca: number } | { recusa: RecusaFinanceiro } {
+  if (liquidos.length === 0)
+    return {
+      recusa: recusaFin('recebivel-cartao-vazio', 'Escolha ao menos uma parcela a receber.', ['parcelas']),
+    };
+  const previsto = liquidos.reduce((s, v) => s + emCentavos(v), 0);
+  const credito = emCentavos(creditado);
+  const primeira = emCentavos(liquidos[0] as number) + (credito - previsto);
+  if (credito <= 0 || primeira < 0)
+    return {
+      recusa: recusaFin(
+        'credito-cartao-invalido',
+        'O valor creditado tem de ser positivo e não pode ficar abaixo do previsto em mais do que a primeira parcela.',
+        ['valorCreditado'],
+      ),
+    };
+  return {
+    recebidos: liquidos.map((v, i) => (i === 0 ? primeira : emCentavos(v)) / 100),
+    diferenca: (credito - previsto) / 100,
+  };
+}
