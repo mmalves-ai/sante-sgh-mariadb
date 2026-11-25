@@ -366,6 +366,12 @@ const opTiposCh = computed(() => comVazio(t(`${D}.escolha`), op.value?.tiposCham
         t(`${D}.irPainel`)
       }}</RouterLink>
     </p>
+    <p v-else class="acoes">
+      <!-- C2-105: áreas e escala da atenção domiciliar. -->
+      <RouterLink :to="{ name: 'adt.domiciliar.areas' }" data-testid="domiciliar-ir-areas">{{
+        t('adt.areaEscalaDomiciliar.irAreas')
+      }}</RouterLink>
+    </p>
     <ErroAdt v-if="opcoes.isError.value" :erro="opcoes.error.value" />
     <ErroAdt v-if="painel.isError.value" :erro="painel.error.value" />
     <ErroAdt v-if="visao.isError.value" :erro="visao.error.value" />

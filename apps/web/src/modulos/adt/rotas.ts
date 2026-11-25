@@ -99,6 +99,13 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'internacao.internacao.ler' },
   },
   {
+    // C2-105, 03-PEP L143: áreas (faixas de CEP e equipe) e escala da atenção domiciliar, aberta pelo painel.
+    path: '/internacao/domiciliar/areas',
+    name: 'adt.domiciliar.areas',
+    component: () => import('./telas/AreaEscalaDomiciliarTela.vue'),
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
+  {
     // C2-079, 04-INT L84: visão do paciente na internação domiciliar (orçamento, transferência, chamados, visitas).
     path: `/internacao/domiciliar/paciente/:pac${reg}`,
     name: 'adt.domiciliar.paciente',
