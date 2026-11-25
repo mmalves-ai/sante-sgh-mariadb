@@ -23,6 +23,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C2-070 (06-FAT L26, F7): o item "Elegibilidade e autorização prévia" da recepção ganhou à mão a rota da tela de
 // elegibilidade do hospital (/faturamento/elegibilidade, leitura do atendimento); a contagem não muda.
 
+// C2-114 (06-SUS L54): o item "Programação, tetos e cotas" do faturamento SUS entrou à mão (mesmo motivo; F7); a
+// contagem acompanha.
 // C2-116 (08-SGO L98): o item "Regras de coparticipação" da operadora própria entrou à mão (mesmo motivo; F7); a
 // contagem acompanha.
 // C2-061 (08-SGO L107): o item "Trocas TISS com os prestadores" da operadora própria entrou à mão (mesmo motivo; F7);
@@ -137,7 +139,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo; F7 vai como fase 7); a contagem acompanha.
 // C2-094 (09-AREA linha 78): o item "Entrada de serviço tomado" do fiscal entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":504,"M":198,"P":57,"N":249};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":505,"M":198,"P":57,"N":250};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -401,6 +403,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.faturamento-sus.contas-sus-no-motor-de-convenios-sigtap-por-item","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Contas SUS no motor de convênios"],"titulo":"Contas SUS no motor de convênios","selo":"M","fase":3,"rota":"/faturamento/contas-sus","permissao":"faturamento.item.ler"},
   {"id":"faturamento.faturamento-sus.ciha-comunicacao-de-informacao-hospitalar","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","CIHA"],"titulo":"CIHA","selo":"N","fase":5,"rota":"/faturamento/sus/ciha","permissao":"faturamento.sus.ler"},
   {"id":"faturamento.faturamento-sus.contratualizacao-sus-metas-e-incentivos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Contratualização SUS"],"titulo":"Contratualização SUS","selo":"P","fase":6,"rota":"/faturamento/sus/contratualizacao","permissao":"faturamento.contratualizacao.ler"},
+  {"id":"faturamento.faturamento-sus.programacao-fisico-orcamentaria-tetos-e-cotas","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Programação, tetos e cotas"],"titulo":"Programação, tetos e cotas","selo":"N","fase":7,"rota":"/faturamento/sus/programacao","permissao":"faturamento.susProgramacao.ler"},
   {"id":"faturamento.faturamento-sus.historico-de-competencias-sigtap","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Histórico de competências SIGTAP"],"titulo":"Histórico de competências SIGTAP","selo":"M","fase":1,"rota":"/faturamento/sus/sigtap","permissao":"catalogo.item.ler"},
   {"id":"faturamento.faturamento-sus.medicos-solicitantes-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Médicos solicitantes SUS"],"titulo":"Médicos solicitantes SUS","selo":"P","fase":5,"rota":"/faturamento/sus/solicitantes","permissao":"faturamento.susSolicitante.ler"},
   {"id":"faturamento.faturamento-sus.transplantes-central-estadual","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Transplantes para a central estadual"],"titulo":"Transplantes para a central estadual","selo":"N","fase":7,"rota":"/faturamento/sus/transplantes","permissao":"faturamento.susTransplante.ler"},
