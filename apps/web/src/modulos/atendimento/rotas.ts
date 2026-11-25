@@ -38,6 +38,13 @@ export const rotasAtendimento: RouteRecordRaw[] = [
     meta: { permissao: 'documento.cadastro.editar' },
   },
   {
+    // 02-CAD linha 24: regra própria do plano da fonte pagadora (exigências, teto e pendência) e a prévia da crítica.
+    path: '/recepcao/atendimento/regras-plano',
+    name: 'atendimento.regrasPlano',
+    component: () => import('./telas/RegrasPlanoTela.vue'),
+    meta: { permissao: 'convenio.contrato.ler' },
+  },
+  {
     path: `/recepcao/atendimento/:reg${reg}/segurado`,
     name: 'atendimento.segurado',
     component: () => import('./telas/SeguradoTela.vue'),

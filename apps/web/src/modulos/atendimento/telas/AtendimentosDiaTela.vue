@@ -63,6 +63,8 @@ const locais = computed(() => [
 const podeIdentificar = pode('atendimento.atendimento.abrir');
 const veIndicadores = pode('atendimento.indicador.ler');
 const configuraImpressao = pode('documento.cadastro.editar');
+// 02-CAD linha 24: a regra do plano (exigências, teto e pendência) para quem lê o contrato do convênio.
+const veRegrasPlano = pode('convenio.contrato.ler');
 const dia = computed(() => lista.data.value?.data ?? '');
 const indicadores = useQuery({
   queryKey: computed(() => ['atendimento', 'indicadores', dia.value]),
@@ -95,6 +97,12 @@ const rotuloAcao = (a: Acao) => t(`atendimento.${a}.titulo`);
         to="/recepcao/atendimento/regras-impressao"
         data-testid="link-regras-impressao"
         >{{ t('regrasImpressao.atalho') }}</RouterLink
+      >
+      <RouterLink
+        v-if="veRegrasPlano"
+        to="/recepcao/atendimento/regras-plano"
+        data-testid="link-regras-plano"
+        >{{ t('regrasImpressao.atalhoPlano') }}</RouterLink
       >
       <RouterLink
         v-if="veIndicadores"

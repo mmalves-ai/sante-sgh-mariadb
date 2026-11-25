@@ -47,6 +47,7 @@ import { marcaDasCoberturas, motivoSemCarteira, preenchimentoDaCobertura } from 
 import { preenchimentoDaMarcacao, tipoInicialDaAbertura } from '../regras-tela.js';
 import AvisoAtendimento from '../componentes/AvisoAtendimento.vue';
 import ErroAtendimento from '../componentes/ErroAtendimento.vue';
+import RegraPlanoNaAbertura from '../componentes/RegraPlanoNaAbertura.vue';
 import { usarAtendimento } from '../usar-atendimento.js';
 
 type Tipo = (typeof CODIGOS_TIPO_ATENDIMENTO)[number];
@@ -394,6 +395,10 @@ const pronto = computed(
 const chave = ref(novaChave('abrir'));
 const erro = ref<unknown>(null);
 const ocupado = ref(false);
+// 02-CAD linha 24: os avisos da regra do plano que o servidor devolveu na abertura. Com aviso, a tela para e mostra
+// o texto antes de seguir para os impressos (a recepção lê o que o plano pede); sem aviso, segue direto.
+const avisoPlano = ref<{ alerta: string | null; orientacao: string | null; reg: number } | null>(null);
+const textoOuNulo = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v : null);
 
 async function abrir(): Promise<void> {
   const p = paciente.value;
@@ -450,6 +455,12 @@ async function abrir(): Promise<void> {
     );
     chave.value = novaChave('abrir');
     await cliente.invalidateQueries({ queryKey: ['atendimento'] });
+    const alerta = textoOuNulo(r.resultado['alertaPlanoMotivo']);
+    const orientacao = textoOuNulo(r.resultado['orientacaoPlano']);
+    if (alerta || orientacao) {
+      avisoPlano.value = { alerta, orientacao, reg: Number(r.resultado['reg']) };
+      return;
+    }
     await roteador.push(`/recepcao/atendimento/${Number(r.resultado['reg'])}/impressos?novo=sim`);
   } catch (x) {
     erro.value = x;
@@ -782,6 +793,14 @@ async function abrir(): Promise<void> {
         <SanteCampoTexto v-model="guia" :rotulo="t('atendimento.segurado.guia')" :max-bytes="20" />
         <SanteCampoTexto v-model="plano" :rotulo="t('atendimento.segurado.plano')" :max-bytes="40" />
       </div>
+      <RegraPlanoNaAbertura
+        :fonte="convenio === '' ? 0 : Number(convenio)"
+        :paciente="paciente?.id ?? null"
+        :carteira="matricula"
+        :validade-carteira="validadeCarteira"
+        :guia="guia"
+        :aberto="avisoPlano"
+      />
       <label
         ><input v-model="comResponsavel" type="checkbox" /> {{ t('atendimento.abrir.comResponsavel') }}</label
       >
@@ -805,7 +824,14 @@ async function abrir(): Promise<void> {
       />
     </section>
 
-    <p class="acoes">
+    <p v-if="avisoPlano" class="acoes">
+      <RouterLink
+        :to="`/recepcao/atendimento/${avisoPlano.reg}/impressos?novo=sim`"
+        data-testid="abrir-atd-seguir-impressos"
+        >{{ t('atendimento.impressos.titulo') }}</RouterLink
+      >
+    </p>
+    <p v-else class="acoes">
       <SanteBotao
         v-if="podeAbrir"
         :rotulo="t('atendimento.abrir.gravar')"

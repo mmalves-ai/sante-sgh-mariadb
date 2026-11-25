@@ -4,6 +4,8 @@ export const mensagensRegrasImpressao = {
   texto:
     'Quais fichas, guias e comprovantes saem para cada atendimento. A regra vale quando tudo o que ela preenche coincide com o atendimento; o que fica em branco vale para todos. Quando mais de uma regra do mesmo modelo vale, ganha a mais específica.',
   atalho: 'Regras de impressão',
+  /** 02-CAD linha 24: atalho da lista do dia para a regra do plano da fonte pagadora. */
+  atalhoPlano: 'Regras do plano',
   carregando: 'Carregando a configuração…',
   todos: 'Todos',
   sim: 'Sim',
