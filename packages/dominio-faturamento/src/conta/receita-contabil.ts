@@ -17,9 +17,13 @@ export type FatoReceita =
   | 'glosa' // a fonte pagadora não pagou o item (glosa registrada, em recurso)
   | 'glosa_aceita' // o hospital aceitou a glosa: perda definitiva, em conta própria
   | 'recurso_acatado' // a glosa revertida no recurso
-  | 'desconto'; // desconto concedido sobre a receita reconhecida (dedução)
+  | 'desconto' // desconto concedido sobre a receita reconhecida (dedução)
+  | 'previsao' // receita prevista do item lançado (competência antes do fechamento), só com a conta de receita prevista
+  | 'recebimento' // a fonte pagadora pagou o item (baixa): sai do "a receber" e entra na conta de entrada
+  | 'recebimento_estornado'; // a baixa foi estornada: volta ao "a receber"
 
-export type TipoAcaoReceita = 'receita' | 'estorno' | 'glosa' | 'recurso' | 'desconto';
+export type TipoAcaoReceita =
+  'receita' | 'estorno' | 'glosa' | 'recurso' | 'desconto' | 'previsao' | 'recebimento';
 
 export interface RegraContaReceita {
   readonly id: number;
@@ -58,6 +62,10 @@ export interface FatoFaturamento {
   readonly itemFaturavelId: number | null;
   readonly setorFuncionalId: number | null;
   readonly componente: string | null;
+  /** O item já tem a receita prevista reconhecida: o fechamento transfere da conta de receita prevista. */
+  readonly previsto?: boolean;
+  /** Conta contábil da conta de entrada do recebimento (banco ou caixa), para o recebido e o seu estorno. */
+  readonly contaEntradaId?: number | null;
 }
 
 export interface EventoReceita {
@@ -112,11 +120,17 @@ export function regraDoFatoReceita(
   return validas[0] ?? null;
 }
 
-/** Débito e crédito de cada fato pela regra (a conta transitória do cliente é o "a receber" da fonte pagadora). */
+/**
+ * Débito e crédito de cada fato pela regra (a conta transitória do cliente é o "a receber" da fonte pagadora).
+ * A receita prevista só existe na regra com a conta de receita prevista: sem ela, o fato 'previsao' não se aplica (nulo,
+ * nem evento nem pendência) e o fechamento reconhece direto na conta de receita. Com ela, a previsão vai a débito da
+ * receita prevista (a faturar) e a crédito da receita; o fechamento do item previsto transfere da prevista para o
+ * "a receber" (a receita não é reconhecida duas vezes).
+ */
 export function eventoDoFato(
   regras: readonly RegraContaReceita[],
   f: FatoFaturamento,
-): EventoReceita | PendenciaReceita {
+): EventoReceita | PendenciaReceita | null {
   if (!(Math.round(f.valor * 100) > 0)) return { chave: f.chave, motivo: 'valor zero ou negativo' };
   if (!dataValida(f.dataReferencia)) return { chave: f.chave, motivo: 'fato sem data de referência válida' };
   if (!f.chave.trim() || f.chave.length > 150)
@@ -124,6 +138,9 @@ export function eventoDoFato(
   const r = regraDoFatoReceita(regras, f);
   if (!r) return { chave: f.chave, motivo: 'nenhuma regra de conta contábil da receita casa com o fato' };
   const aReceber = r.contaTransitoriaClienteId;
+  const prevista = r.contaReceitaPrevistaId;
+  const origemReceita = f.previsto === true && prevista !== null ? prevista : r.contaReceitaId;
+  const entrada = f.contaEntradaId ?? null;
   const par = (
     tipoAcao: TipoAcaoReceita,
     debito: number | null,
@@ -144,10 +161,23 @@ export function eventoDoFato(
             regraId: r.id,
           };
   switch (f.fato) {
+    case 'previsao':
+      return prevista === null
+        ? null
+        : par('previsao', prevista, r.contaReceitaId, 'a conta de receita prevista');
     case 'fechamento':
-      return par('receita', aReceber, r.contaReceitaId, 'a conta a receber da fonte pagadora');
+      return par('receita', aReceber, origemReceita, 'a conta a receber da fonte pagadora');
     case 'reabertura':
-      return par('estorno', r.contaReceitaId, aReceber, 'a conta a receber da fonte pagadora');
+      return par('estorno', origemReceita, aReceber, 'a conta a receber da fonte pagadora');
+    case 'recebimento':
+      return par(
+        'recebimento',
+        entrada,
+        aReceber,
+        'a conta contábil da conta de entrada ou a conta a receber',
+      );
+    case 'recebimento_estornado':
+      return par('estorno', aReceber, entrada, 'a conta contábil da conta de entrada ou a conta a receber');
     case 'glosa':
       return par('glosa', r.contaGlosaId, aReceber, 'a conta de glosa ou a conta a receber');
     case 'glosa_aceita':
@@ -209,4 +239,43 @@ export function diferencaEventosReceita(
     if (!vivos.some((g) => g.chave === a.chave && igual(a, g))) incluir.push(a);
   }
   return { incluir, cancelar, divergentes };
+}
+
+/** O estorno de um evento: as mesmas contas trocadas, com a chave e a data do fato que estorna. */
+export function estornoDoEvento(g: EventoReceita, chave: string, dataReferencia: string): EventoReceita {
+  return {
+    chave,
+    dataReferencia,
+    tipoAcao: 'estorno',
+    debitoContaContabilId: g.creditoContaContabilId,
+    creditoContaContabilId: g.debitoContaContabilId,
+    valor: g.valor,
+    regraId: g.regraId,
+  };
+}
+
+const CHAVE_DO_CICLO = /^(conta:\d+:ciclo:(\d+):.+):(fechamento|desconto)$/;
+
+/**
+ * O fato 'reabertura' de cada ciclo de fechamento encerrado: o estorno espelha, valor a valor, o que o fechamento daquele
+ * ciclo contabilizou (receita e desconto), com a chave própria (":reabertura" e ":reabertura-desconto") e a data da
+ * reabertura. Só o contabilizado é estornado: o pendente do ciclo reaberto nunca chegou ao livro e a apuração o cancela.
+ * Um estorno por evento contabilizado, sempre a mesma chave: reabrir não duplica.
+ */
+export function estornosDaReabertura(
+  gravados: readonly EventoGravado[],
+  reaberturas: ReadonlyMap<number, string>,
+): EventoReceita[] {
+  const out: EventoReceita[] = [];
+  for (const g of gravados) {
+    if (g.situacao !== 'contabilizado') continue;
+    const m = CHAVE_DO_CICLO.exec(g.chave);
+    if (!m) continue;
+    const data = reaberturas.get(Number(m[2]));
+    if (!data) continue;
+    out.push(
+      estornoDoEvento(g, `${m[1]}:${m[3] === 'desconto' ? 'reabertura-desconto' : 'reabertura'}`, data),
+    );
+  }
+  return out;
 }

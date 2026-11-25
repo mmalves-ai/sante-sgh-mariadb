@@ -45,6 +45,7 @@ const fato: FatoFaturamento = {
 };
 const ev = (f: FatoFaturamento, regras = [base]): EventoReceita => {
   const e = eventoDoFato(regras, f);
+  if (e === null) throw new Error('esperava evento: o fato não se aplica');
   if (!('tipoAcao' in e)) throw new Error(`esperava evento: ${e.motivo}`);
   return e;
 };
