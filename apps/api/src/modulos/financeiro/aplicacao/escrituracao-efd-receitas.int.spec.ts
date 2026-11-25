@@ -39,6 +39,7 @@ describe.skipIf(SEM_BANCO)(
     let m: MassaFinanceiro;
     let pendente = 0;
     let municipio = 0;
+    let motivo = 0;
     const armazem = armazemFinanceiroMemoria();
     const operacoes = operacoesEscrituracao(armazem);
     const consultar = (sql: string, p: unknown[]) =>
@@ -71,9 +72,9 @@ describe.skipIf(SEM_BANCO)(
           `INSERT INTO nota_servico (estabelecimento_id, numero_rps, serie_rps, numero_nota, ambiente, data_emissao,
              competencia, municipio_prestacao_id, tipo_tomador, tomador_nome, tomador_documento, discriminacao,
              valor_servicos, valor_desconto_incondicionado, base_calculo, valor_pis, valor_cofins, valor_liquido, situacao,
-             criado_em)
+             cancelada_em, motivo_cancelamento_documento_fiscal_id, criado_em)
            VALUES (?, ?, 'RC', ?, ?, '2026-09-10 10:00:00', ?, ?, ?, 'TOMADOR SINTETICO L0207', ?,
-             'SERVICOS HOSPITALARES SINTETICOS', ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
+             'SERVICOS HOSPITALARES SINTETICOS', ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
           [
             m.est,
             rps,
@@ -90,6 +91,9 @@ describe.skipIf(SEM_BANCO)(
             o.cofins ?? 0,
             o.valor,
             o.situacao ?? 'autorizada',
+            // A cancelada leva a data e o motivo (ck_nota_servico_cancelamento).
+            o.situacao === 'cancelada' ? '2026-09-11 10:00:00' : null,
+            o.situacao === 'cancelada' ? motivo : null,
           ],
         ),
       );
@@ -110,6 +114,7 @@ describe.skipIf(SEM_BANCO)(
           [m.est],
         );
         await e.executar('UPDATE estabelecimento SET cnpj = NULL WHERE id = ? AND cnpj = ?', [m.est, CNPJ]);
+        await e.executar("DELETE FROM motivo_cancelamento_documento_fiscal WHERE codigo = 'L0207-CANC'", []);
       });
 
     beforeAll(async () => {
@@ -120,6 +125,11 @@ describe.skipIf(SEM_BANCO)(
           (await e.uma<{ id: number }>('SELECT id FROM municipio_ibge ORDER BY id LIMIT 1'))!.id,
         );
         await e.executar('UPDATE estabelecimento SET cnpj = ? WHERE id = ? AND cnpj IS NULL', [CNPJ, m.est]);
+        motivo = await e.inserir(
+          `INSERT INTO motivo_cancelamento_documento_fiscal (codigo, descricao, criado_em)
+           VALUES ('L0207-CANC', 'MOTIVO SINTETICO L0207', NOW(3))`,
+          [],
+        );
       });
       // Receita: 10000 (PJ, retidos PIS 65 e COFINS 300) + 5000 com desconto de 1000 (PF) = base 14000.
       await nota(970001, { valor: 10000, pis: 65, cofins: 300 });
