@@ -32,3 +32,5 @@ export * from './cartao-preferencia.js';
 export * from './kit-agendamento.js';
 // F3.4 (04-CC linha 91): cadastro do procedimento cirúrgico (grupo, porte, especialidade, natureza, caráter).
 export * from './procedimento-cirurgico.js';
+// F7 (04-CC linha 102): autorização prévia da cirurgia eletiva por etapas e a trava da confirmação sem senha.
+export * from './autorizacao-convenio.js';
