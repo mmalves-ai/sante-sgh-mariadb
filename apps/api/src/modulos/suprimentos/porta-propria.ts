@@ -51,6 +51,7 @@ import {
   type EscopoEstoque,
   exigeJustificativa,
   faixaDoValor,
+  conferirVencedoraDoContrato,
   planejarVencedor,
   podeConsolidarNota,
   type PropostaCotacao,
@@ -2929,17 +2930,13 @@ async function definirVencedorCotacao(tx: TxOperacao, est: number, e: DefinirVen
     'SELECT c.empresa_fornecedora_id FROM pedido_compra p JOIN contrato_fornecedor c ON c.id = p.contrato_fornecedor_id WHERE p.id = ?',
     [n(pedido['id'])],
   );
-  if (
-    doContrato &&
-    propostas.some(
-      (p) => e.vencedoras.includes(p.id) && p.fornecedor !== n(doContrato['empresa_fornecedora_id']),
-    )
-  )
-    throw recusa(
-      'fornecedor-diferente',
-      'O pedido está ligado ao contrato: a vencedora é a proposta do fornecedor do contrato.',
-      { campos: ['vencedoras'] },
-    );
+  recusar(
+    conferirVencedoraDoContrato(
+      propostas,
+      e.vencedoras,
+      doContrato ? n(doContrato['empresa_fornecedora_id']) : null,
+    ),
+  );
   if (
     exigeJustificativa(propostas, e.item, e.seq, e.vencedoras) &&
     (e.justificativa ?? '').trim().length < 10

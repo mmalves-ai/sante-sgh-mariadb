@@ -37,7 +37,7 @@ import { PORTA_OPME, type PortaOpme } from './opme-porta.js';
 import { PedidoGestaoController } from './pedido-gestao.controller.js';
 import { PortaOpmeMemoria } from './opme-porta-memoria.js';
 import { PORTA_SUPRIMENTOS, type PortaSuprimentos } from './porta.js';
-import { PortaSuprimentosMemoria } from './porta-memoria.js';
+import { type ContratosDoPedidoMemoria, PortaSuprimentosMemoria } from './porta-memoria.js';
 import { SuprimentosController } from './suprimentos.controller.js';
 import { VinculoReferenciaPrecoController } from './vinculo-referencia-preco.controller.js';
 import { PORTA_VINCULO_REFERENCIA, portaVinculoReferenciaIndisponivel } from './vinculo-referencia-preco.js';
@@ -138,12 +138,16 @@ export async function modulo(
       ? new (await import('./consignado-taxa.js')).PortaTaxaConsignacaoPropria(ctx.nucleo)
       : portaTaxaConsignacaoIndisponivel();
   // 05-SUP linha 27: os contratos com fornecedores gravam no banco próprio; sem o núcleo, a memória só em dev/ci com as
-  // fontes sintéticas; fora disso, 503 em tudo.
+  // fontes sintéticas; fora disso, 503 em tudo. Na memória, o pedido de compra com contrato grava o vínculo nela.
+  const ligarContratosMemoria = <T extends ContratosDoPedidoMemoria>(porta: T): T => {
+    if (suprimentos instanceof PortaSuprimentosMemoria) suprimentos.ligarContratos(porta);
+    return porta;
+  };
   const contrato =
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? (await import('./contrato-porta-propria.js')).portaContratoPropria(ctx.nucleo)
       : !ctx.nucleo && fontesSinteticas(ctx.env)
-        ? new (await import('./contrato-porta-memoria.js')).PortaContratoMemoria()
+        ? ligarContratosMemoria(new (await import('./contrato-porta-memoria.js')).PortaContratoMemoria())
         : (await import('./contrato-porta-propria.js')).portaContratoIndisponivel();
   const memoria = suprimentos.destino === 'memoria';
   const configuracaoMemoria =

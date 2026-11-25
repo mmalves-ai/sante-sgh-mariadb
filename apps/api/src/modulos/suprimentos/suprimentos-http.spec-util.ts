@@ -80,13 +80,16 @@ export async function montarAppSuprimentos(o: { hhmm?: string; semChaves?: reado
       }),
       suprimentos: async () => ({
         modulo: async (ctx): Promise<DynamicModule> => {
+          const suprimentos = new PortaSuprimentosMemoria(null);
           const base = await moduloSuprimentos(ctx, {
-            suprimentos: new PortaSuprimentosMemoria(null),
+            suprimentos,
             opme,
             manipulacao: new PortaManipulacaoMemoria(),
             consignado: portas.consignado,
             ...(o.semChaves ? { semChaves: o.semChaves } : {}),
           });
+          // 05-SUP linha 27: o pedido com contrato grava o vínculo nos mesmos contratos em memória que o teste lê.
+          suprimentos.ligarContratos(portas.contrato);
           // O OPME e a manipulação leem a porta do centro cirúrgico: o `modulo.ts` só os monta quando o registro já tem
           // o cirurgia; aqui entram sempre, com a porta do centro cirúrgico de memória.
           const doBase = new Set(base.controllers ?? []);

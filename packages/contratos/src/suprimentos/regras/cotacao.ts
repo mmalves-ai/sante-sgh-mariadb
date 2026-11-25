@@ -52,6 +52,26 @@ export function planejarVencedor(
   return { marcas, recusas };
 }
 
+/**
+ * O pedido ligado ao contrato do fornecedor (05-SUP linha 27) compra só desse fornecedor: toda proposta escolhida como
+ * vencedora tem de ser dele. Sem contrato (`null`), qualquer proposta do item vale.
+ */
+export function conferirVencedoraDoContrato(
+  propostas: readonly Pick<PropostaCotacao, 'id' | 'fornecedor'>[],
+  escolhidas: readonly number[],
+  fornecedorDoContrato: number | null,
+): RecusaSuprimentos | null {
+  if (fornecedorDoContrato === null) return null;
+  const deOutro = propostas.some((p) => escolhidas.includes(p.id) && p.fornecedor !== fornecedorDoContrato);
+  return deOutro
+    ? recusa(
+        'fornecedor-diferente',
+        'O pedido está ligado ao contrato: a vencedora é a proposta do fornecedor do contrato.',
+        ['vencedoras'],
+      )
+    : null;
+}
+
 /** Os vencedores de um item (rateio legítimo); vazio não é vencedor nem perdedor. */
 export function vencedoresDoItem(
   propostas: readonly PropostaCotacao[],

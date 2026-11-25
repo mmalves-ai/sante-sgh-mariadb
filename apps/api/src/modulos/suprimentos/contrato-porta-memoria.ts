@@ -23,7 +23,8 @@ import {
 } from '@sgh/dominio-suprimentos';
 import { recusa } from '@sgh/nucleo';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
-import type { GravadorContrato, PortaContrato } from './contrato-porta.js';
+import type { GravadorContrato, PortaContrato, VinculoContratoGravado } from './contrato-porta.js';
+import type { ContratosDoPedidoMemoria } from './porta-memoria.js';
 
 const FORNECEDORES = new Map([
   [7001, 'DISTRIBUIDORA SINTÉTICA ALFA LTDA'],
@@ -73,11 +74,22 @@ interface VinculoMem {
   criadoEm: string;
   chave: string;
 }
+/** O pedido que o contrato conhece: os sintéticos fixos e os criados na tela de pedidos (sem preço ao nascer). */
+interface PedidoContratoMem {
+  id: number;
+  ano: number;
+  doc: number;
+  fornecedores: readonly number[];
+  valor: number;
+  data: string;
+}
 type Mutavel<T> = { -readonly [K in keyof T]: T[K] };
 interface Estado {
   contratos: (Mutavel<ContratoGravado> & { chave: string })[];
   eventos: EventoMem[];
   vinculos: VinculoMem[];
+  /** Os pedidos de compra criados na sessão (a porta de suprimentos em memória). */
+  pedidosCompra: PedidoContratoMem[];
   seq: number;
 }
 
@@ -85,7 +97,7 @@ const recusar = (r: { codigo: string; mensagem: string; campos?: readonly string
   if (r) throw recusa(r.codigo, r.mensagem, r.campos ? { campos: r.campos } : {});
 };
 
-export class PortaContratoMemoria implements PortaContrato {
+export class PortaContratoMemoria implements PortaContrato, ContratosDoPedidoMemoria {
   readonly destino = 'memoria' as const;
   private readonly porEstabelecimento = new Map<number | null, Estado>();
 
@@ -94,7 +106,7 @@ export class PortaContratoMemoria implements PortaContrato {
   private e(c: Pick<ContextoPortaM18, 'estabelecimento'>): Estado {
     let s = this.porEstabelecimento.get(c.estabelecimento ?? null);
     if (!s) {
-      s = { contratos: [], eventos: [], vinculos: [], seq: 55_500 };
+      s = { contratos: [], eventos: [], vinculos: [], pedidosCompra: [], seq: 55_500 };
       this.porEstabelecimento.set(c.estabelecimento ?? null, s);
     }
     return s;
@@ -108,14 +120,22 @@ export class PortaContratoMemoria implements PortaContrato {
     throw new Error('O contrato não grava pelo executor.');
   }
 
+  /** Os pedidos que o contrato conhece: os sintéticos fixos e os da tela de pedidos desta sessão. */
+  private pedidos(s: Estado): PedidoContratoMem[] {
+    return [
+      ...PEDIDOS_CONTRATO_SINTETICOS.map((p) => ({ ...p, fornecedores: [p.fornecedor] })),
+      ...s.pedidosCompra,
+    ];
+  }
+
   private vinculosComValor(s: Estado, contrato: ContratoGravado): VinculoContrato[] {
     return s.vinculos
       .filter((v) => v.contrato === contrato.id)
       .map((v) => {
         const valor =
           v.tipo === 'pedido'
-            ? (PEDIDOS_CONTRATO_SINTETICOS.find(
-                (p) => p.id === v.legado && p.fornecedor === contrato.fornecedor,
+            ? (this.pedidos(s).find(
+                (p) => p.id === v.legado && p.fornecedores.every((f) => f === contrato.fornecedor),
               )?.valor ?? 0)
             : (TITULOS_CONTRATO_SINTETICOS.find((t) => t.id === v.legado)?.valor ?? 0);
         return {
@@ -206,16 +226,21 @@ export class PortaContratoMemoria implements PortaContrato {
     if (!x) return null;
     const ligado = (tipo: 'pedido' | 'titulo', legado: number) =>
       s.vinculos.some((v) => v.tipo === tipo && v.legado === legado);
-    const pedidos: CandidatoVinculo[] = PEDIDOS_CONTRATO_SINTETICOS.filter(
-      (p) => p.fornecedor === x.fornecedor && !ligado('pedido', p.id),
-    ).map((p) => ({
-      tipo: 'pedido',
-      ids: [p.id],
-      chaveNatural: `${p.ano}/${p.doc}`,
-      data: p.data,
-      valor: p.valor,
-      descricao: `Pedido ${p.doc}/${p.ano}`,
-    }));
+    const pedidos: CandidatoVinculo[] = this.pedidos(s)
+      .filter(
+        (p) =>
+          p.fornecedores.length > 0 &&
+          p.fornecedores.every((f) => f === x.fornecedor) &&
+          !ligado('pedido', p.id),
+      )
+      .map((p) => ({
+        tipo: 'pedido',
+        ids: [p.id],
+        chaveNatural: `${p.ano}/${p.doc}`,
+        data: p.data,
+        valor: p.valor,
+        descricao: `Pedido ${p.doc}/${p.ano}`,
+      }));
     const docs = new Map<number, (typeof TITULOS_CONTRATO_SINTETICOS)[number][]>();
     for (const t of TITULOS_CONTRATO_SINTETICOS)
       if (t.credor === x.fornecedor && !ligado('titulo', t.id))
@@ -259,6 +284,7 @@ export class PortaContratoMemoria implements PortaContrato {
       contratos: [...s.contratos],
       eventos: [...s.eventos],
       vinculos: [...s.vinculos],
+      pedidosCompra: [...s.pedidosCompra],
       seq: s.seq,
     };
     try {
@@ -405,94 +431,135 @@ export class PortaContratoMemoria implements PortaContrato {
         if (x.tipo === 'rescisao') c.situacao = 'rescindido';
         return { evento, contrato: id, tipo: x.tipo, valor, repetido: false };
       },
-      vincular: async (v) => {
-        const ja = s.vinculos.filter((y) => y.chave.startsWith(`${v.chave}:`));
-        if (ja.length)
-          return {
-            contrato: v.contrato.contrato,
-            vinculos: ja.map((y) => y.id),
-            saldoAntes: 0,
-            saldoDepois: 0,
-            repetido: true,
-          };
-        const c = contrato(v.contrato.contrato);
-        const evs = this.eventosDe(s, c.id);
-        const saldo = saldoContrato(c.valorInicial, evs, this.vinculosComValor(s, c));
-        const pedido =
-          v.tipo === 'pedido' ? PEDIDOS_CONTRATO_SINTETICOS.find((p) => p.id === v.ids[0]) : null;
-        const titulos =
-          v.tipo === 'titulo' ? TITULOS_CONTRATO_SINTETICOS.filter((t) => v.ids.includes(t.id)) : [];
-        if (v.tipo === 'pedido' && !pedido)
-          throw recusa('pedido-inexistente', 'O pedido não existe.', { campos: ['ids'] });
-        if (v.tipo === 'titulo' && titulos.length !== new Set(v.ids).size)
-          throw recusa('titulo-inexistente', 'Alguma parcela do título não existe.', { campos: ['ids'] });
-        const exc =
-          v.contrato.excecao === null
-            ? null
-            : evs.find((x) => x.id === v.contrato.excecao && x.tipo === 'excecao');
-        if (v.contrato.excecao !== null && !exc)
-          throw recusa('excecao-inexistente', 'A exceção aprovada não existe.', { campos: ['excecao'] });
-        const origem = v.contrato.pedidoDeOrigem;
-        recusar(
-          conferirVinculoContrato({
-            contrato: {
-              id: c.id,
-              situacao: c.situacao,
-              inicio: c.inicio,
-              fim: fimVigente(c.fimOriginal, evs),
-              fornecedor: c.fornecedor,
-            },
-            hoje: this.hoje(),
-            tipo: v.tipo,
-            fornecedores: pedido ? [pedido.fornecedor] : [...new Set(titulos.map((t) => t.credor))],
-            valor: v.tipo === 'titulo' && origem === null ? titulos.reduce((a, t) => a + t.valor, 0) : 0,
-            saldo: saldo.saldo,
-            excecao: exc
-              ? {
-                  id: exc.id,
-                  contrato: c.id,
-                  aprovador: exc.usuario,
-                  criadoEm: exc.criadoEm,
-                  usada: exc.usado,
-                }
-              : null,
-            solicitante: v.usuario,
-            jaVinculado: s.vinculos.some((y) => y.tipo === v.tipo && v.ids.includes(y.legado)),
-            pedidoDeOrigemValido:
-              origem === null
-                ? null
-                : s.vinculos.some((y) => y.id === origem && y.tipo === 'pedido' && y.contrato === c.id),
-          }),
-        );
-        const ids: number[] = [];
-        for (const [i, legado] of v.ids.entries()) {
-          const id = proximo();
-          const t = titulos.find((x) => x.id === legado);
-          s.vinculos.push({
-            id,
-            contrato: c.id,
-            tipo: v.tipo,
-            legado,
-            chaveNatural: pedido
-              ? `${pedido.ano}/${pedido.doc}`
-              : `${t!.credor}/${t!.doc}/${t!.parc}/${t!.tipo}/${t!.serie}`,
-            pedidoDeOrigem: origem,
-            excecao: i === 0 ? v.contrato.excecao : null,
-            usuario: v.usuario,
-            criadoEm: agora(),
-            chave: `${v.chave}:${i + 1}`,
-          });
-          ids.push(id);
-        }
-        const depois = saldoContrato(c.valorInicial, evs, this.vinculosComValor(s, c));
-        return {
-          contrato: c.id,
-          vinculos: ids,
-          saldoAntes: saldo.saldo,
-          saldoDepois: depois.saldo,
-          repetido: false,
-        };
-      },
+      vincular: async (v) => this.vincularAgora(s, v),
     };
+  }
+
+  /** O vínculo ao contrato (síncrono: a porta de suprimentos em memória o chama de dentro da operação do pedido). */
+  private vincularAgora(s: Estado, v: Parameters<GravadorContrato['vincular']>[0]): VinculoContratoGravado {
+    const proximo = () => (s.seq += 1);
+    const contrato = (id: number) => {
+      const x = s.contratos.find((y) => y.id === id);
+      if (!x) throw recusa('contrato-inexistente', 'O contrato não existe.');
+      return x;
+    };
+    const ja = s.vinculos.filter((y) => y.chave.startsWith(`${v.chave}:`));
+    if (ja.length)
+      return {
+        contrato: v.contrato.contrato,
+        vinculos: ja.map((y) => y.id),
+        saldoAntes: 0,
+        saldoDepois: 0,
+        repetido: true,
+      };
+    const c = contrato(v.contrato.contrato);
+    const evs = this.eventosDe(s, c.id);
+    const saldo = saldoContrato(c.valorInicial, evs, this.vinculosComValor(s, c));
+    const pedido = v.tipo === 'pedido' ? this.pedidos(s).find((p) => p.id === v.ids[0]) : null;
+    const titulos =
+      v.tipo === 'titulo' ? TITULOS_CONTRATO_SINTETICOS.filter((t) => v.ids.includes(t.id)) : [];
+    if (v.tipo === 'pedido' && !pedido)
+      throw recusa('pedido-inexistente', 'O pedido não existe.', { campos: ['ids'] });
+    if (v.tipo === 'titulo' && titulos.length !== new Set(v.ids).size)
+      throw recusa('titulo-inexistente', 'Alguma parcela do título não existe.', { campos: ['ids'] });
+    const exc =
+      v.contrato.excecao === null
+        ? null
+        : evs.find((x) => x.id === v.contrato.excecao && x.tipo === 'excecao');
+    if (v.contrato.excecao !== null && !exc)
+      throw recusa('excecao-inexistente', 'A exceção aprovada não existe.', { campos: ['excecao'] });
+    const origem = v.contrato.pedidoDeOrigem;
+    recusar(
+      conferirVinculoContrato({
+        contrato: {
+          id: c.id,
+          situacao: c.situacao,
+          inicio: c.inicio,
+          fim: fimVigente(c.fimOriginal, evs),
+          fornecedor: c.fornecedor,
+        },
+        hoje: this.hoje(),
+        tipo: v.tipo,
+        fornecedores: pedido ? pedido.fornecedores : [...new Set(titulos.map((t) => t.credor))],
+        valor: v.tipo === 'titulo' && origem === null ? titulos.reduce((a, t) => a + t.valor, 0) : 0,
+        saldo: saldo.saldo,
+        excecao: exc
+          ? {
+              id: exc.id,
+              contrato: c.id,
+              aprovador: exc.usuario,
+              criadoEm: exc.criadoEm,
+              usada: exc.usado,
+            }
+          : null,
+        solicitante: v.usuario,
+        jaVinculado: s.vinculos.some((y) => y.tipo === v.tipo && v.ids.includes(y.legado)),
+        pedidoDeOrigemValido:
+          origem === null
+            ? null
+            : s.vinculos.some((y) => y.id === origem && y.tipo === 'pedido' && y.contrato === c.id),
+      }),
+    );
+    const ids: number[] = [];
+    for (const [i, legado] of v.ids.entries()) {
+      const id = proximo();
+      const t = titulos.find((x) => x.id === legado);
+      s.vinculos.push({
+        id,
+        contrato: c.id,
+        tipo: v.tipo,
+        legado,
+        chaveNatural: pedido
+          ? `${pedido.ano}/${pedido.doc}`
+          : `${t!.credor}/${t!.doc}/${t!.parc}/${t!.tipo}/${t!.serie}`,
+        pedidoDeOrigem: origem,
+        excecao: i === 0 ? v.contrato.excecao : null,
+        usuario: v.usuario,
+        criadoEm: agora(),
+        chave: `${v.chave}:${i + 1}`,
+      });
+      ids.push(id);
+    }
+    const depois = saldoContrato(c.valorInicial, evs, this.vinculosComValor(s, c));
+    return {
+      contrato: c.id,
+      vinculos: ids,
+      saldoAntes: saldo.saldo,
+      saldoDepois: depois.saldo,
+      repetido: false,
+    };
+  }
+
+  /**
+   * 05-SUP linha 27: o pedido criado na tela de pedidos (porta de suprimentos em memória) nasce ligado ao contrato, pelas
+   * mesmas regras do vínculo; a recusa desfaz tudo, e o pedido passa a aparecer entre os vínculos do contrato.
+   */
+  vincularPedidoDaCompra(
+    c: Pick<ContextoPortaM18, 'estabelecimento'>,
+    m: Parameters<ContratosDoPedidoMemoria['vincularPedidoDaCompra']>[1],
+  ): { contrato: number; fornecedor: number } {
+    const s = this.e(c);
+    const antes: Estado = {
+      contratos: [...s.contratos],
+      eventos: [...s.eventos],
+      vinculos: [...s.vinculos],
+      pedidosCompra: [...s.pedidosCompra],
+      seq: s.seq,
+    };
+    try {
+      s.pedidosCompra.push({ ...m.pedido, fornecedores: [...m.pedido.fornecedores], valor: 0 });
+      const g = this.vincularAgora(s, {
+        contrato: m.contrato,
+        tipo: 'pedido',
+        ids: [m.pedido.id],
+        usuario: m.solicitante,
+        chave: `pedido-compra:${m.pedido.id}`,
+      });
+      const ct = s.contratos.find((y) => y.id === g.contrato)!;
+      return { contrato: g.contrato, fornecedor: ct.fornecedor };
+    } catch (err) {
+      Object.assign(s, antes);
+      throw err;
+    }
   }
 }

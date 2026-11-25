@@ -2,6 +2,8 @@
 // fonte sintética e a porta dos contratos EM MEMÓRIA (nada conecta a banco; pedidos e títulos SINTÉTICOS dos
 // fornecedores 7001 e 7002). As datas são relativas ao dia de hoje (a porta em memória usa o relógio da máquina).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PortaContratoMemoria } from './contrato-porta-memoria.js';
+import { PortaSuprimentosMemoria } from './porta-memoria.js';
 import { type AppSuprimentos, montarAppSuprimentos, type Sessao } from './suprimentos-http.spec-util.js';
 
 const C = '/api/suprimentos/contratos';
@@ -277,5 +279,133 @@ describe('contratos com fornecedores (regras 5 a 8)', () => {
     expect((await put(corpo)).statusCode).toBe(200);
     expect((await put(corpo)).statusCode).toBe(409);
     expect(await detalhe(id)).toMatchObject({ critico: true, indiceReajuste: 'igpm', garantia: 'caucao' });
+  });
+});
+
+// 05-SUP linha 27 (C1-032): na sessão sintética de dev/ci (sem o núcleo), o pedido de compra criado com contrato grava
+// o vínculo nos contratos em memória pelas mesmas regras da porta própria (conferirVinculoContrato), ou é recusado; nunca
+// aceita o contrato e o descarta. A vencedora da cotação do pedido ligado é só a proposta do fornecedor do contrato
+// (conferirVencedoraDoContrato). O efeito no MariaDB está em contrato-pedido-compra.int.spec.ts.
+const P = '/api/suprimentos/pedidos';
+let seqPedido = 0;
+const novoContrato = async (x: Record<string, unknown> = {}): Promise<number> => {
+  const r = await a.post(comprador, C, {
+    numero: `CT-MEM-${++seqPedido}/2026`,
+    fornecedor: 7001,
+    tipo: 'fornecimento',
+    objeto: 'Fornecimento sintético de material de consumo',
+    inicio: dia(-30),
+    fim: dia(300),
+    valor: 10_000,
+    indiceReajuste: 'ipca',
+    dataBase: dia(-30),
+    gestor: 'SINT.GERCOMPRAS',
+    fiscal: 'SINT.CONTRATOS',
+    ...x,
+  });
+  expect(r.statusCode).toBe(201);
+  return r.json().id as number;
+};
+// O pedido de compra tem corpo estrito (sem o campo `chave`): a chave vai só no cabeçalho, como na tela.
+const postSemChave = (url: string, payload: Record<string, unknown>) =>
+  a.app.inject({
+    method: 'POST',
+    url,
+    headers: { cookie: comprador.cookie, 'x-csrf': comprador.csrf, 'idempotency-key': a.novaChave() },
+    payload,
+  });
+const pedido = (fornecedores: number[], contrato?: number) =>
+  postSemChave(P, {
+    centroCusto: 101,
+    fornecedores,
+    itens: [{ item: 5005, quantidade: 4 }],
+    ...(contrato ? { contrato: { contrato } } : {}),
+  });
+const vinculosPedido = async (id: number) =>
+  ((await a.get(comprador, `${C}/${id}`)).json().vinculos as { tipo: string; chaveNatural: string }[]).filter(
+    (v) => v.tipo === 'pedido',
+  );
+
+describe('pedido de compra ligado ao contrato na memória (C1-032)', () => {
+  it('o pedido criado com contrato aparece entre os vínculos do contrato, com o histórico', async () => {
+    const id = await novoContrato();
+    const r = await pedido([7001], id);
+    expect(r.statusCode).toBe(200);
+    expect(r.json().ids).toMatchObject({ contrato: id });
+    const { ano, doc } = r.json().ids;
+    const v = await vinculosPedido(id);
+    expect(v).toHaveLength(1);
+    expect(v[0]!.chaveNatural).toBe(`${ano}/${doc}`);
+    // O pedido já ligado não volta como candidato do mesmo contrato.
+    const cand = (await a.get(comprador, `${C}/${id}/candidatos`)).json();
+    const lista = cand.itens as { chaveNatural: string }[];
+    expect(lista.some((x) => x.chaveNatural === `${ano}/${doc}`)).toBe(false);
+  });
+
+  it('recusa o pedido de outro fornecedor (nada é criado nem ligado)', async () => {
+    const id = await novoContrato();
+    const antes = (await a.get(comprador, P)).json();
+    const r = await pedido([7002], id);
+    expect(r.statusCode).toBe(409);
+    expect(r.json().codigo).toBe('fornecedor-diferente');
+    expect(await vinculosPedido(id)).toHaveLength(0);
+    expect((await a.get(comprador, P)).json()).toEqual(antes);
+  });
+
+  it('recusa o contrato inexistente', async () => {
+    const r = await pedido([7001], 999_999);
+    expect(r.statusCode).toBeGreaterThanOrEqual(400);
+    expect(r.json().codigo).toBe('contrato-inexistente');
+  });
+
+  it('a vencedora do pedido ligado é só a proposta do fornecedor do contrato', async () => {
+    const id = await novoContrato();
+    const r = await pedido([7001], id);
+    const { ano, doc } = r.json().ids;
+    const p = (await a.get(comprador, `${P}/${ano}/${doc}`)).json();
+    const proposta = p.propostas[0];
+    expect(proposta.fornecedor).toBe(7001);
+    const v = await postSemChave(`${P}/${ano}/${doc}/vencedor`, {
+      item: proposta.item,
+      seq: proposta.seq,
+      vencedoras: [proposta.id],
+    });
+    expect(v.statusCode).toBe(200);
+  });
+});
+
+describe('a porta de suprimentos em memória com e sem os contratos ligados', () => {
+  it('sem os contratos, recusa o contrato (nunca o descarta); ligada, aplica as regras do vínculo', async () => {
+    const sup = new PortaSuprimentosMemoria(null);
+    const contexto = { cliente: 'teste', estabelecimento: 1, usuario: 'SINT.CONTRATOS', correlacao: 't' };
+    await expect(
+      sup.executar(
+        contexto as never,
+        'suprimentos.criarPedido',
+        {
+          centroCusto: 101,
+          fornecedores: [7001],
+          itens: [{ item: 5005, quantidade: 1 }],
+          contrato: { contrato: 1 },
+        },
+        { chaveIdempotencia: 'k-1', usuario: 'SINT.CONTRATOS' } as never,
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'contrato-indisponivel' } });
+    // Ligada, a mesma porta grava o vínculo no contrato em memória.
+    const contratos = new PortaContratoMemoria();
+    sup.ligarContratos(contratos);
+    await expect(
+      sup.executar(
+        contexto as never,
+        'suprimentos.criarPedido',
+        {
+          centroCusto: 101,
+          fornecedores: [7001],
+          itens: [{ item: 5005, quantidade: 1 }],
+          contrato: { contrato: 1 },
+        },
+        { chaveIdempotencia: 'k-2', usuario: 'SINT.CONTRATOS' } as never,
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'contrato-inexistente' } });
   });
 });

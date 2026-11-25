@@ -69,6 +69,7 @@ import {
   escopoDasLinhas,
   exigeJustificativa,
   faixaDoValor,
+  conferirVencedoraDoContrato,
   planejarVencedor,
   podeConsolidarNota,
   proximoAFechar,
@@ -185,6 +186,8 @@ interface PedidoM {
     rateio: boolean;
   }[];
   aprovacao: { decisao: 'aprovado' | 'reprovado'; aprovador: string; em: string; nivel: number } | null;
+  /** 05-SUP linha 27: o fornecedor do contrato a que o pedido nasceu ligado (só ele vence a cotação). */
+  fornecedorDoContrato?: number | null;
 }
 interface EnvioM {
   id: number;
@@ -353,9 +356,30 @@ function recusar(r: RecusaSuprimentos | readonly RecusaSuprimentos[] | null): vo
   if (p) throw recusa(p.codigo, p.mensagem, p.campos ? { campos: [...p.campos] } : {});
 }
 
+/**
+ * Os contratos com fornecedores em memória (05-SUP linha 27), ligados pelo modulo.ts: o pedido de compra que nasce com
+ * contrato grava o vínculo lá, pelas mesmas regras do vínculo (conferirVinculoContrato), ou é recusado.
+ */
+export interface ContratosDoPedidoMemoria {
+  vincularPedidoDaCompra(
+    c: Pick<ContextoSuprimentos, 'estabelecimento'>,
+    m: {
+      contrato: { contrato: number; excecao: number | null; pedidoDeOrigem: number | null };
+      pedido: { id: number; ano: number; doc: number; fornecedores: readonly number[]; data: string };
+      solicitante: string;
+    },
+  ): { contrato: number; fornecedor: number };
+}
+
 export class PortaSuprimentosMemoria implements PortaSuprimentos {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();
+  private contratos: ContratosDoPedidoMemoria | null = null;
+
+  /** Liga os contratos em memória (o modulo.ts, em dev/ci): sem eles, o pedido com contrato é recusado. */
+  ligarContratos(contratos: ContratosDoPedidoMemoria): void {
+    this.contratos = contratos;
+  }
 
   constructor(private readonly catalogo: FonteEstadoOperacao | null) {}
 
@@ -743,13 +767,19 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    const resultado = this.aplicar(s, op, analise.data as never, loginDaOperacao(ctx));
+    const resultado = this.aplicar(s, op, analise.data as never, loginDaOperacao(ctx), c);
     s.idem.set(chave, { hash, resultado });
     return { resultado, repetida: false, trilha: null };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private aplicar(s: Estado, op: string, e: any, usuario: string): Record<string, number | string> {
+  private aplicar(
+    s: Estado,
+    op: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    e: any,
+    usuario: string,
+    c?: ContextoSuprimentos,
+  ): Record<string, number | string> {
     const r = this.competencia();
     const escopo = this.escopoDe(usuario);
     switch (op) {
@@ -826,6 +856,19 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
           escolhas: [],
           aprovacao: null,
         };
+        // 05-SUP linha 27: o pedido nasce ligado ao contrato do fornecedor, pelas regras do vínculo, antes de existir
+        // (a recusa não deixa pedido); sem os contratos ligados, recusa: nunca aceitar o contrato e descartá-lo.
+        if (e.contrato) {
+          if (!this.contratos || !c)
+            throw recusa('contrato-indisponivel', 'Os contratos com fornecedores não estão disponíveis.', {
+              campos: ['contrato'],
+            });
+          p.fornecedorDoContrato = this.contratos.vincularPedidoDaCompra(c, {
+            contrato: e.contrato,
+            pedido: { id: p.id, ano: p.ano, doc: p.doc, fornecedores: e.fornecedores, data: p.data },
+            solicitante: usuario,
+          }).fornecedor;
+        }
         e.itens.forEach((it: { item: number; quantidade: number }, k: number) => {
           this.item(s, it.item);
           p.itens.push({
@@ -856,6 +899,7 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
           doc: p.doc,
           itens: p.itens.length,
           fornecedores: e.fornecedores.length,
+          ...(e.contrato ? { contrato: e.contrato.contrato } : {}),
         };
       }
       case 'suprimentos.registrarProposta': {
@@ -872,6 +916,7 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
         const propostas = p.propostas.map((x) => ({ ...x }));
         const plano = planejarVencedor(propostas, { item: e.item, seq: e.seq }, e.vencedoras);
         recusar(plano.recusas);
+        recusar(conferirVencedoraDoContrato(propostas, e.vencedoras, p.fornecedorDoContrato ?? null));
         if (
           exigeJustificativa(propostas, e.item, e.seq, e.vencedoras) &&
           (e.justificativa ?? '').trim().length < 10

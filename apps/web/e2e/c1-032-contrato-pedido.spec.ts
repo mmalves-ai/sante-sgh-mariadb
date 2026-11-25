@@ -1,10 +1,11 @@
 // E2E @C1-032 (05-SUP linha 27): os contratos com fornecedores pelas rotas reais do módulo (o ContratoController
-// registrado no modulo.ts, sobre a porta própria quando a API sobe com o núcleo; a de memória só em dev/ci sem ele) e o
-// pedido de compra que nasce ligado ao contrato. O gestor de contratos abre a tela pelo menu, cadastra o contrato do
-// fornecedor (vigência, valor, reajuste, gestor e fiscal); na tela dos pedidos, com um só fornecedor convidado, escolhe
-// o contrato dele no combo, inclui o item e cria o pedido: o pedido nasce ligado (mesma transação) e aparece entre os
-// vínculos do contrato, com o histórico do vínculo. Com dois fornecedores convidados, o combo do contrato some (o
-// pedido ligado é de um fornecedor só). O efeito no banco está em
+// registrado no modulo.ts) e o pedido de compra que nasce ligado ao contrato. Roda na sessão sintética de dev/ci (logins
+// SINT.*, sem o núcleo): o modulo.ts liga a porta de suprimentos em memória aos contratos em memória, e o pedido com
+// contrato grava o vínculo lá pelas mesmas regras da porta própria (conferirVinculoContrato), ou é recusado. O gestor de
+// contratos abre a tela pelo menu, cadastra o contrato do fornecedor (vigência, valor, reajuste, gestor e fiscal); na
+// tela dos pedidos, com um só fornecedor convidado, escolhe o contrato dele no combo, inclui o item e cria o pedido: o
+// pedido nasce ligado e aparece entre os vínculos do contrato. Com dois fornecedores convidados, o combo do contrato
+// some (o pedido ligado é de um fornecedor só). O efeito no MariaDB (pedido_compra e o histórico do contrato) está em
 // apps/api/src/modulos/suprimentos/contrato-pedido-compra.int.spec.ts. Massa SINTÉTICA; nenhum dado de pessoa.
 import { expect, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
