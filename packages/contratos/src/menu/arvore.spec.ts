@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('440 itens: M 198, P 57, N 185, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 440, M: 198, P: 57, N: 185 });
+  it('442 itens: M 198, P 57, N 187, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 442, M: 198, P: 57, N: 187 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(440);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(442);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -285,6 +285,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/cadastros/solicitantes',
         '/cirurgia/mapa', // M18
         '/cirurgia/notas-sala', // M30
+        '/cirurgia/procedimentos-cirurgicos', // F3.4 (04-CC linha 91)
         '/cirurgia/registro',
         '/cirurgia/salas',
         '/consultorio/fila',
@@ -426,6 +427,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/pep/prescricao/hemoterapia',
         '/pep/prescricao/montar',
         '/pep/prescricao/reconciliacao',
+        '/pep/prontuario-setor', // F3.3 (03-PEP L91): regras do prontuário por setor
         '/pep/resultados/grupos', // F3.3 (03-PEP L128): grupos comparativos de resultados
         '/pep/sumario-alta/secoes', // F3.3 (03-PEP L124): seções configuráveis do sumário de alta
         '/pessoas/colaboradores', // M52.1 (fatia F1)
