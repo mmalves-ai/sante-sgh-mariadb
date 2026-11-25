@@ -65,6 +65,11 @@ import {
 } from './prescricao-propria-cadastro.js';
 import { NOTAS_PACIENTE, NotasPacienteController } from './notas-paciente.controller.js';
 import { NotasPacientePropria } from './notas-paciente-propria.js';
+import { ObrigatoriedadeDocumentoController } from './obrigatoriedade-documento.controller.js';
+import {
+  PORTA_OBRIGATORIEDADE_DOCUMENTO,
+  PortaObrigatoriedadeDocumentoPropria,
+} from './obrigatoriedade-documento-propria.js';
 import {
   ANOTACOES_ADMINISTRATIVAS,
   AnotacoesAdministrativasController,
@@ -199,6 +204,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       FarmacovigilanciaController,
       PrescricaoCadastroController,
       NotasPacienteController,
+      ObrigatoriedadeDocumentoController,
       AnotacoesAdministrativasController,
       ResultadosGruposController,
     ],
@@ -271,6 +277,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new NotasPacientePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L132: documentos exigidos por diagnóstico, idade ou setor (regras e lista do profissional); sem núcleo, 503.
+      {
+        provide: PORTA_OBRIGATORIEDADE_DOCUMENTO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaObrigatoriedadeDocumentoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // 03-PEP L147: anotação administrativa do caso (registro não clínico da equipe); sem núcleo, 503.
