@@ -5,6 +5,7 @@ import {
   campoDoTributo,
   conferirCancelamentoEntrada,
   conferirConclusaoEntrada,
+  conferirTituloDaEntrada,
   conferirEntradaServico,
   type EntradaServicoProposta,
   type ItemEntradaServico,
@@ -194,6 +195,23 @@ describe('entrada de serviço tomado: conclusão e cancelamento', () => {
     expect(conferirConclusaoEntrada({ situacao: 'aberta', valorTotal: 10, somaItens: 9 })?.codigo).toBe(
       'itens-nao-fecham',
     );
+  });
+  it('o título confirma a retenção: desconta o retido, ou traz a própria, e só uma entrada', () => {
+    const b = {
+      valorEntrada: 2000,
+      liquidoEntrada: 1780,
+      tituloBruto: 2000,
+      tituloLiquido: 1780,
+      tituloTemRetencao: false,
+      ligadoAOutraEntrada: false,
+    };
+    expect(conferirTituloDaEntrada(b)).toBeNull();
+    expect(conferirTituloDaEntrada({ ...b, tituloLiquido: 2000 })?.codigo).toBe('titulo-sem-retencao');
+    expect(conferirTituloDaEntrada({ ...b, tituloLiquido: 1985, tituloTemRetencao: true })).toBeNull();
+    expect(conferirTituloDaEntrada({ ...b, tituloBruto: 1500, tituloTemRetencao: true })?.codigo).toBe(
+      'titulo-valor-divergente',
+    );
+    expect(conferirTituloDaEntrada({ ...b, ligadoAOutraEntrada: true })?.codigo).toBe('titulo-ja-ligado');
   });
   it('cancela com justificativa, nunca a declarada na REINF nem a de título pago', () => {
     const c = {

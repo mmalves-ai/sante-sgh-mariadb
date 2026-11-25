@@ -16,6 +16,7 @@ import {
   campoDoTributo,
   conferirCancelamentoEntrada,
   conferirConclusaoEntrada,
+  conferirTituloDaEntrada,
   conferirEntradaServico,
   type FatoRetencao,
   liquidoEntrada,
@@ -662,15 +663,45 @@ const concluir = definirOperacao<z.infer<typeof esquemaConcluir>, ResultadoOpera
       }),
     );
     if (e.titulo !== null) {
-      const t = await tx.uma(
-        `SELECT id FROM titulo_pagar WHERE id = ? AND estabelecimento_id = ? AND empresa_fornecedora_id = ?
-            AND situacao <> 'cancelado' AND excluido_em IS NULL`,
+      // O título travado: duas conclusões ao mesmo tempo não o ligam a duas entradas.
+      const [t] = await tx.consultarParaAtualizar(
+        `SELECT id, valor_bruto, valor_liquido FROM titulo_pagar WHERE id = ? AND estabelecimento_id = ?
+            AND empresa_fornecedora_id = ? AND situacao <> 'cancelado' AND excluido_em IS NULL`,
         [e.titulo, est, r['empresa_fornecedora_id']],
       );
       if (!t)
         throw recusa('titulo-invalido', 'O título não é deste fornecedor nem deste estabelecimento.', {
           campos: ['titulo'],
         });
+      const retidas = await tx.consultar(
+        `SELECT r.valor_retido FROM retencao_entrada_servico r
+           JOIN entrada_servico_item i ON i.id = r.entrada_servico_item_id
+          WHERE i.entrada_servico_id = ? AND i.excluido_em IS NULL AND r.excluido_em IS NULL`,
+        [e.entrada],
+      );
+      const doTitulo = await tx.uma(
+        `SELECT 1 AS x FROM retencao_titulo rt JOIN parcela_pagar pp ON pp.id = rt.parcela_pagar_id
+          WHERE pp.titulo_pagar_id = ? AND rt.excluido_em IS NULL AND pp.excluido_em IS NULL LIMIT 1`,
+        [e.titulo],
+      );
+      const outra = await tx.uma(
+        `SELECT 1 AS x FROM entrada_servico WHERE titulo_pagar_id = ? AND id <> ? AND situacao <> 'cancelada'
+            AND excluido_em IS NULL LIMIT 1`,
+        [e.titulo, e.entrada],
+      );
+      recusar(
+        conferirTituloDaEntrada({
+          valorEntrada: numero(r['valor_total']),
+          liquidoEntrada: liquidoEntrada(
+            numero(r['valor_total']),
+            retidas.map((x) => ({ valorRetido: numero(x['valor_retido']) })),
+          ),
+          tituloBruto: numero(t['valor_bruto']),
+          tituloLiquido: numero(t['valor_liquido']),
+          tituloTemRetencao: !!doTitulo,
+          ligadoAOutraEntrada: !!outra,
+        }),
+      );
     }
     const pedido = numeroOuNulo(r['pedido_compra_id']);
     if (pedido !== null) await movimentarPedido(tx, est, pedido, itens, 1);

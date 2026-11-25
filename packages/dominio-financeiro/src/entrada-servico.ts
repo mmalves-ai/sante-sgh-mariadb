@@ -272,6 +272,35 @@ export function conferirConclusaoEntrada(p: {
 }
 
 /**
+ * O título ligado na conclusão confirma a retenção da entrada (IN RFB 2.043/2021): ou ele já traz as próprias retenções
+ * (e vale o título, com o mesmo bruto da nota), ou o seu líquido é o líquido da entrada (o retido foi descontado do
+ * pagamento ao prestador). Um título só confirma uma entrada viva.
+ */
+export function conferirTituloDaEntrada(p: {
+  readonly valorEntrada: number;
+  readonly liquidoEntrada: number;
+  readonly tituloBruto: number;
+  readonly tituloLiquido: number;
+  readonly tituloTemRetencao: boolean;
+  readonly ligadoAOutraEntrada: boolean;
+}): RecusaFinanceiro | null {
+  if (p.ligadoAOutraEntrada)
+    return rec('titulo-ja-ligado', 'O título já confirma outra entrada de serviço.', ['titulo']);
+  if (p.tituloTemRetencao) {
+    if (Math.abs(p.tituloBruto - p.valorEntrada) > 0.01)
+      return rec('titulo-valor-divergente', 'O bruto do título não é o valor da nota.', ['titulo']);
+    return null;
+  }
+  if (Math.abs(p.tituloLiquido - p.liquidoEntrada) > 0.01)
+    return rec(
+      'titulo-sem-retencao',
+      `O líquido do título (${p.tituloLiquido.toFixed(2)}) não desconta a retenção da entrada: devia ser ${p.liquidoEntrada.toFixed(2)}.`,
+      ['titulo'],
+    );
+  return null;
+}
+
+/**
  * Cancelar: com justificativa; nunca a já cancelada; a concluída só enquanto a retenção não foi declarada na EFD-REINF
  * nem confirmada por título pago (aí se corrige pelo título ou pelo evento retificador, nunca sumindo com a entrada).
  */

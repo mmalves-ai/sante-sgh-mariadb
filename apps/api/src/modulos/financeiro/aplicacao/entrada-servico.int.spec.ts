@@ -461,5 +461,83 @@ describe.skipIf(SEM_BANCO)(
         5, // IR, INSS, PIS, COFINS e CSLL ficam no histórico
       ]);
     });
+    it('o título confirma a retenção: recusa o que não desconta o retido e o já ligado a outra entrada viva', async () => {
+      const r5 = await executar(
+        'registrar',
+        nota('NF-5', {
+          itens: [{ servico, pedidoItem, quantidade: 1, valorUnitario: 1000, centroCusto: centro }],
+          cambio: null,
+          issRetido: false,
+          aliquotaIss: null,
+        }),
+      );
+      const entrada = Number(r5['entrada']);
+      const [ret] = await consultar(
+        `SELECT COALESCE(SUM(r.valor_retido), 0) AS retido FROM retencao_entrada_servico r
+           JOIN entrada_servico_item i ON i.id = r.entrada_servico_item_id WHERE i.entrada_servico_id = ?`,
+        [entrada],
+      );
+      const retido = Number(ret!['retido']);
+      expect(retido).toBeGreaterThan(0);
+      const liquido = Math.round((1000 - retido) * 100) / 100;
+      // Títulos sintéticos sem retenção detalhada no título: cheio (o exemplo da revisão, sem desconto do retido), com o
+      // total retido da entrada descontado e um já ligado a outra entrada.
+      const [cheio, ligado, certo] = await m.nucleo.escrever(
+        { cliente: CLIENTE, correlacao: 'preparo-c2094-titulo' },
+        async (e) => {
+          const agora = new Date();
+          const tc = Number(
+            (await e.uma<{ id: number }>("SELECT id FROM tipo_credor WHERE codigo = 'fornecedor'", []))?.id,
+          );
+          const td = Number(
+            (await e.uma<{ id: number }>('SELECT id FROM tipo_documento_financeiro ORDER BY id LIMIT 1', []))
+              ?.id,
+          );
+          const nf = Number(
+            (await e.uma<{ id: number }>("SELECT id FROM natureza_financeira WHERE codigo = '9207.1.1'", []))
+              ?.id,
+          );
+          const titulo = (numeroTitulo: string, liq: number) =>
+            e.inserir(
+              `INSERT INTO titulo_pagar (estabelecimento_id, numero, tipo_credor_id, empresa_fornecedora_id,
+               tipo_documento_financeiro_id, numero_documento, data_emissao, data_lancamento, valor_bruto, valor_retencoes,
+               valor_liquido, natureza_financeira_id, referente, situacao, criado_em)
+             VALUES (?, ?, ?, ?, ?, 'NF-5', '2026-09-05', '2026-09-05', 1000, ?, ?, ?, 'SERVICO SINTETICO', 'aberto', ?)`,
+              [est, numeroTitulo, tc, fornecedor, td, Math.round((1000 - liq) * 100) / 100, liq, nf, agora],
+            );
+          const t2 = await titulo('C2094-T2', 1000);
+          const t3 = await titulo('C2094-T3', liquido);
+          const t4 = await titulo('C2094-T4', liquido);
+          // A NF-1 (concluída) já é confirmada pelo T3.
+          await e.executar(
+            "UPDATE entrada_servico SET titulo_pagar_id = ? WHERE estabelecimento_id = ? AND numero_documento = 'NF-1'",
+            [t3, est],
+          );
+          return [t2, t3, t4];
+        },
+      );
+      const versao = async () =>
+        Number((await consultar('SELECT versao FROM entrada_servico WHERE id = ?', [entrada]))[0]!['versao']);
+      expect(
+        await codigoDaGravacao(executar('concluir', { entrada, versao: await versao(), titulo: cheio })),
+      ).toBe('titulo-sem-retencao');
+      expect(
+        await codigoDaGravacao(executar('concluir', { entrada, versao: await versao(), titulo: ligado })),
+      ).toBe('titulo-ja-ligado');
+      const [antes] = await consultar(
+        'SELECT situacao, titulo_pagar_id, (SELECT COUNT(*) FROM escrituracao_entrada x WHERE x.entrada_servico_id = es.id) AS escr FROM entrada_servico es WHERE id = ?',
+        [entrada],
+      );
+      expect([antes!['situacao'], antes!['titulo_pagar_id'], Number(antes!['escr'])]).toEqual([
+        'aberta',
+        null,
+        0,
+      ]);
+      await executar('concluir', { entrada, versao: await versao(), titulo: certo });
+      const [depois] = await consultar('SELECT situacao, titulo_pagar_id FROM entrada_servico WHERE id = ?', [
+        entrada,
+      ]);
+      expect([depois!['situacao'], Number(depois!['titulo_pagar_id'])]).toEqual(['concluida', Number(certo)]);
+    });
   },
 );
