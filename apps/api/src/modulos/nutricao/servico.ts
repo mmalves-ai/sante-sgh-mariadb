@@ -503,6 +503,23 @@ export class ServicoNutricao {
       .sort((a, b) =>
         `${a.leito.acomodacao}|${a.leito.leito}`.localeCompare(`${b.leito.acomodacao}|${b.leito.leito}`),
       );
+    // A composição que o médico prescreveu para esta refeição (03-PEP L112) vai à linha do item que vale no mapa.
+    const composicaoDoItem = new Map(itens.map((x) => [x.itemDieta, x.composicao ?? []]));
+    for (const l of linhas) {
+      const comp = (l.itemDieta === null ? [] : (composicaoDoItem.get(l.itemDieta) ?? [])).filter(
+        (x) => x.refeicao === q.refeicao,
+      );
+      if (comp.length > 0)
+        l.composicao = comp.map((x) => ({
+          sequencia: x.sequencia,
+          alimento: x.alimento,
+          quantidade: x.quantidade,
+          medidaCaseira: x.medidaCaseira,
+          quantidadeMedidaCaseira: x.quantidadeMedidaCaseira,
+          substitui: x.substitui,
+          percentualDiario: x.percentualDiario,
+        }));
+    }
     const agoraPor = new Map<
       number,
       { descricao: string; gravadaEm: string | null; itemDieta: number | null }

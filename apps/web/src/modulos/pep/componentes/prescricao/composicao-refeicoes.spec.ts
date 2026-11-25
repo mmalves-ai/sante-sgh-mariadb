@@ -5,6 +5,7 @@ import {
   linhaVazia,
   percentualDaComposicao,
   recusaDaComposicao,
+  refeicaoDaLinha,
   refeicoesDoContrato,
   removerLinha,
 } from './composicao-refeicoes.js';
@@ -83,5 +84,23 @@ describe('composição da dieta por refeição na tela (03-PEP L112)', () => {
         linha({ percentualDiario: '30', substitui: 1 }),
       ]),
     ).toBe(25.5);
+  });
+
+  it('o substituto segue a refeição do titular: trocar a refeição do titular depois leva o substituto junto', () => {
+    // Substituto criado antes de escolher a refeição do titular (a linha nasce com refeição vazia).
+    const semRefeicao = acrescentarSubstituto([linha({ refeicao: '', alimento: '31' })], 0);
+    expect(semRefeicao[1]!.refeicao).toBe('');
+    const escolhida = semRefeicao.map((l, i) => (i === 0 ? { ...l, refeicao: '2' } : l));
+    escolhida[1] = { ...escolhida[1]!, alimento: '32' };
+    expect(refeicaoDaLinha(escolhida, 1)).toBe('2');
+    expect(refeicoesDoContrato(escolhida).map((r) => r.refeicao)).toEqual([2, 2]);
+    expect(recusaDaComposicao('livre', escolhida)).toBeNull();
+    // Troca da refeição do titular depois do substituto criado: o domínio não recusa por refeição diferente.
+    const trocada = acrescentarSubstituto([linha({ alimento: '31' })], 0).map((l, i) =>
+      i === 0 ? { ...l, refeicao: '3' } : { ...l, alimento: '32' },
+    );
+    expect(trocada[1]!.refeicao).toBe('1');
+    expect(refeicoesDoContrato(trocada).map((r) => r.refeicao)).toEqual([3, 3]);
+    expect(recusaDaComposicao('oral', trocada)).toBeNull();
   });
 });

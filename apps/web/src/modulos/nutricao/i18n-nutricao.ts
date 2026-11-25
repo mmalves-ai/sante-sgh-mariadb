@@ -291,6 +291,7 @@ export const mensagensNutricao = {
       exame: 'Jejum para o exame',
     },
     mudou: 'Mudou depois do corte',
+    ouSubstituto: 'ou',
     alertas: 'Alertas à copa',
     alerta: '{nome} ({leito}): era {antes}; agora {agora}.',
     fechar: 'Fechar o mapa no corte',

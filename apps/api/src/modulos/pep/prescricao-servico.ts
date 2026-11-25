@@ -1221,7 +1221,12 @@ function descricaoDoItem(i: ItemPrescricaoLido): {
         principios: [],
       };
     default:
-      return { descricao: i.planoNome ?? `Tipo ${i.plano}`, dose: null, produto: null, principios: [] };
+      return {
+        descricao: (d.tipo === 'outro' ? d.resumo : undefined) ?? i.planoNome ?? `Tipo ${i.plano}`,
+        dose: null,
+        produto: null,
+        principios: [],
+      };
   }
 }
 

@@ -84,8 +84,60 @@ async function existe(tx: TxOperacao, tabela: string, id: number, rotulo: string
   return id;
 }
 
+/**
+ * Os cadastros de uma linha da composição da dieta, com a mesma regra que os domínios da tela usam: a refeição é do
+ * estabelecimento da prescrição, ativa, com o horário geral (sem unidade de internação própria) e geral ou da própria
+ * modalidade da dieta; o alimento está vigente hoje; a medida caseira está ativa e é genérica ou do alimento da linha.
+ * Um POST montado à mão com cadastro de outro estabelecimento, de outro alimento ou fora de uso é recusado com 422 sem
+ * gravar nada (a transação da prescrição é desfeita).
+ */
+async function conferirCadastrosDaRefeicao(
+  tx: TxOperacao,
+  estabelecimento: number,
+  dieta: number,
+  r: { readonly refeicao: number; readonly alimento: number; readonly medidaCaseira: number | null },
+): Promise<void> {
+  const hr = await tx.uma(
+    `SELECT id FROM horario_refeicao
+      WHERE id = ? AND estabelecimento_id = ? AND ativo AND unidade_internacao_id IS NULL
+        AND (modalidade_dieta_id IS NULL OR modalidade_dieta_id = ?)`,
+    [r.refeicao, estabelecimento, dieta],
+  );
+  if (!hr)
+    throw recusar(
+      422,
+      'dieta-refeicao-fora-do-estabelecimento',
+      'A refeição não é do estabelecimento da prescrição, está inativa ou é de outra unidade ou modalidade de dieta.',
+    );
+  const al = await tx.uma(
+    `SELECT id FROM alimento_referencia
+      WHERE id = ? AND vigencia_inicio <= CURRENT_DATE AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)`,
+    [r.alimento],
+  );
+  if (!al)
+    throw recusar(
+      422,
+      'dieta-alimento-fora-da-vigencia',
+      'O alimento não está no cadastro ou está fora da vigência da tabela de composição.',
+    );
+  if (r.medidaCaseira === null) return;
+  const mc = await tx.uma(
+    `SELECT id FROM medida_caseira_alimento
+      WHERE id = ? AND ativo AND (alimento_referencia_id IS NULL OR alimento_referencia_id = ?)`,
+    [r.medidaCaseira, r.alimento],
+  );
+  if (!mc)
+    throw recusar(
+      422,
+      'dieta-medida-caseira-invalida',
+      'A medida caseira está inativa ou é de outro alimento (só a genérica ou a do próprio alimento).',
+    );
+}
+
 export interface ContextoDetalhe {
   readonly item: number;
+  /** O estabelecimento da prescrição (a refeição da composição da dieta tem de ser dele). */
+  readonly estabelecimento: number;
   readonly profissional: number;
   readonly usuario: number;
   readonly agora: Date;
@@ -161,23 +213,21 @@ export async function gravarDetalhe(tx: TxOperacao, d: Detalhe, c: ContextoDetal
       // Composição por refeição (03-PEP L112): a regra é do domínio (conferirRefeicoesDieta, chamada por
       // conferirItemGravavel em conferirItensGravaveis, antes de qualquer gravação).
       const refeicoes = d.refeicoes ?? [];
+      for (const r of refeicoes) await conferirCadastrosDaRefeicao(tx, c.estabelecimento, d.dieta, r);
       const gravados: number[] = [];
       for (const [i, r] of refeicoes.entries())
         gravados.push(
           await tx.incluir('prescricao_dieta_refeicao_item', {
             prescricao_item_dieta_id: dieta,
             sequencia: i + 1,
-            horario_refeicao_id: await existe(tx, 'horario_refeicao', r.refeicao, 'A refeição'),
-            alimento_referencia_id: await existe(tx, 'alimento_referencia', r.alimento, 'O alimento'),
+            horario_refeicao_id: r.refeicao,
+            alimento_referencia_id: r.alimento,
             quantidade: r.quantidade,
             unidade_medida_id:
               r.unidade === null
                 ? null
                 : await existe(tx, 'unidade_medida', r.unidade, 'A unidade do alimento'),
-            medida_caseira_alimento_id:
-              r.medidaCaseira === null
-                ? null
-                : await existe(tx, 'medida_caseira_alimento', r.medidaCaseira, 'A medida caseira'),
+            medida_caseira_alimento_id: r.medidaCaseira,
             quantidade_medida_caseira: r.quantidadeMedidaCaseira,
             substituto_prescricao_dieta_refeicao_item_id:
               r.substitui === null ? null : (gravados[r.substitui - 1] ?? null),

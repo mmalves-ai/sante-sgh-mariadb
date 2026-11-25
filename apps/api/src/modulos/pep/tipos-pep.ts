@@ -1605,7 +1605,15 @@ export type DetalheLido =
       readonly dose: number | null;
       readonly unidade: string | null;
     }
-  | { readonly tipo: 'outro'; readonly id: null };
+  | {
+      readonly tipo: 'outro';
+      readonly id: null;
+      /**
+       * Resumo do que foi prescrito, quando a leitura o monta (dieta com composição por refeição, 03-PEP L112: cada
+       * refeição com os alimentos, a quantidade, a medida caseira e o substituto).
+       */
+      readonly resumo?: string;
+    };
 
 export interface ProdutoLido {
   readonly produto: number;

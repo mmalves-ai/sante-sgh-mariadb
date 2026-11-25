@@ -8,6 +8,7 @@
 import { ErroOperacao } from '@sgh/nucleo';
 import type { LiberacaoGravacao } from '../exames/public-api.js';
 import type {
+  AlimentoDaComposicao,
   AlteracaoHotelariaRegistrada,
   CorrecaoRegistrada,
   AcompanhamentoTerapiaRegistrado,
@@ -56,6 +57,8 @@ interface Sintetico {
     readonly nome: string;
     readonly quantidade: string | null;
     readonly caracteristicas: { nome: string; resposta: string | null }[];
+    /** Composição por refeição (03-PEP L112), com a refeição do dia de cada alimento. */
+    readonly composicao?: readonly AlimentoDaComposicao[];
   };
   readonly alergias: string[];
 }
@@ -101,7 +104,46 @@ const SINTETICOS: readonly Sintetico[] = [
       tipoAcomodacaoAtual: 1,
       horasAtras: 30,
     },
-    dieta: { plano: 3, dieta: 1, nome: 'DIETA ORAL', quantidade: null, caracteristicas: [] },
+    dieta: {
+      plano: 3,
+      dieta: 1,
+      nome: 'DIETA ORAL',
+      quantidade: null,
+      caracteristicas: [],
+      // Desjejum composto: pão com o substituto (biscoito) e leite em xícara.
+      composicao: [
+        {
+          refeicao: 1,
+          sequencia: 1,
+          alimento: 'Pão francês',
+          quantidade: '50',
+          medidaCaseira: null,
+          quantidadeMedidaCaseira: null,
+          substitui: null,
+          percentualDiario: '15',
+        },
+        {
+          refeicao: 1,
+          sequencia: 2,
+          alimento: 'Biscoito de água e sal',
+          quantidade: '30',
+          medidaCaseira: null,
+          quantidadeMedidaCaseira: null,
+          substitui: 1,
+          percentualDiario: null,
+        },
+        {
+          refeicao: 1,
+          sequencia: 3,
+          alimento: 'Leite integral',
+          quantidade: '200',
+          medidaCaseira: 'Xícara de chá',
+          quantidadeMedidaCaseira: '1',
+          substitui: null,
+          percentualDiario: '10',
+        },
+      ],
+    },
     alergias: [],
   },
   {
@@ -780,6 +822,7 @@ export class PortaNutricaoMemoria implements PortaNutricao {
         vigenciaFim: v.vigenciaFim,
         suspensaEm: null,
         caracteristicas: x.dieta.caracteristicas,
+        ...(x.dieta.composicao ? { composicao: x.dieta.composicao } : {}),
       };
     });
   }

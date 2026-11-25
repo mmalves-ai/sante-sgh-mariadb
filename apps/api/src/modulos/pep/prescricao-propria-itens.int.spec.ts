@@ -9,7 +9,9 @@
 import { type ContextoOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { PLANO_DO_TIPO } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PortaNutricaoPropria } from '../nutricao/porta-propria.js';
 import { GravacaoPrescricaoPropria } from './prescricao-propria-gravacao.js';
+import { PortaPrescricaoPropria } from './prescricao-porta-propria.js';
 import { dataHora } from './registro-porta-propria.js';
 import type { GravacaoPrescricao, ItemGravacao } from './tipos-pep.js';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
@@ -41,6 +43,7 @@ const CATALOGOS = [
   'via_aerea',
   'modo_ventilatorio',
   'condicao_se_necessario',
+  'medida_caseira_alimento',
 ] as const;
 
 interface Massa {
@@ -80,6 +83,8 @@ async function limpar(e: Escritor): Promise<void> {
     `DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM unidade_assistencial WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM horario_refeicao WHERE estabelecimento_id IN ${est}`,
+    `DELETE FROM horario_refeicao WHERE estabelecimento_id IN (SELECT id FROM estabelecimento WHERE codigo = CONCAT(?, 'b'))`,
+    "DELETE FROM estabelecimento WHERE codigo = CONCAT(?, 'b')",
     `DELETE FROM sequencia_negocio WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM idempotencia_operacao WHERE estabelecimento_id IN ${est}`,
     'DELETE FROM estabelecimento WHERE codigo = ?',
@@ -209,9 +214,26 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
       );
       for (const a of ['a1', 'a2'])
         cat[a] = await ins(
-          `INSERT INTO alimento_referencia (codigo_tbca, descricao, versao_fonte, vigencia_inicio, criado_em) VALUES (?, 'Alimento sintético', 'sintetica', '2026-01-01', ?)`,
-          [`${P}${a}`],
+          `INSERT INTO alimento_referencia (codigo_tbca, descricao, versao_fonte, vigencia_inicio, criado_em) VALUES (?, ?, 'sintetica', '2026-01-01', ?)`,
+          [`${P}${a}`, `Alimento sintético ${a}`],
         );
+      // Medida caseira do alimento a2 (não vale para o a1) e a refeição de OUTRO estabelecimento (fora da prescrição).
+      cat['medidaA2'] = await ins(
+        `INSERT INTO medida_caseira_alimento (codigo, descricao, alimento_referencia_id, equivalencia_gramas, criado_em)
+         VALUES (?, 'Colher sintética', ?, 15, ?)`,
+        [`${P}mc`, cat['a2']],
+      );
+      const outroEst = await ins(
+        `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
+         VALUES (?, 'Outro hospital sintético', 'Outro hospital sintético (fictício)', ?, ?)`,
+        [`${P}b`, FUSO],
+      );
+      cat['refeicaoOutroEst'] = await ins(
+        `INSERT INTO horario_refeicao (estabelecimento_id, refeicao_do_dia_id, horario_inicio, horario_fim,
+           horario_corte_mapa, criado_em) VALUES (?, ?, '07:00', '08:00', '05:00', ?)`,
+        [outroEst, refeicao],
+      );
+      cat['refeicaoDoDia'] = refeicao;
       cat['caract'] = await ins(
         `INSERT INTO caracteristica_dieta (codigo, descricao, categoria, tipo_resposta, criado_em) VALUES (?, 'Restrição sintética', 'restricao', 'texto', ?)`,
         [`${P}c`],
@@ -739,7 +761,45 @@ describe.skipIf(SEM_BANCO)('tipos de item da prescrição no banco próprio (int
         porta.prescrever(c, 'pep.prescrever', gravacao([comRefeicao('rjj', 'jejum')]), ctx()),
       ),
     ).rejects.toMatchObject({ problema: { status: 422, codigo: 'dieta-refeicao-indevida' } });
+    // O servidor repete a regra dos domínios da tela: um POST montado à mão com a refeição de OUTRO estabelecimento,
+    // ou com a medida caseira de outro alimento, é recusado com 422 sem gravar nada.
+    const livreCom = (chave: string, rs: typeof refeicoes) => {
+      const it = semDieta(chave, 'livre');
+      return { ...it, detalhe: { ...it.detalhe, refeicoes: rs } } as ItemGravacao;
+    };
+    const recusaComposicao = (rs: typeof refeicoes, codigo: string) =>
+      expect(
+        Promise.resolve().then(() =>
+          porta.prescrever(
+            c,
+            'pep.prescrever',
+            {
+              ...gravacao([livreCom('rx', rs)]),
+              vigencia: { inicio: local(48 * HORA), fim: local(72 * HORA) },
+            },
+            ctx(),
+          ),
+        ),
+      ).rejects.toMatchObject({ problema: { status: 422, codigo } });
+    await recusaComposicao(
+      [{ ...refeicoes[0]!, refeicao: m.cat['refeicaoOutroEst']! }],
+      'dieta-refeicao-fora-do-estabelecimento',
+    );
+    await recusaComposicao(
+      [{ ...refeicoes[0]!, medidaCaseira: m.cat['medidaA2']!, quantidadeMedidaCaseira: 2 }],
+      'dieta-medida-caseira-invalida',
+    );
     expect(await contarPrescricoes()).toBe(antes);
+    expect(
+      Number(
+        (
+          await ler(
+            `SELECT COUNT(*) AS n FROM prescricao_dieta_refeicao_item WHERE horario_refeicao_id = ?`,
+            [m.cat['refeicaoOutroEst']],
+          )
+        )[0]?.['n'],
+      ),
+    ).toBe(0);
     const r = await porta.prescrever(
       c,
       'pep.prescrever',
@@ -769,5 +829,36 @@ describe.skipIf(SEM_BANCO)('tipos de item da prescrição no banco próprio (int
     expect(Number(linhas[1]!['subst'])).toBe(Number(linhas[0]!['id']));
     expect([Number(linhas[0]!['pct']), Number(linhas[0]!['kcal'])]).toEqual([25, 180]);
     expect([linhas[1]!['pct'], linhas[1]!['kcal']]).toEqual([null, null]);
+
+    // Lida de volta: a visão do item na prescrição traz a composição (refeição, alimentos e o substituto)...
+    const itensLidos = await new PortaPrescricaoPropria(nucleo, CLIENTE).itens(c, r.prescricao);
+    expect(itensLidos).toHaveLength(1);
+    expect(itensLidos[0]!.detalhe).toMatchObject({
+      tipo: 'outro',
+      resumo: 'Dieta sintética: Desjejum sintético: Alimento sintético a1 200; ou Alimento sintético a2 150',
+    });
+    // ...e o mapa de dieta da nutrição (a copa) recebe a mesma composição, com a refeição do dia de cada alimento.
+    const nutricao = new PortaNutricaoPropria(nucleo);
+    const servirEm = local(60 * HORA);
+    const doMapa = await nutricao.itensDieta(
+      { cliente: CLIENTE, estabelecimento: m.est, usuario: m.usuario, correlacao: P },
+      [m.atd],
+      servirEm,
+    );
+    const daLivre = doMapa.filter((x) => x.prescricao === r.prescricao);
+    expect(daLivre).toHaveLength(1);
+    expect(
+      daLivre[0]!.composicao?.map((x) => [
+        x.refeicao,
+        x.sequencia,
+        x.alimento,
+        Number(x.quantidade),
+        x.substitui,
+      ]),
+    ).toEqual([
+      [m.cat['refeicaoDoDia'], 1, 'Alimento sintético a1', 200, null],
+      [m.cat['refeicaoDoDia'], 2, 'Alimento sintético a2', 150, 1],
+    ]);
+    expect(Number(daLivre[0]!.composicao?.[0]?.percentualDiario)).toBe(25);
   });
 });

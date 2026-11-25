@@ -57,6 +57,7 @@ import {
 } from './porta.js';
 import type {
   AcompanhamentoTerapiaRegistrado,
+  AlimentoDaComposicao,
   AlteracaoHotelariaRegistrada,
   BarreiraAltaRegistrada,
   ChecagemDieta,
@@ -1370,6 +1371,36 @@ export class PortaNutricaoPropria implements PortaNutricao {
             { teto: 20000 },
           )
         : [];
+      // A composição por refeição do item (03-PEP L112): o que a copa serve em cada refeição do dia.
+      const comp = ids.length
+        ? await l.consultar(
+            `SELECT ri.prescricao_item_dieta_id, ri.sequencia, hr.refeicao_do_dia_id, ar.descricao AS alimento,
+                    ri.quantidade, mc.descricao AS medida, ri.quantidade_medida_caseira, ti.sequencia AS substitui,
+                    ri.percentual_diario
+               FROM prescricao_dieta_refeicao_item ri
+               JOIN horario_refeicao hr ON hr.id = ri.horario_refeicao_id
+               JOIN alimento_referencia ar ON ar.id = ri.alimento_referencia_id
+               LEFT JOIN medida_caseira_alimento mc ON mc.id = ri.medida_caseira_alimento_id
+               LEFT JOIN prescricao_dieta_refeicao_item ti ON ti.id = ri.substituto_prescricao_dieta_refeicao_item_id
+              WHERE ri.excluido_em IS NULL AND ri.prescricao_item_dieta_id IN (${marcas(ids)})
+              ORDER BY ri.prescricao_item_dieta_id, ri.sequencia`,
+            ids,
+            { teto: 20000 },
+          )
+        : [];
+      const composicaoDe = (itemDieta: number): AlimentoDaComposicao[] =>
+        comp
+          .filter((x) => n(x['prescricao_item_dieta_id']) === itemDieta)
+          .map((x) => ({
+            refeicao: n(x['refeicao_do_dia_id']),
+            sequencia: n(x['sequencia']),
+            alimento: texto(x['alimento']),
+            quantidade: texto(x['quantidade']),
+            medidaCaseira: textoN(x['medida']),
+            quantidadeMedidaCaseira: textoN(x['quantidade_medida_caseira']),
+            substitui: nn(x['substitui']),
+            percentualDiario: textoN(x['percentual_diario']),
+          }));
       return rs.map((r) => ({
         atendimento: n(r['atendimento_id']),
         item: n(r['item']),
@@ -1386,6 +1417,7 @@ export class PortaNutricaoPropria implements PortaNutricao {
         caracteristicas: cars
           .filter((x) => n(x['prescricao_item_dieta_id']) === n(r['item_dieta']))
           .map((x) => ({ nome: texto(x['descricao']), resposta: textoN(x['resposta']) })),
+        composicao: composicaoDe(n(r['item_dieta'])),
       }));
     });
   }

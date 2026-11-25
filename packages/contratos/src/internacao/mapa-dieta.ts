@@ -112,6 +112,21 @@ export const esquemaAcompanhanteLinha = z.object({
   origem: z.enum(['nutricao', 'portaria']).optional(),
 });
 
+/**
+ * Um alimento da composição da dieta na refeição do mapa (03-PEP L112): o que o médico compôs na prescrição, para a
+ * copa servir. O substituto aponta a sequência do titular que ele pode trocar.
+ */
+export const esquemaAlimentoRefeicaoLinha = z.object({
+  sequencia: z.number().int(),
+  alimento: z.string(),
+  quantidade: z.string(),
+  medidaCaseira: z.string().nullable(),
+  quantidadeMedidaCaseira: z.string().nullable(),
+  substitui: z.number().int().nullable(),
+  percentualDiario: z.string().nullable(),
+});
+export type AlimentoRefeicaoLinha = z.infer<typeof esquemaAlimentoRefeicaoLinha>;
+
 export const esquemaLinhaMapa = z.object({
   internacao: z.number().int(),
   paciente: z.number().int(),
@@ -132,6 +147,8 @@ export const esquemaLinhaMapa = z.object({
   prescritoEm: z.string().nullable(),
   /** A prescrição mudou depois do corte (alerta à copa). */
   mudouDepoisDoCorte: z.boolean(),
+  /** A composição prescrita para esta refeição (dieta oral ou livre por refeição); ausente sem composição. */
+  composicao: z.array(esquemaAlimentoRefeicaoLinha).optional(),
 });
 export type LinhaMapa = z.infer<typeof esquemaLinhaMapa>;
 

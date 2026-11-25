@@ -455,6 +455,23 @@ const restricoes = (l: LinhaMapa) =>
               <div v-else-if="l.dieta" class="secundario">
                 {{ l.dieta }}<span v-if="l.quantidade"> · {{ l.quantidade }}</span>
               </div>
+              <ul
+                v-if="l.composicao?.length"
+                class="composicao"
+                :data-testid="`mapa-composicao-${l.internacao}`"
+              >
+                <li
+                  v-for="x in l.composicao"
+                  :key="x.sequencia"
+                  :class="{ substituto: x.substitui !== null }"
+                >
+                  <span v-if="x.substitui !== null">{{ t('nutricao.mapa.ouSubstituto') }} </span>
+                  {{ x.alimento }} · {{ x.quantidade }}
+                  <span v-if="x.medidaCaseira">
+                    ({{ x.quantidadeMedidaCaseira ?? '' }} {{ x.medidaCaseira }})</span
+                  >
+                </li>
+              </ul>
               <strong v-if="l.mudouDepoisDoCorte" class="mudou"> {{ t('nutricao.mapa.mudou') }}</strong>
             </td>
             <td>{{ restricoes(l) }}</td>
@@ -585,6 +602,13 @@ const restricoes = (l: LinhaMapa) =>
 
 <style src="../../agenda/componentes/estilo-agenda.css"></style>
 <style scoped>
+.composicao {
+  margin: var(--sgh-espaco-1) 0 0;
+  padding-left: var(--sgh-espaco-4);
+}
+.composicao .substituto {
+  padding-left: var(--sgh-espaco-2);
+}
 tr.jejum td:first-child {
   border-inline-start: 4px solid var(--sgh-aviso);
 }

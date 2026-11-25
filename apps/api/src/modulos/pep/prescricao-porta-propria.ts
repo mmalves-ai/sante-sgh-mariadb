@@ -289,7 +289,7 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
                 m.id AS med_id, COALESCE(m.item_prescritivel_id, i.item_prescritivel_id) AS produto,
                 ip.descricao AS produto_nome, ip.principio_ativo_id, m.dose, up.sigla AS unidade,
                 m.iniciar_agora, m.nao_ajustar_horario, m.justificativa_nao_padronizado,
-                m.justificativa_alergia
+                m.justificativa_alergia, pd.id AS dieta_id, md.descricao AS dieta_nome
            FROM prescricao_item i
            JOIN prescricao p ON p.id = i.prescricao_id
            JOIN tipo_item_prescricao t ON t.id = i.tipo_item_prescricao_id
@@ -299,6 +299,8 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
            LEFT JOIN prescricao_item_medicamento m ON m.prescricao_item_id = i.id AND m.excluido_em IS NULL
            LEFT JOIN item_prescritivel ip ON ip.id = COALESCE(m.item_prescritivel_id, i.item_prescritivel_id)
            LEFT JOIN unidade_prescricao up ON up.id = m.unidade_prescricao_id
+           LEFT JOIN prescricao_item_dieta pd ON pd.prescricao_item_id = i.id AND pd.excluido_em IS NULL
+           LEFT JOIN modalidade_dieta md ON md.id = pd.modalidade_dieta_id
           WHERE i.prescricao_id = ? AND ${VISIVEL('p')} AND i.excluido_em IS NULL
           ORDER BY i.sequencia, i.id`,
         [prescricao, est.id],
@@ -312,6 +314,41 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
           ORDER BY h.previsto_em, h.id`,
         [prescricao, est.id],
       );
+      // A composição da dieta por refeição (03-PEP L112), lida de volta para a visão do item.
+      const dietas = linhas.filter((x) => x['dieta_id'] !== null && x['dieta_id'] !== undefined);
+      const composicao = dietas.length
+        ? await l.consultar(
+            `SELECT ri.prescricao_item_dieta_id, rd.descricao AS refeicao, ar.descricao AS alimento, ri.quantidade,
+                    mc.descricao AS medida, ri.quantidade_medida_caseira, ri.substituto_prescricao_dieta_refeicao_item_id
+               FROM prescricao_dieta_refeicao_item ri
+               JOIN horario_refeicao hr ON hr.id = ri.horario_refeicao_id
+               JOIN refeicao_do_dia rd ON rd.id = hr.refeicao_do_dia_id
+               JOIN alimento_referencia ar ON ar.id = ri.alimento_referencia_id
+               LEFT JOIN medida_caseira_alimento mc ON mc.id = ri.medida_caseira_alimento_id
+              WHERE ri.excluido_em IS NULL AND ri.prescricao_item_dieta_id IN (${dietas.map(() => '?').join(', ')})
+              ORDER BY ri.prescricao_item_dieta_id, ri.sequencia`,
+            dietas.map((x) => x['dieta_id']),
+          )
+        : [];
+      const resumoDaDieta = (x: Record<string, unknown>): string | undefined => {
+        const doItem = composicao.filter((r) => num(r['prescricao_item_dieta_id']) === num(x['dieta_id']));
+        if (doItem.length === 0) return undefined;
+        const porRefeicao = new Map<string, string[]>();
+        for (const r of doItem) {
+          const medida =
+            r['medida'] === null
+              ? ''
+              : ` (${String(r['quantidade_medida_caseira'] ?? '')} ${String(r['medida'])})`;
+          const alimento = `${String(r['alimento'])} ${Number(r['quantidade']).toLocaleString('pt-BR')}${medida}`;
+          const ref = String(r['refeicao']);
+          porRefeicao.set(ref, [
+            ...(porRefeicao.get(ref) ?? []),
+            r['substituto_prescricao_dieta_refeicao_item_id'] === null ? alimento : `ou ${alimento}`,
+          ]);
+        }
+        const nome = textoOuNull(x['dieta_nome']) ?? textoOuNull(x['tipo_nome']) ?? 'Dieta';
+        return `${nome}: ${[...porRefeicao].map(([ref, as]) => `${ref}: ${as.join('; ')}`).join(' | ')}`;
+      };
       const porItem = new Map<number, HorarioPadraoLido[]>();
       for (const h of horarios) {
         const item = num(h['prescricao_item_id']);
@@ -334,7 +371,10 @@ export class PortaPrescricaoPropria implements PortaPrescricao {
         const liberada = instanteDe(x['liberada_em']);
         const detalhe: DetalheLido =
           x['med_id'] === null || x['med_id'] === undefined
-            ? { tipo: 'outro', id: null }
+            ? ((r) =>
+                r === undefined ? { tipo: 'outro', id: null } : { tipo: 'outro', id: null, resumo: r })(
+                resumoDaDieta(x),
+              )
             : {
                 tipo: 'medicamento',
                 id: num(x['med_id']),

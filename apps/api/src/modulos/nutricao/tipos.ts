@@ -4,6 +4,7 @@
 import type {
   AcaoCorrecao,
   AcessoNpt,
+  AlimentoRefeicaoLinha,
   AlteracaoHotLida,
   BaseLegalAcompanhante,
   CorrecaoLida,
@@ -365,6 +366,13 @@ export interface ItemDietaMapa {
   readonly vigenciaFim: string;
   readonly suspensaEm: string | null;
   readonly caracteristicas: { nome: string; resposta: string | null }[];
+  /** A composição por refeição do item (03-PEP L112), com a refeição do dia de cada alimento; ausente sem composição. */
+  readonly composicao?: readonly AlimentoDaComposicao[];
+}
+
+/** Um alimento da composição da dieta, com a refeição do dia (refeicao_do_dia) em que é servido. */
+export interface AlimentoDaComposicao extends AlimentoRefeicaoLinha {
+  readonly refeicao: number;
 }
 
 export interface CirurgiaDaJanela {

@@ -1638,6 +1638,7 @@ async function inserirItem(
   });
   await gravarDetalhe(tx, d, {
     item,
+    estabelecimento: est.id,
     profissional: prof.profissional,
     usuario: prof.usuario,
     agora: new Date(),

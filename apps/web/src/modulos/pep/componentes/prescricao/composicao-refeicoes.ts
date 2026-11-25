@@ -39,10 +39,19 @@ export function linhaVazia(refeicao = '', substitui: number | null = null): Linh
   };
 }
 
+/**
+ * A refeição da linha: a do titular quando a linha é substituto (o substituto não tem seletor de refeição e segue o
+ * titular, mesmo que o médico troque a refeição do titular depois de criar o substituto).
+ */
+export function refeicaoDaLinha(linhas: readonly LinhaRefeicao[], i: number): string {
+  const l = linhas[i]!;
+  return l.substitui === null ? l.refeicao : (linhas[l.substitui - 1]?.refeicao ?? '');
+}
+
 /** As linhas no formato do contrato (o esquema do item confere o que faltar). */
 export function refeicoesDoContrato(linhas: readonly LinhaRefeicao[]) {
-  return linhas.map((l) => ({
-    refeicao: ident(l.refeicao),
+  return linhas.map((l, i) => ({
+    refeicao: ident(refeicaoDaLinha(linhas, i)),
     alimento: ident(l.alimento),
     quantidade: numero(l.quantidade),
     unidade: null,
@@ -95,6 +104,7 @@ export function acrescentarSubstituto(linhas: readonly LinhaRefeicao[], i: numbe
     l.substitui !== null && l.substitui > fim ? { ...l, substitui: l.substitui + 1 } : l;
   return [
     ...linhas.slice(0, fim).map(renum),
+    // A refeição do substituto é sempre a do titular (refeicaoDaLinha); a cópia aqui é só informativa.
     linhaVazia(linhas[i]!.refeicao, i + 1),
     ...linhas.slice(fim).map(renum),
   ];
