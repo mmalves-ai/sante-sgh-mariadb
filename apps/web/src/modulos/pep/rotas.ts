@@ -128,6 +128,16 @@ export const rotasPep: RouteRecordRaw[] = [
     },
   },
   {
+    // 03-PEP L98: configuração da nota S.O.A.P. por estabelecimento e especialidade (partes obrigatórias, CID-10, CIAP-2).
+    path: '/pep/admin/nota-soap',
+    name: 'pep.admin.notaSoap',
+    component: () => import('./telas/NotaSoapConfiguracaoTela.vue'),
+    meta: {
+      permissao: 'pep.admin.ler',
+      menu: 'PEP > Administração do PEP > Configuração da nota S.O.A.P.',
+    },
+  },
+  {
     path: '/administracao/auditoria/acessos-prontuario',
     name: 'auditoria.acessos-prontuario',
     component: () => import('./telas/AcessosProntuarioTela.vue'),

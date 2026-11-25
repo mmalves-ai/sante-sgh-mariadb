@@ -8,6 +8,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha.
 // C2-081 (06-FAT L27, F7): os itens "Autorização prévia à operadora" da recepção e da internação entraram à mão (mesmo
 // motivo); a contagem acompanha.
+// C2-080 (03-PEP L98, F8): o item "Configuração da nota S.O.A.P." da administração do PEP entrou à mão (mesmo motivo);
+// a contagem acompanha.
 // C2-079 (04-INT L84, F8): o item "Internação domiciliar" da internação entrou à mão (mesmo motivo); a contagem
 // acompanha.
 // C2-071 (05-SADT L18, F7): o item "Mamografia e anatomia patológica" do diagnóstico entrou à mão (mesmo motivo); a
@@ -117,7 +119,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-059 (07-FIN L114): o item "NF-e de saída de mercadoria" do fiscal entrou à mão (mesmo motivo; F7 vai como
 // fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":488,"M":198,"P":57,"N":233};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":489,"M":198,"P":57,"N":234};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -260,6 +262,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"pep.administracao-do-pep.secoes-do-sumario-de-alta","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Seções do sumário de alta"],"titulo":"Seções do sumário de alta","selo":"N","fase":3,"rota":"/pep/sumario-alta/secoes","permissao":"pep.admin.ler"},
   {"id":"pep.administracao-do-pep.regras-do-prontuario-por-setor","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Regras do prontuário por setor"],"titulo":"Regras do prontuário por setor","selo":"N","fase":3,"rota":"/pep/prontuario-setor","permissao":"pep.admin.ler"},
   {"id":"pep.administracao-do-pep.regras-de-aviso-clinico","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Regras de aviso clínico"],"titulo":"Regras de aviso clínico","selo":"N","fase":3,"rota":"/pep/avisos-clinicos/regras","permissao":"pep.admin.ler"},
+  {"id":"pep.administracao-do-pep.configuracao-da-nota-soap","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Configuração da nota S.O.A.P."],"titulo":"Configuração da nota S.O.A.P.","selo":"N","fase":7,"rota":"/pep/admin/nota-soap","permissao":"pep.admin.ler"},
   {"id":"enfermagem.aprazamento-e-checagem-de-medicamentos-em-tela","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Aprazamento e checagem de medicamentos"],"titulo":"Aprazamento e checagem de medicamentos","selo":"P","fase":2,"rota":"/enfermagem/aprazamento","permissao":"enfermagem.horario.ler"},
   {"id":"enfermagem.checagem-por-codigo-de-barras-pulseira-e-dose","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Checagem por código de barras"],"titulo":"Checagem por código de barras","selo":"N","fase":2,"rota":"/beira-leito/checagem","permissao":"enfermagem.administracao.ler"},
   {"id":"enfermagem.horarios-padrao-de-medicacao-por-unidade","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Horários-padrão de medicação por unidade"],"titulo":"Horários-padrão de medicação por unidade","selo":"M","fase":2,"rota":"/cadastros/prescricao/horarios-padrao","permissao":"pep.gradeHorario.ler"},

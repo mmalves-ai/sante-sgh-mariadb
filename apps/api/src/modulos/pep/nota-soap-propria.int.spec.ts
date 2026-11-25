@@ -455,6 +455,14 @@ describe.skipIf(SEM_BANCO)('nota clínica em quatro partes codificada (banco pr�
     expect((await notas.termos('ciap2', `${M}K`)).map((t) => t.id)).toEqual([ids.ciap]);
     expect((await notas.termos('cid10', 'I10')).map((t) => t.codigo)).toContain('I10');
     expect((await notas.correspondencia(ids.ciap)).map((t) => t.id)).toEqual([ids.i10, ids.i15]);
+    // Combos da tela de configuração: o estabelecimento da massa aparece; nada vem de linha excluída.
+    const op = await notas.opcoesConfiguracao();
+    expect(op.estabelecimentos).toContainEqual({ id: ids.est, nome: `Hospital sintético ${P}` });
+    expect(op.especialidades.every((x) => Number.isInteger(x.id) && x.nome.length > 0)).toBe(true);
+    // A configuração gravada pela tela aparece na lista da administração, com a versão para a alteração.
+    expect(await notas.configuracoes()).toContainEqual(
+      expect.objectContaining({ id: ids.config, estabelecimentoId: ids.est, usaCiap: true, versao: 3 }),
+    );
   });
 
   it('as rotas exigem o vínculo assistencial com o paciente', async () => {

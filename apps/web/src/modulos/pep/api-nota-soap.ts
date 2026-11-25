@@ -118,3 +118,63 @@ export async function gravarNotaSoap(
   if (!r.ok) throw await erroDaResposta(r);
   return esquemaGravada.parse(await r.json());
 }
+
+// ------------------------------------------------------------------ configuração (administração do PEP)
+// GET  /api/pep/nota-soap/configuracoes          configurações por estabelecimento e especialidade (pep.admin.ler)
+// GET  /api/pep/nota-soap/configuracoes/opcoes   estabelecimentos e especialidades ativos, para os combos
+// POST /api/pep/nota-soap/configuracoes          incluir ou alterar (pep.admin.editar; com a versão na alteração)
+export const esquemaConfiguracaoNota = configuracao.extend({
+  id: z.number(),
+  descricao: z.string(),
+  versao: z.number(),
+});
+export type ConfiguracaoNotaTela = z.infer<typeof esquemaConfiguracaoNota>;
+const opcao = z.object({ id: z.number(), nome: z.string() });
+export const esquemaOpcoesConfiguracaoNota = z.object({
+  estabelecimentos: z.array(opcao),
+  especialidades: z.array(opcao),
+});
+export type OpcoesConfiguracaoNotaTela = z.infer<typeof esquemaOpcoesConfiguracaoNota>;
+
+export const lerConfiguracoesNota = (buscar: typeof fetch = fetch) =>
+  ler(`${P}/configuracoes`, z.array(esquemaConfiguracaoNota), buscar);
+
+export const lerOpcoesConfiguracaoNota = (buscar: typeof fetch = fetch) =>
+  ler(`${P}/configuracoes/opcoes`, esquemaOpcoesConfiguracaoNota, buscar);
+
+export interface EntradaConfiguracaoNotaTela {
+  id: number | null;
+  versao: number | null;
+  estabelecimento: number | null;
+  especialidade: number | null;
+  descricao: string;
+  exigeSubjetivo: boolean;
+  exigeObjetivo: boolean;
+  exigeAvaliacao: boolean;
+  exigePlano: boolean;
+  usaCiap: boolean;
+  exigeCidAvaliacao: boolean;
+  ativo: boolean;
+}
+
+export async function gravarConfiguracaoNota(
+  corpo: EntradaConfiguracaoNotaTela,
+  buscar: typeof fetch = fetch,
+): Promise<{ id: number; versao: number }> {
+  const r = await buscar(`${P}/configuracoes`, {
+    method: 'POST',
+    headers: {
+      ...JSON_ACEITO,
+      'content-type': 'application/json',
+      'x-csrf': tokenCsrf(),
+      'idempotency-key': novaChave('pep.notaSoap.configuracao'),
+    },
+    body: JSON.stringify(corpo),
+  });
+  if (!r.ok) throw await erroDaResposta(r);
+  const g = z
+    .object({ resultado: z.object({ id: z.number(), versao: z.number() }).passthrough() })
+    .passthrough()
+    .parse(await r.json());
+  return { id: g.resultado.id, versao: g.resultado.versao };
+}

@@ -7,6 +7,7 @@
 //   POST /api/pep/nota-soap/assinar                      assinar (partes obrigatórias e CID-10 da avaliação)
 //   POST /api/pep/nota-soap/sem-efeito                   tornar sem efeito (justificativa quando assinada)
 //   GET  /api/pep/nota-soap/configuracoes                configurações por estabelecimento e especialidade
+//   GET  /api/pep/nota-soap/configuracoes/opcoes         estabelecimentos e especialidades ativos (combos)
 //   POST /api/pep/nota-soap/configuracoes                incluir ou alterar uma configuração
 // Ler: pep.prontuario.ler; escrever e assinar: pep.evolucao.criar; sem efeito: pep.evolucao.suspender; configurar:
 // pep.admin.ler / pep.admin.editar. Como as vizinhas do prontuário, a visão por paciente e as gravações conferem o
@@ -194,6 +195,12 @@ export class NotaSoapController {
   @Permissao('pep.admin.ler')
   configuracoes() {
     return this.banco().configuracoes();
+  }
+
+  @Get('configuracoes/opcoes')
+  @Permissao('pep.admin.ler')
+  opcoesConfiguracao() {
+    return this.banco().opcoesConfiguracao();
   }
 
   @Post('configuracoes')

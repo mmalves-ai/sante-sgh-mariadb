@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 488, M: 198, P: 57, N: 233 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 489, M: 198, P: 57, N: 234 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(488);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(489);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -426,6 +426,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/patrimonio/parametros', // M54.6
         '/pep/admin/impressao', // M22
         '/pep/admin/modelos', // M22
+        '/pep/admin/nota-soap', // C2-080 (03-PEP L98): configuração da nota S.O.A.P.
         '/pep/admin/tipos', // M22
         '/pep/uti/indices', // M45 (etapa 2)
         '/pep/anotacoes-administrativas', // C1-109 (03-PEP L147)

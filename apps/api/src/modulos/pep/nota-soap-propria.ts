@@ -131,6 +131,10 @@ export interface ConfiguracaoLida extends ConfiguracaoNotaSoap {
   readonly descricao: string;
   readonly versao: number;
 }
+export interface OpcoesConfiguracaoNota {
+  readonly estabelecimentos: readonly { readonly id: number; readonly nome: string }[];
+  readonly especialidades: readonly { readonly id: number; readonly nome: string }[];
+}
 export interface NotaLida {
   readonly id: number;
   readonly versao: number;
@@ -376,6 +380,21 @@ export class NotaSoapPropria {
         )
       ).map(configDe),
     );
+  }
+
+  /** Estabelecimentos e especialidades ativos, para os combos da tela de configuração da nota. */
+  opcoesConfiguracao(): Promise<OpcoesConfiguracaoNota> {
+    return this.ler(async (l) => {
+      const estabelecimentos = await l.consultar(
+        `SELECT id, nome_fantasia AS nome FROM estabelecimento WHERE excluido_em IS NULL AND ativo
+          ORDER BY nome_fantasia, id`,
+      );
+      const especialidades = await l.consultar(
+        'SELECT id, descricao AS nome FROM especialidade_medica WHERE ativo ORDER BY descricao, id',
+      );
+      const op = (r: Record<string, unknown>) => ({ id: num(r['id']), nome: String(r['nome'] ?? '') });
+      return { estabelecimentos: estabelecimentos.map(op), especialidades: especialidades.map(op) };
+    });
   }
 
   /** Atendimentos do paciente (os mais novos; com a configuração que vale para cada um) e as notas dele. */
