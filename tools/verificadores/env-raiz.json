@@ -1,9 +1,9 @@
 {
-  "descricao": "Metadados do .env da raiz do sante-sgh. Só permissão, tamanho e data: o conteúdo nunca é lido. Se o dono trocar o .env, registre de novo (stat). Registrado de novo em 2026-11-23: o .env ganhou, por decisão do dono, as credenciais do aviso por SES, o token do GitHub e os endereços DEV da VM. Registrado de novo em 2026-11-24 04h30: o .env ganhou MAILPIT_GESTAO_USUARIO, MAILPIT_GESTAO_SENHA e MAILPIT_GESTAO_HASH (tela do Mailpit atrás do Caddy da gestão, pedido do dono) e SEMEAR_ADMIN_EMAIL foi atualizado ao e-mail novo do administrador.",
+  "descricao": "Metadados do .env da raiz do sante-sgh. Só permissão, tamanho e data: o conteúdo nunca é lido. Se o dono trocar o .env, registre de novo (stat). Registrado de novo em 2026-11-23: o .env ganhou, por decisão do dono, as credenciais do aviso por SES, o token do GitHub e os endereços DEV da VM. Registrado de novo em 2026-11-24 04h30: o .env ganhou MAILPIT_GESTAO_USUARIO, MAILPIT_GESTAO_SENHA e MAILPIT_GESTAO_HASH (tela do Mailpit atrás do Caddy da gestão, pedido do dono) e SEMEAR_ADMIN_EMAIL foi atualizado ao e-mail novo do administrador. Registrado de novo em 2026-11-25 02h30: a sessão sante-sgh-ba trocou só SEMEAR_ADMIN_SENHA (00h08, a pedido do dono, para desbloquear o login do administrador da plataforma); nenhuma outra linha.",
   "fonte": "stat -c '%a %s %Y' .env",
-  "registradoEm": "2026-11-24",
+  "registradoEm": "2026-11-25",
   "raiz": "/home/mmalves/workspace/redesante/sante-sgh",
   "permissao": "600",
   "tamanho": 1443,
-  "mtime": 1795504741
+  "mtime": 1795576116
 }
