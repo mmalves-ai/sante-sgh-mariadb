@@ -530,6 +530,7 @@
     "src/modulos/financeiro/vocabulario.ts",
     "src/modulos/financeiro/porta-propria.int.spec.ts",
     "src/modulos/financeiro/api/escopo-conta.int.spec.ts",
+    "src/modulos/financeiro/aplicacao/alcada-adiantamento-movimento.spec.ts",
     "src/modulos/financeiro/aplicacao/baixar-titulo.spec.ts",
     "src/modulos/financeiro/aplicacao/comum.spec-util.ts",
     "src/modulos/financeiro/aplicacao/criar-titulo-pagar.spec.ts",
