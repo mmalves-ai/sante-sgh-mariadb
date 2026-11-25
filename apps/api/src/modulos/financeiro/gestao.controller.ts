@@ -27,6 +27,7 @@ import {
   FONTE_CONFIGURACAO,
   type FonteConfiguracao,
 } from '../config/public-api.js';
+import { NOMES_OPERACAO_TIPO_LANCAMENTO, type OperacaoTipoLancamento } from '@sgh/dominio-financeiro';
 import { corpo, inteiroOuNulo } from '../exames/public-api.js';
 import { ApoiosFinanceiro } from './apoios.js';
 import {
@@ -45,6 +46,15 @@ import {
   tiposDoPerfil,
   usuariosDoEstabelecimento,
 } from './gestao-propria.js';
+import {
+  escopoMemoria,
+  manterEscopoMemoria,
+  manterRestricaoMemoria,
+  manterTipoMemoria,
+  perfisMemoria,
+  tiposMemoria,
+  usuariosMemoria,
+} from './gestao-permissoes-memoria.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
 import { type ContextoFinanceiro, PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
 import { resultadoFin } from './servico.js';
@@ -82,6 +92,14 @@ export class GestaoFinanceiroController {
     if (this.nucleo) return null;
     const p = this.porta as PortaFinanceiro & Partial<LeituraGestaoMemoria>;
     return p.gestaoLancamentos && p.gestaoClassificacao ? (p as LeituraGestaoMemoria) : null;
+  }
+
+  /**
+   * F3.8, 07-FIN linha 99: o estabelecimento das permissões em memória, só na sessão sintética (porta em memória, sem
+   * banco do cliente). Com o banco, devolve nulo e vale o caminho do executor.
+   */
+  private estMemoria(req: RequisicaoAutorizada): number | null {
+    return this.memoria() ? (sessaoDe(req).porta.estabelecimento ?? 0) : null;
   }
 
   private ler<T>(req: RequisicaoAutorizada, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
@@ -149,6 +167,7 @@ export class GestaoFinanceiroController {
   @Get('usuarios')
   @Permissao('financeiro.parametro.ler')
   usuarios(@Req() req: RequisicaoAutorizada) {
+    if (this.estMemoria(req) !== null) return usuariosMemoria();
     return this.ler(req, (l, est) => usuariosDoEstabelecimento(l, est));
   }
 
@@ -156,6 +175,8 @@ export class GestaoFinanceiroController {
   @Permissao('financeiro.parametro.ler')
   escopo(@Query('usuario') usuario: string | undefined, @Req() req: RequisicaoAutorizada) {
     const n = idDe(usuario, 'Usuário');
+    const mem = this.estMemoria(req);
+    if (mem !== null) return escopoMemoria(mem, n);
     return this.ler(req, (l, est) => escopoDoUsuario(l, est, n));
   }
 
@@ -163,52 +184,59 @@ export class GestaoFinanceiroController {
   @HttpCode(200)
   @Permissao('financeiro.parametro.editar')
   @AuditadoNoHandler('financeiro.manterEscopoConta pelo executor (trilha na mesma transação)')
-  manterEscopo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
-    return this.gravar(
-      req,
-      'financeiro.manterEscopoConta',
-      corpo(esquemaEscopoConta, b),
-      'Escopo de contas do usuário gravado.',
-    );
+  async manterEscopo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    const e = corpo(esquemaEscopoConta, b);
+    const mensagem = 'Escopo de contas do usuário gravado.';
+    const mem = this.estMemoria(req);
+    if (mem !== null) return resultadoFin(mensagem, false, manterEscopoMemoria(mem, sessaoDe(req).login, e));
+    return this.gravar(req, 'financeiro.manterEscopoConta', e, mensagem);
   }
 
   @Get('perfis')
   @Permissao('financeiro.parametro.ler')
   perfis(@Req() req: RequisicaoAutorizada) {
+    if (this.estMemoria(req) !== null) return perfisMemoria();
     return this.ler(req, (l, est) => perfisDoEstabelecimento(l, est));
   }
 
   @Get('tipos-lancamento')
   @Permissao('financeiro.parametro.ler')
-  tipos(@Query('perfil') perfil: string | undefined, @Req() req: RequisicaoAutorizada) {
+  tipos(
+    @Query('perfil') perfil: string | undefined,
+    @Query('operacao') operacao: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
     const n = idDe(perfil, 'Perfil');
-    return this.ler(req, (l, est) => tiposDoPerfil(l, est, n));
+    const o = (operacao?.trim() || 'banco') as OperacaoTipoLancamento;
+    if (!NOMES_OPERACAO_TIPO_LANCAMENTO.includes(o))
+      throw new ErroProblema('entrada-invalida', 400, 'Operação inválida', 'Escolha a operação.');
+    const mem = this.estMemoria(req);
+    if (mem !== null) return tiposMemoria(mem, n, o);
+    return this.ler(req, (l, est) => tiposDoPerfil(l, est, n, o));
   }
 
   @Post('tipos-lancamento')
   @HttpCode(200)
   @Permissao('financeiro.parametro.editar')
   @AuditadoNoHandler('financeiro.manterTipoLancamento pelo executor (trilha na mesma transação)')
-  manterTipo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
-    return this.gravar(
-      req,
-      'financeiro.manterTipoLancamento',
-      corpo(esquemaTipoLancamentoPerfil, b),
-      'Tipo de lançamento do perfil gravado.',
-    );
+  async manterTipo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    const e = corpo(esquemaTipoLancamentoPerfil, b);
+    const mensagem = 'Tipo do perfil gravado.';
+    const mem = this.estMemoria(req);
+    if (mem !== null) return resultadoFin(mensagem, false, manterTipoMemoria(mem, e));
+    return this.gravar(req, 'financeiro.manterTipoLancamento', e, mensagem);
   }
 
   @Post('tipos-lancamento/restricao')
   @HttpCode(200)
   @Permissao('financeiro.parametro.editar')
   @AuditadoNoHandler('financeiro.manterRestricaoTipoLancamento pelo executor (trilha na mesma transação)')
-  manterRestricao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
-    return this.gravar(
-      req,
-      'financeiro.manterRestricaoTipoLancamento',
-      corpo(esquemaRestricaoTipoLancamento, b),
-      'Restrição de tipos do perfil gravada.',
-    );
+  async manterRestricao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    const e = corpo(esquemaRestricaoTipoLancamento, b);
+    const mensagem = 'Restrição de tipos do perfil gravada.';
+    const mem = this.estMemoria(req);
+    if (mem !== null) return resultadoFin(mensagem, false, manterRestricaoMemoria(mem, e));
+    return this.gravar(req, 'financeiro.manterRestricaoTipoLancamento', e, mensagem);
   }
 
   @Get('lancamentos')

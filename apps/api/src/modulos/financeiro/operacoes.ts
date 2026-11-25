@@ -385,7 +385,7 @@ async function incluirTituloPagar(
   ctx: ContextoOperacao,
 ): Promise<ResultadoOperacao> {
   const est = estabelecimentoDe(ctx);
-  usuarioDe(ctx);
+  const usuario = usuarioDe(ctx);
   const mapa = CREDOR_DO_TIPO[e.tipo];
   const credor = e.tipo === 'M' ? (e.profissional ?? e.credor) : e.credor;
   const existe = async (): Promise<boolean> => {
@@ -425,6 +425,8 @@ async function incluirTituloPagar(
     [mapa.codigo],
     `o tipo de credor "${mapa.codigo}"`,
   );
+  // F3.8, 07-FIN linha 99: o tipo de credor liberado aos perfis do usuário no título a pagar (lista branca, quando há).
+  await exigirTipoLancamentoLiberado(tx, est, usuario, tipoCredor, 'contas_pagar');
   const tipoDocumento = await idObrigatorio(
     tx,
     `SELECT id FROM tipo_documento_financeiro WHERE ativo = TRUE AND sentido IN ('pagar','ambos')

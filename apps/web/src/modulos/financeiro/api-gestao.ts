@@ -33,6 +33,9 @@ export interface EscopoConta {
   readonly vigenciaFim: string | null;
   readonly temLinha: boolean;
 }
+/** As operações que têm tipo por perfil: o movimento (tipo de lançamento), o título a pagar e o adiantamento (credor). */
+export const OPERACOES_TIPO = ['banco', 'contas_pagar', 'adiantamento'] as const;
+export type OperacaoTipo = (typeof OPERACOES_TIPO)[number];
 export interface TipoDoPerfil {
   readonly tipo: number;
   readonly codigo: string;
@@ -79,15 +82,21 @@ export interface LancamentoAchado {
 export const buscarLancamentos = (alvo: AlvoReclassificacao, termo: string): Promise<LancamentoAchado[]> =>
   ler(`${P}/lancamentos${qs({ alvo, termo })}`, z.array(confiar<LancamentoAchado>()));
 export const gravarRestricaoDoPerfil = (
-  e: { perfil: number; restrito: boolean },
+  e: { perfil: number; restrito: boolean; operacao: OperacaoTipo },
   chave: string,
 ): Promise<ResultadoFinanceiro> =>
   enviar(`${P}/tipos-lancamento/restricao`, e, confiar<ResultadoFinanceiro>(), chave);
 
 export const lerPerfis = (): Promise<Opcao[]> => ler(`${P}/perfis`, z.array(confiar<Opcao>()));
-export const lerTiposDoPerfil = (perfil: number): Promise<{ restrito: boolean; tipos: TipoDoPerfil[] }> =>
-  ler(`${P}/tipos-lancamento${qs({ perfil })}`, confiar<{ restrito: boolean; tipos: TipoDoPerfil[] }>());
+export const lerTiposDoPerfil = (
+  perfil: number,
+  operacao: OperacaoTipo,
+): Promise<{ restrito: boolean; tipos: TipoDoPerfil[] }> =>
+  ler(
+    `${P}/tipos-lancamento${qs({ perfil, operacao })}`,
+    confiar<{ restrito: boolean; tipos: TipoDoPerfil[] }>(),
+  );
 export const gravarTipoDoPerfil = (
-  e: { perfil: number; tipo: number; liberado: boolean },
+  e: { perfil: number; tipo: number; liberado: boolean; operacao: OperacaoTipo },
   chave: string,
 ): Promise<ResultadoFinanceiro> => enviar(`${P}/tipos-lancamento`, e, confiar<ResultadoFinanceiro>(), chave);
