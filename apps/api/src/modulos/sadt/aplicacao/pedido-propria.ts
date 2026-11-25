@@ -52,6 +52,7 @@ import {
   TABELAS_CONTA_PEDIDO,
 } from './pedido-conta.js';
 import type { NucleoSadt } from '../porta-propria.js';
+import { conferirPostoDaColeta } from './posto-coleta-propria.js';
 import type { ContextoSadt } from '../porta.js';
 
 // ── Entradas (validadas na rota e de novo aqui) ─────────────────────────────────────────────────────────────
@@ -119,6 +120,8 @@ export const esquemaColetarRecoleta = z.object({
   identificadoresConferidos: z.boolean().default(false),
   pulseira: z.string().trim().max(120).nullable().default(null),
   estacao: z.string().trim().max(64).nullable().default(null),
+  /** O posto de coleta do cadastro onde a recoleta foi colhida (à beira do leito, sem posto). */
+  posto: id.nullable().default(null),
 });
 
 // ── Saídas ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1250,6 +1253,7 @@ export class ServicoPedidoSadt {
         }),
       );
       const original = n(nc['amostra_biologica_id']);
+      const avisosPosto = await conferirPostoDaColeta(tx, est, e.posto);
       const itens = await tx.consultarParaAtualizar(
         `SELECT ei.id, ei.versao FROM amostra_biologica_exame abe JOIN exame_item ei ON ei.id = abe.exame_item_id
           WHERE abe.amostra_biologica_id = ? AND abe.excluido_em IS NULL AND ei.situacao = 'solicitado'`,
@@ -1274,6 +1278,7 @@ export class ServicoPedidoSadt {
         coletada_em: agora,
         repeticao: true,
         motivo_nova_coleta_id: n(nc['motivo_nova_coleta_id']),
+        ponto_coleta_id: e.posto,
         origem: 'sistema',
       });
       const codigo = codigoDaAmostra(prefixo, amostra);
@@ -1312,6 +1317,8 @@ export class ServicoPedidoSadt {
           identificadoresConferidos: true,
           pulseiraConferida: internado,
           estacao: e.estacao,
+          posto: e.posto,
+          avisosPosto,
         }),
       });
       await tx.alterar('nova_coleta', recoleta, n(nc['versao']), {
@@ -1414,6 +1421,7 @@ export class ServicoPedidoSadt {
       await tx.alterar('nova_coleta', recoleta, n(nc['versao']), {
         situacao: 'cancelada',
         cancelada_em: agora,
+        cancelada_por_usuario_id: usuario,
         motivo_cancelamento: p.motivo,
       });
       return { id: recoleta, exames: itens.length };
