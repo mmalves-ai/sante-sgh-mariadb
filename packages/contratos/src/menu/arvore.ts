@@ -149,7 +149,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo; F8 vai como fase 7); a contagem acompanha.
 // C1-026 (07-FIN linha 66): o item "Dados bancários e chave Pix do credor" das contas a pagar entrou à mão (mesmo
 // motivo), para o cadastro de credores chegar à tela sem a leitura das remessas; a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":510,"M":198,"P":57,"N":255};
+// C1-035 (09-AREA linha 86): o item "Auditoria das checagens" da enfermagem entrou à mão (mesmo motivo; F8 vai como
+// fase 7); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":511,"M":198,"P":57,"N":256};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -304,6 +306,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"enfermagem.prescricao-de-enfermagem-aprazada-e-checada","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Prescrição de enfermagem aprazada e checada"],"titulo":"Prescrição de enfermagem aprazada e checada","selo":"N","fase":5,"rota":"/enfermagem/turno?secao=cuidados","permissao":"enfermagem.sae.ler"},
   {"id":"enfermagem.procedimentos-cuidados-e-kits-de-enfermagem","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Procedimentos, cuidados e kits de enfermagem"],"titulo":"Procedimentos, cuidados e kits de enfermagem","selo":"M","fase":2,"rota":"/cadastros/enfermagem/procedimentos","permissao":"enfermagem.procedimento.ler"},
   {"id":"enfermagem.classificacao-de-pacientes-fugulin-nas","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Classificação de pacientes"],"titulo":"Classificação de pacientes","selo":"N","fase":5,"rota":"/enfermagem/classificacao","permissao":"enfermagem.classificacao.ler"},
+  {"id":"enfermagem.auditoria-das-checagens-amostra-auditor-e-justificativa","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Auditoria das checagens"],"titulo":"Auditoria das checagens","selo":"N","fase":7,"rota":"/enfermagem/auditoria-checagem","permissao":"enfermagem.auditoriaChecagem.ler"},
   {"id":"multiprofissional.evolucoes-multiprofissionais-fisio-nutricao-psicologia","area":"ASSISTÊNCIA","grupo":"Multiprofissional","caminho":["Multiprofissional","Evoluções multiprofissionais"],"titulo":"Evoluções multiprofissionais","selo":"M","fase":2,"rota":"/pep/pacientes?aba=registro-novo","permissao":"pep.evolucao.criar"},
   {"id":"multiprofissional.nutricao-clinica.dietas-caracteristicas-e-horarios-de-refeicao","area":"ASSISTÊNCIA","grupo":"Multiprofissional","caminho":["Multiprofissional","Nutrição clínica","Dietas, características e horários de refeição"],"titulo":"Dietas, características e horários de refeição","selo":"M","fase":2,"rota":"/pep/cadastros/nutricao","permissao":"pep.caracteristicaDieta.ler"},
   {"id":"multiprofissional.nutricao-clinica.triagem-e-avaliacao-nutricional-nrs-2002","area":"ASSISTÊNCIA","grupo":"Multiprofissional","caminho":["Multiprofissional","Nutrição clínica","Triagem e avaliação nutricional"],"titulo":"Triagem e avaliação nutricional","selo":"N","fase":5,"rota":"/nutricao/triagem","permissao":"pep.nutricao.ler"},
