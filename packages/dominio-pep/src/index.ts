@@ -145,3 +145,5 @@ export * from './nota-soap.js';
 // F8 (09-AREA L69): registro oncológico (tumor com CID-O-3, estadiamento TNM) e radioterapia (plano e sessões).
 export * from './especialidades/registro-oncologico.js';
 export * from './curvas-crescimento.js';
+// 03-PEP L145: doação e transplante de órgãos (doador, receptor, destino do órgão, acompanhamento).
+export * from './transplante.js';
