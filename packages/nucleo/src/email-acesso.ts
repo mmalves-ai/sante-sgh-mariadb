@@ -100,13 +100,26 @@ export function emailAcessoMemoria(): PortaEmailAcesso & { readonly enviadas: Me
  */
 export function emailAcessoDoAmbiente(
   env: Readonly<Record<string, string | undefined>>,
+  avisar: (texto: string) => void = (texto) => console.warn(texto),
 ): PortaEmailAcesso | null {
   const url = env['SMTP_URL']?.trim();
   // Canal do dono (decisão do dono, 24/11/2026: "para o admin, que sou eu, pode mandar"): fora de produção, com
   // ACESSO_EMAIL_CANAL_DONO=sim, o e-mail de acesso cujo destinatário é o dono vai à caixa real dele pelo canal de
   // avisos da obra (SES); qualquer outro destinatário segue para a captura local (SMTP em loopback) ou é recusado.
-  // Sem DONO_EMAIL o canal fica desligado e vale o comportamento normal.
+  // Sem DONO_EMAIL o canal fica desligado e vale o comportamento normal, com aviso na montagem (só o nome das chaves,
+  // nunca valor): o lançador do dev que liga o canal precisa definir DONO_EMAIL junto.
   const emailDono = emailDoDono(env);
+  if (
+    !emailDono &&
+    (env['AMBIENTE'] ?? 'dev') !== 'producao' &&
+    env['ACESSO_EMAIL_CANAL_DONO']?.trim() === 'sim'
+  )
+    avisar(
+      'E-mail de acesso: ACESSO_EMAIL_CANAL_DONO=sim sem DONO_EMAIL; o canal do dono fica desligado e vale o envio ' +
+        (url
+          ? 'pela captura local (SMTP_URL).'
+          : 'normal, que sem SMTP_URL deixa a recuperação e o código por e-mail indisponíveis.'),
+    );
   if (
     emailDono &&
     (env['AMBIENTE'] ?? 'dev') !== 'producao' &&

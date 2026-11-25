@@ -19,11 +19,40 @@ describe('canal do dono na porta de e-mail', () => {
     );
   });
 
-  it('ligado com DONO_EMAIL vazio: comportamento normal (sem SMTP_URL, sem envio)', () => {
+  it('ligado com DONO_EMAIL vazio: comportamento normal (sem SMTP_URL, sem envio), com aviso só de chaves', () => {
+    const avisos: string[] = [];
+    const avisar = (t: string) => avisos.push(t);
     expect(
-      emailAcessoDoAmbiente({ AMBIENTE: 'dev', ACESSO_EMAIL_CANAL_DONO: 'sim', DONO_EMAIL: '' }),
+      emailAcessoDoAmbiente({ AMBIENTE: 'dev', ACESSO_EMAIL_CANAL_DONO: 'sim', DONO_EMAIL: '' }, avisar),
     ).toBeNull();
-    expect(emailAcessoDoAmbiente({ AMBIENTE: 'dev', ACESSO_EMAIL_CANAL_DONO: 'sim' })).toBeNull();
+    expect(emailAcessoDoAmbiente({ AMBIENTE: 'dev', ACESSO_EMAIL_CANAL_DONO: 'sim' }, avisar)).toBeNull();
+    expect(avisos).toHaveLength(2);
+    expect(avisos[0]).toMatch(/ACESSO_EMAIL_CANAL_DONO=sim sem DONO_EMAIL/);
+    expect(avisos[0]).toMatch(/indisponíveis/);
+    const comSmtp = emailAcessoDoAmbiente(
+      { AMBIENTE: 'dev', ACESSO_EMAIL_CANAL_DONO: 'sim', SMTP_URL: 'smtp://127.0.0.1:1025' },
+      avisar,
+    );
+    expect(comSmtp?.destino).toBe('smtp');
+    expect(avisos[2]).toMatch(/captura local/);
+    expect(avisos[2]).not.toMatch(/127\.0\.0\.1/);
+  });
+
+  it('sem aviso quando o canal está desligado, em produção ou com DONO_EMAIL', () => {
+    const avisos: string[] = [];
+    const avisar = (t: string) => avisos.push(t);
+    emailAcessoDoAmbiente({ AMBIENTE: 'dev' }, avisar);
+    emailAcessoDoAmbiente({ AMBIENTE: 'producao', ACESSO_EMAIL_CANAL_DONO: 'sim' }, avisar);
+    emailAcessoDoAmbiente(
+      {
+        AMBIENTE: 'dev',
+        ACESSO_EMAIL_CANAL_DONO: 'sim',
+        DONO_EMAIL: 'dono@exemplo.dev',
+        SGH_RAIZ_REPOSITORIO: '/inexistente',
+      },
+      avisar,
+    );
+    expect(avisos).toEqual([]);
   });
 
   it('o canal recusa outro destinatário sem chamar o envio', async () => {
