@@ -229,7 +229,12 @@ export class ServicoPacs {
         ato: x.ato,
         setor: rotuloAto(x.ato),
         nomeExame: x.exame.nome,
-        paciente: { id: x.paciente.id ?? x.paciente.prontuario, nome: x.paciente.nome },
+        paciente: {
+          id: x.paciente.id ?? x.paciente.prontuario,
+          nome: x.paciente.nome,
+          prontuario: x.paciente.prontuario,
+          nascimento: x.paciente.nascimento,
+        },
         data: x.pedidoEm ?? x.chave.data,
         urgente: x.urgente,
         modalidade: mod,

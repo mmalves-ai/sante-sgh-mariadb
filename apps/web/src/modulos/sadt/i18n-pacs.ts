@@ -54,6 +54,7 @@ export const mensagensPacs = {
     selecionarExame: 'Selecionar o exame {exame}',
     exame: 'Exame',
     paciente: 'Paciente',
+    identificacao: 'Prontuário {prontuario} · nascimento {nascimento}',
     modalidade: 'Modalidade',
     acesso: 'Número de acesso',
     entrega: 'Entrega',

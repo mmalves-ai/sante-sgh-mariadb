@@ -161,7 +161,8 @@ export const esquemaItemWorklist = z.object({
   ato: n,
   setor: txt,
   nomeExame: txt,
-  paciente: z.object({ id: n, nome: txt }),
+  /** Dois identificadores do paciente (segurança do paciente): o nome com o prontuário e a data de nascimento. */
+  paciente: z.object({ id: n, nome: txt, prontuario: n, nascimento: txt.nullable() }),
   data: txt,
   urgente: z.boolean(),
   modalidade: z.object({ id: n.nullable(), sigla: txt }).nullable(),

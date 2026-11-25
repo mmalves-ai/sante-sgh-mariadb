@@ -121,7 +121,7 @@ interface Linha {
   modalidade: { id: number | null; sigla: string } | null;
   mwl: { id: number; accession: string; envios: number; entrega: string } | null;
   estudo: { status: string; link: string | null; mensagens: number } | null;
-  paciente: { id: number; nome: string };
+  paciente: { id: number; nome: string; prontuario: number; nascimento: string | null };
 }
 
 // Sem chave de liberação (05-SADT linha 20): o que liga o envio é o destino do estabelecimento (parâmetro
@@ -153,6 +153,9 @@ describe('lista de trabalho DICOM (M47.3)', { timeout: 60_000 }, () => {
     exameRx = rx!.exame;
     paciente = rx!.paciente.id;
     expect(paciente).toBe(1001);
+    // Dois identificadores na linha (homônimos 1001 e 1002 têm o mesmo nome): o prontuário e a data de nascimento.
+    expect(rx!.paciente.prontuario).toBe(501001);
+    expect(rx!.paciente.nascimento).toBe('1958-03-12');
     expect(rx!.modalidade).toEqual({ id: 6, sigla: 'CR' });
     // Sem destino no estabelecimento: a lista lê, o envio fica parado com o motivo (o parâmetro a informar).
     expect(tela.liberacao).toBeUndefined();

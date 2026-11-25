@@ -84,14 +84,20 @@ test.describe('Lista de trabalho DICOM e PACS @M47 @M47.3 @fase5', () => {
     await page.goto('/sadt/imagem/worklist');
     await expect(page.getByRole('heading', { level: 1, name: 'Lista de trabalho DICOM' })).toBeVisible();
     await expect(page.getByTestId('worklist-motivo')).toContainText('pacs.parceiroWorklist');
-    // A linha do pedido deste paciente (JOSÉ DA SILVA, 1001): a fonte sintética já traz outro raio X a enviar, de outro
-    // paciente (1003), que não aparece no prontuário do 1001.
+    // A linha do pedido deste paciente (1001, prontuário 501001): a fonte sintética já traz outro raio X a enviar, de outro
+    // paciente (1003), e tem homônimos (1001 e 1002, mesmo nome e nascimento). A linha mostra o prontuário e o
+    // nascimento, e o filtro é pelo prontuário, não pelo nome.
     const linhaRx = page
       .locator('[data-testid^="worklist-exame-"]')
       .filter({ hasText: 'RAIO X DE TÓRAX' })
-      .filter({ hasText: 'JOSÉ DA SILVA' })
+      .filter({
+        has: page.locator('[data-testid^="worklist-paciente-"]', { hasText: 'Prontuário 501001 ·' }),
+      })
       .filter({ hasText: 'A enviar' })
       .first();
+    await expect(linhaRx.locator('[data-testid^="worklist-paciente-"]')).toContainText(
+      'nascimento 12/03/1958',
+    );
     await expect(linhaRx).toBeVisible();
     const exame = Number((await linhaRx.getAttribute('data-testid'))!.replace('worklist-exame-', ''));
     await semViolacaoAxe(page, '/sadt/imagem/worklist (sem destino)');

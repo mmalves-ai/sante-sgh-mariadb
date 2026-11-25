@@ -75,6 +75,17 @@ describe.skipIf(SEM_BANCO)('porta própria da lista de trabalho DICOM (MariaDB, 
     const c = ctx();
     const { hoje } = await porta.relogio(c);
     expect((await porta.examesDoDia(c, hoje)).itens.map((x) => x.id)).toEqual([m!.itemImagem]);
+    // A linha leva os dois identificadores do paciente lidos do banco (prontuário e nascimento), para a tela distinguir
+    // homônimos.
+    const [doDia] = (await porta.examesDoDia(c, hoje)).itens;
+    const pac = await um(
+      `SELECT p.numero_prontuario AS pr, DATE_FORMAT(pf.data_nascimento, '%Y-%m-%d') AS nasc
+         FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?`,
+      [m!.base.paciente],
+    );
+    expect(doDia!.paciente.id).toBe(m!.base.paciente);
+    expect(doDia!.paciente.prontuario).toBe(Number(String(pac?.['pr'] ?? '').replace(/\D/g, '')) || 0);
+    expect(doDia!.paciente.nascimento).toBe(pac?.['nasc'] ?? null);
     const cad = await porta.modalidadeDoCadastro(c, [m!.itemImagem]);
     expect(cad.get(m!.itemImagem)).toEqual({ id: m!.modalidade, sigla: 'CT' });
     expect((await porta.modalidades(c)).some((x) => x.sigla === 'CT')).toBe(true);

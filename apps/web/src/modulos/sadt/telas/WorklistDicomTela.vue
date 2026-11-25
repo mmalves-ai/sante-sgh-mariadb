@@ -233,7 +233,18 @@ const simular = (status: StatusEstudo) =>
               <strong v-if="x.urgente"> · {{ t('pacs.tabela.urgente') }}</strong>
               <span class="secundario"> · {{ x.setor }} · {{ quando(x.data) }}</span>
             </td>
-            <td>{{ x.paciente.nome }}</td>
+            <td :data-testid="`worklist-paciente-${x.exame}`">
+              {{ x.paciente.nome }}
+              <span class="secundario">
+                ·
+                {{
+                  t('pacs.tabela.identificacao', {
+                    prontuario: x.paciente.prontuario,
+                    nascimento: quando(x.paciente.nascimento),
+                  })
+                }}
+              </span>
+            </td>
             <td>{{ x.modalidade?.sigla ?? t('pacs.tabela.semItem') }}</td>
             <td :data-testid="`worklist-acesso-${x.exame}`">
               {{ x.mwl?.accession ?? t('pacs.tabela.semItem') }}
