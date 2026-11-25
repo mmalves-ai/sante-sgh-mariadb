@@ -58,6 +58,7 @@ const novo = ref({
   manual: '',
   justificativa: '',
   aprovador: '',
+  justificativaCobertura: '',
 });
 
 // Equipe do ato (06-FAT linha 15): honorário e procedimento (grupos 2 e 3) levam a equipe no mesmo pedido.
@@ -74,11 +75,20 @@ function alternar(i: number) {
 function marcarTodos() {
   marcados.value = new Set((itens.data.value?.itens ?? []).filter((i) => !i.conferidoPor).map((i) => i.id));
 }
-async function agir(fn: () => Promise<{ mensagem: string }>) {
+/** A situação da cobertura que o lançamento devolve (aviso da fonte ou liberação por exceção). */
+function avisoCobertura(r: { ids?: Record<string, unknown> }): string {
+  const s = r.ids?.['coberturaSituacao'];
+  if (typeof s !== 'string' || s === 'livre') return '';
+  const m = r.ids?.['coberturaMotivos'];
+  const rot = t(`cobertura.lancamento.situacoes.${s}`);
+  return `${t('cobertura.lancamento.situacao', { situacao: rot })}${typeof m === 'string' && m ? `: ${m}` : ''}`;
+}
+async function agir(fn: () => Promise<{ mensagem: string; ids?: Record<string, unknown> }>) {
   erro.value = null;
   mensagem.value = null;
   try {
-    mensagem.value = (await fn()).mensagem;
+    const r = await fn();
+    mensagem.value = [r.mensagem, avisoCobertura(r)].filter(Boolean).join(' · ');
     marcados.value = new Set();
     await qc.invalidateQueries({ queryKey: ['faturamento'] });
   } catch (e) {
@@ -103,6 +113,10 @@ const pedidoLancamento = () => ({
   hora: lerHoraDigitada(novo.value.hora) ?? novo.value.hora,
   local: Number(novo.value.local),
   ato: Number(novo.value.ato),
+  // F7 (09-AREA linha 76): a justificativa que a fonte pagadora exige para cobrir o item (restrição de cobertura).
+  ...(novo.value.justificativaCobertura.trim()
+    ? { justificativaCobertura: novo.value.justificativaCobertura.trim() }
+    : {}),
   precoManual: novo.value.manual
     ? {
         unitario: numero(novo.value.manual),
@@ -320,6 +334,14 @@ const lancar = () =>
         <span v-if="novo.manual" class="campo"
           ><label for="lan-n-aprov">{{ t('faturamento.itens.aprovador') }}</label
           ><input id="lan-n-aprov" v-model="novo.aprovador" maxlength="31"
+        /></span>
+        <span class="campo"
+          ><label for="lan-n-just-cob">{{ t('cobertura.lancamento.justificativa') }}</label
+          ><input
+            id="lan-n-just-cob"
+            v-model="novo.justificativaCobertura"
+            maxlength="500"
+            data-testid="lan-n-just-cobertura"
         /></span>
         <EquipeLancamento
           v-if="aceitaEquipe"

@@ -37,6 +37,7 @@ import { useConexao } from '../conexao.js';
 import { agoraLocal, descreverItem } from '../descricao-item.js';
 import { dataHoraBr } from '../formato.js';
 import DadosClinicos from '../componentes/prescricao/DadosClinicos.vue';
+import AvisoCoberturaPrescricao from '../../faturamento/componentes/AvisoCoberturaPrescricao.vue';
 
 const props = defineProps<{ paciente: string }>();
 const { t } = useI18n();
@@ -103,6 +104,12 @@ const aba = ref<GrupoItemPrescricao>(grupoInicial);
 
 // ── Itens ─────────────────────────────────────────────────────────────────────────────────────────
 const itens = ref<ItemPrescricao[]>([]);
+// F7 (09-AREA linha 76): o aviso da cobertura da fonte pagadora vai pelos itens com código faturável (hemocomponente).
+const itensCobertura = computed(() =>
+  itens.value.flatMap((i) =>
+    i.detalhe.tipo === 'hemoterapia' ? [{ codigo: i.detalhe.hemocomponente.codigo, quantidade: 1 }] : [],
+  ),
+);
 const produtosVistos = reactive(new Map<number, string>());
 const dominio = (lista: string, v: string | number | null | undefined) =>
   v === null || v === undefined
@@ -500,6 +507,8 @@ const titulo = computed(() => {
           </tbody>
         </table>
       </section>
+
+      <AvisoCoberturaPrescricao :atendimento-id="Number(atendimento) || null" :itens="itensCobertura" />
 
       <div class="campo">
         <label for="presc-obs-geral">{{ t('pep.presc.editor.observacaoGeral') }}</label>

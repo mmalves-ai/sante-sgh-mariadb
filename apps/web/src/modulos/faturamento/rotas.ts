@@ -124,6 +124,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     component: () => import('./telas/OpmeLiberacaoTela.vue'),
     meta: { permissao: 'faturamento.autorizacao.ler' },
   },
+  // F7 (09-AREA linha 76): restrição de cobertura por fonte pagadora e compatibilidade entre procedimentos.
+  {
+    path: '/faturamento/cobertura',
+    name: 'faturamento.cobertura',
+    component: () => import('./telas/CoberturaTela.vue'),
+    meta: { permissao: 'faturamento.regra.ler' },
+  },
   // 06-FAT linha 30: regra de apresentação TISS por fonte pagadora (itens por guia e valores padrão de campo).
   {
     path: '/faturamento/apresentacao-tiss',
