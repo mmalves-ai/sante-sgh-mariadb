@@ -3,8 +3,9 @@
 // preferências e o /inicio funcionarem de ponta a ponta sem banco; a gravação de verdade é a do banco próprio
 // (operacoes-preferencias-propria.ts, contrato de efeito no .int.spec). As telas do menu são as entradas da árvore do
 // menu com endereço e permissão de leitura do cargo (o mesmo filtro `rotaPermitida` da leitura própria).
-import { ARVORE_MENU } from '@sgh/contratos';
+import { ARVORE_MENU, colunasVisaoDaRota } from '@sgh/contratos';
 import {
+  codigoTelaDoMenu,
   conferirTelaInicial,
   conferirVisaoTela,
   MENSAGEM_PREFERENCIA,
@@ -27,12 +28,8 @@ interface TelaMenu {
   readonly rota: string;
 }
 
-/** Código de tela sintético a partir da rota (o banco tem o seu; aqui só precisa ser estável e válido). */
-export const codigoTelaDaRota = (rota: string): string =>
-  rota
-    .replace(/^\//, '')
-    .replace(/[^A-Za-z0-9._-]+/g, '.')
-    .slice(0, 30) || 'raiz';
+/** O mesmo código que a porta própria dá à tela do menu ao registrá-la no banco. */
+export const codigoTelaDaRota = (rota: string): string => codigoTelaDoMenu(rota);
 
 let telasCache: TelaMenu[] | null = null;
 /** Uma tela por rota do menu (a primeira entrada com aquela rota dá o título). */
@@ -115,7 +112,10 @@ export class PreferenciasMemoria {
   gravarVisaoTela(login: string | null, entrada: unknown) {
     if (!login) throw recusar('sem-conta');
     const e = esquemaGravarVisaoTela.parse(entrada);
-    if (!telasDoMenuSintetico().some((t) => t.codigo === e.tela)) throw recusar('tela-inexistente');
+    const daLista = telasDoMenuSintetico().find((t) => t.codigo === e.tela);
+    if (!daLista) throw recusar('tela-inexistente');
+    const colunasDaTela = colunasVisaoDaRota(daLista.rota);
+    if (!colunasDaTela) throw recusar('tela-sem-visao');
     const conta = this.contas.get(login) ?? {
       geral: PREFERENCIA_GERAL_PADRAO,
       telaInicial: null,
@@ -124,7 +124,11 @@ export class PreferenciasMemoria {
     const daTela = conta.visoes.filter((v) => v.tela === e.tela);
     const nomePedido = (e.nome ?? NOME_VISAO_PADRAO).trim();
     const mesma = daTela.find((v) => v.nome === nomePedido);
-    const r = conferirVisaoTela(e, { primeiraDaTela: daTela.length === 0, padraoAtual: mesma?.padrao });
+    const r = conferirVisaoTela(e, {
+      colunasDaTela,
+      primeiraDaTela: daTela.length === 0,
+      padraoAtual: mesma?.padrao,
+    });
     if ('recusa' in r) throw recusar(r.recusa);
     const v = r.visao;
     const nova: VisaoTelaLida = {

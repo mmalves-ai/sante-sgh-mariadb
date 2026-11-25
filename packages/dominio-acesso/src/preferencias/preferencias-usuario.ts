@@ -34,6 +34,7 @@ export type RecusaPreferencia =
   | 'tela-inexistente'
   | 'tela-inicial-sem-rota'
   | 'tela-sem-permissao'
+  | 'tela-sem-visao'
   | 'visao-sem-colunas'
   | 'coluna-repetida'
   | 'coluna-desconhecida'
@@ -51,6 +52,7 @@ export const MENSAGEM_PREFERENCIA: Readonly<Record<RecusaPreferencia, string>> =
   'tela-inexistente': 'Essa tela não existe ou não está ativa.',
   'tela-inicial-sem-rota': 'A tela inicial precisa ser uma tela do menu, com endereço próprio.',
   'tela-sem-permissao': 'Seu cargo não dá acesso a essa tela; escolha uma tela do seu menu.',
+  'tela-sem-visao': 'Esta tela não tem lista com colunas para guardar.',
   'visao-sem-colunas': 'Deixe ao menos uma coluna visível.',
   'coluna-repetida': 'A mesma coluna aparece duas vezes.',
   'coluna-desconhecida': 'Uma das colunas não existe nesta tela.',
@@ -221,4 +223,77 @@ export function conferirVisaoTela(
  */
 export function visaoInicial<T extends { nome: string; padrao: boolean }>(visoes: readonly T[]): T | null {
   return visoes.find((v) => v.padrao) ?? visoes.find((v) => v.nome === NOME_VISAO_PADRAO) ?? null;
+}
+
+const TAMANHO_CODIGO_TELA = 30;
+
+/** Resumo estável de um texto em 8 dígitos hexadecimais (FNV-1a de 32 bits; só para desempatar códigos longos). */
+function resumoDoTexto(texto: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < texto.length; i += 1) {
+    h ^= texto.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+/**
+ * Código da tela do menu a partir do endereço dela: estável (o mesmo endereço dá sempre o mesmo código), válido como
+ * código de tela e único mesmo quando dois endereços começam iguais (o endereço longo leva um resumo no fim, em vez
+ * de ser só cortado). É o código com que a tela do menu é registrada no banco na primeira vez em que alguém a usa.
+ */
+export function codigoTelaDoMenu(rota: string): string {
+  const limpo =
+    rota
+      .replace(/^\/+/, '')
+      .replace(/[^A-Za-z0-9._-]+/g, '.')
+      .replace(/^\.+|\.+$/g, '') || 'raiz';
+  if (limpo.length <= TAMANHO_CODIGO_TELA) return limpo;
+  return `${limpo.slice(0, TAMANHO_CODIGO_TELA - 9)}-${resumoDoTexto(rota)}`;
+}
+
+/**
+ * As colunas que a lista mostra, na ordem: as da visão guardada que a tela ainda oferece (coluna que saiu da tela é
+ * ignorada, sem erro); sem visão, ou se nenhuma coluna guardada existe mais, as de fábrica, na ordem de fábrica.
+ */
+export function colunasDaVisao(
+  oferecidas: readonly string[],
+  guardadas: readonly string[] | null | undefined,
+): string[] {
+  const validas = [...new Set(guardadas ?? [])].filter((c) => oferecidas.includes(c));
+  return validas.length > 0 ? validas : [...oferecidas];
+}
+
+/** A visão é a de fábrica: todas as colunas oferecidas, na ordem de fábrica. */
+export function visaoDeFabrica(oferecidas: readonly string[], visiveis: readonly string[]): boolean {
+  return visiveis.length === oferecidas.length && visiveis.every((c, i) => c === oferecidas[i]);
+}
+
+/**
+ * Mostra ou esconde uma coluna. A que volta entra na posição de fábrica em relação às visíveis; a última visível não
+ * sai (a lista nunca fica sem coluna): devolve a mesma lista.
+ */
+export function alternarColuna(
+  oferecidas: readonly string[],
+  visiveis: readonly string[],
+  coluna: string,
+): string[] {
+  if (!oferecidas.includes(coluna)) return [...visiveis];
+  if (visiveis.includes(coluna))
+    return visiveis.length === 1 ? [...visiveis] : visiveis.filter((c) => c !== coluna);
+  const posicao = oferecidas.indexOf(coluna);
+  const depois = visiveis.findIndex((c) => oferecidas.indexOf(c) > posicao);
+  const r = [...visiveis];
+  r.splice(depois === -1 ? r.length : depois, 0, coluna);
+  return r;
+}
+
+/** Move uma coluna visível uma posição para antes (-1) ou depois (+1); na ponta, fica onde está. */
+export function moverColuna(visiveis: readonly string[], coluna: string, passo: -1 | 1): string[] {
+  const i = visiveis.indexOf(coluna);
+  const j = i + passo;
+  const r = [...visiveis];
+  if (i === -1 || j < 0 || j >= r.length) return r;
+  [r[i], r[j]] = [r[j]!, r[i]!];
+  return r;
 }

@@ -1,5 +1,5 @@
 // Preferências da conta na fonte sintética (01-ADM L84): as mesmas regras do domínio que a porta própria aplica.
-import { ARVORE_MENU } from '@sgh/contratos';
+import { ARVORE_MENU, ROTA_TRILHA_AUDITORIA } from '@sgh/contratos';
 import { ErroOperacao } from '@sgh/nucleo';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PreferenciasMemoria, telasDoMenuSintetico } from './preferencias-memoria.js';
@@ -9,6 +9,9 @@ const outra = ARVORE_MENU.find((i) => i.rota && i.permissao && i.permissao !== e
 const tela = telasDoMenuSintetico().find((t) => t.rota === entrada.rota)!;
 const telaOutra = telasDoMenuSintetico().find((t) => t.rota === outra.rota)!;
 const permissoes = [entrada.permissao!];
+// A lista que guarda visão por usuário (a trilha de auditoria) e uma tela do menu que não tem lista.
+const lista = telasDoMenuSintetico().find((t) => t.rota === ROTA_TRILHA_AUDITORIA)!;
+const semLista = telasDoMenuSintetico().find((t) => t.rota === '/administracao/parametros')!;
 
 const codigo = (f: () => unknown): string => {
   try {
@@ -51,32 +54,48 @@ describe('preferências da conta em memória (fonte sintética)', () => {
   });
 
   it('visão de tela: nasce padrão, a nova padrão tira a marca da anterior, regravar mantém a marca', () => {
-    p.gravarVisaoTela('SINT.X', { tela: tela.codigo, colunas: ['a', 'b'] });
+    p.gravarVisaoTela('SINT.X', { tela: lista.codigo, colunas: ['dataHora', 'usuario'] });
     p.gravarVisaoTela('SINT.X', {
-      tela: tela.codigo,
+      tela: lista.codigo,
       nome: 'Noite',
-      colunas: ['b'],
-      ordenacao: [{ coluna: 'b', direcao: 'desc' }],
+      colunas: ['usuario'],
+      ordenacao: [{ coluna: 'usuario', direcao: 'desc' }],
       padrao: true,
     });
-    p.gravarVisaoTela('SINT.X', { tela: tela.codigo, nome: 'Noite', colunas: ['b', 'a'] });
+    p.gravarVisaoTela('SINT.X', { tela: lista.codigo, nome: 'Noite', colunas: ['usuario', 'dataHora'] });
     expect(
       codigo(() =>
         p.gravarVisaoTela('SINT.X', {
-          tela: tela.codigo,
-          colunas: ['a'],
-          ordenacao: [{ coluna: 'b', direcao: 'asc' }],
+          tela: lista.codigo,
+          colunas: ['dataHora'],
+          ordenacao: [{ coluna: 'usuario', direcao: 'asc' }],
         }),
       ),
     ).toBe('ordenacao-fora-das-colunas');
-    expect(codigo(() => p.gravarVisaoTela('SINT.X', { tela: 'nao.existe', colunas: ['a'] }))).toBe(
+    expect(codigo(() => p.gravarVisaoTela('SINT.X', { tela: 'nao.existe', colunas: ['dataHora'] }))).toBe(
       'tela-inexistente',
     );
-    const l = p.ler('SINT.X', tela.codigo, new Set(permissoes));
+    const l = p.ler('SINT.X', lista.codigo, new Set(permissoes));
     expect(l.visoes.map((v) => [v.nome, v.padrao])).toEqual([
       ['padrao', false],
       ['Noite', true],
     ]);
-    expect(l.visaoInicialPorTela[tela.codigo]).toBe('Noite');
+    expect(l.visaoInicialPorTela[lista.codigo]).toBe('Noite');
+  });
+
+  it('visão de tela: só as colunas que a lista oferece, e só em tela que tem lista', () => {
+    expect(
+      codigo(() => p.gravarVisaoTela('SINT.X', { tela: lista.codigo, colunas: ['dataHora', 'salario'] })),
+    ).toBe('coluna-desconhecida');
+    expect(codigo(() => p.gravarVisaoTela('SINT.X', { tela: semLista.codigo, colunas: ['dataHora'] }))).toBe(
+      'tela-sem-visao',
+    );
+    expect(p.ler('SINT.X', undefined, new Set(permissoes)).visoes).toEqual([]);
+  });
+
+  it('cada tela do menu tem um código só dela', () => {
+    const codigos = telasDoMenuSintetico().map((t) => t.codigo);
+    expect(new Set(codigos).size).toBe(codigos.length);
+    for (const c of codigos) expect(c).toMatch(/^[A-Za-z0-9._-]{1,30}$/);
   });
 });
