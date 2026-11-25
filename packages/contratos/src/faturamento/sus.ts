@@ -99,6 +99,10 @@ export const REGRAS_CRITICA_SUS = [
   // (leitos × dias do mês), acima sem liberação nominal, e o tipo sem capacidade quando o cadastro é usado.
   'diarias-uti-acima-do-teto',
   'diarias-uti-sem-capacidade',
+  // Programação físico-orçamentária, teto e cota (06-SUS linha 54): a produção da competência que passa do limite em
+  // vigor (a gravidade sai do limite: bloqueante quando ele bloqueia, aviso quando não).
+  'producao-acima-do-teto',
+  'producao-acima-da-cota',
 ] as const;
 export type RegraCriticaSus = (typeof REGRAS_CRITICA_SUS)[number];
 
@@ -142,6 +146,8 @@ export const GRAVIDADE_DA_REGRA_SUS: Readonly<Record<RegraCriticaSus, GravidadeC
   'uti-nao-habilitada': 'bloqueante',
   'diarias-uti-acima-do-teto': 'bloqueante',
   'diarias-uti-sem-capacidade': 'aviso',
+  'producao-acima-do-teto': 'aviso',
+  'producao-acima-da-cota': 'aviso',
 };
 
 /** Situação da crítica: aberta, corrigida na origem (a nova crítica não a acusa) ou justificada (só aviso). */

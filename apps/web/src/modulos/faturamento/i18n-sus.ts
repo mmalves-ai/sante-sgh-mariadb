@@ -158,6 +158,10 @@ export const mensagensSus = {
         'Diárias de UTI da competência acima do teto da capacidade contratada (leitos × dias do mês), sem liberação (Leitos do sistema público)',
       'diarias-uti-sem-capacidade':
         'Diárias de UTI de um tipo sem capacidade contratada na competência (Leitos do sistema público)',
+      'producao-acima-do-teto':
+        'Produção acima do teto financeiro ou da programação físico-orçamentária da competência (Programação e tetos SUS)',
+      'producao-acima-da-cota':
+        'Produção acima da cota do procedimento para o município ou setor (remaneje a cota ou justifique)',
     },
   },
   ciha: {
