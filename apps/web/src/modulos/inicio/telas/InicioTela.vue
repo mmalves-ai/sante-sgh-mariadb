@@ -48,9 +48,13 @@ import {
   lerWorklistRecepcao,
 } from '../api-inicio.js';
 import ErroTrabalho from '../componentes/ErroTrabalho.vue';
+import BlocoPagina from '../componentes/BlocoPagina.vue';
+import { lerMinhaPagina } from '../api-pagina-inicial.js';
+import { mensagensPaginaInicial } from '../i18n-pagina-inicial.js';
 import MarcaRisco from '../../recepcao/componentes/MarcaRisco.vue';
 
 const { t } = useI18n();
+const { t: tp } = useI18n({ useScope: 'local', messages: mensagensPaginaInicial });
 const { estabelecimentoAtivo, permissoes, sessao } = usarSessao();
 const dono = computed(() => donoDaSessao(sessao.value));
 const pagina = useQuery({
@@ -176,6 +180,36 @@ const cartoes = computed(() => {
   if (agravos.data.value) resumos.agravos = resumoAgravos(agravos.data.value);
   return montarCartoes(visiveis.value, resumos);
 });
+// 01-ADM L114: a página montada pelo hospital para os perfis da pessoa (sem modelo publicado, ou sem o banco do
+// cliente, a página fixa acima vale). As listas de trabalho do modelo são os cartões já liberados, na ordem do modelo;
+// os demais blocos (indicador com gráfico, atalho, texto) entram na mesma grade.
+const minha = useQuery({
+  queryKey: computed(() => ['inicio', 'pagina-montada', dono.value]),
+  queryFn: () => lerMinhaPagina(),
+  retry: false,
+});
+const modeloDaPagina = computed(() => (minha.isSuccess.value ? (minha.data.value?.modelo ?? null) : null));
+type ItemPagina =
+  | { chave: string; largura: number; cartao: (typeof cartoes.value)[number]; bloco?: undefined }
+  | {
+      chave: string;
+      largura: number;
+      bloco: NonNullable<typeof minha.data.value>['blocos'][number];
+      cartao?: undefined;
+    };
+const itens = computed<ItemPagina[]>(() => {
+  if (!modeloDaPagina.value || !minha.data.value)
+    return cartoes.value.map((c) => ({ chave: c.id, largura: 1, cartao: c }));
+  const r: ItemPagina[] = [];
+  minha.data.value.blocos.forEach((b, i) => {
+    if (b.tipo !== 'lista_trabalho') r.push({ chave: `bloco-${i}`, largura: b.largura, bloco: b });
+    else {
+      const c = cartoes.value.find((x) => x.id === b.catalogo);
+      if (c) r.push({ chave: c.id, largura: b.largura, cartao: c });
+    }
+  });
+  return r;
+});
 const topoMedico = computed(() => (medico.data.value?.pacientes ?? []).slice(0, 5));
 const topoRecepcao = computed(() => (recepcao.data.value?.senhas ?? []).slice(0, 5));
 const topoPa = computed(() =>
@@ -216,199 +250,209 @@ const prazoTexto = (p: string) => `${p.slice(8, 10)}/${p.slice(5, 7)} ${p.slice(
           nome="perfil-ativo"
         />
       </div>
-      <template v-if="cartoes.length > 0">
+      <template v-if="itens.length > 0">
+        <p v-if="modeloDaPagina" class="secundario" data-testid="inicio-modelo">
+          {{ tp('paginaDoPerfil', { nome: modeloDaPagina.nome }) }}
+        </p>
         <h2 class="sgh-visualmente-oculto">{{ t('trabalho.inicio.filas') }}</h2>
         <div class="filas" data-testid="inicio-cartoes">
-          <article
-            v-for="c in cartoes"
-            :key="c.id"
-            class="painel cartao"
-            :class="{ urgente: c.prioridade >= 80 }"
-            :data-testid="`cartao-${c.id}`"
-            :aria-labelledby="`cartao-titulo-${c.id}`"
-          >
-            <header class="cartao__topo">
-              <h3 :id="`cartao-titulo-${c.id}`">
-                <RouterLink :to="c.rota" :aria-label="t('trabalho.inicio.abrirFila', { titulo: c.titulo })">{{
-                  c.titulo
-                }}</RouterLink>
-              </h3>
-              <span v-if="c.pendentes === null" class="secundario">{{
-                t('trabalho.inicio.carregandoFila')
-              }}</span>
-              <strong v-else-if="c.pendentes > 0" class="selo" :data-testid="`selo-${c.id}`">{{
-                t('trabalho.inicio.pendentes', { n: c.pendentes })
-              }}</strong>
-              <span v-else class="secundario" :data-testid="`selo-${c.id}`">{{
-                t('trabalho.inicio.semPendencia')
-              }}</span>
-            </header>
-            <p v-if="c.prazo" class="secundario">
-              {{ t('trabalho.inicio.prazo', { quando: prazoTexto(c.prazo) }) }}
-            </p>
-            <ul v-if="c.id === 'medico' && topoMedico.length > 0" class="lista" data-testid="topo-medico">
-              <li v-for="p in topoMedico" :key="p.atendimento">
-                <RouterLink :to="`/pep/paciente/${p.paciente}`">{{ p.nome }}</RouterLink>
-                <span class="secundario"> · {{ p.leito ?? t('trabalho.medico.semLeito') }}</span>
-                <span v-for="x in p.pendencias.slice(0, 3)" :key="x.tipo" class="chip">{{
-                  t(`trabalho.medico.tipos.${x.tipo}`)
-                }}</span>
-              </li>
-            </ul>
-            <ul
-              v-if="c.id === 'recepcao' && topoRecepcao.length > 0"
-              class="lista"
-              data-testid="topo-recepcao"
-            >
-              <li v-for="s in topoRecepcao" :key="s.id">
-                <strong>{{ s.senha }}</strong>
-                <span class="secundario">
-                  · {{ t(`trabalho.recepcao.prioridades.${s.prioridade}`) }} ·
-                  {{ t('trabalho.recepcao.esperaMin', { n: s.esperaMinutos }) }}</span
-                >
-              </li>
-            </ul>
-            <ul v-if="c.id === 'pa' && topoPa.length > 0" class="lista" data-testid="topo-pa">
-              <li v-for="k in topoPa" :key="k.reg">
-                <MarcaRisco :cor="k.risco!.cor" :nome="k.risco!.nomeCor" />
-                <span> {{ k.senha ?? k.paciente }}</span>
-                <span class="secundario">
-                  ·
-                  {{
-                    k.risco!.minutosRestantes >= 0
-                      ? t('classificacao.quadro.faltam', { min: k.risco!.minutosRestantes })
-                      : t('classificacao.quadro.passou', { min: -k.risco!.minutosRestantes })
-                  }}</span
-                >
-                <span v-for="p in k.protocolos ?? []" :key="p.tipo" class="chip">{{ p.nomeTipo }}</span>
-              </li>
-            </ul>
-            <ul v-if="c.id === 'nir' && topoNir.length > 0" class="lista" data-testid="topo-nir">
-              <li v-for="x in topoNir" :key="x.id">
-                <RouterLink to="/internacao/nir/fila">{{ x.paciente.nome }}</RouterLink>
-                <span class="secundario">
-                  · {{ t(`nir.prioridades.${x.prioridade}`) }} · {{ t(`nir.estados.${x.estado}`) }}</span
-                >
-                <span v-if="x.prazoEstourado" class="chip">{{ t('nir.fila.prazoVencido') }}</span>
-              </li>
-            </ul>
-            <p v-if="c.id === 'nir' && nir.data.value" class="secundario" data-testid="resumo-nir">
-              {{
-                t('regulacao.cartao.solicitacoes', {
-                  n: nir.data.value.itens.length,
-                  estourados: nir.data.value.estourados,
-                })
-              }}
-              <template v-if="nir.data.value.conflitos.length > 0">
-                · {{ t('regulacao.cartao.conflitos', { n: nir.data.value.conflitos.length }) }}</template
+          <template v-for="item in itens" :key="item.chave">
+            <BlocoPagina v-if="item.bloco" :bloco="item.bloco" />
+            <template v-else>
+              <article
+                v-for="c in [item.cartao!]"
+                :key="c.id"
+                class="painel cartao"
+                :class="[{ urgente: c.prioridade >= 80 }, `largura-${item.largura}`]"
+                :data-testid="`cartao-${c.id}`"
+                :aria-labelledby="`cartao-titulo-${c.id}`"
               >
-              <template v-if="altas.data.value">
-                ·
-                {{
-                  t('regulacao.cartao.barreiras', {
-                    n: barreiras.length,
-                    vencidas: barreiras.filter((b) => b.vencida).length,
-                  })
-                }}</template
-              >
-            </p>
-            <ul
-              v-if="c.id === 'nir' && topoBarreiras.length > 0"
-              class="lista"
-              data-testid="topo-nir-barreiras"
-            >
-              <li v-for="b in topoBarreiras" :key="b.id">
-                <RouterLink to="/internacao/nir/altas-previstas">{{ b.nome }}</RouterLink>
-                <span class="secundario">
-                  · {{ b.leito }} · {{ t(`nir.altas.tipos.${b.tipo}`) }} ·
-                  {{ t('regulacao.cartao.prazoBarreira', { prazo: dataCurta(b.prazo) }) }}</span
+                <header class="cartao__topo">
+                  <h3 :id="`cartao-titulo-${c.id}`">
+                    <RouterLink
+                      :to="c.rota"
+                      :aria-label="t('trabalho.inicio.abrirFila', { titulo: c.titulo })"
+                      >{{ c.titulo }}</RouterLink
+                    >
+                  </h3>
+                  <span v-if="c.pendentes === null" class="secundario">{{
+                    t('trabalho.inicio.carregandoFila')
+                  }}</span>
+                  <strong v-else-if="c.pendentes > 0" class="selo" :data-testid="`selo-${c.id}`">{{
+                    t('trabalho.inicio.pendentes', { n: c.pendentes })
+                  }}</strong>
+                  <span v-else class="secundario" :data-testid="`selo-${c.id}`">{{
+                    t('trabalho.inicio.semPendencia')
+                  }}</span>
+                </header>
+                <p v-if="c.prazo" class="secundario">
+                  {{ t('trabalho.inicio.prazo', { quando: prazoTexto(c.prazo) }) }}
+                </p>
+                <ul v-if="c.id === 'medico' && topoMedico.length > 0" class="lista" data-testid="topo-medico">
+                  <li v-for="p in topoMedico" :key="p.atendimento">
+                    <RouterLink :to="`/pep/paciente/${p.paciente}`">{{ p.nome }}</RouterLink>
+                    <span class="secundario"> · {{ p.leito ?? t('trabalho.medico.semLeito') }}</span>
+                    <span v-for="x in p.pendencias.slice(0, 3)" :key="x.tipo" class="chip">{{
+                      t(`trabalho.medico.tipos.${x.tipo}`)
+                    }}</span>
+                  </li>
+                </ul>
+                <ul
+                  v-if="c.id === 'recepcao' && topoRecepcao.length > 0"
+                  class="lista"
+                  data-testid="topo-recepcao"
                 >
-                <span v-if="b.vencida" class="chip">{{ t('nir.altas.vencida') }}</span>
-              </li>
-            </ul>
-            <p
-              v-if="c.id === 'qualidade' && qualidade.data.value"
-              class="secundario"
-              data-testid="resumo-qualidade"
-            >
-              {{
-                t('qualidade.prazos.resumoCartao', {
-                  vencido: qualidade.data.value.porSituacao.vencido,
-                  breve: qualidade.data.value.porSituacao.venceEmBreve,
-                  prazo: qualidade.data.value.porSituacao.noPrazo,
-                })
-              }}
-            </p>
-            <p v-if="c.id === 'ccih' && ccih.data.value" class="secundario" data-testid="resumo-ccih">
-              {{
-                t('ccih.cartao.resumo', {
-                  emVigilancia: ccih.data.value.emVigilancia,
-                  semLiberacao: ccih.data.value.semLiberacao,
-                })
-              }}
-            </p>
-            <p
-              v-if="c.id === 'agravos' && agravos.data.value"
-              class="secundario"
-              data-testid="resumo-agravos"
-            >
-              {{
-                t('agravos.cartao.resumo', {
-                  abertos: agravos.data.value.abertos,
-                  vencidos: agravos.data.value.vencidos,
-                  gatilhos: agravos.data.value.gatilhosSemCaso,
-                })
-              }}
-            </p>
-            <p
-              v-if="c.id === 'nutricao' && nutricao.data.value"
-              class="secundario"
-              data-testid="resumo-nutricao"
-            >
-              {{
-                t('nutricao.fila.resumo', {
-                  vencida: nutricao.data.value.contagens.vencida,
-                  atencao: nutricao.data.value.contagens.atencao,
-                  atriar: nutricao.data.value.contagens['a-triar'],
-                  reavaliar: nutricao.data.value.contagens.reavaliar,
-                  triado: nutricao.data.value.contagens.triado,
-                })
-              }}
-            </p>
-            <ul
-              v-if="c.id === 'nutricao' && topoNutricao.length > 0"
-              class="lista"
-              data-testid="topo-nutricao"
-            >
-              <li v-for="i in topoNutricao" :key="i.internacao">
-                <RouterLink to="/nutricao/triagem">{{ i.nome }}</RouterLink>
-                <span class="secundario">
-                  · {{ i.leito.bloco }} {{ i.leito.acomodacao }} {{ i.leito.leito }} ·
+                  <li v-for="s in topoRecepcao" :key="s.id">
+                    <strong>{{ s.senha }}</strong>
+                    <span class="secundario">
+                      · {{ t(`trabalho.recepcao.prioridades.${s.prioridade}`) }} ·
+                      {{ t('trabalho.recepcao.esperaMin', { n: s.esperaMinutos }) }}</span
+                    >
+                  </li>
+                </ul>
+                <ul v-if="c.id === 'pa' && topoPa.length > 0" class="lista" data-testid="topo-pa">
+                  <li v-for="k in topoPa" :key="k.reg">
+                    <MarcaRisco :cor="k.risco!.cor" :nome="k.risco!.nomeCor" />
+                    <span> {{ k.senha ?? k.paciente }}</span>
+                    <span class="secundario">
+                      ·
+                      {{
+                        k.risco!.minutosRestantes >= 0
+                          ? t('classificacao.quadro.faltam', { min: k.risco!.minutosRestantes })
+                          : t('classificacao.quadro.passou', { min: -k.risco!.minutosRestantes })
+                      }}</span
+                    >
+                    <span v-for="p in k.protocolos ?? []" :key="p.tipo" class="chip">{{ p.nomeTipo }}</span>
+                  </li>
+                </ul>
+                <ul v-if="c.id === 'nir' && topoNir.length > 0" class="lista" data-testid="topo-nir">
+                  <li v-for="x in topoNir" :key="x.id">
+                    <RouterLink to="/internacao/nir/fila">{{ x.paciente.nome }}</RouterLink>
+                    <span class="secundario">
+                      · {{ t(`nir.prioridades.${x.prioridade}`) }} · {{ t(`nir.estados.${x.estado}`) }}</span
+                    >
+                    <span v-if="x.prazoEstourado" class="chip">{{ t('nir.fila.prazoVencido') }}</span>
+                  </li>
+                </ul>
+                <p v-if="c.id === 'nir' && nir.data.value" class="secundario" data-testid="resumo-nir">
                   {{
-                    t(`nutricao.situacoes.${i.situacao}`, {
-                      h:
-                        i.situacao === 'vencida'
-                          ? nutricao.data.value?.prazoHoras
-                          : nutricao.data.value?.preferencialHoras,
+                    t('regulacao.cartao.solicitacoes', {
+                      n: nir.data.value.itens.length,
+                      estourados: nir.data.value.estourados,
                     })
-                  }}</span
+                  }}
+                  <template v-if="nir.data.value.conflitos.length > 0">
+                    · {{ t('regulacao.cartao.conflitos', { n: nir.data.value.conflitos.length }) }}</template
+                  >
+                  <template v-if="altas.data.value">
+                    ·
+                    {{
+                      t('regulacao.cartao.barreiras', {
+                        n: barreiras.length,
+                        vencidas: barreiras.filter((b) => b.vencida).length,
+                      })
+                    }}</template
+                  >
+                </p>
+                <ul
+                  v-if="c.id === 'nir' && topoBarreiras.length > 0"
+                  class="lista"
+                  data-testid="topo-nir-barreiras"
                 >
-              </li>
-            </ul>
-            <p v-if="c.id === 'nutricao'" class="secundario">
-              <RouterLink to="/nutricao/mapa">{{ t('nutricao.atalhos.mapa') }}</RouterLink>
-            </p>
-            <ul
-              v-if="c.id === 'mensagens' && topoMensagens.length > 0"
-              class="lista"
-              data-testid="topo-mensagens"
-            >
-              <li v-for="m in topoMensagens" :key="m.id">
-                <RouterLink :to="`/mensagens?abrir=${m.id}`">{{ m.assunto }}</RouterLink>
-                <span class="secundario"> · {{ m.remetente }} · {{ horaDe(m.enviadaEm) }}</span>
-              </li>
-            </ul>
-          </article>
+                  <li v-for="b in topoBarreiras" :key="b.id">
+                    <RouterLink to="/internacao/nir/altas-previstas">{{ b.nome }}</RouterLink>
+                    <span class="secundario">
+                      · {{ b.leito }} · {{ t(`nir.altas.tipos.${b.tipo}`) }} ·
+                      {{ t('regulacao.cartao.prazoBarreira', { prazo: dataCurta(b.prazo) }) }}</span
+                    >
+                    <span v-if="b.vencida" class="chip">{{ t('nir.altas.vencida') }}</span>
+                  </li>
+                </ul>
+                <p
+                  v-if="c.id === 'qualidade' && qualidade.data.value"
+                  class="secundario"
+                  data-testid="resumo-qualidade"
+                >
+                  {{
+                    t('qualidade.prazos.resumoCartao', {
+                      vencido: qualidade.data.value.porSituacao.vencido,
+                      breve: qualidade.data.value.porSituacao.venceEmBreve,
+                      prazo: qualidade.data.value.porSituacao.noPrazo,
+                    })
+                  }}
+                </p>
+                <p v-if="c.id === 'ccih' && ccih.data.value" class="secundario" data-testid="resumo-ccih">
+                  {{
+                    t('ccih.cartao.resumo', {
+                      emVigilancia: ccih.data.value.emVigilancia,
+                      semLiberacao: ccih.data.value.semLiberacao,
+                    })
+                  }}
+                </p>
+                <p
+                  v-if="c.id === 'agravos' && agravos.data.value"
+                  class="secundario"
+                  data-testid="resumo-agravos"
+                >
+                  {{
+                    t('agravos.cartao.resumo', {
+                      abertos: agravos.data.value.abertos,
+                      vencidos: agravos.data.value.vencidos,
+                      gatilhos: agravos.data.value.gatilhosSemCaso,
+                    })
+                  }}
+                </p>
+                <p
+                  v-if="c.id === 'nutricao' && nutricao.data.value"
+                  class="secundario"
+                  data-testid="resumo-nutricao"
+                >
+                  {{
+                    t('nutricao.fila.resumo', {
+                      vencida: nutricao.data.value.contagens.vencida,
+                      atencao: nutricao.data.value.contagens.atencao,
+                      atriar: nutricao.data.value.contagens['a-triar'],
+                      reavaliar: nutricao.data.value.contagens.reavaliar,
+                      triado: nutricao.data.value.contagens.triado,
+                    })
+                  }}
+                </p>
+                <ul
+                  v-if="c.id === 'nutricao' && topoNutricao.length > 0"
+                  class="lista"
+                  data-testid="topo-nutricao"
+                >
+                  <li v-for="i in topoNutricao" :key="i.internacao">
+                    <RouterLink to="/nutricao/triagem">{{ i.nome }}</RouterLink>
+                    <span class="secundario">
+                      · {{ i.leito.bloco }} {{ i.leito.acomodacao }} {{ i.leito.leito }} ·
+                      {{
+                        t(`nutricao.situacoes.${i.situacao}`, {
+                          h:
+                            i.situacao === 'vencida'
+                              ? nutricao.data.value?.prazoHoras
+                              : nutricao.data.value?.preferencialHoras,
+                        })
+                      }}</span
+                    >
+                  </li>
+                </ul>
+                <p v-if="c.id === 'nutricao'" class="secundario">
+                  <RouterLink to="/nutricao/mapa">{{ t('nutricao.atalhos.mapa') }}</RouterLink>
+                </p>
+                <ul
+                  v-if="c.id === 'mensagens' && topoMensagens.length > 0"
+                  class="lista"
+                  data-testid="topo-mensagens"
+                >
+                  <li v-for="m in topoMensagens" :key="m.id">
+                    <RouterLink :to="`/mensagens?abrir=${m.id}`">{{ m.assunto }}</RouterLink>
+                    <span class="secundario"> · {{ m.remetente }} · {{ horaDe(m.enviadaEm) }}</span>
+                  </li>
+                </ul>
+              </article>
+            </template>
+          </template>
         </div>
       </template>
       <div v-else class="vazio" data-testid="fila-vazia">
@@ -435,6 +479,20 @@ const prazoTexto = (p: string) => `${p.slice(8, 10)}/${p.slice(5, 7)} ${p.slice(
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
   gap: var(--sgh-espaco-3);
+}
+.filas :deep(.largura-2),
+.filas .largura-2 {
+  grid-column: span 1;
+}
+@media (min-width: 64rem) {
+  .filas :deep(.largura-2),
+  .filas .largura-2 {
+    grid-column: span 2;
+  }
+  .filas :deep(.largura-3),
+  .filas .largura-3 {
+    grid-column: 1 / -1;
+  }
 }
 .cartao__topo {
   display: flex;

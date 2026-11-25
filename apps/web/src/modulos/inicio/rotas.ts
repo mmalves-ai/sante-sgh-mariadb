@@ -30,6 +30,13 @@ export const rotasInicio: RouteRecordRaw[] = [
     meta: { permissao: PERMISSOES_INICIO.worklistRecepcaoLer },
   },
   {
+    // 01-ADM L114: o editor da página inicial por perfil (blocos, ordem e perfis).
+    path: '/admin/pagina-inicial',
+    name: 'inicio.paginaInicial',
+    component: () => import('./telas/PaginaInicialModelosTela.vue'),
+    meta: { permissao: 'relatorio.paginaInicial.ler' },
+  },
+  {
     path: '/mensagens',
     name: 'mensagens',
     component: () => import('./telas/MensagensTela.vue'),
