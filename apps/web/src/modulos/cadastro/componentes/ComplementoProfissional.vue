@@ -276,7 +276,7 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
   <section class="cartao" aria-labelledby="compl-titulo" data-testid="complemento-profissional">
     <h2 id="compl-titulo" class="cartao__titulo">{{ T('titulo') }}</h2>
     <MensagemErro v-if="erro" :erro="erro" />
-    <p v-if="mensagem" role="status" class="ok">{{ mensagem }}</p>
+    <p v-if="mensagem" role="status" class="ok" data-testid="compl-ok">{{ mensagem }}</p>
 
     <!-- RQE -->
     <h3>{{ T('rqe.titulo') }}</h3>
@@ -308,10 +308,12 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
     <p v-else>{{ T('nenhum') }}</p>
     <form v-if="podeEditar" class="linha" data-testid="form-rqe" @submit.prevent="gravarRqe">
       <label
-        >{{ T('rqe.numero') }} <input v-model.trim="rqe.numero" inputmode="numeric" maxlength="10"
+        >{{ T('rqe.numero') }}
+        <input v-model.trim="rqe.numero" data-testid="rqe-numero" inputmode="numeric" maxlength="10"
       /></label>
       <SanteSelecao
         v-model="rqe.uf"
+        data-testid="rqe-uf"
         :rotulo="T('rqe.uf')"
         :opcoes="[
           { valor: '', rotulo: '—', desabilitada: true },
@@ -320,6 +322,7 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
       />
       <SanteSelecao
         v-model="rqe.especialidade"
+        data-testid="rqe-especialidade"
         :rotulo="T('rqe.especialidade')"
         :opcoes="[
           { valor: 0, rotulo: '—', desabilitada: true },
@@ -356,6 +359,7 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
     <form v-if="podeEditar" class="linha" data-testid="form-assinatura" @submit.prevent="gravarAssinatura">
       <SanteSelecao
         v-model="ass.tipo"
+        data-testid="ass-tipo"
         :rotulo="T('assinatura.tipo')"
         :opcoes="[
           { valor: 'certificado_digital', rotulo: T('assinatura.tipos.certificado_digital') },
@@ -371,11 +375,17 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
             data-testid="arquivo-assinatura"
             @change="escolherImagem"
         /></label>
-        <small v-if="imagemErro" class="erro">{{ imagemErro }}</small>
+        <small v-if="imagemErro" class="erro" data-testid="imagem-erro">{{ imagemErro }}</small>
       </template>
       <template v-else>
-        <label>{{ T('assinatura.titular') }} <input v-model="ass.titular" maxlength="150" /></label>
-        <label>{{ T('assinatura.serie') }} <input v-model.trim="ass.numeroSerie" maxlength="90" /></label>
+        <label
+          >{{ T('assinatura.titular') }}
+          <input v-model="ass.titular" data-testid="ass-titular" maxlength="150"
+        /></label>
+        <label
+          >{{ T('assinatura.serie') }}
+          <input v-model.trim="ass.numeroSerie" data-testid="ass-serie" maxlength="90"
+        /></label>
         <label>{{ T('assinatura.emissor') }} <input v-model="ass.emissor" maxlength="150" /></label>
         <label
           >{{ T('assinatura.impressao') }} <input v-model.trim="ass.impressaoDigital" maxlength="95"
@@ -458,6 +468,7 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
           >{{ T('fiscal.pis') }}
           <input
             v-model.trim="fiscal.pisPasep"
+            data-testid="fiscal-pis"
             inputmode="numeric"
             maxlength="14"
             :aria-invalid="pisFalta"
@@ -478,16 +489,22 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
           >{{ T('fiscal.iss') }}
           <input
             v-model="fiscal.aliquotaIss"
+            data-testid="fiscal-iss"
             inputmode="decimal"
             :aria-invalid="issFora"
             :title="issFora ? T('fiscal.issFora') : ''"
         /></label>
-        <label>{{ T('fiscal.inss') }} <input v-model="fiscal.percentualInss" inputmode="decimal" /></label>
+        <label
+          >{{ T('fiscal.inss') }}
+          <input v-model="fiscal.percentualInss" data-testid="fiscal-inss" inputmode="decimal"
+        /></label>
         <label class="marca"
-          ><input v-model="fiscal.retemIss" type="checkbox" /> {{ T('fiscal.retemIss') }}</label
+          ><input v-model="fiscal.retemIss" data-testid="fiscal-retem-iss" type="checkbox" />
+          {{ T('fiscal.retemIss') }}</label
         >
         <label class="marca"
-          ><input v-model="fiscal.retemInss" type="checkbox" /> {{ T('fiscal.retemInss') }}</label
+          ><input v-model="fiscal.retemInss" data-testid="fiscal-retem-inss" type="checkbox" />
+          {{ T('fiscal.retemInss') }}</label
         >
         <label class="marca"
           ><input v-model="fiscal.retemIrrf" type="checkbox" /> {{ T('fiscal.retemIrrf') }}</label
@@ -562,6 +579,7 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
         /></label>
         <SanteSelecao
           v-model="conta.tipoChavePix"
+          data-testid="conta-tipo-chave"
           :rotulo="T('conta.tipoChave')"
           :opcoes="[
             { valor: '', rotulo: '—' },
@@ -572,9 +590,13 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
           ]"
         />
         <label v-if="conta.tipoChavePix"
-          >{{ T('conta.chave') }} <input v-model.trim="conta.chavePix" maxlength="77"
+          >{{ T('conta.chave') }}
+          <input v-model.trim="conta.chavePix" data-testid="conta-chave" maxlength="77"
         /></label>
-        <label>{{ T('conta.favorecido') }} <input v-model="conta.favorecidoNome" maxlength="150" /></label>
+        <label
+          >{{ T('conta.favorecido') }}
+          <input v-model="conta.favorecidoNome" data-testid="conta-favorecido" maxlength="150"
+        /></label>
         <SanteSelecao
           v-model="conta.favorecidoTipo"
           :rotulo="T('conta.favorecidoTipo')"
@@ -584,13 +606,15 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
           ]"
         />
         <label
-          >{{ T('conta.documento') }} <input v-model.trim="conta.favorecidoDocumento" inputmode="numeric"
+          >{{ T('conta.documento') }}
+          <input v-model.trim="conta.favorecidoDocumento" data-testid="conta-documento" inputmode="numeric"
         /></label>
         <label class="marca"
           ><input v-model="conta.principal" type="checkbox" /> {{ T('conta.tornarPrincipal') }}</label
         >
         <label class="marca"
-          ><input v-model="conta.confirmaTerceiro" type="checkbox" /> {{ T('conta.confirmaTerceiro') }}</label
+          ><input v-model="conta.confirmaTerceiro" data-testid="conta-confirma-terceiro" type="checkbox" />
+          {{ T('conta.confirmaTerceiro') }}</label
         >
         <button type="submit" :disabled="!contaOk">{{ T('gravar') }}</button>
         <small v-if="!temConta && !conta.chavePix">{{ T('conta.semMeio') }}</small>
