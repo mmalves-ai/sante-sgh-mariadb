@@ -98,7 +98,12 @@ const TABELAS_GRAVACAO = [
   'exame_oftalmologico',
   'exame_oftalmologico_valor',
   'exame_oftalmologico_item',
-  ...onco.TABELAS_ONCOLOGIA,
+  // As tabelas da oncologia (as mesmas de onco.TABELAS_ONCOLOGIA), literais para o gerador de privilégios.
+  'protocolo_quimioterapia',
+  'tratamento_oncologico',
+  'ciclo_quimioterapia',
+  'ciclo_quimioterapia_prescricao',
+  'evento_tratamento_oncologico',
 ] as const;
 
 /** Evento do histórico do lactário (tela) ↔ evento do modelo. */

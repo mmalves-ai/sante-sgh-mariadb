@@ -31,6 +31,7 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
+import * as onco from './oncologia-propria.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type { Autor } from './registro-oncologico.js';
 
@@ -154,6 +155,48 @@ function atualDe(r: Linha): AcompanhamentoAtual {
     recidivaEm: dia(r['recidiva_em']),
     obitoEm: tx_(r['obito_em']),
   };
+}
+
+/**
+ * A reação que suspende o tratamento suspende, na mesma transação, todos os ciclos ativos do tratamento (previstos ou
+ * liberados) pela mesma mudança de andamento da oncologia, com o evento 'ciclo suspenso' (categoria toxicidade) em cada
+ * um: o ciclo sai da validação e da administração até ser retomado. Devolve os ciclos suspensos.
+ */
+async function suspenderCiclosAtivos(
+  tx: TxOperacao,
+  est: number,
+  tratamento: number,
+  motivo: string,
+  vinculo: number,
+): Promise<number[]> {
+  const ativos = await tx.consultar<Linha>(
+    `SELECT q.id, t.protocolo_quimioterapia_id FROM ciclo_quimioterapia q
+       JOIN tratamento_oncologico t ON t.id = q.tratamento_oncologico_id
+      WHERE q.tratamento_oncologico_id = ? AND t.estabelecimento_id = ? AND q.excluido_em IS NULL
+        AND q.situacao IN ('previsto', 'liberado')
+      ORDER BY q.id`,
+    [tratamento, est],
+  );
+  const ids: number[] = [];
+  for (const c of ativos) {
+    const id = n(c['id']);
+    await onco.mudarAndamentoCiclo(tx, est, { id, de: ['ativo'], para: 'suspenso' });
+    await onco.registrarEventoOnco(tx, est, {
+      evento: 'ciclo-suspenso',
+      codigoProtocolo: '',
+      protocolo: nn(c['protocolo_quimioterapia_id']),
+      ciclo: id,
+      prescricao: null,
+      categoria: 'toxicidade',
+      ciclosAfetados: null,
+      antes: null,
+      motivo,
+      vinculo,
+      usuario: String(tx.contexto.usuario ?? ''),
+    });
+    ids.push(id);
+  }
+  return ids;
 }
 
 export class PortaAcompanhamentoOncologicoPropria implements PortaAcompanhamentoOncologico {
@@ -355,7 +398,7 @@ export class PortaAcompanhamentoOncologicoPropria implements PortaAcompanhamento
     return this.executar(
       c,
       OPERACOES_ACOMPANHAMENTO_ONCOLOGICO.reacao,
-      ['reacao_tratamento_oncologico'],
+      ['reacao_tratamento_oncologico', 'ciclo_quimioterapia', 'evento_tratamento_oncologico'],
       { ...a, ...e },
       chave,
       async (tx, est) => {
@@ -407,6 +450,14 @@ export class PortaAcompanhamentoOncologicoPropria implements PortaAcompanhamento
           dose_ajustada: e.doseAjustada,
           tratamento_suspenso: e.tratamentoSuspenso,
         });
+        if (e.tratamentoSuspenso && tratamento !== null)
+          await suspenderCiclosAtivos(
+            tx,
+            est,
+            tratamento,
+            `Reação grau ${e.grau}: ${e.descricao}`,
+            a.profissional,
+          );
         return { id };
       },
     );

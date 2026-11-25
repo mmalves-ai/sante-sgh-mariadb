@@ -31,6 +31,9 @@ describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, client
     fisico: 0,
     atendimento: 0,
     internacao: 0,
+    paciente2: 0,
+    tipoProtocolo: 0,
+    intencao: 0,
   };
   let c: ContextoPortaM18;
   let autor: Autor;
@@ -46,6 +49,15 @@ describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, client
       await e.executar('DELETE FROM tratamento_radioterapia WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM aparelho_radioterapia WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM reacao_tratamento_oncologico WHERE estabelecimento_id = ?', [ids.est]);
+      await e.executar(
+        'DELETE v FROM evento_tratamento_oncologico v JOIN ciclo_quimioterapia q ON q.id = v.ciclo_quimioterapia_id JOIN tratamento_oncologico t ON t.id = q.tratamento_oncologico_id WHERE t.estabelecimento_id = ?',
+        [ids.est],
+      );
+      await e.executar(
+        'DELETE q FROM ciclo_quimioterapia q JOIN tratamento_oncologico t ON t.id = q.tratamento_oncologico_id WHERE t.estabelecimento_id = ?',
+        [ids.est],
+      );
+      await e.executar('DELETE FROM tratamento_oncologico WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar(
         'DELETE v FROM acompanhamento_oncologico_evento v JOIN acompanhamento_oncologico a ON a.id = v.acompanhamento_oncologico_id WHERE a.estabelecimento_id = ?',
         [ids.est],
@@ -272,7 +284,16 @@ describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, client
           [c_, `Estádio ${c_}`, o, agora],
         );
       await cod('regiao_irradiada', 'mama');
-      await cod('intencao_tratamento_oncologico', 'adjuvante');
+      ids.intencao = await cod('intencao_tratamento_oncologico', 'adjuvante');
+      ids.tipoProtocolo = await cod('tipo_protocolo_oncologico', `${P}-QT`);
+      const pp2 = await pessoa(`PACIENTE SINTETICA 2 ${P}`);
+      ids.paciente2 = await garantir(
+        e,
+        'SELECT id FROM paciente WHERE pessoa_fisica_id = ?',
+        [pp2],
+        "INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, situacao, criado_em) VALUES (?, ?, 'ativo', ?)",
+        [pp2, 920_730_102, agora],
+      );
       await e.inserir(
         `INSERT INTO usuario_vinculo_profissional (usuario_id, estabelecimento_id, profissional_id, vigencia_inicio, criado_em)
          VALUES (?, ?, ?, '2026-01-01', ?)`,
@@ -697,5 +718,121 @@ describe.skipIf(SEM_BANCO)('registro oncológico e radioterapia (MariaDB, client
     expect(lido.acompanhamentos[0]).toMatchObject({ id: a1.id, classificacao: 'recidiva', versao: 2 });
     expect(lido.acompanhamentos[0]!.eventos.map((x) => x.tipo)).toEqual(['recidiva', 'classificacao']);
     expect(lido.reacoes.map((x) => [x.grau, x.categoria])).toEqual([[3, 'hematologica']]);
+  });
+
+  // C2-090 rodada 3: a reação ligada ao ciclo herda o tratamento, recusa ciclo de outro tratamento ou de outro paciente,
+  // e a reação que suspende o tratamento suspende os ciclos ativos dele (andamento e evento) na mesma transação.
+  it('reação ligada ao ciclo: herda o tratamento, recusa ciclo alheio e a suspensão para os ciclos ativos', async () => {
+    const acomp = new PortaAcompanhamentoOncologicoPropria(nucleo);
+    const lido = await acomp.doPaciente(c, ids.paciente);
+    const acompanhamento = lido.acompanhamentos[0]!.id;
+    const tumorId = (await porta.doPaciente(c, ids.paciente)).tumores[0]!.id;
+    const ciclos: Record<string, number> = {};
+    const trat: Record<string, number> = {};
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-c2090-ciclo' }, async (e) => {
+      const agora = new Date();
+      for (const [k, pac] of [
+        ['T1', ids.paciente],
+        ['T2', ids.paciente],
+        ['T3', ids.paciente2],
+      ] as const)
+        trat[k] = await e.inserir(
+          `INSERT INTO tratamento_oncologico (estabelecimento_id, numero, paciente_id, diagnostico_oncologico_id,
+             tipo_protocolo_oncologico_id, intencao_tratamento_oncologico_id, responsavel_profissional_id, situacao, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'em_andamento', ?)`,
+          [ids.est, `${P}-${k}`, pac, tumorId, ids.tipoProtocolo, ids.intencao, ids.profissional, agora],
+        );
+      for (const [k, t, num, sit] of [
+        ['C1', 'T1', 1, 'previsto'],
+        ['C2', 'T1', 2, 'liberado'],
+        ['C3', 'T1', 3, 'concluido'],
+        ['C4', 'T2', 1, 'previsto'],
+        ['C5', 'T3', 1, 'previsto'],
+      ] as const)
+        ciclos[k] = await e.inserir(
+          `INSERT INTO ciclo_quimioterapia (tratamento_oncologico_id, numero_ciclo, data_prevista, situacao, criado_em)
+           VALUES (?, ?, '2026-12-01', ?, ?)`,
+          [trat[t], num, sit, agora],
+        );
+    });
+    const hoje = new Date().toISOString().slice(0, 10);
+    const reacao = {
+      acompanhamento,
+      tratamento: null as number | null,
+      ciclo: ciclos['C1']! as number | null,
+      categoria: 'hematologica',
+      descricao: 'Plaquetopenia',
+      grau: 3,
+      evolucao: 'nova',
+      avaliadoEm: `${hoje}T10:00`,
+      conduta: 'Reduzir a dose do próximo ciclo',
+      doseAjustada: true,
+      tratamentoSuspenso: false,
+    };
+    const rDose = await acomp.registrarReacao(c, autor, reacao, chave());
+    await expect(
+      acomp.registrarReacao(c, autor, { ...reacao, tratamento: trat['T2']! }, chave()),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'ciclo-de-outro-tratamento');
+    await expect(
+      acomp.registrarReacao(c, autor, { ...reacao, ciclo: ciclos['C5']! }, chave()),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'registro-inexistente');
+    const rSusp = await acomp.registrarReacao(
+      c,
+      autor,
+      {
+        ...reacao,
+        descricao: 'Neutropenia febril',
+        grau: 4,
+        conduta: 'Suspender a quimioterapia e internar',
+        doseAjustada: false,
+        tratamentoSuspenso: true,
+      },
+      chave(),
+    );
+
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'confere-c2090-ciclo' }, async (e) => {
+      const rs = await e.consultar<Record<string, unknown>>(
+        `SELECT id, tratamento_oncologico_id, ciclo_quimioterapia_id, dose_ajustada, tratamento_suspenso
+           FROM reacao_tratamento_oncologico WHERE ciclo_quimioterapia_id IS NOT NULL AND estabelecimento_id = ? ORDER BY id`,
+        [ids.est],
+      );
+      expect(
+        rs.map((r) => [
+          Number(r['id']),
+          Number(r['tratamento_oncologico_id']),
+          Number(r['ciclo_quimioterapia_id']),
+        ]),
+      ).toEqual([
+        [rDose.id, trat['T1'], ciclos['C1']],
+        [rSusp.id, trat['T1'], ciclos['C1']],
+      ]);
+      expect(rs.map((r) => [Number(r['dose_ajustada']), Number(r['tratamento_suspenso'])])).toEqual([
+        [1, 0],
+        [0, 1],
+      ]);
+      const sit = await e.consultar<Record<string, unknown>>(
+        'SELECT id, situacao, versao FROM ciclo_quimioterapia WHERE id IN (?, ?, ?, ?, ?) ORDER BY id',
+        [ciclos['C1'], ciclos['C2'], ciclos['C3'], ciclos['C4'], ciclos['C5']],
+      );
+      expect(Object.fromEntries(sit.map((r) => [Number(r['id']), r['situacao']]))).toEqual({
+        [ciclos['C1']!]: 'suspenso',
+        [ciclos['C2']!]: 'suspenso',
+        [ciclos['C3']!]: 'concluido',
+        [ciclos['C4']!]: 'previsto',
+        [ciclos['C5']!]: 'previsto',
+      });
+      expect(Number(sit.find((r) => Number(r['id']) === ciclos['C1'])!['versao'])).toBe(2);
+      const ev = await e.consultar<Record<string, unknown>>(
+        `SELECT ciclo_quimioterapia_id, evento, categoria, motivo, usuario_id FROM evento_tratamento_oncologico
+          WHERE ciclo_quimioterapia_id IN (?, ?, ?, ?, ?) ORDER BY ciclo_quimioterapia_id`,
+        [ciclos['C1'], ciclos['C2'], ciclos['C3'], ciclos['C4'], ciclos['C5']],
+      );
+      expect(ev.map((x) => [Number(x['ciclo_quimioterapia_id']), x['evento'], x['categoria']])).toEqual([
+        [ciclos['C1'], 'ciclo_suspenso', 'toxicidade'],
+        [ciclos['C2'], 'ciclo_suspenso', 'toxicidade'],
+      ]);
+      expect(String(ev[0]!['motivo'])).toBe('Reação grau 4: Neutropenia febril');
+      expect(Number(ev[0]!['usuario_id'])).toBe(ids.usuario);
+    });
   });
 });
