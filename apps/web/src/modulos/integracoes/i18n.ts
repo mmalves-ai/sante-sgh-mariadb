@@ -1,4 +1,5 @@
 // Textos das telas das integrações e do laboratório de apoio (M34). Sem nome de sistema antigo (ADR 0023).
+import { mensagensInterfacesEquipamento } from './i18n-interfaces-equipamento.js';
 export const mensagensIntegracoes = {
   carregando: 'Carregando…',
   nenhum: 'Nada encontrado.',
@@ -182,11 +183,7 @@ export const mensagensIntegracoes = {
     texto:
       'Os perfis de prioridade da ferramenta externa de classificação de risco (consulta) e o caminho da integração: o envio em uso ou o motor de integração, nunca os dois.',
   },
-  interfaces: {
-    titulo: 'Interfaces de equipamento',
-    texto:
-      'As interfaces de equipamento e dos laboratórios de apoio, em consulta (nenhuma senha, usuário de FTP nem chave é lido). Mudar uma interface muda o que ela envia: a troca é combinada com o laboratório e a TI.',
-  },
+  interfaces: mensagensInterfacesEquipamento,
   apoio: {
     titulo: 'Laboratório de apoio',
     texto:
