@@ -1,11 +1,12 @@
 // E2E @C2-006 (05-SADT linha 5): a restrição clínica do exame no pedido feito pela prescrição do prontuário. O médico
 // escolhe o exame no atendimento e a tela mostra na hora o que a restrição decide (POST
-// /api/sadt/pedidos/avaliar-prontuario): o bloqueio sem exceção impede o envio; o bloqueio que aceita exceção pede a
+// /api/sadt/pedidos/avaliar-prontuario/:paciente): o bloqueio sem exceção impede o envio; o bloqueio que aceita exceção pede a
 // justificativa (10 caracteres ou mais) e só segue para quem pode autorizá-la; o alerta pede a confirmação. A tela de
 // exames do setor não lança mais exame direto: o atalho leva ao pedido de exames (/sadt/pedido). axe sem violação séria.
 // Sessão real sobre a fonte sintética e as portas em MEMÓRIA (dados SINTÉTICOS): a fonte sintética não tem o banco do
 // cliente, então a resposta da avaliação é simulada pela rota interceptada; a gravação confere tudo de novo no banco
-// (contrato de efeito em documentos-propria-operacoes-2.int.spec.ts).
+// (contrato de efeito em documentos-propria-operacoes-2.int.spec.ts). A recusa do paciente restrito e sem vínculo na
+// avaliação está em pedido-prontuario.controller.spec.ts. Cada envio aqui confere que a tela leva o paciente na rota.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 
@@ -37,7 +38,9 @@ async function simularAvaliacao(
   pode: boolean,
 ) {
   const corpos: unknown[] = [];
-  await page.route('**/api/sadt/pedidos/avaliar-prontuario', async (r: Route) => {
+  await page.route('**/api/sadt/pedidos/avaliar-prontuario/*', async (r: Route) => {
+    // O paciente vai na rota (o filtro do paciente com acesso restrito o lê); o atendimento, no corpo.
+    expect(new URL(r.request().url()).pathname).toBe('/api/sadt/pedidos/avaliar-prontuario/1001');
     const corpo = r.request().postDataJSON() as { exames: number[] };
     corpos.push(corpo);
     const restricoes: Restricao[] = corpo.exames

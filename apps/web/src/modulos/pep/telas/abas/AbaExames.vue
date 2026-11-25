@@ -9,13 +9,8 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../../casca/MensagemErro.vue';
-import {
-  type AvaliacaoRestricaoExame,
-  avaliarRestricoesExame,
-  lerExames,
-  novaChave,
-  solicitarExames,
-} from '../../api-documentos.js';
+import { type AvaliacaoRestricaoExame, lerExames, novaChave, solicitarExames } from '../../api-documentos.js';
+import { avaliarRestricoesDoPaciente } from '../../api-restricao-exame.js';
 import AvisoConsulta from '../../componentes/documentos/AvisoConsulta.vue';
 import SeletorAtendimento from '../../componentes/documentos/SeletorAtendimento.vue';
 import { dataHoraBr } from '../../formato.js';
@@ -57,7 +52,7 @@ async function avaliarRestricoes(): Promise<void> {
     return;
   }
   try {
-    const r = await avaliarRestricoesExame({
+    const r = await avaliarRestricoesDoPaciente(props.paciente, {
       atendimento: atendimento.value,
       exames: examesDoPedido.value,
       confirmado: true,

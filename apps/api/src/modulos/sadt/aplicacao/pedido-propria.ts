@@ -532,6 +532,8 @@ export async function restricoesDoProntuario(
   est: number,
   e: {
     readonly atendimento: number;
+    /** O paciente aberto no prontuário: o atendimento tem de ser dele (a avaliação da tela o informa pela rota). */
+    readonly paciente?: number;
     readonly exames: readonly number[];
     readonly confirmado: boolean;
     readonly justificativa: string | null;
@@ -545,6 +547,8 @@ export async function restricoesDoProntuario(
 }> {
   const at = await atendimentoParaRestricao(l, est, e.atendimento);
   if (!at) throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento.');
+  if (e.paciente !== undefined && Number(at['paciente_id']) !== e.paciente)
+    throw recusa('atendimento-de-outro-paciente', 'O atendimento não é do paciente aberto no prontuário.');
   const exames = [...new Set(e.exames)];
   const setores = await setorPadraoDosExames(l, est, exames);
   const materiais = await materialPadraoDosExames(l, exames);
@@ -651,9 +655,11 @@ export class ServicoPedidoSadt {
     });
   }
 
-  /** As restrições do pedido de exames da prescrição do prontuário, vistas na hora (nada gravado). */
+  /** As restrições do pedido de exames da prescrição do prontuário, vistas na hora (nada gravado); o atendimento tem de
+   * ser do paciente da rota. */
   avaliarPedidoDoProntuario(
     c: ContextoSadt,
+    paciente: number,
     entrada: unknown,
     podeAutorizarExcecao = false,
   ): Promise<AvaliacaoPedidoProntuario> {
@@ -661,6 +667,7 @@ export class ServicoPedidoSadt {
     return this.ler(c, async (l, est) => {
       const r = await restricoesDoProntuario(l, est, {
         ...p,
+        paciente,
         podeAutorizarExcecao,
         usuario: c.usuario ?? null,
       });
