@@ -57,6 +57,10 @@ const visiveis = computed(() =>
       <RouterLink to="/operadora/contas" data-testid="link-contas-medicas">{{
         t('operadoraContas.atalho')
       }}</RouterLink>
+      ·
+      <RouterLink to="/operadora/comercial" data-testid="link-comercial">{{
+        t('operadoraComercial.atalho')
+      }}</RouterLink>
     </p>
     <MensagemErro v-if="tela.isError.value" :erro="tela.error.value" />
     <p v-else-if="!d" role="status">{{ t('operadoraCobranca.carregando') }}</p>

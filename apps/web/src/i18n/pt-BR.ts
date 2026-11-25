@@ -109,6 +109,7 @@ import { mensagensCobrancaOperadora } from '../modulos/operadora/i18n-cobranca.j
 import { mensagensAutorizacaoOperadora } from '../modulos/operadora/i18n-autorizacao.js';
 import { mensagensAnsOperadora } from '../modulos/operadora/i18n-ans.js';
 import { mensagensContasOperadora } from '../modulos/operadora/i18n-contas.js';
+import { mensagensComercialOperadora } from '../modulos/operadora/i18n-comercial.js';
 import {
   mensagensAtendimentoOperadora,
   mensagensPortalPrestador,
@@ -2511,6 +2512,8 @@ export const mensagensWeb = {
   operadoraAutorizacao: mensagensAutorizacaoOperadora,
   operadoraContas: mensagensContasOperadora,
   operadoraAns: mensagensAnsOperadora,
+  // 08-SGO L100 (C2-095): o comercial da operadora (proposta de adesão, força de venda, metas, comissão).
+  operadoraComercial: mensagensComercialOperadora,
   operadoraAtendimento: mensagensAtendimentoOperadora,
   portalPrestador: mensagensPortalPrestador,
   // M60 (etapa 2): a conferência da instalação e da conexão ao banco.

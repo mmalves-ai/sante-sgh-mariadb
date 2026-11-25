@@ -24,6 +24,13 @@ export const rotasOperadora: RouteRecordRaw[] = [
     component: () => import('./telas/CobrancaOperadoraTela.vue'),
     meta: { permissao: 'operadora.cobranca.ler' },
   },
+  // 08-SGO L100 (C2-095): comercial (proposta de adesão, força de venda, metas, campanhas, comissão com estorno).
+  {
+    path: '/operadora/comercial',
+    name: 'operadora.comercial',
+    component: () => import('./telas/ComercialOperadoraTela.vue'),
+    meta: { permissao: 'operadora.comercial.ler' },
+  },
   // M56 (etapa 4, F3): a rede credenciada e prestadora.
   {
     path: '/operadora/rede',
