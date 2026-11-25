@@ -1,5 +1,5 @@
 // E2E @F3.5-04 (F3.5, 05-SADT linha 7): o posto de coleta como cadastro próprio e a etiqueta da recoleta e da alíquota.
-// A biomédica chega às recoletas pelo menu (Diagnóstico › Laboratório › Recoletas), encontra a reimpressão da etiqueta
+// A biomédica chega às recoletas pelo menu (Diagnóstico › Laboratório › Recoletas; os postos têm item próprio), encontra a reimpressão da etiqueta
 // (só com o código da amostra) e abre o cadastro dos postos pelo atalho da própria tela; o formulário do posto confere
 // na hora o que impede gravar (código, descrição, setor, horário) e usa só o combo do tema (nada de <select> cru).
 // Na fonte sintética o cadastro precisa do banco do cliente: a tela diz isso em vez de falhar calada; o efeito (posto
@@ -65,12 +65,18 @@ test.describe('@F3.5-04 posto de coleta e etiqueta da recoleta', () => {
     await expect(page).toHaveURL(/\/sadt\/recoletas$/);
     await semViolacaoAxe(page, '/sadt/recoletas');
 
+    // O item próprio do menu (Diagnóstico › Laboratório › Postos de coleta) abre o mesmo cadastro.
+    await (await itemDoMenu(page, 'Postos de coleta')).click();
+    await expect(page).toHaveURL(/\/sadt\/postos-coleta$/);
+    await expect(page.getByTestId('postos-coleta')).toBeVisible();
+
     expect(externas).toEqual([]);
   });
 
   test('quem não tem a leitura de amostras não abre o cadastro dos postos', async ({ page }) => {
     await entrar(page, 'SINT.MEDICO');
     await expect(await itemDoMenu(page, 'Recoletas')).toHaveCount(0);
+    await expect(await itemDoMenu(page, 'Postos de coleta')).toHaveCount(0);
     await page.goto('/sadt/postos-coleta');
     await expect(page.getByTestId('postos-coleta')).toHaveCount(0);
   });
