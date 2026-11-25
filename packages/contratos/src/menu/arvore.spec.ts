@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 497, M: 198, P: 57, N: 242 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 498, M: 198, P: 57, N: 243 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(497);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(498);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -578,6 +578,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/financeiro/orcamento', // M54 (etapa 7)
         '/custos/apuracao', // M54 (etapa 5)
         '/custos/resultado', // M54 (etapa 5)
+        '/custos/custo-padrao', // C2-115 (07-FIN L140)
         '/financeiro/fiscal/dmed', // M32
         '/financeiro/fiscal/entradas', // M32
         '/financeiro/fiscal/nfse', // M32

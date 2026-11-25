@@ -129,7 +129,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // fase 7); a contagem acompanha.
 // C2-083 (07-FIN L157): o item "Remuneração variável" do repasse médico entrou à mão (mesmo motivo; F8 vai como
 // fase 7, o teto da escala do menu); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":497,"M":198,"P":57,"N":242};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":498,"M":198,"P":57,"N":243};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -505,6 +505,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"controladoria.custos-hospitalares.centros-de-custo-e-criterios-de-rateio","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Centros de custo e critérios de rateio"],"titulo":"Centros de custo e critérios de rateio","selo":"N","fase":6,"rota":"/custos/centros","permissao":"custos.centro.ler"},
   {"id":"controladoria.custos-hospitalares.custo-por-procedimento-e-por-paciente","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Custo por procedimento e por paciente"],"titulo":"Custo por procedimento e por paciente","selo":"N","fase":6,"rota":"/custos/apuracao","permissao":"custos.apuracao.ler"},
   {"id":"controladoria.custos-hospitalares.resultado-por-unidade-e-por-convenio","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Resultado por unidade e por convênio"],"titulo":"Resultado por unidade e por convênio","selo":"N","fase":6,"rota":"/custos/resultado","permissao":"custos.resultado.ler"},
+  {"id":"controladoria.custos-hospitalares.custo-padrao-por-procedimento","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Custo-padrão por procedimento"],"titulo":"Custo-padrão por procedimento","selo":"N","fase":7,"rota":"/custos/custo-padrao","permissao":"custos.apuracao.ler"},
   {"id":"controladoria.patrimonio.cadastro-de-bens-plaquetas-e-responsaveis","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Patrimônio","Cadastro de bens, plaquetas e responsáveis"],"titulo":"Cadastro de bens, plaquetas e responsáveis","selo":"N","fase":6,"rota":"/patrimonio/bens","permissao":"patrimonio.bem.ler"},
   {"id":"controladoria.patrimonio.depreciacao","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Patrimônio","Depreciação"],"titulo":"Depreciação","selo":"N","fase":6,"rota":"/patrimonio/depreciacao","permissao":"patrimonio.depreciacao.ler"},
   {"id":"controladoria.patrimonio.transferencia-baixa-e-inventario-de-bens","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Patrimônio","Transferência, baixa e inventário de bens"],"titulo":"Transferência, baixa e inventário de bens","selo":"N","fase":6,"rota":"/patrimonio/movimentos","permissao":"patrimonio.movimento.ler"},
