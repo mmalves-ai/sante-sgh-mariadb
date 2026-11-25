@@ -100,6 +100,21 @@ async function simular(page: Page, enviados: { url: string; corpo: unknown }[]):
       avisos: [],
     }),
   );
+  await page.route('**/api/faturamento/credenciamento?**', (rota) =>
+    json(
+      rota,
+      lista(
+        [
+          ['id', 'Id'],
+          ['profissional', 'Profissional'],
+          ['inicio', 'Vigência: início'],
+          ['fim', 'Vigência: fim'],
+          ['versao', 'Versão'],
+        ],
+        [{ id: 21, profissional: 'PROFISSIONAL SINTETICO F372', inicio: '2025-01-01', fim: null, versao: 1 }],
+      ),
+    ),
+  );
   await page.route('**/api/faturamento/credenciamento/excecoes?**', (rota) =>
     json(
       rota,
@@ -202,6 +217,7 @@ async function simular(page: Page, enviados: { url: string; corpo: unknown }[]):
     '**/api/faturamento/de-para',
     '**/api/faturamento/de-para/*/encerramento',
     '**/api/faturamento/credenciamento/excecoes',
+    '**/api/faturamento/credenciamento-cobranca',
   ])
     await page.route(caminho, (rota) => {
       if (rota.request().method() !== 'POST') return rota.continue();
@@ -210,7 +226,7 @@ async function simular(page: Page, enviados: { url: string; corpo: unknown }[]):
     });
 }
 
-test.describe('F3.7 cobrança por fonte pagadora @F3.7 @C1-004', () => {
+test.describe('F3.7 cobrança por fonte pagadora @F3.7 @C1-004 @C1-022', () => {
   test('faturista confere a guia, grava de-para, exceção e equivalência do mat/med e encerra sem apagar', async ({
     page,
   }) => {
@@ -268,6 +284,28 @@ test.describe('F3.7 cobrança por fonte pagadora @F3.7 @C1-004', () => {
     await expect(page.getByTestId('cobranca-aviso')).toContainText('Registro 11 encerrado');
     expect(enviados.at(-1)?.url).toMatch(/\/api\/faturamento\/de-para\/11\/encerramento$/);
     expect(enviados.at(-1)?.corpo).toEqual({ versao: 3, vigenciaFim: hoje, motivo: 'CONTRATO NOVO F372' });
+
+    // Credenciamento: a lista mostra quem já pode cobrar; profissional e prestador juntos é recusado na hora;
+    // gravado, vai a fonte, o profissional, o código na fonte e o início (hoje, por padrão).
+    await page.getByTestId('cobranca-aba-credenciamento').click();
+    await expect(page.getByTestId('cobranca-lista')).toContainText('PROFISSIONAL SINTETICO F372');
+    await page.getByTestId('cr-profissional').fill('601');
+    await page.getByTestId('cr-prestador').fill('701');
+    await expect(page.getByTestId('cr-erros')).toContainText('não os dois');
+    await expect(page.getByTestId('cr-gravar')).toBeDisabled();
+    await page.getByTestId('cr-prestador').fill('');
+    await page.getByTestId('cr-codigo').fill('F372-PREST');
+    await page.getByTestId('cr-gravar').click();
+    await expect(page.getByTestId('cobranca-aviso')).toBeVisible();
+    expect(enviados.at(-1)?.url).toMatch(/\/api\/faturamento\/credenciamento-cobranca$/);
+    expect(enviados.at(-1)?.corpo).toMatchObject({
+      fontePagadoraId: FONTE,
+      profissionalId: 601,
+      prestadorId: null,
+      codigoNaFonte: 'F372-PREST',
+      recebeDiretoDaFonte: false,
+      vigenciaInicio: hoje,
+    });
 
     // Exceção: proibir sem motivo é recusado na hora; com o motivo, vai o profissional e o item.
     await page.getByTestId('cobranca-aba-excecoes').click();

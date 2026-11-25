@@ -16,6 +16,7 @@ import {
 } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { versaoTexto } from '../faturamento/esquemas.js';
+import { ServicoCobranca } from '../precos/cobranca.controller.js';
 import { ServicoApresentacaoTiss } from './apresentacao.controller.js';
 import { armazemXmlLocal, armazemXmlMemoria, type LocalizadorArquivos } from './armazem-xml.js';
 import type { ContextoTiss, PortaTiss } from './porta.js';
@@ -703,6 +704,161 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
           regra,
         ]);
         await e.executar('DELETE FROM regra_apresentacao_tiss WHERE id = ?', [regra]);
+        await e.executar('DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (?, ?)', [m.a, m.b]);
+        await e.executar('DELETE FROM conta_hospitalar WHERE id IN (?, ?)', [m.a, m.b]);
+      });
+    }
+  }, 90_000);
+
+  it('gerar o lote com o credenciamento (06-FAT linha 8): sem credenciamento a fonte que barra recusa sem gravar; gravado o credenciamento o lote sai; a exceção que proíbe o procedimento recusa com o motivo; a fonte que não barra gera e avisa', async () => {
+    const cobranca = new ServicoCobranca(nucleo);
+    const escrever = <T>(fn: (e: Escritor) => Promise<T>) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-f378' }, fn);
+    const barrar = (sim: boolean) =>
+      escrever((e) =>
+        e.executar('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = ? WHERE id = ?', [
+          sim,
+          ids.fonte,
+        ]),
+      );
+    const m = await escrever(async (e) => {
+      const agora = new Date();
+      const item = await garantir(
+        e,
+        'SELECT id FROM item_faturavel WHERE codigo = ?',
+        ['83160004'],
+        "INSERT INTO item_faturavel (codigo, descricao, tipo_item, grupo_faturamento_id, criado_em) VALUES (?, ?, 'honorario', ?, ?)",
+        ['83160004', 'HONORARIO SINTETICO 83160004', ids.grupo, agora],
+      );
+      const conta = async (sufixo: string) => {
+        const id = await e.inserir(
+          `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, fim_em, situacao, valor_itens, valor_total, fechada_em,
+           fechada_por_usuario_id, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'internacao', ?, ?, ?, 'fechada', 120, 120, ?, ?, ?)`,
+          [
+            ids.est,
+            `${P}-${sufixo}`,
+            ids.atendimento,
+            ids.paciente,
+            ids.fonte,
+            ids.tipoConta,
+            competencia,
+            agora,
+            agora,
+            agora,
+            ids.usuario,
+            agora,
+          ],
+        );
+        await e.inserir(
+          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em,
+           quantidade, valor_unitario, valor_total, executante_profissional_id, criado_em)
+         VALUES (?, 1, ?, ?, 1, 120, 120, ?, ?)`,
+          [id, item, agora, ids.prof, agora],
+        );
+        return id;
+      };
+      return { item, a: await conta('CA'), b: await conta('CB') };
+    });
+    const entrada = async (conta: number) => ({
+      convenio: ids.fonte,
+      tipoGuia: 4,
+      contas: [{ id: conta, versao: await versaoDaConta(conta) }],
+    });
+    const lotes = async () =>
+      Number(
+        (await lerUma('SELECT COUNT(*) AS q FROM lote_tiss WHERE estabelecimento_id = ?', [ids.est]))?.['q'],
+      );
+    const gerados: number[] = [];
+    try {
+      // 1) A fonte barra e o executante não tem credenciamento nela: recusa, nada é gravado, a conta segue fechada.
+      await barrar(true);
+      const antes = await lotes();
+      const e1 = await erroDe(porta.executar(c, 'faturamento.gerarLote', await entrada(m.a), op()));
+      expect(codigo(e1)).toBe('credenciamento-barra-cobranca');
+      expect(e1.message).toContain(`${P}-CA`);
+      expect(e1.message).toContain('Sem credenciamento vigente');
+      expect(await lotes()).toBe(antes);
+      expect(await lerUma('SELECT situacao FROM conta_hospitalar WHERE id = ?', [m.a])).toMatchObject({
+        situacao: 'fechada',
+      });
+      // 2) Gravado o credenciamento (a mesma operação da tela), o lote sai: lote, conta no lote, conta faturada.
+      const cr = await cobranca.gravar('credenciamento', op(), {
+        fontePagadoraId: ids.fonte,
+        profissionalId: ids.prof,
+        vigenciaInicio: '2025-01-01',
+      });
+      expect(
+        await lerUma(
+          'SELECT estabelecimento_id, fonte_pagadora_id, profissional_id, vigencia_fim FROM credenciamento_cobranca WHERE id = ?',
+          [cr['id']],
+        ),
+      ).toMatchObject({
+        estabelecimento_id: ids.est,
+        fonte_pagadora_id: ids.fonte,
+        profissional_id: ids.prof,
+        vigencia_fim: null,
+      });
+      const r1 = await porta.executar(c, 'faturamento.gerarLote', await entrada(m.a), op());
+      gerados.push(Number(r1.resultado['lote']));
+      expect(r1.resultado).toMatchObject({ contas: 1 });
+      expect(String(r1.resultado['alertas'] ?? '')).not.toContain('credenciamento');
+      expect(await lotes()).toBe(antes + 1);
+      expect(
+        (
+          await lerTodas('SELECT conta_hospitalar_id FROM lote_tiss_conta WHERE lote_tiss_id = ?', [
+            gerados[0],
+          ])
+        ).map((x) => Number(x['conta_hospitalar_id'])),
+      ).toEqual([m.a]);
+      expect(await lerUma('SELECT situacao FROM conta_hospitalar WHERE id = ?', [m.a])).toMatchObject({
+        situacao: 'faturada',
+      });
+      // 3) A exceção que proíbe o procedimento (mais específica que o credenciamento) recusa o lote com o motivo.
+      await cobranca.gravar('excecao', op(), {
+        profissionalId: ids.prof,
+        fontePagadoraId: ids.fonte,
+        itemId: m.item,
+        efeito: 'proibe',
+        motivo: 'FORA DO CONTRATO F378',
+        vigenciaInicio: '2025-01-01',
+      });
+      const e2 = await erroDe(porta.executar(c, 'faturamento.gerarLote', await entrada(m.b), op()));
+      expect(codigo(e2)).toBe('credenciamento-barra-cobranca');
+      expect(e2.message).toContain(`${P}-CB`);
+      expect(e2.message).toContain('FORA DO CONTRATO F378');
+      expect(await lotes()).toBe(antes + 1);
+      // 4) A fonte que não barra gera o lote e avisa o item sem credenciamento (a fonte tem credenciamento cadastrado).
+      await barrar(false);
+      const r2 = await porta.executar(c, 'faturamento.gerarLote', await entrada(m.b), op());
+      gerados.push(Number(r2.resultado['lote']));
+      expect(r2.resultado).toMatchObject({ contas: 1 });
+      expect(String(r2.resultado['alertas'])).toContain(
+        'a fonte pagadora não barra pela falta de credenciamento',
+      );
+      expect(String(r2.resultado['alertas'])).toContain('FORA DO CONTRATO F378');
+      expect(await lotes()).toBe(antes + 2);
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-f378' }, async (e) => {
+        await e.executar('UPDATE fonte_pagadora SET bloqueia_sem_credenciamento = FALSE WHERE id = ?', [
+          ids.fonte,
+        ]);
+        for (const lote of gerados) {
+          const a = await e.uma<{ arquivo_id: number }>('SELECT arquivo_id FROM lote_tiss WHERE id = ?', [
+            lote,
+          ]);
+          await e.executar('DELETE FROM lote_tiss_conta WHERE lote_tiss_id = ?', [lote]);
+          await e.executar(
+            'DELETE FROM fatura_fonte_pagadora_conta WHERE fatura_fonte_pagadora_id IN (SELECT id FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?)',
+            [lote],
+          );
+          await e.executar('DELETE FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?', [lote]);
+          await e.executar('DELETE FROM lote_tiss WHERE id = ?', [lote]);
+          await e.executar('DELETE FROM arquivo WHERE id = ?', [a?.arquivo_id ?? 0]);
+        }
+        await e.executar('DELETE FROM excecao_credenciamento WHERE estabelecimento_id = ?', [ids.est]);
+        await e.executar('DELETE FROM credenciamento_cobranca WHERE estabelecimento_id = ?', [ids.est]);
         await e.executar('DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (?, ?)', [m.a, m.b]);
         await e.executar('DELETE FROM conta_hospitalar WHERE id IN (?, ?)', [m.a, m.b]);
       });
