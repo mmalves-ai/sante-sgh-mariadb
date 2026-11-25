@@ -55,7 +55,8 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     path: '/financeiro/pagar/pagamento-eletronico',
     name: 'financeiro.pagar.pagamentoEletronico',
     component: () => import('./telas/PagamentoEletronicoTela.vue'),
-    meta: { permissao: 'financeiro.remessa.ler' },
+    // C1-026: o cadastro de credores entra só na aba dos dados bancários (sem ler nem gerar remessa).
+    meta: { permissao: 'financeiro.remessa.ler', permissaoOu: ['financeiro.contaCredor.manter'] },
   },
   {
     path: '/financeiro/pagar/adiantamentos',

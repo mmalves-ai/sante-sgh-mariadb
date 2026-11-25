@@ -3,7 +3,10 @@
 // ler o retorno do banco (o arquivo é conferido na hora, antes de enviar, e cada linha volta com a ocorrência e o que
 // foi feito com o título), gerar a remessa por Pix (só entra o credor com chave ativa; quem não tem leva direto ao
 // cadastro) e manter a conta e a chave Pix do credor (conferidas a cada tecla pela regra do domínio; o dado gravado
-// aparece só com o final). Fora de produção, o retorno pode vir do simulador: nada sai do estabelecimento.
+// aparece só com o final). C1-026: o credor da conta é o fornecedor, o profissional ou o prestador terceiro do
+// estabelecimento (escolhido antes da busca); quem mantém a conta e a chave (financeiro.contaCredor.manter) não é quem
+// gera a remessa (segregação de funções): sem a permissão o botão de gravar fica preso e o motivo aparece escrito, e o
+// cadastro de credores vê só a aba dos dados bancários. Fora de produção, o retorno pode vir do simulador: nada sai do estabelecimento.
 import {
   conferirContaCredor,
   tipoProvavelChavePix,
@@ -21,6 +24,8 @@ import { novaChave } from '../api-financeiro.js';
 import {
   type ContaCredorTela,
   gerarRemessaPix,
+  TIPOS_CREDOR_CONTA,
+  type TipoCredorConta,
   lerBancos,
   lerContasDoCredor,
   lerParcelasPix,
@@ -36,10 +41,25 @@ import { data, opcoesContas, reais, usarFinanceiro } from '../usar-financeiro.js
 const { t } = useI18n();
 const qc = useQueryClient();
 const rota = useRoute();
-const { apoio, gravacao, pode, motivo } = usarFinanceiro();
+const { apoio, gravacao, pode, motivo, tem } = usarFinanceiro();
 type Aba = 'retorno' | 'pix' | 'credor';
 const ABAS: readonly Aba[] = ['retorno', 'pix', 'credor'];
-const aba = ref<Aba>(ABAS.includes(rota.query['aba'] as Aba) ? (rota.query['aba'] as Aba) : 'retorno');
+// Retorno e Pix pedem a leitura das remessas; a aba do credor, a consulta dos títulos ou a manutenção da conta.
+const abasVisiveis = computed(() =>
+  ABAS.filter((a) =>
+    a === 'credor'
+      ? tem('financeiro.tituloPagar.ler') || tem('financeiro.contaCredor.manter')
+      : tem('financeiro.remessa.ler'),
+  ),
+);
+const abaPedida = ABAS.includes(rota.query['aba'] as Aba) ? (rota.query['aba'] as Aba) : 'retorno';
+const aba = ref<Aba>(
+  abasVisiveis.value.includes(abaPedida) ? abaPedida : (abasVisiveis.value[0] ?? abaPedida),
+);
+watch(abasVisiveis, (v) => {
+  const primeira = v[0];
+  if (!v.includes(aba.value) && primeira) aba.value = primeira;
+});
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const gravando = ref(false);
@@ -66,6 +86,7 @@ function trocarAba(a: Aba) {
 const remessas = useQuery({
   queryKey: ['financeiro', 'pagamento-eletronico', 'remessas'],
   queryFn: () => lerRemessasComPendencia(),
+  enabled: computed(() => tem('financeiro.remessa.ler')),
 });
 const remessa = ref(typeof rota.query['remessa'] === 'string' ? rota.query['remessa'] : '');
 const opcoesRemessa = computed(() => [
@@ -170,10 +191,24 @@ const enviarPix = () =>
   );
 
 // ── Dados bancários e chave Pix do credor ──
+const tipoCredor = ref<TipoCredorConta>('fornecedor');
+const opcoesTipoCredor = computed(() =>
+  TIPOS_CREDOR_CONTA.map((v) => ({
+    valor: v,
+    rotulo: t(`financeiro.pagamentoEletronico.credor.tipos.${v}`),
+  })),
+);
+const podeManterConta = computed(() => tem('financeiro.contaCredor.manter'));
 const credor = ref<number | null>(null);
 const contasCredor = useQuery({
-  queryKey: computed(() => ['financeiro', 'pagamento-eletronico', 'contas-credor', credor.value]),
-  queryFn: () => lerContasDoCredor(credor.value ?? 0),
+  queryKey: computed(() => [
+    'financeiro',
+    'pagamento-eletronico',
+    'contas-credor',
+    tipoCredor.value,
+    credor.value,
+  ]),
+  queryFn: () => lerContasDoCredor(tipoCredor.value, credor.value ?? 0),
   enabled: computed(() => credor.value !== null),
 });
 const bancos = useQuery({
@@ -273,7 +308,8 @@ const gravarConta = () =>
             }
           : {
               acao: 'incluir',
-              fornecedor: credor.value ?? 0,
+              tipoCredor: tipoCredor.value,
+              credor: credor.value ?? 0,
               ...dados.value,
               preferencial: form.preferencial,
             },
@@ -290,7 +326,9 @@ const desativar = (c: ContaCredorTela) =>
       ),
     aposConta,
   );
-function cadastrarChave() {
+/** Do título sem chave direto ao cadastro, já com o tipo do credor escolhido (a busca começa vazia). */
+function cadastrarChave(tipo: 'fornecedor' | 'profissional') {
+  tipoCredor.value = tipo;
   trocarAba('credor');
 }
 </script>
@@ -313,7 +351,7 @@ function cadastrarChave() {
     </p>
     <div class="filtros" role="group" :aria-label="t('financeiro.pagamentoEletronico.titulo')">
       <button
-        v-for="a in ABAS"
+        v-for="a in abasVisiveis"
         :key="a"
         type="button"
         :aria-pressed="aba === a"
@@ -456,13 +494,16 @@ function cadastrarChave() {
                 v-else
                 type="button"
                 :data-testid="`pe-pix-sem-chave-${p.documento}`"
-                @click="cadastrarChave"
+                @click="cadastrarChave(p.credorTipo)"
               >
                 {{ t('financeiro.pagamentoEletronico.pix.cadastrar') }}
               </button>
             </td>
             <td>
               {{ p.credorNome }}
+              <small class="secundario" :data-testid="`pe-pix-tipo-${p.documento}`">
+                · {{ t(`financeiro.pagamentoEletronico.credor.tipos.${p.credorTipo}`) }}
+              </small>
               <small v-if="!p.temChavePix" class="secundario">
                 ({{ t('financeiro.pagamentoEletronico.pix.semChave') }})
               </small>
@@ -513,9 +554,18 @@ function cadastrarChave() {
     <template v-else>
       <h2>{{ t('financeiro.pagamentoEletronico.abas.credor') }}</h2>
       <div class="filtros">
+        <span class="campo">
+          <SanteSelecao
+            v-model="tipoCredor"
+            :rotulo="t('financeiro.pagamentoEletronico.credor.tipo')"
+            :opcoes="opcoesTipoCredor"
+            obrigatorio
+            data-testid="pe-credor-tipo"
+          />
+        </span>
         <BuscaCredor
           v-model="credor"
-          tipo="fornecedor"
+          :tipo="tipoCredor"
           :rotulo="t('financeiro.pagamentoEletronico.credor.buscar')"
           prefixo="pe-credor"
         />
@@ -564,7 +614,7 @@ function cadastrarChave() {
                 <template v-if="c.ativo">
                   <button
                     type="button"
-                    :disabled="gravando"
+                    :disabled="gravando || !podeManterConta"
                     data-testid="pe-conta-corrigir"
                     @click="corrigir(c)"
                   >
@@ -572,7 +622,7 @@ function cadastrarChave() {
                   </button>
                   <button
                     type="button"
-                    :disabled="gravando"
+                    :disabled="gravando || !podeManterConta"
                     data-testid="pe-conta-desativar"
                     @click="desativar(c)"
                   >
@@ -705,7 +755,11 @@ function cadastrarChave() {
               {{ t('financeiro.pagamentoEletronico.credor.preferencial') }}
             </label>
           </span>
-          <button type="submit" :disabled="gravando || recusaConta !== null" data-testid="pe-gravar-conta">
+          <button
+            type="submit"
+            :disabled="gravando || recusaConta !== null || !podeManterConta"
+            data-testid="pe-gravar-conta"
+          >
             {{ t('financeiro.pagamentoEletronico.credor.gravar') }}
           </button>
           <button v-if="corrigindo" type="button" data-testid="pe-cancelar-correcao" @click="limparForm">
@@ -713,6 +767,9 @@ function cadastrarChave() {
           </button>
         </form>
         <p v-if="preenchido && recusaConta" role="alert" data-testid="pe-recusa-conta">{{ recusaConta }}</p>
+        <p v-if="!podeManterConta" class="secundario" role="status" data-testid="pe-sem-permissao-conta">
+          {{ t('financeiro.pagamentoEletronico.credor.semPermissao') }}
+        </p>
       </template>
     </template>
   </section>

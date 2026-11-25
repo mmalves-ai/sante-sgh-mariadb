@@ -1,7 +1,8 @@
 // F3.8 (07-FIN linha 66): a tela do pagamento eletrônico. Chega-se por um clique a partir das remessas; o arquivo de
 // retorno é conferido na hora, antes de enviar (arquivo que não é retorno CNAB 240 prende o botão e diz o motivo; o
 // arquivo bem formado mostra quantas linhas e quantos títulos traz); nos dados bancários do credor, o credor é achado
-// pelo código ou nome e a chave Pix é conferida a cada tecla (chave inválida ou de outro titular prende o botão; o tipo
+// pelo código ou nome e a chave Pix é conferida a cada tecla; só o cadastro de credores (SINT.FIN.CREDOR) grava a conta,
+// quem gera a remessa (SINT.FIN.PAGA) vê o botão preso (C1-026) (chave inválida ou de outro titular prende o botão; o tipo
 // da chave é sugerido pela forma digitada). A fonte do E2E é a sintética, sem banco: a gravação (baixa pelo retorno,
 // cadastro da conta e remessa por Pix) é provada no contrato de efeito pagamento-eletronico.int.spec.ts. Axe nos passos.
 import { expect, type Page, test } from '@playwright/test';
@@ -85,8 +86,31 @@ test.describe('financeiro: pagamento eletrônico @F3.8-03', () => {
     await expect(page.getByTestId('pe-processar')).toBeDisabled();
     await semViolacaoAxe(page, '/financeiro/pagar/pagamento-eletronico (retorno)');
 
-    // Dados bancários do credor: achado pelo código, sem id digitado às cegas.
+    // Remessa por Pix: sem título marcado o botão fica preso e o total diz zero.
+    await page.getByTestId('pe-aba-pix').click();
+    await expect(page.getByTestId('pe-pix-gerar')).toBeDisabled();
+    await expect(page.getByTestId('pe-pix-total')).toContainText('0 título(s)');
+
+    // C1-026, segregação de funções: quem gera a remessa vê os dados bancários do credor, mas não os grava.
     await page.getByTestId('pe-aba-credor').click();
+    await page.getByTestId('pe-credor-busca').fill('5001');
+    await page.locator('[data-testid^="pe-credor-opcao-"]').first().click();
+    await expect(page.getByTestId('pe-credor-escolhido')).toBeVisible();
+    await page.getByTestId('pe-titular').fill('Fornecedor Sintético');
+    await page.getByTestId('pe-documento').fill('529.982.247-25');
+    await page.getByTestId('pe-chave').fill('529.982.247-25');
+    await expect(page.getByTestId('pe-recusa-conta')).toHaveCount(0);
+    await expect(page.getByTestId('pe-sem-permissao-conta')).toContainText('cadastro de credores');
+    await expect(page.getByTestId('pe-gravar-conta')).toBeDisabled();
+
+    // Dados bancários do credor pelo cadastro de credores: achado pelo código, sem id digitado às cegas; só a aba
+    // do credor aparece (não lê nem gera remessa).
+    await entrar(page, 'SINT.FIN.CREDOR');
+    await page.goto('/financeiro/pagar/pagamento-eletronico');
+    await expect(page.getByTestId('tela-fin-pagamento-eletronico')).toBeVisible();
+    await expect(page.getByTestId('pe-aba-retorno')).toHaveCount(0);
+    await expect(page.getByTestId('pe-aba-pix')).toHaveCount(0);
+    await expect(page.getByTestId('pe-aba-credor')).toHaveAttribute('aria-pressed', 'true');
     await page.getByTestId('pe-credor-busca').fill('5001');
     await page.locator('[data-testid^="pe-credor-opcao-"]').first().click();
     await expect(page.getByTestId('pe-credor-escolhido')).toBeVisible();
@@ -106,13 +130,9 @@ test.describe('financeiro: pagamento eletrônico @F3.8-03', () => {
     await page.getByTestId('pe-documento').fill('529.982.247-25');
     await page.getByTestId('pe-chave').fill('529.982.247-25');
     await expect(page.getByTestId('pe-recusa-conta')).toHaveCount(0);
+    await expect(page.getByTestId('pe-sem-permissao-conta')).toHaveCount(0);
     await expect(page.getByTestId('pe-gravar-conta')).toBeEnabled();
     await semViolacaoAxe(page, '/financeiro/pagar/pagamento-eletronico (dados bancários do credor)');
-
-    // Remessa por Pix: sem título marcado o botão fica preso e o total diz zero.
-    await page.getByTestId('pe-aba-pix').click();
-    await expect(page.getByTestId('pe-pix-gerar')).toBeDisabled();
-    await expect(page.getByTestId('pe-pix-total')).toContainText('0 título(s)');
     expect(externas).toEqual([]);
   });
 });

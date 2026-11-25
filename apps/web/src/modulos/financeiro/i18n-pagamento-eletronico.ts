@@ -46,6 +46,10 @@ export const mensagensPagamentoEletronico = {
     nenhuma: 'Nenhum título em aberto para pagar por Pix.',
   },
   credor: {
+    tipo: 'Tipo do credor',
+    tipos: { fornecedor: 'Fornecedor', profissional: 'Profissional', prestador: 'Prestador terceiro' },
+    semPermissao:
+      'Só o cadastro de credores grava ou desativa os dados bancários e a chave Pix (quem gera a remessa não os altera).',
     buscar: 'Credor (nome, CNPJ ou CPF)',
     contas: 'Contas e chaves do credor',
     nenhuma: 'O credor ainda não tem conta nem chave Pix no cadastro.',

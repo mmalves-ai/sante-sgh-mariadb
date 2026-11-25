@@ -1,6 +1,6 @@
 // F3.8, 07-FIN linha 66: cliente da tela do pagamento eletrônico (pagamento-eletronico.controller.ts): retorno do
 // banco, dados bancários e chave Pix do credor e remessa por Pix.
-import type { ResultadoFinanceiro } from '@sgh/contratos';
+import type { CredorEncontrado, ResultadoFinanceiro } from '@sgh/contratos';
 import { z } from 'zod';
 import { enviar, ler, qs } from '../exames/api-exames.js';
 
@@ -47,6 +47,9 @@ export interface RetornoLidoTela {
   readonly totalBaixado: number;
   readonly itens: readonly ItemRetornoTela[];
 }
+/** C1-026: quem recebe pela conta ou chave Pix (o prestador terceiro é do estabelecimento). */
+export type TipoCredorConta = 'fornecedor' | 'profissional' | 'prestador';
+export const TIPOS_CREDOR_CONTA: readonly TipoCredorConta[] = ['fornecedor', 'profissional', 'prestador'];
 export interface ContaCredorTela {
   readonly id: number;
   readonly versao: number;
@@ -68,6 +71,7 @@ export interface ParcelaPixTela {
   readonly documento: string;
   readonly parcela: number;
   readonly credor: number;
+  readonly credorTipo: 'fornecedor' | 'profissional';
   readonly credorNome: string;
   readonly vencimento: string | null;
   readonly valor: number;
@@ -87,7 +91,11 @@ export interface DadosContaCredor {
   readonly preferencial: boolean;
 }
 export type ManterContaCredor =
-  | ({ readonly acao: 'incluir'; readonly fornecedor: number } & DadosContaCredor)
+  | ({
+      readonly acao: 'incluir';
+      readonly tipoCredor: TipoCredorConta;
+      readonly credor: number;
+    } & DadosContaCredor)
   | ({ readonly acao: 'alterar'; readonly contaCredor: number; readonly versao: number } & DadosContaCredor)
   | { readonly acao: 'desativar'; readonly contaCredor: number; readonly versao: number };
 
@@ -103,8 +111,11 @@ export const processarRetorno = (
 ) => enviar(`${P}/retornos`, corpo, resultado, chave);
 export const lerRetornoSimulado = (remessa: number) =>
   ler(`${P}/retorno-simulado${qs({ remessa })}`, confiar<{ nomeArquivo: string; conteudo: string }>());
-export const lerContasDoCredor = (fornecedor: number) =>
-  ler(`${P}/credores/contas${qs({ fornecedor })}`, lista<ContaCredorTela>());
+export const lerContasDoCredor = (tipo: TipoCredorConta, credor: number) =>
+  ler(`${P}/credores/contas${qs({ tipo, credor })}`, lista<ContaCredorTela>());
+/** O prestador terceiro do estabelecimento pelo nome, código ou CNPJ (o CPF do prestador pessoa física não sai). */
+export const buscarPrestadores = (termo: string) =>
+  ler(`${P}/credores${qs({ tipo: 'prestador', busca: termo })}`, lista<CredorEncontrado>());
 export const lerBancos = () => ler(`${P}/bancos`, lista<{ id: number; nome: string }>());
 export const manterContaCredor = (corpo: ManterContaCredor, chave: string) =>
   enviar(`${P}/credores/contas`, corpo, resultado, chave);
