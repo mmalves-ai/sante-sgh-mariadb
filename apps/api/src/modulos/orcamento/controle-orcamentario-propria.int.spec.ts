@@ -5,7 +5,11 @@
 // natureza são ids já existentes do cliente (só lidos). Prova o que fica em `regra_controle_orcamentario`,
 // `reserva_orcamentaria`, `excecao_orcamentaria` e `ajuste_orcamento_nota`: a regra de bloqueio, a reserva que cabe, a
 // recusa sem gravar, a exceção justificada decidida por outra pessoa e usada pela reserva, o teto do documento, a nota
-// parcial e a final com o ajuste, a liberação com o motivo, o alerta que pede ciência e o saldo em cada passo.
+// parcial e a final com o ajuste, a liberação com o motivo, o alerta que pede ciência e o saldo em cada passo; a nota
+// final acima da reserva sob bloqueio (só com exceção, que fica utilizada, e o autorizador no ajuste); a exceção presa à
+// linha (a de outra linha não libera o bloqueio) e o controle no documento, o mesmo caminho que a aprovação do pedido de
+// compra e a do título a pagar chamam (linha achada pelo centro, bloqueio recusa, exceção da linha libera, documento
+// coberto). Migração 14_FIN/99_excecao_orcamentaria_linha.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -134,7 +138,47 @@ describe.skipIf(SEM_BANCO)('PortaControleOrcamentarioPropria contra o MariaDB (c
          VALUES (?, 902112002, ?, ?, ?, 'NF-SINT-2', '2027-03-05', '2027-03-05', 1000, 1000, ?, ?)`,
         [est, credor, fornecedor, tipoDoc, natureza, agora],
       );
-      return { usuario, aprovador, est, cc, plano, conta, versao, linha, pedido, titulo };
+      // Segunda linha (outro centro, 100 em março), com um pedido (200) e um título (300) desse centro.
+      const cc2 = await e.inserir(
+        `INSERT INTO centro_custo (estabelecimento_id, codigo, nome, vigencia_inicio, ativo, criado_em)
+         VALUES (?, ?, 'Centro sintético B', '2026-01-01', TRUE, ?)`,
+        [est, `${P}-B`, agora],
+      );
+      const linha2 = await e.inserir(
+        `INSERT INTO linha_orcamento (versao_orcamento_id, sequencia, centro_custo_id, natureza,
+           natureza_financeira_id, valor_mes_03, criado_em)
+         VALUES (?, 2, ?, 'despesa', ?, 100, ?)`,
+        [versao, cc2, natureza, agora],
+      );
+      const pedido2 = await e.inserir(
+        `INSERT INTO pedido_compra (estabelecimento_id, ano, numero, empresa_fornecedora_id, centro_custo_id,
+           data_pedido, valor_produtos, valor_total, criado_em)
+         VALUES (?, 2027, 902112003, ?, ?, '2027-03-06', 200, 200, ?)`,
+        [est, fornecedor, cc2, agora],
+      );
+      const titulo2 = await e.inserir(
+        `INSERT INTO titulo_pagar (estabelecimento_id, numero, tipo_credor_id, empresa_fornecedora_id,
+           tipo_documento_financeiro_id, numero_documento, data_emissao, data_lancamento, valor_bruto, valor_liquido,
+           natureza_financeira_id, centro_custo_id, criado_em)
+         VALUES (?, 902112004, ?, ?, ?, 'NF-SINT-4', '2027-03-06', '2027-03-06', 300, 300, ?, ?, ?)`,
+        [est, credor, fornecedor, tipoDoc, natureza, cc2, agora],
+      );
+      return {
+        usuario,
+        aprovador,
+        est,
+        cc,
+        plano,
+        conta,
+        versao,
+        linha,
+        pedido,
+        titulo,
+        cc2,
+        linha2,
+        pedido2,
+        titulo2,
+      };
     });
     porta = new PortaControleOrcamentarioPropria(nucleo, CLIENTE);
   });
@@ -221,6 +265,7 @@ describe.skipIf(SEM_BANCO)('PortaControleOrcamentarioPropria contra o MariaDB (c
     expect(x).toMatchObject({
       situacao: 'pendente',
       entidade: 'titulo_pagar',
+      linha_orcamento_id: m['linha'],
       solicitante_usuario_id: m['usuario'],
       plano_orcamentario_id: m['plano'],
       centro_custo_id: m['cc'],
@@ -241,6 +286,8 @@ describe.skipIf(SEM_BANCO)('PortaControleOrcamentarioPropria contra o MariaDB (c
     const [r2] = await ler('SELECT * FROM reserva_orcamentaria WHERE titulo_pagar_id = ?', [m['titulo']]);
     expect(Number(r2!['excedeu_saldo'])).toBe(1);
     expect(r2!['autorizador_usuario_id']).toBe(m['aprovador']);
+    // Sem conta na reserva, ela fica com a conta da exceção usada.
+    expect(r2!['conta_orcamentaria_id']).toBe(m['conta']);
     m['resTitulo'] = Number(r2!['id']);
     const [xu] = await ler(
       'SELECT situacao, reserva_orcamentaria_id FROM excecao_orcamentaria WHERE id = ?',
@@ -265,19 +312,51 @@ describe.skipIf(SEM_BANCO)('PortaControleOrcamentarioPropria contra o MariaDB (c
     await expect(
       porta.registrarNota(ctx(), m['resPedido']!, { versao: rp, valorRealizado: 10, final: false }),
     ).rejects.toMatchObject({ problema: { codigo: 'conflito-versao' } });
-    await porta.registrarNota(ctx(), m['resPedido']!, {
+    // A nota final passa da reserva em 50 e o saldo já está em −300: sob bloqueio, sem exceção, nada grava.
+    const final = {
       versao: Number(r['versao']),
       valorRealizado: 550,
       final: true,
       numeroDocumento: 'NF-SINT-P2',
       motivo: 'Frete acima do pedido',
+    };
+    const antesNota = await contar();
+    await expect(porta.registrarNota(ctx(), m['resPedido']!, final)).rejects.toMatchObject(recusa);
+    expect(await contar()).toBe(antesNota);
+    expect(Number((await reserva(m['resPedido']!))['valor_consumido'])).toBe(300);
+    // Exceção do excesso da nota (50), na mesma linha, aprovada por outra pessoa: a nota passa e a usa.
+    await porta.solicitarExcecao(ctx(), {
+      tipoDocumento: 'pedido_compra',
+      documento: m['pedido']!,
+      linha: m['linha']!,
+      competencia: COMP,
+      contaOrcamentaria: m['conta']!,
+      valor: 50,
+      justificativa: 'Frete acima do pedido cobrado pelo fornecedor sintético',
+      data: '2027-03-10',
     });
+    const [xn] = await ler(
+      `SELECT id FROM excecao_orcamentaria WHERE entidade = 'pedido_compra' AND entidade_id = ? AND situacao = 'pendente'`,
+      [m['pedido']],
+    );
+    await porta.decidirExcecao(ctx(m['aprovador']!), Number(xn!['id']), { versao: 1, aprovar: true });
+    expect(await porta.registrarNota(ctx(), m['resPedido']!, final)).toMatchObject({
+      decisao: 'excecao',
+      excesso: 50,
+      ajuste: 50,
+    });
+    const [xnu] = await ler(
+      'SELECT situacao, reserva_orcamentaria_id FROM excecao_orcamentaria WHERE id = ?',
+      [xn!['id']],
+    );
+    expect(xnu).toMatchObject({ situacao: 'utilizada', reserva_orcamentaria_id: m['resPedido'] });
     r = await reserva(m['resPedido']!);
     expect(r).toMatchObject({ situacao: 'consumida' });
     expect(Number(r['valor_consumido'])).toBe(800);
     expect(Number(r['valor_liberado'])).toBe(0);
     const ajustes = await ler(
-      `SELECT sequencia, valor_comprometido, valor_realizado, valor_ajuste, pedido_compra_id, competencia
+      `SELECT sequencia, valor_comprometido, valor_realizado, valor_ajuste, pedido_compra_id, competencia,
+              excedeu_saldo, autorizador_usuario_id
          FROM ajuste_orcamento_nota WHERE reserva_orcamentaria_id = ? ORDER BY sequencia`,
       [m['resPedido']],
     );
@@ -288,6 +367,10 @@ describe.skipIf(SEM_BANCO)('PortaControleOrcamentarioPropria contra o MariaDB (c
       [2, 500, 50],
     ]);
     expect(ajustes[1]!['pedido_compra_id']).toBe(m['pedido']);
+    expect(ajustes.map((a) => [Number(a['excedeu_saldo']), a['autorizador_usuario_id']])).toEqual([
+      [0, null],
+      [1, m['aprovador']],
+    ]);
     // Saldo: 1000 − aberto 500 (título) − realizado (800 + 50) = −350.
     expect(await saldo()).toMatchObject({ comprometido: 500, realizado: 850, disponivel: -350 });
     // Reserva já consumida não recebe nota.
@@ -350,7 +433,100 @@ describe.skipIf(SEM_BANCO)('PortaControleOrcamentarioPropria contra o MariaDB (c
     const painel = await porta.painel(ctx());
     expect(painel.regras).toHaveLength(1);
     expect(painel.reservas).toHaveLength(3);
-    expect(painel.excecoes[0]).toMatchObject({ situacao: 'utilizada', valor: 300 });
+    expect(painel.excecoes.map((x) => [x.situacao, x.valor, x.linha])).toEqual([
+      ['utilizada', 50, m['linha']],
+      ['utilizada', 300, m['linha']],
+    ]);
+    expect(painel.excecoes[0]!.documentoNumero).toBe('2027/902112001');
+    expect(painel.reservas.map((x) => x.documentoNumero)).toContain('902112002');
     expect(painel.linhas.map((l) => l.id)).toContain(m['linha']);
+    // A escolha do documento é pelo número de negócio, com fornecedor, valor e o já reservado.
+    const doPedido = painel.documentos.find(
+      (d) => d.id === m['pedido'] && d.tipoDocumento === 'pedido_compra',
+    );
+    expect(doPedido).toMatchObject({ numero: '2027/902112001', valor: 800, reservado: 800 });
+    expect(doPedido!.fornecedor).not.toBeNull();
+  });
+
+  it('exceção presa à linha e o controle no documento (o caminho da aprovação do pedido e do título)', async () => {
+    await porta.salvarRegra(ctx(), null, {
+      acao: 'bloquear',
+      centroCusto: m['cc2']!,
+      prioridade: 10,
+      vigenciaInicio: '2027-01-01',
+    });
+    const conta = m['conta']!;
+    // Exceção aprovada para o título 2 na linha A: não libera a reserva dele na linha B.
+    const naLinha = (linha: number, valor: number) => ({
+      tipoDocumento: 'titulo_pagar',
+      documento: m['titulo2']!,
+      linha,
+      competencia: COMP,
+      contaOrcamentaria: conta,
+      valor,
+      justificativa: 'Despesa sintética fora do previsto para o centro B',
+      data: '2027-03-10',
+    });
+    await porta.solicitarExcecao(ctx(), naLinha(m['linha']!, 300));
+    const [xa] = await ler(
+      `SELECT id FROM excecao_orcamentaria WHERE entidade_id = ? AND entidade = 'titulo_pagar' AND situacao = 'pendente'`,
+      [m['titulo2']],
+    );
+    await porta.decidirExcecao(ctx(m['aprovador']!), Number(xa!['id']), { versao: 1, aprovar: true });
+    const antes = await contar();
+    await expect(
+      porta.reservar(ctx(), {
+        tipoDocumento: 'titulo_pagar',
+        documento: m['titulo2']!,
+        linha: m['linha2']!,
+        competencia: COMP,
+        contaOrcamentaria: conta,
+        data: '2027-03-10',
+      }),
+    ).rejects.toMatchObject(recusa);
+    // O controle no documento acha a linha B pelo centro: o pedido 2 (200 sobre 100) e o título 2 são recusados.
+    await expect(
+      porta.controlarDocumento(ctx(), { tipoDocumento: 'pedido_compra', documento: m['pedido2']! }),
+    ).rejects.toMatchObject(recusa);
+    await expect(
+      porta.controlarDocumento(ctx(), { tipoDocumento: 'titulo_pagar', documento: m['titulo2']! }),
+    ).rejects.toMatchObject(recusa);
+    expect(await contar()).toBe(antes);
+    // A exceção da linha B (200) libera; a reserva fica na linha B, com a conta e o aprovador da exceção.
+    await porta.solicitarExcecao(ctx(), naLinha(m['linha2']!, 200));
+    const [xb] = await ler(
+      `SELECT id, linha_orcamento_id FROM excecao_orcamentaria WHERE entidade_id = ? AND entidade = 'titulo_pagar'
+          AND situacao = 'pendente'`,
+      [m['titulo2']],
+    );
+    expect(xb!['linha_orcamento_id']).toBe(m['linha2']);
+    await porta.decidirExcecao(ctx(m['aprovador']!), Number(xb!['id']), { versao: 1, aprovar: true });
+    const feito = await porta.controlarDocumento(ctx(), {
+      tipoDocumento: 'titulo_pagar',
+      documento: m['titulo2']!,
+    });
+    expect(feito).toMatchObject({
+      situacao: 'reservado',
+      linha: m['linha2'],
+      valor: 300,
+      decisao: 'excecao',
+    });
+    const rb = await reserva(feito.reserva!);
+    expect(rb).toMatchObject({
+      linha_orcamento_id: m['linha2'],
+      conta_orcamentaria_id: conta,
+      autorizador_usuario_id: m['aprovador'],
+      competencia: expect.anything(),
+    });
+    const [usadas] = await ler(
+      `SELECT SUM(situacao = 'utilizada' AND linha_orcamento_id = ?) AS b, SUM(situacao = 'aprovada') AS a
+         FROM excecao_orcamentaria WHERE entidade = 'titulo_pagar' AND entidade_id = ?`,
+      [m['linha2'], m['titulo2']],
+    );
+    expect([Number(usadas!['b']), Number(usadas!['a'])]).toEqual([1, 1]);
+    // Já todo reservado: o documento fica coberto, nada grava.
+    expect(
+      await porta.controlarDocumento(ctx(), { tipoDocumento: 'titulo_pagar', documento: m['titulo2']! }),
+    ).toMatchObject({ situacao: 'coberto', reserva: null });
   });
 });

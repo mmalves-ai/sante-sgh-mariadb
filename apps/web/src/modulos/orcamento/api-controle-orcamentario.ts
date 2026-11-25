@@ -3,6 +3,7 @@
 import {
   ACOES_CONTROLE,
   DOCUMENTOS_CONTROLE,
+  DOCUMENTOS_RESERVA,
   PERIODOS_APURACAO,
   SITUACOES_EXCECAO,
   SITUACOES_RESERVA,
@@ -43,6 +44,8 @@ export const esquemaPainel = z.object({
       numero: z.string(),
       tipoDocumento: z.string(),
       documento: n,
+      documentoNumero: s,
+      linha: n,
       competencia: z.string(),
       conta: s,
       valor: z.number(),
@@ -63,6 +66,7 @@ export const esquemaPainel = z.object({
       numero: z.string(),
       tipoDocumento: z.string(),
       documento: n,
+      documentoNumero: s,
       linha: z.number(),
       centro: s,
       competencia: z.string(),
@@ -76,6 +80,16 @@ export const esquemaPainel = z.object({
     }),
   ),
   linhas: z.array(opcao),
+  documentos: z.array(
+    z.object({
+      tipoDocumento: z.enum(DOCUMENTOS_RESERVA),
+      id: z.number(),
+      numero: z.string(),
+      fornecedor: s,
+      valor: z.number(),
+      reservado: z.number(),
+    }),
+  ),
   contas: z.array(opcao),
   centros: z.array(opcao),
   naturezas: z.array(opcao),
@@ -141,6 +155,9 @@ export interface ReservaProposta {
 }
 export const reservarOrcamento = (r: ReservaProposta) =>
   enviar(`${B}/reservas`, r, gravado, novaChave('orc-reservar'));
+/** Reserva pelo documento: o sistema acha a linha oficial do centro (o mesmo caminho da aprovação). */
+export const controlarDocumento = (d: { tipoDocumento: string; documento: number; ciente: boolean }) =>
+  enviar(`${B}/documento`, d, gravado, novaChave('orc-documento'));
 export const pedirExcecao = (
   r: Omit<ReservaProposta, 'ciente' | 'valor' | 'contaOrcamentaria'> & {
     contaOrcamentaria: number;
@@ -152,7 +169,13 @@ export const decidirExcecao = (id: number, d: { versao: number; aprovar: boolean
   enviar(`${B}/excecoes/${id}/decidir`, d, gravado, novaChave('orc-decidir'));
 export const registrarNotaReserva = (
   id: number,
-  d: { versao: number; valorRealizado: number; final: boolean; numeroDocumento: string | null },
+  d: {
+    versao: number;
+    valorRealizado: number;
+    final: boolean;
+    numeroDocumento: string | null;
+    ciente: boolean;
+  },
 ) => enviar(`${B}/reservas/${id}/nota`, d, gravado, novaChave('orc-nota'));
 export const liberarReserva = (id: number, d: { versao: number; motivo: string }) =>
   enviar(`${B}/reservas/${id}/liberar`, d, gravado, novaChave('orc-liberar'));

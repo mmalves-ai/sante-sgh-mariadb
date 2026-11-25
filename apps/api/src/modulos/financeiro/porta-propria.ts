@@ -77,6 +77,10 @@ import { buscarFornecedores, deParaDoEstabelecimento, fatosContabeis } from './c
 import { exigirPeriodoAberto } from './periodo-propria.js';
 import { ligarArquivo, registrarArquivoGuardado, retencaoAte } from '../tiss/armazem-xml.js';
 import {
+  controlarOrcamentoDoDocumento,
+  TABELAS_CONTROLE_NO_DOCUMENTO,
+} from '../orcamento/controle-orcamentario-propria.js';
+import {
   aprovacoesPorTitulo,
   centroDaAlcada,
   conferirItemGlosado,
@@ -145,6 +149,8 @@ const SITUACOES_TITULAVEIS = SITUACOES_CONTA_TITULAVEL.map((s) => `'${s}'`).join
 
 /** Tabelas das gravações diretas (a operação de gravação direta só grava nelas). */
 const TABELAS_GRAVACAO_DIRETA = [
+  // C2-112: a aprovação do título reserva o saldo orçado (controle-orcamentario-propria.ts).
+  ...TABELAS_CONTROLE_NO_DOCUMENTO,
   'prorrogacao_parcela',
   'parcela_remessa_bancaria',
   'arquivo',
@@ -1954,6 +1960,16 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghFinanceiro {
         situacao: sit.aprovado ? 'aprovado' : 'em_aprovacao',
         concluido_em: sit.aprovado ? agora() : null,
       });
+      // C2-112 (07-FIN linha 130): aprovado, o título reserva o saldo orçado pela regra que vale; o bloqueio sem
+      // exceção recusa a aprovação inteira; no alerta, a aprovação pelo aprovador da alçada é a ciência.
+      if (sit.aprovado) {
+        if (usuario === null) throw recusa('sem-usuario', 'A aprovação precisa do usuário da sessão.');
+        await controlarOrcamentoDoDocumento(tx, est, usuario, {
+          tipoDocumento: 'titulo_pagar',
+          documento: titulo,
+          ciente: true,
+        });
+      }
       if (sit.aprovado)
         await tx.alterar('titulo_pagar', titulo, numero(p['versao']), {
           autorizado: true,

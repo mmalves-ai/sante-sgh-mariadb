@@ -110,6 +110,15 @@ export class ControleOrcamentarioController {
     return this.com(req, (p, c) => p.reservar(c, corpo));
   }
 
+  /** Reserva pelo documento: o sistema acha a linha oficial do centro e da natureza e reserva o que falta. */
+  @Post('documento')
+  @HttpCode(201)
+  @Permissao('financeiro.orcamento.editar')
+  @AuditadoNoHandler(TRILHA)
+  controlarDocumento(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+    return this.com(req, (p, c) => p.controlarDocumento(c, corpo));
+  }
+
   @Post('reservas/:id/nota')
   @HttpCode(200)
   @Permissao('financeiro.orcamento.editar')

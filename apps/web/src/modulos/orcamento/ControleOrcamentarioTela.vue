@@ -23,6 +23,7 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { pode } from '../../casca/sessao/pode.js';
 import {
+  controlarDocumento,
   decidirExcecao,
   lerPainelControle,
   lerSaldoControle,
@@ -77,7 +78,7 @@ const acao = useMutation({
 // ------------------------------------------------------------ reservar
 const r = ref({
   tipoDocumento: 'pedido_compra' as string,
-  documento: '',
+  documento: '' as Id,
   linha: '' as Id,
   mes: hoje().slice(0, 7),
   conta: '' as Id,
@@ -88,6 +89,21 @@ const r = ref({
 const competencia = computed(() => (/^\d{4}-\d{2}$/.test(r.value.mes) ? `${r.value.mes}-01` : ''));
 const opDocumentos = computed(() =>
   DOCUMENTOS_RESERVA.map((x) => ({ valor: x as string, rotulo: t(`${D}.documentos.${x}`) })),
+);
+// O documento é escolhido pelo número de negócio, com o fornecedor, o valor e o já reservado à vista.
+const docsDoTipo = computed(() =>
+  (p.value?.documentos ?? []).filter((d) => d.tipoDocumento === r.value.tipoDocumento),
+);
+const opDocumentosLista = computed(() =>
+  comVazio(
+    t(`${D}.escolha`),
+    docsDoTipo.value.map((d) => ({
+      id: d.id,
+      nome: [d.numero, d.fornecedor, moeda(d.valor), t(`${D}.jaReservado`, { valor: moeda(d.reservado) })]
+        .filter(Boolean)
+        .join(' · '),
+    })),
+  ),
 );
 const opLinhas = computed(() => comVazio(t(`${D}.escolha`), p.value?.linhas ?? []));
 const opContas = computed(() => comVazio(t(`${D}.escolha`), p.value?.contas ?? []));
@@ -124,10 +140,18 @@ const conferencia = computed(() => {
   });
 });
 const bloqueado = computed(() => conferencia.value?.decisao === 'bloqueio');
-const documentoId = computed(() => {
-  const x = Number(r.value.documento);
-  return Number.isInteger(x) && x > 0 ? x : null;
-});
+const documentoId = computed(() =>
+  docsDoTipo.value.some((d) => d.id === r.value.documento) ? (r.value.documento as number) : null,
+);
+function reservarPeloDocumento() {
+  acao.mutate(() =>
+    controlarDocumento({
+      tipoDocumento: r.value.tipoDocumento,
+      documento: documentoId.value!,
+      ciente: r.value.ciente,
+    }),
+  );
+}
 const podeReservar = computed(
   () =>
     podeGravar.value &&
@@ -174,13 +198,13 @@ function enviarExcecao() {
 
 // ------------------------------------------------------------ reservas: nota e liberação
 const notaAberta = ref<number | null>(null);
-const nota = ref({ valor: '', final: false, numero: '' });
+const nota = ref({ valor: '', final: false, numero: '', ciente: false });
 const liberarAberta = ref<number | null>(null);
 const motivoLiberar = ref('');
 function abrirNota(id: number) {
   notaAberta.value = id;
   liberarAberta.value = null;
-  nota.value = { valor: '', final: false, numero: '' };
+  nota.value = { valor: '', final: false, numero: '', ciente: false };
 }
 function gravarNota(id: number, versao: number) {
   acao.mutate(async () => {
@@ -189,6 +213,7 @@ function gravarNota(id: number, versao: number) {
       valorRealizado: numero(nota.value.valor) ?? 0,
       final: nota.value.final,
       numeroDocumento: nota.value.numero.trim() || null,
+      ciente: nota.value.ciente,
     });
     notaAberta.value = null;
   });
@@ -344,10 +369,12 @@ function alternarRegra(x: RegraLida) {
           :opcoes="opDocumentos"
           data-testid="ctl-tipo-documento"
         />
-        <label
-          >{{ t(`${D}.numeroDocumento`) }}
-          <input v-model="r.documento" inputmode="numeric" data-testid="ctl-documento" />
-        </label>
+        <SanteSelecao
+          v-model="r.documento"
+          :rotulo="t(`${D}.numeroDocumento`)"
+          :opcoes="opDocumentosLista"
+          data-testid="ctl-documento"
+        />
         <SanteSelecao
           v-model="r.linha"
           :rotulo="t(`${D}.linha`)"
@@ -416,6 +443,14 @@ function alternarRegra(x: RegraLida) {
         data-testid="ctl-reservar-gravar"
         @acionar="reservar"
       />
+      <SanteBotao
+        v-if="podeGravar && documentoId !== null"
+        :rotulo="t(`${D}.reservarPeloDocumento`)"
+        variante="secundario"
+        :desabilitado="acao.isPending.value"
+        data-testid="ctl-reservar-documento"
+        @acionar="reservarPeloDocumento"
+      />
       <fieldset v-if="bloqueado && podeGravar" data-testid="ctl-excecao">
         <legend>{{ t(`${D}.pedirExcecao`) }}</legend>
         <p>{{ t(`${D}.bloqueia`) }}</p>
@@ -457,7 +492,8 @@ function alternarRegra(x: RegraLida) {
           <template v-for="x in p.reservas" :key="x.id">
             <tr :data-testid="`ctl-reserva-${x.id}`">
               <td>
-                {{ x.numero }} · {{ t(`${D}.documentos.${x.tipoDocumento}`) }}
+                {{ t(`${D}.documentos.${x.tipoDocumento}`) }} {{ x.documentoNumero ?? '' }} ·
+                {{ x.numero }}
                 <strong v-if="x.excedeuSaldo">{{ t(`${D}.excedeu`) }}</strong>
               </td>
               <td>{{ x.competencia.slice(0, 7) }}</td>
@@ -502,6 +538,10 @@ function alternarRegra(x: RegraLida) {
                   <label class="marca">
                     <input v-model="nota.final" type="checkbox" data-testid="ctl-nota-final" />
                     {{ t(`${D}.notaFinal`) }}
+                  </label>
+                  <label v-if="nota.final" class="marca">
+                    <input v-model="nota.ciente" type="checkbox" data-testid="ctl-nota-ciente" />
+                    {{ t(`${D}.notaCiente`) }}
                   </label>
                   <SanteBotao
                     :rotulo="t(`${D}.gravarNota`)"
@@ -561,7 +601,9 @@ function alternarRegra(x: RegraLida) {
         </thead>
         <tbody>
           <tr v-for="x in p.excecoes" :key="x.id" :data-testid="`ctl-excecao-${x.id}`">
-            <td>{{ x.numero }} · {{ t(`${D}.documentos.${x.tipoDocumento}`) }}</td>
+            <td>
+              {{ t(`${D}.documentos.${x.tipoDocumento}`) }} {{ x.documentoNumero ?? '' }} · {{ x.numero }}
+            </td>
             <td>{{ moeda(x.valor) }}</td>
             <td>{{ x.saldoDisponivel === null ? '' : moeda(x.saldoDisponivel) }}</td>
             <td>{{ x.justificativa }}</td>

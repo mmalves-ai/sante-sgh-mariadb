@@ -47,6 +47,7 @@ const reserva = (id: number, situacao: string, aberto: number) => ({
   numero: `RPC${id}-1`,
   tipoDocumento: 'pedido_compra',
   documento: 41,
+  documentoNumero: '2027/41',
   linha: 9,
   centro: 'Centro sintético A',
   competencia: '2027-03-01',
@@ -64,6 +65,8 @@ const excecao = (situacao: string, solicitante: number) => ({
   numero: 'ETP42-1',
   tipoDocumento: 'titulo_pagar',
   documento: 42,
+  documentoNumero: '9042',
+  linha: 9,
   competencia: '2027-03-01',
   conta: 'Material sintético',
   valor: 300,
@@ -109,6 +112,24 @@ test.describe('controle orçamentário na compra e no pagamento @C2-112', () => 
           excecoes,
           reservas,
           linhas: [{ id: 9, nome: '2027 v1 #1 · Centro sintético A · Material' }],
+          documentos: [
+            {
+              tipoDocumento: 'pedido_compra',
+              id: 41,
+              numero: '2027/41',
+              fornecedor: 'Fornecedor sintético',
+              valor: 800,
+              reservado: 0,
+            },
+            {
+              tipoDocumento: 'titulo_pagar',
+              id: 42,
+              numero: '9042',
+              fornecedor: 'Fornecedor sintético',
+              valor: 1000,
+              reservado: 0,
+            },
+          ],
           contas: [{ id: 3, nome: '1.01 Material sintético' }],
           centros: [{ id: 7, nome: 'Centro sintético A' }],
           naturezas: [{ id: 8, nome: 'Material sintético' }],
@@ -121,6 +142,10 @@ test.describe('controle orçamentário na compra e no pagamento @C2-112', () => 
         acao = String(corpo['acao']);
         regras = [regra(acao)];
         return json(rota, { id: 5 }, 201);
+      }
+      if (url.pathname.endsWith('/documento')) {
+        corpos['documento'] = corpo;
+        return json(rota, { id: null, situacao: 'coberto', reserva: null }, 201);
       }
       if (url.pathname.endsWith('/excecoes')) {
         corpos['excecao'] = corpo;
@@ -171,7 +196,13 @@ test.describe('controle orçamentário na compra e no pagamento @C2-112', () => 
 
     // Reserva do pedido: saldo e regra à vista; acima do saldo, o alerta pede ciência.
     await page.getByTestId('ctl-aba-reservar').click();
-    await page.getByTestId('ctl-documento').fill('41');
+    // O documento é escolhido pelo número de negócio (com fornecedor e valor), não pelo identificador interno.
+    await escolher(page.getByTestId('ctl-documento'), { rotulo: /2027\/41 · Fornecedor sintético/ });
+    // Reservar pela linha do centro do documento: o mesmo caminho da aprovação do pedido.
+    await page.getByTestId('ctl-reservar-documento').click();
+    await expect
+      .poll(() => corpos['documento'])
+      .toMatchObject({ tipoDocumento: 'pedido_compra', documento: 41 });
     await escolher(page.getByTestId('ctl-linha'), '9');
     await page.getByTestId('ctl-competencia').fill('2027-03');
     await expect(page.getByTestId('ctl-disponivel')).toContainText('1.000,00');
@@ -200,7 +231,7 @@ test.describe('controle orçamentário na compra e no pagamento @C2-112', () => 
     expect(corpos['regra']).toMatchObject({ acao: 'bloquear', versao: 1 });
     await page.getByTestId('ctl-aba-reservar').click();
     await escolher(page.getByTestId('ctl-tipo-documento'), 'titulo_pagar');
-    await page.getByTestId('ctl-documento').fill('42');
+    await escolher(page.getByTestId('ctl-documento'), { rotulo: /9042 · Fornecedor sintético/ });
     await page.getByTestId('ctl-valor').fill('500');
     await expect(page.getByTestId('ctl-excesso')).toContainText('300,00');
     await expect(page.getByTestId('ctl-reservar-gravar')).toBeDisabled();
@@ -260,6 +291,7 @@ test.describe('controle orçamentário na compra e no pagamento @C2-112', () => 
       numeroDocumento: 'NF-SINT-9',
     });
     await expect(page.getByTestId('ctl-reserva-71')).toContainText('Realizada');
+    await expect(page.getByTestId('ctl-reserva-71')).toContainText('2027/41');
     await semViolacaoAxe(page, '/financeiro/orcamento/controle (reservas)');
   });
 });

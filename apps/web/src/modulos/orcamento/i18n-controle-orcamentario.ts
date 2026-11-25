@@ -42,7 +42,10 @@ export const mensagensControleOrcamentario = {
   },
   // Reserva
   documento: 'Documento',
-  numeroDocumento: 'Identificador do documento',
+  numeroDocumento: 'Número do documento',
+  jaReservado: 'reservado {valor}',
+  reservarPeloDocumento: 'Reservar pela linha do centro do documento',
+  notaCiente: 'Estou ciente se a nota passar da reserva e do saldo orçado',
   linha: 'Linha do orçamento',
   competencia: 'Mês do orçamento',
   conta: 'Conta orçamentária',

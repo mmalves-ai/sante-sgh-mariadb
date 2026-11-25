@@ -328,6 +328,43 @@ export function efeitoDaNota(n: NotaNaReserva): EfeitoDaNota {
   };
 }
 
+export interface ConferenciaAjusteNota {
+  readonly acao: AcaoControle;
+  readonly tolerancia: number;
+  /** O saldo da linha antes da nota (a reserva ainda com o que estava em aberto). */
+  readonly saldo: SaldoOrcamentario;
+  /** O ajuste da nota final (realizado − comprometido em aberto). */
+  readonly ajuste: number;
+  readonly ciente: boolean;
+  readonly excecaoAprovada: number | null;
+}
+
+/**
+ * A nota final que passa da reserva gasta além do comprometido: o que passa (o ajuste positivo) segue a mesma regra da
+ * reserva. Só conta como excesso da nota o que ela gasta além do saldo que ainda havia (o saldo já negativo foi
+ * autorizado antes, na reserva ou em outra nota): conferir registra, alertar pede ciência, bloquear exige a exceção
+ * aprovada que cubra esse excesso. Ajuste zero ou negativo (a nota veio igual ou menor) passa livre.
+ */
+export function conferirAjusteDaNota(e: ConferenciaAjusteNota): ResultadoConferencia {
+  if (!Number.isFinite(e.ajuste) || e.ajuste <= 0)
+    return { decisao: 'livre', excesso: 0, excedeuSaldo: false, autorizacao: null, problemas: [] };
+  const r = conferirSaldo({
+    acao: e.acao,
+    tolerancia: e.tolerancia,
+    saldo: { ...e.saldo, disponivel: Math.max(0, e.saldo.disponivel) },
+    valor: e.ajuste,
+    ciente: e.ciente,
+    excecaoAprovada: e.excecaoAprovada,
+  });
+  return {
+    ...r,
+    problemas: r.problemas.map((p) => ({
+      campo: p.campo,
+      mensagem: p.mensagem.replace('O valor passa', 'A nota passa da reserva e'),
+    })),
+  };
+}
+
 /** Liberar a reserva (pedido cancelado, título baixado por outro meio): só a que tem saldo em aberto. */
 export function validarLiberacaoReserva(r: ReservaParaSaldo, motivo: string): ProblemaControle[] {
   const p: ProblemaControle[] = [];

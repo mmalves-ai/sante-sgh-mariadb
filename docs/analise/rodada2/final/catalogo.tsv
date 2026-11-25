@@ -815,7 +815,7 @@ agregacao_bem	FIN	item	F8	Valor agregado ao bem por melhoria ou componente	MV BE
 agrupador_aprovacao	FIN	dominio	F8	Agrupador de documentos para aprovação em bloco (por centro de custo, natureza ou credor)	MV ALCA_DEMANDA_AGRP, ALCA_PONTO_AGRP, ALCA_PERMISSAO_AGRP	07	6
 agrupamento_unidade_negocio	FIN	dominio	F8	Agrupamento das unidades de negócio do estabelecimento para análise gerencial de resultado	rodada2:nova	07	1
 ajuste_lalur	FIN	item	F7	Adição ou exclusão da parte A do LALUR por período, com conta e fundamento	MV DIGITACAO_PARTE_A_LALUR, ELALUR_PARTEA_SPED_ECF	07	4
-ajuste_orcamento_nota	FIN	item	F8	Ajuste do comprometido quando a nota difere do pedido	MV ORCA_AJUSTE_NF, ORCA_AJUSTE_NF_RATEIO	07	4
+ajuste_orcamento_nota	FIN	item	F8	Ajuste do comprometido quando a nota difere do pedido	MV ORCA_AJUSTE_NF, ORCA_AJUSTE_NF_RATEIO; excesso da nota final com o autorizador (07-FIN linha 130; migração 14_FIN/99_excecao_orcamentaria_linha)	07	4
 ajuste_provisao_passivo	FIN	item	F8	Desconto, acréscimo ou reversão parcial aplicada a uma provisão	MV PROVISAO_DESC_ACRES	07	1
 ajuste_titulo	FIN	item	F3	Desconto, acréscimo, juros, multa ou abatimento lançado na parcela a pagar ou a receber, com tipo e motivo	SPDATA MFDESACR; MV PAG_DESC_ACRES, CONREC_DESC_ACRES, CON_PAG_DESC_ACRES	07	6
 aliquota_tributo_excecao	FIN	configuracao	F8	Alíquota diferenciada de tributo sobre consumo por procedimento, receita ou setor, com vigência	rodada2:nova	07	2
@@ -968,7 +968,7 @@ evento_nota_servico	FIN	historico	F3	Eventos da nota: emissão, cancelamento, su
 evento_reinf	FIN	principal	F3	Evento da EFD-REINF (R-1000 a R-4099) por competência, com XML, situação e recibo	MV REINF, REINF_EVENTOS, REINF_XML, REINF_SERVICO_TOMADO, REINF_BEN_PAG	07	3
 evento_reinf_item	FIN	item	F3	Pagamento, serviço tomado ou beneficiário informado no evento, ligado à origem financeira	MV REINF_BEN_PAG, REINF_BEN_PAG_IMP, REINF_SERVICO_TOMADO_PRE_NF, REINF_BENEFICIARIO, REINF_DEPENDENTES	07	14
 excecao_consumo_custo	FIN	configuracao	F8	Insumos, classes, setores ou fontes pagadoras excluídos da apropriação de consumo ao custo com base no faturamento	rodada2:nova	07	2
-excecao_orcamentaria	FIN	principal	F8	Exceção justificada para operar sem saldo, com aprovação	MV ORCA_EXCECAO, ORCA_CONTROLE_PENDENCIAS	07	0
+excecao_orcamentaria	FIN	principal	F8	Exceção justificada para operar sem saldo, com aprovação	MV ORCA_EXCECAO, ORCA_CONTROLE_PENDENCIAS; presa à linha do orçamento (07-FIN linha 130; migração 14_FIN/99_excecao_orcamentaria_linha)	07	0
 exportacao_custo	FIN	principal	F3	Arquivo de custos exportado (ApuraSUS), com competência e situação	SPDATA CTWGRUPOEXPORTACAO; paridade estrutural: era F7	07	1
 extrato_bancario	FIN	principal	F3	Extrato importado (OFX ou CSV) de uma conta, com período, saldo inicial e final	MV LCTO_EXTRATO_IMPORTADO	07	0
 faixa_atraso_cobranca	FIN	configuracao	F7	Faixas de dias de atraso para a análise de carteira e a priorização da cobrança	MV LEGENDA_CURVA_ABCD	07	0

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   abertoDaReserva,
   type AlvoControle,
+  conferirAjusteDaNota,
   conferirSaldo,
   efeitoDaNota,
   mesesDoPeriodo,
@@ -202,5 +203,44 @@ describe('nota na reserva', () => {
       'reserva',
       'motivo',
     ]);
+  });
+});
+
+describe('nota final acima da reserva (o ajuste segue a regra)', () => {
+  const saldo = { orcado: 1000, comprometido: 1000, realizado: 300, disponivel: -300 };
+  const base = { tolerancia: 0, saldo, ajuste: 50, ciente: false, excecaoAprovada: null };
+
+  it('ajuste zero ou negativo passa livre, mesmo com bloqueio', () => {
+    expect(conferirAjusteDaNota({ ...base, acao: 'bloquear', ajuste: 0 }).decisao).toBe('livre');
+    expect(conferirAjusteDaNota({ ...base, acao: 'bloquear', ajuste: -20 }).decisao).toBe('livre');
+  });
+
+  it('o excesso da nota é só o que ela gasta além do saldo que havia', () => {
+    expect(conferirAjusteDaNota({ ...base, acao: 'conferir' })).toMatchObject({
+      decisao: 'registrado',
+      excesso: 50,
+      autorizacao: 'sessao',
+    });
+    const cabe = { ...saldo, disponivel: 30 };
+    expect(conferirAjusteDaNota({ ...base, acao: 'bloquear', saldo: cabe, ajuste: 20 }).decisao).toBe(
+      'livre',
+    );
+    expect(conferirAjusteDaNota({ ...base, acao: 'conferir', saldo: cabe }).excesso).toBe(20);
+  });
+
+  it('alerta pede ciência; bloqueio exige exceção aprovada que cubra o excesso', () => {
+    const alerta = conferirAjusteDaNota({ ...base, acao: 'alertar' });
+    expect(alerta).toMatchObject({ decisao: 'alerta', autorizacao: null });
+    expect(alerta.problemas[0]?.campo).toBe('ciente');
+    expect(conferirAjusteDaNota({ ...base, acao: 'alertar', ciente: true }).autorizacao).toBe('sessao');
+    const sem = conferirAjusteDaNota({ ...base, acao: 'bloquear' });
+    expect(sem).toMatchObject({ decisao: 'bloqueio', excedeuSaldo: false });
+    expect(sem.problemas[0]?.mensagem).toMatch(/^A nota passa da reserva/);
+    expect(conferirAjusteDaNota({ ...base, acao: 'bloquear', excecaoAprovada: 40 }).decisao).toBe('bloqueio');
+    expect(conferirAjusteDaNota({ ...base, acao: 'bloquear', excecaoAprovada: 50 })).toMatchObject({
+      decisao: 'excecao',
+      autorizacao: 'excecao',
+    });
+    expect(conferirAjusteDaNota({ ...base, acao: 'nao_controlar' }).decisao).toBe('sem_controle');
   });
 });
