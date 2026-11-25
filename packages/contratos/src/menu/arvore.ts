@@ -65,7 +65,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // fornecedor" de compras entraram à mão (mesmo motivo); a contagem acompanha.
 // C2-012 (04-CC linha 106): o item "Profilaxia antimicrobiana" do centro cirúrgico entrou à mão (mesmo motivo); a
 // contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":453,"M":198,"P":57,"N":198};
+// C2-014 (06-SUS linha 65): o item "Transplantes para a central estadual" do faturamento SUS entrou à mão (mesmo
+// motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":454,"M":198,"P":57,"N":199};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
