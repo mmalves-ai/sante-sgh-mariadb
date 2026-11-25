@@ -24,6 +24,20 @@ const campos = (r: { campo: string }[]) => r.map((p) => p.campo);
 const veiculo = { categoria: 1, ativo: true, quilometragemAtual: 1000 };
 const base = { categoriaPedida: 1, classificacao: 'B', veiculo, agora };
 
+const HAB: Record<string, string> = {
+  condutor: 'motorista',
+  tecnico_enfermagem: 'tecnico_enfermagem',
+  enfermeiro: 'enfermeiro',
+  medico: 'medico',
+  outro: 'socorrista',
+};
+/** Membro habilitado (ativo, para a ambulância) para a própria função declarada. */
+const mb = (profissional: number, funcao: string) => ({
+  profissional,
+  funcao,
+  habilitacoes: [{ funcao: HAB[funcao] ?? funcao, tipo: 'ambos', ativo: true }],
+});
+
 describe('chamado de ambulância', () => {
   it('aceita o pedido com destino e recusa sem destino, categoria, CEP válido ou com previsão no passado', () => {
     expect(conferirChamadoAmbulancia(pedido)).toEqual([]);
@@ -44,24 +58,10 @@ describe('chamado de ambulância', () => {
   });
 
   it('exige a equipe mínima pela classificação nacional', () => {
-    expect(conferirEquipeAmbulancia([{ profissional: 1, funcao: 'condutor' }], 'A')).toEqual([]);
-    expect(conferirEquipeAmbulancia([{ profissional: 1, funcao: 'condutor' }], 'B')).toHaveLength(1);
-    expect(
-      conferirEquipeAmbulancia(
-        [
-          { profissional: 1, funcao: 'condutor' },
-          { profissional: 2, funcao: 'enfermeiro' },
-        ],
-        'B',
-      ),
-    ).toEqual([]);
-    const d = conferirEquipeAmbulancia(
-      [
-        { profissional: 1, funcao: 'condutor' },
-        { profissional: 1, funcao: 'enfermeiro' },
-      ],
-      'D',
-    );
+    expect(conferirEquipeAmbulancia([mb(1, 'condutor')], 'A')).toEqual([]);
+    expect(conferirEquipeAmbulancia([mb(1, 'condutor')], 'B')).toHaveLength(1);
+    expect(conferirEquipeAmbulancia([mb(1, 'condutor'), mb(2, 'enfermeiro')], 'B')).toEqual([]);
+    const d = conferirEquipeAmbulancia([mb(1, 'condutor'), mb(1, 'enfermeiro')], 'D');
     expect(d.map((p) => p.mensagem)).toEqual([
       'O mesmo profissional aparece duas vezes na equipe.',
       'A ambulância tipo D exige o médico na equipe.',
@@ -69,11 +69,35 @@ describe('chamado de ambulância', () => {
     expect(conferirEquipeAmbulancia([], null)).toHaveLength(1);
   });
 
+  it('recusa o membro sem habilitação ativa para a ambulância na função declarada', () => {
+    const sem = (funcao: string, habilitacoes: { funcao: string; tipo: string; ativo: boolean }[]) =>
+      conferirEquipeAmbulancia([mb(1, 'condutor'), { profissional: 2, funcao, habilitacoes }], 'A');
+    // Maqueiro declarado como médico; habilitação de outro estabelecimento não chega (lista vazia).
+    expect(sem('medico', [{ funcao: 'maqueiro', tipo: 'ambos', ativo: true }])).toHaveLength(1);
+    expect(sem('enfermeiro', [])[0]?.mensagem).toMatch(/não está habilitado .* enfermeiro/);
+    // Habilitação inativa ou só para o transporte interno não vale na ambulância.
+    expect(sem('medico', [{ funcao: 'medico', tipo: 'ambos', ativo: false }])).toHaveLength(1);
+    expect(sem('medico', [{ funcao: 'medico', tipo: 'interno', ativo: true }])).toHaveLength(1);
+    // O condutor é o motorista habilitado; 'outro' aceita qualquer habilitação da ambulância menos o maqueiro.
+    expect(sem('medico', [{ funcao: 'medico', tipo: 'ambulancia', ativo: true }])).toEqual([]);
+    expect(
+      conferirEquipeAmbulancia(
+        [
+          {
+            profissional: 1,
+            funcao: 'condutor',
+            habilitacoes: [{ funcao: 'maqueiro', tipo: 'ambos', ativo: true }],
+          },
+        ],
+        'A',
+      ),
+    ).toHaveLength(1);
+    expect(sem('outro', [{ funcao: 'socorrista', tipo: 'ambulancia', ativo: true }])).toEqual([]);
+    expect(sem('outro', [{ funcao: 'maqueiro', tipo: 'ambos', ativo: true }])).toHaveLength(1);
+  });
+
   it('aprova com o veículo da categoria e a equipe; recusa outra categoria ou veículo inativo', () => {
-    const equipe = [
-      { profissional: 1, funcao: 'condutor' },
-      { profissional: 2, funcao: 'tecnico_enfermagem' },
-    ];
+    const equipe = [mb(1, 'condutor'), mb(2, 'tecnico_enfermagem')];
     expect(conferirAcaoChamado({ ...base, acao: 'aprovar', situacao: 'solicitado', equipe })).toEqual({
       situacao: 'aprovado',
       problemas: [],

@@ -59,6 +59,18 @@ const OPERACAO: Record<AcaoChamadoAmbulancia, string> = {
   cancelar: 'internacao.ambulancia.cancelar',
 };
 
+/** O estabelecimento do chamado como a porta o recebe: id e fuso horário. */
+interface EstabelecimentoChamado {
+  readonly id: number;
+  readonly fuso: string;
+}
+/** O dia (AAAA-MM-DD) de um instante no fuso do estabelecimento; undefined sem o instante. */
+const diaNoFuso = (v: unknown, fuso: string): string | undefined =>
+  v === null || v === undefined
+    ? undefined
+    : new Intl.DateTimeFormat('en-CA', { timeZone: fuso }).format(
+        v instanceof Date ? v : new Date(String(v)),
+      );
 const iso = (v: unknown): string | null =>
   v === null || v === undefined ? null : (v instanceof Date ? v : new Date(String(v))).toISOString();
 const quando = z
@@ -448,11 +460,12 @@ export class PortaChamadoAmbulanciaPropria extends PortaEstabelecimentoPropria {
       tx: TxOperacao,
       agora: Date,
       usuario: number,
+      estId: number,
     ) => Promise<{
       campos: Record<string, unknown>;
       conferir: Partial<Parameters<typeof conferirAcaoChamado>[0]>;
     }>,
-    depois?: (ch: Record<string, unknown>, tx: TxOperacao, est: number) => Promise<X>,
+    depois?: (ch: Record<string, unknown>, tx: TxOperacao, est: EstabelecimentoChamado) => Promise<X>,
   ): Promise<{ id: number; situacao: string } & Partial<X>> {
     return this.gravar(c, OPERACAO[acao], TABELAS, async (tx, est, usuario) => {
       const [ch] = await tx.consultarParaAtualizar(
@@ -464,7 +477,7 @@ export class PortaChamadoAmbulanciaPropria extends PortaEstabelecimentoPropria {
       );
       if (!ch) throw naoEncontrado('Chamado de ambulância');
       const agora = new Date();
-      const m = await montar(ch, tx, agora, usuario);
+      const m = await montar(ch, tx, agora, usuario, est.id);
       const veiculoId = numOuNull(m.campos['ambulancia_id'] ?? ch['ambulancia_id']);
       const v = veiculoId
         ? await tx.uma(
@@ -490,7 +503,7 @@ export class PortaChamadoAmbulanciaPropria extends PortaEstabelecimentoPropria {
       });
       if (!r.situacao) throw recusaRegra('Chamado de ambulância recusado', r.problemas);
       await tx.alterar(T_CHAMADO, alvo, versaoLida, { ...m.campos, situacao: r.situacao });
-      const extra = depois ? await depois({ ...ch, ...m.campos }, tx, est.id) : ({} as X);
+      const extra = depois ? await depois({ ...ch, ...m.campos }, tx, est) : ({} as X);
       return { tabela: T_CHAMADO, id: alvo, situacao: r.situacao, ...extra };
     });
   }
@@ -513,7 +526,7 @@ export class PortaChamadoAmbulanciaPropria extends PortaEstabelecimentoPropria {
       alvo,
       'aprovar',
       x.versao,
-      async (_ch, tx, agora, usuario) => {
+      async (_ch, tx, agora, usuario, estId) => {
         for (const m of x.equipe)
           await exigir(
             tx,
@@ -521,9 +534,29 @@ export class PortaChamadoAmbulanciaPropria extends PortaEstabelecimentoPropria {
             [m.profissional],
             'Profissional',
           );
+        // A habilitação de transporte de cada membro neste estabelecimento: o domínio confere a função declarada.
+        const ids = [...new Set(x.equipe.map((m) => m.profissional))];
+        const habs = ids.length
+          ? await tx.consultar(
+              `SELECT profissional_id, funcao_transporte, tipo_transporte, ativo FROM profissional_transporte
+                WHERE estabelecimento_id = ? AND excluido_em IS NULL
+                  AND profissional_id IN (${ids.map(() => '?').join(', ')})`,
+              [estId, ...ids],
+            )
+          : [];
+        const equipe = x.equipe.map((m) => ({
+          ...m,
+          habilitacoes: habs
+            .filter((h) => num(h['profissional_id']) === m.profissional)
+            .map((h) => ({
+              funcao: String(h['funcao_transporte']),
+              tipo: String(h['tipo_transporte']),
+              ativo: bool(h['ativo']),
+            })),
+        }));
         return {
           campos: { ambulancia_id: x.ambulancia, aprovado_em: agora, aprovado_por_usuario_id: usuario },
-          conferir: { equipe: x.equipe },
+          conferir: { equipe },
         };
       },
       async (_ch, tx) => {
@@ -682,7 +715,7 @@ export class PortaChamadoAmbulanciaPropria extends PortaEstabelecimentoPropria {
         throw recusaRegra('Cobrança recusada', [
           { campo: 'situacao', mensagem: 'A remoção deste chamado já está na conta.' },
         ]);
-      const cobranca = await this.cobrarNaTransacao(tx, est.id, alvo, ch, true);
+      const cobranca = await this.cobrarNaTransacao(tx, est, alvo, ch, true);
       return { tabela: T_CHAMADO, id: alvo, cobranca };
     });
   }
@@ -693,11 +726,12 @@ export class PortaChamadoAmbulanciaPropria extends PortaEstabelecimentoPropria {
    */
   private async cobrarNaTransacao(
     tx: TxOperacao,
-    est: number,
+    estab: EstabelecimentoChamado,
     alvo: number,
     ch: Record<string, unknown>,
     exigirLancamento: boolean,
   ): Promise<CobrancaChamado> {
+    const est = estab.id;
     const pendente = (motivo: string): CobrancaChamado => {
       if (exigirLancamento) throw recusaRegra('Cobrança recusada', [{ campo: 'conta', mensagem: motivo }]);
       return { situacao: 'pendente', motivo };
@@ -726,7 +760,8 @@ export class PortaChamadoAmbulanciaPropria extends PortaEstabelecimentoPropria {
           rotaId: numOuNull(ch['rota_ambulancia_id']),
           km: rodados && rodados > 0 ? rodados : null,
           comVolta: false,
-          data: iso(ch['fim_trajeto_em'])?.slice(0, 10),
+          // O dia da remoção no fuso do estabelecimento (o banco guarda o instante em UTC).
+          data: diaNoFuso(ch['fim_trajeto_em'], estab.fuso),
         },
         { chamado: alvo },
       );

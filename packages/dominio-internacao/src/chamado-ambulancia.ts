@@ -84,9 +84,33 @@ export function conferirChamadoAmbulancia(p: PedidoChamadoAmbulancia): ProblemaT
   return r;
 }
 
+/** Habilitação de transporte do profissional no estabelecimento (função do cadastro, tipo e se está ativa). */
+export interface HabilitacaoTransporte {
+  readonly funcao: string;
+  readonly tipo: string;
+  readonly ativo: boolean;
+}
+
 export interface MembroEquipeAmbulancia {
   readonly profissional: number;
   readonly funcao: string;
+  /** As habilitações de transporte do profissional no estabelecimento do chamado (vazio: nenhuma). */
+  readonly habilitacoes: readonly HabilitacaoTransporte[];
+}
+
+/** Habilitações do cadastro de transporte que permitem cada função na equipe da ambulância. */
+export const HABILITACAO_DA_FUNCAO: Record<FuncaoEquipeAmbulancia, readonly string[]> = {
+  condutor: ['motorista'],
+  tecnico_enfermagem: ['tecnico_enfermagem'],
+  enfermeiro: ['enfermeiro'],
+  medico: ['medico'],
+  outro: ['socorrista', 'motorista', 'tecnico_enfermagem', 'enfermeiro', 'medico'],
+};
+
+/** O profissional tem habilitação ativa, válida para a ambulância, que permite a função declarada. */
+export function habilitadoParaFuncao(m: MembroEquipeAmbulancia): boolean {
+  const aceitas = HABILITACAO_DA_FUNCAO[m.funcao as FuncaoEquipeAmbulancia] ?? [];
+  return m.habilitacoes.some((h) => h.ativo && h.tipo !== 'interno' && aceitas.includes(h.funcao));
 }
 
 /** Funções exigidas pela classificação nacional da ambulância; o condutor é sempre exigido. */
@@ -96,7 +120,10 @@ export function equipeMinimaAmbulancia(classificacao: string | null): readonly F
   return ['condutor'];
 }
 
-/** Confere a equipe da remoção: funções válidas, sem profissional repetido e com a equipe mínima da categoria. */
+/**
+ * Confere a equipe da remoção: funções válidas, cada membro habilitado (ativo, para a ambulância, no estabelecimento)
+ * para a função declarada, sem profissional repetido e com a equipe mínima da categoria.
+ */
 export function conferirEquipeAmbulancia(
   equipe: readonly MembroEquipeAmbulancia[],
   classificacao: string | null,
@@ -104,6 +131,12 @@ export function conferirEquipeAmbulancia(
   const r: ProblemaTransporte[] = [];
   if (equipe.some((m) => !(FUNCOES_EQUIPE_AMBULANCIA as readonly string[]).includes(m.funcao)))
     r.push({ campo: 'equipe', mensagem: 'Função da equipe desconhecida.' });
+  for (const m of equipe)
+    if ((FUNCOES_EQUIPE_AMBULANCIA as readonly string[]).includes(m.funcao) && !habilitadoParaFuncao(m))
+      r.push({
+        campo: 'equipe',
+        mensagem: `Um profissional da equipe não está habilitado neste estabelecimento para atuar como ${ROTULO_HABILITACAO[m.funcao as FuncaoEquipeAmbulancia]} na ambulância.`,
+      });
   if (new Set(equipe.map((m) => m.profissional)).size !== equipe.length)
     r.push({ campo: 'equipe', mensagem: 'O mesmo profissional aparece duas vezes na equipe.' });
   const tem = new Set(equipe.map((m) => m.funcao));
@@ -118,6 +151,14 @@ export function conferirEquipeAmbulancia(
   }
   return r;
 }
+
+const ROTULO_HABILITACAO: Record<FuncaoEquipeAmbulancia, string> = {
+  condutor: 'condutor (motorista)',
+  tecnico_enfermagem: 'técnico de enfermagem',
+  enfermeiro: 'enfermeiro',
+  medico: 'médico',
+  outro: 'outro profissional',
+};
 
 const ROTULO_FUNCAO: Record<FuncaoEquipeAmbulancia, string> = {
   condutor: 'o condutor',

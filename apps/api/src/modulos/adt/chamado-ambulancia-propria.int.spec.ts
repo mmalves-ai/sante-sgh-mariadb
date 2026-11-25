@@ -20,7 +20,8 @@ const P = 'c2068amb';
 type Massa = Record<string, number>;
 
 async function limpar(e: Escritor): Promise<void> {
-  const est = '(SELECT id FROM estabelecimento WHERE codigo = ?)';
+  // O estabelecimento do teste e o segundo (código com o sufixo X), da habilitação de outra unidade.
+  const est = "(SELECT id FROM estabelecimento WHERE codigo LIKE CONCAT(?, '%'))";
   await e.executar('SET FOREIGN_KEY_CHECKS = 0');
   try {
     await e.executar(
@@ -64,8 +65,8 @@ async function limpar(e: Escritor): Promise<void> {
   } finally {
     await e.executar('SET FOREIGN_KEY_CHECKS = 1');
   }
-  await limparTrilhaDaMassa(e, { codigos: [P] });
-  await e.executar('DELETE FROM estabelecimento WHERE codigo = ?', [P]);
+  await limparTrilhaDaMassa(e, { codigos: [P, `${P}X`] });
+  await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', [P, `${P}X`]);
 }
 
 const recusa = { problema: { codigo: 'regra-violada' } };
@@ -166,6 +167,18 @@ describe.skipIf(SEM_BANCO)('PortaChamadoAmbulanciaPropria contra o MariaDB (cont
         );
       await hab(profs[0]!, 'motorista', 'ambulancia');
       await hab(profs[1]!, 'maqueiro', 'interno');
+      await hab(profs[2]!, 'tecnico_enfermagem', 'ambos');
+      // Outra unidade: o maqueiro daqui é médico habilitado lá (não vale neste estabelecimento).
+      const outra = await e.inserir(
+        `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
+         VALUES (?, ?, ?, 'America/Sao_Paulo', ?)`,
+        [`${P}X`, `Hospital sintético ${P}X`, `Hospital sintético ${P}X (fictício)`, agora],
+      );
+      await e.inserir(
+        `INSERT INTO profissional_transporte (estabelecimento_id, profissional_id, funcao_transporte, tipo_transporte,
+           criado_em) VALUES (?, ?, 'medico', 'ambos', ?)`,
+        [outra, profs[1]!, agora],
+      );
       await e.executar('SET FOREIGN_KEY_CHECKS = 0');
       try {
         const ambB = await e.inserir(
@@ -288,6 +301,42 @@ describe.skipIf(SEM_BANCO)('PortaChamadoAmbulanciaPropria contra o MariaDB (cont
       }),
     ).rejects.toMatchObject(recusa);
     expect((await chamado(s.id))['situacao']).toBe('solicitado');
+    // Habilitação: o maqueiro daqui (médico só na outra unidade) declarado como médico, ou como enfermeiro sem
+    // habilitação nenhuma, não completa a equipe; nada é gravado.
+    const equipeAntes = Number(
+      (
+        await ler('SELECT COUNT(*) AS n FROM chamado_ambulancia_equipe WHERE chamado_ambulancia_id = ?', [
+          s.id,
+        ])
+      )[0]!['n'],
+    );
+    for (const funcao of ['medico', 'enfermeiro'])
+      await expect(
+        porta.aprovar(ctx(), s.id, {
+          ambulancia: m['ambB'],
+          equipe: [
+            condutor,
+            { profissional: m['prof2'], funcao: 'tecnico_enfermagem' },
+            { profissional: m['prof1'], funcao },
+          ],
+          versao: Number(c['versao']),
+        }),
+      ).rejects.toMatchObject({
+        problema: {
+          codigo: 'regra-violada',
+          detail: expect.stringMatching(/^Um profissional da equipe não está habilitado/),
+        },
+      });
+    expect((await chamado(s.id))['situacao']).toBe('solicitado');
+    expect(
+      Number(
+        (
+          await ler('SELECT COUNT(*) AS n FROM chamado_ambulancia_equipe WHERE chamado_ambulancia_id = ?', [
+            s.id,
+          ])
+        )[0]!['n'],
+      ),
+    ).toBe(equipeAntes);
 
     await porta.aprovar(ctx(), s.id, {
       ambulancia: m['ambB'],
@@ -383,8 +432,23 @@ describe.skipIf(SEM_BANCO)('PortaChamadoAmbulanciaPropria contra o MariaDB (cont
         [m['est'], m['catA'], m['itemKm']],
       ),
     );
+    // Remoção concluída às 23h30 de Brasília (02h30 do dia seguinte em UTC): a conta recebe o dia local.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `fim-${P}` }, (e) =>
+      e.executar('UPDATE chamado_ambulancia SET fim_trajeto_em = ? WHERE id = ?', [
+        new Date('2026-11-20T23:30:00-03:00'),
+        s.id,
+      ]),
+    );
+    c = await chamado(s.id);
     const r = await porta.cobrar(ctx(), s.id, { versao: Number(c['versao']) });
     expect(r).toMatchObject({ cobranca: { situacao: 'lancada', quantidade: 30 } });
+    const [lancado] = await ler('SELECT realizado_em FROM conta_hospitalar_item WHERE id = ?', [
+      (r.cobranca as { itemId: number }).itemId,
+    ]);
+    const realizado = lancado!['realizado_em'];
+    expect(
+      realizado instanceof Date ? realizado.toISOString().slice(0, 10) : String(realizado).slice(0, 10),
+    ).toBe('2026-11-20');
     expect(Number((await chamado(s.id))['conta_hospitalar_item_id'])).toBe(
       (r.cobranca as { itemId: number }).itemId,
     );
