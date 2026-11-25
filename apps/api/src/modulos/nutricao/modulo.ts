@@ -18,6 +18,8 @@ import { EstadoProntuario } from '../pep/sessao-prontuario.js';
 import { portaDaPortaria } from '../portaria/modulo.js';
 import { PORTA_PORTARIA, type PortaPortaria } from '../portaria/porta.js';
 import type { ContextoModulo } from '../registro.js';
+import { CardapioController } from './cardapio.controller.js';
+import { PORTA_CARDAPIO, PortaCardapioPropria } from './cardapio-propria.js';
 import { DireitoRefeicaoController } from './direito-refeicao.controller.js';
 import { PORTA_DIREITO_REFEICAO, PortaDireitoRefeicaoPropria } from './direito-refeicao-propria.js';
 import { NutricaoController } from './nutricao.controller.js';
@@ -64,7 +66,12 @@ export async function moduloNutricao(
       : null);
   return {
     module: class ModuloNutricao {},
-    controllers: [NutricaoController, DireitoRefeicaoController, OcorrenciaRefeicaoController],
+    controllers: [
+      NutricaoController,
+      DireitoRefeicaoController,
+      OcorrenciaRefeicaoController,
+      CardapioController,
+    ],
     providers: [
       { provide: PORTA_NUTRICAO, useValue: porta },
       { provide: ESTADO_PRONTUARIO, useValue: new EstadoProntuario() },
@@ -82,6 +89,14 @@ export async function moduloNutricao(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaOcorrenciaRefeicaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (04-HOT linha 141): cardápio, ficha técnica, planejamento, produção e escolha do paciente; sem núcleo, 503.
+      {
+        provide: PORTA_CARDAPIO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCardapioPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       ...(portaria ? [{ provide: PORTA_PORTARIA, useValue: portaria }] : []),
