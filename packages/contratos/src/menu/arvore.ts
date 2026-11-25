@@ -21,7 +21,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F3.8 (07-FIN linha 85): o item "Fechamento do período financeiro" entrou à mão (mesmo motivo); a contagem
 // acompanha.
 // F3.5 (05-SADT linha 19): o item "Escala de execução" entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":423,"M":196,"P":57,"N":170};
+// F3.5 (05-SADT linha 21): os itens "Entrega de resultados" e "Prazos de entrega e publicação no portal" entraram à
+// mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":425,"M":198,"P":57,"N":170};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -166,6 +168,8 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"diagnostico-sadt.laboratorio.rastreio-de-amostra","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Rastreio de amostra"],"titulo":"Rastreio de amostra","selo":"N","fase":2,"rota":"/sadt/amostras","permissao":"sadt.amostra.ler"},
   {"id":"diagnostico-sadt.laboratorio.recoletas","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Recoletas"],"titulo":"Recoletas","selo":"M","fase":2,"rota":"/sadt/recoletas","permissao":"sadt.amostra.ler"},
   {"id":"diagnostico-sadt.escala-de-execucao","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Escala de execução"],"titulo":"Escala de execução","selo":"M","fase":3,"rota":"/sadt/escala-execucao","permissao":"sadt.catalogo.ler"},
+  {"id":"diagnostico-sadt.entrega-de-resultados","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Entrega de resultados"],"titulo":"Entrega de resultados","selo":"M","fase":3,"rota":"/sadt/entregas","permissao":"sadt.laudo.ler"},
+  {"id":"diagnostico-sadt.prazos-de-entrega-e-publicacao-no-portal","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Prazos de entrega e publicação no portal"],"titulo":"Prazos de entrega e publicação no portal","selo":"M","fase":3,"rota":"/sadt/entregas/cadastro","permissao":"sadt.catalogo.ler"},
   {"id":"diagnostico-sadt.limites-do-pedido-de-exame","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Limites do pedido de exame"],"titulo":"Limites do pedido de exame","selo":"N","fase":7,"rota":"/sadt/limites","permissao":"sadt.catalogo.ler"},
   {"id":"diagnostico-sadt.laboratorio.digitacao-e-importacao-de-resultados","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Digitação e importação de resultados"],"titulo":"Digitação e importação de resultados","selo":"M","fase":2,"rota":"/sadt/resultados/digitacao","permissao":"sadt.resultado.ler"},
   {"id":"diagnostico-sadt.laboratorio.interfaces-de-equipamento","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Interfaces de equipamento"],"titulo":"Interfaces de equipamento","selo":"P","fase":3,"rota":"/sadt/laboratorio/interfaces","permissao":"sadt.interface.ler"},

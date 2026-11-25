@@ -1,6 +1,7 @@
 // Textos das telas do SADT, dos laudos e do portal de resultados (M26). Sem nome de sistema antigo (ADR 0023).
 import { mensagensAgencia } from './i18n-agencia.js';
 import { mensagensPedido } from './i18n-pedido.js';
+import { mensagensEntrega, recusasEntrega } from './i18n-entrega.js';
 import { mensagensEscalaExecucao } from './i18n-escala-execucao.js';
 import { mensagensLimites } from './i18n-limites.js';
 import { mensagensLoteTrabalho } from './i18n-lote-trabalho.js';
@@ -368,6 +369,8 @@ export const mensagensSadt = {
     invalido: 'Código não encontrado.',
   },
   recusas: {
+    // F3.5 (05-SADT linha 21): as recusas da entrega de resultados.
+    ...recusasEntrega,
     'pedido-suspenso': 'O pedido foi suspenso no prontuário.',
     'pedido-recebido': 'O pedido já foi recebido pelo setor.',
     'exame-nao-recebido': 'Receba o pedido no setor antes de digitar o resultado.',
@@ -400,6 +403,8 @@ export const mensagensSadt = {
   // F3.5: pedido de exames, cancelamento do item e recoleta.
   pedido: mensagensPedido,
   limites: mensagensLimites,
+  // F3.5 (05-SADT linha 21): entrega de resultados no balcão, prazos e publicação no portal.
+  entrega: mensagensEntrega,
   // F3.5 (05-SADT linha 19): escala de execução e fila do setor.
   escala: mensagensEscalaExecucao,
   // F3.5: lote de trabalho da bancada no mapa de trabalho.

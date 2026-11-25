@@ -75,6 +75,19 @@ export const rotasSadt: RouteRecordRaw[] = [
     component: () => import('./telas/CatalogoExamesTela.vue'),
     meta: { permissao: 'sadt.catalogo.ler' },
   },
+  // F3.5 (05-SADT linha 21): a entrega de resultados no balcão e o cadastro do prazo e da publicação no portal.
+  {
+    path: '/sadt/entregas',
+    name: 'sadt.entregas',
+    component: () => import('./telas/EntregaResultadosTela.vue'),
+    meta: { permissao: 'sadt.laudo.ler' },
+  },
+  {
+    path: '/sadt/entregas/cadastro',
+    name: 'sadt.entregas.cadastro',
+    component: () => import('./telas/EntregaCadastroTela.vue'),
+    meta: { permissao: 'sadt.catalogo.ler' },
+  },
   {
     path: '/sadt/limites',
     name: 'sadt.limites',
