@@ -42,8 +42,9 @@ interface Conta {
 type Favorecido = Omit<FavorecidoRepasse, 'retencoes'>;
 
 const PROFISSIONAIS = [
-  { id: 1, nome: 'MEDICA SINTETICA ALFA', documento: null },
-  { id: 2, nome: 'MEDICO SINTETICO BETA', documento: null },
+  // os mesmos médicos da busca de prestadores da fonte sintética (porta-memoria do repasse)
+  { id: 7001, nome: 'MEDICO SINTETICO A', documento: null },
+  { id: 7002, nome: 'MEDICO SINTETICO B', documento: null },
 ];
 const EMPRESAS = [
   { id: 11, nome: 'CLINICA SINTETICA ALFA LTDA', documento: '37110492000188', fornecedor: 21 },
@@ -68,9 +69,9 @@ export class PortaFavorecidosRepasseMemoria implements PortaFavorecidosRepasse {
   private readonly contas: Conta[] = [
     {
       id: 61,
-      credor: { tipo: 'proprio_profissional', id: 1 },
+      credor: { tipo: 'proprio_profissional', id: 7002 },
       rotulo: 'PIX (email)',
-      titular: 'MEDICA SINTETICA ALFA',
+      titular: 'MEDICO SINTETICO B',
       documentoFinal: '0191',
       preferencial: true,
     },
@@ -159,7 +160,6 @@ export class PortaFavorecidosRepasseMemoria implements PortaFavorecidosRepasse {
     const e = entradaValida(esquemaFavorecido, entrada);
     const forma = validarFavorecido(e);
     if (forma.length) throw recusaRegra('Favorecido recusado', forma);
-    if (!PROFISSIONAIS.some((x) => x.id === e.profissional)) throw naoEncontrado('Profissional');
     if (e.fontePagadora !== null && !FONTES.some((x) => x.id === e.fontePagadora))
       throw naoEncontrado('Fonte pagadora');
     if (e.contaBancaria !== null) {
@@ -191,7 +191,8 @@ export class PortaFavorecidosRepasseMemoria implements PortaFavorecidosRepasse {
     const novo: Favorecido = {
       id: ++this.seq,
       profissional: e.profissional,
-      profissionalNome: PROFISSIONAIS.find((x) => x.id === e.profissional)!.nome,
+      // o médico vem da busca de prestadores da fonte sintética (outro cadastro em memória): só o id é guardado
+      profissionalNome: PROFISSIONAIS.find((x) => x.id === e.profissional)?.nome ?? null,
       fontePagadora: e.fontePagadora,
       fontePagadoraNome: FONTES.find((x) => x.id === e.fontePagadora)?.nome ?? null,
       tipo: e.tipo,

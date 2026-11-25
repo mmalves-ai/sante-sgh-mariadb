@@ -20,6 +20,8 @@ export interface Favorecido {
   tipo: TipoFavorecido;
   alvoNome: string | null;
   contaBancaria: number | null;
+  /** O fornecedor (contas a pagar) da empresa ou da cooperativa; nulo para pessoa física. */
+  fornecedor: number | null;
   percentual: number;
   inicio: string;
   fim: string | null;
@@ -79,3 +81,24 @@ export const incluirPrestadorTerceiro = (corpo: unknown) =>
   enviar(`${R}/prestadores-terceiros`, corpo, confiar<{ id: number }>(), novaChave('prestador'));
 export const alterarPrestadorTerceiro = (id: number, corpo: unknown) =>
   enviar(`${R}/prestadores-terceiros/${id}`, corpo, confiar<{ id: number }>(), novaChave('prest-alt'));
+
+/** Os tributos ativos, para o enquadramento do fornecedor (nenhum escolhido: vale para todos). */
+export const lerTributos = () =>
+  ler(`${R}/favorecidos/tributos`, itens<{ id: number; codigo: string; descricao: string }>());
+/** O enquadramento tributário do fornecedor (o mesmo cadastro do contas a pagar); o anterior do tributo termina antes. */
+export const incluirEnquadramento = (fornecedor: number, corpo: unknown) =>
+  enviar(
+    `${R}/favorecidos/fornecedores/${fornecedor}/enquadramentos`,
+    corpo,
+    confiar<{ id: number; encerrados: number[] }>(),
+    novaChave('fav-enq'),
+  );
+export const lerContasPrestador = (id: number) =>
+  ler(`${R}/prestadores-terceiros/${id}/contas`, itens<ContaCredito>());
+export const incluirContaPrestador = (id: number, corpo: unknown) =>
+  enviar(
+    `${R}/prestadores-terceiros/${id}/contas`,
+    corpo,
+    confiar<{ id: number }>(),
+    novaChave('prest-conta'),
+  );
