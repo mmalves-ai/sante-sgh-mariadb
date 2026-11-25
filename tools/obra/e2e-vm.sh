@@ -113,6 +113,10 @@ rodada() {
   echo "e2e-vm: commit ${SHA:0:8}, portas web:api $PORTAS, argumentos: $*"
   cd "$WT" && "${E[@]}" ./pnpm install --frozen-lockfile --prefer-offline --store-dir "$RAIZ/.pnpm-store" >"$BASE/instalar.log" 2>&1 \
     || { echo "e2e-vm: instalar falhou (ver $BASE/instalar.log)"; exit 1; }
+  # Build antes do Playwright (25/11): o webServer tem 240 s e o build passava esse tempo esperando vaga do limite-vm
+  # (máx. 3 comandos pesados na VM, disputados com os construtores). Com o build pronto, o api:serve só reaproveita o cache.
+  "${E[@]}" ./pnpm exec nx run-many -t build -p api web --output-style=static >"$BASE/build.log" 2>&1 \
+    || { echo "e2e-vm: build falhou (ver $BASE/build.log)"; grep -E 'MISSING_EXPORT|AMBIGUOUS|UNRESOLVED|error' "$BASE/build.log" | head -5; exit 1; }
   exec "${E[@]}" nice -n 10 ./node_modules/.bin/playwright test -c apps/web/playwright.config.ts "$@"
 }
 # A rodada num grupo de processos próprio (setsid): o vigia encerra o grupo inteiro (playwright, nx, api, web, worker).
