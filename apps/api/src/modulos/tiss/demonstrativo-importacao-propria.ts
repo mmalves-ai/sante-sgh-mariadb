@@ -6,8 +6,11 @@
 //   divergente ou sem correspondência). A baixa por item (faturamento.registrarGlosa com o demonstrativo) grava o pago
 //   e a glosa no item da conta e marca a linha como conciliada, ligada ao item glosado.
 // - Pagamento: grava demonstrativo_pagamento (data do pagamento, informado, liberado, glosa, débitos, créditos e o
-//   líquido), as linhas por protocolo ou guia em demonstrativo_pagamento_item (ligadas ao lote e à conta quando casam)
-//   e os débitos e créditos em demonstrativo_deducao. Líquido negativo é recusado (conferirPagamento).
+//   líquido), as linhas por protocolo ou guia em demonstrativo_pagamento_item e os débitos e créditos em
+//   demonstrativo_deducao. Um pagamento cobre vários lotes da operadora: cada linha casa com QUALQUER lote do
+//   estabelecimento da mesma fonte pagadora (número do lote ou do protocolo) ou com a conta pela guia. A linha casada
+//   fica pendente (divergente, com glosa) até a baixa do recebimento (financeiro.baixar_pagamento_tiss), que a
+//   concilia. Líquido negativo é recusado (conferirPagamento).
 // O mesmo número do demonstrativo para a mesma fonte pagadora não entra duas vezes (repetido). Nada é apagado.
 import type { DemonstrativoLido, ItemDemonstrativoLido } from '@sgh/contratos';
 import {
@@ -46,12 +49,46 @@ export interface PagamentoPorta {
   readonly deducoes: readonly DeducaoPagamento[];
 }
 
+/** O cabeçalho do pagamento para a tela: totais, situação da baixa, deduções e o lote de cada linha. */
+export interface ResumoPagamento {
+  readonly situacao: string;
+  readonly dataPagamento: string;
+  readonly informado: number;
+  readonly liberado: number;
+  readonly glosa: number;
+  readonly debitos: number;
+  readonly creditos: number;
+  readonly liquido: number;
+  readonly titulo: number | null;
+  readonly deducoes: readonly {
+    readonly sequencia: number;
+    readonly natureza: 'debito' | 'credito';
+    readonly codigo: string;
+    readonly descricao: string;
+    readonly valor: number;
+  }[];
+  /** O lote de cada linha (id da linha → id do lote; 0 sem casamento). */
+  readonly lotes: Readonly<Record<number, number>>;
+}
+
 export interface ResultadoImportacao {
   readonly id: number;
   readonly repetido: boolean;
   readonly casados: number;
   readonly semCasamento: number;
 }
+
+/** As contas dos lotes do estabelecimento da mesma operadora, com a guia do prestador (casamento pela guia). */
+const SQL_CONTAS_DA_FONTE = `
+  SELECT ltc.lote_tiss_id AS lote, ch.id AS conta, ch.numero,
+         (SELECT MAX(g.numero_guia_prestador) FROM guia_tiss g
+           WHERE g.conta_hospitalar_id = ch.id AND g.excluido_em IS NULL) AS guia
+    FROM lote_tiss lt
+    JOIN lote_tiss_conta ltc ON ltc.lote_tiss_id = lt.id AND ltc.excluido_em IS NULL
+    JOIN conta_hospitalar ch ON ch.id = ltc.conta_hospitalar_id AND ch.excluido_em IS NULL
+   WHERE lt.estabelecimento_id = ? AND lt.fonte_pagadora_id = ? AND lt.excluido_em IS NULL
+   ORDER BY lt.id DESC, ch.id
+   LIMIT 200000`;
 
 const SQL_ITENS_DO_LOTE = `
   SELECT ci.id AS item, ci.sequencia, ci.valor_total, ch.id AS conta, ch.numero, f.codigo,
@@ -80,7 +117,7 @@ export async function importarDemonstrativoNoBanco(
   d: ImportacaoPorta & { readonly pagamento?: PagamentoPorta | null },
 ): Promise<ResultadoImportacao> {
   const lote = await tx.uma<Linha>(
-    `SELECT id, fonte_pagadora_id, numero_lote, numero_protocolo FROM lote_tiss
+    `SELECT id, fonte_pagadora_id FROM lote_tiss
       WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [d.lote, est],
   );
@@ -97,7 +134,7 @@ export async function importarDemonstrativoNoBanco(
   }));
   const observacao = d.chaveObjeto ? `Arquivo guardado: ${d.chaveObjeto}`.slice(0, 500) : null;
   return d.tipo === 'pagamento'
-    ? gravarPagamento(tx, est, d, { lote, fonte, candidatos, observacao })
+    ? gravarPagamento(tx, est, d, { fonte, observacao })
     : gravarAnalise(tx, est, d, { fonte, candidatos, observacao });
 }
 
@@ -167,12 +204,7 @@ async function gravarPagamento(
   tx: TxOperacao,
   est: number,
   d: ImportacaoPorta & { readonly pagamento?: PagamentoPorta | null },
-  x: {
-    lote: Linha;
-    fonte: number;
-    candidatos: CandidatoConciliacao[];
-    observacao: string | null;
-  },
+  x: { fonte: number; observacao: string | null },
 ): Promise<ResultadoImportacao> {
   const p = d.pagamento;
   if (!p || p.linhas.length === 0)
@@ -216,22 +248,45 @@ async function gravarPagamento(
     situacao: 'importado',
     observacao: x.observacao,
   });
-  const numeroLote = limpo(texto(x.lote['numero_lote']));
-  const protocolo = limpo(texto(x.lote['numero_protocolo']));
+  // Os lotes e as contas do estabelecimento da mesma operadora: o pagamento cobre vários lotes, não só o escolhido.
+  const lotes = await tx.consultar<Linha>(
+    `SELECT id, numero_lote, numero_protocolo FROM lote_tiss
+      WHERE estabelecimento_id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL ORDER BY id DESC LIMIT 50000`,
+    [est, x.fonte],
+  );
+  const porNumero = new Map<string, number>();
+  const porProtocolo = new Map<string, number>();
+  for (const r of lotes) {
+    const nl = limpo(texto(r['numero_lote']));
+    const np = limpo(texto(r['numero_protocolo']));
+    if (nl !== '' && !porNumero.has(nl)) porNumero.set(nl, n(r['id']));
+    if (np !== '' && !porProtocolo.has(np)) porProtocolo.set(np, n(r['id']));
+  }
+  const guias = [...new Set(p.linhas.map((l) => (l.numeroGuia !== null ? limpo(l.numeroGuia) : '')))].filter(
+    (g) => g !== '',
+  );
+  const porGuia = new Map<string, { conta: number; lote: number }>();
+  if (guias.length > 0)
+    for (const r of await tx.consultar<Linha>(SQL_CONTAS_DA_FONTE, [est, x.fonte])) {
+      const alvo = { conta: n(r['conta']), lote: n(r['lote']) };
+      for (const g of [texto(r['guia']), texto(r['numero']), String(n(r['conta']))].map(limpo))
+        if (g !== '' && !porGuia.has(g)) porGuia.set(g, alvo);
+    }
   let casados = 0;
   for (const [k, l] of p.linhas.entries()) {
-    const doLote =
-      (l.numeroLote !== null && numeroLote !== '' && limpo(l.numeroLote) === numeroLote) ||
-      (l.protocolo !== null && protocolo !== '' && limpo(l.protocolo) === protocolo);
-    const guia = l.numeroGuia !== null ? limpo(l.numeroGuia) : '';
-    const conta =
-      guia !== '' ? (x.candidatos.find((c) => c.guias.some((g) => limpo(g) === guia))?.conta ?? null) : null;
-    const casada = doLote || conta !== null;
+    const porConta = l.numeroGuia !== null ? porGuia.get(limpo(l.numeroGuia)) : undefined;
+    const loteCasado =
+      porConta?.lote ??
+      (l.numeroLote !== null ? porNumero.get(limpo(l.numeroLote)) : undefined) ??
+      (l.protocolo !== null ? porProtocolo.get(limpo(l.protocolo)) : undefined) ??
+      null;
+    const conta = porConta?.conta ?? null;
+    const casada = loteCasado !== null || conta !== null;
     if (casada) casados += 1;
     await tx.incluir('demonstrativo_pagamento_item', {
       demonstrativo_pagamento_id: id,
       sequencia: k + 1,
-      lote_tiss_id: casada ? d.lote : null,
+      lote_tiss_id: loteCasado,
       conta_hospitalar_id: conta,
       numero_lote_prestador: l.numeroLote,
       numero_protocolo: l.protocolo,
@@ -267,8 +322,10 @@ export async function listarPagamentos(
   const p: unknown[] = [est];
   let where = '';
   if (f.lote !== null) {
-    where += ` AND EXISTS (SELECT 1 FROM demonstrativo_pagamento_item x WHERE x.demonstrativo_pagamento_id = d.id
-                 AND x.lote_tiss_id = ? AND x.excluido_em IS NULL)`;
+    // O pagamento cobre vários lotes da operadora: no lote aberto aparecem os pagamentos da mesma operadora, inclusive
+    // o que ainda não casou nenhuma linha.
+    where += ` AND d.fonte_pagadora_id = (SELECT lt.fonte_pagadora_id FROM lote_tiss lt WHERE lt.id = ?
+                 AND lt.estabelecimento_id = d.estabelecimento_id)`;
     p.push(f.lote);
   }
   if (f.convenios !== null) {
@@ -311,14 +368,20 @@ export async function listarPagamentos(
   }));
 }
 
-/** O demonstrativo de pagamento: as linhas por protocolo ou guia (sem item da conta: a baixa é pelo de análise). */
+/** O demonstrativo de pagamento: totais, deduções e as linhas por protocolo ou guia (a baixa é no título). */
 export async function lerPagamento(
   l: Leitor,
   est: number,
   id: number,
-): Promise<{ lote: number; convenio: number; itens: ItemDemonstrativoLido[] } | null> {
+): Promise<{
+  lote: number;
+  convenio: number;
+  itens: ItemDemonstrativoLido[];
+  pagamento: ResumoPagamento;
+} | null> {
   const d = await l.uma<Linha>(
-    `SELECT fonte_pagadora_id FROM demonstrativo_pagamento
+    `SELECT fonte_pagadora_id, situacao, data_pagamento, valor_informado, valor_liberado, valor_glosa, valor_debitos,
+            valor_creditos, valor_liquido, titulo_receber_id FROM demonstrativo_pagamento
       WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [id, est],
   );
@@ -330,9 +393,33 @@ export async function lerPagamento(
       WHERE demonstrativo_pagamento_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
     [id],
   );
+  const deducoes = await l.consultar<Linha>(
+    `SELECT sequencia, natureza, codigo_detalhamento, descricao, valor FROM demonstrativo_deducao
+      WHERE demonstrativo_pagamento_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
+    [id],
+  );
   return {
     lote: n(itens.find((i) => i['lote_tiss_id'] !== null)?.['lote_tiss_id']),
     convenio: n(d['fonte_pagadora_id']),
+    pagamento: {
+      situacao: texto(d['situacao']),
+      dataPagamento: dataIso(d['data_pagamento']),
+      informado: n(d['valor_informado']),
+      liberado: n(d['valor_liberado']),
+      glosa: n(d['valor_glosa']),
+      debitos: n(d['valor_debitos']),
+      creditos: n(d['valor_creditos']),
+      liquido: n(d['valor_liquido']),
+      titulo: d['titulo_receber_id'] === null ? null : n(d['titulo_receber_id']),
+      deducoes: deducoes.map((x) => ({
+        sequencia: n(x['sequencia']),
+        natureza: texto(x['natureza']) === 'credito' ? ('credito' as const) : ('debito' as const),
+        codigo: texto(x['codigo_detalhamento']),
+        descricao: texto(x['descricao']),
+        valor: n(x['valor']),
+      })),
+      lotes: Object.fromEntries(itens.map((r) => [n(r['id']), n(r['lote_tiss_id'])])),
+    },
     itens: itens.map((r) => {
       const s = texto(r['situacao_conciliacao']);
       return {

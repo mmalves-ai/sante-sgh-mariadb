@@ -1,9 +1,12 @@
 // E2E @C2-096 (06-FAT linha 33, F3.7): demonstrativos da operadora com conciliação item a item. No lote sintético, o
 // faturista digita o demonstrativo de análise (um item com glosa e motivo), importa (casamento item a item) e concilia
-// (baixa por item, linhas "baixadas"); depois importa o demonstrativo de PAGAMENTO pelo XML TISS (protocolo do lote,
-// débito e crédito), que entra na mesma lista como pagamento e abre as linhas por protocolo, sem o botão de baixa (a
-// baixa é pelo de análise); reimportar o mesmo número não duplica. axe sem violação séria. Sessão real sobre a fonte
-// sintética de dev; XML e números SINTÉTICOS (nenhuma pessoa real); nenhuma saída externa (vigiarExternas).
+// (baixa por item, linhas "baixadas"); depois importa o demonstrativo de PAGAMENTO pelo XML TISS com o número do lote
+// e o protocolo reais do lote sintético 8002 ('000000000040', 'P00000000040') e um protocolo de fora: a linha do lote
+// casa (lote 8002, situação "Casado", pendente da baixa), a de fora fica sem casamento, e o resumo mostra liberado,
+// débitos, créditos e líquido (290 + 10 - 4,35 + 1 = 296,65) e as duas deduções; reimportar o mesmo número não duplica. A
+// baixa do recebimento nos títulos é provada no contrato de efeito (demonstrativo-importacao-propria.int.spec). axe
+// sem violação séria. Sessão real sobre a fonte sintética de dev; XML e números SINTÉTICOS (nenhuma pessoa real);
+// nenhuma saída externa (vigiarExternas).
 import { expect, type Page, test } from '@playwright/test';
 import { demonstrativoPagamentoSinteticoXml } from '@sgh/dominio-faturamento';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
@@ -11,6 +14,9 @@ import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 const LOTE = 8002;
+// O número do lote e o protocolo do lote sintético 8002 (o pagamento casa por eles, não pelo id).
+const NUMERO_LOTE = '000000000040';
+const PROTOCOLO = 'P00000000040';
 
 async function entrar(page: Page, login: string): Promise<void> {
   await page.context().clearCookies();
@@ -50,7 +56,10 @@ test.describe('demonstrativo de análise e de pagamento, conciliação item a it
       numero: `PG-${sufixo}`,
       dataEmissao: '2026-11-20',
       dataPagamento: '2026-11-25',
-      protocolos: [{ numeroLote: String(LOTE), protocolo: 'PROT-E2E', informado: 300, liberado: 290 }],
+      protocolos: [
+        { numeroLote: NUMERO_LOTE, protocolo: PROTOCOLO, informado: 300, liberado: 290 },
+        { numeroLote: '000000999999', protocolo: 'P-FORA-E2E', informado: 10, liberado: 10 },
+      ],
       descontos: [
         { indicador: 1, tipo: '01', descricao: 'IRRF SINTETICO', valor: 4.35 },
         { indicador: 2, tipo: '05', descricao: 'AJUSTE SINTETICO', valor: 1 },
@@ -61,12 +70,35 @@ test.describe('demonstrativo de análise e de pagamento, conciliação item a it
     await page.getByTestId('dm-numero').fill(`PG-${sufixo}`);
     await page.getByTestId('dm-xml').fill(xml);
     await page.getByTestId('dm-importar').click();
-    await expect(page.getByTestId('dm-mensagem')).toContainText('Demonstrativo importado');
-    const linhaPagamento = page.locator('[data-testid^="dm-pag-"]').first();
-    await expect(linhaPagamento).toBeVisible();
-    await linhaPagamento.locator('[data-testid^="dm-ver-pag-"]').click();
-    await expect(page.getByTestId('dm-detalhe')).toBeVisible();
+    await expect(page.getByTestId('dm-mensagem')).toContainText(
+      '1 item(ns) casado(s) com a conta, 1 sem casamento',
+    );
+    // A importação abre o pagamento: o resumo com os totais e as deduções.
+    await expect(page.getByTestId('dm-pag-resumo')).toBeVisible();
+    await expect(page.getByTestId('dm-pag-liberado')).toContainText('300,00');
+    await expect(page.getByTestId('dm-pag-debitos')).toContainText('4,35');
+    await expect(page.getByTestId('dm-pag-creditos')).toContainText('1,00');
+    await expect(page.getByTestId('dm-pag-liquido')).toContainText('296,65');
+    await expect(page.getByTestId('dm-pag-situacao')).toContainText('aguarda a baixa');
+    await expect(page.getByTestId('dm-pag-deducoes').locator('tbody tr')).toHaveCount(2);
+    await expect(page.getByTestId('dm-pag-deducao-1')).toContainText('IRRF SINTETICO');
+    // As linhas: a do lote casada com o lote 8002 (pendente da baixa), a de fora sem casamento.
+    const linhas = page.getByTestId('dm-detalhe').locator('tbody tr');
+    await expect(linhas).toHaveCount(2);
+    await expect(linhas.nth(0).locator('[data-testid^="dm-linha-lote-"]')).toHaveText(String(LOTE));
+    await expect(linhas.nth(0).locator('[data-testid^="dm-situacao-"]')).toHaveText('Casado');
+    await expect(linhas.nth(1).locator('[data-testid^="dm-linha-lote-"]')).toHaveText('—');
+    await expect(linhas.nth(1).locator('[data-testid^="dm-situacao-"]')).toHaveText('Sem casamento');
     await expect(page.getByTestId('dm-conciliar')).toHaveCount(0);
+    // Na lista do lote, o pagamento aparece com o líquido.
+    const linhaPagamento = page
+      .getByTestId('dm-lista')
+      .locator('tr[data-testid^="dm-pag-"]')
+      .filter({ hasText: `PG-${sufixo}` });
+    await expect(linhaPagamento).toHaveCount(1);
+    await expect(linhaPagamento).toContainText('296,65');
+    await linhaPagamento.locator('[data-testid^="dm-ver-pag-"]').click();
+    await expect(page.getByTestId('dm-pag-resumo')).toBeVisible();
     await semViolacaoAxe(page, '/faturamento/demonstrativos (pagamento)');
 
     // 3. Reimportar o mesmo pagamento não duplica.

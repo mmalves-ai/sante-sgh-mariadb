@@ -111,10 +111,47 @@ export const reabrirCompetencia = (
 
 export const listarDemonstrativos = (f: { lote?: string }) =>
   ler(`${T}/demonstrativos${qs(f)}`, z.array(confiar<DemonstrativoLido>()));
+/** O cabeçalho do demonstrativo de pagamento: totais, situação da baixa, débitos e créditos e o lote de cada linha. */
+export interface ResumoPagamentoTiss {
+  readonly situacao: string;
+  readonly dataPagamento: string;
+  readonly informado: number;
+  readonly liberado: number;
+  readonly glosa: number;
+  readonly debitos: number;
+  readonly creditos: number;
+  readonly liquido: number;
+  readonly titulo: number | null;
+  readonly deducoes: readonly {
+    sequencia: number;
+    natureza: 'debito' | 'credito';
+    codigo: string;
+    descricao: string;
+    valor: number;
+  }[];
+  readonly lotes: Readonly<Record<number, number>>;
+}
 export const lerDemonstrativo = (id: number, tipo: 'analise' | 'pagamento' = 'analise') =>
   ler(
     `${T}/demonstrativos/${id}${tipo === 'pagamento' ? '?tipo=pagamento' : ''}`,
-    confiar<{ lote: number; convenio: number; itens: ItemDemonstrativoLido[] }>(),
+    confiar<{
+      lote: number;
+      convenio: number;
+      itens: ItemDemonstrativoLido[];
+      pagamento?: ResumoPagamentoTiss;
+    }>(),
+  );
+/** A baixa do recebimento pelo demonstrativo de pagamento (rota do financeiro: financeiro.tituloReceber.baixar). */
+export const baixarPagamentoTiss = (
+  id: number,
+  corpo: { conta: number; dataRecebimento: string },
+  chave: string,
+) =>
+  enviar(
+    `/api/financeiro/receber/pagamentos-tiss/${id}/baixa`,
+    corpo,
+    confiar<{ mensagem: string; repetida?: boolean }>(),
+    chave,
   );
 export const importarDemonstrativo = (
   corpo: {

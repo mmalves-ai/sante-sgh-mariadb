@@ -2,7 +2,11 @@
 // uma linha por item, casada item a item com o item da conta do lote (glosa, motivo, situação); a baixa pelo
 // demonstrativo (faturamento.registrarGlosa) concilia as linhas e as liga ao item glosado; a reimportação não duplica;
 // o de pagamento grava o cabeçalho com débitos, créditos e líquido, as linhas por protocolo e as deduções; líquido
-// negativo é recusado sem gravar. Massa SINTÉTICA "D9633" (nenhuma pessoa real) no cliente de teste.
+// negativo é recusado sem gravar. O pagamento casa com QUALQUER lote da operadora (não só o escolhido na tela) e a linha
+// casada fica pendente até a baixa; a baixa do recebimento (financeiro.baixar_pagamento_tiss) grava UM crédito pelo
+// líquido, o recebimento do título da conta com a retenção (débitos) e o acréscimo (créditos), abate a parcela e o
+// título, concilia as linhas e marca o cabeçalho "baixado"; repetir é recusado. Massa SINTÉTICA "D9633" (nenhuma
+// pessoa real) no cliente de teste.
 import { randomUUID } from 'node:crypto';
 import {
   demonstrativoPagamentoSinteticoXml,
@@ -13,6 +17,7 @@ import {
 import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { OPERACOES_BAIXA_PAGAMENTO_TISS } from '../financeiro/baixa-pagamento-tiss-propria.js';
 import { armazemXmlMemoria } from './armazem-xml.js';
 import type { ContextoTiss } from './porta.js';
 import { PortaTissPropria } from './porta-propria.js';
@@ -39,7 +44,7 @@ describe.skipIf(SEM_BANCO)('importação do demonstrativo e conciliação item a
   let nucleo: NucleoProprio;
   let porta: PortaTissPropria;
   let c: ContextoTiss;
-  const ids = { est: 0, usuario: 0, conta: 0, lote: 0, itens: [0, 0, 0] };
+  const ids = { est: 0, usuario: 0, conta: 0, lote: 0, lote2: 0, fonte: 0, itens: [0, 0, 0] };
 
   const limpar = async (e: Escritor) => {
     const est = [ids.est];
@@ -66,6 +71,19 @@ describe.skipIf(SEM_BANCO)('importação do demonstrativo e conciliação item a
         est,
       );
     await e.executar('DELETE FROM demonstrativo_pagamento WHERE estabelecimento_id = ?', est);
+    await e.executar('DELETE FROM recebimento WHERE estabelecimento_id = ?', est);
+    await e.executar('DELETE FROM movimento_bancario WHERE estabelecimento_id = ?', est);
+    await e.executar(
+      `DELETE d FROM documento_origem_titulo d JOIN titulo_receber t ON t.id = d.titulo_receber_id
+        WHERE t.estabelecimento_id = ?`,
+      est,
+    );
+    await e.executar(
+      'DELETE p FROM parcela_receber p JOIN titulo_receber t ON t.id = p.titulo_receber_id WHERE t.estabelecimento_id = ?',
+      est,
+    );
+    await e.executar('DELETE FROM titulo_receber WHERE estabelecimento_id = ?', est);
+    await e.executar('DELETE FROM conta_bancaria WHERE estabelecimento_id = ?', est);
     await e.executar(
       'DELETE FROM lote_tiss_conta WHERE lote_tiss_id IN (SELECT id FROM lote_tiss WHERE estabelecimento_id = ?)',
       est,
@@ -139,13 +157,13 @@ describe.skipIf(SEM_BANCO)('importação do demonstrativo e conciliação item a
         'INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, criado_em) VALUES (?, ?, ?)',
         [pessoa, 963_301, agora],
       );
-      const fonte = await garantir(
+      const fonte = (ids.fonte = await garantir(
         e,
         'SELECT id FROM fonte_pagadora WHERE codigo = ?',
         [`${P}FP`],
         "INSERT INTO fonte_pagadora (codigo, nome, tipo, registro_ans, criado_em) VALUES (?, ?, 'operadora', '999996', ?)",
         [`${P}FP`, `OPERADORA SINTETICA ${P}`, agora],
-      );
+      ));
       const categoria = await garantir(
         e,
         'SELECT id FROM categoria_atendimento WHERE codigo = ?',
@@ -255,6 +273,14 @@ describe.skipIf(SEM_BANCO)('importação do demonstrativo e conciliação item a
       await e.inserir(
         'INSERT INTO lote_tiss_conta (lote_tiss_id, conta_hospitalar_id, valor, criado_em) VALUES (?, ?, 900, ?)',
         [ids.lote, ids.conta, agora],
+      );
+      // Outro lote da mesma operadora, sem conta: o pagamento cita os dois.
+      ids.lote2 = await e.inserir(
+        `INSERT INTO lote_tiss (estabelecimento_id, fonte_pagadora_id, numero_lote, sequencial, tipo_guia,
+           versao_padrao_tiss_id, gerado_em, quantidade_guias, valor_total, numero_protocolo, situacao, protocolado_em,
+           criado_em)
+         VALUES (?, ?, '000000963302', '000000963302', 'resumo_internacao', ?, ?, 0, 0, '963302', 'protocolado', ?, ?)`,
+        [ids.est, fonte, versaoTiss, agora, agora, agora],
       );
     });
     porta = new PortaTissPropria(nucleo, CLIENTE, armazemXmlMemoria());
@@ -395,7 +421,8 @@ describe.skipIf(SEM_BANCO)('importação do demonstrativo e conciliação item a
         dataPagamento: '2026-11-15',
         protocolos: [
           { numeroLote: '000000963301', protocolo: '963301', informado: 900, liberado: 700 },
-          { numeroLote: '000000000001', protocolo: '1', informado: 10, liberado: 10 },
+          { numeroLote: '000000963302', protocolo: '963302', informado: 10, liberado: 10 },
+          { numeroLote: '000000000001', protocolo: '1', informado: 5, liberado: 5 },
         ],
         descontos: [
           { indicador: 1, tipo: '01', descricao: 'IRRF RETIDO', valor: 10.5 },
@@ -420,7 +447,7 @@ describe.skipIf(SEM_BANCO)('importação do demonstrativo e conciliação item a
         pagamento: { dataPagamento: p.dataPagamento, linhas: p.linhas, deducoes: p.deducoes },
       }),
     );
-    expect(r).toMatchObject({ repetido: false, casados: 1, semCasamento: 1 });
+    expect(r).toMatchObject({ repetido: false, casados: 2, semCasamento: 1 });
     expect(
       await lerUma(
         `SELECT data_pagamento, valor_informado, valor_liberado, valor_glosa, valor_debitos, valor_creditos,
@@ -428,22 +455,32 @@ describe.skipIf(SEM_BANCO)('importação do demonstrativo e conciliação item a
         [r.id],
       ),
     ).toMatchObject({
-      valor_informado: '910.00',
-      valor_liberado: '710.00',
+      valor_informado: '915.00',
+      valor_liberado: '715.00',
       valor_glosa: '200.00',
       valor_debitos: '10.50',
       valor_creditos: '3.00',
-      valor_liquido: '702.50',
+      valor_liquido: '707.50',
       situacao: 'importado',
     });
     expect(
       await lerUma(
-        `SELECT COUNT(*) AS q, SUM(lote_tiss_id = ?) AS do_lote, SUM(situacao_conciliacao = 'divergente') AS divergentes,
+        `SELECT COUNT(*) AS q, SUM(lote_tiss_id = ?) AS do_lote, SUM(lote_tiss_id = ?) AS do_outro,
+                SUM(situacao_conciliacao = 'divergente') AS divergentes,
+                SUM(situacao_conciliacao = 'pendente') AS pendentes, SUM(situacao_conciliacao = 'conciliado') AS conc,
                 SUM(situacao_conciliacao = 'sem_correspondencia') AS sem
            FROM demonstrativo_pagamento_item WHERE demonstrativo_pagamento_id = ?`,
-        [ids.lote, r.id],
+        [ids.lote, ids.lote2, r.id],
       ),
-    ).toMatchObject({ q: 2, do_lote: '1', divergentes: '1', sem: '1' });
+    ).toMatchObject({
+      q: 3,
+      do_lote: '1',
+      do_outro: '1',
+      divergentes: '1',
+      pendentes: '1',
+      conc: '0',
+      sem: '1',
+    });
     expect(
       await lerUma(
         `SELECT COUNT(*) AS q, SUM(natureza = 'debito') AS deb, SUM(valor) AS total
@@ -455,7 +492,31 @@ describe.skipIf(SEM_BANCO)('importação do demonstrativo e conciliação item a
     // A tela lista o pagamento junto (tipo "pagamento") e abre as linhas dele.
     const lista = await porta.demonstrativos(c, { lote: ids.lote, convenios: null });
     expect(lista.map((d) => d.tipo).sort()).toEqual(['analise', 'pagamento']);
-    expect((await porta.demonstrativo(c, r.id, 'pagamento'))?.itens).toHaveLength(2);
+    expect(lista.find((d) => d.tipo === 'pagamento')).toMatchObject({
+      casados: 2,
+      baixados: 0,
+      valorPago: 707.5,
+    });
+    // No outro lote da operadora o mesmo pagamento aparece (cobre os dois).
+    expect(
+      (await porta.demonstrativos(c, { lote: ids.lote2, convenios: null })).some((d) => d.id === r.id),
+    ).toBe(true);
+    const det = await porta.demonstrativo(c, r.id, 'pagamento');
+    expect(det?.itens).toHaveLength(3);
+    expect(det?.itens.map((i) => i.situacao)).toEqual(['casado', 'casado', 'sem-casamento']);
+    expect(det?.pagamento).toMatchObject({
+      situacao: 'importado',
+      dataPagamento: '2026-11-15',
+      liberado: 715,
+      debitos: 10.5,
+      creditos: 3,
+      liquido: 707.5,
+    });
+    expect(det?.pagamento?.deducoes.map((x) => [x.natureza, x.valor])).toEqual([
+      ['debito', 10.5],
+      ['credito', 3],
+    ]);
+    expect(Object.values(det?.pagamento?.lotes ?? {})).toEqual([ids.lote, ids.lote2, 0]);
 
     // Débito maior que o liberado: recusa e nada fica gravado.
     const antes = await lerUma(
@@ -483,5 +544,191 @@ describe.skipIf(SEM_BANCO)('importação do demonstrativo e conciliação item a
         ids.est,
       ]),
     ).toEqual(antes);
+  });
+  it('baixa do pagamento: líquido na conta, retenção e créditos no recebimento do título; linhas conciliadas; repetir recusa', async () => {
+    const agora = new Date();
+    const hoje = agora.toISOString().slice(0, 10);
+    const prep = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-baixa-9633' }, async (e) => {
+      const g = (tabela: string, codigo: string, colunas: string, valores: unknown[]) =>
+        garantir(
+          e,
+          `SELECT id FROM ${tabela} WHERE codigo = ?`,
+          [codigo],
+          `INSERT INTO ${tabela} (codigo, ${colunas}, criado_em) VALUES (?, ${valores.map(() => '?').join(', ')}, ?)`,
+          [codigo, ...valores, agora],
+        );
+      await g('tipo_lancamento_bancario', 'recebimento_titulo', 'descricao, sentido, transferencia', [
+        'TIPO recebimento_titulo',
+        'credito',
+        false,
+      ]);
+      await g('forma_recebimento', `${P}-TRF`, 'descricao, meio, uso', [
+        `TRANSFERENCIA ${P}`,
+        'transferencia',
+        'recebimento',
+      ]);
+      const tipoDoc = await g('tipo_documento_financeiro', 'fatura', 'descricao, sentido', [
+        'Fatura',
+        'receber',
+      ]);
+      const grupo = await g('grupo_natureza_financeira', '9633', 'nome, tipo', [
+        `GRUPO SINTETICO ${P}`,
+        'ambos',
+      ]);
+      const sub = await garantir(
+        e,
+        'SELECT id FROM subgrupo_natureza_financeira WHERE grupo_natureza_financeira_id = ? AND codigo = ?',
+        [grupo, '2'],
+        'INSERT INTO subgrupo_natureza_financeira (grupo_natureza_financeira_id, codigo, descricao, classificacao, criado_em) VALUES (?, ?, ?, ?, ?)',
+        [grupo, '2', `SUBGRUPO SINTETICO ${P}`, 'receita', agora],
+      );
+      const nat = await g(
+        'natureza_financeira',
+        '9633.2.1',
+        'descricao, subgrupo_natureza_financeira_id, tipo',
+        [`RECEITA SINTETICA ${P}`, sub, 'receita'],
+      );
+      const banco = await garantir(
+        e,
+        'SELECT id FROM banco WHERE codigo_ispb = ?',
+        ['96330001'],
+        "INSERT INTO banco (codigo_ispb, descricao, vigencia_inicio, versao_fonte, criado_em) VALUES (?, 'BANCO SINTETICO D9633', '2000-01-01', 'teste', ?)",
+        ['96330001', agora],
+      );
+      const contaBancaria = await e.inserir(
+        "INSERT INTO conta_bancaria (estabelecimento_id, codigo, descricao, tipo, banco_id, numero_conta, criado_em) VALUES (?, ?, ?, 'corrente', ?, '9633', ?)",
+        [ids.est, `${P}-CB`, `CONTA ${P} SINTETICA`, banco, agora],
+      );
+      const titulo = await e.inserir(
+        `INSERT INTO titulo_receber (estabelecimento_id, numero, tipo_devedor, fonte_pagadora_id, tipo_origem,
+           tipo_documento_financeiro_id, numero_documento, data_emissao, data_lancamento, valor_bruto, valor_liquido,
+           valor_recebido, situacao, natureza_financeira_id, criado_em)
+         VALUES (?, ?, 'fonte_pagadora', ?, 'avulso', ?, ?, ?, ?, 900, 900, 0, 'aberto', ?, ?)`,
+        [ids.est, `${P}-T1`, ids.fonte, tipoDoc, `${P}-C1`, hoje, hoje, nat, agora],
+      );
+      const parcela = await e.inserir(
+        `INSERT INTO parcela_receber (titulo_receber_id, sequencia, vencimento, vencimento_original, valor,
+           valor_recebido, saldo, situacao, criado_em) VALUES (?, 1, ?, ?, 900, 0, 900, 'aberta', ?)`,
+        [titulo, hoje, hoje, agora],
+      );
+      await e.inserir(
+        `INSERT INTO documento_origem_titulo (natureza_titulo, titulo_receber_id, tipo_documento, entidade, entidade_id,
+           criado_em) VALUES ('receber', ?, 'outro', 'conta_hospitalar', ?, ?)`,
+        [titulo, ids.conta, agora],
+      );
+      return { contaBancaria, titulo, parcela };
+    });
+    const p = lerDemonstrativoPagamentoXml(
+      demonstrativoPagamentoSinteticoXml({
+        numero: `${P}PG9`,
+        dataEmissao: '2026-11-20',
+        dataPagamento: hoje,
+        protocolos: [
+          { numeroLote: '000000963301', protocolo: '963301', informado: 900, liberado: 800 },
+          { numeroLote: '000000000001', protocolo: '1', informado: 100, liberado: 100 },
+        ],
+        descontos: [
+          { indicador: 1, tipo: '01', descricao: 'IRRF RETIDO', valor: 13.5 },
+          { indicador: 2, tipo: '05', descricao: 'AJUSTE A FAVOR', valor: 4.5 },
+        ],
+      }),
+    );
+    const imp = await porta.gravarSgh(c, trilha('demonstrativo_pagamento'), (g) =>
+      g.importarDemonstrativo({
+        usuario: 'd9633.teste',
+        lote: ids.lote2,
+        tipo: 'pagamento',
+        origem: 'xml',
+        numero: p.numero,
+        dataEmissao: p.dataEmissao,
+        itens: [],
+        hashArquivo: null,
+        chaveObjeto: null,
+        pagamento: { dataPagamento: p.dataPagamento, linhas: p.linhas, deducoes: p.deducoes },
+      }),
+    );
+    // Importado pelo outro lote, a linha casa com o lote da conta (mesma operadora).
+    expect(imp).toMatchObject({ repetido: false, casados: 1, semCasamento: 1 });
+    const executor = nucleo.criarExecutor();
+    const rodar = (entrada: unknown) =>
+      executor.executar(
+        OPERACOES_BAIXA_PAGAMENTO_TISS['financeiro.baixarPagamentoTiss'] as never,
+        CLIENTE,
+        entrada,
+        op(),
+      );
+    const entrada = { demonstrativo: imp.id, conta: prep.contaBancaria, dataRecebimento: hoje };
+    const r = (await rodar(entrada)).resultado as Record<string, unknown>;
+    // 800 de 900 liberados baixados: débitos e créditos na proporção (13,50 x 8/9 = 12,00; 4,50 x 8/9 = 4,00).
+    expect(r).toMatchObject({
+      titulos: 1,
+      linhas: 1,
+      recebido: 800,
+      retencao: 12,
+      acrescimo: 4,
+      liquido: 792,
+    });
+    expect(r).toMatchObject({ linhasSemTitulo: 1, valorSemTitulo: 100 });
+    expect(
+      await lerUma(
+        `SELECT COUNT(*) AS q, SUM(valor) AS valor, MAX(natureza) AS natureza FROM movimento_bancario
+          WHERE estabelecimento_id = ? AND conta_bancaria_id = ?`,
+        [ids.est, prep.contaBancaria],
+      ),
+    ).toMatchObject({ q: 1, valor: '792.00', natureza: 'credito' });
+    expect(
+      await lerUma(
+        `SELECT COUNT(*) AS q, SUM(valor_recebido) AS recebido, SUM(valor_retencao) AS retencao,
+                SUM(valor_juros) AS creditos, SUM(valor_glosa) AS glosa, MAX(meio_baixa) AS meio,
+                MAX(numero_documento) AS doc, MAX(parcela_receber_id) AS parcela
+           FROM recebimento WHERE estabelecimento_id = ?`,
+        [ids.est],
+      ),
+    ).toMatchObject({
+      q: 1,
+      recebido: '800.00',
+      retencao: '12.00',
+      creditos: '4.00',
+      glosa: '100.00',
+      meio: 'demonstrativo',
+      doc: `${P}PG9`,
+      parcela: prep.parcela,
+    });
+    expect(
+      await lerUma('SELECT saldo, valor_recebido, situacao FROM parcela_receber WHERE id = ?', [
+        prep.parcela,
+      ]),
+    ).toMatchObject({ saldo: '100.00', valor_recebido: '800.00', situacao: 'parcial' });
+    expect(
+      await lerUma('SELECT valor_recebido, situacao FROM titulo_receber WHERE id = ?', [prep.titulo]),
+    ).toMatchObject({ valor_recebido: '800.00', situacao: 'recebido_parcial' });
+    expect(
+      await lerUma(
+        'SELECT situacao, conta_bancaria_id, titulo_receber_id FROM demonstrativo_pagamento WHERE id = ?',
+        [imp.id],
+      ),
+    ).toMatchObject({
+      situacao: 'baixado',
+      conta_bancaria_id: prep.contaBancaria,
+      titulo_receber_id: prep.titulo,
+    });
+    expect(
+      await lerUma(
+        `SELECT SUM(situacao_conciliacao = 'conciliado') AS conc, SUM(situacao_conciliacao = 'sem_correspondencia') AS sem
+           FROM demonstrativo_pagamento_item WHERE demonstrativo_pagamento_id = ?`,
+        [imp.id],
+      ),
+    ).toMatchObject({ conc: '1', sem: '1' });
+    // A tela mostra o baixado e a linha como baixada.
+    const det = await porta.demonstrativo(c, imp.id, 'pagamento');
+    expect(det?.pagamento).toMatchObject({ situacao: 'baixado', titulo: prep.titulo });
+    expect(det?.itens.map((i) => i.situacao)).toEqual(['baixado', 'sem-casamento']);
+    const lista = await porta.demonstrativos(c, { lote: ids.lote, convenios: null });
+    expect(lista.find((d) => d.id === imp.id && d.tipo === 'pagamento')).toMatchObject({ baixados: 1 });
+    // Repetir a baixa (outra chave) é recusado, e nada muda.
+    expect(String((await erroDe(rodar(entrada))).problema['codigo'])).toBe('ja-baixado');
+    expect(
+      await lerUma('SELECT COUNT(*) AS q FROM recebimento WHERE estabelecimento_id = ?', [ids.est]),
+    ).toMatchObject({ q: 1 });
   });
 });

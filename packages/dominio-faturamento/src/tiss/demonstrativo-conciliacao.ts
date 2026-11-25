@@ -262,11 +262,165 @@ export function demonstrativoPagamentoSinteticoXml(d: {
   return `<?xml version="1.0" encoding="ISO-8859-1"?><ans:mensagemTISS xmlns:ans="http://www.ans.gov.br/padroes/tiss/schemas"><ans:operadoraParaPrestador><ans:demonstrativosRetorno><ans:demonstrativoPagamento><ans:cabecalhoDemonstrativo><ans:registroANS>999999</ans:registroANS><ans:numeroDemonstrativo>${d.numero}</ans:numeroDemonstrativo><ans:nomeOperadora>OPERADORA SINTETICA</ans:nomeOperadora><ans:numeroCNPJ>00000000000000</ans:numeroCNPJ><ans:dataEmissao>${d.dataEmissao}</ans:dataEmissao></ans:cabecalhoDemonstrativo><ans:pagamentos><ans:pagamentosPorData><ans:dadosPagamento><ans:dataPagamento>${d.dataPagamento}</ans:dataPagamento></ans:dadosPagamento><ans:dadosResumo>${prot}</ans:dadosResumo>${desc}</ans:pagamentosPorData></ans:pagamentos></ans:demonstrativoPagamento></ans:demonstrativosRetorno></ans:operadoraParaPrestador></ans:mensagemTISS>`;
 }
 
-/** Situação da linha do pagamento: sem lote nem conta do hospital, sem correspondência; com glosa, divergente. */
+/** Situação da linha do pagamento na importação: sem lote nem conta do hospital, sem correspondência; casada, fica
+ * pendente até a baixa do recebimento (com glosa, divergente). "Conciliado" só depois da baixa efetiva no título. */
 export function situacaoLinhaPagamento(l: {
   readonly casada: boolean;
   readonly valorGlosa: number;
 }): SituacaoConciliacao {
   if (!l.casada) return 'sem_correspondencia';
-  return cent(l.valorGlosa) > 0 ? 'divergente' : 'conciliado';
+  return cent(l.valorGlosa) > 0 ? 'divergente' : 'pendente';
+}
+
+// ── Baixa do recebimento pelo demonstrativo de pagamento ─────────────────────────────────────────────────
+
+/** A linha do pagamento com as contas que ela cobre (a conta casada pela guia, ou as contas do lote). */
+export interface LinhaPagamentoBaixa {
+  readonly linha: number;
+  readonly contas: readonly number[];
+  readonly liberado: number;
+  readonly glosa: number;
+}
+
+/** O título do convênio de uma conta, com a primeira parcela em aberto (nula quando não há saldo). */
+export interface TituloPagamentoBaixa {
+  readonly titulo: number;
+  readonly conta: number;
+  readonly parcela: number | null;
+  readonly saldo: number;
+}
+
+export interface BaixaPagamentoTitulo {
+  readonly titulo: number;
+  readonly parcela: number;
+  /** Parte do liberado que abate o saldo do título (o retido pela operadora conta como pago). */
+  readonly recebido: number;
+  /** Débitos do demonstrativo (IRRF, ISS, ajustes) rateados pelo recebido: retidos, não entram no banco. */
+  readonly retencao: number;
+  /** Créditos do demonstrativo rateados pelo recebido: entram no banco além do liberado. */
+  readonly acrescimo: number;
+  /** O que entra na conta bancária por este título: recebido menos retenção mais acréscimo. */
+  readonly liquido: number;
+  readonly glosa: number;
+  readonly saldoRestante: number;
+  readonly quita: boolean;
+}
+
+export interface PlanoBaixaPagamento {
+  readonly baixas: readonly BaixaPagamentoTitulo[];
+  /** Linhas inteiramente baixadas nos títulos (ficam conciliadas). */
+  readonly linhasBaixadas: readonly number[];
+  readonly linhasSemTitulo: number;
+  readonly valorSemTitulo: number;
+  readonly totalRecebido: number;
+  readonly totalRetencao: number;
+  readonly totalAcrescimo: number;
+  readonly totalLiquido: number;
+}
+
+export interface RecusaBaixaPagamento {
+  readonly codigo: string;
+  readonly mensagem: string;
+}
+
+/** Rateio em centavos proporcional aos pesos; a sobra do arredondamento vai para o último peso positivo. */
+function ratear(total: number, pesos: readonly number[]): number[] {
+  const soma = pesos.reduce((t, p) => t + p, 0);
+  if (soma <= 0 || total <= 0) return pesos.map(() => 0);
+  const partes = pesos.map((p) => Math.floor((total * p) / soma));
+  const resto = total - partes.reduce((t, p) => t + p, 0);
+  const ultimo = pesos.reduce((u, p, k) => (p > 0 ? k : u), -1);
+  partes[ultimo] = (partes[ultimo] ?? 0) + resto;
+  return partes;
+}
+
+/**
+ * A baixa dos títulos do convênio pelo demonstrativo de pagamento: o liberado de cada linha abate o saldo dos títulos
+ * das contas que ela cobre (a conta casada pela guia; a linha do lote reparte entre as contas do lote, na ordem, até o
+ * saldo de cada uma). Os débitos e créditos do demonstrativo entram na parte baixada, rateados pelo recebido de cada
+ * título, na proporção do liberado aplicado sobre o liberado total (o que fica sem título não leva dedução). O líquido
+ * nunca fica negativo. Demonstrativo já baixado ou cancelado é recusado, e sem nada a baixar também.
+ */
+export function planejarBaixaPagamento(e: {
+  readonly situacao: string;
+  readonly linhas: readonly LinhaPagamentoBaixa[];
+  readonly titulos: readonly TituloPagamentoBaixa[];
+  readonly debitos: number;
+  readonly creditos: number;
+}): PlanoBaixaPagamento | RecusaBaixaPagamento {
+  if (e.situacao === 'baixado')
+    return { codigo: 'ja-baixado', mensagem: 'Este demonstrativo de pagamento já foi baixado nos títulos.' };
+  if (e.situacao === 'cancelado')
+    return { codigo: 'demonstrativo-cancelado', mensagem: 'O demonstrativo de pagamento está cancelado.' };
+  const saldo = new Map<number, number>();
+  const porConta = new Map<number, TituloPagamentoBaixa>();
+  for (const t of e.titulos) {
+    if (t.parcela === null || cent(t.saldo) <= 0 || porConta.has(t.conta)) continue;
+    porConta.set(t.conta, t);
+    if (!saldo.has(t.titulo)) saldo.set(t.titulo, cent(t.saldo));
+  }
+  const recebido = new Map<number, number>();
+  const glosa = new Map<number, number>();
+  const linhasBaixadas: number[] = [];
+  let linhasSemTitulo = 0;
+  let semTitulo = 0;
+  let liberadoTotal = 0;
+  for (const l of e.linhas) {
+    let resto = cent(l.liberado);
+    liberadoTotal += resto;
+    const titulos = [...new Set(l.contas.map((c) => porConta.get(c)?.titulo).filter((t) => t !== undefined))];
+    for (const t of titulos) {
+      const livre = (saldo.get(t) ?? 0) - (recebido.get(t) ?? 0);
+      const parte = Math.min(resto, Math.max(0, livre));
+      if (parte > 0) recebido.set(t, (recebido.get(t) ?? 0) + parte);
+      resto -= parte;
+    }
+    if (titulos.length > 0) glosa.set(titulos[0]!, (glosa.get(titulos[0]!) ?? 0) + cent(l.glosa));
+    if (titulos.length === 0 || resto === cent(l.liberado)) linhasSemTitulo += 1;
+    else if (resto === 0) linhasBaixadas.push(l.linha);
+    semTitulo += resto;
+  }
+  const ids = [...recebido.keys()].filter((t) => (recebido.get(t) ?? 0) > 0);
+  if (ids.length === 0)
+    return {
+      codigo: 'sem-titulo',
+      mensagem: 'Nenhuma linha do demonstrativo tem título do convênio em aberto para baixar.',
+    };
+  const pesos = ids.map((t) => recebido.get(t)!);
+  const aplicado = pesos.reduce((t, p) => t + p, 0);
+  const proporcao = (v: number) => (liberadoTotal > 0 ? Math.round((cent(v) * aplicado) / liberadoTotal) : 0);
+  const retencoes = ratear(proporcao(e.debitos), pesos);
+  const acrescimos = ratear(proporcao(e.creditos), pesos);
+  const liquidoTotal = aplicado - proporcao(e.debitos) + proporcao(e.creditos);
+  if (liquidoTotal < 0)
+    return {
+      codigo: 'pagamento-inconsistente',
+      mensagem: 'Os débitos do demonstrativo passam do valor baixado: confira o arquivo.',
+    };
+  const baixas = ids.map((t, k): BaixaPagamentoTitulo => {
+    const r = pesos[k]!;
+    const s = saldo.get(t)!;
+    const tit = e.titulos.find((x) => x.titulo === t && x.parcela !== null)!;
+    return {
+      titulo: t,
+      parcela: tit.parcela!,
+      recebido: reais(r),
+      retencao: reais(retencoes[k]!),
+      acrescimo: reais(acrescimos[k]!),
+      liquido: reais(r - retencoes[k]! + acrescimos[k]!),
+      glosa: reais(glosa.get(t) ?? 0),
+      saldoRestante: reais(s - r),
+      quita: s - r === 0,
+    };
+  });
+  return {
+    baixas,
+    linhasBaixadas,
+    linhasSemTitulo,
+    valorSemTitulo: reais(semTitulo),
+    totalRecebido: reais(aplicado),
+    totalRetencao: reais(retencoes.reduce((t, v) => t + v, 0)),
+    totalAcrescimo: reais(acrescimos.reduce((t, v) => t + v, 0)),
+    totalLiquido: reais(liquidoTotal),
+  };
 }

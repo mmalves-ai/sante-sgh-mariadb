@@ -146,10 +146,77 @@ describe('demonstrativo de pagamento', () => {
 });
 
 describe('situação da linha do pagamento', () => {
-  it('casada sem glosa concilia; com glosa diverge; sem lote nem conta fica sem correspondência', async () => {
+  it('casada sem glosa fica pendente até a baixa; com glosa diverge; sem lote nem conta fica sem correspondência', async () => {
     const { situacaoLinhaPagamento } = await import('./demonstrativo-conciliacao.js');
-    expect(situacaoLinhaPagamento({ casada: true, valorGlosa: 0 })).toBe('conciliado');
+    expect(situacaoLinhaPagamento({ casada: true, valorGlosa: 0 })).toBe('pendente');
     expect(situacaoLinhaPagamento({ casada: true, valorGlosa: 0.01 })).toBe('divergente');
     expect(situacaoLinhaPagamento({ casada: false, valorGlosa: 0 })).toBe('sem_correspondencia');
+  });
+});
+
+describe('baixa do recebimento pelo demonstrativo de pagamento', () => {
+  const titulos = [
+    { titulo: 10, conta: 1, parcela: 100, saldo: 200 },
+    { titulo: 11, conta: 2, parcela: 110, saldo: 100 },
+    { titulo: 12, conta: 3, parcela: null, saldo: 0 },
+  ];
+  it('linha do lote reparte entre as contas até o saldo; débitos e créditos rateados pelo recebido', async () => {
+    const { planejarBaixaPagamento } = await import('./demonstrativo-conciliacao.js');
+    const p = planejarBaixaPagamento({
+      situacao: 'importado',
+      linhas: [{ linha: 1, contas: [1, 2], liberado: 290, glosa: 10 }],
+      titulos,
+      debitos: 4.35,
+      creditos: 1,
+    });
+    if ('codigo' in p) throw new Error(p.mensagem);
+    expect(p.baixas.map((b) => [b.titulo, b.recebido, b.saldoRestante, b.quita])).toEqual([
+      [10, 200, 0, true],
+      [11, 90, 10, false],
+    ]);
+    expect(p.totalRetencao).toBe(4.35);
+    expect(p.totalAcrescimo).toBe(1);
+    expect(p.totalLiquido).toBe(286.65);
+    expect(p.baixas.reduce((t, b) => t + Math.round(b.liquido * 100), 0)).toBe(28665);
+    expect(p.baixas[0]!.glosa).toBe(10);
+    expect(p.linhasBaixadas).toEqual([1]);
+    expect(p.valorSemTitulo).toBe(0);
+  });
+  it('o que passa do saldo ou não tem título fica de fora, sem dedução', async () => {
+    const { planejarBaixaPagamento } = await import('./demonstrativo-conciliacao.js');
+    const p = planejarBaixaPagamento({
+      situacao: 'importado',
+      linhas: [
+        { linha: 1, contas: [2], liberado: 150, glosa: 0 },
+        { linha: 2, contas: [3], liberado: 50, glosa: 0 },
+        { linha: 3, contas: [], liberado: 0, glosa: 0 },
+      ],
+      titulos,
+      debitos: 20,
+      creditos: 0,
+    });
+    if ('codigo' in p) throw new Error(p.mensagem);
+    expect(p.totalRecebido).toBe(100);
+    expect(p.valorSemTitulo).toBe(100);
+    expect(p.linhasSemTitulo).toBe(2);
+    expect(p.linhasBaixadas).toEqual([]);
+    expect(p.totalRetencao).toBe(10);
+    expect(p.totalLiquido).toBe(90);
+  });
+  it('recusa o já baixado, o cancelado e o que não tem título em aberto', async () => {
+    const { planejarBaixaPagamento } = await import('./demonstrativo-conciliacao.js');
+    const base = {
+      linhas: [{ linha: 1, contas: [3], liberado: 10, glosa: 0 }],
+      titulos,
+      debitos: 0,
+      creditos: 0,
+    };
+    expect(planejarBaixaPagamento({ ...base, situacao: 'baixado' })).toMatchObject({ codigo: 'ja-baixado' });
+    expect(planejarBaixaPagamento({ ...base, situacao: 'cancelado' })).toMatchObject({
+      codigo: 'demonstrativo-cancelado',
+    });
+    expect(planejarBaixaPagamento({ ...base, situacao: 'importado' })).toMatchObject({
+      codigo: 'sem-titulo',
+    });
   });
 });

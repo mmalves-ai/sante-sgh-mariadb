@@ -4,18 +4,24 @@
 // lote (DP-33.8); a importação é idempotente (o mesmo número ou o mesmo arquivo não entra duas vezes) e cada item casa
 // com o item da conta pelo sequencial da guia. Conciliar baixa os itens casados (valor e quantidade pagos e o motivo da
 // glosa: sem motivo não fecha a conciliação). O demonstrativo de pagamento (XML com protocolos, débitos e créditos, ou a
-// digitação agrupada por guia) entra na mesma lista e abre as linhas por protocolo para conferir.
+// digitação agrupada por guia) entra na mesma lista e abre o resumo (liberado, glosa, débitos, créditos e líquido), os
+// débitos e créditos da operadora e as linhas por protocolo, com o lote casado (qualquer lote da operadora). Dali o
+// faturista com a baixa do financeiro baixa o recebimento nos títulos do convênio, sem trocar de tela.
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import type { ItemGlosaLido } from '@sgh/contratos';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import { usarSessao } from '../../../casca/sessao/sessao.js';
+import { lerApoio } from '../../financeiro/api-financeiro.js';
+import { opcoesContas } from '../../financeiro/usar-financeiro.js';
 import AvisoFaturamento from '../../faturamento/componentes/AvisoFaturamento.vue';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import {
   baixar,
+  baixarPagamentoTiss,
   importarDemonstrativo,
   itensGlosa,
   lerDemonstrativo,
@@ -45,6 +51,10 @@ const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const avisos = ref<readonly string[]>([]);
 const gravando = ref(false);
+
+const { permissoes } = usarSessao();
+const podeBaixarPagamento = computed(() => permissoes.value.has('financeiro.tituloReceber.baixar'));
+const baixaPag = ref({ conta: '', data: '' });
 
 const motivos = useQuery({ queryKey: ['tiss', 'motivos'], queryFn: () => lerMotivos(), staleTime: 300_000 });
 const opcoesMotivo = computed(() =>
@@ -80,6 +90,39 @@ const detalhe = useQuery({
   queryFn: () => lerDemonstrativo(aberto.value!, abertoTipo.value),
   enabled: computed(() => aberto.value !== null),
 });
+const resumo = computed(() => (abertoTipo.value === 'pagamento' ? detalhe.data.value?.pagamento : undefined));
+const apoioFin = useQuery({
+  queryKey: ['financeiro', 'apoio'],
+  queryFn: () => lerApoio(),
+  staleTime: 60_000,
+  enabled: computed(() => podeBaixarPagamento.value && resumo.value?.situacao === 'importado'),
+});
+const contasBancarias = computed(() =>
+  opcoesContas(apoioFin.data.value?.contas, t('tiss.demonstrativos.escolha')),
+);
+async function baixarPagamento() {
+  if (aberto.value === null || !baixaPag.value.conta) return;
+  erro.value = null;
+  mensagem.value = null;
+  gravando.value = true;
+  try {
+    const r = await baixarPagamentoTiss(
+      aberto.value,
+      {
+        conta: Number(baixaPag.value.conta),
+        dataRecebimento: baixaPag.value.data || resumo.value?.dataPagamento || apoio.data.value?.hoje || '',
+      },
+      novaChave('baixa-pagamento'),
+    );
+    mensagem.value = r.mensagem;
+    avisos.value = [];
+    await qc.invalidateQueries({ queryKey: ['tiss'] });
+  } catch (e) {
+    erro.value = e;
+  } finally {
+    gravando.value = false;
+  }
+}
 function abrirLote() {
   loteAberto.value = lote.value ? Number(lote.value) : null;
   digitado.value = {};
@@ -342,11 +385,59 @@ async function conciliar() {
       </tbody>
     </table>
     <template v-if="detalhe.data.value">
+      <template v-if="resumo">
+        <h2>{{ t('tiss.demonstrativos.resumoPagamento') }}</h2>
+        <dl class="resumo" data-testid="dm-pag-resumo">
+          <dt>{{ t('tiss.situacao') }}</dt>
+          <dd data-testid="dm-pag-situacao">
+            {{ t(`tiss.demonstrativos.situacaoPagamento.${resumo.situacao}`) }}
+          </dd>
+          <dt>{{ t('tiss.demonstrativos.dataPagamento') }}</dt>
+          <dd>{{ resumo.dataPagamento ? data(resumo.dataPagamento) : '—' }}</dd>
+          <dt>{{ t('tiss.demonstrativos.informado') }}</dt>
+          <dd>{{ reais(resumo.informado) }}</dd>
+          <dt>{{ t('tiss.demonstrativos.liberado') }}</dt>
+          <dd data-testid="dm-pag-liberado">{{ reais(resumo.liberado) }}</dd>
+          <dt>{{ t('tiss.demonstrativos.glosa') }}</dt>
+          <dd>{{ reais(resumo.glosa) }}</dd>
+          <dt>{{ t('tiss.demonstrativos.debitos') }}</dt>
+          <dd data-testid="dm-pag-debitos">{{ reais(resumo.debitos) }}</dd>
+          <dt>{{ t('tiss.demonstrativos.creditos') }}</dt>
+          <dd data-testid="dm-pag-creditos">{{ reais(resumo.creditos) }}</dd>
+          <dt>{{ t('tiss.demonstrativos.liquido') }}</dt>
+          <dd data-testid="dm-pag-liquido">{{ reais(resumo.liquido) }}</dd>
+        </dl>
+        <h3>{{ t('tiss.demonstrativos.deducoes') }}</h3>
+        <p v-if="!resumo.deducoes.length">{{ t('tiss.demonstrativos.semDeducao') }}</p>
+        <table v-else class="tabela" data-testid="dm-pag-deducoes">
+          <thead>
+            <tr>
+              <th scope="col">{{ t('tiss.sequencial') }}</th>
+              <th scope="col">{{ t('tiss.demonstrativos.tipo') }}</th>
+              <th scope="col">{{ t('tiss.motivo') }}</th>
+              <th scope="col">{{ t('tiss.pago') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="x in resumo.deducoes"
+              :key="x.sequencia"
+              :data-testid="`dm-pag-deducao-${x.sequencia}`"
+            >
+              <td>{{ x.sequencia }}</td>
+              <td>{{ t(`tiss.demonstrativos.natureza.${x.natureza}`) }}</td>
+              <td>{{ x.codigo }} {{ x.descricao }}</td>
+              <td>{{ reais(x.valor) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
       <h2>{{ t('tiss.demonstrativos.conciliacao') }}</h2>
       <table class="tabela" data-testid="dm-detalhe">
         <thead>
           <tr>
             <th scope="col">{{ t('tiss.sequencial') }}</th>
+            <th v-if="resumo" scope="col">{{ t('tiss.lote') }}</th>
             <th scope="col">{{ t('tiss.item') }}</th>
             <th scope="col">{{ t('tiss.cobrado') }}</th>
             <th scope="col">{{ t('tiss.demonstrativos.informado') }}</th>
@@ -356,9 +447,13 @@ async function conciliar() {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="i in detalhe.data.value.itens" :key="i.id">
+          <tr v-for="i in detalhe.data.value.itens" :key="i.id" :data-testid="`dm-linha-${i.id}`">
             <td>{{ i.sequencial }}</td>
-            <td>{{ i.item ?? '—' }} · {{ i.codigoProcedimento }}</td>
+            <td v-if="resumo" :data-testid="`dm-linha-lote-${i.id}`">{{ resumo.lotes[i.id] || '—' }}</td>
+            <td>
+              {{ resumo ? i.numeroGuia : (i.item ?? '—') }}
+              <template v-if="!resumo">· {{ i.codigoProcedimento }}</template>
+            </td>
             <td>{{ i.valorCobrado === null ? '—' : reais(i.valorCobrado) }}</td>
             <td>{{ reais(i.valorInformado) }}</td>
             <td>{{ reais(i.valorPago) }}</td>
@@ -382,6 +477,36 @@ async function conciliar() {
       >
         {{ t('tiss.demonstrativos.conciliar') }}
       </button>
+      <form
+        v-if="resumo && resumo.situacao === 'importado' && podeBaixarPagamento"
+        class="formulario"
+        data-testid="dm-pag-baixa"
+        @submit.prevent="baixarPagamento"
+      >
+        <h3>{{ t('tiss.demonstrativos.baixaPagamento') }}</h3>
+        <p>{{ t('tiss.demonstrativos.baixaTexto') }}</p>
+        <span class="campo">
+          <SanteSelecao
+            v-model="baixaPag.conta"
+            :rotulo="t('tiss.demonstrativos.contaBancaria')"
+            :opcoes="contasBancarias"
+            data-testid="dm-pag-conta"
+          />
+        </span>
+        <span class="campo">
+          <label for="dm-pag-data">{{ t('tiss.demonstrativos.dataRecebimento') }}</label>
+          <input
+            id="dm-pag-data"
+            v-model="baixaPag.data"
+            type="date"
+            :placeholder="resumo.dataPagamento"
+            data-testid="dm-pag-data"
+          />
+        </span>
+        <button type="submit" :disabled="gravando || !baixaPag.conta" data-testid="dm-pag-baixar">
+          {{ t('tiss.demonstrativos.baixarPagamento') }}
+        </button>
+      </form>
     </template>
   </section>
 </template>

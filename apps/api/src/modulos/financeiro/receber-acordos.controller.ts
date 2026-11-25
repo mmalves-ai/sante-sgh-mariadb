@@ -11,6 +11,8 @@
 //   GET  /api/financeiro/receber/demonstrativos-importados/:id/previa  o que cada título receberia (sem gravar)
 //   POST /api/financeiro/receber/demonstrativos-importados/:id/baixa   { conta, dataRecebimento }
 //   POST /api/financeiro/receber/demonstrativos-importados/:id/desfazer-baixa  { motivo }
+//   POST /api/financeiro/receber/pagamentos-tiss/:id/baixa             { conta, dataRecebimento } (demonstrativo de
+//        pagamento TISS: líquido, débitos e créditos no recebimento dos títulos das contas casadas)
 // A gravação vai pelo executor do núcleo (trilha, outbox e idempotência na mesma transação); sem núcleo: 503.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import type { ResultadoFinanceiro } from '@sgh/contratos';
@@ -27,6 +29,10 @@ import {
   OPERACOES_BAIXA_DEMONSTRATIVO,
   previaDaBaixa,
 } from './baixa-demonstrativo-propria.js';
+import {
+  esquemaBaixarPagamentoTiss,
+  OPERACOES_BAIXA_PAGAMENTO_TISS,
+} from './baixa-pagamento-tiss-propria.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
 import {
   acordosDoEstabelecimento,
@@ -40,7 +46,11 @@ import {
 } from './renegociacao-propria.js';
 import { resultadoFin } from './servico.js';
 
-const OPERACOES = { ...OPERACOES_RENEGOCIACAO, ...OPERACOES_BAIXA_DEMONSTRATIVO } as const;
+const OPERACOES = {
+  ...OPERACOES_RENEGOCIACAO,
+  ...OPERACOES_BAIXA_DEMONSTRATIVO,
+  ...OPERACOES_BAIXA_PAGAMENTO_TISS,
+} as const;
 const reais = (v: unknown) =>
   `R$ ${Number(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -197,6 +207,24 @@ export class ReceberAcordosController {
       corpo(esquemaBaixarDemonstrativo, { ...((b ?? {}) as object), demonstrativo: idDaRota(id) }),
       (r) =>
         `Demonstrativo ${String(r['numero'])} baixado: ${reais(r['recebido'])} em ${String(r['titulos'])} título(s), ${String(r['itens'])} item(ns); ${reais(r['glosa'])} de glosa fica em aberto nos títulos.`,
+    );
+  }
+
+  @Post('pagamentos-tiss/:id/baixa')
+  @HttpCode(200)
+  @Permissao('financeiro.tituloReceber.baixar')
+  @AuditadoNoHandler('financeiro.baixar_pagamento_tiss pelo executor (trilha na mesma transação)')
+  baixarPagamentoTiss(
+    @Param('id') id: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ResultadoFinanceiro> {
+    return this.gravar(
+      req,
+      'financeiro.baixarPagamentoTiss',
+      corpo(esquemaBaixarPagamentoTiss, { ...((b ?? {}) as object), demonstrativo: idDaRota(id) }),
+      (r) =>
+        `Pagamento ${String(r['numero'])} baixado: ${reais(r['liquido'])} líquido na conta, ${reais(r['recebido'])} em ${String(r['titulos'])} título(s), ${reais(r['retencao'])} de débitos e ${reais(r['acrescimo'])} de créditos.`,
     );
   }
 

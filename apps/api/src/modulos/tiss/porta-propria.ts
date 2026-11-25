@@ -24,7 +24,6 @@ import type {
   EvidenciaGlosaLida,
   GradeGlosa,
   GuiaLida,
-  ItemDemonstrativoLido,
   ItemGlosaLido,
   ListaLotes,
   LoteDetalhe,
@@ -1101,7 +1100,7 @@ export class PortaTissPropria implements PortaTiss {
     c: ContextoTiss,
     id: number,
     tipo: 'analise' | 'pagamento' = 'analise',
-  ): Promise<{ lote: number; convenio: number; itens: ItemDemonstrativoLido[] } | null> {
+  ): ReturnType<PortaTiss['demonstrativo']> {
     return this.ler(c, async (l, est) => {
       if (tipo === 'pagamento') return lerPagamento(l, est, id);
       const d = await l.uma<Linha>(

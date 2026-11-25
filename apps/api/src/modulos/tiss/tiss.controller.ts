@@ -51,7 +51,6 @@ import {
   type GradeGlosa,
   type GravacaoTiss,
   type GuiaLida,
-  type ItemDemonstrativoLido,
   type ItemGlosaLido,
   type ListaLotes,
   type LoteDetalhe,
@@ -400,7 +399,7 @@ export class TissController {
     @Param('id') id: string,
     @Query('tipo') tipo: string | undefined,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<{ lote: number; convenio: number; itens: ItemDemonstrativoLido[] }> {
+  ): Promise<NonNullable<Awaited<ReturnType<PortaTiss['demonstrativo']>>>> {
     const s = sessaoDe(req);
     const pagamento = tipo === 'pagamento';
     const d = await this.porta.demonstrativo(ctx(s), idDaRota(id), pagamento ? 'pagamento' : 'analise');
