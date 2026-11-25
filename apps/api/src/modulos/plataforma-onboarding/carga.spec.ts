@@ -520,6 +520,46 @@ describe('carga: ações, batimento e progresso', () => {
     expect(progressoDosContadores({ progresso: { gravadas: -1 } })).toBeNull();
   });
 
+  it('situação da base e contagem do preparo (snake_case aninhado) viram o contrato', () => {
+    const p = progressoDosContadores({
+      progresso: {
+        linhas_total: 200,
+        recusas_por_regra: { restricao_destino_1048: 1 },
+        base: {
+          linhas_origem: 200,
+          linhas_na_base: 150,
+          linhas_recusadas: 10,
+          linhas_faltam: 40,
+          tabelas_sem_situacao: 1,
+          por_tabela_top: [{ tabela: 'paciente', linhas_origem: 100, na_base: 60, recusadas: 0, faltam: 40 }],
+        },
+      },
+    });
+    expect(p?.base).toMatchObject({
+      linhasOrigem: 200,
+      linhasNaBase: 150,
+      linhasRecusadas: 10,
+      linhasFaltam: 40,
+    });
+    expect(p?.base?.porTabelaTop?.[0]).toEqual({
+      tabela: 'paciente',
+      linhasOrigem: 100,
+      naBase: 60,
+      recusadas: 0,
+      faltam: 40,
+    });
+    expect(p?.recusasPorRegra).toEqual({ restricao_destino_1048: 1 });
+    const c = progressoDosContadores({
+      progresso: {
+        etapa: 'contagem',
+        tabela_contando: 'tabela 3 de 9',
+        tabelas_contadas: 2,
+        tabelas_total: 9,
+      },
+    });
+    expect(c).toMatchObject({ etapa: 'contagem', tabelaContando: 'tabela 3 de 9', tabelasContadas: 2 });
+  });
+
   it('a rota de progresso monta execução, progresso, conciliação e ações', async () => {
     const execucao = linha({
       estado: 'gravando',

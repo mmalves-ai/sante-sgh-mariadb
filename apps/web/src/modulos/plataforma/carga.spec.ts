@@ -17,6 +17,8 @@ import {
   lerCarga,
   partesEndereco,
   segmentosCarga,
+  velocidadeConferencia,
+  duracaoTexto,
   urlLogCarga,
 } from './api-carga.js';
 import CargaSincronismoTela from './telas/CargaSincronismoTela.vue';
@@ -264,6 +266,40 @@ describe('api da tela de carga', () => {
       banco: 'C:\\dados\\base.fdb',
     });
     expect(partesEndereco('origens/base.fdb')).toBeNull();
+  });
+
+  it('com a situação da base, a barra é na base / recusadas / faltam (não o andamento da execução)', () => {
+    const s = segmentosCarga({
+      tabelasFeitas: 0,
+      tabelasTotal: 2,
+      linhasTotal: 1000,
+      linhasProcessadas: 10,
+      gravadas: 0,
+      puladasIguais: 10,
+      recusadas: 0,
+      pendenciasAviso: 0,
+      base: {
+        linhasOrigem: 1000,
+        linhasNaBase: 900,
+        linhasRecusadas: 50,
+        linhasFaltam: 50,
+        tabelas: 2,
+        tabelasLidasNesta: 0,
+        tabelasSemSituacao: 0,
+      },
+    });
+    expect(s).toMatchObject({ daBase: true, percentual: 90, gravado: 90, recusado: 5, restante: 5 });
+    expect(s).toMatchObject({ linhasGravadas: 900, linhasRecusadas: 50, linhasRestantes: 50 });
+  });
+
+  it('velocidade pela diferença entre batimentos e previsão de término', () => {
+    const v = velocidadeConferencia({ linhas: 1000, em: 0 }, { linhas: 16000, em: 1000 * 1 }, 31000);
+    expect(v).toEqual({ linhasPorSegundo: 15000, segundosRestantes: 1 });
+    expect(velocidadeConferencia(null, { linhas: 1, em: 1 }, 10)).toBeNull();
+    expect(velocidadeConferencia({ linhas: 5, em: 0 }, { linhas: 5, em: 1000 }, 10)).toBeNull();
+    expect(duracaoTexto(10)).toBe('menos de 1 min');
+    expect(duracaoTexto(12 * 60)).toBe('12 min');
+    expect(duracaoTexto(3 * 3600 + 5 * 60)).toBe('3 h 05 min');
   });
 });
 

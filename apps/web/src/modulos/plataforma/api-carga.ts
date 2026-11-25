@@ -115,6 +115,8 @@ export interface SegmentosCarga {
   readonly linhasRestantes: number;
   /** Recusas sobre o total de linhas, em %, com até uma casa. */
   readonly percentualErros: number;
+  /** A barra é a SITUAÇÃO DA BASE (na base, recusadas, faltam), não o andamento desta execução. */
+  readonly daBase: boolean;
 }
 
 const limitar = (v: number) => Math.min(100, Math.max(0, Number.isFinite(v) ? v : 0));
@@ -124,6 +126,26 @@ const limitar = (v: number) => Math.min(100, Math.max(0, Number.isFinite(v) ? v 
  * linhas (plano ainda não contado), usa o percentual da execução, todo como gravado.
  */
 export function segmentosCarga(p: ProgressoCarga | null, percentualExecucao = 0): SegmentosCarga {
+  const b = p?.base;
+  if (b && b.linhasOrigem > 0) {
+    // situação da base: quanto da origem já está no banco do cliente (antes e ao longo desta execução)
+    const origem = b.linhasOrigem;
+    const naBase = Math.min(b.linhasNaBase, origem);
+    const rec = Math.min(b.linhasRecusadas, origem - naBase);
+    const gravado = limitar((naBase / origem) * 100);
+    const recusado = Math.min(limitar((rec / origem) * 100), 100 - gravado);
+    return {
+      percentual: Math.floor(gravado),
+      gravado,
+      recusado,
+      restante: Math.max(0, 100 - gravado - recusado),
+      linhasGravadas: naBase,
+      linhasRecusadas: rec,
+      linhasRestantes: Math.max(0, origem - naBase - rec),
+      percentualErros: Math.round(limitar((rec / origem) * 100) * 10) / 10,
+      daBase: true,
+    };
+  }
   const total = p?.linhasTotal ?? 0;
   if (!p || total <= 0) {
     const pc = Math.floor(limitar(percentualExecucao));
@@ -136,6 +158,7 @@ export function segmentosCarga(p: ProgressoCarga | null, percentualExecucao = 0)
       linhasRecusadas: p?.recusadas ?? 0,
       linhasRestantes: 0,
       percentualErros: 0,
+      daBase: false,
     };
   }
   const ok = p.gravadas + p.puladasIguais;
@@ -151,7 +174,43 @@ export function segmentosCarga(p: ProgressoCarga | null, percentualExecucao = 0)
     linhasRecusadas: p.recusadas,
     linhasRestantes: Math.max(0, total - processadas),
     percentualErros: Math.round(limitar((p.recusadas / total) * 100) * 10) / 10,
+    daBase: false,
   };
+}
+
+/** Amostra do andamento: linhas processadas e o instante do batimento (ms). */
+export interface AmostraConferencia {
+  readonly linhas: number;
+  readonly em: number;
+}
+
+/** Amostra de um progresso; null sem batimento datado. */
+export function amostraDe(p: ProgressoCarga | null): AmostraConferencia | null {
+  const em = p?.atualizadoEm ? Date.parse(p.atualizadoEm) : Number.NaN;
+  return p && Number.isFinite(em) ? { linhas: p.linhasProcessadas, em } : null;
+}
+
+/**
+ * Velocidade da conferência (linhas/s, pela diferença entre dois batimentos) e previsão de término (s) das linhas que
+ * faltam conferir nesta execução. null sem duas amostras distintas ou sem avanço.
+ */
+export function velocidadeConferencia(
+  anterior: AmostraConferencia | null,
+  atual: AmostraConferencia | null,
+  linhasTotal: number,
+): { linhasPorSegundo: number; segundosRestantes: number | null } | null {
+  if (!anterior || !atual || atual.em <= anterior.em || atual.linhas <= anterior.linhas) return null;
+  const v = (atual.linhas - anterior.linhas) / ((atual.em - anterior.em) / 1000);
+  const faltam = Math.max(0, linhasTotal - atual.linhas);
+  return { linhasPorSegundo: Math.round(v), segundosRestantes: v > 0 ? Math.round(faltam / v) : null };
+}
+
+/** Duração legível: "2 h 05 min", "12 min", "menos de 1 min". */
+export function duracaoTexto(segundos: number): string {
+  const m = Math.round(segundos / 60);
+  if (m < 1) return 'menos de 1 min';
+  if (m < 60) return `${m} min`;
+  return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
 }
 
 /** Partes do endereço `host:porta/banco` da origem de servidor, para preencher o formulário. */

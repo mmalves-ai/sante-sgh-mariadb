@@ -15,6 +15,35 @@ const contagem = z.number().int().nonnegative();
 export const MODOS_CARGA = ['completa', 'diferencial'] as const;
 export type ModoCarga = (typeof MODOS_CARGA)[number];
 
+/** Situação da base (`contadores.progresso.base`): quanto da origem já está no banco do cliente. Calculada uma vez
+ * por execução, depois do plano, a partir do resumo por tabela do conector; sobe com as gravadas. */
+export const esquemaBaseCarga = z.object({
+  linhasOrigem: contagem.default(0),
+  linhasNaBase: contagem.default(0),
+  linhasRecusadas: contagem.default(0),
+  linhasFaltam: contagem.default(0),
+  tabelas: contagem.default(0),
+  tabelasLidasNesta: contagem.default(0),
+  /** Tabelas do plano sem situação conhecida (contam como faltantes). */
+  tabelasSemSituacao: contagem.default(0),
+  calculoMs: contagem.nullish(),
+  calculadaEm: z.string().nullish(),
+  /** Até 20 tabelas de destino com mais linhas faltando. */
+  porTabelaTop: z
+    .array(
+      z.object({
+        tabela: z.string(),
+        linhasOrigem: contagem,
+        naBase: contagem,
+        recusadas: contagem,
+        faltam: contagem,
+      }),
+    )
+    .max(20)
+    .optional(),
+});
+export type BaseCarga = z.infer<typeof esquemaBaseCarga>;
+
 /** `contadores.progresso` gravado pelo motor a cada batimento (≤ 15 s). Percentual geral = linhasProcessadas /
  * linhasTotal (por linhas). Os contadores principais valem 0 quando ausentes. */
 export const esquemaProgressoCarga = z.object({
@@ -34,8 +63,18 @@ export const esquemaProgressoCarga = z.object({
   /** Recusas por regra (ex.: `restricao_destino_1048`). */
   recusasPorRegra: z.record(z.string(), contagem).optional(),
   /** Até 20 tabelas de destino com mais recusas. */
-  recusasPorTabela: z.array(z.object({ tabela: z.string(), recusadas: contagem })).max(20).optional(),
+  recusasPorTabela: z
+    .array(z.object({ tabela: z.string(), recusadas: contagem }))
+    .max(20)
+    .optional(),
   atualizadoEm: z.string().nullish(),
+  /** `contagem` no preparo (contagem das tabelas da origem), antes do plano. */
+  etapa: z.string().nullish(),
+  /** Tabela sendo contada no preparo: nome de destino ou "tabela N de M" (nunca o nome da origem). */
+  tabelaContando: z.string().nullish(),
+  tabelasContadas: contagem.nullish(),
+  /** Situação da base; ausente nas execuções antigas (a tela cai no andamento da execução). */
+  base: esquemaBaseCarga.nullish(),
 });
 export type ProgressoCarga = z.infer<typeof esquemaProgressoCarga>;
 

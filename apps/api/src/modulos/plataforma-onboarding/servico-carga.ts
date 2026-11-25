@@ -149,13 +149,30 @@ export function batimentoAtrasado(
 
 const camel = (k: string) => k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
+/** Chaves snake_case -> camelCase no nível do objeto; `base` (situação da base) e as linhas de `por_tabela_top`
+ * também. `recusas_por_regra` fica como veio: as chaves dele são nomes de regra, não campos. */
+function camelRaso(o: Record<string, unknown>, raiz = false): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(o).map(([k, v]) => {
+      if (raiz && k === 'base' && v && typeof v === 'object' && !Array.isArray(v))
+        return [k, camelRaso(v as Record<string, unknown>)];
+      if (!raiz && k === 'por_tabela_top' && Array.isArray(v))
+        return [
+          camel(k),
+          v.map((x) =>
+            x && typeof x === 'object' && !Array.isArray(x) ? camelRaso(x as Record<string, unknown>) : x,
+          ),
+        ];
+      return [camel(k), v];
+    }),
+  );
+}
+
 /** `contadores.progresso` (chaves do motor em snake_case) -> ProgressoCarga; null se ausente ou fora do esquema. */
 export function progressoDosContadores(c: Record<string, unknown>): ProgressoCarga | null {
   const p = c['progresso'];
   if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
-  const r = esquemaProgressoCarga.safeParse(
-    Object.fromEntries(Object.entries(p as Record<string, unknown>).map(([k, v]) => [camel(k), v])),
-  );
+  const r = esquemaProgressoCarga.safeParse(camelRaso(p as Record<string, unknown>, true));
   return r.success ? r.data : null;
 }
 
