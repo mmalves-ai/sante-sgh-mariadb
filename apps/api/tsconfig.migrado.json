@@ -653,6 +653,7 @@
     "src/modulos/operadora/operadora.spec.ts",
     "src/modulos/operadora/rede.spec.ts",
     "src/modulos/operadora/portal-prestador-contas.spec.ts",
+    "src/modulos/operadora/troca-tiss.controller.spec.ts",
     "src/modulos/operadora/aplicacao/identidade.ts",
     "src/modulos/operadora/ans-bases-proprias.ts",
     "src/modulos/operadora/ans-bases-proprias.int.spec.ts",
