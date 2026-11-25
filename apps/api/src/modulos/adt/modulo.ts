@@ -55,6 +55,8 @@ import { SameTramiteController } from './same-tramite.controller.js';
 import { PORTA_SAME_TRAMITE, PortaSameTramitePropria } from './same-tramite-propria.js';
 import { AVISOS_ADT } from './simbolos.js';
 import { ControlesAssistenciaisController } from './controles-assistenciais.controller.js';
+import { DestinoCorpoController } from './destino-corpo.controller.js';
+import { PORTA_DESTINO_CORPO, PortaDestinoCorpoPropria } from './destino-corpo-propria.js';
 import {
   PORTA_CONTROLES_ASSISTENCIAIS,
   PortaControlesAssistenciaisPropria,
@@ -135,6 +137,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
       SameGuardaController,
       SameTramiteController,
       ControlesAssistenciaisController,
+      DestinoCorpoController,
       LeitosSusController,
       ComunicacaoOperadoraController,
     ],
@@ -203,6 +206,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaControlesAssistenciaisPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // C1-112 (09-AREA L74): funerária, cartório e guarda e liberação do corpo após o óbito; sem núcleo, 503.
+      {
+        provide: PORTA_DESTINO_CORPO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaDestinoCorpoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F78.04-2 (04-INT L79 e L80): leitos do sistema público e comunicação à operadora; sem núcleo, 503.

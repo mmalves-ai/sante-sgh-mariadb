@@ -117,6 +117,14 @@ export const rotasAdt: RouteRecordRaw[] = [
     meta: { permissao: 'enfermagem.horario.ler' },
   },
   {
+    // C1-112, 09-AREA L74: destino do corpo após o óbito (funerária, cartório, guarda e liberação); ?paciente= abre a
+    // visão do paciente. A mesma permissão de leitura da API (PERMISSOES_DESTINO_CORPO.ler).
+    path: '/internacao/obitos',
+    name: 'adt.destinoCorpo',
+    component: () => import('./telas/DestinoCorpoTela.vue'),
+    meta: { permissao: 'internacao.internacao.ler' },
+  },
+  {
     // F78.04-1, 04-INT L74: formulários numerados da declaração de óbito (lote, uso, extravio, devolução).
     path: '/internacao/controles/formularios-obito',
     name: 'adt.controles.obito',

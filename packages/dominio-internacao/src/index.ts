@@ -22,3 +22,4 @@ export * from './bloqueio-isolamento.js';
 export * from './leitos-sus.js';
 export * from './comunicacao-operadora.js';
 export * from './transporte-paciente.js';
+export * from './destino-corpo.js';
