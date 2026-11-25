@@ -3,6 +3,7 @@ import { CensoFechamentoService } from './censo-fechamento.service.js';
 import { ClassificacaoEstouroService } from './classificacao-estouro.service.js';
 import { ContratosVencimentoService } from './contratos-vencimento.service.js';
 import { DataMartCargaService } from './datamart-carga.service.js';
+import { FilaErpService } from './exportacao-erp/fila.service.js';
 import { PacotesParceiroEntregaService } from './pacotes-parceiro-entrega.service.js';
 import { NotificacaoDespachoService } from './notificacao-despacho.service.js';
 import { NirReservaService } from './nir-reserva.service.js';
@@ -61,6 +62,8 @@ const SERVICOS: Readonly<Record<string, Provider>> = {
   'pacs-worklist': PacsWorklistService,
   // M57 (etapa 1): a carga noturna do MPI da Rede em lotes e o relatório diário de divergência com o reparo.
   'rede-mpi': RedeMpiService,
+  // 08-INTG L136: a fila com o ERP corporativo (envio do lote gerado e retorno item a item; simulador fora de produção).
+  'fila-erp': FilaErpService,
   'relatorio-envio': EnvioRelatorioService,
   integracao: IntegracaoService,
 };
@@ -110,6 +113,8 @@ export function servicosDoWorker(env: NodeJS.ProcessEnv = process.env): Provider
     PacsWorklistService,
     // M57 (etapa 1): MPI da Rede noturno (REDE_MPI_NOTURNO=ligado).
     RedeMpiService,
+    // 08-INTG L136: fila com o ERP corporativo (FILA_ERP_ENVIO=ligado em dev/ci).
+    FilaErpService,
     EnvioRelatorioService,
     IntegracaoService,
   ],

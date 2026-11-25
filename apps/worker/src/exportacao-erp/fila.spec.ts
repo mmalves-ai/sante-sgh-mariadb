@@ -97,3 +97,14 @@ describe('job da fila com o ERP', () => {
     expect(m.gravacoes.length).toBe(antes + 1);
   });
 });
+
+describe('serviço da fila do ERP no worker', () => {
+  it('liga só com FILA_ERP_ENVIO=ligado em dev/ci e usa o simulador fora de produção', async () => {
+    const { adaptadorErpDoAmbiente, filaErpLigada } = await import('./fila.service.js');
+    expect(filaErpLigada({ AMBIENTE: 'dev' })).toBe(false);
+    expect(filaErpLigada({ AMBIENTE: 'dev', FILA_ERP_ENVIO: 'ligado' })).toBe(true);
+    expect(filaErpLigada({ AMBIENTE: 'producao', FILA_ERP_ENVIO: 'desligado' })).toBe(false);
+    expect(adaptadorErpDoAmbiente({ NODE_ENV: 'development' })).toBe(adaptadorErpSimuladoWorker);
+    expect(adaptadorErpDoAmbiente({ NODE_ENV: 'production' })).toBeNull();
+  });
+});
