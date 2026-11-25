@@ -120,6 +120,13 @@ export const rotasFinanceiro: RouteRecordRaw[] = [
     meta: { permissao: 'financeiro.tituloPagar.ler' },
   },
   {
+    // F8, 07-FIN linha 70: notas de crédito e de débito com tributos, do fornecedor e do cliente.
+    path: '/financeiro/notas-credito-debito',
+    name: 'financeiro.notasCreditoDebito',
+    component: () => import('./telas/NotasCreditoDebitoTela.vue'),
+    meta: { permissao: 'financeiro.notaCreditoDebito.ler' },
+  },
+  {
     path: '/financeiro/tesouraria/fluxo-caixa',
     name: 'financeiro.tesouraria.fluxo',
     component: () => import('./telas/FluxoCaixaTela.vue'),
