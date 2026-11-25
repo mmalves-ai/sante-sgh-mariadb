@@ -314,6 +314,25 @@ export class PortaBeneficiarioSaudePropria {
     });
   }
 
+  /** Termos ativos do CID-10 pelo código ou pela descrição (a doença declarada aponta para um deles). */
+  cids(c: ContextoPorta, busca: string): Promise<{ id: number; codigo: string; descricao: string }[]> {
+    return this.ler(c, async (l) => {
+      const b = busca.trim();
+      const rs = await l.consultar(
+        `SELECT t.id, t.codigo_termo, t.descricao FROM termo_terminologia t JOIN terminologia g ON g.id = t.terminologia_id
+          WHERE g.codigo = 'cid10' AND t.ativo = TRUE AND (t.codigo_termo LIKE ? OR t.descricao LIKE ?)
+          ORDER BY CASE WHEN t.codigo_termo LIKE ? THEN 0 ELSE 1 END, t.codigo_termo LIMIT 30`,
+        [`${b.toUpperCase()}%`, `%${b}%`, `${b.toUpperCase()}%`],
+        { teto: 30 },
+      );
+      return rs.map((r) => ({
+        id: Number(r['id']),
+        codigo: textoObrigatorio(r['codigo_termo']),
+        descricao: textoObrigatorio(r['descricao']),
+      }));
+    });
+  }
+
   /** Os questionários vigentes de declaração de saúde com as perguntas. */
   questionarios(c: ContextoPorta): Promise<QuestionarioDeclaracao[]> {
     return this.ler(c, async (l, _est, hoje) => {

@@ -2,6 +2,7 @@
 // (08-SGO L95, C2-113; F7; RN ANS 162 e 438). Ler com operadora.beneficiario.ler; gravar com
 // operadora.beneficiario.editar:
 //   GET  operadora/saude-beneficiario?matricula=              beneficiário pela matrícula exata
+//   GET  operadora/saude-beneficiario/cids?busca=            termos do CID-10 pelo código ou pela descrição
 //   GET  operadora/saude-beneficiario/questionarios           questionários vigentes de declaração de saúde
 //   GET  operadora/saude-beneficiario/:id                     visão por beneficiário (carências, declarações, CPT...)
 //   POST operadora/saude-beneficiario/:id/declaracoes         registra a declaração com respostas e doenças
@@ -97,6 +98,7 @@ const esquemaDecisaoPortabilidade = z.object({
   jaPortouAntes: z.boolean(),
 });
 const esquemaBusca = z.object({ matricula: z.string().min(1).max(40) });
+const esquemaBuscaCid = z.object({ busca: z.string().min(2).max(80) });
 
 @Controller()
 export class BeneficiarioSaudeOperadoraController {
@@ -117,6 +119,12 @@ export class BeneficiarioSaudeOperadoraController {
   @Permissao(LER)
   buscar(@Query() q: unknown, @Req() req: RequisicaoAutorizada) {
     return this.ok(this.porta.buscar(sessaoDe(req).porta, corpo(esquemaBusca, q).matricula));
+  }
+
+  @Get('operadora/saude-beneficiario/cids')
+  @Permissao(LER)
+  cids(@Query() q: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.ok(this.porta.cids(sessaoDe(req).porta, corpo(esquemaBuscaCid, q).busca));
   }
 
   @Get('operadora/saude-beneficiario/questionarios')

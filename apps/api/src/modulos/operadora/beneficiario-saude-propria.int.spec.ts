@@ -171,6 +171,11 @@ describe.skipIf(!PODE)('C2-113 declaração de saúde, CPT e portabilidade (banc
     expect(cids).toHaveLength(2);
     const c = contexto(massa!);
     const d0 = declaracaoBase();
+    // a busca do CID-10 da tela acha o termo pelo código
+    const [{ codigo_termo: cod0 }] = (await q('SELECT codigo_termo FROM termo_terminologia WHERE id = ?', [
+      cids[0],
+    ])) as [{ codigo_termo: string }];
+    expect((await porta!.cids(c, cod0)).map((t) => t.id)).toContain(cids[0]);
     expect(
       await codigoDe(
         porta!.registrarDeclaracao(
