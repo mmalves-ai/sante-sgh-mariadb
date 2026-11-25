@@ -15,6 +15,7 @@ import {
   type ProcedimentoOperacional,
   SITUACOES_PROCEDIMENTO,
   TIPOS_RESULTADO_ANALITO,
+  conferirGrupoDoAnalito,
   validarAnalito,
   planejarNovasFaixas,
   planejarNovaVersaoFormula,
@@ -292,7 +293,7 @@ const TABELAS = [
 ];
 
 /** 422 com as falhas por campo (a tela marca cada uma). */
-function recusar(falhas: readonly FalhaCatalogo[]): never {
+export function recusar(falhas: readonly FalhaCatalogo[]): never {
   throw new ErroOperacao(
     422,
     'regra-catalogo',
@@ -301,11 +302,11 @@ function recusar(falhas: readonly FalhaCatalogo[]): never {
   );
 }
 
-const inexistente = (o: string) =>
+export const inexistente = (o: string) =>
   new ErroOperacao(404, 'registro-inexistente', 'Registro inexistente', `${o} não existe.`);
 
 /** Colunas do vínculo a partir da entrada da tela (camelCase → snake_case; sem id, versão). */
-function colunas(e: Record<string, unknown>): Record<string, unknown> {
+export function colunas(e: Record<string, unknown>): Record<string, unknown> {
   const r: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(e)) {
     if (k === 'id' || k === 'versao') continue;
@@ -542,6 +543,22 @@ export class PortaCatalogoSadtPropria {
           Number(fica['secundarioExameId']),
           ligacoes.map((l) => ({ de: Number(l['de']), para: Number(l['para']) })),
         );
+        if (falhas.length) recusar(falhas);
+      }
+      // O grupo de respostas do analito no exame (05-SADT linha 3): regra do domínio, na inclusão e quando muda.
+      if (tipo === 'analito' && (!vid || 'grupoRespostaId' in e || 'ativo' in e || 'calculado' in e)) {
+        const [an] = await tx.consultar(`SELECT tipo_resultado FROM analito WHERE id = ?`, [
+          fica['analitoId'],
+        ]);
+        const grupo = num(fica['grupoRespostaId']);
+        const [g] = grupo ? await tx.consultar(`SELECT ativo FROM grupo_resposta WHERE id = ?`, [grupo]) : [];
+        const falhas = conferirGrupoDoAnalito({
+          tipoResultado: String(an?.['tipo_resultado'] ?? ''),
+          calculado: bool(fica['calculado']),
+          ativo: fica['ativo'] === undefined ? true : bool(fica['ativo']),
+          grupoRespostaId: grupo,
+          grupoAtivo: g ? bool(g['ativo']) : null,
+        });
         if (falhas.length) recusar(falhas);
       }
       const valores = colunas(e);
@@ -926,6 +943,8 @@ export class PortaCatalogoSadtPropria {
                   WHERE ativo = TRUE ORDER BY simbolo`,
       exames: `SELECT id, CONCAT(sigla, ' · ', nome) AS nome FROM exame
                 WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY nome LIMIT 2000`,
+      gruposResposta: `SELECT id, CONCAT(descricao, ' (', codigo, ')') AS nome FROM grupo_resposta
+                        WHERE ativo = TRUE ORDER BY descricao`,
     };
     return this.ler(c, async (l) => {
       const r: Record<string, { id: number; nome: string }[]> = {};
@@ -950,12 +969,17 @@ const BOOLEANOS = new Set([
   'obrigatorio',
   'calculado',
   'exige_laudo',
+  'anormal',
+  'critico',
+  'contagioso',
+  'exige_confirmacao',
+  'permite_texto_livre',
 ]);
 const DECIMAIS =
   /^(volume_minimo_ml|custo_unitario|multiplicador_cobranca|limite_(minimo|maximo)_aceito|(referencia|alerta|critico|absurdo)_(minima|maxima|minimo|maximo))$/;
 
 /** Linha do banco → objeto da tela (snake_case → camelCase; datas em ISO). */
-function camel(l: Linha): Record<string, unknown> {
+export function camel(l: Linha): Record<string, unknown> {
   const r: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(l)) {
     const c = k.replace(/_([a-z0-9])/g, (_m, x: string) => x.toUpperCase());

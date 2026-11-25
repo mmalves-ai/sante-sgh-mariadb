@@ -175,6 +175,25 @@ export const esquemaElementoDigitacao = z.object({
   respostasPadrao: z.array(z.object({ codigo: n, texto: txt })),
   critico: nul(z.object({ abaixoDe: nul(n), acimaDe: nul(n), prazoMinutos: n })),
   valor: nul(z.object({ numerico: nul(n), alfa: nul(txt), absoluta: nul(n) })),
+  /** Analito calculado: a fórmula vigente na data do exame, as variáveis e o valor (ou o motivo de não calcular). */
+  calculo: z
+    .object({
+      expressao: txt,
+      casas: nul(n),
+      variaveis: z.array(
+        z.object({
+          codigo: n,
+          identificador: txt,
+          fonte: z.enum(['analito', 'grandeza', 'dado_paciente', 'digitado']),
+          analito: nul(n),
+          dadoPaciente: nul(txt),
+        }),
+      ),
+      valor: nul(n),
+      motivo: nul(txt),
+    })
+    .nullable()
+    .optional(),
 });
 export type ElementoDigitacao = z.infer<typeof esquemaElementoDigitacao>;
 
@@ -192,6 +211,10 @@ export const esquemaResultadoDigitacao = z.object({
   bloqueado: z.boolean(),
   /** Grandezas do laudo estruturado do eco (as do exame). */
   grandezas: z.array(z.object({ codigo: n, nome: txt, sigla: txt })),
+  /** Textos padrão oferecidos na digitação do exame (os do exame, os do setor e os gerais). */
+  textosPadrao: z.array(z.object({ codigo: n, descricao: txt, texto: txt, mnemonico: nul(txt) })).optional(),
+  /** Idade do paciente em anos completos na data do exame (para refazer a conta da fórmula na tela). */
+  idadePaciente: nul(n).optional(),
 });
 export type ResultadoDigitacao = z.infer<typeof esquemaResultadoDigitacao>;
 

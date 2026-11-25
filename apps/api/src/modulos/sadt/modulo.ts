@@ -38,14 +38,18 @@ import { PORTA_SADT, type PortaSadt } from './porta.js';
 import { PortaSadtMemoria } from './porta-memoria.js';
 import { PortalController, SERVICO_PORTAL } from './portal.controller.js';
 import { MapaTrabalhoController, SERVICO_MAPA_TRABALHO } from './mapa-trabalho.controller.js';
+import { LoteTrabalhoController, SERVICO_LOTE_TRABALHO } from './lote-trabalho.controller.js';
 import { ResultadoBancoController, SERVICO_RESULTADO_SADT } from './resultado-banco.controller.js';
 import { OrcamentoExamesController, SERVICO_ORCAMENTO_SADT } from './orcamento-exames.controller.js';
 import { PedidoSadtController, SERVICO_PEDIDO_SADT } from './pedido.controller.js';
 import { AVISOS_SADT, SadtController, VIGIA_CRITICOS } from './sadt.controller.js';
 import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propria.js';
 import { CatalogoSadtController } from './catalogo.controller.js';
+import { PortaRespostasSadtPropria, RESPOSTAS_SADT } from './catalogo-respostas-propria.js';
+import { CatalogoRespostasSadtController } from './catalogo-respostas.controller.js';
 import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
 import { ApoioRemessaController, SERVICO_APOIO_REMESSA } from './apoio-remessa.controller.js';
+import { EscalaExecucaoController, SERVICO_ESCALA_EXECUCAO } from './escala-execucao.controller.js';
 import { LimitesExameController, SERVICO_LIMITES_EXAME } from './limites-exame.controller.js';
 import { MicrobiologiaController, SERVICO_MICROBIOLOGIA } from './microbiologia.controller.js';
 
@@ -135,18 +139,22 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       PortalController,
       PacsController,
       CatalogoSadtController,
+      CatalogoRespostasSadtController,
       PedidoSadtController,
       OrcamentoExamesController,
       MapaTrabalhoController,
+      LoteTrabalhoController,
       ResultadoBancoController,
       LaudoRedacaoController,
       ApoioRemessaController,
       LimitesExameController,
+      EscalaExecucaoController,
       MicrobiologiaController,
     ],
     providers: [
       // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.
       { provide: CATALOGO_SADT, useValue: ctx.nucleo ? new PortaCatalogoSadtPropria(ctx.nucleo) : null },
+      { provide: RESPOSTAS_SADT, useValue: ctx.nucleo ? new PortaRespostasSadtPropria(ctx.nucleo) : null },
       ...(configuracaoMemoria ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracaoMemoria }] : []),
       { provide: PORTA_SADT, useValue: sadt },
       { provide: PORTA_PACS, useValue: pacs },
@@ -160,6 +168,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoResultadoSadt } = await import('./aplicacao/resultado-propria.js');
           return new ServicoResultadoSadt(ctx.nucleo);
+        },
+      },
+      // Lote de trabalho da bancada (abrir, fechar, imprimir): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_LOTE_TRABALHO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoLoteTrabalho } = await import('./aplicacao/lote-trabalho-propria.js');
+          return new ServicoLoteTrabalho(ctx.nucleo);
         },
       },
       {
@@ -203,6 +220,15 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
           if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
           const { ServicoLaudoRedacao } = await import('./aplicacao/laudo-redacao.js');
           return new ServicoLaudoRedacao(ctx.nucleo);
+        },
+      },
+      // Escala de execução (05-SADT linha 19): só no banco do cliente (sem ele, 503).
+      {
+        provide: SERVICO_ESCALA_EXECUCAO,
+        useFactory: async () => {
+          if (!ctx.nucleo || !ctx.configuracao.clientePadrao || sadt.destino !== 'banco') return null;
+          const { ServicoEscalaExecucao } = await import('./aplicacao/escala-execucao-propria.js');
+          return new ServicoEscalaExecucao(ctx.nucleo);
         },
       },
       // Limites do pedido de exame (05-SADT linha 6): só no banco do cliente (sem ele, 503).

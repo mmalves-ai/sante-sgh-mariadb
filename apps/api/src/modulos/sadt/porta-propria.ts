@@ -22,6 +22,7 @@
 // O portal de resultados lê e grava o protocolo do paciente (protocolo_acesso_portal) e a credencial do médico externo
 // (pedido e conta do portal). Pendência (a tela recebe o motivo, nada em silêncio): as operações do executor
 // (OPERACOES_SADT_PENDENTES: contrato novo da tela, pedido p-sadt).
+import { comCalculo, lerFormulasDoExame, lerTextosPadraoDoExame } from './aplicacao/formulas-leitura.js';
 import { lerBancadasDoMapa } from './aplicacao/mapa-trabalho-propria.js';
 import {
   type AmostraDetalhe,
@@ -1131,10 +1132,13 @@ export class PortaSadtPropria implements PortaSadt {
           { teto: 500 },
         )
       ).map((x) => ({ codigo: n(x['id']), nome: texto(x['descricao']), sigla: texto(x['sigla']) }));
+      // Fórmula vigente na data do exame e textos padrão do exame (05-SADT linha 3): o calculado sai com a conta.
+      const formulas = await lerFormulasDoExame(l, exame.exame.id ?? 0, dia);
+      const textosPadrao = await lerTextosPadraoDoExame(l, exame.exame.id ?? 0);
       return {
         exame,
-        elementos,
-        variaveis,
+        ...comCalculo(elementos, variaveis, formulas, nn(pac?.['dias'])),
+        textosPadrao,
         observacoes,
         modelos,
         laudo:

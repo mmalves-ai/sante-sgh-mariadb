@@ -105,6 +105,10 @@ export interface ResultadoParaDigitacaoLido {
   readonly alertaDataInvalida: boolean;
   readonly bloqueado: boolean;
   readonly grandezas: { codigo: number; nome: string; sigla: string }[];
+  /** Textos padrão oferecidos na digitação do exame (05-SADT linha 3). */
+  readonly textosPadrao?: { codigo: number; descricao: string; texto: string; mnemonico: string | null }[];
+  /** Idade do paciente em anos completos na data do exame, para o cálculo das fórmulas. */
+  readonly idadePaciente?: number | null;
 }
 
 export interface ApoioSadtLido {
