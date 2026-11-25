@@ -163,6 +163,12 @@ test.describe('Vínculo do item com a referência de preço @F36-5 @fase3', () =
 
     await entrar(page, 'SINT.ADMIN');
     await page.goto(`/suprimentos/itens/cadastro/${ITEM}`);
+    // A tela do item é carregada sob demanda: no servidor de desenvolvimento recém-subido (o E2E rodado sozinho), a
+    // primeira compilação passa dos 5 s padrão. Primeiro a tela; depois a prova de que a ficha simulada carregou (o
+    // painel só existe para o item já gravado) e de que nada foi recusado; então o painel.
+    await expect(page.getByTestId('tela-suprimentos-item-cadastro')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('item-codigo')).toHaveValue('MAT-SINT-1', { timeout: 15_000 });
+    await expect(page.getByTestId('recusa-suprimentos')).toHaveCount(0);
     const painel = page.getByTestId('vinculo-referencia');
     await expect(painel).toBeVisible();
     // Um vigente por publicação.
