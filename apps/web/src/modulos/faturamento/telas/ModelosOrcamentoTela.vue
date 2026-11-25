@@ -19,9 +19,15 @@ import {
   lerOpcoesModelo,
   lerPrevia,
 } from '../api-particular.js';
+import { usarSessao } from '../../../casca/sessao/sessao.js';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
 
 const { t, te } = useI18n();
+// Quem só lê (faturamento.orcamento.ler) consulta os modelos e a prévia; cadastrar e inativar pedem
+// faturamento.regra.editar e emitir pede faturamento.orcamento.criar (o servidor confere de novo).
+const { permissoes } = usarSessao();
+const podeEditarModelo = computed(() => permissoes.value.has('faturamento.regra.editar'));
+const podeEmitir = computed(() => permissoes.value.has('faturamento.orcamento.criar'));
 const qc = useQueryClient();
 const modelos = useQuery({ queryKey: ['faturamento', 'modelos-orcamento'], queryFn: lerModelos });
 const opcoes = useQuery({
@@ -196,7 +202,14 @@ const cadastrar = () =>
             <button type="button" :data-testid="`mo-orcar-${m.codigo}`" @click="orcar(m.id)">
               {{ t('particular.mo.orcar') }}
             </button>
-            <button type="button" @click="inativar(m.id)">{{ t('particular.mo.inativar') }}</button>
+            <button
+              v-if="podeEditarModelo"
+              type="button"
+              :data-testid="`mo-inativar-${m.codigo}`"
+              @click="inativar(m.id)"
+            >
+              {{ t('particular.mo.inativar') }}
+            </button>
           </td>
         </tr>
       </tbody>
@@ -249,7 +262,7 @@ const cadastrar = () =>
           })
         }}
       </p>
-      <form class="filtros" data-testid="mo-form-gerar" @submit.prevent="gerar">
+      <form v-if="podeEmitir" class="filtros" data-testid="mo-form-gerar" @submit.prevent="gerar">
         <label>
           {{ t('particular.mo.buscarPaciente') }}
           <input
@@ -284,8 +297,11 @@ const cadastrar = () =>
       </form>
     </template>
 
-    <h2>{{ t('particular.mo.novo') }}</h2>
-    <form class="filtros" data-testid="mo-form-novo" @submit.prevent="cadastrar">
+    <p v-if="!podeEditarModelo" class="secundario" role="note" data-testid="mo-so-consulta">
+      {{ t('particular.mo.soConsulta') }}
+    </p>
+    <h2 v-if="podeEditarModelo">{{ t('particular.mo.novo') }}</h2>
+    <form v-if="podeEditarModelo" class="filtros" data-testid="mo-form-novo" @submit.prevent="cadastrar">
       <label>
         {{ t('particular.mo.codigo') }}
         <input v-model="novo.codigo" maxlength="30" />

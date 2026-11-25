@@ -113,6 +113,8 @@ export const mensagensParticular = {
     emitir: 'Emitir orçamento',
     emitido: 'Orçamento {numero} emitido: {total}.',
     novo: 'Novo modelo',
+    soConsulta:
+      'Cadastrar e inativar modelos pede a permissão de editar as regras do faturamento; aqui você consulta e orça.',
     descricao: 'Descrição',
     buscarItem: 'Buscar procedimento ou item (código ou descrição)',
     escolha: 'Escolha',

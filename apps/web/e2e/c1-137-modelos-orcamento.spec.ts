@@ -149,6 +149,12 @@ test.describe('Modelos de orçamento de particular @C1-137', () => {
     await page.goto('/faturamento/modelos-orcamento');
     await expect(page.getByTestId('tela-modelos-orcamento')).toBeVisible();
     await expect(page.getByTestId('mo-lista')).toContainText('PARTO SINTETICO APARTAMENTO');
+    // O caixa orça e emite (faturamento.orcamento.*), mas não tem faturamento.regra.editar: não vê o cadastro nem o
+    // Inativar, e a tela avisa que o modelo ali é só consulta.
+    await expect(page.getByTestId('mo-so-consulta')).toBeVisible();
+    await expect(page.getByTestId('mo-form-novo')).toHaveCount(0);
+    await expect(page.getByTestId('mo-inativar-MOD-SINT')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Inativar' })).toHaveCount(0);
 
     // Escolher o modelo monta a prévia: a diária com o preço da tabela, o honorário pedindo o valor.
     await page.getByTestId('mo-orcar-MOD-SINT').click();
