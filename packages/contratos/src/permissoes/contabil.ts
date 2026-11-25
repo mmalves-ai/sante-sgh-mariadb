@@ -102,4 +102,35 @@ export const PERMISSOES_CONTABIL_M54_F3: readonly DeclaracaoPermissao[] = [
 
     { criticidade: 'sensivel' },
   ),
+  // C2-101 (07-FIN linha 127): consolidação gerencial de várias empresas. Recurso novo, sem opção correspondente no
+  // menu de origem: concedido pelo perfil ao administrador do sistema (a controladoria recebe pelo perfil dela).
+  p(
+    'contabil.consolidacao.ler',
+    'Consultar os grupos de consolidação, o de-para, a prévia e a DRE e o balanço consolidados',
+    {
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+      escopos: [],
+    },
+  ),
+  p(
+    'contabil.consolidacao.editar',
+    'Manter o grupo de consolidação, o plano gerencial comum e o de-para das contas dos estabelecimentos',
+    {
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+      escopos: [],
+    },
+  ),
+  p(
+    'contabil.consolidacao.apurar',
+    'Apurar a consolidação mensal com a eliminação entre empresas e liberar a competência',
+    {
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+      escopos: [],
+    },
+  ),
 ];

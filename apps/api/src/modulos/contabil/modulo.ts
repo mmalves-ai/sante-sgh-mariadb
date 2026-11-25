@@ -10,6 +10,7 @@ import { converterHtmlEmPdfA } from '../documento/infra/gotenberg.js';
 import { CIFRA_CPF_PESSOAS, CifraCpf, chaveCpfDoAmbiente } from '../pessoas/public-api.js';
 import type { ContextoModulo } from '../registro.js';
 import { ContabilController } from './contabil.controller.js';
+import { ConsolidacaoController, NUCLEO_CONSOLIDACAO } from './consolidacao.controller.js';
 import { DemonstracoesContabilController, GERADOR_PDF_CONTABIL } from './demonstracoes.controller.js';
 import { LancamentosContabilController } from './lancamentos.controller.js';
 import { PORTA_CONTABIL, type PortaContabil } from './porta.js';
@@ -51,9 +52,16 @@ export function moduloContabil(ctx: ContextoModulo, opcoes: OpcoesModuloContabil
           (await converterHtmlEmPdfA(gotenberg, html, { metadados: { Title: titulo } })).pdf;
   return {
     module: class ModuloContabil {},
-    controllers: [ContabilController, LancamentosContabilController, DemonstracoesContabilController],
+    controllers: [
+      ContabilController,
+      LancamentosContabilController,
+      DemonstracoesContabilController,
+      // C2-101 (07-FIN linha 127): consolidação gerencial de várias empresas.
+      ConsolidacaoController,
+    ],
     providers: [
       { provide: PORTA_CONTABIL, useValue: porta },
+      { provide: NUCLEO_CONSOLIDACAO, useValue: ctx.nucleo ?? null },
       ...(pdf ? [{ provide: GERADOR_PDF_CONTABIL, useValue: pdf }] : []),
       ...(cifra ? [{ provide: CIFRA_CPF_PESSOAS, useValue: cifra }] : []),
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
