@@ -5,7 +5,10 @@
 // catálogo, justificativa e o prazo do município; nada é apagado: a nota fica "cancelada" ou "substituida", com o
 // evento e a substituta ligada. Fora do simulador a nota fica só com o RPS gerado. O XML de cada nota (a emitida e
 // a substituta) fica no armazém de arquivos, registrado em `arquivo` (hash, tamanho, imutável, guarda legal) e ligado
-// por `nota_servico.xml_arquivo_id`.
+// por `nota_servico.xml_arquivo_id`. A emissão avulsa antiga (GET e POST `financeiro/fiscal/nfse`) não existe mais na API:
+// a nota só sai pelo ciclo (`financeiro/fiscal/notas-servico`).
+import 'reflect-metadata';
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { createHash, randomUUID } from 'node:crypto';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -19,6 +22,8 @@ import {
   parametrosNotaServico,
 } from '../nota-servico-propria.js';
 import { armazemFinanceiroMemoria } from '../armazem.js';
+import { FinanceiroController } from '../financeiro.controller.js';
+import { NotaServicoController } from '../nota-servico.controller.js';
 import {
   CLIENTE,
   codigoDaGravacao,
@@ -33,6 +38,40 @@ const CNPJ_SINTETICO = '11222333000181';
 const JUSTIFICATIVA = 'Valor da fatura corrigido depois da conferência.';
 const ARMAZEM = armazemFinanceiroMemoria();
 const OPERACOES = operacoesNotaServico(ARMAZEM);
+
+/** As rotas que o controlador declara, como o Nest as registra: "<verbo> <prefixo>/<caminho>". */
+function rotasDe(classe: { prototype: object }): string[] {
+  const prefixo = String(Reflect.getMetadata(PATH_METADATA, classe) ?? '');
+  const verbos = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ALL', 'OPTIONS', 'HEAD'];
+  return Object.getOwnPropertyNames(classe.prototype)
+    .filter((m) => m !== 'constructor')
+    .map((m) => Object.getOwnPropertyDescriptor(classe.prototype, m)?.value as object | undefined)
+    .filter((fn): fn is object => typeof fn === 'function' && Reflect.hasMetadata(PATH_METADATA, fn))
+    .map((fn) => {
+      const caminho = String(Reflect.getMetadata(PATH_METADATA, fn));
+      const verbo = verbos[Number(Reflect.getMetadata(METHOD_METADATA, fn))] ?? '?';
+      return `${verbo} ${[prefixo, caminho].filter((x) => x && x !== '/').join('/')}`;
+    });
+}
+
+describe('a nota de serviço só sai pelo ciclo (rotas da API)', () => {
+  it('a emissão avulsa e a lista antiga (financeiro/fiscal/nfse) não existem: o Nest responde 404', () => {
+    const rotas = [...rotasDe(FinanceiroController), ...rotasDe(NotaServicoController)];
+    expect(rotas.filter((r) => /fiscal\/nfse(\/|$)/.test(r))).toEqual([]);
+    expect(rotas.filter((r) => r.includes('fiscal/declaracoes')).length).toBeGreaterThan(0);
+    expect(rotasDe(NotaServicoController).sort()).toEqual(
+      [
+        'GET financeiro/fiscal/notas-servico',
+        'GET financeiro/fiscal/notas-servico/apoio',
+        'GET financeiro/fiscal/notas-servico/:id/historico',
+        'POST financeiro/fiscal/notas-servico/lote',
+        'POST financeiro/fiscal/notas-servico/:id/cancelar',
+        'POST financeiro/fiscal/notas-servico/:id/substituir',
+        'POST financeiro/fiscal/notas-servico/prazo',
+      ].sort(),
+    );
+  });
+});
 
 describe.skipIf(SEM_BANCO)('ciclo da nota de serviço: lote, cancelamento e substituição (MariaDB)', () => {
   let m: MassaFinanceiro;

@@ -12,8 +12,8 @@
 //   GET  /api/financeiro/tesouraria/movimento ; POST tesouraria/movimento ; GET tesouraria/conciliacao
 //   POST tesouraria/extratos | tesouraria/conciliacao ; GET tesouraria/creditos ; POST tesouraria/creditos/:id/atribuir
 //   GET  tesouraria/fluxo-caixa ; GET gerencial/dre | gerencial/apropriacoes
-//   GET  fiscal/entradas | fiscal/nfse | fiscal/declaracoes | contabil/lotes | contabil/de-para
-//   POST fiscal/nfse | fiscal/declaracoes/dmed | fiscal/declaracoes/reinf | contabil/lotes
+//   GET  fiscal/entradas | fiscal/declaracoes | contabil/lotes | contabil/de-para
+//   POST fiscal/declaracoes/dmed | fiscal/declaracoes/reinf | contabil/lotes
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type AdiantamentoResposta,
@@ -39,7 +39,6 @@ import {
   esquemaConciliar,
   esquemaCriarTituloPagar,
   esquemaCriarTituloReceber,
-  esquemaEmitirNfse,
   esquemaExportarLoteContabil,
   esquemaFaixaAlcada,
   esquemaGerarDeclaracao,
@@ -772,20 +771,6 @@ export class FinanceiroController {
       inteiroOuNulo(q['ano']) ?? Number(hoje.slice(0, 4)),
       inteiroOuNulo(q['mes']) ?? Number(hoje.slice(5, 7)),
     );
-  }
-
-  @Get('fiscal/nfse')
-  @Permissao('financeiro.nfse.ler')
-  nfse(@Req() req: RequisicaoAutorizada): Promise<RegistroFiscalResposta[]> {
-    return this.porta.registrosFiscais(ctx(sessaoDe(req)), 'nfse');
-  }
-
-  @Post('fiscal/nfse')
-  @HttpCode(200)
-  @Permissao('financeiro.nfse.emitir')
-  @AuditadoNoHandler('NFS-e (simulador fora de produção) com a trilha na mesma transação')
-  emitirNfse(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
-    return this.servico.emitirNfse(sessaoDe(req), corpo(esquemaEmitirNfse, b));
   }
 
   @Get('fiscal/declaracoes')

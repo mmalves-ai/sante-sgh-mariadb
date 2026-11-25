@@ -198,7 +198,7 @@ interface Estado {
     aprovadores: AprovacaoRegistrada[];
   })[];
   rateios: { documento: number; credor: number; centroCusto: number; percentual: number; valor: number }[];
-  fiscais: Record<'nfse' | 'declaracao' | 'lote' | 'remessa', RegistroFiscalResposta[]>;
+  fiscais: Record<'declaracao' | 'lote' | 'remessa', RegistroFiscalResposta[]>;
   pagosPeloNovo: Set<number>;
   idem: Map<string, { hash: string; resultado: Record<string, number | string> }>;
 }
@@ -378,7 +378,7 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
         },
       ],
       rateios: [],
-      fiscais: { nfse: [], declaracao: [], lote: [], remessa: [] },
+      fiscais: { declaracao: [], lote: [], remessa: [] },
       pagosPeloNovo: new Set(),
       idem: new Map(),
     };
@@ -1391,24 +1391,6 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
           for (const x of d.parcelas ?? []) this.emRemessaPendente(s).add(x.parcela);
         return { id, sequencial };
       },
-      registrarNfse: async (d) => {
-        const id = ++s.seq;
-        s.fiscais.nfse.unshift({
-          ID: id,
-          TITULO_RECEBER: d.tituloReceber,
-          MOMENTO: d.momento,
-          VALOR_SERVICOS: d.valorServicos,
-          VALOR_ISS: d.valorIss,
-          VALOR_IBS: d.valorIbs,
-          VALOR_CBS: d.valorCbs,
-          VALOR_LIQUIDO: d.valorLiquido,
-          DESTINO: d.destino,
-          SITUACAO: d.situacao,
-          NUMERO: d.numero,
-          EMITIDO_EM: s.hoje,
-        });
-        return { id };
-      },
       registrarDeclaracao: async (d) => {
         const id = ++s.seq;
         s.fiscais.declaracao.unshift({
@@ -2144,7 +2126,7 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
       }));
   }
 
-  async registrosFiscais(c: ContextoFinanceiro, tipo: 'nfse' | 'declaracao' | 'lote' | 'remessa') {
+  async registrosFiscais(c: ContextoFinanceiro, tipo: 'declaracao' | 'lote' | 'remessa') {
     return this.e(c).fiscais[tipo];
   }
 

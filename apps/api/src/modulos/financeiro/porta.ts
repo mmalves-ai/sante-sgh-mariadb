@@ -190,27 +190,6 @@ export interface GravadorSghFinanceiro {
     hashRetorno: string | null;
     ocorrencias: string | null;
   }): Promise<{ id: number; sequencial: number }>;
-  registrarNfse(d: {
-    usuario: string;
-    tituloReceber: number | null;
-    conta: number | null;
-    momento: string;
-    classificacao: string;
-    itemServico: string;
-    valorServicos: number;
-    aliquotaIss: number;
-    valorIss: number;
-    issRetido: boolean;
-    valorIbs: number;
-    valorCbs: number;
-    retencoes: number;
-    valorLiquido: number;
-    destino: 'simulador' | 'prefeitura';
-    situacao: 'simulada' | 'autorizada' | 'rejeitada';
-    numero: string | null;
-    hashXml: string;
-    arquivo: ArquivoGuardadoFinanceiro | null;
-  }): Promise<{ id: number }>;
   registrarDeclaracao(d: {
     usuario: string;
     tipo: 'dmed' | 'reinf-r2000' | 'reinf-r4000';
@@ -341,7 +320,7 @@ export interface PortaFinanceiro extends PortaGravacaoM18<GravadorSghFinanceiro>
   retencoesDaCompetencia(c: ContextoFinanceiro, ano: number, mes: number): Promise<RetencaoReinfPorta[]>;
   registrosFiscais(
     c: ContextoFinanceiro,
-    tipo: 'nfse' | 'declaracao' | 'lote' | 'remessa',
+    tipo: 'declaracao' | 'lote' | 'remessa',
   ): Promise<RegistroFiscalResposta[]>;
 }
 

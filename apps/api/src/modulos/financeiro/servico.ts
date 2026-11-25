@@ -22,7 +22,6 @@ import {
   type DetalheTituloPagarResposta,
   type DetalheTituloReceberResposta,
   type DreResposta,
-  type EmitirNfseEntrada,
   EVENTOS_AUDITAVEIS,
   type ExportarLoteContabilEntrada,
   type FaixaAlcadaEntrada,
@@ -41,10 +40,7 @@ import {
 import {
   aberturaPorGrupo,
   alcadaAplicavel,
-  calcularNfse,
-  conferirNfse,
   creditosSemCasamento,
-  destinoNfse,
   ErroExtrato,
   gerarCnab240,
   gerarDmed,
@@ -59,13 +55,11 @@ import {
   dePararFatos,
   montarLoteContabil,
   saldoMostrado,
-  simularPrefeitura,
   simularRetorno,
   situacaoAprovacao,
   somarDias,
   sugerirConciliacao,
   type TipoCredor,
-  xmlNfse,
 } from '@sgh/dominio-financeiro';
 import { ErroProblema } from '../../problema.filter.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
@@ -844,61 +838,6 @@ export class ServicoFinanceiro {
   }
 
   // ── Fiscal ────────────────────────────────────────────────────────────────────────────────────────────────────
-
-  async emitirNfse(s: SessaoCadastro, e: EmitirNfseEntrada): Promise<ResultadoFinanceiro> {
-    const r1 = conferirNfse(e);
-    if (r1)
-      throw new ErroProblema('recusa-de-negocio', 409, 'NFS-e recusada', r1.mensagem, { codigo: r1.codigo });
-    const calc = calcularNfse(e);
-    const destino = destinoNfse(this.ambiente, false);
-    const xml = xmlNfse({
-      ...calc,
-      numeroRps: String(Date.now() % 1_000_000_000),
-      tomador: e.tituloReceber ? `titulo ${e.tituloReceber}` : `conta ${e.conta}`,
-      itemServico: e.itemServico,
-    });
-    const hash = sha256(xml);
-    const chave = `nfse/${hash}.xml`;
-    const conteudoXml = bytes(xml);
-    await this.armazem.guardar(chave, conteudoXml, 'application/xml');
-    const sim = simularPrefeitura(xml, Date.now() % 1_000_000_000);
-    const r = await this.apoios.apoios.fiscal.sgh(
-      comChave(s),
-      E.financeiroNfseEmitida.codigo,
-      'financeiro.fiscal',
-      (x: { id: number }) => ({ tabela: 'nota_servico', id: String(x.id) }),
-      (g) =>
-        g.registrarNfse({
-          usuario: s.login,
-          tituloReceber: e.tituloReceber,
-          conta: e.conta,
-          momento: e.momento,
-          classificacao: e.classificacao,
-          itemServico: e.itemServico,
-          valorServicos: calc.baseCalculo,
-          aliquotaIss: e.aliquotaIss,
-          valorIss: calc.valorIss,
-          issRetido: calc.issRetido,
-          valorIbs: calc.valorIbs,
-          valorCbs: calc.valorCbs,
-          retencoes: calc.retencoesFederais,
-          valorLiquido: calc.valorLiquido,
-          destino,
-          situacao: 'simulada',
-          numero: sim.numero,
-          hashXml: hash,
-          arquivo: { chave, tamanhoBytes: conteudoXml.length, tipoMime: 'application/xml' },
-        }),
-    );
-    return resultadoFin(
-      `NFS-e ${sim.numero} simulada (a emissão real fica para depois da DP-38): líquido de ${calc.valorLiquido.toFixed(2)}.`,
-      false,
-      {
-        nfse: r.id,
-        numero: sim.numero,
-      },
-    );
-  }
 
   async gerarDeclaracao(s: SessaoCadastro, e: GerarDeclaracaoEntrada): Promise<ResultadoFinanceiro> {
     const ano = Number(e.periodo.slice(0, 4));

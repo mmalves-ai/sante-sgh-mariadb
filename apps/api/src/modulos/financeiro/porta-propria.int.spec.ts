@@ -440,39 +440,6 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
       ),
     ).toBe(1);
     expect((await porta.registrosFiscais(c, 'remessa')).map((x) => x['CONTA'])).toContain(m.contaA);
-    const nfse = () =>
-      porta.gravarSgh(comChave(c), trilha, (g) =>
-        g.registrarNfse({
-          usuario: 'x',
-          tituloReceber: null,
-          conta: null,
-          momento: 'apresentacao',
-          classificacao: 'x',
-          itemServico: '4.03',
-          valorServicos: 1,
-          aliquotaIss: 2,
-          valorIss: 0.02,
-          issRetido: false,
-          valorIbs: 0,
-          valorCbs: 0,
-          retencoes: 0,
-          valorLiquido: 0.98,
-          destino: 'simulador',
-          situacao: 'simulada',
-          numero: null,
-          hashXml: 'd'.repeat(64),
-          arquivo: null,
-        }),
-      );
-    // A NFS-e simulada fica registrada (com o hash); o mesmo arquivo de novo devolve o mesmo registro.
-    const n1 = await nfse();
-    expect((await nfse()).id).toBe(n1.id);
-    const nota = (await porta.registrosFiscais(c, 'nfse')).find((x) => x['ID'] === n1.id);
-    expect([nota?.['SITUACAO'], nota?.['DESTINO'], nota?.['VALOR_LIQUIDO']]).toEqual([
-      'simulada',
-      'simulador',
-      0.98,
-    ]);
     const dec = await porta.gravarSgh(comChave(c), trilha, (g) =>
       g.registrarDeclaracao({
         usuario: 'x',

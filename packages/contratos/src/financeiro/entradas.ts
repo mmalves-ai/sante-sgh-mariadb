@@ -347,32 +347,6 @@ export const esquemaGerarRemessa = z
   .strict();
 export type GerarRemessaEntrada = z.infer<typeof esquemaGerarRemessa>;
 
-export const esquemaEmitirNfse = z
-  .object({
-    tituloReceber: id.nullable().default(null),
-    conta: id.nullable().default(null),
-    momento: z.enum(['apresentacao', 'recebimento']),
-    /** Classificação tributária e o item da lista de serviços da NFS-e. */
-    classificacao: z.string().max(20),
-    itemServico: z.string().max(20),
-    valorServicos: dinheiro,
-    aliquotaIss: z.number().min(0).max(5),
-    issRetido: z.boolean(),
-    retencoes: z
-      .object({
-        ir: dinheiroOuZero.default(0),
-        pis: dinheiroOuZero.default(0),
-        cofins: dinheiroOuZero.default(0),
-        csll: dinheiroOuZero.default(0),
-        inss: dinheiroOuZero.default(0),
-      })
-      .strict()
-      .default({ ir: 0, pis: 0, cofins: 0, csll: 0, inss: 0 }),
-  })
-  .strict()
-  .refine((e) => e.tituloReceber !== null || e.conta !== null, { message: 'Informe o título ou a conta.' });
-export type EmitirNfseEntrada = z.infer<typeof esquemaEmitirNfse>;
-
 export const esquemaGerarDeclaracao = z
   .object({
     tipo: z.enum(['dmed', 'reinf-r2000', 'reinf-r4000']),
