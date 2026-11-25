@@ -107,6 +107,8 @@ export * from './nutricao/mapa.js';
 // F7 (04-HOT linha 133): direito à refeição do acompanhante (lei, convênio, idade) e a cobrança.
 export * from './nutricao/direito-refeicao.js';
 export * from './nutricao/ocorrencia-refeicao.js';
+// F8 (04-HOT linha 141): cardápio, ficha técnica, planejamento aprovado por nutricionista e previsão da produção.
+export * from './nutricao/cardapio.js';
 export * from './social/avaliacao.js';
 export * from './nutricao/correcao.js';
 // M45, etapa 6: especialidades sob demanda (oftalmologia, oncologia, obstetrícia) e o lactário (DP-32, desligados).
