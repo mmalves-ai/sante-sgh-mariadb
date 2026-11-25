@@ -33,6 +33,8 @@ import { CENTRAL_AVISOS_QUALIDADE, type CentralAvisosQualidade } from './central
 import { AgravoController } from './agravo.controller.js';
 import { AnaliseCulturaController, PORTA_ANALISE_CULTURA } from './analise-cultura.controller.js';
 import { PortaAnaliseCulturaPropria } from './porta-analise-cultura-propria.js';
+import { NotificacaoIrasController, PORTA_NOTIFICACAO_IRAS } from './notificacao-iras.controller.js';
+import { PortaNotificacaoIrasPropria } from './porta-notificacao-iras-propria.js';
 import { PerfilCidController, PORTA_PERFIL_CID } from './perfil-cid.controller.js';
 import { PortaPerfilCidPropria } from './porta-perfil-cid-propria.js';
 import { CcihController } from './ccih.controller.js';
@@ -129,6 +131,7 @@ export async function modulo(
       SegurancaPacienteController,
       CcihController,
       AnaliseCulturaController,
+      NotificacaoIrasController,
       PerfilCidController,
       AgravoController,
       GestaoQualidadeController,
@@ -142,6 +145,12 @@ export async function modulo(
         provide: PORTA_ANALISE_CULTURA,
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao ? new PortaAnaliseCulturaPropria(ctx.nucleo) : null,
+      },
+      // O envio mensal da notificação de IRAS ao órgão sanitário (F7, 09-AREA linha 68): só a porta própria; sem banco, 503.
+      {
+        provide: PORTA_NOTIFICACAO_IRAS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao ? new PortaNotificacaoIrasPropria(ctx.nucleo) : null,
       },
       // A hierarquia da CID-10 e o perfil epidemiológico (F7, 09-AREA linha 83): só a porta própria; sem banco, 503.
       {
