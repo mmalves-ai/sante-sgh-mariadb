@@ -12,6 +12,7 @@
 import { createHash } from 'node:crypto';
 import { centavos } from '@sgh/contratos/regras-financeiro';
 import {
+  campoDoTributo,
   conferirAlteracaoProcesso,
   conferirEncerramentoSuspensao,
   conferirProcessoSuspensao,
@@ -128,7 +129,12 @@ async function retencoesDaCompetencia(
   l: Leitor,
   est: number,
   periodo: string,
-): Promise<{ retencoes: RetencaoServico[]; fornecedor: Map<string, number>; semDocumento: number[] }> {
+): Promise<{
+  retencoes: RetencaoServico[];
+  fornecedor: Map<string, number>;
+  semDocumento: number[];
+  entradasSemDocumento: number[];
+}> {
   const linhas = await l.consultar(
     `SELECT t.id, COALESCE(ef.cnpj, ef.cpf, pp.cpf, co.cpf) AS documento, ef.id AS fornecedor, t.numero_documento, t.valor_bruto,
             LOWER(tr.codigo) AS tributo, SUM(r.valor_retido) AS valor
@@ -176,10 +182,53 @@ async function retencoesDaCompetencia(
     else if (t.startsWith('ir')) x.ir = centavos(x.ir + v);
     porTitulo.set(tid, x);
   }
+  // C2-094 (09-AREA linha 78): a retenção calculada na entrada de serviço concluída da competência entra até o título
+  // confirmá-la. Com título ligado que já tem retenção, vale o título (fonte única: nada declarado em dobro).
+  const entradas = await l.consultar(
+    `SELECT es.id, COALESCE(ef.cnpj, ef.cpf) AS documento, ef.id AS fornecedor, es.valor_total, tr.codigo AS tributo,
+            SUM(r.valor_retido) AS valor
+       FROM retencao_entrada_servico r JOIN entrada_servico_item i ON i.id = r.entrada_servico_item_id
+       JOIN entrada_servico es ON es.id = i.entrada_servico_id JOIN tributo tr ON tr.id = r.tributo_id
+       JOIN empresa_fornecedora ef ON ef.id = es.empresa_fornecedora_id
+      WHERE es.estabelecimento_id = ? AND es.competencia = ? AND es.situacao = 'concluida' AND es.excluido_em IS NULL
+        AND i.excluido_em IS NULL AND r.excluido_em IS NULL AND r.retido = TRUE
+        AND NOT EXISTS (SELECT 1 FROM parcela_pagar pp JOIN retencao_titulo rt ON rt.parcela_pagar_id = pp.id
+                         WHERE pp.titulo_pagar_id = es.titulo_pagar_id AND rt.excluido_em IS NULL)
+      GROUP BY es.id, documento, fornecedor, es.valor_total, tributo
+      ORDER BY es.id`,
+    [est, `${periodo}-01`],
+  );
+  const porEntrada = new Map<number, { -readonly [K in keyof RetencaoServico]: RetencaoServico[K] }>();
+  const entradasSemDocumento = new Set<number>();
+  for (const r of entradas) {
+    const eid = numero(r['id']);
+    const doc = so(r['documento'] == null ? '' : texto(r['documento']));
+    if (doc.length !== 11 && doc.length !== 14) {
+      entradasSemDocumento.add(eid);
+      continue;
+    }
+    fornecedor.set(doc, numero(r['fornecedor']));
+    const x = porEntrada.get(eid) ?? {
+      cnpjPrestador: doc,
+      // O documento da entrada (negativo: nunca se confunde com o id do título na contagem das notas).
+      documento: -eid,
+      dataEmissao: `${periodo}-01`,
+      valorBruto: numero(r['valor_total']),
+      inss: 0,
+      ir: 0,
+      csll: 0,
+      pis: 0,
+      cofins: 0,
+    };
+    const campo = campoDoTributo(texto(r['tributo']));
+    if (campo && campo !== 'iss') x[campo] = centavos(x[campo] + numero(r['valor']));
+    porEntrada.set(eid, x);
+  }
   return {
-    retencoes: [...porTitulo.values()],
+    retencoes: [...porTitulo.values(), ...porEntrada.values()],
     fornecedor,
     semDocumento: [...semDocumento].sort((a, b) => a - b),
+    entradasSemDocumento: [...entradasSemDocumento].sort((a, b) => a - b),
   };
 }
 
@@ -250,7 +299,11 @@ export async function painelReinf(l: Leitor, est: number, periodo: string) {
     })),
     processos: await processosSuspensao(l, est),
     // Títulos com retenção na competência cujo credor não tem CPF nem CNPJ: fora de qualquer evento até o cadastro.
-    titulosSemDocumento: (await retencoesDaCompetencia(l, est, periodo)).semDocumento,
+    ...(await retencoesDaCompetencia(l, est, periodo).then((r) => ({
+      titulosSemDocumento: r.semDocumento,
+      // C2-094: entradas de serviço com retenção cujo fornecedor não tem CPF nem CNPJ (fora dos eventos até o cadastro).
+      entradasSemDocumento: r.entradasSemDocumento,
+    }))),
   };
 }
 

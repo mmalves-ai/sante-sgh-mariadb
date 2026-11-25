@@ -219,6 +219,27 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
       escopos: [],
     },
   ),
+  // C2-094 (09-AREA linha 78): entrada de serviço tomado. Recurso novo, sem opção correspondente no menu de origem:
+  // concedido pelo perfil do emissor de nota fiscal (a área fiscal) e ao administrador do sistema.
+  p(
+    'financeiro.entradaServico.ler',
+    'Consultar as entradas de serviço tomado, os itens, o câmbio e as retenções',
+    {
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['emissor-nota-fiscal', 'administrador-sistema'],
+      escopos: [],
+    },
+  ),
+  p(
+    'financeiro.entradaServico.lancar',
+    'Registrar, concluir e cancelar a entrada de serviço tomado contra o pedido, com as retenções na fonte',
+    {
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['emissor-nota-fiscal', 'administrador-sistema'],
+      escopos: [],
+    },
+  ),
   p('financeiro.dmed.ler', 'Consultar as DMED geradas'),
   p('financeiro.dmed.gerar', 'Gerar a DMED (arquivo, não enviado até a DP-38)', {
     criticidade: 'sensivel',

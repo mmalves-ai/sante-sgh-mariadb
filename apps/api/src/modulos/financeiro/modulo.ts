@@ -35,6 +35,7 @@ import { NotaServicoController } from './nota-servico.controller.js';
 import { NUCLEO_PERIODO_FINANCEIRO, PeriodoFinanceiroController } from './periodo.controller.js';
 import { ReceberAcordosController } from './receber-acordos.controller.js';
 import { ReinfEventosController } from './reinf-eventos.controller.js';
+import { EntradaServicoController } from './entrada-servico.controller.js';
 import { PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
 import { PortaFinanceiroMemoria } from './porta-memoria.js';
 import { portaFinanceiroIndisponivel, PortaFinanceiroPropria } from './porta-propria.js';
@@ -88,6 +89,8 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       CompensacaoPrevisaoController,
       PagamentoEletronicoController,
       ReinfEventosController,
+      // F7, 09-AREA linha 78 (C2-094): entrada de serviço tomado com retenções (fonte da EFD-REINF).
+      EntradaServicoController,
       ReceberAcordosController,
       NotaCessaoController,
       // F3.8, 07-FIN linha 113: o ciclo da nota de serviço (lote, cancelamento, substituição, histórico).
