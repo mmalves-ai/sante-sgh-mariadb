@@ -19,6 +19,7 @@ import { type ArmazemFinanceiro, armazemFinanceiroLocal, armazemFinanceiroMemori
 import { AlteracaoTituloPagarController } from './alteracao-titulo-pagar.controller.js';
 import { CartaoController } from './cartao.controller.js';
 import { CobrancaBancariaController } from './cobranca-bancaria.controller.js';
+import { CobrancaPixController } from './cobranca-pix.controller.js';
 import { comCartaoNoFluxo } from './cartao-propria.js';
 import { CompensacaoPrevisaoController } from './compensacao-previsao.controller.js';
 import { ContabilFiscalController } from './contabil-fiscal.controller.js';
@@ -97,6 +98,8 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       FluxoAprovacaoController,
       // F7, 07-FIN linha 78: cobrança bancária com boleto (carteira, emissão, remessa e retorno).
       CobrancaBancariaController,
+      // F7, 07-FIN linha 90: cobrança Pix com retorno, baixa automática e devolução.
+      CobrancaPixController,
     ],
     providers: [
       { provide: PORTA_FINANCEIRO, useValue: porta },
