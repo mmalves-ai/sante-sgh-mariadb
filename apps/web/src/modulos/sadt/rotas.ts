@@ -170,6 +170,13 @@ export const rotasSadt: RouteRecordRaw[] = [
     component: () => import('./telas/LaudoRedacaoTela.vue'),
     meta: { permissao: 'sadt.laudo.ler' },
   },
+  // C2-027 (04-CC linha 107): o registro estruturado do exame de hemodinâmica (atalho na tela de métodos gráficos).
+  {
+    path: '/sadt/hemodinamica',
+    name: 'sadt.hemodinamica',
+    component: () => import('./telas/HemodinamicaTela.vue'),
+    meta: { permissao: 'sadt.laudo.ler' },
+  },
   {
     path: '/sadt/laudos',
     name: 'sadt.laudos',

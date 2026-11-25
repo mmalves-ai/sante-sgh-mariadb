@@ -38,6 +38,7 @@ import ErroSadt from '../componentes/ErroSadt.vue';
 
 const M = {
   titulo: 'Laudo do exame',
+  hemodinamica: 'Registro de hemodinâmica',
   item: 'Exame (número do item)',
   abrir: 'Abrir',
   paciente: 'Paciente',
@@ -388,6 +389,9 @@ const motivoOk = computed(() => !!f.motivo || f.motivoTexto.trim().length >= 10)
       <SanteBotao v-if="dados" :rotulo="M.voltar" data-testid="laudo-voltar" @acionar="voltar" />
       <RouterLink :to="{ name: 'sadt.laudos.modelos' }" data-testid="laudo-ir-modelos">{{
         M.modelos
+      }}</RouterLink>
+      <RouterLink :to="{ name: 'sadt.hemodinamica' }" data-testid="laudo-ir-hemodinamica">{{
+        M.hemodinamica
       }}</RouterLink>
     </div>
     <ErroSadt v-if="erro" :erro="erro" />

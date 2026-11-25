@@ -53,6 +53,8 @@ import { ConsumoPadraoExameController } from './consumo-padrao.controller.js';
 import { BuscaAtivaResultadoController } from './busca-ativa.controller.js';
 import { BUSCA_ATIVA_RESULTADO, PortaBuscaAtivaPropria } from './busca-ativa-propria.js';
 import { CONSUMO_PADRAO_EXAME, PortaConsumoPadraoExamePropria } from './consumo-padrao-propria.js';
+import { HemodinamicaController } from './hemodinamica.controller.js';
+import { PORTA_HEMODINAMICA, PortaHemodinamicaPropria } from './hemodinamica-propria.js';
 import { GRANDEZAS_LAUDO, PortaGrandezasLaudoPropria } from './laudo-grandezas-propria.js';
 import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
 import { ApoioRemessaController, SERVICO_APOIO_REMESSA } from './apoio-remessa.controller.js';
@@ -175,8 +177,17 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       MicrobiologiaCadastroController,
       ConsumoPadraoExameController,
       BuscaAtivaResultadoController,
+      HemodinamicaController,
     ],
     providers: [
+      // F8 (04-CC linha 107): registro do exame de hemodinâmica (só no banco do cliente).
+      {
+        provide: PORTA_HEMODINAMICA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaHemodinamicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       // F8 (05-SADT linha 22): consumo padrão do exame, baixa no estoque e lançamento na conta (só no banco do cliente).
       {
         provide: CONSUMO_PADRAO_EXAME,

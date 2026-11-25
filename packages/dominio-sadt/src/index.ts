@@ -43,3 +43,4 @@ export * from './resultado/resposta-padrao.js';
 export * from './microbiologia/antibiograma.js';
 export * from './microbiologia/cadastro-antibiograma.js';
 export * from './equipamento/interface.js';
+export * from './hemodinamica/registro.js';
