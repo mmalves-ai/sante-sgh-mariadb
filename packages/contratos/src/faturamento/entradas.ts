@@ -57,6 +57,8 @@ export const esquemaLancarItem = z
       .strict()
       .nullable()
       .optional(),
+    /** Justificativa do item que a fonte pagadora só cobre com justificativa (restrição de cobertura). */
+    justificativaCobertura: texto(500).nullable().optional(),
     /** Preço manual (só com faturamento.preco.manual e dentro da faixa, ou com aprovação; regra 12). */
     precoManual: z
       .object({

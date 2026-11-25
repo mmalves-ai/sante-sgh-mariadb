@@ -33,6 +33,11 @@ import {
 } from './conta-transferencia.controller.js';
 import { FaturamentoController } from './faturamento.controller.js';
 import {
+  CoberturaController,
+  SERVICO_COBERTURA,
+  ServicoCobertura,
+} from './restricao-cobertura.controller.js';
+import {
   ParametrosFaturamentoController,
   SERVICO_PARAMETROS_FATURAMENTO,
   ServicoParametrosFaturamento,
@@ -94,6 +99,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
       RegrasComerciaisController,
       ParametrosFaturamentoController,
       SimulacaoReceitaController,
+      CoberturaController,
     ],
     providers: [
       { provide: PORTA_FATURAMENTO, useValue: porta },
@@ -119,6 +125,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
         useValue:
           !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
             ? new ServicoTransferenciaConta(ctx.nucleo)
+            : null,
+      },
+      // F7 (09-AREA linha 76): restrição de cobertura por fonte pagadora e compatibilidade (banco próprio).
+      {
+        provide: SERVICO_COBERTURA,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoCobertura(ctx.nucleo)
             : null,
       },
       // 06-FAT linhas 17, 18 e 20: horário especial, acréscimo e desconto com alçada e pacote na conta (banco próprio).

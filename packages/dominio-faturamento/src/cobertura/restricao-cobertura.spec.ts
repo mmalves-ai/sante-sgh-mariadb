@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   avaliarCobertura,
   criterioBate,
-  diaDaSemana,
+  diaDaSemanaCobertura,
   type LancamentoCobertura,
   type ParCompatibilidade,
   paresAplicaveis,
@@ -102,7 +102,7 @@ describe('restrição de cobertura por fonte pagadora', () => {
     expect(criterioBate({ tipo: 'faixa_idade', idadeMinima: 0 }, lanc({ idade: null }))).toBe(false);
     expect(criterioBate({ tipo: 'horario', horaInicio: '22:00', horaFim: '06:00' }, l)).toBe(true);
     expect(criterioBate({ tipo: 'horario', horaInicio: '22:00', horaFim: '06:00' }, lanc())).toBe(false);
-    expect(diaDaSemana('2026-11-25')).toBe(4);
+    expect(diaDaSemanaCobertura('2026-11-25')).toBe(4);
     expect(criterioBate({ tipo: 'horario', horaInicio: '00:00', horaFim: '23:59', diaSemana: 1 }, l)).toBe(
       false,
     );

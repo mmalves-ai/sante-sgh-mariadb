@@ -173,7 +173,7 @@ const hhmm = (h: string | null | undefined): number | null => {
 };
 
 /** Dia da semana da data civil: 1 domingo a 7 sábado. */
-export function diaDaSemana(data: string): number {
+export function diaDaSemanaCobertura(data: string): number {
   return new Date(`${data.slice(0, 10)}T12:00:00Z`).getUTCDay() + 1;
 }
 
@@ -185,13 +185,13 @@ export function tipoAtendimentoDaNatureza(natureza: string): TipoAtendimentoCobe
     : 'ambulatorial';
 }
 
-export function vigenteNaData(inicio: string, fim: string | null, data: string): boolean {
+export function vigenteNaDataCobertura(inicio: string, fim: string | null, data: string): boolean {
   const d = data.slice(0, 10);
   return inicio.slice(0, 10) <= d && (fim === null || fim.slice(0, 10) >= d);
 }
 
 function dentroDoHorario(c: CriterioCobertura, l: LancamentoCobertura): boolean {
-  if (c.diaSemana != null && c.diaSemana !== diaDaSemana(l.data)) return false;
+  if (c.diaSemana != null && c.diaSemana !== diaDaSemanaCobertura(l.data)) return false;
   const ini = hhmm(c.horaInicio);
   const fim = hhmm(c.horaFim);
   const h = hhmm(l.hora);
@@ -234,7 +234,7 @@ export function restricaoAlcanca(r: RestricaoCobertura, l: LancamentoCobertura):
   if (!r.ativo || r.fontePagadoraId !== l.fontePagadoraId) return false;
   if (r.estabelecimentoId !== null && r.estabelecimentoId !== l.estabelecimentoId) return false;
   if (r.planoId !== null && r.planoId !== l.planoId) return false;
-  if (!vigenteNaData(r.vigenciaInicio, r.vigenciaFim, l.data)) return false;
+  if (!vigenteNaDataCobertura(r.vigenciaInicio, r.vigenciaFim, l.data)) return false;
   if (r.tipoAtendimento !== null && r.tipoAtendimento !== l.tipoAtendimento) return false;
   const alvo =
     (r.itemId !== null && r.itemId === l.itemId) ||
@@ -303,7 +303,7 @@ export function paresAplicaveis(
     (p) =>
       p.ativo &&
       (p.fontePagadoraId === null || p.fontePagadoraId === fonte) &&
-      vigenteNaData(p.vigenciaInicio, p.vigenciaFim, data) &&
+      vigenteNaDataCobertura(p.vigenciaInicio, p.vigenciaFim, data) &&
       (p.itemId === itemId || (p.relacionadoId === itemId && p.tipo === 'incompativel')),
   );
   const chave = (p: ParCompatibilidade) =>

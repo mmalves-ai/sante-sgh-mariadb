@@ -51,6 +51,7 @@ import {
 } from './conta-entrada.js';
 
 import { conferirLancamentoNoPeriodo } from './conta-periodos-propria.js';
+import { conferirCoberturaNoLancamento } from './restricao-cobertura-propria.js';
 import { versaoNumero } from './esquemas.js';
 import { dispararKitsDoItem } from './kit-lancamento.js';
 import { type PrecoVigente, precoVigente, tabelasDePreco } from './preco-conta.js';
@@ -640,6 +641,20 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
     // 06-FAT linha 12: a data que cai num período fechado da conta parcial é recusada (o item sem tipo de lançamento
     // só esbarra no período geral).
     await conferirLancamentoNoPeriodo(tx, conta.id, realizado, null);
+    // F7 (09-AREA linha 76): restrição de cobertura da fonte e compatibilidade com a conta, antes de gravar (o bloqueio
+    // recusa; a exceção do atendimento libera e fica na memória).
+    const cobertura = await conferirCoberturaNoLancamento(tx, est, conta.id, {
+      itemId: n(item['id']),
+      grupoId: item['grupo_faturamento_id'] == null ? null : n(item['grupo_faturamento_id']),
+      tabelaId: preco?.tabela || (naTabela ? n(naTabela['tabela_preco_id']) : null),
+      data: e.data,
+      hora: e.hora,
+      setorId: setor,
+      profissionalId: e.executante,
+      quantidade: e.quantidade,
+      valorTotal: comAcordo ? comAcordo.total : valorDoItem(unitario, e.quantidade),
+      justificado: !!e.justificativaCobertura?.trim(),
+    });
     const seq = await tx.uma<Linha>(
       'SELECT COALESCE(MAX(sequencia), 0) + 1 AS proxima FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
       [conta.id],
@@ -741,6 +756,13 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
         origem: e.origem ?? null,
         profissional: quem.profissional,
         credenciamento: alerta ? { efeito: alerta.efeito, motivo: alerta.motivo } : null,
+        cobertura: cobertura
+          ? {
+              situacao: cobertura.situacao,
+              achados: cobertura.achados,
+              justificativa: e.justificativaCobertura ?? null,
+            }
+          : null,
         // 06-FAT linha 1: as regras do acordo aplicadas, o excedente transferido e o que o alto custo exige.
         acordo: comAcordo
           ? {
@@ -791,6 +813,13 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       ...(pacotes.aplicados ? { pacotesAplicados: pacotes.aplicados } : {}),
       ...(pacotes.reclassificados ? { pacoteReclassificados: pacotes.reclassificados } : {}),
       ...(comAcordo?.alertas.length ? { alertasAcordo: comAcordo.alertas.join(',') } : {}),
+      // F7 (09-AREA linha 76): o aviso da cobertura e a liberação por exceção (o resultado da operação é plano).
+      ...(cobertura
+        ? {
+            coberturaSituacao: cobertura.situacao,
+            coberturaMotivos: cobertura.achados.map((a) => a.motivo).join(' | '),
+          }
+        : {}),
     };
     const doKit = kits.kits.length
       ? { kits: kits.kits.join(','), itensKit: kits.itens.length, semPrecoKit: kits.semPreco }
