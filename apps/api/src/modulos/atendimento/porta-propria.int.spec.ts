@@ -932,4 +932,70 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
         ),
       ).rejects.toMatchObject({ problema: { codigo: 'troca-de-conta' } });
   });
+
+  it('02-CAD 20: o atendimento pedido pelo solicitante unificado em outro nasce no cadastro que continua', async () => {
+    const mm = m!;
+    const c = contextoPorta(mm);
+    const NUMEROS = ['F3110AT1', 'F3110AT2'];
+    const limpar = () =>
+      nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'f3-1-10-abertura' }, async (w) => {
+        const doTeste = 'SELECT id FROM solicitante_externo WHERE numero_conselho IN (?, ?)';
+        await w.executar(
+          `UPDATE atendimento SET solicitante_externo_id = NULL WHERE solicitante_externo_id IN (SELECT id FROM (${doTeste}) x)`,
+          NUMEROS,
+        );
+        await w.executar(
+          'UPDATE solicitante_externo SET sucessor_solicitante_externo_id = NULL WHERE numero_conselho IN (?, ?)',
+          NUMEROS,
+        );
+        await w.executar('DELETE FROM solicitante_externo WHERE numero_conselho IN (?, ?)', NUMEROS);
+      });
+    await limpar();
+    try {
+      // Massa sintética: o cadastro que continua e o duplicado já unificado nele (inativo, com o ponteiro).
+      const [continua, duplicado] = await nucleo.escrever(
+        { cliente: CLIENTE_F22, correlacao: 'f3-1-10-abertura' },
+        async (w) => {
+          const novo = (nome: string, numero: string) =>
+            w.inserir(
+              `INSERT INTO solicitante_externo (nome, conselho_classe_id, numero_conselho, conselho_unidade_federativa_id,
+                 data_inscricao, ativo, criado_em) VALUES (?, ?, ?, ?, '2026-01-01', TRUE, NOW(3))`,
+              [nome, mm.conselho, numero, mm.uf],
+            );
+          const a = await novo(`SOLICITANTE QUE CONTINUA ${MARCA}`, NUMEROS[0]!);
+          const b = await novo(`SOLICITANTE DUPLICADO ${MARCA}`, NUMEROS[1]!);
+          await w.executar(
+            `UPDATE solicitante_externo SET ativo = FALSE, data_inativacao = CURRENT_DATE, ativo_antes_unificacao = TRUE,
+               sucessor_solicitante_externo_id = ?, unificado_em = NOW(3), unificado_por = ? WHERE id = ?`,
+            [a, mm.usuario, b],
+          );
+          return [a, b] as const;
+        },
+      );
+      const r = await porta.executar(
+        c,
+        'atendimento.abrirAtendimento',
+        { ...abertura(mm), solicitante: duplicado },
+        contextoGravacao(mm),
+      );
+      const reg = Number(r.resultado['reg']);
+      expect(reg).toBeGreaterThan(0);
+      // O que fica no banco: o atendimento aponta para o cadastro que continua, nunca para o duplicado.
+      expect(
+        Number((await ler('SELECT solicitante_externo_id AS s FROM atendimento WHERE id = ?', [reg]))?.['s']),
+      ).toBe(continua);
+      expect(
+        await contar('SELECT COUNT(*) AS n FROM atendimento WHERE solicitante_externo_id = ?', [duplicado]),
+      ).toBe(0);
+      // O duplicado segue como estava: inativo e com o ponteiro.
+      expect(
+        await ler(
+          'SELECT ativo, sucessor_solicitante_externo_id AS s FROM solicitante_externo WHERE id = ?',
+          [duplicado],
+        ),
+      ).toMatchObject({ ativo: 0, s: continua });
+    } finally {
+      await limpar().catch(() => undefined);
+    }
+  });
 });
