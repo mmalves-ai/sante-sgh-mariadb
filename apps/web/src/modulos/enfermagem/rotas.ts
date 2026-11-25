@@ -61,6 +61,13 @@ export const rotasEnfermagem: RouteRecordRaw[] = [
     meta: { permissao: 'enfermagem.sinalVital.ler' },
   },
   {
+    // 03-PEP linha 115 (C2-003): limites de alerta dos sinais vitais (gravar pede enfermagem.limiteSinal.editar).
+    path: '/enfermagem/limites-sinais',
+    name: 'enfermagem.limitesSinais',
+    component: () => import('./telas/LimitesSinaisTela.vue'),
+    meta: { permissao: 'enfermagem.sinalVital.ler' },
+  },
+  {
     path: '/enfermagem/plantao',
     name: 'enfermagem.plantao',
     component: () => import('./telas/PlantaoTela.vue'),

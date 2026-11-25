@@ -24,6 +24,7 @@ import {
   retificarSinal,
   semRede,
 } from '../api-enfermagem.js';
+import AfericaoDetalhadaPainel from '../componentes/AfericaoDetalhadaPainel.vue';
 import ErroEnfermagem from '../componentes/ErroEnfermagem.vue';
 import SeletorUnidade from '../componentes/SeletorUnidade.vue';
 import { usarChecagem } from '../usar-checagem.js';
@@ -299,6 +300,12 @@ watch(
           data-testid="sv-registrar"
         />
       </form>
+      <AfericaoDetalhadaPainel
+        v-if="modo === 'tela' && paciente"
+        :paciente="paciente"
+        :atendimento="atendimentoDoPaciente"
+        :pode-criar="podeCriar"
+      />
       <div class="barra" role="group">
         <SanteBotao
           :variante="vista === 'grade' ? 'primario' : 'secundario'"

@@ -50,6 +50,10 @@ export const mensagensSinaisDetalhe = {
     normalSuperior: 'Normal superior',
     limiteSuperior: 'Crítico superior',
     incluir: 'Incluir limite',
+    faixaVazia: 'Informe ao menos uma faixa (crítica ou normal).',
+    faixaFora:
+      'As faixas vão em ordem: crítico inferior, normal inferior, normal superior e crítico superior.',
+    idadeInvertida: 'A idade máxima não pode ser menor que a mínima.',
     inativar: 'Inativar',
     motivoInativar: 'Motivo da inativação (10 caracteres ou mais)',
     ativos: 'Limites ativos',
