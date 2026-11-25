@@ -479,3 +479,125 @@ export async function detalheDoAcordo(l: Leitor, est: number, acordo: number) {
     })),
   };
 }
+
+// ── Escolha por devedor (a visão de quem deve: todos os títulos em aberto dele, com o saldo real das parcelas) ──
+
+/** Letra do tipo de devedor na rota ↔ tipo do modelo, com a coluna que o identifica no título. */
+const DEVEDORES = {
+  C: { tipo: 'fonte_pagadora', coluna: 'fonte_pagadora_id' },
+  E: { tipo: 'paciente', coluna: 'paciente_id' },
+  O: { tipo: 'cliente', coluna: 'cliente_financeiro_id' },
+} as const;
+export type LetraDevedor = keyof typeof DEVEDORES;
+export const letraDevedor = (v: unknown): LetraDevedor | null =>
+  typeof v === 'string' && v in DEVEDORES ? (v as LetraDevedor) : null;
+const NOME_DO_DEVEDOR = {
+  C: { de: 'fonte_pagadora n ON n.id = t.fonte_pagadora_id', nome: 'n.nome' },
+  E: {
+    de: 'paciente pa ON pa.id = t.paciente_id JOIN pessoa_fisica n ON n.id = pa.pessoa_fisica_id',
+    nome: 'n.nome',
+  },
+  O: { de: 'cliente_financeiro n ON n.id = t.cliente_financeiro_id', nome: 'n.nome' },
+} as const;
+/** A parcela que pode entrar num acordo: a mesma condição da gravação. */
+const RENEGOCIAVEL = `p.excluido_em IS NULL AND p.saldo > 0 AND p.situacao IN ('aberta','parcial')
+  AND t.excluido_em IS NULL AND t.situacao IN ('aberto','recebido_parcial')`;
+
+/** Os devedores do tipo com saldo renegociável, do maior saldo para o menor; a busca é pelo nome. */
+export async function devedoresComSaldoAberto(l: Leitor, est: number, letra: LetraDevedor, busca: string) {
+  const d = DEVEDORES[letra];
+  const n = NOME_DO_DEVEDOR[letra];
+  const termo = busca.trim().slice(0, 80);
+  const linhas = await l.consultar(
+    `SELECT t.${d.coluna} AS id, ${n.nome} AS nome, COUNT(DISTINCT t.id) AS titulos, SUM(p.saldo) AS saldo,
+            MIN(p.vencimento) AS mais_antigo
+       FROM titulo_receber t JOIN parcela_receber p ON p.titulo_receber_id = t.id JOIN ${n.de}
+      WHERE t.estabelecimento_id = ? AND t.tipo_devedor = ? AND ${RENEGOCIAVEL}
+        AND (? = '' OR ${n.nome} LIKE ?)
+      GROUP BY t.${d.coluna}, ${n.nome} ORDER BY saldo DESC, nome LIMIT 50`,
+    [est, d.tipo, termo, `%${termo.replace(/[%_\\]/g, (c) => `\\${c}`)}%`],
+  );
+  return linhas.map((r) => ({
+    id: numero(r['id']),
+    nome: String(r['nome']),
+    titulos: numero(r['titulos']),
+    saldo: numero(r['saldo']),
+    maisAntigo: dataIso(r['mais_antigo']) ?? '',
+  }));
+}
+
+/**
+ * Todos os títulos em aberto de UM devedor, do vencimento mais antigo para o mais novo, com as parcelas que entram no
+ * acordo e o saldo real de cada uma (o que a gravação usa): a prévia da tela dá o mesmo valor que fica gravado.
+ */
+export async function titulosRenegociaveisDoDevedor(
+  l: Leitor,
+  est: number,
+  letra: LetraDevedor,
+  devedor: number,
+) {
+  const d = DEVEDORES[letra];
+  const linhas = await l.consultar(
+    `SELECT t.id AS titulo, t.numero, t.numero_documento, t.data_emissao, t.valor_liquido, t.valor_recebido,
+            p.id AS parcela, p.sequencia, p.vencimento, p.valor, p.saldo, p.situacao,
+            EXISTS (SELECT 1 FROM encontro_contas_item i JOIN encontro_contas c ON c.id = i.encontro_contas_id
+                     WHERE i.parcela_receber_id = p.id AND i.excluido_em IS NULL
+                       AND c.situacao = 'aguardando_aprovacao') AS em_encontro
+       FROM titulo_receber t JOIN parcela_receber p ON p.titulo_receber_id = t.id
+      WHERE t.estabelecimento_id = ? AND t.tipo_devedor = ? AND t.${d.coluna} = ? AND ${RENEGOCIAVEL}
+      ORDER BY p.vencimento, t.id, p.sequencia LIMIT 5000`,
+    [est, d.tipo, devedor],
+  );
+  const titulos = new Map<
+    number,
+    {
+      id: number;
+      numero: string;
+      documento: string;
+      emissao: string;
+      valor: number;
+      recebido: number;
+      vencimento: string;
+      saldo: number;
+      emEncontro: boolean;
+      parcelas: {
+        parcela: number;
+        sequencia: number;
+        vencimento: string;
+        valor: number;
+        saldo: number;
+        situacao: string;
+        emEncontro: boolean;
+      }[];
+    }
+  >();
+  for (const r of linhas) {
+    const id = numero(r['titulo']);
+    const t = titulos.get(id) ?? {
+      id,
+      numero: String(r['numero']),
+      documento: String(r['numero_documento'] ?? ''),
+      emissao: dataIso(r['data_emissao']) ?? '',
+      valor: numero(r['valor_liquido']),
+      recebido: numero(r['valor_recebido']),
+      vencimento: dataIso(r['vencimento']) ?? '',
+      saldo: 0,
+      emEncontro: false,
+      parcelas: [],
+    };
+    const emEncontro = !!Number(r['em_encontro']);
+    t.parcelas.push({
+      parcela: numero(r['parcela']),
+      sequencia: numero(r['sequencia']),
+      vencimento: dataIso(r['vencimento']) ?? '',
+      valor: numero(r['valor']),
+      saldo: numero(r['saldo']),
+      situacao: String(r['situacao']),
+      emEncontro,
+    });
+    t.saldo = Math.round((t.saldo + numero(r['saldo']) + Number.EPSILON) * 100) / 100;
+    t.emEncontro = t.emEncontro || emEncontro;
+    titulos.set(id, t);
+  }
+  return { devedor: `${d.tipo}:${devedor}`, titulos: [...titulos.values()] };
+}

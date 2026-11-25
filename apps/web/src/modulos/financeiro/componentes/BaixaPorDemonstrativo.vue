@@ -1,14 +1,20 @@
 <script setup lang="ts">
 // Baixa dos títulos pelo demonstrativo de pagamento importado da operadora (F3.8, 07-FIN linha 76). Escolhido o
 // demonstrativo, a prévia mostra o que cada título recebe e o que fica glosado; um botão baixa tudo de uma vez, com o
-// recebido e a glosa por item da conta (em vez de item a item).
+// recebido e a glosa por item da conta (em vez de item a item). A baixa feita na conta, na data ou com o demonstrativo
+// errado é desfeita aqui mesmo, com o motivo (os recebimentos ficam estornados; nada é apagado).
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
-import { baixarDemonstrativo, lerPreviaDaBaixa, listarDemonstrativosImportados } from '../api-acordos.js';
+import {
+  baixarDemonstrativo,
+  desfazerBaixaDemonstrativo,
+  lerPreviaDaBaixa,
+  listarDemonstrativosImportados,
+} from '../api-acordos.js';
 import { novaChave } from '../api-financeiro.js';
 import { data, opcoesContas, reais, usarFinanceiro } from '../usar-financeiro.js';
 
@@ -41,23 +47,44 @@ const form = reactive({ conta: '', data: new Date().toISOString().slice(0, 10) }
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const gravando = ref(false);
-async function baixar() {
+const selecionado = computed(
+  () => (lista.data.value ?? []).find((d) => String(d.id) === escolhido.value) ?? null,
+);
+const motivo = ref('');
+async function agir(fn: () => Promise<{ mensagem: string }>) {
   erro.value = null;
   mensagem.value = null;
   gravando.value = true;
   try {
-    const r = await baixarDemonstrativo(
-      Number(escolhido.value),
-      { conta: Number(form.conta), dataRecebimento: form.data },
-      novaChave('baixa-demonstrativo'),
-    );
-    mensagem.value = r.mensagem;
+    mensagem.value = (await fn()).mensagem;
     await qc.invalidateQueries({ queryKey: ['financeiro'] });
+    return true;
   } catch (e) {
     erro.value = e;
+    return false;
   } finally {
     gravando.value = false;
   }
+}
+const baixar = () =>
+  agir(() =>
+    baixarDemonstrativo(
+      Number(escolhido.value),
+      { conta: Number(form.conta), dataRecebimento: form.data },
+      novaChave('baixa-demonstrativo'),
+    ),
+  );
+async function desfazer() {
+  if (
+    await agir(() =>
+      desfazerBaixaDemonstrativo(
+        Number(escolhido.value),
+        motivo.value.trim(),
+        novaChave('desfazer-baixa-demonstrativo'),
+      ),
+    )
+  )
+    motivo.value = '';
 }
 </script>
 
@@ -85,7 +112,24 @@ async function baixar() {
         <p v-if="previa.data.value.impedimento" role="alert" data-testid="bxd-impedimento">
           {{ previa.data.value.impedimento.mensagem }}
         </p>
-        <template v-else-if="previa.data.value.plano">
+        <div v-if="selecionado?.baixado" data-testid="bxd-desfazer">
+          <h3>{{ t('financeiro.acordos.baixa.desfazerTitulo') }}</h3>
+          <p class="secundario">{{ t('financeiro.acordos.baixa.desfazerTexto') }}</p>
+          <span class="campo">
+            <label for="bxd-motivo">{{ t('financeiro.acordos.baixa.motivoDesfazer') }}</label>
+            <input id="bxd-motivo" v-model="motivo" minlength="5" maxlength="400" data-testid="bxd-motivo" />
+          </span>
+          <button
+            type="button"
+            :disabled="gravando || motivo.trim().length < 5 || !podeBaixar"
+            data-testid="bxd-confirmar-desfazer"
+            @click="desfazer"
+          >
+            {{ t('financeiro.acordos.baixa.desfazer') }}
+          </button>
+          <p v-if="!podeBaixar" class="secundario">{{ t('financeiro.acordos.baixa.semPermissao') }}</p>
+        </div>
+        <template v-if="!previa.data.value.impedimento && previa.data.value.plano">
           <table class="tabela" data-testid="bxd-previa">
             <thead>
               <tr>

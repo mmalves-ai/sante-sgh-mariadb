@@ -1,7 +1,9 @@
 <script setup lang="ts">
-// Renegociação de títulos a receber (F3.8, 07-FIN linha 76): `/financeiro/receber/renegociacoes`. Numa tela só: marcar
-// os títulos em aberto de um devedor, ver a prévia do acordo (a mesma regra do servidor, na hora) e gravar; embaixo, os
-// acordos com o histórico (o que entrou e as parcelas novas) e o desfazer com motivo, enquanto não houve recebimento.
+// Renegociação de títulos a receber (F3.8, 07-FIN linha 76): `/financeiro/receber/renegociacoes`. Numa tela só:
+// escolher quem deve (convênio, paciente particular ou cliente, com busca pelo nome), ver TODOS os títulos em aberto
+// dele com o saldo real das parcelas, marcar, ver a prévia do acordo (a mesma regra e o mesmo saldo do servidor, na
+// hora) e gravar; embaixo, os acordos com o histórico (o que entrou e as parcelas novas) e o desfazer com motivo,
+// enquanto não houve recebimento.
 import { planejarRenegociacao } from '@sgh/contratos/regras-financeiro';
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
@@ -9,8 +11,17 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
-import { type Acordo, desfazerAcordo, gravarAcordo, lerAcordo, listarAcordos } from '../api-acordos.js';
-import { listarRenegociacoes, listarTitulosReceber, novaChave } from '../api-financeiro.js';
+import {
+  type Acordo,
+  desfazerAcordo,
+  gravarAcordo,
+  lerAcordo,
+  listarAcordos,
+  listarDevedoresDoAcordo,
+  listarTitulosDoDevedor,
+  type TipoDevedorAcordo,
+} from '../api-acordos.js';
+import { listarRenegociacoes, novaChave } from '../api-financeiro.js';
 import { data, quando, reais, usarFinanceiro } from '../usar-financeiro.js';
 
 const { t } = useI18n();
@@ -21,30 +32,61 @@ const hoje = new Date().toISOString().slice(0, 10);
 const numero = (v: string) => Number(String(v).replace(',', '.')) || 0;
 
 // ── Novo acordo ──
-const tipo = ref('');
+const MAXIMO_TITULOS = 100;
+const tipo = ref<TipoDevedorAcordo | ''>('');
 const tipos = computed(() => [
   { valor: '', rotulo: t('financeiro.escolha') },
   { valor: 'C', rotulo: t('financeiro.acordos.tipos.C') },
-  { valor: 'P', rotulo: t('financeiro.acordos.tipos.P') },
+  { valor: 'E', rotulo: t('financeiro.acordos.tipos.E') },
+  { valor: 'O', rotulo: t('financeiro.acordos.tipos.O') },
 ]);
-const abertos = useQuery({
-  queryKey: computed(() => ['financeiro', 'receber', 'abertos-acordo', tipo.value]),
-  queryFn: () => listarTitulosReceber({ devedor: tipo.value, aberto: 'sim' }),
+// A busca pelo nome vai ao servidor depois de uma pausa na digitação.
+const busca = ref('');
+const buscaAplicada = ref('');
+let espera: ReturnType<typeof setTimeout> | undefined;
+watch(busca, (v) => {
+  clearTimeout(espera);
+  espera = setTimeout(() => {
+    buscaAplicada.value = v.trim();
+  }, 300);
+});
+const devedores = useQuery({
+  queryKey: computed(() => ['financeiro', 'acordos-devedores', tipo.value, buscaAplicada.value]),
+  queryFn: () => listarDevedoresDoAcordo(tipo.value as TipoDevedorAcordo, buscaAplicada.value),
   enabled: computed(() => !!tipo.value),
 });
-const titulos = computed(() =>
-  (abertos.data.value?.itens ?? []).map((x) => ({
-    ...x,
-    chave: `${x.devedor}:${x.codigo}`,
-    saldo: Math.round((x.valor - x.recebido) * 100) / 100,
+const devedor = ref('');
+const opcoesDevedor = computed(() => [
+  { valor: '', rotulo: t('financeiro.escolha') },
+  ...(devedores.data.value ?? []).map((d) => ({
+    valor: String(d.id),
+    rotulo: t('financeiro.acordos.opcaoDevedor', { nome: d.nome, titulos: d.titulos, saldo: reais(d.saldo) }),
   })),
-);
+]);
+const doDevedor = useQuery({
+  queryKey: computed(() => ['financeiro', 'acordos-titulos', tipo.value, Number(devedor.value)]),
+  queryFn: () => listarTitulosDoDevedor(tipo.value as TipoDevedorAcordo, Number(devedor.value)),
+  enabled: computed(() => !!tipo.value && !!devedor.value),
+});
+const titulos = computed(() => doDevedor.data.value?.titulos ?? []);
+const saldoDoDevedor = computed(() => Math.round(titulos.value.reduce((x, y) => x + y.saldo, 0) * 100) / 100);
 const marcados = ref<number[]>([]);
 watch(tipo, () => {
+  devedor.value = '';
+  busca.value = '';
+  buscaAplicada.value = '';
+});
+watch(devedor, () => {
   marcados.value = [];
 });
+const marcaveis = computed(() => titulos.value.filter((x) => !x.emEncontro).map((x) => x.id));
+const todosMarcados = computed(
+  () => marcaveis.value.length > 0 && marcaveis.value.every((id) => marcados.value.includes(id)),
+);
+function alternarTodos() {
+  marcados.value = todosMarcados.value ? [] : [...marcaveis.value];
+}
 const escolhidos = computed(() => titulos.value.filter((x) => marcados.value.includes(x.id)));
-const devedorDoAcordo = computed(() => escolhidos.value[0]?.chave ?? null);
 const form = reactive({
   juros: '',
   multa: '',
@@ -53,20 +95,23 @@ const form = reactive({
   vencimento: hoje,
   observacao: '',
 });
+// A prévia usa as parcelas e o saldo que o servidor devolveu: as mesmas que a gravação lê.
 const calculo = computed(() =>
   escolhidos.value.length === 0
     ? null
     : planejarRenegociacao({
         dataAcordo: hoje,
-        parcelas: escolhidos.value.map((x) => ({
-          parcela: x.id,
-          titulo: x.id,
-          situacao: x.recebido > 0 ? 'parcial' : 'aberta',
-          valor: x.valor,
-          saldo: x.saldo,
-          devedor: x.chave,
-          emEncontro: false,
-        })),
+        parcelas: escolhidos.value.flatMap((x) =>
+          x.parcelas.map((p) => ({
+            parcela: p.parcela,
+            titulo: x.id,
+            situacao: p.situacao,
+            valor: p.valor,
+            saldo: p.saldo,
+            devedor: doDevedor.data.value?.devedor ?? '',
+            emEncontro: p.emEncontro,
+          })),
+        ),
         juros: numero(form.juros),
         multa: numero(form.multa),
         desconto: numero(form.desconto),
@@ -75,9 +120,15 @@ const calculo = computed(() =>
       }),
 );
 const impedimento = computed(() =>
-  calculo.value && 'codigo' in calculo.value ? calculo.value.mensagem : null,
+  marcados.value.length > MAXIMO_TITULOS
+    ? t('financeiro.acordos.muitosTitulos', { maximo: MAXIMO_TITULOS })
+    : calculo.value && 'codigo' in calculo.value
+      ? calculo.value.mensagem
+      : null,
 );
-const plano = computed(() => (calculo.value && !('codigo' in calculo.value) ? calculo.value : null));
+const plano = computed(() =>
+  !impedimento.value && calculo.value && !('codigo' in calculo.value) ? calculo.value : null,
+);
 
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
@@ -114,6 +165,7 @@ async function gravar() {
   );
   if (feito) {
     marcados.value = [];
+    devedor.value = '';
     Object.assign(form, { juros: '', multa: '', desconto: '', parcelas: '1', observacao: '' });
   }
 }
@@ -163,43 +215,76 @@ async function desfazer(a: Acordo) {
           data-testid="ac-tipo"
         />
       </span>
-      <ErroFaturamento v-if="abertos.error.value" :erro="abertos.error.value" />
-      <p v-else-if="tipo && abertos.isLoading.value">{{ t('financeiro.carregando') }}</p>
-      <table v-else-if="titulos.length" class="tabela" data-testid="ac-titulos">
-        <thead>
-          <tr>
-            <th scope="col">{{ t('financeiro.acordos.novo') }}</th>
-            <th scope="col">{{ t('financeiro.acordos.documento') }}</th>
-            <th scope="col">{{ t('financeiro.acordos.devedor') }}</th>
-            <th scope="col">{{ t('financeiro.acordos.vencimento') }}</th>
-            <th scope="col">{{ t('financeiro.acordos.saldo') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="x in titulos" :key="x.id">
-            <td>
-              <input
-                v-model="marcados"
-                type="checkbox"
-                :value="x.id"
-                :disabled="devedorDoAcordo !== null && devedorDoAcordo !== x.chave"
-                :aria-label="t('financeiro.acordos.marcar', { documento: x.documento })"
-                :title="
-                  devedorDoAcordo !== null && devedorDoAcordo !== x.chave
-                    ? t('financeiro.acordos.outroDevedor')
-                    : undefined
-                "
-                :data-testid="`ac-marcar-${x.id}`"
-              />
-            </td>
-            <td>{{ x.documento }}</td>
-            <td>{{ x.nome }}</td>
-            <td>{{ data(x.vencimento) }}</td>
-            <td>{{ reais(x.saldo) }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else-if="tipo">{{ t('financeiro.acordos.nenhumAberto') }}</p>
+      <template v-if="tipo">
+        <span class="campo">
+          <label for="ac-busca">{{ t('financeiro.acordos.busca') }}</label>
+          <input id="ac-busca" v-model="busca" type="search" maxlength="80" data-testid="ac-busca" />
+        </span>
+        <ErroFaturamento v-if="devedores.error.value" :erro="devedores.error.value" />
+        <p v-else-if="devedores.isLoading.value">{{ t('financeiro.carregando') }}</p>
+        <p v-else-if="!devedores.data.value?.length" data-testid="ac-sem-devedor">
+          {{ t('financeiro.acordos.nenhumDevedor') }}
+        </p>
+        <span v-else class="campo">
+          <SanteSelecao
+            v-model="devedor"
+            :rotulo="t('financeiro.acordos.quem')"
+            :opcoes="opcoesDevedor"
+            data-testid="ac-devedor"
+          />
+        </span>
+      </template>
+      <template v-if="tipo && devedor">
+        <ErroFaturamento v-if="doDevedor.error.value" :erro="doDevedor.error.value" />
+        <p v-else-if="doDevedor.isLoading.value">{{ t('financeiro.carregando') }}</p>
+        <template v-else-if="titulos.length">
+          <p data-testid="ac-resumo-devedor">
+            {{
+              t('financeiro.acordos.resumoDevedor', {
+                titulos: titulos.length,
+                saldo: reais(saldoDoDevedor),
+                data: data(titulos[0]?.vencimento ?? ''),
+              })
+            }}
+          </p>
+          <button type="button" data-testid="ac-marcar-todos" @click="alternarTodos">
+            {{ todosMarcados ? t('financeiro.acordos.desmarcarTodos') : t('financeiro.acordos.marcarTodos') }}
+          </button>
+          <table class="tabela" data-testid="ac-titulos">
+            <thead>
+              <tr>
+                <th scope="col">{{ t('financeiro.acordos.novo') }}</th>
+                <th scope="col">{{ t('financeiro.acordos.documento') }}</th>
+                <th scope="col">{{ t('financeiro.acordos.emissao') }}</th>
+                <th scope="col">{{ t('financeiro.acordos.vencimento') }}</th>
+                <th scope="col">{{ t('financeiro.acordos.parcelasAbertas') }}</th>
+                <th scope="col">{{ t('financeiro.acordos.saldo') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="x in titulos" :key="x.id">
+                <td>
+                  <input
+                    v-model="marcados"
+                    type="checkbox"
+                    :value="x.id"
+                    :disabled="x.emEncontro"
+                    :aria-label="t('financeiro.acordos.marcar', { documento: x.documento || x.numero })"
+                    :title="x.emEncontro ? t('financeiro.acordos.emEncontro') : undefined"
+                    :data-testid="`ac-marcar-${x.id}`"
+                  />
+                </td>
+                <td>{{ x.numero }}{{ x.documento ? ` (${x.documento})` : '' }}</td>
+                <td>{{ data(x.emissao) }}</td>
+                <td>{{ data(x.vencimento) }}</td>
+                <td>{{ x.parcelas.length }}</td>
+                <td>{{ reais(x.saldo) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+        <p v-else data-testid="ac-sem-titulo">{{ t('financeiro.acordos.nenhumAberto') }}</p>
+      </template>
 
       <template v-if="escolhidos.length">
         <span class="campo">

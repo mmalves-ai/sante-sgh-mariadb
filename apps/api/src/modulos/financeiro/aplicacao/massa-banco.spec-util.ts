@@ -109,6 +109,10 @@ export async function limparMassa(nucleo: NucleoProprio, ests: readonly number[]
     );
     await x(`DELETE FROM saldo_financeiro_periodo WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM periodo_financeiro WHERE estabelecimento_id IN (${q})`);
+    // O débito de estorno aponta para o crédito que estorna: a ligação sai antes da exclusão.
+    await x(
+      `UPDATE movimento_bancario SET estornado_movimento_bancario_id = NULL WHERE estabelecimento_id IN (${q})`,
+    );
     await x(`DELETE FROM movimento_bancario WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM grupo_lancamento_financeiro WHERE estabelecimento_id IN (${q})`);
     await x(`DELETE FROM bordero_pagamento WHERE estabelecimento_id IN (${q})`);

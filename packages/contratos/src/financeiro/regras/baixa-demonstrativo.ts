@@ -77,7 +77,7 @@ export function planejarBaixaDemonstrativo(
   if (e.jaBaixado)
     return recusaFin(
       'demonstrativo-ja-baixado',
-      'Este demonstrativo já foi baixado nos títulos. Para refazer, estorne os recebimentos dele antes.',
+      'Este demonstrativo já foi baixado nos títulos. Para refazer, desfaça a baixa dele antes (com o motivo).',
     );
   const titulos = new Map(e.titulos.map((t) => [t.titulo, t]));
   const porTitulo = new Map<number, Map<number, ItemRecebidoDoDemonstrativo>>();
@@ -142,5 +142,116 @@ export function planejarBaixaDemonstrativo(
     totalGlosa: centavos(baixas.reduce((x, b) => x + b.glosa, 0)),
     linhasSemTitulo,
     valorSemTitulo,
+  };
+}
+
+/** O motivo mínimo para desfazer a baixa de um demonstrativo (o estorno tem de dizer por quê). */
+export const MOTIVO_DESFAZER_BAIXA_MINIMO = 5;
+
+export interface RecebimentoDoDemonstrativo {
+  readonly recebimento: number;
+  readonly parcela: number;
+  readonly titulo: number;
+  /** Quanto este recebimento baixou na parcela. */
+  readonly recebido: number;
+  /** A parcela hoje: situação, saldo e total recebido. */
+  readonly situacaoParcela: string;
+  readonly saldoParcela: number;
+  readonly recebidoParcela: number;
+  /** O título hoje: situação e total recebido. */
+  readonly situacaoTitulo: string;
+  readonly recebidoTitulo: number;
+}
+
+export interface EntradaDesfazerBaixaDemonstrativo {
+  /** Os recebimentos efetivados que a baixa do demonstrativo gravou. */
+  readonly recebimentos: readonly RecebimentoDoDemonstrativo[];
+  /** O crédito bancário da baixa já foi conciliado com o extrato. */
+  readonly creditoConciliado: boolean;
+  readonly motivo: string;
+}
+
+export interface DevolucaoDaBaixa {
+  readonly recebimento: number;
+  readonly parcela: number;
+  readonly titulo: number;
+  readonly estornado: number;
+  /** A parcela depois do estorno. */
+  readonly saldoParcela: number;
+  readonly recebidoParcela: number;
+  readonly situacaoParcela: 'aberta' | 'parcial';
+}
+
+export interface PlanoDesfazerBaixaDemonstrativo {
+  readonly devolucoes: readonly DevolucaoDaBaixa[];
+  /** O título depois do estorno (um por título). */
+  readonly titulos: readonly {
+    readonly titulo: number;
+    readonly recebido: number;
+    readonly situacao: 'aberto' | 'recebido_parcial';
+  }[];
+  /** O total que sai da conta bancária (o débito contrário ao crédito da baixa). */
+  readonly totalEstornado: number;
+}
+
+/**
+ * Desfazer a baixa do demonstrativo (conta ou data errada, demonstrativo trocado): todos os recebimentos dele são
+ * estornados de uma vez, com o motivo; cada parcela recupera o saldo que a baixa tirou e o título volta a ficar em
+ * aberto ou recebido em parte. Recusado quando a baixa não existe, quando o crédito já foi conciliado com o extrato ou
+ * quando a parcela andou depois da baixa (renegociada, cancelada, protestada, perdida): nada é desfeito pela metade.
+ */
+export function planejarDesfazerBaixaDemonstrativo(
+  e: EntradaDesfazerBaixaDemonstrativo,
+): PlanoDesfazerBaixaDemonstrativo | RecusaFinanceiro {
+  if (e.recebimentos.length === 0)
+    return recusaFin(
+      'demonstrativo-nao-baixado',
+      'Este demonstrativo não tem baixa em vigor: releia a lista.',
+    );
+  if (e.motivo.trim().length < MOTIVO_DESFAZER_BAIXA_MINIMO)
+    return recusaFin('motivo-obrigatorio', 'Diga o motivo de desfazer a baixa.', ['motivo']);
+  if (e.creditoConciliado)
+    return recusaFin(
+      'credito-conciliado',
+      'O crédito desta baixa já foi conciliado com o extrato bancário: a baixa não pode mais ser desfeita.',
+    );
+  const parcelas = new Map<number, { saldo: number; recebido: number }>();
+  const titulos = new Map<number, number>();
+  const devolucoes: DevolucaoDaBaixa[] = [];
+  for (const r of e.recebimentos) {
+    const p = parcelas.get(r.parcela) ?? { saldo: r.saldoParcela, recebido: r.recebidoParcela };
+    const doTitulo = titulos.get(r.titulo) ?? r.recebidoTitulo;
+    if (
+      !['parcial', 'recebida'].includes(r.situacaoParcela) ||
+      !['recebido_parcial', 'recebido'].includes(r.situacaoTitulo) ||
+      r.recebido > p.recebido + TOLERANCIA ||
+      r.recebido > doTitulo + TOLERANCIA
+    )
+      return recusaFin(
+        'titulo-movimentado',
+        'Há título que mudou depois desta baixa (renegociado, cancelado, protestado ou dado como perdido): a baixa não pode mais ser desfeita.',
+      );
+    p.saldo = centavos(p.saldo + r.recebido);
+    p.recebido = centavos(Math.max(0, p.recebido - r.recebido));
+    parcelas.set(r.parcela, p);
+    titulos.set(r.titulo, centavos(Math.max(0, doTitulo - r.recebido)));
+    devolucoes.push({
+      recebimento: r.recebimento,
+      parcela: r.parcela,
+      titulo: r.titulo,
+      estornado: centavos(r.recebido),
+      saldoParcela: p.saldo,
+      recebidoParcela: p.recebido,
+      situacaoParcela: p.recebido > TOLERANCIA ? 'parcial' : 'aberta',
+    });
+  }
+  return {
+    devolucoes,
+    titulos: [...titulos].map(([titulo, recebido]) => ({
+      titulo,
+      recebido,
+      situacao: recebido > TOLERANCIA ? ('recebido_parcial' as const) : ('aberto' as const),
+    })),
+    totalEstornado: centavos(devolucoes.reduce((x, d) => x + d.estornado, 0)),
   };
 }

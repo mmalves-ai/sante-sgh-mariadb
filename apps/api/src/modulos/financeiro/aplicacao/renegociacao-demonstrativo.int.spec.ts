@@ -7,6 +7,10 @@
 // Renegociação: dois títulos do mesmo convênio (um recebido em parte) viram um acordo com juros, multa e desconto
 // rateados e um título novo de três parcelas; os originais ficam renegociados, com o histórico. Desfazer devolve o
 // saldo às parcelas originais e cancela o título novo, sem apagar nada; com recebimento no acordo é recusado.
+// Desfazer a baixa do demonstrativo: os recebimentos ficam estornados (motivo, quem, quando), um débito contrário sai da
+// conta ligado ao crédito da baixa, parcela e título recuperam o saldo, as linhas por item ficam, e o demonstrativo pode
+// ser baixado de novo. Particular: o título do paciente entra em acordo, e as leituras por devedor (convênio, paciente,
+// cliente) devolvem o saldo real das parcelas (a parcela protestada fica de fora da lista e do acordo).
 import { randomUUID } from 'node:crypto';
 import type { Executor } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -19,7 +23,9 @@ import { PortaFinanceiroPropria } from '../porta-propria.js';
 import {
   acordosDoEstabelecimento,
   detalheDoAcordo,
+  devedoresComSaldoAberto,
   OPERACOES_RENEGOCIACAO,
+  titulosRenegociaveisDoDevedor,
 } from '../renegociacao-propria.js';
 import {
   CLIENTE,
@@ -289,6 +295,119 @@ describe.skipIf(SEM_BANCO)('baixa pelo demonstrativo e renegociação a receber 
       previaDaBaixa(l, m.est, demonstrativo),
     );
     expect(depois.impedimento?.codigo).toBe('demonstrativo-ja-baixado');
+
+    // Desfazer a baixa: motivo obrigatório; outro estabelecimento não alcança; quem não movimenta a conta não desfaz.
+    const desfazer = (motivo: string, o: { usuario?: number; est?: number; chave?: string } = {}) =>
+      rodar('financeiro.desfazerBaixaDemonstrativo', { demonstrativo, motivo }, o);
+    expect(await codigoDaGravacao(desfazer('ok'))).toBe('motivo-obrigatorio');
+    expect(await codigoDaGravacao(desfazer('Outro estabelecimento', { est: m.outroEst }))).toBe(
+      'demonstrativo-inexistente',
+    );
+    const u = await desfazer('Crédito lançado na conta errada');
+    expect(u.trilha).not.toBeNull();
+    expect(u.resultado).toMatchObject({ recebimentos: 2, titulos: 2, estornado: 1250.85, debitos: 1 });
+    const estornados = await consultar(
+      `SELECT situacao, estornado_em IS NOT NULL AS quando, estorno_usuario_id, motivo_estorno, valor_recebido
+         FROM recebimento WHERE estabelecimento_id = ? ORDER BY id`,
+      [m.est],
+    );
+    expect(
+      estornados.map((x) => [
+        x['situacao'],
+        n(x['quando']),
+        n(x['estorno_usuario_id']),
+        x['motivo_estorno'],
+        n(x['valor_recebido']),
+      ]),
+    ).toEqual([
+      ['estornado', 1, m.lanca, 'Crédito lançado na conta errada', 250.3],
+      ['estornado', 1, m.lanca, 'Crédito lançado na conta errada', 1000.55],
+    ]);
+    // O crédito da baixa fica no dia dele; um débito contrário, de origem estorno, sai da mesma conta e aponta para ele.
+    const contrarios = await consultar(
+      `SELECT natureza, tipo_origem, valor, conta_bancaria_id, situacao, estornado_movimento_bancario_id AS de
+         FROM movimento_bancario WHERE estabelecimento_id = ? AND numero_documento = ? ORDER BY id`,
+      [m.est, `${P}-D1`],
+    );
+    expect(
+      contrarios.map((x) => [
+        x['natureza'],
+        x['tipo_origem'],
+        n(x['valor']),
+        n(x['conta_bancaria_id']),
+        x['situacao'],
+        x['de'] === null ? null : n(x['de']),
+      ]),
+    ).toEqual([
+      ['credito', 'manual', 1250.85, m.contaA, 'ativo', null],
+      ['debito', 'estorno', 1250.85, m.contaA, 'ativo', n(movimentos[0]?.['id'])],
+    ]);
+    // A parcela e o título recuperam o saldo; as linhas por item da conta ficam no histórico.
+    const reabertos = await consultar(
+      `SELECT t.situacao, t.valor_recebido, p.situacao AS parcela, p.saldo, p.valor_recebido AS recebido_parcela,
+              p.quitada_em IS NOT NULL AS quitada
+         FROM titulo_receber t JOIN parcela_receber p ON p.titulo_receber_id = t.id WHERE t.id IN (?, ?) ORDER BY t.id`,
+      [t1, t2],
+    );
+    expect(
+      reabertos.map((x) => [
+        x['situacao'],
+        n(x['valor_recebido']),
+        x['parcela'],
+        n(x['saldo']),
+        n(x['recebido_parcela']),
+        n(x['quitada']),
+      ]),
+    ).toEqual([
+      ['aberto', 0, 'aberta', 300.3, 0, 0],
+      ['aberto', 0, 'aberta', 1000.55, 0, 0],
+    ]);
+    expect(
+      n(
+        (
+          await consultar(
+            `SELECT COUNT(*) AS q FROM recebimento_item_conta i JOIN recebimento r ON r.id = i.recebimento_id
+              WHERE r.estabelecimento_id = ?`,
+            [m.est],
+          )
+        )[0]?.['q'],
+      ),
+    ).toBe(3);
+    // Desfeita, não há o que desfazer de novo; o demonstrativo volta à lista como não baixado e é baixado outra vez,
+    // agora na conta certa: ficam os dois recebimentos estornados e os dois novos.
+    expect(await codigoDaGravacao(desfazer('Repetindo o pedido'))).toBe('demonstrativo-nao-baixado');
+    expect(
+      (
+        await ler<Awaited<ReturnType<typeof demonstrativosImportados>>>((l) =>
+          demonstrativosImportados(l, m.est),
+        )
+      ).map((x) => x.baixado),
+    ).toEqual([false]);
+    const outra = await rodar('financeiro.baixarDemonstrativoPagamento', { ...entrada, conta: m.contaB });
+    expect(outra.resultado).toMatchObject({ titulos: 2, recebido: 1250.85, glosa: 50 });
+    const situacoes = await consultar(
+      `SELECT situacao, conta_bancaria_id, COUNT(*) AS q FROM recebimento WHERE estabelecimento_id = ?
+        GROUP BY situacao, conta_bancaria_id ORDER BY situacao`,
+      [m.est],
+    );
+    expect(situacoes.map((x) => [x['situacao'], n(x['conta_bancaria_id']), n(x['q'])])).toEqual([
+      ['efetivado', m.contaB, 2],
+      ['estornado', m.contaA, 2],
+    ]);
+    // Com o crédito conciliado com o extrato, a baixa não se desfaz mais.
+    await escrever(async (e) => {
+      const c = await e.inserir(
+        `INSERT INTO conciliacao_bancaria (estabelecimento_id, conta_bancaria_id, periodo_inicio, periodo_fim,
+           saldo_extrato, saldo_sistema, criado_em) VALUES (?, ?, ?, ?, 0, 0, ?)`,
+        [m.est, m.contaB, HOJE, HOJE, new Date()],
+      );
+      await e.executar(
+        `UPDATE movimento_bancario SET conciliado = TRUE, conciliacao_bancaria_id = ?
+          WHERE estabelecimento_id = ? AND numero_documento = ? AND conta_bancaria_id = ? AND natureza = 'credito'`,
+        [c, m.est, `${P}-D1`, m.contaB],
+      );
+    });
+    expect(await codigoDaGravacao(desfazer('Tentativa depois da conciliação'))).toBe('credito-conciliado');
     console.info(`[f38-05] demonstrativo: ${recebimentos.length} recebimento(s), ${porItem.length} item(ns)`);
   }, 120_000);
 
@@ -297,7 +416,7 @@ describe.skipIf(SEM_BANCO)('baixa pelo demonstrativo e renegociação a receber 
       documento: string,
       valor: number,
       recebido: number,
-      devedor: { convenio?: number; cliente?: number },
+      devedor: { convenio?: number; cliente?: number; paciente?: number },
     ) =>
       escrever<number>(async (e) => {
         const agora = new Date();
@@ -311,15 +430,16 @@ describe.skipIf(SEM_BANCO)('baixa pelo demonstrativo e renegociação a receber 
         );
         const t = await e.inserir(
           `INSERT INTO titulo_receber (estabelecimento_id, numero, tipo_devedor, fonte_pagadora_id, cliente_financeiro_id,
-             tipo_origem, tipo_documento_financeiro_id, numero_documento, data_emissao, data_lancamento, valor_bruto,
-             valor_liquido, valor_recebido, situacao, natureza_financeira_id, criado_em)
-           VALUES (?, ?, ?, ?, ?, 'avulso', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             paciente_id, tipo_origem, tipo_documento_financeiro_id, numero_documento, data_emissao, data_lancamento,
+             valor_bruto, valor_liquido, valor_recebido, situacao, natureza_financeira_id, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, 'avulso', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             m.est,
             `${P}-N${documento}`,
-            devedor.convenio ? 'fonte_pagadora' : 'cliente',
+            devedor.convenio ? 'fonte_pagadora' : devedor.paciente ? 'paciente' : 'cliente',
             devedor.convenio ?? null,
             devedor.cliente ?? null,
+            devedor.paciente ?? null,
             n(tipoDoc?.id),
             documento,
             HOJE,
@@ -354,6 +474,92 @@ describe.skipIf(SEM_BANCO)('baixa pelo demonstrativo e renegociação a receber 
     const ra = await tituloAvulso('938061', 600, 0, { convenio: m.convenio });
     const rb = await tituloAvulso('938062', 400, 100, { convenio: m.convenio });
     const rc = await tituloAvulso('938063', 80, 0, { cliente });
+    // Particular: o título do paciente tem uma parcela em aberto (250,00) e outra protestada (70,00), fora do acordo.
+    const paciente = n(
+      (
+        await consultar('SELECT paciente_id FROM conta_hospitalar WHERE id = ?', [m.contasHospitalares[0]])
+      )[0]?.['paciente_id'],
+    );
+    const rp = await tituloAvulso('938064', 250, 0, { paciente });
+    await escrever(async (e) => {
+      await e.executar(
+        'UPDATE titulo_receber SET valor_bruto = 320, valor_liquido = 320, quantidade_parcelas = 2 WHERE id = ?',
+        [rp],
+      );
+      await e.inserir(
+        `INSERT INTO parcela_receber (titulo_receber_id, sequencia, vencimento, vencimento_original, valor,
+           valor_recebido, saldo, situacao, criado_em) VALUES (?, 2, ?, ?, 70, 0, 70, 'protestada', ?)`,
+        [rp, HOJE, HOJE, new Date()],
+      );
+    });
+
+    // A escolha por devedor: quem deve, por tipo e por nome, e todos os títulos dele com o saldo real das parcelas.
+    type Devedores = Awaited<ReturnType<typeof devedoresComSaldoAberto>>;
+    type DoDevedor = Awaited<ReturnType<typeof titulosRenegociaveisDoDevedor>>;
+    const particulares = await ler<Devedores>((l) => devedoresComSaldoAberto(l, m.est, 'E', ''));
+    expect(particulares.map((x) => [x.id, x.titulos, x.saldo])).toEqual([[paciente, 1, 250]]);
+    expect(
+      (await ler<Devedores>((l) => devedoresComSaldoAberto(l, m.est, 'O', ''))).map((x) => [
+        x.id,
+        x.titulos,
+        x.saldo,
+      ]),
+    ).toEqual([[cliente, 1, 80]]);
+    const convenios = await ler<Devedores>((l) => devedoresComSaldoAberto(l, m.est, 'C', 'SINTETICA L0207'));
+    expect(convenios.map((x) => x.id)).toEqual([m.convenio]);
+    expect(
+      await ler<Devedores>((l) => devedoresComSaldoAberto(l, m.est, 'C', 'NOME QUE NAO EXISTE')),
+    ).toEqual([]);
+    expect(await ler<Devedores>((l) => devedoresComSaldoAberto(l, m.outroEst, 'E', ''))).toEqual([]);
+    const doPaciente = await ler<DoDevedor>((l) => titulosRenegociaveisDoDevedor(l, m.est, 'E', paciente));
+    expect(doPaciente.devedor).toBe(`paciente:${paciente}`);
+    expect(
+      doPaciente.titulos.map((x) => [x.id, x.valor, x.saldo, x.parcelas.map((p) => [p.saldo, p.situacao])]),
+    ).toEqual([[rp, 320, 250, [[250, 'aberta']]]]);
+    const doConvenio = await ler<DoDevedor>((l) => titulosRenegociaveisDoDevedor(l, m.est, 'C', m.convenio));
+    expect(
+      doConvenio.titulos.filter((x) => [ra, rb].includes(x.id)).map((x) => [x.id, x.recebido, x.saldo]),
+    ).toEqual([
+      [ra, 0, 600],
+      [rb, 100, 300],
+    ]);
+    expect(await ler<DoDevedor>((l) => titulosRenegociaveisDoDevedor(l, m.outroEst, 'E', paciente))).toEqual({
+      devedor: `paciente:${paciente}`,
+      titulos: [],
+    });
+
+    // O acordo do particular leva o saldo que a lista mostrou (250,00) e deixa a parcela protestada onde estava.
+    const rpAcordo = await rodar('financeiro.renegociarTitulosReceber', {
+      titulos: [rp],
+      quantidadeParcelas: 2,
+      primeiroVencimento: EM_30_DIAS,
+    });
+    expect(rpAcordo.resultado).toMatchObject({ valorOriginal: 250, valorRenegociado: 250, parcelas: 2 });
+    const [doParticular] = await consultar(
+      `SELECT r.paciente_id, r.fonte_pagadora_id, r.devedor_nome <> '' AS com_nome, t.tipo_devedor,
+              t.paciente_id AS paciente_titulo, o.situacao AS original,
+              (SELECT GROUP_CONCAT(CONCAT(p.situacao, ':', p.saldo) ORDER BY p.sequencia) FROM parcela_receber p
+                WHERE p.titulo_receber_id = o.id) AS parcelas
+         FROM renegociacao r JOIN titulo_receber t ON t.id = r.novo_titulo_receber_id
+         JOIN titulo_receber o ON o.id = ? WHERE r.id = ?`,
+      [rp, n(rpAcordo.resultado['renegociacao'])],
+    );
+    expect([
+      n(doParticular?.['paciente_id']),
+      doParticular?.['fonte_pagadora_id'],
+      n(doParticular?.['com_nome']),
+      doParticular?.['tipo_devedor'],
+      n(doParticular?.['paciente_titulo']),
+      doParticular?.['original'],
+      doParticular?.['parcelas'],
+    ]).toEqual([paciente, null, 1, 'paciente', paciente, 'aberto', 'renegociada:0.00,protestada:70.00']);
+    expect(await ler<Devedores>((l) => devedoresComSaldoAberto(l, m.est, 'E', ''))).toEqual([
+      expect.objectContaining({ id: paciente, titulos: 1, saldo: 250 }),
+    ]);
+    await rodar('financeiro.desfazerRenegociacaoReceber', {
+      renegociacao: n(rpAcordo.resultado['renegociacao']),
+      motivo: 'Acordo do particular lançado para a prova',
+    });
     const acordo = {
       titulos: [ra, rb],
       juros: 30,
@@ -378,7 +584,10 @@ describe.skipIf(SEM_BANCO)('baixa pelo demonstrativo e renegociação a receber 
     expect(
       n(
         (
-          await consultar('SELECT COUNT(*) AS q FROM renegociacao WHERE estabelecimento_id = ?', [m.est])
+          await consultar(
+            'SELECT COUNT(*) AS q FROM renegociacao WHERE estabelecimento_id = ? AND fonte_pagadora_id IS NOT NULL',
+            [m.est],
+          )
         )[0]?.['q'],
       ),
     ).toBe(0);
@@ -491,7 +700,8 @@ describe.skipIf(SEM_BANCO)('baixa pelo demonstrativo e renegociação a receber 
     );
     expect(
       lista.map((x) => [x.id, x.situacao, x.valorRenegociado, x.parcelas, x.parcelasOriginais, x.titulo]),
-    ).toEqual([[id, 'efetivada', 900, 3, 2, novo]]);
+    ).toContainEqual([id, 'efetivada', 900, 3, 2, novo]);
+    expect(lista.map((x) => x.situacao).sort()).toEqual(['cancelada', 'efetivada']);
     const detalhe = await ler<Awaited<ReturnType<typeof detalheDoAcordo>>>((l) =>
       detalheDoAcordo(l, m.est, id),
     );
@@ -568,6 +778,6 @@ describe.skipIf(SEM_BANCO)('baixa pelo demonstrativo e renegociação a receber 
         }),
       ),
     ).toBe('acordo-com-recebimento');
-    console.info('[f38-05] renegociação: 2 acordo(s), 1 desfeito, histórico mantido');
+    console.info('[f38-05] renegociação: 3 acordo(s), 2 desfeito(s), histórico mantido');
   }, 120_000);
 });

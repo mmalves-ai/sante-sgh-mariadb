@@ -65,6 +65,49 @@ export interface NovoAcordo {
   observacao?: string;
 }
 
+/** Tipo de devedor do acordo: convênio, paciente particular ou cliente. */
+export type TipoDevedorAcordo = 'C' | 'E' | 'O';
+export interface DevedorComSaldo {
+  readonly id: number;
+  readonly nome: string;
+  readonly titulos: number;
+  readonly saldo: number;
+  readonly maisAntigo: string;
+}
+export interface TituloRenegociavel {
+  readonly id: number;
+  readonly numero: string;
+  readonly documento: string;
+  readonly emissao: string;
+  readonly valor: number;
+  readonly recebido: number;
+  readonly vencimento: string;
+  /** Soma do saldo das parcelas que entram no acordo (o que a gravação usa). */
+  readonly saldo: number;
+  readonly emEncontro: boolean;
+  readonly parcelas: readonly {
+    parcela: number;
+    sequencia: number;
+    vencimento: string;
+    valor: number;
+    saldo: number;
+    situacao: string;
+    emEncontro: boolean;
+  }[];
+}
+export interface TitulosDoDevedor {
+  /** O devedor numa chave comparável (a mesma da regra). */
+  readonly devedor: string;
+  readonly titulos: readonly TituloRenegociavel[];
+}
+
+export const listarDevedoresDoAcordo = (tipo: TipoDevedorAcordo, busca: string) =>
+  ler(
+    `${P}/acordos/devedores?tipo=${tipo}&busca=${encodeURIComponent(busca.trim())}`,
+    lista<DevedorComSaldo>(),
+  );
+export const listarTitulosDoDevedor = (tipo: TipoDevedorAcordo, devedor: number) =>
+  ler(`${P}/acordos/titulos-abertos?tipo=${tipo}&devedor=${devedor}`, confiar<TitulosDoDevedor>());
 export const listarAcordos = () => ler(`${P}/acordos`, lista<Acordo>());
 export const lerAcordo = (id: number) => ler(`${P}/acordos/${id}`, confiar<DetalheAcordo>());
 export const gravarAcordo = (corpo: NovoAcordo, chave: string) =>
@@ -115,3 +158,10 @@ export const baixarDemonstrativo = (
   corpo: { conta: number; dataRecebimento: string },
   chave: string,
 ) => enviar(`${P}/demonstrativos-importados/${id}/baixa`, corpo, confiar<ResultadoFinanceiro>(), chave);
+export const desfazerBaixaDemonstrativo = (id: number, motivo: string, chave: string) =>
+  enviar(
+    `${P}/demonstrativos-importados/${id}/desfazer-baixa`,
+    { motivo },
+    confiar<ResultadoFinanceiro>(),
+    chave,
+  );

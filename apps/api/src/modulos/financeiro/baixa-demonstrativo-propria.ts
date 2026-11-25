@@ -6,9 +6,14 @@
 // "demonstrativo" (número do demonstrativo no documento) e uma linha por item da conta (apresentado, recebido, glosa e
 // motivo); a parcela e o título somam o recebido. A glosa NÃO baixa o saldo: fica em aberto no título até ser aceita ou
 // o recurso voltar (registro da glosa no título, já existente). O demonstrativo já baixado é recusado.
+// Desfazer a baixa (conta, data ou demonstrativo errado): os recebimentos do demonstrativo ficam estornados com o motivo,
+// quem e quando; um débito contrário sai da conta na data de hoje, ligado ao crédito da baixa (o crédito original fica
+// como estava, no dia dele: período fechado não muda); a parcela e o título recuperam o saldo. Nada é apagado, e o
+// demonstrativo volta a poder ser baixado.
 import {
   type LinhaDoDemonstrativo,
   planejarBaixaDemonstrativo,
+  planejarDesfazerBaixaDemonstrativo,
   type RecusaFinanceiro,
   type TituloDoDemonstrativo,
 } from '@sgh/dominio-financeiro';
@@ -33,6 +38,11 @@ type Linha = Record<string, unknown>;
 export const esquemaBaixarDemonstrativo = z
   .object({ demonstrativo: id, conta: id, dataRecebimento: DATA })
   .strict();
+export const esquemaDesfazerBaixaDemonstrativo = z
+  .object({ demonstrativo: id, motivo: z.string().trim().max(400) })
+  .strict();
+/** O número do demonstrativo como fica no documento do recebimento e do movimento (30 posições). */
+const documentoDe = (numeroDemonstrativo: unknown) => String(numeroDemonstrativo).slice(0, 30);
 
 function recusar<T extends object>(r: RecusaFinanceiro | T): T {
   if ('codigo' in r && 'mensagem' in r) {
@@ -69,7 +79,7 @@ async function demonstrativoLido(l: Leitor, est: number, demonstrativo: number) 
        JOIN titulo_receber t ON t.id = p.titulo_receber_id
       WHERE r.estabelecimento_id = ? AND r.meio_baixa = 'demonstrativo' AND r.situacao = 'efetivado'
         AND r.excluido_em IS NULL AND r.numero_documento = ? AND t.fonte_pagadora_id = ? LIMIT 1`,
-    [est, String(d['numero_demonstrativo']), d['fonte_pagadora_id']],
+    [est, documentoDe(d['numero_demonstrativo']), d['fonte_pagadora_id']],
   );
   return {
     cabecalho: d,
@@ -272,8 +282,156 @@ const baixarDemonstrativo = definirOperacao<z.infer<typeof esquemaBaixarDemonstr
   ],
 });
 
+const desfazerBaixaDemonstrativo = definirOperacao<
+  z.infer<typeof esquemaDesfazerBaixaDemonstrativo>,
+  ResultadoOperacao
+>({
+  nome: 'financeiro.desfazer_baixa_demonstrativo',
+  tabelas: ['recebimento', 'movimento_bancario', 'parcela_receber', 'titulo_receber'],
+  entrada: esquemaDesfazerBaixaDemonstrativo as never,
+  async gravar(tx, e, ctx: ContextoOperacao) {
+    if (ctx.estabelecimento === null)
+      throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+    if (ctx.usuario === null) throw recusa('sem-usuario', 'A gravação exige o usuário da sessão.');
+    const est = ctx.estabelecimento;
+    const usuario = ctx.usuario;
+    const agora = new Date();
+    const hoje = agora.toISOString().slice(0, 10);
+    await exigirPeriodoAberto(tx, est, hoje, 'motivo');
+    const d = await tx.uma(
+      `SELECT id, numero_demonstrativo, fonte_pagadora_id FROM demonstrativo_analise_conta
+        WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+      [e.demonstrativo, est],
+    );
+    if (!d) throw recusa('demonstrativo-inexistente', 'O demonstrativo não existe neste estabelecimento.');
+    const documento = documentoDe(d['numero_demonstrativo']);
+    const recebimentos = await tx.consultarParaAtualizar(
+      `SELECT r.id, r.versao, r.parcela_receber_id, r.valor_recebido, r.conta_bancaria_id, r.movimento_bancario_id,
+              p.titulo_receber_id
+         FROM recebimento r JOIN parcela_receber p ON p.id = r.parcela_receber_id
+         JOIN titulo_receber t ON t.id = p.titulo_receber_id
+        WHERE r.estabelecimento_id = ? AND r.meio_baixa = 'demonstrativo' AND r.situacao = 'efetivado'
+          AND r.excluido_em IS NULL AND r.numero_documento = ? AND t.fonte_pagadora_id = ? ORDER BY r.id`,
+      [est, documento, d['fonte_pagadora_id']],
+      { teto: 5000 },
+    );
+    const idsParcela = [...new Set(recebimentos.map((r) => numero(r['parcela_receber_id'])))];
+    const idsTitulo = [...new Set(recebimentos.map((r) => numero(r['titulo_receber_id'])))];
+    const idsMovimento = [
+      ...new Set(recebimentos.map((r) => numero(r['movimento_bancario_id'])).filter((x) => x > 0)),
+    ];
+    const titulos = idsTitulo.length
+      ? await tx.consultarParaAtualizar(
+          `SELECT id, versao, situacao, valor_recebido FROM titulo_receber WHERE id IN (${ph(idsTitulo)}) ORDER BY id`,
+          [...idsTitulo],
+          { teto: 5000 },
+        )
+      : [];
+    const parcelas = idsParcela.length
+      ? await tx.consultarParaAtualizar(
+          `SELECT id, versao, situacao, saldo, valor_recebido FROM parcela_receber WHERE id IN (${ph(idsParcela)}) ORDER BY id`,
+          [...idsParcela],
+          { teto: 5000 },
+        )
+      : [];
+    const movimentos = idsMovimento.length
+      ? await tx.consultarParaAtualizar(
+          `SELECT id, conta_bancaria_id, tipo_lancamento_bancario_id, valor, conciliado, natureza_financeira_id
+             FROM movimento_bancario WHERE id IN (${ph(idsMovimento)}) AND situacao = 'ativo' ORDER BY id`,
+          [...idsMovimento],
+          { teto: 100 },
+        )
+      : [];
+    const parcelaDe = new Map(parcelas.map((p) => [numero(p['id']), p]));
+    const tituloDe = new Map(titulos.map((t) => [numero(t['id']), t]));
+    const plano = recusar(
+      planejarDesfazerBaixaDemonstrativo({
+        recebimentos: recebimentos.map((r) => {
+          const p = parcelaDe.get(numero(r['parcela_receber_id']));
+          const t = tituloDe.get(numero(r['titulo_receber_id']));
+          return {
+            recebimento: numero(r['id']),
+            parcela: numero(r['parcela_receber_id']),
+            titulo: numero(r['titulo_receber_id']),
+            recebido: numero(r['valor_recebido']),
+            situacaoParcela: String(p?.['situacao'] ?? ''),
+            saldoParcela: numero(p?.['saldo']),
+            recebidoParcela: numero(p?.['valor_recebido']),
+            situacaoTitulo: String(t?.['situacao'] ?? ''),
+            recebidoTitulo: numero(t?.['valor_recebido']),
+          };
+        }),
+        creditoConciliado: movimentos.some((m) => !!Number(m['conciliado'])),
+        motivo: e.motivo,
+      }),
+    );
+    // Quem desfaz precisa movimentar a conta em que o crédito entrou.
+    const { contasDoEscopo } = await import('./operacoes.js');
+    const escopo = await contasDoEscopo(tx, est, usuario, 'movimentar');
+    if (recebimentos.some((r) => !escopo.includes(numero(r['conta_bancaria_id']))))
+      throw recusa('fora-do-escopo', 'A conta bancária desta baixa não está no seu escopo de contas.');
+    const motivo = e.motivo.trim();
+    for (const r of recebimentos)
+      await tx.alterar('recebimento', numero(r['id']), numero(r['versao']), {
+        situacao: 'estornado',
+        estornado_em: agora,
+        estorno_usuario_id: usuario,
+        motivo_estorno: motivo.slice(0, 500),
+      });
+    // O débito contrário, na data de hoje, ligado ao crédito da baixa (que fica no dia dele).
+    const debitos: number[] = [];
+    for (const m of movimentos)
+      debitos.push(
+        await tx.incluir('movimento_bancario', {
+          estabelecimento_id: est,
+          conta_bancaria_id: numero(m['conta_bancaria_id']),
+          tipo_lancamento_bancario_id: numero(m['tipo_lancamento_bancario_id']),
+          natureza: 'debito',
+          tipo_origem: 'estorno',
+          data_movimento: hoje,
+          numero_documento: documento,
+          historico: `Estorno da baixa pelo demonstrativo de pagamento ${documento}: ${motivo}`.slice(0, 300),
+          valor: numero(m['valor']),
+          natureza_financeira_id: m['natureza_financeira_id'] ?? null,
+          estornado_movimento_bancario_id: numero(m['id']),
+        }),
+      );
+    // A parcela e o título ficam como o plano diz (a última devolução de cada parcela traz o saldo final).
+    const finalDaParcela = new Map(plano.devolucoes.map((x) => [x.parcela, x]));
+    for (const [parcela, x] of finalDaParcela)
+      await tx.alterar('parcela_receber', parcela, numero(parcelaDe.get(parcela)?.['versao']), {
+        valor_recebido: x.recebidoParcela,
+        saldo: x.saldoParcela,
+        situacao: x.situacaoParcela,
+        quitada_em: null,
+      });
+    for (const t of plano.titulos)
+      await tx.alterar('titulo_receber', t.titulo, numero(tituloDe.get(t.titulo)?.['versao']), {
+        valor_recebido: t.recebido,
+        situacao: t.situacao,
+      });
+    return {
+      demonstrativo: e.demonstrativo,
+      numero: String(d['numero_demonstrativo']),
+      recebimentos: recebimentos.length,
+      titulos: plano.titulos.length,
+      estornado: plano.totalEstornado,
+      debitos: debitos.length,
+    };
+  },
+  alvo: (e) => ({ tabela: 'demonstrativo_analise_conta', id: e.demonstrativo }),
+  trilha: (e) => ({ dados: null, motivo: e.motivo.trim() }),
+  eventos: (_e, r) => [
+    {
+      tipo: 'financeiro.titulo_receber.recebimento_estornado',
+      carga: { titulos: numero(r['titulos']), recebimentos: numero(r['recebimentos']) },
+    },
+  ],
+});
+
 export const OPERACOES_BAIXA_DEMONSTRATIVO = {
   'financeiro.baixarDemonstrativoPagamento': baixarDemonstrativo,
+  'financeiro.desfazerBaixaDemonstrativo': desfazerBaixaDemonstrativo,
 } as const;
 
 // ── Leituras ───────────────────────────────────────────────────────────────────────────────────────────────────
@@ -289,7 +447,7 @@ export async function demonstrativosImportados(l: Leitor, est: number) {
                       JOIN titulo_receber t ON t.id = p.titulo_receber_id
                      WHERE r.estabelecimento_id = d.estabelecimento_id AND r.meio_baixa = 'demonstrativo'
                        AND r.situacao = 'efetivado' AND r.excluido_em IS NULL
-                       AND r.numero_documento = d.numero_demonstrativo
+                       AND r.numero_documento = LEFT(d.numero_demonstrativo, 30)
                        AND t.fonte_pagadora_id = d.fonte_pagadora_id) AS baixado
        FROM demonstrativo_analise_conta d JOIN fonte_pagadora f ON f.id = d.fonte_pagadora_id
       WHERE d.estabelecimento_id = ? AND d.excluido_em IS NULL AND d.situacao <> 'cancelado'

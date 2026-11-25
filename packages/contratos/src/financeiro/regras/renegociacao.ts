@@ -199,7 +199,7 @@ export function conferirDesfazerRenegociacao(a: AcordoADesfazer): RecusaFinancei
   if (a.recebidoNoAcordo > TOLERANCIA || a.parcelaNovaMovimentada)
     return recusaFin(
       'acordo-com-recebimento',
-      'O acordo já teve parcela recebida ou movimentada: estorne o recebimento antes, ou faça um novo acordo com o saldo.',
+      'O acordo já teve parcela recebida ou movimentada e não pode mais ser desfeito: para mudar as condições, faça um novo acordo com o saldo que ficou.',
     );
   if (a.motivo.trim().length < MOTIVO_DESFAZER_ACORDO_MINIMO)
     return recusaFin('motivo-obrigatorio', 'Diga o motivo de desfazer o acordo.', ['motivo']);

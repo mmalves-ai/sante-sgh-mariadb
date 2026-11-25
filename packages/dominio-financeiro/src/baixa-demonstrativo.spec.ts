@@ -4,6 +4,8 @@ import {
   type EntradaBaixaDemonstrativo,
   type LinhaDoDemonstrativo,
   planejarBaixaDemonstrativo,
+  planejarDesfazerBaixaDemonstrativo,
+  type RecebimentoDoDemonstrativo,
   type TituloDoDemonstrativo,
 } from './index.js';
 
@@ -112,5 +114,127 @@ describe('baixa pelo demonstrativo de pagamento', () => {
     ['recebido-acima-do-saldo', entrada({ titulos: [titulo(5, 249.98)] })],
   ])('recusa %s', (esperado, e) => {
     expect(codigo(planejarBaixaDemonstrativo(e))).toBe(esperado);
+  });
+});
+
+const recebimento = (
+  id: number,
+  recebido: number,
+  extra: Partial<RecebimentoDoDemonstrativo> = {},
+): RecebimentoDoDemonstrativo => ({
+  recebimento: id,
+  parcela: id * 10,
+  titulo: id * 100,
+  recebido,
+  situacaoParcela: 'recebida',
+  saldoParcela: 0,
+  recebidoParcela: recebido,
+  situacaoTitulo: 'recebido',
+  recebidoTitulo: recebido,
+  ...extra,
+});
+
+describe('desfazer a baixa pelo demonstrativo', () => {
+  it('devolve o saldo a cada parcela, reabre o título e soma o débito contrário', () => {
+    const p = planejarDesfazerBaixaDemonstrativo({
+      recebimentos: [
+        recebimento(1, 250.3, {
+          situacaoParcela: 'parcial',
+          saldoParcela: 50,
+          situacaoTitulo: 'recebido_parcial',
+        }),
+        recebimento(2, 1000.55),
+      ],
+      creditoConciliado: false,
+      motivo: 'Conta bancária errada',
+    });
+    expect(codigo(p)).toBe('plano');
+    if ('codigo' in p) return;
+    expect(p.totalEstornado).toBe(1250.85);
+    expect(
+      p.devolucoes.map((d) => [d.parcela, d.estornado, d.saldoParcela, d.recebidoParcela, d.situacaoParcela]),
+    ).toEqual([
+      [10, 250.3, 300.3, 0, 'aberta'],
+      [20, 1000.55, 1000.55, 0, 'aberta'],
+    ]);
+    expect(p.titulos).toEqual([
+      { titulo: 100, recebido: 0, situacao: 'aberto' },
+      { titulo: 200, recebido: 0, situacao: 'aberto' },
+    ]);
+  });
+
+  it('o que já tinha sido recebido por outra via continua recebido (parcial)', () => {
+    const p = planejarDesfazerBaixaDemonstrativo({
+      recebimentos: [
+        recebimento(1, 100, {
+          situacaoParcela: 'parcial',
+          saldoParcela: 20,
+          recebidoParcela: 180,
+          situacaoTitulo: 'recebido_parcial',
+          recebidoTitulo: 180,
+        }),
+      ],
+      creditoConciliado: false,
+      motivo: 'Data errada',
+    });
+    if ('codigo' in p) throw new Error(p.codigo);
+    expect(p.devolucoes[0]).toMatchObject({
+      saldoParcela: 120,
+      recebidoParcela: 80,
+      situacaoParcela: 'parcial',
+    });
+    expect(p.titulos).toEqual([{ titulo: 100, recebido: 80, situacao: 'recebido_parcial' }]);
+  });
+
+  it('dois recebimentos do mesmo título somam na devolução', () => {
+    const p = planejarDesfazerBaixaDemonstrativo({
+      recebimentos: [
+        recebimento(1, 30, { parcela: 7, titulo: 9, recebidoParcela: 30, recebidoTitulo: 70 }),
+        recebimento(2, 40, { parcela: 8, titulo: 9, recebidoParcela: 40, recebidoTitulo: 70 }),
+      ],
+      creditoConciliado: false,
+      motivo: 'Demonstrativo trocado',
+    });
+    if ('codigo' in p) throw new Error(p.codigo);
+    expect(p.titulos).toEqual([{ titulo: 9, recebido: 0, situacao: 'aberto' }]);
+    expect(p.totalEstornado).toBe(70);
+  });
+
+  it('recusas: sem baixa, sem motivo, crédito conciliado e título que andou depois', () => {
+    const base = { recebimentos: [recebimento(1, 10)], creditoConciliado: false, motivo: 'Conta errada' };
+    expect(codigo(planejarDesfazerBaixaDemonstrativo({ ...base, recebimentos: [] }))).toBe(
+      'demonstrativo-nao-baixado',
+    );
+    expect(codigo(planejarDesfazerBaixaDemonstrativo({ ...base, motivo: ' ok ' }))).toBe(
+      'motivo-obrigatorio',
+    );
+    expect(codigo(planejarDesfazerBaixaDemonstrativo({ ...base, creditoConciliado: true }))).toBe(
+      'credito-conciliado',
+    );
+    for (const situacaoParcela of ['renegociada', 'cancelada', 'protestada', 'perdida', 'aberta'])
+      expect(
+        codigo(
+          planejarDesfazerBaixaDemonstrativo({
+            ...base,
+            recebimentos: [recebimento(1, 10, { situacaoParcela })],
+          }),
+        ),
+      ).toBe('titulo-movimentado');
+    expect(
+      codigo(
+        planejarDesfazerBaixaDemonstrativo({
+          ...base,
+          recebimentos: [recebimento(1, 10, { situacaoTitulo: 'renegociado' })],
+        }),
+      ),
+    ).toBe('titulo-movimentado');
+    expect(
+      codigo(
+        planejarDesfazerBaixaDemonstrativo({
+          ...base,
+          recebimentos: [recebimento(1, 10, { recebidoParcela: 4 })],
+        }),
+      ),
+    ).toBe('titulo-movimentado');
   });
 });
