@@ -8,6 +8,6 @@ export default defineConfig({
     include: ['src/**/*.spec.ts'],
     exclude: ['src/**/*.int.spec.ts'],
     environment: 'node',
-    env: { VIGIA_BANCO: 'desligado', OUTBOX_RELAY: 'desligado' },
+    env: { VIGIA_BANCO: 'desligado', OUTBOX_RELAY: 'desligado', TRANSMISSOR_TISS: 'desligado' },
   },
 });

@@ -18,6 +18,7 @@ import { EmailService } from './email.service.js';
 import { IndiceBuscaService } from './indice-busca.service.js';
 import { PublicadorCatalogosService } from './publicador-catalogos.service.js';
 import { RelayOutboxService } from './relay-outbox.service.js';
+import { TransmissorTissService } from './transmissor-tiss.service.js';
 import { Relogio } from './relogio.js';
 import { SinalDeVidaService } from './sinal-de-vida.service.js';
 import { VigiaArquivosService } from './vigia-arquivos.service.js';
@@ -67,6 +68,8 @@ const SERVICOS: Readonly<Record<string, Provider>> = {
   'rede-mpi': RedeMpiService,
   // 08-INTG L136: a fila com o ERP corporativo (envio do lote gerado e retorno item a item; simulador fora de produção).
   'fila-erp': FilaErpService,
+  // 06-FAT L26: o transmissor TISS da elegibilidade e da comunicação de beneficiário (destino falso fora de produção).
+  'transmissor-tiss': TransmissorTissService,
   'relatorio-envio': EnvioRelatorioService,
   integracao: IntegracaoService,
 };
@@ -93,6 +96,8 @@ export function servicosDoWorker(env: NodeJS.ProcessEnv = process.env): Provider
     VigiaBancoService,
     VigiaArquivosService,
     RelayOutboxService,
+    // 06-FAT L26: transmissor TISS (destino falso fora de produção; TRANSMISSOR_TISS=desligado nos testes).
+    TransmissorTissService,
     EmailService,
     IndiceBuscaService,
     PublicadorCatalogosService,
