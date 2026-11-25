@@ -22,4 +22,5 @@ export * from './ficha-complementar/responsaveis.js';
 export * from './profissional/lotacao.js';
 export * from './especialidade/ligacoes.js';
 export * from './solicitante/manutencao.js';
+export * from './solicitante/unificacao.js';
 export * from './linha-cuidado/linha-cuidado.js';

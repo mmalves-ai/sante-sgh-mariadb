@@ -34,6 +34,14 @@ import {
 import { z } from 'zod';
 import type { ContextoPorta } from './porta.js';
 import type { NucleoCadastro } from './porta-propria.js';
+import {
+  type EntradaDesfazerUnificacaoSolicitante,
+  type EntradaUnificarSolicitante,
+  lerUnificacaoDoSolicitante,
+  opDesfazerUnificacaoSolicitante,
+  opUnificarSolicitante,
+  type UnificacaoDoSolicitante,
+} from './solicitante-unificacao-propria.js';
 import type { RegistroTrilhaTela } from './tipos.js';
 
 export const LIGACOES_CADASTRO = Symbol('LIGACOES_CADASTRO');
@@ -525,10 +533,17 @@ const opSituacaoSolicitante = (t: RegistroTrilhaTela) =>
     acao: 'alteracao',
     async gravar(tx, e) {
       const s = await tx.uma(
-        'SELECT ativo, data_inscricao FROM solicitante_externo WHERE id = ? AND excluido_em IS NULL',
+        'SELECT ativo, data_inscricao, sucessor_solicitante_externo_id FROM solicitante_externo WHERE id = ? AND excluido_em IS NULL',
         [e.id],
       );
       if (!s) throw naoAchado('Solicitante');
+      // O cadastro unificado em outro só volta pelo desfazer da unificação (que devolve o ponteiro).
+      if (e.ativo && s['sucessor_solicitante_externo_id'] !== null)
+        throw recusaCampo(
+          'solicitante-unificado',
+          'Este cadastro foi unificado em outro: desfaça a unificação para reativá-lo.',
+          'ativo',
+        );
       if (bool(s['ativo']) === e.ativo)
         throw recusaCampo(
           'sem-alteracao',
@@ -670,15 +685,20 @@ export interface FichaSolicitante {
   ativo: boolean;
   dataInativacao: string | null;
   faltaParaGuia: string[];
-  parecidos: { id: number; nome: string; registro: string; ativo: boolean; motivo: string }[];
+  /** Unificação (02-CAD linha 20): para onde este cadastro foi e quem foi unificado nele. */
+  unificadoEm: UnificacaoDoSolicitante['unificadoEm'];
+  absorvidos: UnificacaoDoSolicitante['absorvidos'];
+  parecidos: { id: number; nome: string; registro: string; ativo: boolean; versao: number; motivo: string }[];
   codigos: { id: number; versao: number; fonte: number; fonteNome: string; codigo: string; ativo: boolean }[];
 }
 
-const SQL_SOLICITANTES = `SELECT s.id, s.nome, cc.sigla AS conselho, uf.sigla AS uf, s.numero_conselho, o.codigo_cbo, s.ativo
+const SQL_SOLICITANTES = `SELECT s.id, s.nome, cc.sigla AS conselho, uf.sigla AS uf, s.numero_conselho, o.codigo_cbo, s.ativo, s.versao
   FROM solicitante_externo s JOIN conselho_classe cc ON cc.id = s.conselho_classe_id
   JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
   LEFT JOIN ocupacao_cbo o ON o.id = s.ocupacao_cbo_id WHERE s.excluido_em IS NULL`;
-const comparavel = (r: Record<string, unknown>): SolicitanteParecido & { ativo: boolean } => ({
+const comparavel = (
+  r: Record<string, unknown>,
+): SolicitanteParecido & { ativo: boolean; versao: number } => ({
   id: Number(r['id']),
   nome: String(r['nome']),
   conselho: texto(r['conselho']),
@@ -686,6 +706,7 @@ const comparavel = (r: Record<string, unknown>): SolicitanteParecido & { ativo: 
   numero: /^\d+$/.test(String(r['numero_conselho'] ?? '')) ? Number(r['numero_conselho']) : null,
   cbo: texto(r['codigo_cbo']),
   ativo: bool(r['ativo']),
+  versao: Number(r['versao'] ?? 0),
 });
 
 export class CadastroLigacoesProprio {
@@ -768,6 +789,17 @@ export class CadastroLigacoesProprio {
   }
   mudarSituacaoSolicitante(c: ContextoPorta, e: EntradaSituacaoSolicitante, t: RegistroTrilhaTela) {
     return this.executar(c, opSituacaoSolicitante(t), e, t);
+  }
+  /** Unifica o duplicado no cadastro que continua (o absorvido fica inativo, com o ponteiro; nada clínico muda). */
+  unificarSolicitante(c: ContextoPorta, e: EntradaUnificarSolicitante, t: RegistroTrilhaTela) {
+    return this.executar(c, opUnificarSolicitante(t), e, t);
+  }
+  desfazerUnificacaoSolicitante(
+    c: ContextoPorta,
+    e: EntradaDesfazerUnificacaoSolicitante,
+    t: RegistroTrilhaTela,
+  ) {
+    return this.executar(c, opDesfazerUnificacaoSolicitante(t), e, t);
   }
   gravarCodigoFonte(c: ContextoPorta, e: EntradaCodigoFonte, t: RegistroTrilhaTela) {
     return this.executar(c, opCodigoFonte(t), e, t);
@@ -972,6 +1004,8 @@ export class CadastroLigacoesProprio {
           nome: s.nome,
           registro: `${s.conselho} ${s.numero ?? ''}/${s.uf}`,
           ativo: s.ativo,
+          // Versão lida: a unificação a confere (o duplicado não é unificado por cima de outra alteração).
+          versao: s.versao,
           motivo: p.motivo,
         };
       });
@@ -994,7 +1028,7 @@ export class CadastroLigacoesProprio {
           WHERE x.solicitante_externo_id = ? AND x.excluido_em IS NULL ORDER BY x.ativo DESC, f.nome`,
         [id],
       );
-      return { s, cods };
+      return { s, cods, uni: await lerUnificacaoDoSolicitante(l, id) };
     });
     if (!f) throw naoAchado('Solicitante');
     const s = f.s;
@@ -1020,13 +1054,18 @@ export class CadastroLigacoesProprio {
       ativo: bool(s['ativo']),
       dataInativacao: data(s['data_inativacao']),
       faltaParaGuia: camposFaltantes(cmp),
-      parecidos: await this.parecidosCom(c, {
-        id,
-        nome: cmp.nome,
-        conselho: cmp.conselho,
-        uf: cmp.uf,
-        numero: cmp.numero,
-      }),
+      unificadoEm: f.uni.unificadoEm,
+      absorvidos: f.uni.absorvidos,
+      // Quem já foi unificado neste cadastro sai dos parecidos (está na lista dos unificados).
+      parecidos: (
+        await this.parecidosCom(c, {
+          id,
+          nome: cmp.nome,
+          conselho: cmp.conselho,
+          uf: cmp.uf,
+          numero: cmp.numero,
+        })
+      ).filter((p) => !f.uni.absorvidos.some((a) => a.id === p.id) && p.id !== f.uni.unificadoEm?.id),
       codigos: f.cods.map((x) => ({
         id: Number(x['id']),
         versao: Number(x['versao']),

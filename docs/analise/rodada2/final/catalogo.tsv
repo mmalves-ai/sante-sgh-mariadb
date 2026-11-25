@@ -369,7 +369,7 @@ sigla_conselho	CAD	catalogo_publico	F3	Siglas de inscrição válidas para cada 
 sinonimo_especialidade	CAD	item	F8	Termos populares de cada especialidade usados na busca do guia de rede e do portal	rodada2:nova	02	1
 situacao_convivio_familiar	CAD	catalogo_publico	F3	Situação de convívio familiar da tabela do e-SUS	F15; SPDATA TBSITCONJUGAL (7); MV SITUACAO_FAMILIAR; areas-sem-dono #11; paridade estrutural: era F7	02	2
 situacao_posse_plano	CAD	dominio	F3	Resposta do paciente sobre ter plano de saúde ou cartão de desconto, usada na captação e no perfil	rodada2:nova	02	1
-solicitante_externo	CAD	principal	F3	Profissional de fora que pede consulta ou exame, com conselho, UF, ocupação e contato	F20; SPDATA TBMEDSOL; MV PRESTADOR_EXTERNO, PRESTADOR_REFERENCIA	02	7
+solicitante_externo	CAD	principal	F3	Profissional de fora que pede consulta ou exame, com conselho, UF, ocupação e contato	F20; SPDATA TBMEDSOL; MV PRESTADOR_EXTERNO, PRESTADOR_REFERENCIA; duplicado unificado por ponteiro para o cadastro que continua, sem apagar nem alterar registro clínico (02-CAD linha 20; migração 03_CAD/98_solicitante_unificacao)	02	7
 solicitante_externo_fonte_pagadora	CAD	vinculo	F3	Código do solicitante externo em cada fonte pagadora	F20; SPDATA TBMEDSOL_CODCON	02	1
 suspeita_duplicidade	CAD	principal	F3	Pares de cadastros com indício de duplicidade, com pontuação, critério e decisão do analista	F7; carga do dia 0; dono 02 (conflitos.md)	02	0
 telefone_pessoa	CAD	item	F3	Telefones da pessoa com tipo, DDD, ramal, consentimento para mensagem e indicação de principal	F3; SPDATA HTPACTELEFONE, TBTIPOTELEFONE; MV CONTATO_PACIENTE	02	8

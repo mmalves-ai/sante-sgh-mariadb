@@ -76,5 +76,20 @@ export const mensagensLigacoes = {
     fonte: 'Fonte pagadora',
     codigo: 'Código na fonte',
     inativarCodigo: 'Inativar código',
+    unificar: 'Unificar neste cadastro',
+    unificarTitulo: 'Unificar {nome} neste cadastro',
+    unificarAjuda:
+      'O cadastro duplicado fica inativo e passa a apontar para este. Atendimentos e pedidos já feitos não mudam. O código em cada fonte pagadora passa para este cadastro onde ele ainda não tem. Dá para desfazer.',
+    unificarMotivo: 'Motivo da unificação (ao menos 10 letras)',
+    unificarConfirmar: 'Unificar',
+    unificarPergunta: 'Unificar o cadastro duplicado neste?',
+    cancelar: 'Cancelar',
+    unificadoEm: 'Este cadastro foi unificado em',
+    unificadoDesde: 'em {data}',
+    desfazer: 'Desfazer a unificação',
+    desfazerMotivo: 'Motivo para desfazer (ao menos 10 letras)',
+    unificados: 'Cadastros unificados neste',
+    atendimentosLigados:
+      'nenhum atendimento | 1 atendimento segue ligado a ele | {n} atendimentos seguem ligados a ele',
   },
 };
