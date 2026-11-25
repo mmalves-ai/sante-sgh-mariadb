@@ -135,7 +135,7 @@ describe.skipIf(SEM_BANCO)('Envio à RNDS pelo worker (contrato de efeito)', () 
           `INSERT INTO sumario_alta (estabelecimento_id, atendimento_id, paciente_id, numero_versao, situacao,
              responsavel_profissional_id, registrado_em, alta_medica_em, codigo_cid10_principal, situacao_diagnostico,
              estado_resolucao, obito, motivo_internacao, condicao_alta, finalizado_em, criado_em)
-           VALUES (?, 999999, ?, 1, 'assinado', 999999, ?, ?, 'J18.9', 'confirmado', 'melhorado', FALSE,
+           VALUES (?, 990208530, ?, 1, 'assinado', 999999, ?, ?, 'J18.9', 'confirmado', 'melhorado', FALSE,
              'Motivo sintético', 'Melhorado', ?, ?)`,
           [est, paciente, agora, agora, agora, agora],
         );

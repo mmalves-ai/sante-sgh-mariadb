@@ -45,6 +45,8 @@ import { PrescricaoDigitalController } from './prescricao-digital.controller.js'
 import { FilaErpController } from './fila-erp.controller.js';
 import { PORTA_FILA_ERP, PortaFilaErpPropria } from './fila-erp-propria.js';
 import { PORTA_PRESCRICAO_DIGITAL, PortaPrescricaoDigitalPropria } from './prescricao-digital-propria.js';
+import { RndsEnvioController } from './rnds-envio.controller.js';
+import { PORTA_RNDS_ENVIO, PortaRndsEnvioPropria } from './rnds-envio-propria.js';
 
 export interface OpcoesModuloIntegracao {
   /** Testes: as portas e o armazém já montados. */
@@ -104,6 +106,7 @@ export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao 
       PacotesVisoesController,
       PrescricaoDigitalController,
       FilaErpController,
+      RndsEnvioController,
     ],
     providers: [
       { provide: PORTA_INTEGRACAO, useValue: porta },
@@ -147,6 +150,11 @@ export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao 
       {
         provide: PORTA_FILA_ERP,
         useValue: nucleo && cliente ? new PortaFilaErpPropria(nucleo, cliente) : null,
+      },
+      // C2-085 (08-INTG L130): envio do sumário de alta e do resultado de exame à RNDS; sem núcleo, 503.
+      {
+        provide: PORTA_RNDS_ENVIO,
+        useValue: nucleo && cliente ? new PortaRndsEnvioPropria(nucleo, cliente) : null,
       },
       ...(local ? [{ provide: FONTE_CONFIGURACAO, useValue: local }] : []),
       {
