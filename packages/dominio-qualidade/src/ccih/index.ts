@@ -13,3 +13,5 @@ export * from './correcao.js';
 export * from './bundle.js';
 export * from './analise-cultura.js';
 export * from './notificacao-iras.js';
+// Auditoria da prescrição de antimicrobiano pela comissão (F7, 03-PEP linha 110).
+export * from './auditoria-antimicrobiano.js';

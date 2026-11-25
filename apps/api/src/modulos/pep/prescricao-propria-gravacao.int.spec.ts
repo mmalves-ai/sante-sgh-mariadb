@@ -56,6 +56,7 @@ async function limpar(e: Escritor): Promise<void> {
   const recs = `(SELECT id FROM reconciliacao_medicamentosa WHERE estabelecimento_id IN ${est})`;
   await limparTrilhaDaMassa(e, { codigos: [P] });
   for (const sql of [
+    `DELETE FROM ficha_antimicrobiano WHERE estabelecimento_id IN ${est}`,
     `DELETE FROM decisao_alerta WHERE prescricao_id IN ${presc}`,
     `DELETE FROM decisao_alerta WHERE prescricao_item_id IN ${itens}`,
     `DELETE FROM prescricao_evento WHERE prescricao_id IN ${presc}`,
@@ -89,6 +90,10 @@ async function limpar(e: Escritor): Promise<void> {
   );
   await e.executar('DELETE FROM pessoa_fisica WHERE nome LIKE ?', [`${P} %`]);
   await e.executar('DELETE FROM item_prescritivel WHERE codigo LIKE ?', [`${P}%`]);
+  await e.executar('DELETE FROM antimicrobiano WHERE codigo LIKE ?', [`${P}%`]);
+  await e.executar('DELETE FROM principio_ativo WHERE codigo_dcb LIKE ?', [`${P}%`]);
+  await e.executar('DELETE FROM sitio_infeccao WHERE codigo LIKE ?', [`${P}%`]);
+  await e.executar('DELETE FROM fonte_pagadora WHERE codigo LIKE ?', [`${P}%`]);
   for (const t of [
     'situacao_checagem',
     'tipo_item_prescricao',
@@ -648,5 +653,88 @@ describe.skipIf(SEM_BANCO)('gravação da prescrição no banco próprio (integr
         [prescricao],
       ),
     ).toBe(0);
+  });
+
+  it('prescrever com a ficha de antimicrobiano: a ficha do item na mesma transação; chave sem item recusa sem gravar', async () => {
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-am` }, async (e) => {
+      const agora = new Date();
+      const pa = await e.inserir(
+        'INSERT INTO principio_ativo (codigo_dcb, descricao, versao_fonte, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}pa`, 'PRINCIPIO SINTETICO', 'teste', agora],
+      );
+      await e.executar('UPDATE item_prescritivel SET principio_ativo_id = ? WHERE id = ?', [pa, m.produto]);
+      // A massa nasce com a fonte pagadora fictícia (chaves desligadas no preparo); a ficha copia a fonte do atendimento.
+      const fp = await e.uma('SELECT id FROM fonte_pagadora ORDER BY id LIMIT 1');
+      const fonte = fp
+        ? Number(fp['id'])
+        : await e.inserir(
+            "INSERT INTO fonte_pagadora (codigo, nome, tipo, criado_em) VALUES (?, 'Fonte sintética', 'particular', ?)",
+            [`${P}fp`, agora],
+          );
+      await e.executar('UPDATE atendimento SET fonte_pagadora_id = ? WHERE id = ?', [fonte, m.atd]);
+      await e.inserir(
+        'INSERT INTO antimicrobiano (codigo, descricao, principio_ativo_id, dias_liberados, criado_em) VALUES (?, ?, ?, 10, ?)',
+        [`${P}am`, 'ANTIMICROBIANO SINTETICO', pa, agora],
+      );
+      await e.inserir(
+        'INSERT INTO sitio_infeccao (codigo, descricao, sigla, versao_criterio, criado_em) VALUES (?, ?, ?, ?, ?)',
+        [`${P}s`, 'Sítio sintético', 'L95S', 'teste', agora],
+      );
+    });
+    const ficha = {
+      chave: 'k1',
+      produto: m.produto,
+      indicacao: 'Pneumonia hospitalar (sintético)',
+      sitio: `${P}s`,
+      tipo: 'empirico' as const,
+      culturaColhida: true,
+      diaTratamento: 1,
+      duracaoDias: 7,
+    };
+    const comFicha = (chave: string): GravacaoPrescricao => ({
+      ...gravacao(100, 110),
+      itens: [item('k1', [101])],
+      sgh: { ...sgh(), fichas: [{ ...ficha, chave }] },
+    });
+    const antes = await contar('SELECT COUNT(*) AS n FROM prescricao WHERE estabelecimento_id = ?', [m.est]);
+    await expect(porta.prescrever(c, 'pep.prescrever', comFicha('k9'), ctx())).rejects.toMatchObject({
+      problema: { status: 422, codigo: 'ficha-sem-item' },
+    });
+    expect(await contar('SELECT COUNT(*) AS n FROM prescricao WHERE estabelecimento_id = ?', [m.est])).toBe(
+      antes,
+    );
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM ficha_antimicrobiano WHERE estabelecimento_id = ?', [m.est]),
+    ).toBe(0);
+    const r = await porta.prescrever(c, 'pep.prescrever', comFicha('k1'), ctx());
+    const linhas = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+      l.consultar(
+        `SELECT f.prescricao_item_id, i.prescricao_id, f.prescritor_profissional_id, f.cultura_coletada, f.dias_previstos,
+                f.avaliacao_situacao, f.origem_infeccao, f.paciente_id, f.atendimento_id,
+                (SELECT codigo FROM finalidade_terapeutica t WHERE t.id = f.finalidade_terapeutica_id) AS finalidade
+           FROM ficha_antimicrobiano f JOIN prescricao_item i ON i.id = f.prescricao_item_id
+          WHERE f.estabelecimento_id = ?`,
+        [m.est],
+      ),
+    );
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0]).toMatchObject({
+      prescricao_id: r.prescricao,
+      prescritor_profissional_id: m.prof,
+      dias_previstos: 7,
+      avaliacao_situacao: 'pendente',
+      origem_infeccao: 'indeterminada',
+      paciente_id: m.pac,
+      atendimento_id: m.atd,
+      finalidade: 'empirica',
+    });
+    expect(Boolean(linhas[0]?.['cultura_coletada'])).toBe(true);
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM prescricao_evento WHERE prescricao_id = ? AND evento = 'criacao'
+            AND JSON_EXTRACT(dados, '$.fichas') = 1`,
+        [r.prescricao],
+      ),
+    ).toBe(1);
   });
 });

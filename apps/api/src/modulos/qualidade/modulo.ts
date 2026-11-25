@@ -32,6 +32,11 @@ import type { ContextoModulo } from '../registro.js';
 import { CENTRAL_AVISOS_QUALIDADE, type CentralAvisosQualidade } from './central-pendencias.js';
 import { AgravoController } from './agravo.controller.js';
 import { AnaliseCulturaController, PORTA_ANALISE_CULTURA } from './analise-cultura.controller.js';
+import {
+  AuditoriaAntimicrobianoController,
+  PORTA_AUDITORIA_ANTIMICROBIANO,
+} from './auditoria-antimicrobiano.controller.js';
+import { PortaAuditoriaAntimicrobianoPropria } from './porta-auditoria-antimicrobiano-propria.js';
 import { PortaAnaliseCulturaPropria } from './porta-analise-cultura-propria.js';
 import { NotificacaoIrasController, PORTA_NOTIFICACAO_IRAS } from './notificacao-iras.controller.js';
 import { PortaNotificacaoIrasPropria } from './porta-notificacao-iras-propria.js';
@@ -131,6 +136,7 @@ export async function modulo(
       SegurancaPacienteController,
       CcihController,
       AnaliseCulturaController,
+      AuditoriaAntimicrobianoController,
       NotificacaoIrasController,
       PerfilCidController,
       AgravoController,
@@ -145,6 +151,14 @@ export async function modulo(
         provide: PORTA_ANALISE_CULTURA,
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao ? new PortaAnaliseCulturaPropria(ctx.nucleo) : null,
+      },
+      // A auditoria da prescrição de antimicrobiano pela comissão (F7, 03-PEP linha 110): só a porta própria; sem banco, 503.
+      {
+        provide: PORTA_AUDITORIA_ANTIMICROBIANO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaAuditoriaAntimicrobianoPropria(ctx.nucleo)
+            : null,
       },
       // O envio mensal da notificação de IRAS ao órgão sanitário (F7, 09-AREA linha 68): só a porta própria; sem banco, 503.
       {

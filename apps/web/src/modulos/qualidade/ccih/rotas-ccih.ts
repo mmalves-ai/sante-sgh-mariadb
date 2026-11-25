@@ -23,6 +23,12 @@ export const rotasCcih: RouteRecordRaw[] = [
     meta: { permissao: P.antimicrobianoLer },
   },
   {
+    path: '/qualidade/ccih/auditoria-antimicrobiano',
+    name: 'qualidade.ccih.auditoria-antimicrobiano',
+    component: () => import('./telas/AuditoriaAntimicrobianoTela.vue'),
+    meta: { permissao: P.antimicrobianoLer },
+  },
+  {
     path: '/qualidade/ccih/precaucoes',
     name: 'qualidade.ccih.precaucoes',
     component: () => import('./telas/PrecaucoesTela.vue'),

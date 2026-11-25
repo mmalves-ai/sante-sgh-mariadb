@@ -16,6 +16,11 @@ const telas = computed(() =>
       rotulo: 'antimicrobianos',
       permissao: 'qualidade.antimicrobiano.ler',
     },
+    {
+      rota: '/qualidade/ccih/auditoria-antimicrobiano',
+      rotulo: 'auditoriaAntimicrobiano',
+      permissao: 'qualidade.antimicrobiano.ler',
+    },
     { rota: '/qualidade/ccih/precaucoes', rotulo: 'precaucoes', permissao: 'qualidade.precaucao.ler' },
     { rota: '/qualidade/ccih/maos-surtos', rotulo: 'maosSurtos', permissao: 'qualidade.ccih.registrar' },
   ].filter((x) => pode(x.permissao)),

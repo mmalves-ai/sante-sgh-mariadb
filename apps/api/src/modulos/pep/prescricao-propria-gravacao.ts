@@ -33,6 +33,7 @@ import {
   produtoDoItem,
 } from './prescricao-propria-itens.js';
 import { integrarDosesDoItem } from '../farmacia/integracao-prescricao.js';
+import { inserirFichaAntimicrobiano } from './prescricao-ficha-antimicrobiano.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 import {
   desmarcarFavorito,
@@ -95,6 +96,8 @@ export const TABELAS_GRAVACAO_PRESCRICAO = [
   'planejamento_prescricao',
   'reconciliacao_medicamentosa',
   'reconciliacao_item',
+  // A ficha de antimicrobiano que vai junto da gravação (03-PEP linha 110).
+  'ficha_antimicrobiano',
   'grade_horario_classe',
   'sequencia_negocio',
 ] as const;
@@ -666,7 +669,6 @@ export class GravacaoPrescricaoPropria {
     ctx: ContextoOperacao,
   ): Promise<{ prescricao: number; horarios: number }> {
     conferirItensSuportados(e.itens, e.vigencia);
-    if (e.sgh.fichas.length > 0) throw recusaPendenteGravacao('fichas de antimicrobiano');
     return this.gravar(
       c,
       ctx,
@@ -756,6 +758,32 @@ export class GravacaoPrescricaoPropria {
         await gravarDecisoes(tx, prof, prescricao, porChave, e.sgh.decisoes, agora);
         for (const futura of e.sgh.futuras)
           await efetivarFutura(tx, est.id, e.atendimento, futura, prescricao, agora);
+        // A ficha de antimicrobiano de cada item (pela chave), na mesma transação: sem o item, nada é gravado.
+        const fichas: number[] = [];
+        for (const fi of e.sgh.fichas) {
+          const doItem = porChave.get(fi.chave);
+          if (doItem === undefined)
+            throw recusar(
+              422,
+              'ficha-sem-item',
+              'A ficha justifica um item desta prescrição: a chave não existe.',
+            );
+          fichas.push(
+            await inserirFichaAntimicrobiano(tx, est, prof.profissional, {
+              atendimento: e.atendimento,
+              paciente: e.paciente,
+              prescricao,
+              item: doItem,
+              produto: fi.produto,
+              indicacao: fi.indicacao,
+              sitio: fi.sitio,
+              tipo: fi.tipo,
+              culturaColhida: fi.culturaColhida,
+              diaTratamento: fi.diaTratamento,
+              duracaoDias: fi.duracaoDias,
+            }),
+          );
+        }
         const evento =
           operacao === 'pep.copiarPrescricao'
             ? 'copia'
@@ -766,6 +794,7 @@ export class GravacaoPrescricaoPropria {
           itens: e.itens.length,
           horarios,
           protocolos: e.protocolos,
+          fichas: fichas.length,
         });
         await evento_(
           tx,
