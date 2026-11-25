@@ -2,13 +2,15 @@
 // requisição (sessão real, porta em memória), vê a requisição na fila, abre a "Lista de separação" pelo link da própria
 // requisição e confere: o cabeçalho (local, destino, urgência), as linhas na ordem do endereço no armazém com o item
 // sem endereço no fim, os lotes sugeridos pela validade, o saldo, a falta só onde o saldo não cobre e o aviso do total
-// de faltas; marca o que já separou (só na tela) e imprime pelo navegador. A requisição cancelada mostra a recusa do
-// servidor em português, sem tabela; a requisição já atendida mostra "nada a separar".
+// de faltas; marca o que já separou (só na tela) e imprime pelo navegador. A requisição cancelada e a já atendida
+// mostram a recusa do servidor em português, sem tabela (a lista só sai para requisição atendível); a requisição
+// atendível sem item pendente mostra "nada pendente a separar".
 // A lista lê a requisição, os saldos e os lotes do banco próprio, que a fonte sintética do E2E não tem (sem banco a
 // rota responde 503): a resposta de `GET /api/suprimentos/cadastro/requisicoes/:id/separacao` é simulada pelo
-// Playwright com massa SINTÉTICA no mesmo formato. A regra (`montarSeparacao`, `conferirRequisicaoSeparavel`) está em
+// Playwright com massa SINTÉTICA no mesmo formato e no vocabulário do servidor (situação `autorizada`,
+// `atendida_parcial`; recusa 409 `separacao-requisicao-nao-atendivel`). A regra (`montarSeparacao`, `conferirRequisicaoSeparavel`) está em
 // packages/dominio-suprimentos/src/cadastro-estoque.spec.ts e o que sai do banco (só o que falta, endereço do
-// local, lotes válidos e liberados, a falta, a recusa da cancelada) em
+// local, lotes válidos e liberados, a falta, a recusa da não atendível) em
 // apps/api/src/modulos/suprimentos/cadastro-estoque-porta-propria.int.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { ORIGEM, semViolacaoAxe } from './ajuda.js';
@@ -46,6 +48,16 @@ const json = (rota: Route, corpo: unknown, status = 200) =>
 const SEPARACAO = /\/api\/suprimentos\/cadastro\/requisicoes\/(\d+)\/separacao(\?.*)?$/;
 const CANCELADA = 990001;
 const ATENDIDA = 990002;
+const SEM_PENDENTE = 990003;
+
+/** A recusa de `conferirRequisicaoSeparavel`, como o servidor a devolve (409). */
+const recusaNaoAtendivel = (situacao: string) => ({
+  type: 'about:blank',
+  title: 'Recusa de negócio',
+  status: 409,
+  codigo: 'separacao-requisicao-nao-atendivel',
+  detail: `A requisição está ${situacao}: não há o que separar.`,
+});
 
 const cabecalho = (requisicao: number, numero: number, situacao: string) => ({
   requisicao,
@@ -113,7 +125,7 @@ test.describe('Lista de separação da requisição @F3.6-03 @fase3', () => {
       expect(rota.request().method()).toBe('GET');
       const id = Number(SEPARACAO.exec(new URL(rota.request().url()).pathname)?.[1]);
       pedidas.push(id);
-      return json(rota, { ...cabecalho(id, 4711, 'aberto'), linhas, totalFalta: 1 });
+      return json(rota, { ...cabecalho(id, 4711, 'autorizada'), linhas, totalFalta: 1 });
     });
     await page.addInitScript(() => {
       (globalThis as unknown as { impressoes: number }).impressoes = 0;
@@ -187,24 +199,19 @@ test.describe('Lista de separação da requisição @F3.6-03 @fase3', () => {
     await semViolacaoAxe(page, '/suprimentos/requisicoes/:id/separacao');
   });
 
-  test('requisição cancelada mostra a recusa do servidor; a já atendida, nada a separar', async ({
+  test('requisição cancelada e a já atendida mostram a recusa do servidor; a atendível sem item pendente, nada pendente', async ({
     page,
   }) => {
     await page.route(SEPARACAO, (rota) => {
       const id = Number(SEPARACAO.exec(new URL(rota.request().url()).pathname)?.[1]);
-      if (id === CANCELADA)
-        return json(
-          rota,
-          {
-            type: 'about:blank',
-            title: 'Recusa de negócio',
-            status: 409,
-            codigo: 'separacao-requisicao-nao-atendivel',
-            detail: 'A requisição está cancelada: não há o que separar.',
-          },
-          409,
-        );
-      return json(rota, { ...cabecalho(id, 4712, 'atendido'), urgente: false, linhas: [], totalFalta: 0 });
+      if (id === CANCELADA) return json(rota, recusaNaoAtendivel('cancelada'), 409);
+      if (id === ATENDIDA) return json(rota, recusaNaoAtendivel('atendida'), 409);
+      return json(rota, {
+        ...cabecalho(id, 4712, 'atendida_parcial'),
+        urgente: false,
+        linhas: [],
+        totalFalta: 0,
+      });
     });
     await entrar(page, 'SINT.ALMOXARIFE');
 
@@ -216,9 +223,19 @@ test.describe('Lista de separação da requisição @F3.6-03 @fase3', () => {
     await expect(tela.getByTestId('separacao-linhas')).toHaveCount(0);
     await expect(tela.getByTestId('separacao-imprimir')).toHaveCount(0);
 
+    // A atendida não é atendível: a mesma recusa, nunca uma lista vazia.
     await page.goto(`/suprimentos/requisicoes/${ATENDIDA}/separacao`);
+    await expect(tela.getByTestId('recusa-suprimentos')).toContainText(
+      'A requisição está atendida: não há o que separar.',
+    );
+    await expect(tela.getByTestId('separacao-linhas')).toHaveCount(0);
+    await expect(tela.getByTestId('separacao-imprimir')).toHaveCount(0);
+
+    // Atendida em parte e o que restava foi cancelado: a lista sai, sem linha pendente.
+    await page.goto(`/suprimentos/requisicoes/${SEM_PENDENTE}/separacao`);
     await expect(tela.getByRole('heading', { level: 1 })).toHaveText('Lista de separação da requisição 4712');
-    await expect(tela).toContainText('Nada a separar: a requisição está atendida.');
+    await expect(tela).toContainText('Nada pendente a separar nesta requisição.');
+    await expect(tela.getByTestId('recusa-suprimentos')).toHaveCount(0);
     await expect(tela.getByTestId('separacao-faltas')).toHaveCount(0);
     await expect(tela.getByTestId('separacao-cabecalho')).not.toContainText('Urgente');
     await expect(tela.getByTestId('separacao-linhas')).toHaveCount(0);

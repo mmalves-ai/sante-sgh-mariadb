@@ -177,7 +177,7 @@ export const mensagensCadastroEstoque = {
     saldo: 'Saldo',
     falta: 'Falta',
     separado: 'Separado',
-    vazia: 'Nada a separar: a requisição está atendida.',
+    vazia: 'Nada pendente a separar nesta requisição.',
     destino: 'Destino',
     geradaEm: 'Gerada em',
     urgente: 'Urgente',
