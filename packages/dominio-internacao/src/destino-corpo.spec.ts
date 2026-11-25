@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   conferirAberturaGuarda,
+  declaracaoVigente,
   decidirAcaoLiberacao,
   decidirDestinoDeclaracao,
   pendenciasDestinoCorpo,
@@ -84,7 +85,7 @@ describe('guarda e liberação do corpo', () => {
         obitoEm: T0,
         entradaNecroterioEm: mais(30),
         agora: mais(60),
-        jaHaGuardaDoAtendimento: false,
+        guardaDoAtendimento: null,
       }).ok,
     ).toBe(true);
     expect(
@@ -93,10 +94,52 @@ describe('guarda e liberação do corpo', () => {
           obitoEm: T0,
           entradaNecroterioEm: mais(-5),
           agora: mais(60),
-          jaHaGuardaDoAtendimento: true,
+          guardaDoAtendimento: 'em_guarda',
         }),
       ),
     ).toEqual(['atendimento', 'entradaNecroterio']);
+    for (const g of ['liberado', 'retirado', 'encaminhado_iml'] as const)
+      expect(
+        campos(
+          conferirAberturaGuarda({
+            obitoEm: T0,
+            entradaNecroterioEm: null,
+            agora: mais(60),
+            guardaDoAtendimento: g,
+          }),
+        ),
+      ).toEqual(['atendimento']);
+    expect(
+      conferirAberturaGuarda({
+        obitoEm: T0,
+        entradaNecroterioEm: null,
+        agora: mais(60),
+        guardaDoAtendimento: null,
+      }),
+    ).toEqual({ ok: true, reabrir: false });
+  });
+
+  it('guarda cancelada é reaberta, nunca duplicada', () => {
+    expect(
+      conferirAberturaGuarda({
+        obitoEm: T0,
+        entradaNecroterioEm: mais(30),
+        agora: mais(60),
+        guardaDoAtendimento: 'cancelado',
+      }),
+    ).toEqual({ ok: true, reabrir: true });
+  });
+
+  it('declaração vigente: a não cancelada mais recente', () => {
+    expect(
+      declaracaoVigente([
+        { id: 3, situacao: 'cancelada' },
+        { id: 1, situacao: 'emitida' },
+        { id: 2, situacao: 'rascunho' },
+      ])?.id,
+    ).toBe(2);
+    expect(declaracaoVigente([{ id: 5, situacao: 'cancelada' }])).toBeNull();
+    expect(declaracaoVigente([])).toBeNull();
   });
 
   const liberar = {
@@ -187,5 +230,13 @@ describe('guarda e liberação do corpo', () => {
         guarda: 'retirado',
       }),
     ).toEqual([]);
+    expect(
+      pendenciasDestinoCorpo({
+        declaracao: 'emitida',
+        funerariaEscolhida: true,
+        cartorioEscolhido: true,
+        guarda: 'cancelado',
+      }),
+    ).toEqual(['guarda']);
   });
 });

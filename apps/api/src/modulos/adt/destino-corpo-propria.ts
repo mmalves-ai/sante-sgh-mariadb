@@ -10,11 +10,16 @@
 //     óbito da declaração, a internação do atendimento e a funerária da declaração; a liberação grava quem retira
 //     (funerária, nome, CPF só com dígitos ou documento, parentesco), as conferências, o instante e o usuário que
 //     liberou; a retirada grava o instante; o encaminhamento marca `encaminhado_iml`; o cancelamento acrescenta o motivo
-//     à observação. Nada é apagado.
+//     à observação. Nada é apagado;
+//   - a guarda segue a declaração vigente do atendimento (a não cancelada mais recente): a liberação decide por ela e
+//     religa `declaracao_obito_id`, e a escolha do destino na declaração vigente religa a guarda aberta; a guarda
+//     cancelada é reaberta pela mesma abertura (volta a 'em_guarda', com a declaração vigente, sem os dados da liberação
+//     desfeita, e "Reaberta" acrescentado à observação), nunca duplicada.
 import {
   type AcaoLiberacaoCorpo,
   ACOES_LIBERACAO_CORPO,
   conferirAberturaGuarda,
+  declaracaoVigente,
   decidirAcaoLiberacao,
   decidirDestinoDeclaracao,
   pendenciasDestinoCorpo,
@@ -427,13 +432,19 @@ export class PortaDestinoCorpoPropria extends PortaEstabelecimentoPropria {
         });
         const g = await travada(
           tx,
-          `SELECT id, versao, servico_funerario_id FROM liberacao_corpo
+          `SELECT id, versao, servico_funerario_id, declaracao_obito_id FROM liberacao_corpo
             WHERE atendimento_id = ? AND situacao = 'em_guarda' AND excluido_em IS NULL`,
           [num(d['atendimento_id'])],
         );
-        if (g && numOuNull(g['servico_funerario_id']) !== e.funeraria)
+        // A guarda aberta acompanha a funerária e fica ligada a esta declaração (a vigente, pois não está cancelada).
+        if (
+          g &&
+          (numOuNull(g['servico_funerario_id']) !== e.funeraria ||
+            numOuNull(g['declaracao_obito_id']) !== declaracao)
+        )
           await tx.alterar('liberacao_corpo', num(g['id']), num(g['versao']), {
             servico_funerario_id: e.funeraria,
+            declaracao_obito_id: declaracao,
           });
         return { tabela: 'declaracao_obito', id: declaracao };
       },
@@ -450,17 +461,46 @@ export class PortaDestinoCorpoPropria extends PortaEstabelecimentoPropria {
         [e.declaracao, est.id],
       );
       if (!d) throw naoEncontrado('Declaração de óbito');
-      const ja = await tx.consultarParaAtualizar('SELECT id FROM liberacao_corpo WHERE atendimento_id = ?', [
-        num(d['atendimento_id']),
-      ]);
+      const ja = await travada(
+        tx,
+        'SELECT id, situacao, versao, observacao FROM liberacao_corpo WHERE atendimento_id = ?',
+        [num(d['atendimento_id'])],
+      );
       const entrada = e.entradaNecroterio ? new Date(e.entradaNecroterio) : null;
       const v = conferirAberturaGuarda({
         obitoEm: new Date(d['obito_em'] as string),
         entradaNecroterioEm: entrada,
         agora: new Date(),
-        jaHaGuardaDoAtendimento: ja.length > 0,
+        guardaDoAtendimento: ja ? (String(ja['situacao']) as SituacaoLiberacaoCorpo) : null,
       });
       if (!v.ok) recusou('Guarda não registrada', v.problemas);
+      const obs = e.observacao?.trim() || null;
+      if (v.reabrir && ja) {
+        // A guarda cancelada volta a valer: mesma linha, ligada à declaração vigente; a liberação desfeita sai dos campos
+        // (a trilha guarda o que havia) e a observação anterior fica, com a reabertura acrescentada.
+        const antes = txtOuNull(ja['observacao']);
+        await tx.alterar('liberacao_corpo', num(ja['id']), num(ja['versao']), {
+          situacao: 'em_guarda',
+          declaracao_obito_id: e.declaracao,
+          data_hora_obito: d['obito_em'],
+          data_hora_entrada_necroterio: entrada,
+          local_guarda: txtOuNull(e.localGuarda?.trim() || null),
+          servico_funerario_id: numOuNull(d['servico_funerario_id']),
+          encaminhado_iml: false,
+          retirante_nome: null,
+          retirante_cpf: null,
+          retirante_documento: null,
+          retirante_tipo_parentesco_id: null,
+          documentos_conferidos: false,
+          declaracao_obito_entregue: false,
+          pertences_entregues: false,
+          data_hora_liberacao: null,
+          liberacao_usuario_id: null,
+          data_hora_retirada: null,
+          observacao: `${antes ? `${antes}\n` : ''}Reaberta${obs ? `: ${obs}` : ''}`,
+        });
+        return { tabela: 'liberacao_corpo', id: num(ja['id']) };
+      }
       const int = await tx.uma(
         'SELECT id FROM internacao WHERE atendimento_id = ? AND excluido_em IS NULL ORDER BY id DESC LIMIT 1',
         [num(d['atendimento_id'])],
@@ -476,7 +516,7 @@ export class PortaDestinoCorpoPropria extends PortaEstabelecimentoPropria {
         local_guarda: txtOuNull(e.localGuarda?.trim() || null),
         servico_funerario_id: numOuNull(d['servico_funerario_id']),
         situacao: 'em_guarda',
-        observacao: txtOuNull(e.observacao?.trim() || null),
+        observacao: obs,
         origem: 'sistema',
       });
       return { tabela: 'liberacao_corpo', id: novo };
@@ -502,11 +542,17 @@ export class PortaDestinoCorpoPropria extends PortaEstabelecimentoPropria {
           [guarda, est.id],
         );
         if (!g) throw naoEncontrado('Guarda do corpo');
-        const d = g['declaracao_obito_id']
-          ? await tx.uma('SELECT situacao FROM declaracao_obito WHERE id = ?', [
-              num(g['declaracao_obito_id']),
-            ])
-          : null;
+        // A liberação decide pela declaração vigente do atendimento, não pela que abriu a guarda (pode ter sido
+        // cancelada e substituída).
+        const d = declaracaoVigente(
+          (
+            await tx.consultar(
+              `SELECT id, situacao FROM declaracao_obito
+                WHERE atendimento_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+              [num(g['atendimento_id']), est.id],
+            )
+          ).map((r) => ({ id: num(r['id']), situacao: String(r['situacao']) })),
+        );
         const funerariaId = acao === 'liberar' ? (e.funeraria ?? numOuNull(g['servico_funerario_id'])) : null;
         const f = funerariaId ? await this.funerariaDoEstabelecimento(tx, est.id, funerariaId) : null;
         const agora = new Date();
@@ -514,7 +560,7 @@ export class PortaDestinoCorpoPropria extends PortaEstabelecimentoPropria {
           agora,
           obitoEm: new Date(g['data_hora_obito'] as string),
           liberadoEm: g['data_hora_liberacao'] ? new Date(g['data_hora_liberacao'] as string) : null,
-          declaracao: d ? (String(d['situacao']) as 'rascunho' | 'emitida' | 'cancelada') : null,
+          declaracao: d ? (d.situacao as 'rascunho' | 'emitida' | 'cancelada') : null,
           funeraria: f ? { ativo: bool(f['ativo']) } : null,
           retiranteNome: e.retiranteNome,
           retiranteCpf: e.retiranteCpf,
@@ -538,6 +584,7 @@ export class PortaDestinoCorpoPropria extends PortaEstabelecimentoPropria {
             pertences_entregues: e.pertencesEntregues,
             data_hora_liberacao: agora,
             liberacao_usuario_id: usuario,
+            declaracao_obito_id: d!.id,
           });
         if (acao === 'retirar') campos['data_hora_retirada'] = new Date(e.retiradaEm!);
         if (acao === 'encaminhar_iml') campos['encaminhado_iml'] = true;

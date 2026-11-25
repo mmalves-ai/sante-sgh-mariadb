@@ -9,7 +9,11 @@
 //     funerária na declaração acompanha a guarda aberta; liberação recusada sem a entrega da declaração e, com ela,
 //     gravada com o CPF só com dígitos, as conferências, o instante e o usuário; retirada antes da liberação recusada e
 //     depois gravada; cancelamento recusado depois da retirada; a declaração em rascunho não libera e é encaminhada ao
-//     serviço de verificação. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+//     serviço de verificação, e o cancelamento por motivo curto numa guarda que aceita cancelar é recusado pelo motivo;
+//   - declaração cancelada e substituída: a guarda aberta com a cancelada é liberada pela nova (vigente) e passa a
+//     apontar para ela; o cancelamento da guarda liberada grava 'cancelado' com o motivo acrescentado à observação
+//     anterior e a versão nova; a guarda cancelada volta às pendências e é reaberta na mesma linha (uma por
+//     atendimento), sem os dados da liberação desfeita. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
@@ -27,6 +31,11 @@ interface Massa {
   rascunho: number;
   atendimentoEmitida: number;
   internacaoEmitida: number;
+  /** Terceiro atendimento: declaração emitida que será cancelada e substituída. */
+  trocada: number;
+  atendimentoTrocada: number;
+  pacienteTrocada: number;
+  profissional: number;
   cartorio: number;
   cartorioInativo: number;
   parentesco: number;
@@ -74,9 +83,14 @@ describe.skipIf(SEM_BANCO)('PortaDestinoCorpoPropria contra o MariaDB (contrato 
         'SELECT id, atendimento_id, paciente_id FROM internacao WHERE excluido_em IS NULL ORDER BY id LIMIT 2',
       );
       const par = await e.uma('SELECT MIN(id) AS id FROM tipo_parentesco WHERE NOT proprio_paciente');
-      if (!usuario?.['id'] || !prof?.['id'] || ints.length < 2 || !par?.['id'])
+      // Terceiro atendimento (com ou sem internação): a declaração que será cancelada e substituída.
+      const terceiro = await e.uma(
+        'SELECT id AS atendimento_id, paciente_id FROM atendimento WHERE excluido_em IS NULL AND id NOT IN (?, ?) ORDER BY id LIMIT 1',
+        [Number(ints[0]?.['atendimento_id'] ?? 0), Number(ints[1]?.['atendimento_id'] ?? 0)],
+      );
+      if (!usuario?.['id'] || !prof?.['id'] || ints.length < 2 || !terceiro || !par?.['id'])
         throw new Error(
-          'O cliente de teste precisa de usuário, profissional, duas internações e parentesco.',
+          'O cliente de teste precisa de usuário, profissional, duas internações, outro atendimento e parentesco.',
         );
       const est = await e.inserir(
         `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
@@ -113,6 +127,10 @@ describe.skipIf(SEM_BANCO)('PortaDestinoCorpoPropria contra o MariaDB (contrato 
         rascunho: await declarar(ints[1]!, '1120002', 'rascunho'),
         atendimentoEmitida: Number(ints[0]!['atendimento_id']),
         internacaoEmitida: Number(ints[0]!['id']),
+        trocada: await declarar(terceiro, '1120003', 'emitida'),
+        atendimentoTrocada: Number(terceiro['atendimento_id']),
+        pacienteTrocada: Number(terceiro['paciente_id']),
+        profissional: Number(prof['id']),
         cartorio: await cartorio('a', true),
         cartorioInativo: await cartorio('b', false),
         parentesco: Number(par['id']),
@@ -222,7 +240,7 @@ describe.skipIf(SEM_BANCO)('PortaDestinoCorpoPropria contra o MariaDB (contrato 
       pendencias: ['guarda'],
     });
     const painel = await porta.obitos(ctx());
-    expect(painel.map((x) => x.declaracao).sort()).toEqual([m.emitida, m.rascunho].sort());
+    expect(painel.map((x) => x.declaracao).sort()).toEqual([m.emitida, m.rascunho, m.trocada].sort());
   });
 
   it('guarda e liberação: abrir, acompanhar a funerária, liberar, retirar e não cancelar o retirado', async () => {
@@ -338,5 +356,125 @@ describe.skipIf(SEM_BANCO)('PortaDestinoCorpoPropria contra o MariaDB (contrato 
     expect(
       await falha(porta.acaoGuarda(ctx(), g, { acao: 'cancelar', versao: 2, motivo: 'curto' })),
     ).toContain('regra-violada');
+  });
+
+  it('declaração cancelada e reemitida: libera pela vigente; cancelamento gravado; guarda reaberta', async () => {
+    const g = (
+      await porta.abrirGuarda(ctx(), {
+        declaracao: m.trocada,
+        localGuarda: 'Câmara 1',
+        observacao: 'Obs sintética',
+      })
+    ).id;
+    // A declaração que abriu a guarda é cancelada por erro de preenchimento e outra é emitida no mesmo atendimento.
+    const nova = await nucleo.escrever({ cliente: CLIENTE, correlacao: `reemitir-${P}` }, async (e) => {
+      const agora = new Date();
+      await e.executar(
+        `UPDATE declaracao_obito SET situacao = 'cancelada', cancelada_em = ?, motivo_cancelamento = ?,
+                versao = versao + 1 WHERE id = ?`,
+        [agora, 'Erro de preenchimento sintético', m.trocada],
+      );
+      return e.inserir(
+        `INSERT INTO declaracao_obito (estabelecimento_id, atendimento_id, paciente_id, numero, obito_em, profissional_id,
+           situacao, emitida_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, 'emitida', ?, ?)`,
+        [
+          m.est,
+          m.atendimentoTrocada,
+          m.pacienteTrocada,
+          '1120004',
+          new Date(agora.getTime() - 3 * 3600_000),
+          m.profissional,
+          agora,
+          agora,
+        ],
+      );
+    });
+    const v1 = await porta.destino(ctx(), nova);
+    expect(v1.guarda).toMatchObject({ id: g, situacao: 'em_guarda' });
+    expect(v1.pendencias).toContain('liberacao');
+
+    // A liberação decide pela declaração vigente (a nova, emitida) e religa a guarda a ela.
+    expect(
+      (
+        await porta.acaoGuarda(ctx(), g, {
+          acao: 'liberar',
+          versao: 1,
+          retiranteNome: 'Pessoa sintética',
+          retiranteDocumento: 'RG sintético',
+          documentosConferidos: true,
+          declaracaoEntregue: true,
+        })
+      ).situacao,
+    ).toBe('liberado');
+    expect(
+      await uma(
+        'SELECT situacao, declaracao_obito_id, retirante_documento, versao FROM liberacao_corpo WHERE id = ?',
+        [g],
+      ),
+    ).toEqual({
+      situacao: 'liberado',
+      declaracao_obito_id: nova,
+      retirante_documento: 'RG sintético',
+      versao: 2,
+    });
+
+    // Motivo curto numa guarda que aceita cancelar: a recusa vem do motivo, e nada muda.
+    const curto = await falha(porta.acaoGuarda(ctx(), g, { acao: 'cancelar', versao: 2, motivo: 'curto' }));
+    expect(curto).toContain('regra-violada');
+    expect(curto).toContain('motivo');
+    expect(curto).not.toContain('não aceita');
+    expect(await uma('SELECT situacao, versao FROM liberacao_corpo WHERE id = ?', [g])).toEqual({
+      situacao: 'liberado',
+      versao: 2,
+    });
+
+    // Cancelamento gravado: situação, motivo acrescentado sem apagar a observação anterior, versão nova.
+    expect(
+      (
+        await porta.acaoGuarda(ctx(), g, {
+          acao: 'cancelar',
+          versao: 2,
+          motivo: 'Liberação registrada por engano',
+        })
+      ).situacao,
+    ).toBe('cancelado');
+    expect(
+      await uma(
+        'SELECT situacao, observacao, versao, alterado_por, excluido_em FROM liberacao_corpo WHERE id = ?',
+        [g],
+      ),
+    ).toEqual({
+      situacao: 'cancelado',
+      observacao: 'Obs sintética\nCancelada: Liberação registrada por engano',
+      versao: 3,
+      alterado_por: m.usuario,
+      excluido_em: null,
+    });
+
+    // A guarda cancelada volta às pendências e é reaberta na mesma linha.
+    const v2 = await porta.destino(ctx(), nova);
+    expect(v2.guarda?.situacao).toBe('cancelado');
+    expect(v2.pendencias).toContain('guarda');
+    expect((await porta.obitos(ctx())).map((x) => x.declaracao)).toContain(nova);
+    expect((await porta.abrirGuarda(ctx(), { declaracao: nova, localGuarda: 'Câmara 3' })).id).toBe(g);
+    const r = await uma('SELECT * FROM liberacao_corpo WHERE id = ?', [g]);
+    expect(r).toMatchObject({
+      situacao: 'em_guarda',
+      declaracao_obito_id: nova,
+      local_guarda: 'Câmara 3',
+      retirante_nome: null,
+      retirante_documento: null,
+      data_hora_liberacao: null,
+      liberacao_usuario_id: null,
+      observacao: 'Obs sintética\nCancelada: Liberação registrada por engano\nReaberta',
+      versao: 4,
+    });
+    expect([r['documentos_conferidos'], r['declaracao_obito_entregue']].map(Boolean)).toEqual([false, false]);
+    expect(
+      await uma('SELECT COUNT(*) AS n FROM liberacao_corpo WHERE atendimento_id = ?', [m.atendimentoTrocada]),
+    ).toMatchObject({ n: 1 });
+    expect((await porta.destino(ctx(), nova)).pendencias).toContain('liberacao');
+    // Já reaberta: uma segunda abertura é recusada.
+    expect(await falha(porta.abrirGuarda(ctx(), { declaracao: nova }))).toContain('regra-violada');
   });
 });

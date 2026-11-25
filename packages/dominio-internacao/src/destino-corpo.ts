@@ -9,7 +9,10 @@
 //     liberação); em guarda → encaminhado ao serviço de verificação de óbito ou ao instituto médico-legal; em guarda ou
 //     liberado → cancelado, com motivo. O corpo só é liberado à família ou à funerária com a declaração de óbito emitida
 //     e entregue (Lei 6.015/1973, art. 77: o sepultamento depende do registro do óbito com a declaração); sem ela, o
-//     caminho é o encaminhamento ao serviço de verificação ou ao instituto médico-legal.
+//     caminho é o encaminhamento ao serviço de verificação ou ao instituto médico-legal;
+//   - a guarda é uma por atendimento e segue a declaração vigente (a não cancelada mais recente): se a declaração for
+//     cancelada e outra emitida, a liberação usa a nova; a guarda cancelada (por engano ou porque o corpo voltou) é
+//     reaberta, nunca apagada nem duplicada, e o óbito volta a ficar pendente de guarda.
 import { cpfValido, somenteDigitos } from '@sgh/contratos';
 
 export const SITUACOES_LIBERACAO_CORPO = [
@@ -124,13 +127,17 @@ export interface EntradaGuardaCorpo {
   readonly obitoEm: Date;
   readonly entradaNecroterioEm: Date | null;
   readonly agora: Date;
-  readonly jaHaGuardaDoAtendimento: boolean;
+  /** Situação da guarda que o atendimento já tem (null: nenhuma). */
+  readonly guardaDoAtendimento: SituacaoLiberacaoCorpo | null;
 }
 
-/** Abre a guarda do corpo: uma por atendimento; a entrada no necrotério nunca antes do óbito nem no futuro. */
-export function conferirAberturaGuarda(e: EntradaGuardaCorpo): ResultadoDestinoCorpo<object> {
+/**
+ * Abre a guarda do corpo: uma por atendimento; a cancelada é reaberta (`reabrir`), qualquer outra recusa; a entrada no
+ * necrotério nunca antes do óbito nem no futuro.
+ */
+export function conferirAberturaGuarda(e: EntradaGuardaCorpo): ResultadoDestinoCorpo<{ reabrir: boolean }> {
   const p: ProblemaDestinoCorpo[] = [];
-  if (e.jaHaGuardaDoAtendimento)
+  if (e.guardaDoAtendimento !== null && e.guardaDoAtendimento !== 'cancelado')
     p.push({ campo: 'atendimento', mensagem: 'O corpo deste atendimento já tem guarda registrada.' });
   if (e.entradaNecroterioEm) {
     if (e.entradaNecroterioEm.getTime() < e.obitoEm.getTime())
@@ -141,7 +148,21 @@ export function conferirAberturaGuarda(e: EntradaGuardaCorpo): ResultadoDestinoC
     if (e.entradaNecroterioEm.getTime() > e.agora.getTime() + FOLGA_MS)
       p.push({ campo: 'entradaNecroterio', mensagem: 'A entrada no necrotério não pode ser no futuro.' });
   }
-  return p.length ? { ok: false, problemas: p } : { ok: true };
+  return p.length
+    ? { ok: false, problemas: p }
+    : { ok: true, reabrir: e.guardaDoAtendimento === 'cancelado' };
+}
+
+/**
+ * A declaração de óbito que vale para o atendimento: a não cancelada mais recente (maior id). É a que a guarda segue e a
+ * que decide a liberação; null quando todas estão canceladas.
+ */
+export function declaracaoVigente<T extends { readonly id: number; readonly situacao: string }>(
+  declaracoes: readonly T[],
+): T | null {
+  let r: T | null = null;
+  for (const d of declaracoes) if (d.situacao !== 'cancelada' && (r === null || d.id > r.id)) r = d;
+  return r;
 }
 
 export interface DadosAcaoLiberacao {
@@ -242,10 +263,11 @@ export function pendenciasDestinoCorpo(e: {
   const r: string[] = [];
   if (e.declaracao === null || e.declaracao === 'cancelada') r.push('declaracao');
   else if (e.declaracao === 'rascunho') r.push('emitir-declaracao');
-  if (e.guarda === 'encaminhado_iml' || e.guarda === 'retirado' || e.guarda === 'cancelado') return r;
+  if (e.guarda === 'encaminhado_iml' || e.guarda === 'retirado') return r;
   if (!e.funerariaEscolhida) r.push('funeraria');
   if (!e.cartorioEscolhido) r.push('cartorio');
-  if (e.guarda === null) r.push('guarda');
+  // A guarda cancelada volta a ser pendência: o corpo precisa de guarda (reaberta) e de destino.
+  if (e.guarda === null || e.guarda === 'cancelado') r.push('guarda');
   else if (e.guarda === 'em_guarda') r.push('liberacao');
   else if (e.guarda === 'liberado') r.push('retirada');
   return r;

@@ -344,8 +344,11 @@ const trocarUso = useMutation({
       </p>
 
       <h2>{{ t(`${k}.guarda.titulo`) }}</h2>
-      <template v-if="!atual.guarda">
-        <p>{{ t(`${k}.guarda.semGuarda`) }}</p>
+      <template v-if="!atual.guarda || atual.guarda.situacao === 'cancelado'">
+        <p v-if="atual.guarda" data-testid="destino-corpo-situacao">
+          {{ t(`${k}.guarda.situacao`, { situacao: t(`${k}.guarda.situacoes.cancelado`) }) }}
+        </p>
+        <p v-else>{{ t(`${k}.guarda.semGuarda`) }}</p>
         <form
           v-if="podeGuarda"
           class="filtros"
