@@ -102,10 +102,18 @@ const f = reactive({
   tratamento: 'empirico' as 'empirico' | 'dirigido' | 'profilatico',
   cultura: false,
   dia: '1',
-  componentes: [] as { produto: ItemBuscado; dose: string; unidade: string; principal: boolean }[],
+  componentes: [] as {
+    produto: ItemBuscado;
+    dose: string;
+    unidade: string;
+    principal: boolean;
+    etapa: string;
+  }[],
   tipoInfusao: '',
   velocidade: '',
   unidadeInfusao: '',
+  /** Etapas da solução a partir da segunda (a primeira usa a velocidade e a unidade acima). */
+  etapasExtras: [] as { velocidade: string; unidadeInfusao: string }[],
   dieta: '',
   quantidade: '',
   viaDieta: '',
@@ -163,6 +171,7 @@ function escolher(p: ItemBuscado): void {
       dose: '',
       unidade: p.unidade ?? '',
       principal: f.componentes.length === 0,
+      etapa: '1',
     });
   } else {
     const faixa = f.faixas[d];
@@ -173,6 +182,26 @@ function escolher(p: ItemBuscado): void {
   }
   encontrados.value = [];
   f.termo = '';
+}
+/** Solução em etapas: cada etapa com a sua velocidade; cada componente escolhe a etapa em que entra. */
+const opcoesEtapa = computed(() =>
+  Array.from({ length: f.etapasExtras.length + 1 }, (_, i) => ({
+    valor: String(i + 1),
+    rotulo: t('pep.presc.item.etapaN', { n: i + 1 }),
+  })),
+);
+function acrescentarEtapa(): void {
+  if (f.etapasExtras.length < 23) f.etapasExtras.push({ velocidade: '', unidadeInfusao: f.unidadeInfusao });
+}
+/** Retira a etapa (2 em diante): os componentes dela voltam à primeira e os das seguintes sobem uma posição. */
+function retirarEtapa(i: number): void {
+  const n = i + 2;
+  f.etapasExtras.splice(i, 1);
+  for (const c of f.componentes) {
+    const e = Number(c.etapa) || 1;
+    if (e === n) c.etapa = '1';
+    else if (e > n) c.etapa = String(e - 1);
+  }
 }
 function acrescentarFaixa(): void {
   f.faixas.push({ de: '', ate: '', produto: null, dose: '', unidade: '', via: 'SC' });
@@ -315,8 +344,16 @@ function montar(): unknown {
             dose: n(c.dose),
             unidade: c.unidade,
             principal: c.principal,
+            etapa: Number(c.etapa) || 1,
           })),
-          etapas: [{ etapa: 1, velocidade: n(f.velocidade), unidadeInfusao: id(f.unidadeInfusao) }],
+          etapas: [
+            { etapa: 1, velocidade: n(f.velocidade), unidadeInfusao: id(f.unidadeInfusao) },
+            ...f.etapasExtras.map((e, i) => ({
+              etapa: i + 2,
+              velocidade: n(e.velocidade),
+              unidadeInfusao: id(e.unidadeInfusao),
+            })),
+          ],
           iniciarAgora: f.agora,
           naoAjustar: f.naoAjustar,
         },
@@ -449,6 +486,7 @@ function incluir(): void {
   f.dose = '';
   f.observacao = '';
   f.componentes = [];
+  f.etapasExtras = [];
   f.faixas = [];
   f.refeicoes = [];
   f.seNecessario = false;
@@ -661,6 +699,14 @@ const opcoesModo = computed(() => op('modos', (g) => !g || g === (tipo.value ===
                   ><input v-model="c.principal" type="checkbox" /> {{ t('pep.presc.item.principal') }}</label
                 >
               </td>
+              <td v-if="f.etapasExtras.length">
+                <SanteSelecao
+                  v-model="c.etapa"
+                  :rotulo="t('pep.presc.item.etapa')"
+                  :opcoes="opcoesEtapa"
+                  :data-testid="`componente-etapa-${i}`"
+                />
+              </td>
             </tr>
           </tbody>
         </table>
@@ -709,6 +755,38 @@ const opcoesModo = computed(() => op('modos', (g) => !g || g === (tipo.value ===
             t('pep.presc.item.velocidadeCalculada', { valor: String(velocidadeCalculada).replace('.', ',') })
           }}
         </p>
+        <fieldset class="etapas" data-testid="etapas-solucao">
+          <legend>{{ t('pep.presc.item.etapas') }}</legend>
+          <p v-if="f.etapasExtras.length">{{ t('pep.presc.item.etapasDica') }}</p>
+          <div v-for="(e, i) in f.etapasExtras" :key="i" class="linha" :data-testid="`etapa-${i + 2}`">
+            <strong>{{ t('pep.presc.item.etapaN', { n: i + 2 }) }}</strong>
+            <div class="campo curto">
+              <label :for="`${px}-vel-e${i}`">{{ t('pep.presc.item.velocidade') }}</label>
+              <input
+                :id="`${px}-vel-e${i}`"
+                v-model="e.velocidade"
+                inputmode="decimal"
+                :data-testid="`velocidade-etapa-${i + 2}`"
+              />
+            </div>
+            <SanteSelecao
+              v-model="e.unidadeInfusao"
+              :rotulo="t('pep.presc.item.unidadeInfusao')"
+              :opcoes="op('unidadesInfusao')"
+            />
+            <SanteBotao
+              :rotulo="t('pep.presc.item.retirarEtapa')"
+              variante="texto"
+              @acionar="retirarEtapa(i)"
+            />
+          </div>
+          <SanteBotao
+            :rotulo="t('pep.presc.item.acrescentarEtapa')"
+            variante="secundario"
+            data-testid="acrescentar-etapa"
+            @acionar="acrescentarEtapa"
+          />
+        </fieldset>
       </template>
 
       <!-- Dietas -->

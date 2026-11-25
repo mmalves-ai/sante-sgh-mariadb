@@ -185,6 +185,13 @@ export const mensagensPrescricao = {
     componente: 'Componente {n}',
     principal: 'Principal',
     acrescentarComponente: 'Acrescentar componente',
+    etapa: 'Etapa',
+    etapaN: 'Etapa {n}',
+    etapas: 'Etapas da infusão',
+    etapasDica:
+      'A primeira etapa usa a velocidade acima. Indique em cada componente a etapa em que ele entra; o volume da etapa é a soma dos componentes principais dela.',
+    acrescentarEtapa: 'Acrescentar etapa',
+    retirarEtapa: 'Retirar etapa',
     tipoInfusao: 'Tipo de infusão',
     velocidade: 'Velocidade',
     unidadeInfusao: 'Unidade da velocidade',
