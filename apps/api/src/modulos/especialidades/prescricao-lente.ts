@@ -233,7 +233,7 @@ export class PortaPrescricaoLentePropria implements PortaPrescricaoLente {
       chave,
       async (tx, est) => {
         const [i] = await tx.consultarParaAtualizar<Linha>(
-          `SELECT id, atendimento_id, paciente_id FROM internacao
+          `SELECT id, atendimento_id, paciente_id, situacao FROM internacao
             WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [e.internacao, est],
         );
@@ -246,6 +246,13 @@ export class PortaPrescricaoLentePropria implements PortaPrescricaoLente {
           );
         if (n(i['paciente_id']) !== e.paciente)
           throw recusa('paciente-divergente', 'A internação é de outro paciente: recarregue a tela.');
+        // Prescrição nova só na internação aberta (ativa ou com alta médica ainda não efetivada), como as demais
+        // gravações clínicas da especialidade: depois da alta, a receita sai no ambulatório.
+        if (!['ativa', 'alta_medica'].includes(String(i['situacao'])))
+          throw recusa(
+            'internacao-encerrada',
+            'A internação já teve alta: a prescrição de lentes não é emitida.',
+          );
         const hoje = await hojeDe(tx);
         recusarErros(conferirPrescricaoLente(p, hoje));
         const validadeAte = validadeDaLente(p, hoje);

@@ -892,6 +892,33 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
     expect(
       await erro(lentes.emitir({ ...ctx, estabelecimento: ids.outroEst }, emissao, chaveLente('0004'))),
     ).toBe('registro-inexistente');
+    // Internação encerrada (alta efetivada): a emissão é recusada e nada é gravado; reaberta para o resto do caso.
+    const altaDaInternacao = (alta: boolean) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-c1-082-alta' }, (e) =>
+        alta
+          ? e.executar(
+              `UPDATE internacao SET situacao = 'alta', data_hora_alta = NOW(),
+                      motivo_saida_hospitalar_id = (SELECT MIN(id) FROM motivo_saida_hospitalar)
+                WHERE id = ?`,
+              [ids.internacao],
+            )
+          : e.executar(
+              `UPDATE internacao SET situacao = 'ativa', data_hora_alta = NULL, motivo_saida_hospitalar_id = NULL
+                WHERE id = ?`,
+              [ids.internacao],
+            ),
+      );
+    await altaDaInternacao(true);
+    try {
+      expect(await erro(lentes.emitir(ctx, emissao, chaveLente('0008')))).toBe('internacao-encerrada');
+    } finally {
+      await altaDaInternacao(false);
+    }
+    const [contagem] = await ler<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM prescricao_lente WHERE estabelecimento_id = ?',
+      [ids.est],
+    );
+    expect(Number(contagem!.n)).toBe(1);
 
     // Visão por paciente: com o prescritor e a internação; nada no outro estabelecimento.
     const lidas = await lentes.doPaciente(ctx, ids.paciente);

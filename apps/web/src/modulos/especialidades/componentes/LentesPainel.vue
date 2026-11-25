@@ -197,9 +197,16 @@ async function confirmarCancelamento(p: PrescricaoLenteLida): Promise<void> {
   }
 }
 
-const imprimindo = ref<PrescricaoLenteLida | null>(null);
+// A folha impressa vale como receita: só a prescrição emitida e vigente é impressa. Cancelada ou vencida fica no
+// histórico, mas nunca sai como documento; se a escolhida for cancelada depois, a folha some na hora.
+const imprimindo = ref<number | null>(null);
+const folha = computed(() => {
+  const p = lista.data.value?.itens.find((x) => x.id === imprimindo.value);
+  return p && situacaoDe(p) === 'vigente' ? p : null;
+});
 async function imprimir(p: PrescricaoLenteLida): Promise<void> {
-  imprimindo.value = p;
+  if (situacaoDe(p) !== 'vigente') return;
+  imprimindo.value = p.id;
   await nextTick();
   window.print();
 }
@@ -259,6 +266,7 @@ const situacaoDe = (p: PrescricaoLenteLida) =>
           <td>{{ p.profissional }}</td>
           <td class="acoes">
             <SanteBotao
+              v-if="situacaoDe(p) === 'vigente'"
               variante="texto"
               :rotulo="t('especialidades.lentes.imprimir')"
               :data-testid="`lente-imprimir-${p.id}`"
@@ -401,47 +409,45 @@ const situacaoDe = (p: PrescricaoLenteLida) =>
       />
     </form>
 
-    <section v-if="imprimindo" class="impressao-lente" aria-hidden="true" data-testid="lente-impressao">
+    <section v-if="folha" class="impressao-lente" aria-hidden="true" data-testid="lente-impressao">
       <h2>{{ t('especialidades.lentes.impressao.titulo') }}</h2>
       <p>
         {{ t('especialidades.lentes.impressao.paciente') }}: {{ paciente.nome }} ·
         {{ t('especialidades.lentes.impressao.prontuario') }}: {{ paciente.prontuario }}
       </p>
       <p>
-        {{ t(`especialidades.lentes.tipos.${imprimindo.tipo}`) }} ·
-        {{ t(`especialidades.lentes.usos.${imprimindo.uso}`) }}
+        {{ t(`especialidades.lentes.tipos.${folha.tipo}`) }} ·
+        {{ t(`especialidades.lentes.usos.${folha.uso}`) }}
       </p>
       <table class="tabela">
         <tbody>
           <tr v-for="l in LADOS" :key="l">
             <th scope="row">{{ t(`especialidades.lentes.olhos.${l}`) }}</th>
-            <td>{{ grauCurto(imprimindo[l]) }}</td>
-            <td>{{ imprimindo[l].acuidade ?? '' }}</td>
+            <td>{{ grauCurto(folha[l]) }}</td>
+            <td>{{ folha[l].acuidade ?? '' }}</td>
           </tr>
         </tbody>
       </table>
-      <p v-if="imprimindo.adicao !== null">
-        {{ t('especialidades.lentes.adicao') }}: {{ sinal(imprimindo.adicao) }}
+      <p v-if="folha.adicao !== null">{{ t('especialidades.lentes.adicao') }}: {{ sinal(folha.adicao) }}</p>
+      <p v-if="folha.distanciaPupilarMm !== null">
+        {{ t('especialidades.lentes.dp') }}: {{ texto(folha.distanciaPupilarMm) }}
       </p>
-      <p v-if="imprimindo.distanciaPupilarMm !== null">
-        {{ t('especialidades.lentes.dp') }}: {{ texto(imprimindo.distanciaPupilarMm) }}
-      </p>
-      <p v-if="imprimindo.tipo === 'lente_contato'">
+      <p v-if="folha.tipo === 'lente_contato'">
         {{
           t('especialidades.lentes.impressao.lenteContato', {
-            curva: texto(imprimindo.curvaBase),
-            diametro: texto(imprimindo.diametro),
+            curva: texto(folha.curvaBase),
+            diametro: texto(folha.diametro),
           })
         }}
       </p>
-      <p v-if="imprimindo.observacao">{{ imprimindo.observacao }}</p>
+      <p v-if="folha.observacao">{{ folha.observacao }}</p>
       <p>
-        {{ t('especialidades.lentes.impressao.data') }}: {{ dataBr(imprimindo.prescritoEm) }} ·
-        {{ t('especialidades.lentes.impressao.validade') }}: {{ dataBr(imprimindo.validadeAte) }}
+        {{ t('especialidades.lentes.impressao.data') }}: {{ dataBr(folha.prescritoEm) }} ·
+        {{ t('especialidades.lentes.impressao.validade') }}: {{ dataBr(folha.validadeAte) }}
       </p>
       <p class="assinatura">
-        {{ imprimindo.profissional
-        }}<template v-if="imprimindo.registroConselho"> · {{ imprimindo.registroConselho }}</template
+        {{ folha.profissional
+        }}<template v-if="folha.registroConselho"> · {{ folha.registroConselho }}</template
         ><br />{{ t('especialidades.lentes.impressao.assinatura') }}
       </p>
     </section>

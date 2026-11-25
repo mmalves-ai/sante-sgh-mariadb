@@ -72,6 +72,9 @@ test.describe('Prescrição de lentes da oftalmologia @C1-082 @fase8', () => {
     await painel.getByTestId(`lente-confirmar-${id}`).click();
     await expect(painel.getByTestId('lentes-mensagem')).toContainText('cancelada');
     await expect(painel.getByTestId(`lente-situacao-${id}`)).toHaveText('Cancelada');
+    // A cancelada não sai como receita válida: sem botão de imprimir e sem a folha.
+    await expect(painel.getByTestId(`lente-imprimir-${id}`)).toHaveCount(0);
+    await expect(page.getByTestId('lente-impressao')).toHaveCount(0);
     expect(externas).toEqual([]);
   });
 });

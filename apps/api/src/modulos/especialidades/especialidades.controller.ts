@@ -554,7 +554,7 @@ export class EspecialidadesController {
     const s = sessaoDe(req);
     const { internacao, ...prescricao } = corpo(esquemaEmissaoLente, b);
     const v = await this.vinculoDa(s, 'oftalmologia.registrar');
-    const i = await this.internacaoLida(s, String(internacao), P.oftalmologiaRegistrar);
+    const i = await this.internacaoAberta(s, internacao, P.oftalmologiaRegistrar);
     const r = await this.lentes.emitir(
       s.porta,
       { internacao: i.internacao, paciente: i.paciente, profissional: v.vinculo, prescricao },
@@ -576,6 +576,8 @@ export class EspecialidadesController {
     const s = sessaoDe(req);
     const e = corpo(esquemaCancelamentoLente, b);
     await this.vinculoDa(s, 'oftalmologia.registrar');
+    // Cancelar fica permitido depois da alta, de propósito: a receita errada que o paciente levou para casa tem de
+    // poder ser invalidada (o registro fica, com o motivo na trilha). Só a emissão exige a internação aberta.
     const i = await this.internacaoLida(s, reg ?? '', P.oftalmologiaRegistrar);
     const r = await this.lentes.cancelar(
       s.porta,
