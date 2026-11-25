@@ -64,6 +64,8 @@ import {
   CadastroCatalogoPrescricaoPropria,
 } from './prescricao-propria-cadastro.js';
 import { NOTAS_PACIENTE, NotasPacienteController } from './notas-paciente.controller.js';
+import { ProntuarioRestritoController } from './prontuario-restrito.controller.js';
+import { PORTA_PRONTUARIO_RESTRITO, PortaProntuarioRestritoPropria } from './prontuario-restrito-propria.js';
 import { AvisosClinicosRegrasController } from './avisos-clinicos-regras.controller.js';
 import {
   PORTA_REGRAS_AVISO_CLINICO,
@@ -218,6 +220,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       FarmacovigilanciaController,
       PrescricaoCadastroController,
       NotasPacienteController,
+      ProntuarioRestritoController,
       AvisosClinicosRegrasController,
       TerminologiaClinicaController,
       ObrigatoriedadeDocumentoController,
@@ -303,6 +306,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaRegrasAvisoClinicoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L93: prontuário de acesso restrito (pedido, autorização, senha do paciente, contagem); sem núcleo, 503.
+      {
+        provide: PORTA_PRONTUARIO_RESTRITO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaProntuarioRestritoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // 03-PEP L102: notas e lembretes livres sobre o paciente; sem núcleo, 503.

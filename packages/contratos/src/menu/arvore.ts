@@ -93,7 +93,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // contagem acompanha.
 // C2-045 (07-FIN linha 90): o item "Cobrança Pix" de contas a receber entrou à mão (mesmo motivo); a contagem
 // acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":468,"M":198,"P":57,"N":213};
+// C2-056 (03-PEP L93): o item "Pedidos de acesso a prontuário restrito" do PEP entrou à mão (mesmo motivo); a
+// contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":469,"M":198,"P":57,"N":214};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -195,6 +197,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"pep.painel-e-localizacao-de-pacientes-favoritos-filtros","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Painel e localização de pacientes"],"titulo":"Painel e localização de pacientes","selo":"M","fase":2,"rota":"/pep/pacientes","permissao":"pep.painel.ler"},
   {"id":"pep.prontuario-ao-vivo-consulta-formularios-e-rtf-do-legado","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Prontuário ao vivo: consulta"],"titulo":"Prontuário ao vivo: consulta","selo":"M","fase":1,"rota":"/pep/prontuario","permissao":"pep.prontuario.ler"},
   {"id":"pep.linha-do-tempo-e-documentos-do-prontuario","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Linha do tempo e documentos do prontuário"],"titulo":"Linha do tempo e documentos do prontuário","selo":"M","fase":2,"rota":"/pep/pacientes?aba=linha-do-tempo","permissao":"pep.prontuario.ler"},
+  {"id":"pep.pedidos-de-acesso-a-prontuario-restrito","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Pedidos de acesso a prontuário restrito"],"titulo":"Pedidos de acesso a prontuário restrito","selo":"N","fase":8,"rota":"/pep/prontuario-restrito","permissao":"pep.prontuarioRestrito.ler"},
   {"id":"pep.registros-clinicos-anamnese-evolucao-escalas-rascunhos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Registros clínicos"],"titulo":"Registros clínicos","selo":"M","fase":2,"rota":"/pep/rascunhos","permissao":"pep.evolucao.criar"},
   {"id":"pep.documentos-exigidos","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Documentos exigidos"],"titulo":"Documentos exigidos","selo":"N","fase":7,"rota":"/pep/documentos-exigidos","permissao":"pep.prontuario.ler"},
   {"id":"pep.copias-do-prontuario","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Cópias do prontuário"],"titulo":"Cópias do prontuário","selo":"N","fase":3,"rota":"/pep/copias-prontuario","permissao":"pep.prontuario.ler"},
