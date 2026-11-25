@@ -6,8 +6,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { type EstadoOperacao, textoDoMotivo } from '@sgh/contratos';
 import {
+  conferirOfertaEspera,
   decidirPreCadastroDaMarcacao,
   type GrupoPrioridadeCadastro,
+  prioridadeGravadaNaEspera,
   prioridadeNaMarcacao,
 } from '@sgh/dominio-agenda';
 import { ErroOperacao, recusa } from '@sgh/nucleo';
@@ -1249,6 +1251,14 @@ export class PortaAgendaMemoria implements PortaAgenda {
       },
       incluirEspera: async (r) => {
         const [p] = await this.lerPacientes(c, [r.paciente]);
+        // 02-AGE 48: o grupo legal pela MESMA regra do domínio da porta própria (o paciente sintético não tem
+        // nascimento nem cadastro de prioridade: vale o grupo informado; inexistente ou inativo é recusado).
+        const prio = prioridadeNaMarcacao(GRUPOS_PRIORIDADE_SINTETICOS, {
+          informada: r.prioridadeLegal ?? null,
+          data: this.rel().hoje,
+        });
+        if (!prio.ok) throw recusa(prio.codigo, prio.motivo, { campos: ['prioridadeLegal'] });
+        const grupo = GRUPOS_PRIORIDADE_SINTETICOS.find((g) => g.id === prio.grupo);
         const id = ++s.seq;
         s.espera.push({
           id,
@@ -1256,9 +1266,11 @@ export class PortaAgendaMemoria implements PortaAgenda {
           prontuario: p?.prontuario ?? 0,
           agenda: r.agenda,
           especialidade: r.especialidade,
-          prioridade: r.prioridade,
-          // A sessão em memória não tem os grupos de prioridade legal do cadastro.
-          prioridadeLegal: null,
+          prioridade: prioridadeGravadaNaEspera(
+            r.prioridade === 'urgente' ? 'urgente' : 'normal',
+            grupo?.id ?? null,
+          ),
+          prioridadeLegal: grupo ? { id: grupo.id, descricao: grupo.descricao, peso: grupo.peso } : null,
           situacao: 'aguardando',
           observacao: r.observacao,
           desde: new Date().toISOString(),
@@ -1270,6 +1282,36 @@ export class PortaAgendaMemoria implements PortaAgenda {
       ofertarEspera: async (r) => {
         const x = s.espera.find((y) => y.id === r.id && ['aguardando', 'ofertado'].includes(y.situacao));
         if (!x) throw recusa('espera-encerrada', 'O pedido da lista de espera já foi encerrado.');
+        // 02-AGE 48: a mesma conferência do domínio da porta própria (vaga compatível; fora da ordem exige motivo).
+        const a = s.agendas.find((y) => y.id === r.agenda);
+        if (!a)
+          throw recusa('agenda-inexistente', 'A agenda da vaga não existe neste estabelecimento.', {
+            campos: ['agenda'],
+          });
+        const itens = s.espera
+          .filter((y) => y.situacao === 'aguardando' || y.id === x.id)
+          .map((y) => ({
+            id: y.id,
+            prioridade: y.prioridade,
+            pesoPrioridadeLegal: y.prioridadeLegal?.peso ?? null,
+            desde: y.desde,
+            // O pedido ofertado de volta à mesma vaga conta como aguardando na conferência.
+            situacao: y.id === x.id ? 'aguardando' : y.situacao,
+            agenda: y.agenda,
+            especialidade: y.especialidade,
+          }));
+        const pedido = itens.find((y) => y.id === x.id);
+        if (!pedido) throw recusa('espera-encerrada', 'O pedido da lista de espera já foi encerrado.');
+        const conf = conferirOfertaEspera(
+          itens,
+          pedido,
+          { agenda: a.id, especialidadesDaAgenda: a.especialidades },
+          r.motivo ?? null,
+        );
+        if (!conf.ok)
+          throw recusa(conf.codigo, conf.motivo, {
+            campos: [conf.codigo === 'vaga-incompativel' ? 'agenda' : 'motivo'],
+          });
         Object.assign(x, { situacao: 'ofertado', oferta: { agenda: r.agenda, data: r.data, hora: r.hora } });
       },
       encerrarEspera: async (r) => {

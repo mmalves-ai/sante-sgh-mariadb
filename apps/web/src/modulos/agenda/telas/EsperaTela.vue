@@ -383,6 +383,7 @@ async function remarcarDia(): Promise<void> {
                   v-if="podeEditar && e.situacao === 'aguardando'"
                   variante="secundario"
                   :rotulo="t('agenda.espera.ofertar')"
+                  data-testid="botao-ofertar-espera"
                   @acionar="ofertar(e.id)"
                 />
                 <SanteBotao

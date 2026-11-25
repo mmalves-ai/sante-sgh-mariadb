@@ -185,6 +185,7 @@
     "src/modulos/config/dominios-propria.int.spec.ts",
     "src/modulos/config/dominios-catalogo.spec.ts",
     "src/modulos/agenda/agenda.spec.ts",
+    "src/modulos/agenda/espera-prioridade-memoria.spec.ts",
     "src/modulos/agenda/agendas.controller.ts",
     "src/modulos/agenda/apoio.controller.ts",
     "src/modulos/agenda/apoio.ts",
