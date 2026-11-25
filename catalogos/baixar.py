@@ -39,6 +39,9 @@ FONTES = {
     "bcb_bancos": ("https://www.bcb.gov.br/content/estabilidadefinanceira/str1/ParticipantesSTR.csv", 5, None),
     "cid10": ("http://www2.datasus.gov.br/cid10/V2008/downloads/CID10CSV.zip", 10, "2008"),
     "sigtap": (sigtap_url, 200, None),
+    # Tipos de logradouro: Tabela 20 das tabelas do leiaute vigente do eSocial (a versão é a do leiaute).
+    "logradouro": ("https://www.gov.br/esocial/pt-br/documentacao-tecnica/leiautes-esocial-versao-s-1-3-nt-08-2026/"
+                   "tabelas.html", 5, "esocial-s-1.3-nt-08-2026"),
 }
 
 
