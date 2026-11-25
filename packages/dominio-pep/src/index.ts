@@ -129,3 +129,11 @@ export * from './anotacao-administrativa.js';
 export * from './obrigatoriedade-documento.js';
 // F3.5 (05-SADT linha 10): a caixa de avisos clínicos do destinatário na central de avisos.
 export * from './aviso-clinico-caixa.js';
+// F8 (09-AREA linha 84): terminologia clínica no diagnóstico, região anatômica e região do exame.
+export * from './terminologia-clinica.js';
+// F3.3 (03-PEP L133): central de regras de aviso clínico (evento, setor, especialidade, categoria e canal).
+export * from './aviso-clinico-regra.js';
+// F8 (03-PEP L93): prontuário de acesso restrito (pedido, autorização, senha do paciente e contagem de aberturas).
+export * from './prontuario-restrito.js';
+// F8 (03-PEP L97): exame físico estruturado por sistema e região do corpo (achados, lado, público, resumo).
+export * from './exame-fisico.js';
