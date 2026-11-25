@@ -30,6 +30,7 @@ export * from './grade-sala.js';
 export * from './cartao-preferencia.js';
 // F3.6 (05-SUP linha 13): kit padrão sugerido no agendamento cirúrgico (lista de materiais previstos).
 export * from './kit-agendamento.js';
+export * from './reserva-cirurgia.js';
 // F3.4 (04-CC linha 91): cadastro do procedimento cirúrgico (grupo, porte, especialidade, natureza, caráter).
 export * from './procedimento-cirurgico.js';
 // F7 (04-CC linha 102): autorização prévia da cirurgia eletiva por etapas e a trava da confirmação sem senha.

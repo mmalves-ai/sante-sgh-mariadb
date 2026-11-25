@@ -45,12 +45,14 @@ import { GradeSalaController } from './grade-sala.controller.js';
 import { PORTA_GRADE_SALA, PortaGradeSalaPropria } from './grade-sala-propria.js';
 import { PORTA_GASTO_SALA, PortaGastoSalaPropria } from './gasto-sala-propria.js';
 import { KitAgendamentoController } from './kit-agendamento.controller.js';
+import { ReservaCirurgiaController } from './reserva-cirurgia.controller.js';
 import { ProcedimentoCirurgicoController } from './procedimento-cirurgico.controller.js';
 import {
   PORTA_PROCEDIMENTO_CIRURGICO,
   PortaProcedimentoCirurgicoPropria,
 } from './procedimento-cirurgico-propria.js';
 import { PORTA_KIT_AGENDAMENTO, PortaKitAgendamentoPropria } from './kit-agendamento-propria.js';
+import { PORTA_RESERVA_CIRURGIA, PortaReservaCirurgiaPropria } from './reserva-cirurgia-propria.js';
 
 export interface OpcoesModuloCirurgia {
   /** Testes: as portas já montadas. */
@@ -129,6 +131,7 @@ export async function moduloCirurgia(
       GastoSalaController,
       GradeSalaController,
       KitAgendamentoController,
+      ReservaCirurgiaController,
       ProcedimentoCirurgicoController,
     ],
     providers: [
@@ -178,6 +181,14 @@ export async function moduloCirurgia(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaKitAgendamentoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (04-CC linha 103): reserva de equipamentos e hemocomponentes da cirurgia; sem núcleo, 503.
+      {
+        provide: PORTA_RESERVA_CIRURGIA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaReservaCirurgiaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.4 (04-CC linha 91): cadastro do procedimento cirúrgico no banco do cliente; sem núcleo, 503.
