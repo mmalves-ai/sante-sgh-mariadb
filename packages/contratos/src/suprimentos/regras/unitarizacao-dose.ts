@@ -38,6 +38,8 @@ export interface RegraFracionamentoParaConferir {
   readonly rendimento: number;
   readonly validadeHoras: number | null;
   readonly exigeCapela: boolean;
+  /** A sobra do que foi aberto (rendimento previsto menos doses e perda) pode ser reaproveitada. Sem isso, é descarte. */
+  readonly reaproveitaSobra: boolean;
 }
 
 /** As doses que a quantidade de origem rende pela regra (sem contar a perda). */
@@ -47,6 +49,24 @@ export function rendimentoPrevisto(
 ): number {
   if (!(regra.quantidadeOrigem > 0) || !(quantidadeOrigem > 0)) return 0;
   return qtd3((quantidadeOrigem / regra.quantidadeOrigem) * regra.rendimento);
+}
+
+/**
+ * A sobra da ordem: o rendimento previsto do que foi aberto menos as doses e a perda (nunca negativa). Nada some do
+ * inventário (RDC 67/2007): sem reaproveitamento pela regra, a sobra é descarte e entra na perda; com reaproveitamento,
+ * fica registrada na ordem com a validade dela.
+ */
+export function sobraDaOrdem(
+  regra: Pick<RegraFracionamentoParaConferir, 'quantidadeOrigem' | 'rendimento'>,
+  quantidadeOrigem: number,
+  doses: number,
+  perda: number,
+): number {
+  const previsto = rendimentoPrevisto(regra, quantidadeOrigem);
+  const usado =
+    (Number.isFinite(doses) ? Math.max(0, doses) : 0) + (Number.isFinite(perda) ? Math.max(0, perda) : 0);
+  const sobra = qtd3(previsto - usado);
+  return sobra > 0.0005 ? sobra : 0;
 }
 
 export interface UnitarizacaoParaConferir {
@@ -123,6 +143,17 @@ export function conferirUnitarizacao(x: UnitarizacaoParaConferir): RecusaSuprime
         ['doses', 'perda'],
       ),
     );
+  else if (x.quantidadeOrigem > 0 && !x.regra.reaproveitaSobra) {
+    const sobra = sobraDaOrdem(x.regra, x.quantidadeOrigem, x.doses, x.perda);
+    if (sobra > 0)
+      out.push(
+        recusa(
+          'sobra-sem-destino',
+          `A regra não reaproveita a sobra: lance as ${sobra} dose(s) que sobram como perda (descarte).`,
+          ['perda'],
+        ),
+      );
+  }
   if (x.percentualEstabilidade !== null) {
     if (!(x.percentualEstabilidade > 0) || x.percentualEstabilidade > 100)
       out.push(

@@ -7,12 +7,20 @@ import {
   identificadorEtiqueta,
   rendimentoPrevisto,
   rotuloDaDose,
+  sobraDaOrdem,
   type UnitarizacaoParaConferir,
   validadeDaDose,
 } from '../index.js';
 
 const base: UnitarizacaoParaConferir = {
-  regra: { ativa: true, quantidadeOrigem: 1, rendimento: 4, validadeHoras: null, exigeCapela: false },
+  regra: {
+    ativa: true,
+    quantidadeOrigem: 1,
+    rendimento: 4,
+    validadeHoras: null,
+    exigeCapela: false,
+    reaproveitaSobra: false,
+  },
   tipo: 'fracionamento',
   quantidadeOrigem: 2,
   doses: 7,
@@ -36,6 +44,23 @@ describe('ordem de unitarização pela regra de fracionamento', () => {
   it('aceita a ordem dentro do rendimento, com o lote liberado e no prazo', () => {
     expect(conferirUnitarizacao(base)).toEqual([]);
     expect(codigos({ doses: 8, perda: 0 })).toEqual([]);
+  });
+
+  it('a sobra (previsto menos doses e perda) é descarte quando a regra não a reaproveita', () => {
+    expect(sobraDaOrdem({ quantidadeOrigem: 1, rendimento: 5 }, 1, 2, 0)).toBe(3);
+    expect(sobraDaOrdem({ quantidadeOrigem: 1, rendimento: 4 }, 2, 7, 1)).toBe(0);
+    expect(sobraDaOrdem({ quantidadeOrigem: 1, rendimento: 4 }, 2, 9, 0)).toBe(0);
+    // Sem reaproveitamento: 6 doses de 8 sem perda deixam 2 sem destino; lançadas como perda, passa.
+    expect(codigos({ doses: 6, perda: 0 })).toEqual(['sobra-sem-destino']);
+    expect(codigos({ doses: 6, perda: 2 })).toEqual([]);
+    expect(codigos({ doses: 6, perda: 1.5 })).toEqual(['sobra-sem-destino']);
+  });
+
+  it('com reaproveitamento pela regra, a sobra é aceita (fica registrada na ordem)', () => {
+    expect(codigos({ regra: { ...base.regra!, reaproveitaSobra: true }, doses: 6, perda: 0 })).toEqual([]);
+    expect(codigos({ regra: { ...base.regra!, reaproveitaSobra: true }, doses: 8, perda: 1 })).toEqual([
+      'rendimento-acima',
+    ]);
   });
 
   it('recusa sem regra, regra inativa e tipo fora da lista', () => {

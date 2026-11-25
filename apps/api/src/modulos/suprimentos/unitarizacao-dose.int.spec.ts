@@ -174,6 +174,10 @@ describe.skipIf(SEM_BANCO)('fracionamento e unitarização de dose na porta pró
     expect(Number(it1['quantidade_origem'])).toBe(2);
     expect(Number(it1['quantidade_produzida'])).toBe(7);
     expect(Number(it1['quantidade_perda'])).toBe(1);
+    // Nada sobrou (7 doses + 1 de perda = 8 previstas): nenhuma sobra registrada.
+    expect(Number(it1['quantidade_sobra'])).toBe(0);
+    expect(it1['validade_sobra']).toBeNull();
+    expect(r.sobra).toBe(0);
 
     // O lote das doses leva o número do lote de origem e a validade nova (nunca além da original).
     const lo = await um(
@@ -262,6 +266,64 @@ describe.skipIf(SEM_BANCO)('fracionamento e unitarização de dose na porta pró
     expect(await codigoDe(porta.rastrear(contexto(m, m.estB, 't-c2092'), r.doses[0]!.identificador))).toBe(
       'dose-inexistente',
     );
+  });
+
+  it('a sobra do que foi aberto: descarte na perda sem reaproveitamento, registrada com validade com ele', async () => {
+    const c = contexto(m, m.estA, 't-c2092');
+    const reaproveita = (v: boolean) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 't-c2092-massa' }, (e) =>
+        e.executar('UPDATE regra_fracionamento_insumo SET reaproveita_sobra = ? WHERE id = ?', [
+          v,
+          ids.regra,
+        ]),
+      );
+    const saldoOrigem = async () =>
+      Number(
+        (
+          await um('SELECT quantidade FROM saldo_lote WHERE lote_insumo_id = ? AND local_estoque_id = ?', [
+            m.lote,
+            m.localA,
+          ])
+        )['quantidade'],
+      );
+    const item = (ordemId: number) =>
+      um(
+        `SELECT quantidade_produzida, quantidade_perda, quantidade_sobra,
+                DATE_FORMAT(validade_sobra, '%Y-%m-%d') AS vs, DATE_FORMAT(validade_resultante, '%Y-%m-%d') AS vr
+           FROM ordem_unitarizacao_item WHERE ordem_unitarizacao_id = ?`,
+        [ordemId],
+      );
+    try {
+      // Sem reaproveitamento: 6 doses de 8 sem perda deixam 2 sem destino e nada é gravado.
+      await reaproveita(false);
+      const s0 = await saldoOrigem();
+      expect(await codigoDe(porta.executarOrdem(c, ordem({ doses: 6, perda: 0 }), chave()))).toBe(
+        'sobra-sem-destino',
+      );
+      expect(await saldoOrigem()).toBe(s0);
+      // Lançada a sobra como perda (descarte), a ordem grava: perda 2, sobra 0.
+      const d = await porta.executarOrdem(c, ordem({ doses: 6, perda: 2 }), chave());
+      expect(d.sobra).toBe(0);
+      const i1 = await item(d.id);
+      expect(Number(i1['quantidade_produzida'])).toBe(6);
+      expect(Number(i1['quantidade_perda'])).toBe(2);
+      expect(Number(i1['quantidade_sobra'])).toBe(0);
+      expect(i1['vs']).toBeNull();
+      expect(await saldoOrigem()).toBe(s0 - 2);
+      // Com reaproveitamento: 5 doses + 1 de perda deixam 2 de sobra, registradas com a validade da embalagem aberta.
+      await reaproveita(true);
+      const r = await porta.executarOrdem(c, ordem({ doses: 5, perda: 1 }), chave());
+      expect(r.sobra).toBe(2);
+      expect(r.validadeSobra).toBe(r.validadeDose);
+      const i2 = await item(r.id);
+      expect(Number(i2['quantidade_produzida'])).toBe(5);
+      expect(Number(i2['quantidade_perda'])).toBe(1);
+      expect(Number(i2['quantidade_sobra'])).toBe(2);
+      expect(i2['vs']).toBe(i2['vr']);
+      expect(await saldoOrigem()).toBe(s0 - 4);
+    } finally {
+      await reaproveita(true);
+    }
   });
 
   it('recusa rendimento acima, lote de outro insumo, capela exigida, sem farmacêutico e outro estabelecimento', async () => {

@@ -42,6 +42,8 @@ export interface OrdemListadaTela {
   readonly resultanteNome: string;
   readonly doses: number;
   readonly perda: number;
+  /** A sobra reaproveitada pela regra (registrada na ordem). */
+  readonly sobra: number;
   readonly validadeDose: string | null;
   readonly situacao: string;
 }
@@ -98,6 +100,8 @@ export interface OrdemGravadaTela {
   readonly numero: number;
   readonly loteDoses: number;
   readonly validadeDose: string;
+  readonly sobra: number;
+  readonly validadeSobra: string | null;
   readonly doses: readonly DoseEmitidaTela[];
   readonly mensagem: string;
 }

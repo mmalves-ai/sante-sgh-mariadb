@@ -147,6 +147,7 @@ test.describe('@C2-092 Fracionamento e unitarização de dose', () => {
           resultanteNome: 'Dose sintética 2 mL',
           doses: 2,
           perda: 0,
+          sobra: 3,
           validadeDose: '2027-02-25',
           situacao: 'executada',
         });
@@ -170,6 +171,8 @@ test.describe('@C2-092 Fracionamento e unitarização de dose', () => {
             movimentoSaida: 1,
             movimentoEntrada: 2,
             validadeDose: '2027-02-25',
+            sobra: 3,
+            validadeSobra: '2027-02-25',
             doses: [dose(1, 'D0000001'), dose(2, 'D0000002')],
             mensagem: 'Ordem 1: 2 dose(s) etiquetada(s), validade até 2027-02-25.',
           },
@@ -199,6 +202,8 @@ test.describe('@C2-092 Fracionamento e unitarização de dose', () => {
     await expect(tela.getByTestId('unit-ordem-executar')).toBeDisabled();
     await tela.getByTestId('unit-ordem-doses').fill('2');
     await expect(tela.getByTestId('unit-ordem-recusas')).toHaveCount(0);
+    // A sobra (5 previstas - 2 doses - 0 de perda) não some: a regra a reaproveita e ela fica registrada na ordem.
+    await expect(tela.getByTestId('unit-ordem-sobra')).toContainText('3');
     // Validade da dose: 25% dos 365 dias restantes (91 dias), antes da embalagem original.
     await expect(tela.getByTestId('unit-ordem-validade')).toContainText('24/02/2027');
 

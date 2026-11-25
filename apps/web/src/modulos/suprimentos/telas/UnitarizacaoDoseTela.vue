@@ -10,6 +10,7 @@ import {
   conferirRegraFracionamento,
   conferirUnitarizacao,
   rendimentoPrevisto,
+  sobraDaOrdem,
   validadeDaDose,
 } from '@sgh/contratos/regras-suprimentos';
 import { SanteSelecao } from '@sgh/ui';
@@ -178,6 +179,11 @@ watch([regraEscolhida, oQtdOrigem], () => {
 const loteEscolhido = computed(() => lotesDoLocal.value.find((l) => l.id === loteId.value) ?? null);
 const previsto = computed(() =>
   regraEscolhida.value ? rendimentoPrevisto(regraEscolhida.value, numero(oQtdOrigem.value)) : 0,
+);
+const sobra = computed(() =>
+  regraEscolhida.value
+    ? sobraDaOrdem(regraEscolhida.value, numero(oQtdOrigem.value), numero(oDoses.value), numero(oPerda.value))
+    : 0,
 );
 const estabilidade = computed(() => (oEstabilidade.value.trim() === '' ? null : numero(oEstabilidade.value)));
 const validade = computed(() => {
@@ -413,6 +419,13 @@ const imprimir = () => window.print();
         </label>
         <div data-testid="unit-ordem-resumo">
           <p v-if="regraEscolhida">{{ fmt(M.ordem.previsto, { n: qtd(previsto) }) }}</p>
+          <p v-if="regraEscolhida && sobra > 0" data-testid="unit-ordem-sobra">
+            {{
+              fmt(regraEscolhida.reaproveitaSobra ? M.ordem.sobraReaproveitada : M.ordem.sobraDescarte, {
+                n: qtd(sobra),
+              })
+            }}
+          </p>
           <p v-if="validade" data-testid="unit-ordem-validade">
             {{ fmt(M.ordem.validade, { data: dataBr(validade) }) }}
           </p>
@@ -555,6 +568,7 @@ const imprimir = () => window.print();
               <th>{{ M.ordens.colunas.dose }}</th>
               <th>{{ M.ordens.colunas.doses }}</th>
               <th>{{ M.ordens.colunas.perda }}</th>
+              <th>{{ M.ordens.colunas.sobra }}</th>
               <th>{{ M.ordens.colunas.validade }}</th>
               <th>{{ M.ordens.colunas.situacao }}</th>
             </tr>
@@ -568,6 +582,7 @@ const imprimir = () => window.print();
               <td>{{ o.resultanteNome }}</td>
               <td>{{ o.doses }}</td>
               <td>{{ qtd(o.perda) }}</td>
+              <td>{{ qtd(o.sobra ?? 0) }}</td>
               <td>{{ dataBr(o.validadeDose) }}</td>
               <td>{{ o.situacao }}</td>
             </tr>

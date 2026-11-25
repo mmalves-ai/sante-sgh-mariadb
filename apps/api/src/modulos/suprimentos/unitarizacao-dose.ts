@@ -19,6 +19,7 @@ import {
   rotuloDaDose,
   sequencialDoIdentificador,
   type TipoOrdemUnitarizacao,
+  sobraDaOrdem,
   validadeDaDose,
 } from '@sgh/contratos/regras-suprimentos';
 import {
@@ -108,6 +109,9 @@ export interface OrdemUnitarizacaoGravada {
   readonly movimentoSaida: number;
   readonly movimentoEntrada: number;
   readonly validadeDose: string;
+  /** A sobra reaproveitada pela regra (0: nada sobrou ou foi lançado como perda) e a validade dela. */
+  readonly sobra: number;
+  readonly validadeSobra: string | null;
   readonly doses: DoseEmitida[];
 }
 
@@ -154,6 +158,7 @@ export interface PainelUnitarizacao {
     readonly resultanteNome: string;
     readonly doses: number;
     readonly perda: number;
+    readonly sobra: number;
     readonly validadeDose: string | null;
     readonly situacao: string;
   }[];
@@ -382,7 +387,8 @@ export class PortaUnitarizacaoDosePropria implements PortaUnitarizacaoDose {
       );
       const ordens = await l.consultar<Linha>(
         `SELECT o.id, o.numero, o.tipo, o.executada_em, o.situacao, io.nome AS origem_nome, li.numero_lote,
-                ir.nome AS resultante_nome, it.quantidade_produzida, it.quantidade_perda, it.validade_resultante
+                ir.nome AS resultante_nome, it.quantidade_produzida, it.quantidade_perda, it.quantidade_sobra,
+                it.validade_resultante
            FROM ordem_unitarizacao o
            JOIN ordem_unitarizacao_item it ON it.ordem_unitarizacao_id = o.id AND it.sequencia = 1
            JOIN insumo io ON io.id = it.origem_insumo_id
@@ -417,6 +423,7 @@ export class PortaUnitarizacaoDosePropria implements PortaUnitarizacaoDose {
           resultanteNome: t(x['resultante_nome']),
           doses: n(x['quantidade_produzida']),
           perda: n(x['quantidade_perda']),
+          sobra: n(x['quantidade_sobra']),
           validadeDose: x['validade_resultante'] ? dia(x['validade_resultante']) : null,
           situacao: t(x['situacao']),
         })),
@@ -559,6 +566,9 @@ export class PortaUnitarizacaoDosePropria implements PortaUnitarizacaoDose {
           percentual,
         });
         if (!validade) throw recusa('lote-vencido', 'O lote de origem está vencido.', { campos: ['lote'] });
+        // A sobra do que foi aberto: o domínio já recusou a que não tem destino; a reaproveitada fica no item da ordem
+        // com a validade da embalagem aberta (a mesma conta da dose, RDC 67/2007).
+        const sobra = regra.reaproveitaSobra ? sobraDaOrdem(regra, e.quantidadeOrigem, e.doses, e.perda) : 0;
         await exigirMesAberto(tx, est, hoje);
         const origem = await insumoAtivo(tx, regra.origem);
         await insumoAtivo(tx, regra.resultante);
@@ -639,6 +649,8 @@ export class PortaUnitarizacaoDosePropria implements PortaUnitarizacaoDose {
           resultante_unidade_medida_id: regra.unidade,
           quantidade_produzida: e.doses,
           quantidade_perda: e.perda,
+          quantidade_sobra: sobra,
+          validade_sobra: sobra > 0 ? validade : null,
           validade_resultante: validade,
           movimento_estoque_id: saida.id,
         });
@@ -717,6 +729,8 @@ export class PortaUnitarizacaoDosePropria implements PortaUnitarizacaoDose {
           movimentoSaida: saida.id,
           movimentoEntrada: entrada.id,
           validadeDose: validade,
+          sobra,
+          validadeSobra: sobra > 0 ? validade : null,
           doses,
         };
       },
