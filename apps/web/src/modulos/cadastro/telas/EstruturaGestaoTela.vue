@@ -204,9 +204,12 @@ const nomeUnidade = (id: number | null) =>
     </div>
     <MensagemErro v-if="consulta.isError.value" :erro="consulta.error.value" />
     <MensagemErro v-if="erro" :erro="erro" />
-    <ul v-if="recusas.length" class="recusas" role="alert" data-testid="recusa-motivo">
-      <li v-for="r in recusas" :key="r">{{ r }}</li>
-    </ul>
+    <!-- O papel de alerta fica no invólucro: na própria lista ele apagava a semântica de lista dos itens (axe listitem). -->
+    <div v-if="recusas.length" role="alert" data-testid="recusa-motivo">
+      <ul class="recusas">
+        <li v-for="r in recusas" :key="r">{{ r }}</li>
+      </ul>
+    </div>
     <p v-if="ok" role="status" data-testid="gravado">{{ t('estruturaGestao.comum.gravado') }}</p>
     <IdentidadeLogotipos v-if="aba === 'logotipos'" />
     <IdentidadeMantenedora v-else-if="aba === 'mantenedora'" />
@@ -420,7 +423,7 @@ const nomeUnidade = (id: number | null) =>
             }}</small>
           </span>
           <!-- A lista dos achados fica fora do rótulo da busca: dentro dele, o clique na lista voltava o foco ao campo. -->
-          <span>
+          <span class="busca-responsavel">
             <label>
               {{ t('estruturaGestao.setor.responsavel') }}
               <input
@@ -609,6 +612,15 @@ const nomeUnidade = (id: number | null) =>
 }
 .aviso {
   color: var(--sgh-alerta);
+}
+/* Campo da busca e a lista dos achados empilhados com folga: colados, o campo ficava abaixo do alvo mínimo (axe target-size). */
+.busca-responsavel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}
+.busca-responsavel input {
+  min-block-size: 1.5rem;
 }
 .recusas {
   margin: 0;

@@ -270,6 +270,9 @@ const impostos = (f: {
     rn: f.retemInss ? T('fiscal.retido') : '',
   });
 const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 4)}${doc.slice(-4)}` : doc);
+// A chave de pagamento que é CPF ou CNPJ é documento: na lista sai mascarada como o documento do favorecido.
+const chaveNaLista = (tipo: string | null | undefined, chave: string) =>
+  tipo === 'cpf' || tipo === 'cnpj' ? mascara(chave) : chave;
 </script>
 
 <template>
@@ -534,7 +537,11 @@ const mascara = (doc: string) => (doc.length > 4 ? `${'•'.repeat(doc.length - 
           <tr v-for="c in fin.contas" :key="c.id" :class="{ inativo: !c.ativo }">
             <td>
               {{ c.bancoDescricao ? `${c.bancoDescricao} · ag. ${c.agencia} · cc ${c.numeroConta}` : '' }}
-              {{ c.chavePix ? `${T(`conta.tiposChave.${c.tipoChavePix}`)}: ${c.chavePix}` : '' }}
+              {{
+                c.chavePix
+                  ? `${T(`conta.tiposChave.${c.tipoChavePix}`)}: ${chaveNaLista(c.tipoChavePix, c.chavePix)}`
+                  : ''
+              }}
             </td>
             <td>{{ c.favorecidoNome }} ({{ mascara(c.favorecidoDocumento) }})</td>
             <td>{{ c.principal ? T('principal') : c.ativo ? '' : T('inativo') }}</td>

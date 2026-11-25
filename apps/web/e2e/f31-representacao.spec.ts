@@ -230,7 +230,8 @@ test.describe('Incapacidade do paciente e comprovantes da representação @F31 @
     // Paciente da fonte sintética (o mesmo do E2E da regra de campo na abertura); só a rota da representação é simulada.
     const DA_FONTE = 1001;
     let alertas: unknown[] = [];
-    await entrar(page, 'SINT.ADMIN');
+    // Quem abre o atendimento é a recepção ambulatorial (o administrador do sistema não tem a abertura).
+    await entrar(page, 'SINT.ATENDIMENTO');
     await page.route(`**/api/cadastros/pacientes/${DA_FONTE}/incapacidades`, (rota) =>
       json(rota, {
         incapaz: alertas.length > 0,

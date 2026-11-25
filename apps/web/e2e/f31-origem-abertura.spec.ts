@@ -28,7 +28,8 @@ test.describe('@F3.1 @F3.1-05 origem do paciente na abertura do atendimento', ()
     const leituras: string[] = [];
     const gravados: Record<string, unknown>[] = [];
     const captacoes: Record<string, unknown>[] = [];
-    await entrar(page, 'SINT.ADMIN');
+    // A recepção ambulatorial abre o atendimento e registra a origem (o administrador do sistema não abre atendimento).
+    await entrar(page, 'SINT.ATENDIMENTO');
     await page.route('**/api/cadastros/vinculos/opcoes', (r) => {
       leituras.push('opcoes');
       return json(r, {
