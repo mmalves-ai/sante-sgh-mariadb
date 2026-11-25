@@ -16,7 +16,7 @@ import {
   type RegraDescarte,
   regraDescarteAplicavel,
   resultadoAtende,
-  somarDias,
+  somarDiasDaGuarda,
   vencidasParaExpurgo,
 } from './soroteca.js';
 
@@ -134,7 +134,7 @@ describe('soroteca: prazo de descarte', () => {
     expect(regraDescarteAplicavel([], c)).toBeNull();
   });
   it('soma os dias ao dia da guarda (virada de mês e ano); sem regra, sem prazo', () => {
-    expect(somarDias('2026-12-25', 10)).toBe('2027-01-04');
+    expect(somarDiasDaGuarda('2026-12-25', 10)).toBe('2027-01-04');
     expect(descartePrevisto('2026-02-20', regra({ diasGuarda: 10 }))).toBe('2026-03-02');
     expect(descartePrevisto('2026-02-20', null)).toBeNull();
   });

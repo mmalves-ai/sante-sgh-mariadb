@@ -14,9 +14,12 @@ import { lerAmostraPorCodigo, listarAmostras, mudarEstadoAmostra, novaChave } fr
 import AvisoSadt from '../componentes/AvisoSadt.vue';
 import ErroSadt from '../componentes/ErroSadt.vue';
 import PacienteSadt from '../componentes/PacienteSadt.vue';
+import SorotecaPainel from '../componentes/SorotecaPainel.vue';
 import { hojeLocal, quando, usarSadt } from '../usar-sadt.js';
 
 const { t } = useI18n();
+// Abas: o rastreio das amostras do dia e a soroteca (guarda, retirada e expurgo; 05-SADT linha 9).
+const aba = ref<'rastreio' | 'soroteca'>('rastreio');
 const cliente = useQueryClient();
 const data = ref(hojeLocal());
 const filtro = ref('');
@@ -116,86 +119,105 @@ const visiveis = computed(() => {
     <h1 id="amostras-titulo">{{ t('sadt.amostras.titulo') }}</h1>
     <p>{{ t('sadt.amostras.texto') }}</p>
     <AvisoSadt :motivo="motivoRastreio" />
-    <div class="filtros">
-      <span class="campo">
-        <label for="amostra-codigo">{{ t('sadt.amostras.codigo') }}</label>
-        <input id="amostra-codigo" v-model="codigo" data-testid="amostra-codigo" @keyup.enter="achar" />
-      </span>
+    <div class="filtros" role="group" :aria-label="t('sadt.amostras.titulo')">
       <SanteBotao
-        variante="secundario"
-        :rotulo="t('sadt.amostras.ler')"
-        data-testid="amostra-achar"
-        @acionar="achar"
+        :variante="aba === 'rastreio' ? 'primario' : 'secundario'"
+        :rotulo="t('sadt.soroteca.abaRastreio')"
+        :aria-pressed="aba === 'rastreio'"
+        data-testid="amostras-aba-rastreio"
+        @acionar="aba = 'rastreio'"
       />
-      <span class="campo">
-        <label for="amostra-data">{{ t('sadt.data') }}</label>
-        <input id="amostra-data" v-model="data" type="date" />
-      </span>
-      <SanteSelecao v-model="filtro" :rotulo="t('sadt.situacao')" :opcoes="estados" />
+      <SanteBotao
+        :variante="aba === 'soroteca' ? 'primario' : 'secundario'"
+        :rotulo="t('sadt.soroteca.abaSoroteca')"
+        :aria-pressed="aba === 'soroteca'"
+        data-testid="amostras-aba-soroteca"
+        @acionar="aba = 'soroteca'"
+      />
     </div>
-    <ErroSadt v-if="lista.isError.value" :erro="lista.error.value" />
-    <p v-else-if="!lista.data.value" role="status">{{ t('sadt.carregando') }}</p>
-    <p v-else-if="visiveis.length === 0">{{ t('sadt.nenhum') }}</p>
-    <div v-for="a in visiveis" :key="a.id" class="painel" :data-testid="`amostra-${a.codigo}`">
-      <h2>{{ a.codigo }} · {{ a.rotulo }}</h2>
-      <p><PacienteSadt :paciente="a.paciente" /> · {{ a.recipiente ?? '—' }}</p>
-      <p>{{ a.exames.map((e) => e.nome).join(', ') }}</p>
-      <details>
-        <summary>{{ t('sadt.amostras.eventos') }}</summary>
+    <SorotecaPainel v-if="aba === 'soroteca'" />
+    <template v-else>
+      <div class="filtros">
+        <span class="campo">
+          <label for="amostra-codigo">{{ t('sadt.amostras.codigo') }}</label>
+          <input id="amostra-codigo" v-model="codigo" data-testid="amostra-codigo" @keyup.enter="achar" />
+        </span>
+        <SanteBotao
+          variante="secundario"
+          :rotulo="t('sadt.amostras.ler')"
+          data-testid="amostra-achar"
+          @acionar="achar"
+        />
+        <span class="campo">
+          <label for="amostra-data">{{ t('sadt.data') }}</label>
+          <input id="amostra-data" v-model="data" type="date" />
+        </span>
+        <SanteSelecao v-model="filtro" :rotulo="t('sadt.situacao')" :opcoes="estados" />
+      </div>
+      <ErroSadt v-if="lista.isError.value" :erro="lista.error.value" />
+      <p v-else-if="!lista.data.value" role="status">{{ t('sadt.carregando') }}</p>
+      <p v-else-if="visiveis.length === 0">{{ t('sadt.nenhum') }}</p>
+      <div v-for="a in visiveis" :key="a.id" class="painel" :data-testid="`amostra-${a.codigo}`">
+        <h2>{{ a.codigo }} · {{ a.rotulo }}</h2>
+        <p><PacienteSadt :paciente="a.paciente" /> · {{ a.recipiente ?? '—' }}</p>
+        <p>{{ a.exames.map((e) => e.nome).join(', ') }}</p>
+        <details>
+          <summary>{{ t('sadt.amostras.eventos') }}</summary>
+          <ul>
+            <li v-for="(ev, i) in a.eventos" :key="i">
+              {{ quando(ev.em) }} · {{ ev.rotulo }} · {{ ev.por
+              }}<template v-if="ev.motivo"> · {{ ev.motivo }}</template>
+            </li>
+          </ul>
+        </details>
+        <div v-if="proximos(a.estado).length > 1" class="filtros">
+          <SanteSelecao
+            :model-value="novoEstado[a.id] ?? ''"
+            @update:model-value="(v: string) => (novoEstado[a.id] = v)"
+            :rotulo="t('sadt.amostras.estado')"
+            :opcoes="proximos(a.estado)"
+            :data-testid="`amostra-estado-${a.codigo}`"
+          />
+          <SanteSelecao
+            v-if="novoEstado[a.id] === 'recoleta'"
+            :model-value="motivoRecoleta[a.id] ?? ''"
+            @update:model-value="(v: string) => (motivoRecoleta[a.id] = v)"
+            :rotulo="t('sadt.motivo')"
+            :opcoes="motivosRecoleta"
+            :data-testid="`amostra-motivo-recoleta-${a.codigo}`"
+          />
+          <template v-if="novoEstado[a.id] === 'rejeitada'">
+            <SanteSelecao
+              :model-value="motivo[a.id] ?? ''"
+              @update:model-value="(v: string) => (motivo[a.id] = v)"
+              :rotulo="t('sadt.motivo')"
+              :opcoes="motivos"
+            />
+            <span class="campo">
+              <label :for="`amostra-detalhe-${a.id}`">{{ t('sadt.amostras.detalhe') }}</label>
+              <input :id="`amostra-detalhe-${a.id}`" v-model="detalhe[a.id]" />
+            </span>
+          </template>
+          <SanteBotao
+            v-if="novoEstado[a.id] && podePassar(novoEstado[a.id] ?? '')"
+            :rotulo="t('sadt.amostras.mudar')"
+            :desabilitado="ocupado || (novoEstado[a.id] === 'recoleta' && !motivoRecoleta[a.id])"
+            :data-testid="`amostra-mudar-${a.codigo}`"
+            @acionar="mudar(a)"
+          />
+        </div>
+      </div>
+      <section v-if="(lista.data.value?.rejeicoes.length ?? 0) > 0" class="painel">
+        <h2>{{ t('sadt.amostras.rejeicoes') }}</h2>
         <ul>
-          <li v-for="(ev, i) in a.eventos" :key="i">
-            {{ quando(ev.em) }} · {{ ev.rotulo }} · {{ ev.por
-            }}<template v-if="ev.motivo"> · {{ ev.motivo }}</template>
+          <li v-for="r in lista.data.value?.rejeicoes ?? []" :key="r.motivo">
+            {{ r.motivo }}: {{ r.quantidade }}
           </li>
         </ul>
-      </details>
-      <div v-if="proximos(a.estado).length > 1" class="filtros">
-        <SanteSelecao
-          :model-value="novoEstado[a.id] ?? ''"
-          @update:model-value="(v: string) => (novoEstado[a.id] = v)"
-          :rotulo="t('sadt.amostras.estado')"
-          :opcoes="proximos(a.estado)"
-          :data-testid="`amostra-estado-${a.codigo}`"
-        />
-        <SanteSelecao
-          v-if="novoEstado[a.id] === 'recoleta'"
-          :model-value="motivoRecoleta[a.id] ?? ''"
-          @update:model-value="(v: string) => (motivoRecoleta[a.id] = v)"
-          :rotulo="t('sadt.motivo')"
-          :opcoes="motivosRecoleta"
-          :data-testid="`amostra-motivo-recoleta-${a.codigo}`"
-        />
-        <template v-if="novoEstado[a.id] === 'rejeitada'">
-          <SanteSelecao
-            :model-value="motivo[a.id] ?? ''"
-            @update:model-value="(v: string) => (motivo[a.id] = v)"
-            :rotulo="t('sadt.motivo')"
-            :opcoes="motivos"
-          />
-          <span class="campo">
-            <label :for="`amostra-detalhe-${a.id}`">{{ t('sadt.amostras.detalhe') }}</label>
-            <input :id="`amostra-detalhe-${a.id}`" v-model="detalhe[a.id]" />
-          </span>
-        </template>
-        <SanteBotao
-          v-if="novoEstado[a.id] && podePassar(novoEstado[a.id] ?? '')"
-          :rotulo="t('sadt.amostras.mudar')"
-          :desabilitado="ocupado || (novoEstado[a.id] === 'recoleta' && !motivoRecoleta[a.id])"
-          :data-testid="`amostra-mudar-${a.codigo}`"
-          @acionar="mudar(a)"
-        />
-      </div>
-    </div>
-    <section v-if="(lista.data.value?.rejeicoes.length ?? 0) > 0" class="painel">
-      <h2>{{ t('sadt.amostras.rejeicoes') }}</h2>
-      <ul>
-        <li v-for="r in lista.data.value?.rejeicoes ?? []" :key="r.motivo">
-          {{ r.motivo }}: {{ r.quantidade }}
-        </li>
-      </ul>
-    </section>
-    <p v-if="mensagem" role="status" data-testid="amostra-mensagem">{{ mensagem }}</p>
-    <ErroSadt v-if="erro" :erro="erro" />
+      </section>
+      <p v-if="mensagem" role="status" data-testid="amostra-mensagem">{{ mensagem }}</p>
+      <ErroSadt v-if="erro" :erro="erro" />
+    </template>
   </section>
 </template>
 

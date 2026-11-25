@@ -188,7 +188,7 @@ export function regraDescarteAplicavel(
 }
 
 /** Dia (AAAA-MM-DD) somado de `dias` (calendário civil, sem fuso). */
-export function somarDias(dia: string, dias: number): string {
+export function somarDiasDaGuarda(dia: string, dias: number): string {
   const d = new Date(`${dia}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) throw new RecusaSoroteca('data-invalida', 'Data inválida.');
   d.setUTCDate(d.getUTCDate() + dias);
@@ -197,7 +197,7 @@ export function somarDias(dia: string, dias: number): string {
 
 /** Descarte previsto: o dia da guarda mais o prazo da regra; sem regra que se aplique, não há prazo (fica sem expurgo). */
 export function descartePrevisto(diaDaGuarda: string, regra: RegraDescarte | null): string | null {
-  return regra === null ? null : somarDias(diaDaGuarda, regra.diasGuarda);
+  return regra === null ? null : somarDiasDaGuarda(diaDaGuarda, regra.diasGuarda);
 }
 
 // ── Posição no suporte ────────────────────────────────────────────────────────────────────────────────────────
