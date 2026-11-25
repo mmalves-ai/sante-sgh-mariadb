@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Geradores de senha e totem (M19; ficha, seção 7): os cadastros dos geradores (CRUD genérico: letra única por
-// recepção, tipo, prioridade legal, limite do dia), a fila de cada serviço (ordem de chamada, intercalação,
+// Geradores de senha e totem (M19; ficha, seção 7): o cadastro dos serviços de senha com gravação (02-REC linha 33,
+// EstruturaRecepcaoBloco: prefixo único por recepção, tipo, prioridade legal, limite do dia e posição do botão), a fila de cada serviço (ordem de chamada, intercalação,
 // tempo-alvo e o botão do totem, só do novo) e os totens cadastrados.
 import { ORDENS_FILA, type GeradorLido } from '@sgh/contratos';
 import { SanteBotao, SanteCampoTexto, SanteDialogo, SanteSelecao } from '@sgh/ui';
@@ -9,9 +9,9 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
-import DominiosIndiceTela from '../../config/telas/DominiosIndiceTela.vue';
 import { configurarFila, lerApoio, novaChave } from '../api-recepcao.js';
 import DispositivosBloco from '../componentes/DispositivosBloco.vue';
+import EstruturaRecepcaoBloco from '../componentes/EstruturaRecepcaoBloco.vue';
 
 const { t } = useI18n();
 const cliente = useQueryClient();
@@ -90,7 +90,7 @@ async function gravar(): Promise<void> {
   <section class="tela-recepcao" aria-labelledby="geradores-titulo" data-testid="tela-geradores">
     <h1 id="geradores-titulo">{{ t('recepcao.geradores.titulo') }}</h1>
     <p>{{ t('recepcao.geradores.texto') }}</p>
-    <DominiosIndiceTela subitem="recepcaoGeradores" embutido />
+    <EstruturaRecepcaoBloco foco="servicos" />
 
     <section class="painel" aria-labelledby="fila-titulo">
       <h2 id="fila-titulo">{{ t('recepcao.geradores.fila') }}</h2>

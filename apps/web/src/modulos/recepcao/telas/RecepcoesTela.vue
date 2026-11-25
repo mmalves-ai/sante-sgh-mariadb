@@ -1,11 +1,12 @@
 <script setup lang="ts">
-// Recepções e setores de senha (M19; ficha, seção 7): o cadastro das recepções (CRUD genérico) e, de cada uma, os
-// locais de atendimento, os guichês e os encaminhamentos permitidos entre locais (a estrutura que o guichê usa).
+// Recepções e setores de senha (M19; ficha, seção 7): o cadastro da estrutura da recepção com gravação (02-REC linha
+// 33: recepção, guichês e serviços de senha, em EstruturaRecepcaoBloco) e, de cada recepção ativa, os locais de
+// atendimento e os encaminhamentos permitidos entre locais (a estrutura que o guichê usa).
 import { useQuery } from '@tanstack/vue-query';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
-import DominiosIndiceTela from '../../config/telas/DominiosIndiceTela.vue';
 import { lerApoio } from '../api-recepcao.js';
+import EstruturaRecepcaoBloco from '../componentes/EstruturaRecepcaoBloco.vue';
 
 const { t } = useI18n();
 const apoio = useQuery({ queryKey: ['recepcao', 'apoio'], queryFn: () => lerApoio() });
@@ -17,7 +18,7 @@ const nomeLocal = (id: number) =>
   <section class="tela-recepcao" aria-labelledby="recepcoes-titulo" data-testid="tela-recepcoes">
     <h1 id="recepcoes-titulo">{{ t('recepcao.recepcoes.titulo') }}</h1>
     <p>{{ t('recepcao.recepcoes.texto') }}</p>
-    <DominiosIndiceTela subitem="recepcaoRecepcoes" embutido />
+    <EstruturaRecepcaoBloco foco="tudo" />
     <section class="painel" aria-labelledby="estrutura-titulo">
       <h2 id="estrutura-titulo">{{ t('recepcao.recepcoes.estrutura') }}</h2>
       <MensagemErro v-if="apoio.isError.value" :erro="apoio.error.value" />
