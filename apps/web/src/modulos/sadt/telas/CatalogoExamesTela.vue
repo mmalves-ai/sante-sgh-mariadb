@@ -23,6 +23,7 @@ import { z } from 'zod';
 import { enviar, ler } from '../../exames/api-exames.js';
 import { novaChave } from '../api-sadt.js';
 import CadastroAnalitos from '../componentes/CadastroAnalitos.vue';
+import LaudoEstruturadoCadastro from '../componentes/LaudoEstruturadoCadastro.vue';
 import ProcedimentosExame from '../componentes/ProcedimentosExame.vue';
 import RespostasTextosExame from '../componentes/RespostasTextosExame.vue';
 
@@ -821,6 +822,7 @@ const filtrada = (qual: string, chave: string) => {
             :analitos="(ficha['analitos'] as Linha[] | undefined) ?? []"
             @gravado="abrir(Number(exame['id']))"
           />
+          <LaudoEstruturadoCadastro :exame-id="Number(exame['id'])" />
           <ProcedimentosExame
             :exame-id="Number(exame['id'])"
             :procedimentos="(ficha['procedimentos'] as Linha[] | undefined) ?? []"

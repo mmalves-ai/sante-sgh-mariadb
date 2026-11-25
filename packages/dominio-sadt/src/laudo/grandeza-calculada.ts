@@ -8,7 +8,7 @@
 //     da fórmula (só grandeza calculada, variáveis do mesmo exame, sem autorreferência nem ciclo, nada retroativo, a
 //     anterior encerrada na véspera).
 import { calcularFormula, type CalculoFormula } from '../catalogo/analito-pop.js';
-import { type FalhaCatalogo, validarFormula, vespera } from '../catalogo/regras.js';
+import { type FalhaCatalogo, validarFormula, variaveisDaExpressao, vespera } from '../catalogo/regras.js';
 import { idadeEmAnos } from '../catalogo/respostas-calculo.js';
 import {
   type GrandezaDoLaudo,
@@ -367,4 +367,35 @@ export function planejarFormulaGrandeza(
     else encerrar.push({ id: v.id, vigenciaFim: vespera(nova.vigenciaInicio) });
   }
   return { falhas, encerrar: falhas.length ? [] : encerrar };
+}
+
+/** Os nomes reservados da expressão para os dados do paciente (o resto são os códigos das medidas do exame). */
+export const NOMES_DADO_PACIENTE: Readonly<Record<string, DadoPacienteGrandeza>> = {
+  peso: 'peso',
+  altura: 'altura',
+  sc: 'superficie_corporal',
+  idade: 'idade',
+};
+
+/**
+ * As variáveis da fórmula tiradas da própria expressão, sem declarar uma a uma: cada nome é o código de uma medida do
+ * exame ou um dado do paciente (peso, altura, sc, idade). O nome que não é nenhum dos dois, ou o código comprido
+ * demais para a expressão (mais de 10 caracteres), volta em `desconhecidas` para a tela avisar na hora.
+ */
+export function variaveisPelaExpressao(
+  expressao: string,
+  grandezas: readonly { readonly id: number; readonly codigo: string; readonly ativo?: boolean }[],
+): { variaveis: VariavelDaGrandeza[]; desconhecidas: string[] } {
+  const variaveis: VariavelDaGrandeza[] = [];
+  const desconhecidas: string[] = [];
+  for (const nome of variaveisDaExpressao(expressao)) {
+    const dado = NOMES_DADO_PACIENTE[nome];
+    const g = grandezas.find((x) => x.codigo === nome && x.ativo !== false);
+    if (g && nome.length <= 10)
+      variaveis.push({ identificador: nome, fonte: 'grandeza', grandeza: g.id, dadoPaciente: null });
+    else if (dado && !g)
+      variaveis.push({ identificador: nome, fonte: 'dado_paciente', grandeza: null, dadoPaciente: dado });
+    else desconhecidas.push(nome);
+  }
+  return { variaveis, desconhecidas };
 }

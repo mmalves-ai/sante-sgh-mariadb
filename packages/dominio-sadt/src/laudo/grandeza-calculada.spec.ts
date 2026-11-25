@@ -12,6 +12,7 @@ import {
   validarFaixaGrandeza,
   validarGrandezaLaudo,
   validarSecaoLaudo,
+  variaveisPelaExpressao,
 } from './grandeza-calculada.js';
 
 const g = (id: number, codigo: string, calculada: boolean, casas: number | null = 1): GrandezaDoLaudo => ({
@@ -271,5 +272,30 @@ describe('cadastro do laudo estruturado', () => {
         }),
       ),
     ).toEqual(['vigenciaInicio']);
+  });
+});
+
+describe('variáveis tiradas da expressão', () => {
+  it('cada nome é o código de uma medida ativa do exame ou um dado do paciente; o resto é avisado', () => {
+    const medidas = [
+      { id: 1, codigo: 'ddve' },
+      { id: 2, codigo: 'dsve' },
+      { id: 5, codigo: 'codigo_comprido_demais' },
+      { id: 6, codigo: 'velha', ativo: false },
+    ];
+    expect(variaveisPelaExpressao('raiz(ddve - dsve) / sc + idade', medidas)).toEqual({
+      variaveis: [
+        { identificador: 'ddve', fonte: 'grandeza', grandeza: 1, dadoPaciente: null },
+        { identificador: 'dsve', fonte: 'grandeza', grandeza: 2, dadoPaciente: null },
+        { identificador: 'sc', fonte: 'dado_paciente', grandeza: null, dadoPaciente: 'superficie_corporal' },
+        { identificador: 'idade', fonte: 'dado_paciente', grandeza: null, dadoPaciente: 'idade' },
+      ],
+      desconhecidas: [],
+    });
+    expect(variaveisPelaExpressao('xyz + codigo_comprido_demais + velha', medidas).desconhecidas).toEqual([
+      'xyz',
+      'codigo_comprido_demais',
+      'velha',
+    ]);
   });
 });
