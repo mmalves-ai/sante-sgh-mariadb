@@ -22,6 +22,8 @@ import {
 import {
   type AtuaisDaEntidade,
   camposDaChave,
+  chaveEquivalencia,
+  type EquivalenciasDoCampo,
   type LeituraDoBanco,
   type ValorItem,
 } from '@sgh/dominio-catalogo';
@@ -41,6 +43,11 @@ interface MapaEntidade {
   readonly vigente: string;
   /** Escopo dos removidos pela UF do arquivo (a base de CEP vem por UF). */
   readonly uf?: string;
+  /**
+   * Campo guardado por referência a um catálogo → consulta (literal) das linhas ativas dele, com `id`, `sigla`,
+   * `descricao` e `canonico` (o valor que `campos` lê). O arquivo pode trazer a sigla ou a descricao.
+   */
+  readonly equivalencias?: Readonly<Record<string, string>>;
 }
 
 const UF = 'JOIN unidade_federativa u ON u.id';
@@ -67,13 +74,26 @@ export const MAPAS: Readonly<Record<string, MapaEntidade>> = Object.freeze({
     },
     vigente: 'p.ativo = TRUE',
   },
+  // A espécie do logradouro (rua, avenida…) entra na comparação: o CEP gravado sem espécie, ou com outra, vira
+  // alteração e a publicação a regrava; o arquivo traz a sigla ou a descrição, comparadas pela equivalência.
   cep: {
-    de: `logradouro_cep l JOIN municipio_ibge m ON m.id = l.municipio_ibge_id ${UF} = l.unidade_federativa_id`,
+    de: `logradouro_cep l JOIN municipio_ibge m ON m.id = l.municipio_ibge_id ${UF} = l.unidade_federativa_id
+      LEFT JOIN especie_logradouro el ON el.id = l.especie_logradouro_id`,
     chave: 'cep',
     expr: 'l.codigo_cep',
-    campos: { uf: 'u.sigla', cidade: 'm.nome', logradouro: 'l.logradouro', ibge: 'm.codigo_ibge' },
+    campos: {
+      uf: 'u.sigla',
+      cidade: 'm.nome',
+      logradouro: 'l.logradouro',
+      ibge: 'm.codigo_ibge',
+      tipoLogradouro: 'el.descricao',
+    },
     vigente: 'l.ativo = TRUE',
     uf: 'u.sigla',
+    equivalencias: {
+      tipoLogradouro:
+        'SELECT id, sigla, descricao, descricao AS canonico FROM especie_logradouro WHERE ativo = TRUE',
+    },
   },
   municipio: {
     de: `municipio_ibge m ${UF} = m.unidade_federativa_id`,
@@ -193,6 +213,33 @@ export function leituraPropria(
             const [chave, item] = doMapa(e, m, linha);
             r.set(chave, item);
           }
+        }
+      });
+      return r;
+    },
+    async equivalencias(entidade): Promise<ReadonlyMap<string, EquivalenciasDoCampo>> {
+      const r = new Map<string, EquivalenciasDoCampo>();
+      const e = def?.entidades.find((x) => x.codigo === entidade);
+      const m = Object.hasOwn(MAPAS, entidade) ? MAPAS[entidade] : undefined;
+      if (!e || !m?.equivalencias) return r;
+      await ler(async (l) => {
+        for (const [campo, sql] of Object.entries(m.equivalencias ?? {})) {
+          const mapa = new Map<string, string | null>();
+          const dono = new Map<string, string>();
+          for (const x of await l.consultar(sql, [], { teto: 10_000, tempoMaximoMs: TEMPO_MS })) {
+            const id = String(x['id']);
+            const canonico = normalizar(e, campo, x['canonico']);
+            for (const v of [x['sigla'], x['descricao']]) {
+              if (v === null || v === undefined || String(v).trim() === '') continue;
+              const k = chaveEquivalencia(String(v));
+              const antes = dono.get(k);
+              if (antes === undefined) {
+                dono.set(k, id);
+                mapa.set(k, canonico === null ? null : String(canonico));
+              } else if (antes !== id) mapa.set(k, null);
+            }
+          }
+          r.set(campo, mapa);
         }
       });
       return r;

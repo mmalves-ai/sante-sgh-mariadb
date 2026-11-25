@@ -7,7 +7,12 @@ import {
   type ItemLoteCatalogo,
   type TabelaReferenciaCatalogo,
 } from '@sgh/contratos';
-import { type AtuaisDaEntidade, compararEdicao, type ItemComparado } from '../comparacao.js';
+import {
+  type AtuaisDaEntidade,
+  compararEdicao,
+  type EquivalenciasDoCampo,
+  type ItemComparado,
+} from '../comparacao.js';
 import { conferirEdicao, type DecisaoEdicao } from '../edicao/vigencia.js';
 import { type ArquivoCarga, lerArquivosDaCarga, type OpcoesLeitura } from '../leitura.js';
 import { camposDaChave, validarItens, type ValorItem } from '../validacao.js';
@@ -28,6 +33,11 @@ export interface LeituraDoBanco {
    * (dublês de teste), as referências não são conferidas.
    */
   referencias?(tabela: TabelaReferenciaCatalogo, codigos: readonly string[]): Promise<ReadonlySet<string>>;
+  /**
+   * Equivalências dos campos que o banco guarda por referência a um catálogo (campo → valor normalizado do arquivo →
+   * valor que `atuais` devolve). Sem ela, os campos são comparados como vêm.
+   */
+  equivalencias?(entidade: string): Promise<ReadonlyMap<string, EquivalenciasDoCampo>>;
 }
 
 /** Códigos referenciados pelos itens válidos, por tabela (para uma leitura só por tabela). */
@@ -153,7 +163,10 @@ export async function prepararCarga(
   if (banco.referencias)
     for (const [tabela, codigos] of codigosReferenciados(def, validacao.itens))
       referencias.set(tabela, await banco.referencias(tabela, [...codigos]));
-  const cmp = compararEdicao(def, validacao.itens, atuais, { existentes, referencias });
+  const equivalencias = new Map<string, ReadonlyMap<string, EquivalenciasDoCampo>>();
+  if (banco.equivalencias)
+    for (const ent of atuais.keys()) equivalencias.set(ent, await banco.equivalencias(ent));
+  const cmp = compararEdicao(def, validacao.itens, atuais, { existentes, referencias, equivalencias });
   const errosArquivo = [
     ...leitura.erros.map((e) => e.mensagem),
     ...(decisaoEdicao.ok ? [] : [decisaoEdicao.motivo]),

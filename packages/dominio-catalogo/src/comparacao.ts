@@ -44,6 +44,38 @@ function iguais(a: ValorItem | undefined, b: ValorItem | undefined): boolean {
   return x === y;
 }
 
+/**
+ * Equivalências de um campo cujo banco guarda a referência a um catálogo (ex.: a espécie do logradouro do CEP, que o
+ * arquivo traz pela sigla ou pela descrição): valor normalizado do arquivo → valor canônico que a leitura do banco
+ * devolve. null marca o valor ambíguo (casa com mais de um item do catálogo).
+ */
+export type EquivalenciasDoCampo = ReadonlyMap<string, string | null>;
+
+/** Normalização da chave de equivalência: sem espaços nas pontas, sem acento, maiúscula. */
+export function chaveEquivalencia(v: string): string {
+  return v.trim().normalize('NFD').replace(/\p{M}/gu, '').toUpperCase();
+}
+
+/**
+ * Os campos do arquivo no vocabulário do banco, para comparar: o campo com equivalências vira o valor canônico; vazio,
+ * fora do catálogo ou ambíguo sai da comparação (a publicação não o grava, então não é diferença a publicar).
+ */
+export function canonizarCampos(
+  campos: Readonly<Record<string, ValorItem>>,
+  equivalencias: ReadonlyMap<string, EquivalenciasDoCampo> | undefined,
+): Record<string, ValorItem> {
+  if (!equivalencias || equivalencias.size === 0) return { ...campos };
+  const r: Record<string, ValorItem> = { ...campos };
+  for (const [campo, mapa] of equivalencias) {
+    if (!Object.hasOwn(r, campo)) continue;
+    const v = r[campo];
+    const canonico = v === null || v === undefined ? undefined : mapa.get(chaveEquivalencia(String(v)));
+    if (canonico === undefined || canonico === null) delete r[campo];
+    else r[campo] = canonico;
+  }
+  return r;
+}
+
 /** Campos que mudam (os campos da chave nunca: são a identidade do item). */
 export function camposAlterados(
   chaves: ReadonlySet<string>,
@@ -76,6 +108,8 @@ export interface OpcoesComparacao {
    * a referência não é conferida.
    */
   readonly referencias?: ReadonlyMap<TabelaReferenciaCatalogo, ReadonlySet<string>>;
+  /** Equivalências por entidade e campo (canonizarCampos): sem elas, o valor do arquivo é comparado como vem. */
+  readonly equivalencias?: ReadonlyMap<string, ReadonlyMap<string, EquivalenciasDoCampo>>;
 }
 
 /**
@@ -155,7 +189,7 @@ export function compararEdicao(
       continue;
     }
     const chaves = new Set(e.campos.filter((c) => c.chave).map((c) => c.nome));
-    const mudou = camposAlterados(chaves, atual, i.campos);
+    const mudou = camposAlterados(chaves, atual, canonizarCampos(i.campos, o.equivalencias?.get(i.entidade)));
     const alterado = Object.keys(mudou).length > 0;
     const motivos = [...i.motivos];
     if (alterado && protegido) motivos.push('código protegido: nunca alterado');
