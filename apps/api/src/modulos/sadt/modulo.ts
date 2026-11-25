@@ -47,6 +47,8 @@ import { CATALOGO_SADT, PortaCatalogoSadtPropria } from './catalogo-porta-propri
 import { CatalogoSadtController } from './catalogo.controller.js';
 import { PortaRespostasSadtPropria, RESPOSTAS_SADT } from './catalogo-respostas-propria.js';
 import { CatalogoRespostasSadtController } from './catalogo-respostas.controller.js';
+import { LaudoGrandezasController } from './laudo-grandezas.controller.js';
+import { GRANDEZAS_LAUDO, PortaGrandezasLaudoPropria } from './laudo-grandezas-propria.js';
 import { LaudoRedacaoController, SERVICO_LAUDO_REDACAO } from './laudo-redacao.controller.js';
 import { ApoioRemessaController, SERVICO_APOIO_REMESSA } from './apoio-remessa.controller.js';
 import { EscalaExecucaoController, SERVICO_ESCALA_EXECUCAO } from './escala-execucao.controller.js';
@@ -150,6 +152,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       LoteTrabalhoController,
       ResultadoBancoController,
       LaudoRedacaoController,
+      LaudoGrandezasController,
       ApoioRemessaController,
       LimitesExameController,
       EscalaExecucaoController,
@@ -160,6 +163,10 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
       // Manutenção do catálogo de exames (F3.5): só com o banco do cliente; sem ele, 503.
       { provide: CATALOGO_SADT, useValue: ctx.nucleo ? new PortaCatalogoSadtPropria(ctx.nucleo) : null },
       { provide: RESPOSTAS_SADT, useValue: ctx.nucleo ? new PortaRespostasSadtPropria(ctx.nucleo) : null },
+      {
+        provide: GRANDEZAS_LAUDO,
+        useValue: ctx.nucleo ? new PortaGrandezasLaudoPropria(ctx.nucleo) : null,
+      },
       ...(configuracaoMemoria ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracaoMemoria }] : []),
       { provide: PORTA_SADT, useValue: sadt },
       { provide: PORTA_PACS, useValue: pacs },
