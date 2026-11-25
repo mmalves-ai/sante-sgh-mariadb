@@ -156,4 +156,60 @@ test.describe('centro cirúrgico: gasto de sala do ato @F34-5', () => {
     await expect(page.getByTestId('gasto-debitar')).toHaveCount(0);
     expect(externas).toEqual([]);
   });
+
+  test('atalho da linha da realizada no registro da cirurgia abre o gasto do mesmo ato; axe', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const realizada = {
+      id: ATO,
+      reg: 77077,
+      data: '2026-11-20',
+      sala: 1,
+      porte: 'M',
+      potencialContaminacao: 'L',
+      tipoAnestesia: { codigo: 1, nome: 'GERAL' },
+      inicio: '08:00',
+      fim: '09:30',
+      duracao: '01:30',
+      paciente: 'PACIENTE SINTETICO',
+      procedimentos: [
+        {
+          procedimento: { codigo: 3, nome: 'PROCEDIMENTO SINTETICO' },
+          especialidade: 1,
+          tecnica: 0,
+          equipe: [{ funcao: 'cirurgiao', rotulo: 'Cirurgião', id: 9, nome: 'CIRURGIAO SINTETICO' }],
+        },
+      ],
+      ligacao: { tipo: 'registro', agendamento: null, candidatos: [] },
+      extensao: null,
+    };
+    await page.route(/\/api\/cirurgia\/realizadas(\?|$)/, (r) =>
+      r.request().method() === 'GET'
+        ? json(r, {
+            itens: [realizada],
+            truncado: false,
+            resumo: { registro: 1, revisao: 0, exato: 0, regEDia: 0, soReg: 0, ambiguo: 0, nenhum: 0 },
+          })
+        : r.fallback(),
+    );
+    await page.route('**/api/cirurgia/gasto-sala/**', async (r) => {
+      const caminho = new URL(r.request().url()).pathname.replace('/api/cirurgia/gasto-sala', '');
+      if (caminho === '/apoio') return json(r, { locais: [], produtos: [] });
+      if (caminho === '/lotes' || caminho === '/lista') return json(r, { itens: [] });
+      return json(r, { ...base, gasto: null, itens: [], diferencas: [], pendencias: [] });
+    });
+
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto('/cirurgia/registro');
+    await expect(page.getByTestId('tabela-realizadas')).toContainText('PACIENTE SINTETICO');
+    const atalho = page.getByTestId(`realizada-gasto-${ATO}`);
+    await expect(atalho).toHaveText('Lançar o gasto');
+    await semViolacaoAxe(page, 'registro: atalho do gasto de sala');
+    await atalho.click();
+    await expect(page).toHaveURL(new RegExp(`/cirurgia/gasto-sala/${ATO}$`));
+    await expect(page.getByTestId('tela-gasto-sala')).toBeVisible();
+    await expect(page.getByTestId('gasto-situacao')).toContainText('ainda não lançado');
+    expect(externas).toEqual([]);
+  });
 });

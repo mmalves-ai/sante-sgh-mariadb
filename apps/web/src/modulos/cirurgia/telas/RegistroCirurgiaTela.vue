@@ -565,6 +565,7 @@ async function registrar(): Promise<void> {
               <th scope="col">{{ t('cirurgia.procedimento') }}</th>
               <th scope="col">{{ t('cirurgia.registro.tempos') }}</th>
               <th scope="col">{{ t('cirurgia.registro.ligacao') }}</th>
+              <th scope="col">{{ t('cirurgia.registro.gastoSala') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -605,6 +606,15 @@ async function registrar(): Promise<void> {
                     @acionar="revisar(r.id, null)"
                   />
                 </template>
+              </td>
+              <td>
+                <!-- F3.4-5 (04-CC L100): atalho da linha da realizada para o gasto de sala do mesmo ato. -->
+                <RouterLink
+                  :to="{ name: 'cirurgia.gasto-sala', params: { ato: String(r.id) } }"
+                  :aria-label="t('cirurgia.registro.gastoSalaDo', { data: dataBr(r.data), sala: r.sala })"
+                  :data-testid="`realizada-gasto-${r.id}`"
+                  >{{ t('cirurgia.registro.lancarGasto') }}</RouterLink
+                >
               </td>
             </tr>
           </tbody>
