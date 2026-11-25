@@ -225,6 +225,8 @@ export type RegraLida = z.infer<typeof esquemaRegraLida>;
 
 export const esquemaPacoteLido = z.object({
   id: n,
+  /** O pacote do cadastro (o `id` é o do acordo com o convênio): abre a composição e as versões. */
+  pacoteId: n.optional(),
   convenio: n,
   codigo: n,
   nome: texto,
