@@ -23,6 +23,7 @@ export * from './coparticipacao.js';
 export * from './autorizacao.js';
 // Etapa 6 (F5): as contas médicas recebidas (protocolo, críticas e glosa automática, revisão, recurso e pagamento).
 export * from './conta.js';
+export * from './conta-conferencia.js';
 // Etapa 7 (F6): as obrigações com a ANS (SIB, SIP, DIOPS, TPS, monitoramento TISS e ressarcimento ao SUS).
 export * from './ans/envio.js';
 export * from './ans/comum.js';
