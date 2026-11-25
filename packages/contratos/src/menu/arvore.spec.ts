@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 509, M: 198, P: 57, N: 254 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 510, M: 198, P: 57, N: 255 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(509);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(510);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -601,6 +601,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/financeiro/pagar/aprovacao', // M32
         '/financeiro/pagar/borderos', // M32
         '/financeiro/pagar/remessas', // M32
+        '/financeiro/pagar/pagamento-eletronico?aba=credor', // C1-026 (07-FIN linha 66)
         '/financeiro/pagar/titulos', // M32
         '/financeiro/parametros', // M32
         '/financeiro/parametros/permissoes', // F3.8 (07-FIN linha 99)

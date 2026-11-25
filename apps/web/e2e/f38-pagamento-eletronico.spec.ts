@@ -106,7 +106,11 @@ test.describe('financeiro: pagamento eletrônico @F3.8-03', () => {
     // Dados bancários do credor pelo cadastro de credores: achado pelo código, sem id digitado às cegas; só a aba
     // do credor aparece (não lê nem gera remessa).
     await entrar(page, 'SINT.FIN.CREDOR');
-    await page.goto('/financeiro/pagar/pagamento-eletronico');
+    // Chega pelo menu (Financeiro > Contas a pagar > Dados bancários e chave Pix do credor), sem a leitura das remessas.
+    const menu = page.getByRole('navigation', { name: 'Menu principal' });
+    await menu.locator('#menu-buscar').fill('Dados bancários e chave Pix');
+    await menu.getByRole('link', { name: 'Dados bancários e chave Pix do credor' }).click();
+    await expect(page).toHaveURL(/\/financeiro\/pagar\/pagamento-eletronico\?aba=credor$/);
     await expect(page.getByTestId('tela-fin-pagamento-eletronico')).toBeVisible();
     await expect(page.getByTestId('pe-aba-retorno')).toHaveCount(0);
     await expect(page.getByTestId('pe-aba-pix')).toHaveCount(0);

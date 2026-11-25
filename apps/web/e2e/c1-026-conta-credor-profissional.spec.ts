@@ -6,6 +6,9 @@
 // tipoCredor/credor; o título do profissional entra no Pix só depois que a chave existe). O que fica no banco (a conta
 // do profissional e do prestador, a chave escolhida, a remessa e a baixa pelo retorno) é provado nos contratos de
 // efeito `aplicacao/pagamento-eletronico-credores.int.spec.ts` e `aplicacao/pagamento-eletronico.int.spec.ts`.
+// Este E2E é só de tela (rotas simuladas): não exercita a API, a permissão do servidor nem a gravação. O ciclo pelo
+// integrador com o banco do cliente fica pendente, porque a esteira do E2E (tools/obra/e2e-vm.sh, igual ao ci.yml) sobe
+// sem núcleo (SGH_NUCLEO_SEM_BANCO=1). O cadastro de credores chega à tela pelo menu, não por endereço digitado.
 // Massa SINTÉTICA. Axe nos passos.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
@@ -197,7 +200,11 @@ test.describe('financeiro: conta e chave Pix do profissional, remessa e retorno 
 
     // 1. O cadastro de credores: só a aba dos dados bancários; escolhe o tipo profissional e acha pelo nome.
     await entrar(page, 'SINT.FIN.CREDOR');
-    await page.goto('/financeiro/pagar/pagamento-eletronico');
+    // Chega pelo menu (Financeiro > Contas a pagar > Dados bancários e chave Pix do credor), sem a leitura das remessas.
+    const menu = page.getByRole('navigation', { name: 'Menu principal' });
+    await menu.locator('#menu-buscar').fill('Dados bancários e chave Pix');
+    await menu.getByRole('link', { name: 'Dados bancários e chave Pix do credor' }).click();
+    await expect(page).toHaveURL(/\/financeiro\/pagar\/pagamento-eletronico\?aba=credor$/);
     await expect(page.getByTestId('tela-fin-pagamento-eletronico')).toBeVisible();
     await expect(page.getByTestId('pe-aba-pix')).toHaveCount(0);
     await escolher(page.getByTestId('pe-credor-tipo'), 'profissional');

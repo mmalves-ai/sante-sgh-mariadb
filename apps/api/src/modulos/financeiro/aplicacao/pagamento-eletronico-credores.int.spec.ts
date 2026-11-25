@@ -55,10 +55,10 @@ describe.skipIf(SEM_BANCO)(
     const contar = async (sql: string, p: unknown[]) => Number((await uma(sql, p))?.['n'] ?? 0);
     const escrever = (fn: Parameters<MassaFinanceiro['nucleo']['escrever']>[1]) =>
       m.nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-pe-c1-026' }, fn);
-    const executar = (nome: keyof typeof OPERACOES_PAGAMENTO_ELETRONICO, entrada: unknown) =>
+    const executar = (nome: keyof typeof OPERACOES_PAGAMENTO_ELETRONICO, entrada: unknown, est?: number) =>
       m.nucleo
         .criarExecutor()
-        .executar(OPERACOES_PAGAMENTO_ELETRONICO[nome] as never, CLIENTE, entrada, op(m.ctx(m.paga)))
+        .executar(OPERACOES_PAGAMENTO_ELETRONICO[nome] as never, CLIENTE, entrada, op(m.ctx(m.paga, est)))
         .then((r) => r.resultado as Record<string, unknown>);
     const codigo = async (p: Promise<unknown>) => {
       try {
@@ -194,7 +194,7 @@ describe.skipIf(SEM_BANCO)(
         ),
       ).toBe(1);
       const lista = await ler<Awaited<ReturnType<typeof contasDoCredor>>>((l) =>
-        contasDoCredor(l, { tipo: 'profissional', id: profissional }),
+        contasDoCredor(l, { tipo: 'profissional', id: profissional }, m.est),
       );
       expect(lista).toHaveLength(1);
       expect(JSON.stringify(lista)).not.toContain(CPF_MEDICO);
@@ -287,6 +287,68 @@ describe.skipIf(SEM_BANCO)(
         await contasDe('prestador_terceiro_id', prestador),
       ]).toEqual(antes);
       expect(await contasDe('prestador_terceiro_id', prestadorOutroEst)).toBe(0);
+    }, 120_000);
+
+    it('a conta do prestador de outro estabelecimento não é lida, desativada nem alterada desta sessão', async () => {
+      // A conta é gravada pela sessão do outro estabelecimento, dono do prestador.
+      const g = await executar(
+        'financeiro.manterContaCredor',
+        {
+          acao: 'incluir',
+          tipoCredor: 'prestador',
+          credor: prestadorOutroEst,
+          titularNome: 'Prestador Sintético L0207 B',
+          titularDocumento: CNPJ_PRESTADOR,
+          tipoChavePix: 'email',
+          chavePix: 'outro@exemplo.com',
+          ...DADOS,
+        },
+        m.outroEst,
+      );
+      const id = Number(g['contaCredor']);
+      const estado = () =>
+        uma(
+          `SELECT c.ativo, c.versao, c.chave_pix,
+                  (SELECT COUNT(*) FROM chave_pix_credor k WHERE k.conta_bancaria_credor_id = c.id AND k.ativa = TRUE) AS chaves
+             FROM conta_bancaria_credor c WHERE c.id = ?`,
+          [id],
+        );
+      const antes = await estado();
+      expect(antes).toMatchObject({ chave_pix: 'outro@exemplo.com' });
+      expect(Boolean(antes?.['ativo'])).toBe(true);
+      const versao = Number(antes?.['versao']);
+
+      // A leitura da sessão do estabelecimento A vem vazia; a do dono traz a conta.
+      const daSessao = await ler<Awaited<ReturnType<typeof contasDoCredor>>>((l) =>
+        contasDoCredor(l, { tipo: 'prestador', id: prestadorOutroEst }, m.est),
+      );
+      expect(daSessao).toEqual([]);
+      const doDono = await ler<Awaited<ReturnType<typeof contasDoCredor>>>((l) =>
+        contasDoCredor(l, { tipo: 'prestador', id: prestadorOutroEst }, m.outroEst),
+      );
+      expect(doDono.map((c) => c.id)).toEqual([id]);
+
+      // Desativar e alterar pela sessão do estabelecimento A recusam como conta inexistente, sem gravar.
+      expect(
+        await codigo(
+          executar('financeiro.manterContaCredor', { acao: 'desativar', contaCredor: id, versao }),
+        ),
+      ).toBe('conta-inexistente');
+      expect(
+        await codigo(
+          executar('financeiro.manterContaCredor', {
+            acao: 'alterar',
+            contaCredor: id,
+            versao,
+            titularNome: 'Prestador Sintético L0207 B',
+            titularDocumento: CNPJ_PRESTADOR,
+            tipoChavePix: 'email',
+            chavePix: 'trocada@exemplo.com',
+            ...DADOS,
+          }),
+        ),
+      ).toBe('conta-inexistente');
+      expect(await estado()).toEqual(antes);
     }, 120_000);
 
     it('a remessa por Pix paga o profissional pela chave dele e, sem ela, pela do prestador ligado', async () => {

@@ -147,7 +147,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo; F7); a contagem acompanha.
 // C2-124 (06-SUS L64): o item "RAAS psicossocial e domiciliar" do faturamento SUS entrou à mão (mesmo
 // motivo; F8 vai como fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":509,"M":198,"P":57,"N":254};
+// C1-026 (07-FIN linha 66): o item "Dados bancários e chave Pix do credor" das contas a pagar entrou à mão (mesmo
+// motivo), para o cadastro de credores chegar à tela sem a leitura das remessas; a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":510,"M":198,"P":57,"N":255};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -443,6 +445,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"financeiro.contas-a-pagar.borderos-de-pagamento","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Borderôs de pagamento"],"titulo":"Borderôs de pagamento","selo":"M","fase":3,"rota":"/financeiro/pagar/borderos","permissao":"financeiro.bordero.ler"},
   {"id":"financeiro.contas-a-pagar.adiantamentos-a-fornecedores-e-medicos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Adiantamentos a fornecedores e médicos"],"titulo":"Adiantamentos a fornecedores e médicos","selo":"M","fase":3,"rota":"/financeiro/pagar/adiantamentos","permissao":"financeiro.adiantamento.ler"},
   {"id":"financeiro.contas-a-pagar.pagamentos-eletronicos-remessa-e-retorno-bancario","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Pagamentos eletrônicos"],"titulo":"Pagamentos eletrônicos","selo":"P","fase":3,"rota":"/financeiro/pagar/remessas","permissao":"financeiro.remessa.ler"},
+  {"id":"financeiro.contas-a-pagar.dados-bancarios-e-chave-pix-do-credor","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Dados bancários e chave Pix do credor"],"titulo":"Dados bancários e chave Pix do credor","selo":"N","fase":3,"rota":"/financeiro/pagar/pagamento-eletronico?aba=credor","permissao":"financeiro.contaCredor.manter"},
   {"id":"financeiro.contas-a-pagar.aprovacao-de-pagamentos-por-alcada","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Aprovação de pagamentos por alçada"],"titulo":"Aprovação de pagamentos por alçada","selo":"N","fase":3,"rota":"/financeiro/pagar/aprovacao","permissao":"financeiro.tituloPagar.ler"},
   {"id":"financeiro.aprovacao.fluxos-de-aprovacao","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Aprovações","Fluxos de aprovação"],"titulo":"Fluxos de aprovação","selo":"N","fase":7,"rota":"/financeiro/aprovacao/fluxos","permissao":"financeiro.fluxoAprovacao.configurar"},
   {"id":"financeiro.aprovacao.minhas-aprovacoes","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Aprovações","Minhas aprovações"],"titulo":"Minhas aprovações","selo":"N","fase":7,"rota":"/financeiro/aprovacoes","permissao":"financeiro.fluxoAprovacao.decidir"},

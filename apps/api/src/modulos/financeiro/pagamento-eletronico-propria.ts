@@ -384,6 +384,14 @@ const manterContaCredor = definirOperacao<ContaCredorEntradaOp, ResultadoOperaca
         { teto: 1 },
       );
       if (!l || credorDaLinha(l) === null) throw recusa('conta-inexistente', 'A conta do credor não existe.');
+      // A conta de prestador terceiro de outro estabelecimento não existe para esta sessão (desativar e alterar).
+      if (l['prestador_terceiro_id'] !== null && l['prestador_terceiro_id'] !== undefined) {
+        const doEstabelecimento = await tx.uma(
+          'SELECT id FROM prestador_terceiro WHERE id = ? AND estabelecimento_id = ?',
+          [numero(l['prestador_terceiro_id']), estabelecimentoDe(ctx)],
+        );
+        if (!doEstabelecimento) throw recusa('conta-inexistente', 'A conta do credor não existe.');
+      }
       if (numero(l['versao']) !== versao)
         throw recusa('versao-desatualizada', 'Outra pessoa alterou a conta do credor: releia.');
       return l;
@@ -958,16 +966,21 @@ export async function credoresParaPagamento(l: Leitor, busca: string) {
 }
 
 /** As contas do credor (ativas primeiro). Agência, conta e chave saem mascaradas: a tela nunca recebe o dado inteiro. */
-export async function contasDoCredor(l: Leitor, credor: CredorDaConta) {
+export async function contasDoCredor(l: Leitor, credor: CredorDaConta, estabelecimento: number) {
   const coluna = COLUNA_DO_CREDOR[credor.tipo];
+  // O prestador terceiro é do estabelecimento: o de outro estabelecimento não tem contas para esta sessão.
+  const doEstabelecimento =
+    credor.tipo === 'prestador'
+      ? 'JOIN prestador_terceiro pt ON pt.id = cc.prestador_terceiro_id AND pt.estabelecimento_id = ?'
+      : '';
   const linhas = await l.consultar(
     `SELECT cc.id, cc.versao, cc.banco_id, b.codigo_compensacao, b.descricao AS banco_nome, cc.tipo_conta,
             cc.numero_agencia, cc.numero_conta, cc.digito_conta, cc.tipo_chave_pix, cc.chave_pix, cc.titular_nome,
             cc.titular_documento, cc.preferencial, cc.ativo,
             (SELECT COUNT(*) FROM chave_pix_credor k WHERE k.conta_bancaria_credor_id = cc.id) AS chaves_historico
-       FROM conta_bancaria_credor cc LEFT JOIN banco b ON b.id = cc.banco_id
+       FROM conta_bancaria_credor cc ${doEstabelecimento} LEFT JOIN banco b ON b.id = cc.banco_id
       WHERE cc.${coluna} = ? ORDER BY cc.ativo DESC, cc.preferencial DESC, cc.id DESC`,
-    [credor.id],
+    credor.tipo === 'prestador' ? [estabelecimento, credor.id] : [credor.id],
     { teto: 200 },
   );
   return linhas.map((c) => ({

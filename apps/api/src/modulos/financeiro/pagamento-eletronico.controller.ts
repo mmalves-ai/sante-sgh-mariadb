@@ -197,7 +197,7 @@ export class PagamentoEletronicoController {
       credor: credor === undefined ? undefined : (inteiroOuNulo(credor) ?? 0),
     });
     if (credorRecusado(r)) throw new ErroProblema('entrada-invalida', 400, 'Credor inválido', r.mensagem);
-    return this.ler(req, (l) => contasDoCredor(l, r));
+    return this.ler(req, (l, est) => contasDoCredor(l, r, est));
   }
 
   @Get('bancos')

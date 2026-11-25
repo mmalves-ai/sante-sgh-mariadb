@@ -424,7 +424,7 @@ describe.skipIf(SEM_BANCO)('pagamento eletrônico a credores (MariaDB)', () => {
       ).toEqual([['financeiro@exemplo.com', true, true]]);
       // A lista da tela nunca traz o dado inteiro.
       const lista = await ler<Awaited<ReturnType<typeof contasDoCredor>>>((x) =>
-        contasDoCredor(x, { tipo: 'fornecedor', id: m.fornecedor }),
+        contasDoCredor(x, { tipo: 'fornecedor', id: m.fornecedor }, m.est),
       );
       expect(lista[0]).toMatchObject({ conta: '••••6789', chavePix: '••••.com', preferencial: true });
       expect(JSON.stringify(lista)).not.toContain('financeiro@exemplo.com');
