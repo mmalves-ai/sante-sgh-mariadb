@@ -305,6 +305,8 @@ export interface PortaAdt extends PortaGravacaoM18<GravadorSghAdt> {
       obrigatorio?: boolean;
       selecionado?: boolean;
       sobDemanda?: boolean;
+      /** A última emissão do documento nesta internação e momento (ISO), lida da trilha. */
+      emitidoEm?: string;
     }[]
   >;
   profissional(c: ContextoAdt, login: string): Promise<ProfissionalDaSessao | null>;

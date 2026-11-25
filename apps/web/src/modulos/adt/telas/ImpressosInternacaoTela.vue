@@ -4,7 +4,8 @@
 // pedido repetido não imprime duas vezes). Os documentos da internação (F3.4, 04-INT linha 69) saem pelo momento
 // (admissão, prorrogação, transferência ou alta) conforme as regras de convênio, especialidade e modalidade: os
 // marcados e os obrigatórios num só clique, cada um com as cópias da regra; os sob demanda podem ser marcados; o
-// obrigatório ainda não emitido fica em aviso.
+// obrigatório ainda não emitido fica em aviso. O já emitido vem da trilha da internação (qualquer estação ou sessão),
+// com a data da última emissão; a emissão desta tela soma na hora.
 import { MOMENTOS_DOCUMENTO_INTERNACAO, obrigatoriosPendentes } from '@sgh/dominio-internacao';
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
@@ -48,12 +49,15 @@ const fichas = useQuery({
 // Marcados: os que a regra traz marcados; o obrigatório não se desmarca.
 const marcados = ref<Set<number>>(new Set());
 const emitidos = ref<Set<number>>(new Set());
+const emitidosAgora = ref<Set<number>>(new Set());
 watch(
   () => fichas.data.value,
   (d) => {
     marcados.value = new Set(
       (d?.fichas ?? []).filter((f) => f.selecionado || f.obrigatorio).map((f) => f.modelo),
     );
+    emitidos.value = new Set((d?.fichas ?? []).filter((f) => f.emitidoEm).map((f) => f.modelo));
+    emitidosAgora.value = new Set();
   },
   { immediate: true },
 );
@@ -66,8 +70,11 @@ const documentos = computed(() =>
     obrigatorio: f.obrigatorio === true,
     selecionado: marcados.value.has(f.modelo),
     sobDemanda: f.sobDemanda === true,
+    emitidoEm: f.emitidoEm ?? null,
   })),
 );
+const quando = (iso: string) =>
+  new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 const pendentes = computed(() => obrigatoriosPendentes(documentos.value, emitidos.value));
 function alternar(modelo: number, obrigatorio: boolean): void {
   if (obrigatorio) return;
@@ -89,6 +96,7 @@ async function emitirDocumentos(
       const r = await emitirDocumento(reg.value, momento.value, d.modelo, novaChave(`doc-${d.modelo}`));
       pdfs.value.push({ nome: d.titulo, url: URL.createObjectURL(blobDoPdf(r.conteudo)), copias: d.copias });
       emitidos.value = new Set([...emitidos.value, d.modelo]);
+      emitidosAgora.value = new Set([...emitidosAgora.value, d.modelo]);
     }
     mensagem.value = t('adt.impressos.emitidos', { n: pdfs.value.length });
   } catch (x) {
@@ -201,6 +209,19 @@ const configuracao = rotaDoSubitem('internacao');
             </label>
             <strong v-if="d.obrigatorio">{{ t('adt.documentos.obrigatorioDoc') }}</strong>
             <em v-if="d.sobDemanda">{{ t('adt.impressos.sobDemanda') }}</em>
+            <span
+              v-if="d.emitidoEm || emitidosAgora.has(d.modelo)"
+              class="secundario"
+              :data-testid="`imp-emitido-${d.modelo}`"
+              >{{
+                t('adt.impressos.emitidoEm', {
+                  quando:
+                    d.emitidoEm && !emitidosAgora.has(d.modelo)
+                      ? quando(d.emitidoEm)
+                      : t('adt.impressos.agora'),
+                })
+              }}</span
+            >
             <SanteBotao
               variante="secundario"
               :rotulo="t('adt.impressos.emitir')"

@@ -28,6 +28,7 @@ import {
   chaveTextoLeito,
   type DestinoAlta,
   diariasFaturaveis,
+  EVENTOS_AUDITAVEIS,
   type EstadoLeitoNovo,
   type EtapaLimpeza,
   type HistoricoOcupacao,
@@ -1454,9 +1455,13 @@ export class PortaAdtPropria implements PortaAdt {
       obrigatorio?: boolean;
       selecionado?: boolean;
       sobDemanda?: boolean;
+      emitidoEm?: string;
     }[]
   > {
     const docs = await new PortaDocumentosInternacao(this.nucleo, this.executor).documentos(c, reg, momento);
+    const emitidos = docs?.length
+      ? await this.documentosEmitidos(c, reg, momento)
+      : new Map<number, string>();
     return (docs ?? []).map((d) => ({
       modelo: d.modelo,
       grafica: true,
@@ -1466,7 +1471,39 @@ export class PortaAdtPropria implements PortaAdt {
       obrigatorio: d.obrigatorio,
       selecionado: d.selecionado,
       sobDemanda: d.sobDemanda,
+      ...(emitidos.has(d.modelo) ? { emitidoEm: emitidos.get(d.modelo)! } : {}),
     }));
+  }
+
+  /**
+   * Os documentos já emitidos da internação no momento, lidos da trilha de auditoria (a emissão registra o modelo e o
+   * momento na chave natural `ficha-<modelo>:<momento>:<cópias>:<resumo>`): o obrigatório pendente vale para qualquer
+   * estação e sessão, não só para a tela aberta. Devolve o modelo e a última emissão (ISO).
+   */
+  private documentosEmitidos(
+    c: ContextoAdt,
+    reg: number,
+    momento: MomentoDocumentoInternacao,
+  ): Promise<Map<number, string>> {
+    return this.ler(c, async (l, est) => {
+      const linhas = await l.consultar(
+        `SELECT JSON_UNQUOTE(JSON_EXTRACT(t.dados_depois, '$.chaveNatural')) AS chave, t.ocorrido_em
+           FROM trilha_auditoria t
+          WHERE t.estabelecimento_id = ? AND t.entidade = 'internacao' AND t.entidade_id = ?
+            AND JSON_UNQUOTE(JSON_EXTRACT(t.dados_depois, '$.evento')) = ?
+            AND JSON_UNQUOTE(JSON_EXTRACT(t.dados_depois, '$.resultado')) = 'sucesso'
+            AND JSON_UNQUOTE(JSON_EXTRACT(t.dados_depois, '$.chaveNatural')) LIKE 'ficha-%'
+          ORDER BY t.ocorrido_em, t.id`,
+        [est, reg, EVENTOS_AUDITAVEIS.internacaoImpressoEmitido.codigo],
+        { teto: 1_000 },
+      );
+      const r = new Map<number, string>();
+      for (const x of linhas) {
+        const m = /^ficha-(\d{1,15}):([a-z_]+):/.exec(texto(x['chave']));
+        if (m && m[2] === momento) r.set(Number(m[1]), (x['ocorrido_em'] as Date).toISOString());
+      }
+      return r;
+    });
   }
 
   profissional(c: ContextoAdt, login: string): Promise<ProfissionalDaSessao | null> {

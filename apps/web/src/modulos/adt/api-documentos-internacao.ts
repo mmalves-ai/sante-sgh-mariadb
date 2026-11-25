@@ -69,6 +69,7 @@ const esquemaFichasDoMomento = z.object({
       obrigatorio: z.boolean().optional(),
       selecionado: z.boolean().optional(),
       sobDemanda: z.boolean().optional(),
+      emitidoEm: z.string().optional(),
     }),
   ),
 });

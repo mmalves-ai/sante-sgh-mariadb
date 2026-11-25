@@ -4,7 +4,10 @@
 // segue a regra mais específica (cópias e obrigatoriedade dela); o modelo desativado deixa de sair e continua no banco
 // (nada se apaga). A ficha da internação (porta.fichas) devolve os mesmos documentos com o texto. O outro estabelecimento
 // não vê nem altera o modelo e as regras deste; o modelo comum só é mexido pela plataforma e não troca de dono; a regra
-// sem momento e sem cópias herda as do modelo; o modelo sob demanda é oferecido na emissão. SGH_NUCLEO_SEM_BANCO=1 pula.
+// sem momento e sem cópias herda as do modelo; o modelo sob demanda é oferecido na emissão. A emissão pela rota (POST
+// /api/internacoes/:reg/impressos?momento=) grava a linha na trilha com o modelo, o momento e as cópias da regra, e o
+// obrigatório já emitido volta lido da trilha (qualquer estação). SGH_NUCLEO_SEM_BANCO=1 pula.
+import { criarAbility, regrasDeAcesso } from '@sgh/dominio-acesso';
 import { ErroOperacao } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -22,6 +25,13 @@ import {
   prepararMassaAdt,
   SEM_BANCO_ADT,
 } from './massa-adt.spec-util.js';
+import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
+import { RegistradorTrilhaPropria } from '../../autorizacao/trilha-propria.js';
+import type { FonteConfiguracao } from '../config/configuracao-fonte.js';
+import type { FonteDocumento } from '../documento/fonte.js';
+import { desligarMapaEstabelecimentos, ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
+import { CHAVE_ADT } from './apoios.js';
+import { InternacaoController } from './internacao.controller.js';
 import { PortaAdtPropria } from './porta-propria.js';
 
 const P = 'L0301D';
@@ -322,6 +332,132 @@ describe.skipIf(SEM_BANCO_ADT)(
       const admissao = await adt.fichas(contextoAdt(M()), internacao, 'admissao');
       expect(admissao.some((f) => f.modelo === deAlta.id)).toBe(false);
       expect(admissao.find((f) => f.modelo === sob.id)?.texto).toBe('Termo de {paciente}');
+    }, 120_000);
+
+    it('emissão pela rota: PDF com os campos preenchidos, trilha com modelo, momento e cópias; pendente pela trilha', async () => {
+      const mod = await modelo('EMIT', {
+        momento: 'admissao',
+        conteudo: '<p>Termo de {paciente} no leito {leito}</p>',
+      });
+      await regra(mod.id, { obrigatorio: true, copias: 2 });
+      desligarMapaEstabelecimentos();
+      await ligarMapaEstabelecimentos(CLIENTE_ADT, M().nucleo);
+      const emitidos: { modelo: string; campos: { rotulo: string; valor: string }[] }[] = [];
+      const documento = {
+        emissao: {
+          emitir: async (p: { modelo: string; campos: { rotulo: string; valor: string }[] }) => {
+            emitidos.push(p);
+            return { pdf: new Uint8Array([37, 80, 68, 70]) };
+          },
+        },
+      } as unknown as FonteDocumento;
+      const configuracao = {
+        chaves: async () => [
+          { chave: CHAVE_ADT, tipo: 'recurso', ligada: true, escopo: 'hospital', valor: '*' },
+        ],
+        prerequisitos: async () => [
+          { recurso: CHAVE_ADT, tipo: 'aprovacao', situacao: 'cumprido', validade: null },
+        ],
+        parametros: async () => [],
+      } as unknown as FonteConfiguracao;
+      const ctrl = new InternacaoController(
+        adt,
+        new RegistradorTrilhaPropria(M().nucleo, CLIENTE_ADT),
+        configuracao,
+        null,
+        null,
+        documento,
+      );
+      const PERMS = ['internacao.impresso.emitir'];
+      const req = () =>
+        ({
+          headers: {
+            'idempotency-key': `int-doc-emit-${internacao}-${Date.now()}`,
+            'x-correlation-id': 'int-doc-emit',
+          },
+          ip: '127.0.0.1',
+          sgh: {
+            real: false,
+            ability: criarAbility(regrasDeAcesso([...PERMS], null)),
+            sessao: {
+              usuario: { id: String(M().usuario), nome: 'Conta sintética', login: M().login },
+              rede: 'teste',
+              estabelecimentos: [],
+              estabelecimentoAtivo: `L0301${M().marca}`,
+              unidadeAtiva: null,
+              permissoes: [...PERMS],
+              sintetica: true,
+              bloqueioInatividadeSegundos: 0,
+              expiraEm: '',
+            },
+          },
+        }) as unknown as RequisicaoAutorizada;
+      const linhas = () =>
+        M().nucleo.lerSomente({ cliente: CLIENTE_ADT, correlacao: 'int-doc-emit-conferir' }, (l) =>
+          l.consultar(
+            `SELECT estabelecimento_id, usuario_id, JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.chaveNatural')) AS chave,
+                    JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.evento')) AS evento
+               FROM trilha_auditoria WHERE entidade = 'internacao' AND entidade_id = ?
+                AND JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.chaveNatural')) LIKE ? ORDER BY id`,
+            [internacao, `ficha-${mod.id}:%`],
+          ),
+        );
+
+      const antes = (await ctrl.fichas(String(internacao), 'admissao', req())).fichas.find(
+        (f) => f.modelo === mod.id,
+      );
+      expect(antes).toMatchObject({ obrigatorio: true, copias: 2 });
+      expect(antes?.emitidoEm).toBeUndefined();
+      expect(await linhas()).toEqual([]);
+
+      // As cópias digitadas (9) não valem: saem as da regra (2), que entram na chave da trilha.
+      const r = await ctrl.impresso(
+        String(internacao),
+        { impresso: 'ficha', formato: 'pdf', copias: 9, modelo: mod.id },
+        req(),
+        'admissao',
+      );
+      expect(r).toMatchObject({ formato: 'pdf', nomeArquivo: `ficha-${mod.id}-${internacao}.pdf` });
+      expect(emitidos.at(-1)?.modelo).toBe(`internacao-ficha-${mod.id}`);
+      const texto = emitidos.at(-1)?.campos.find((c) => c.rotulo === 'Documento')?.valor ?? '';
+      expect(texto).toMatch(/^Termo de .+ no leito .+$/);
+      expect(texto).not.toMatch(/\{(paciente|leito)\}/);
+      const gravadas = await linhas();
+      expect(gravadas).toHaveLength(1);
+      expect(gravadas[0]).toMatchObject({
+        estabelecimento_id: M().est,
+        usuario_id: M().usuario,
+        evento: 'internacao.impresso.emitido',
+      });
+      expect(String(gravadas[0]!['chave'])).toMatch(new RegExp(`^ficha-${mod.id}:admissao:2:[0-9a-f]{16}$`));
+
+      // O obrigatório já emitido volta lido da trilha (outra estação ou sessão); em outro momento, não.
+      const depois = (await ctrl.fichas(String(internacao), 'admissao', req())).fichas.find(
+        (f) => f.modelo === mod.id,
+      );
+      expect(depois?.emitidoEm).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      const alta = await ctrl.fichas(String(internacao), 'alta', req());
+      expect(alta.fichas.find((f) => f.modelo === mod.id)?.emitidoEm).toBeUndefined();
+
+      // Modelo fora da configuração desta internação: 409 e nada na trilha.
+      await expect(
+        ctrl.impresso(
+          String(internacao),
+          { impresso: 'ficha', formato: 'pdf', copias: 1, modelo: 32_767 },
+          req(),
+          'admissao',
+        ),
+      ).rejects.toMatchObject({ status: 409 });
+      await expect(
+        ctrl.impresso(
+          String(internacao),
+          { impresso: 'ficha', formato: 'pdf', copias: 1, modelo: mod.id },
+          req(),
+          'transferencia',
+        ),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(await linhas()).toHaveLength(1);
+      desligarMapaEstabelecimentos();
     }, 120_000);
   },
 );
