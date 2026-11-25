@@ -287,6 +287,37 @@ export function recusaObrigatoriosPendentes(
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
+ * O arquivo TISS é ISO-8859-1: o primeiro caractere que ele não aceita (fora da faixa, ou de controle que não seja
+ * tabulação ou quebra de linha), como U+XXXX; null quando todos cabem. O valor que a operadora pediu nunca é trocado
+ * em silêncio: quem grava recusa com o campo, e o lote recusa o que já estava gravado.
+ */
+export function caractereForaDoTiss(texto: string): string | null {
+  for (const ch of texto) {
+    const c = ch.codePointAt(0)!;
+    if (c > 0xff || (c >= 0x7f && c <= 0x9f) || (c < 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d))
+      return `U+${c.toString(16).toUpperCase().padStart(4, '0')}`;
+  }
+  return null;
+}
+
+const mensagemForaDoTiss = (rotulo: string, c: string) =>
+  `${rotulo}: o caractere ${c} não cabe no arquivo TISS (ISO-8859-1); troque-o (travessão por hífen, aspas curvas por retas, sem emoji).`;
+
+/** Confere o que das opções vai ao arquivo da operadora (o código e o valor de envio): erros por campo. */
+export function validarOpcoesAtributo(
+  opcoes: readonly { readonly codigo: string; readonly valorEnvio?: string | null }[],
+): Erros {
+  const erros: Erros = {};
+  opcoes.forEach((o, i) => {
+    const cc = caractereForaDoTiss(o.codigo);
+    if (cc) erros[`opcoes.${i}.codigo`] = mensagemForaDoTiss(`Opção ${o.codigo}`, cc);
+    const ce = o.valorEnvio ? caractereForaDoTiss(o.valorEnvio) : null;
+    if (ce) erros[`opcoes.${i}.valorEnvio`] = mensagemForaDoTiss(`Valor de envio da opção ${o.codigo}`, ce);
+  });
+  return erros;
+}
+
+/**
  * Confere e normaliza os valores informados contra os campos que valem para a guia. Campo vazio não grava; o
  * obrigatório vazio fica em `faltam` (a guia só é apresentada sem pendência). Erro de tipo ou de opção recusa.
  */
@@ -333,6 +364,10 @@ export function validarValoresAtributos(
       else erros[campo] = `${d.rotulo}: responda sim ou não.`;
     } else if (d.tamanhoMaximo !== null && texto.length > d.tamanhoMaximo)
       erros[campo] = `${d.rotulo}: no máximo ${d.tamanhoMaximo} caracteres.`;
+    else {
+      const c = caractereForaDoTiss(texto);
+      if (c) erros[campo] = mensagemForaDoTiss(d.rotulo, c);
+    }
     if (!erros[campo]) normalizados.push({ atributoId: d.id, opcaoId: null, texto: norm });
   }
   // Dependência entre listas: a opção escolhida, quando tem pai, exige a opção-pai escolhida no campo de que depende.
@@ -341,8 +376,12 @@ export function validarValoresAtributos(
     const id = escolhida.get(d.id);
     if (id === undefined || d.dependeDeId === null || !porId.has(d.dependeDeId)) continue;
     const pai = d.opcoes.find((o) => o.id === id)?.opcaoPaiId ?? null;
-    if (pai !== null && escolhida.get(d.dependeDeId) !== pai)
+    if (pai !== null && escolhida.get(d.dependeDeId) !== pai) {
       erros[`atributo.${d.id}`] = `${d.rotulo}: a opção não combina com a escolhida no campo de que depende.`;
+      // A combinação inválida não vale: sai dos normalizados (nem grava, nem vai à operadora).
+      const i = normalizados.findIndex((v) => v.atributoId === d.id);
+      if (i >= 0) normalizados.splice(i, 1);
+    }
   }
   const preenchidos = new Set(normalizados.map((v) => v.atributoId));
   const faltam = defs.filter((d) => d.obrigatorio && !preenchidos.has(d.id)).map((d) => d.rotulo);
@@ -354,28 +393,54 @@ export const LIMITE_OBSERVACAO_GUIA = 500;
 
 /**
  * Os campos adicionais da operadora informados na guia, no texto que vai à observação da guia TISS: `CODIGO: valor`, na
- * ordem do cadastro, separados por "; ". Só os campos que valem para a guia (ativos e do tipo dela) e os valores
- * válidos; a opção vai pelo código de envio da operadora (ou pelo seu código). Sem nada a enviar, texto null. Passar do
- * limite do padrão marca `excede` (o lote recusa: nunca se corta o que a operadora pediu).
+ * ordem do cadastro, separados por "; ". Só os campos que valem para a guia (ativos e do tipo dela); o valor de campo
+ * inativado ou de outro tipo de guia fica guardado e não vai. A opção vai pelo código de envio da operadora (ou pelo seu
+ * código). Sem nada a enviar, texto null. Passar do limite do padrão marca `excede`, e o valor gravado que deixou de
+ * valer (opção inativada, tamanho reduzido, tipo errado, combinação com o pai, caractere fora do ISO-8859-1) vai em
+ * `erros`: o lote recusa nos dois casos, porque nunca se corta nem se omite em silêncio o que a operadora pediu.
  */
 export function observacaoDosAtributos(
   defs: readonly DefinicaoAtributoGuia[],
   valores: readonly ValorAtributo[],
   limite = LIMITE_OBSERVACAO_GUIA,
-): { texto: string | null; excede: boolean } {
-  const { normalizados } = validarValoresAtributos(defs, valores);
-  const porCampo = new Map(normalizados.map((v) => [v.atributoId, v]));
+): { texto: string | null; excede: boolean; erros: string[] } {
+  const ids = new Set(defs.map((d) => d.id));
+  const r = validarValoresAtributos(
+    defs,
+    valores.filter((v) => ids.has(v.atributoId)),
+  );
+  const erros = Object.values(r.erros);
+  const porCampo = new Map(r.normalizados.map((v) => [v.atributoId, v]));
   const partes: string[] = [];
   for (const d of defs) {
     const v = porCampo.get(d.id);
     if (!v) continue;
     const o = v.opcaoId === null ? null : d.opcoes.find((x) => x.id === v.opcaoId);
     const valor = o ? o.valorEnvio?.trim() || o.codigo : (v.texto ?? '');
-    if (valor) partes.push(`${d.codigo}: ${valor}`);
+    // Opção cadastrada antes da conferência do conjunto de caracteres: recusa, sem trocar.
+    const c = o ? caractereForaDoTiss(valor) : null;
+    if (c) erros.push(mensagemForaDoTiss(d.rotulo, c));
+    else if (valor) partes.push(`${d.codigo}: ${valor}`);
   }
   const texto = partes.join('; ').replace(/\s+/g, ' ').trim();
-  if (!texto) return { texto: null, excede: false };
-  return { texto, excede: texto.length > limite };
+  if (!texto) return { texto: null, excede: false, erros };
+  return { texto, excede: texto.length > limite, erros };
+}
+
+/**
+ * A recusa do lote quando um valor gravado na guia deixou de valer para a operadora: a guia e cada campo com o motivo.
+ * Sem erro, null.
+ */
+export function recusaCamposOperadoraInvalidos(
+  conta: string,
+  guia: string,
+  erros: readonly string[],
+): { codigo: 'guia-campos-operadora-invalidos'; mensagem: string } | null {
+  if (!erros.length) return null;
+  return {
+    codigo: 'guia-campos-operadora-invalidos',
+    mensagem: `A conta ${conta}: a guia ${guia} tem campo da operadora com valor que não vale (${erros.join(' ')}) Corrija na guia antes do lote.`,
+  };
 }
 
 /** A recusa do lote quando os campos da operadora não cabem na observação da guia. */

@@ -36,6 +36,7 @@ import {
   normalizarProtocolo,
   VERSAO_TISS_VIGENTE,
   conferirReaberturaCompetencia,
+  recusaCamposOperadoraInvalidos,
   recusaObrigatoriosPendentes,
   recusaObservacaoLonga,
 } from '@sgh/dominio-faturamento';
@@ -268,6 +269,10 @@ async function contaTiss(
     : null;
   // Os campos adicionais da operadora informados na guia vão à observação da guia TISS (06-FAT linha 10).
   const obs = guia?.['id'] ? await observacaoDaGuiaPropria(tx, est, n(guia['id'])) : null;
+  // Valor gravado que deixou de valer (opção inativada, combinação com o pai, caractere fora do ISO-8859-1): recusa
+  // com a guia e o campo, em vez de sumir do arquivo ou quebrar a montagem do XML.
+  const invalidos = obs ? recusaCamposOperadoraInvalidos(rotulo, obs.numero, obs.erros) : null;
+  if (invalidos) throw recusa(invalidos.codigo, invalidos.mensagem);
   if (obs?.excede && obs.texto) {
     const r = recusaObservacaoLonga(rotulo, obs.numero, obs.texto.length);
     throw recusa(r.codigo, r.mensagem);

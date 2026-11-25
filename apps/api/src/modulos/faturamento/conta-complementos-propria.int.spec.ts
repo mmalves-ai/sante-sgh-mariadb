@@ -706,4 +706,100 @@ describe.skipIf(SEM_BANCO)('complementos da conta e da guia (MariaDB)', () => {
       (await linhas('SELECT COUNT(*) AS q FROM lote_tiss WHERE estabelecimento_id = ?', [ids.est]))[0]?.['q'],
     ).toBe(0);
   });
+  it('lote TISS: caractere fora do ISO-8859-1 recusa ao gravar a opção e o valor; gravado antes, o lote recusa com a guia e o campo, sem gravar', async () => {
+    const guiaRi = Number(
+      (
+        await linhas(
+          'SELECT id FROM guia_tiss WHERE conta_hospitalar_id = ? AND tipo_guia = ? ORDER BY id DESC',
+          [ids2.conta, 'resumo_internacao'],
+        )
+      )[0]?.['id'],
+    );
+    const atuais = await s.ler(ctxL(), (l, e) => atributosGuiaPropria(l, e, guiaRi));
+    const est = atuais.campos.find((c) => c.codigo === 'ESTADIO')!;
+    const lote = atuais.campos.find((c) => c.codigo === 'LOTEOBR')!;
+    const e1 = est.opcoes.find((o) => o.codigo === 'E1')!.id;
+    // Opção nova com travessão no código de envio: recusa no cadastro, nada gravado.
+    const antes = (
+      await linhas('SELECT COUNT(*) AS q FROM atributo_guia_fonte_pagadora WHERE fonte_pagadora_id = ?', [
+        ids.fonte,
+      ])
+    )[0]?.['q'];
+    expect(
+      await codigoDo(
+        s.gravar('atributo', op(), {
+          fontePagadoraId: ids.fonte,
+          codigo: 'GRAU',
+          rotulo: 'Grau',
+          tipoDado: 'opcao',
+          tipoGuia: 'resumo_internacao',
+          opcoes: [{ codigo: 'G1', descricao: 'Grau um', valorEnvio: 'GR\u20131' }],
+        }),
+      ),
+    ).toBe('entrada-invalida');
+    expect(
+      (
+        await linhas('SELECT COUNT(*) AS q FROM atributo_guia_fonte_pagadora WHERE fonte_pagadora_id = ?', [
+          ids.fonte,
+        ])
+      )[0]?.['q'],
+    ).toBe(antes);
+    // Valor de texto com aspas curvas: recusa ao gravar na guia; o valor anterior fica como estava.
+    const base = [
+      ...atuais.valores.filter((v) => v.atributoId !== est.id && v.atributoId !== lote.id),
+      { atributoId: est.id, opcaoId: e1 },
+    ];
+    await s.gravar('guia.atributos', op(), {
+      guiaId: guiaRi,
+      valores: [...base, { atributoId: lote.id, texto: 'ONCO-1' }],
+    });
+    expect(
+      await codigoDo(
+        s.gravar('guia.atributos', op(), {
+          guiaId: guiaRi,
+          valores: [...base, { atributoId: lote.id, texto: '\u201cONCO\u201d' }],
+        }),
+      ),
+    ).toBe('entrada-invalida');
+    expect(
+      (
+        await linhas(
+          'SELECT valor_texto FROM valor_atributo_guia WHERE guia_tiss_id = ? AND atributo_guia_fonte_pagadora_id = ? AND excluido_em IS NULL',
+          [guiaRi, lote.id],
+        )
+      ).map((v) => v['valor_texto']),
+    ).toEqual(['ONCO-1']);
+    // Código de envio gravado antes da conferência (dado antigo): o lote recusa com a guia e o campo, sem trocar o
+    // caractere nem omitir o campo, e nada se grava.
+    await escrever((e) =>
+      e.executar('UPDATE atributo_guia_opcao SET valor_envio = ? WHERE id = ?', ['ONC\u2014E1', e1]),
+    );
+    const obs = await s.ler(ctxL(), (l, e) => observacaoDaGuiaPropria(l, e, guiaRi));
+    expect(obs.erros.join(' ')).toContain('Estadiamento: o caractere U+2014');
+    expect(obs.texto).toContain('LOTEOBR: ONCO-1');
+    expect(obs.texto).not.toContain('ESTADIO');
+    const executor = nucleo.criarExecutor({});
+    const gerar = operacoesTiss({} as never)['faturamento.gerarLote']!;
+    const versao = versaoTexto(
+      Number((await linhas('SELECT versao FROM conta_hospitalar WHERE id = ?', [ids2.conta]))[0]?.['versao']),
+    );
+    expect(
+      await codigoDo(
+        executor.executar(
+          gerar,
+          CLIENTE,
+          { convenio: ids.fonte, tipoGuia: 3, contas: [{ id: ids2.conta, versao }] } as never,
+          op(),
+        ),
+      ),
+    ).toBe('guia-campos-operadora-invalidos');
+    expect(
+      (await linhas('SELECT COUNT(*) AS q FROM lote_tiss WHERE estabelecimento_id = ?', [ids.est]))[0]?.['q'],
+    ).toBe(0);
+    // Corrigido o código de envio, a guia volta a passar desta conferência.
+    await escrever((e) =>
+      e.executar('UPDATE atributo_guia_opcao SET valor_envio = ? WHERE id = ?', ['ONC-E1', e1]),
+    );
+    expect((await s.ler(ctxL(), (l, e) => observacaoDaGuiaPropria(l, e, guiaRi))).erros).toEqual([]);
+  });
 });

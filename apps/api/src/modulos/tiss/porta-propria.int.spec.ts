@@ -16,6 +16,7 @@ import {
 } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { versaoTexto } from '../faturamento/esquemas.js';
+import { ServicoComplementosConta } from '../faturamento/conta-complementos.controller.js';
 import { ServicoCobranca } from '../precos/cobranca.controller.js';
 import { ServicoApresentacaoTiss } from './apresentacao.controller.js';
 import { armazemXmlLocal, armazemXmlMemoria, type LocalizadorArquivos } from './armazem-xml.js';
@@ -536,6 +537,123 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
         await e.executar('DELETE FROM arquivo WHERE id = ?', [a?.arquivo_id ?? 0]);
         await e.executar('DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?', [contaH]);
         await e.executar('DELETE FROM conta_hospitalar WHERE id = ?', [contaH]);
+      });
+    }
+  }, 60_000);
+
+  it('gerar o lote com os campos da operadora (06-FAT linha 10): a guia da conta leva à observação do XML o código de envio da opção, nunca a descrição', async () => {
+    const complementos = new ServicoComplementosConta(nucleo);
+    const opC = () => ({ ...op(), reautenticadoEm: Date.now() });
+    const agora = new Date();
+    const { contaO, guiaO } = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-teste-03-16' },
+      async (e) => {
+        const honorario = Number(
+          (await e.uma<{ id: number }>('SELECT id FROM item_faturavel WHERE codigo = ?', ['83160002']))?.id,
+        );
+        const id = await e.inserir(
+          `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, fim_em, situacao, valor_itens, valor_total, fechada_em,
+           fechada_por_usuario_id, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'internacao', ?, ?, ?, 'fechada', 150, 150, ?, ?, ?)`,
+          [
+            ids.est,
+            `${P}-CO`,
+            ids.atendimento,
+            ids.paciente,
+            ids.fonte,
+            ids.tipoConta,
+            competencia,
+            agora,
+            agora,
+            agora,
+            ids.usuario,
+            agora,
+          ],
+        );
+        await e.inserir(
+          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
+           valor_unitario, valor_total, executante_profissional_id, criado_em)
+         VALUES (?, 1, ?, ?, 1, 150, 150, ?, ?)`,
+          [id, honorario, agora, ids.prof, agora],
+        );
+        // O honorário referencia a guia principal da internação (CHECK do modelo).
+        const principal = await e.inserir(
+          `INSERT INTO guia_tiss (estabelecimento_id, conta_hospitalar_id, tipo_guia, fonte_pagadora_id, paciente_id,
+           numero_guia_prestador, data_emissao, criado_em) VALUES (?, ?, 'resumo_internacao', ?, ?, ?, ?, ?)`,
+          [ids.est, id, ids.fonte, ids.paciente, `${P}GP`, hoje, agora],
+        );
+        const guia = await e.inserir(
+          `INSERT INTO guia_tiss (estabelecimento_id, conta_hospitalar_id, tipo_guia, fonte_pagadora_id, paciente_id,
+           guia_tiss_principal_id, numero_guia_prestador, data_emissao, criado_em)
+           VALUES (?, ?, 'honorario', ?, ?, ?, ?, ?, ?)`,
+          [ids.est, id, ids.fonte, ids.paciente, principal, `${P}GO`, hoje, agora],
+        );
+        return { contaO: id, guiaO: guia };
+      },
+    );
+    let lote = 0;
+    try {
+      // O cadastro e o valor passam pelas gravações reais dos complementos (a opção com o código de envio da operadora).
+      const est = await complementos.gravar('atributo', opC(), {
+        fontePagadoraId: ids.fonte,
+        codigo: 'ESTADIO',
+        rotulo: 'Estadiamento',
+        tipoDado: 'opcao',
+        tipoGuia: 'honorario',
+        opcoes: [{ codigo: 'E1', descricao: 'ESTADIO UM SINTETICO', valorEnvio: 'ONC-E1' }],
+      });
+      const opcao = Number(
+        (
+          await lerUma('SELECT id FROM atributo_guia_opcao WHERE atributo_guia_fonte_pagadora_id = ?', [
+            est['id'],
+          ])
+        )?.['id'],
+      );
+      await complementos.gravar('guia.atributos', opC(), {
+        guiaId: guiaO,
+        valores: [{ atributoId: Number(est['id']), opcaoId: opcao }],
+      });
+      const r = await porta.executar(
+        c,
+        'faturamento.gerarLote',
+        { convenio: ids.fonte, tipoGuia: 4, contas: [{ id: contaO, versao: await versaoDaConta(contaO) }] },
+        op(),
+      );
+      lote = Number(r.resultado['lote']);
+      // A guia escolhida para a conta é a que tem os campos: ela entra no lote com o número dela.
+      const g = await lerUma('SELECT lote_tiss_id, numero_guia_prestador FROM guia_tiss WHERE id = ?', [
+        guiaO,
+      ]);
+      expect(Number(g?.['lote_tiss_id'])).toBe(lote);
+      const chave = (await porta.xmlDoLote(c, lote))?.chave ?? '';
+      const xml = new TextDecoder().decode((await armazem.ler(chave)) ?? new Uint8Array());
+      expect(xml).toContain('<ans:observacao>ESTADIO: ONC-E1</ans:observacao>');
+      expect(xml).not.toContain('ESTADIO UM SINTETICO');
+      expect(xml).toContain(`${P}GO`);
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-03-16' }, async (e) => {
+        const a = await e.uma<{ arquivo_id: number }>('SELECT arquivo_id FROM lote_tiss WHERE id = ?', [
+          lote,
+        ]);
+        await e.executar('DELETE FROM valor_atributo_guia WHERE guia_tiss_id = ?', [guiaO]);
+        await e.executar('DELETE FROM guia_tiss WHERE id = ?', [guiaO]);
+        await e.executar('DELETE FROM guia_tiss WHERE conta_hospitalar_id = ?', [contaO]);
+        await e.executar('DELETE FROM lote_tiss_conta WHERE lote_tiss_id = ?', [lote]);
+        await e.executar(
+          'DELETE FROM fatura_fonte_pagadora_conta WHERE fatura_fonte_pagadora_id IN (SELECT id FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?)',
+          [lote],
+        );
+        await e.executar('DELETE FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?', [lote]);
+        await e.executar('DELETE FROM lote_tiss WHERE id = ?', [lote]);
+        await e.executar('DELETE FROM arquivo WHERE id = ?', [a?.arquivo_id ?? 0]);
+        await e.executar(
+          'DELETE o FROM atributo_guia_opcao o JOIN atributo_guia_fonte_pagadora t ON t.id = o.atributo_guia_fonte_pagadora_id WHERE t.fonte_pagadora_id = ?',
+          [ids.fonte],
+        );
+        await e.executar('DELETE FROM atributo_guia_fonte_pagadora WHERE fonte_pagadora_id = ?', [ids.fonte]);
+        await e.executar('DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?', [contaO]);
+        await e.executar('DELETE FROM conta_hospitalar WHERE id = ?', [contaO]);
       });
     }
   }, 60_000);

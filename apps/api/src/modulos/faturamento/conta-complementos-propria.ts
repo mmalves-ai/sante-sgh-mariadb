@@ -17,6 +17,7 @@ import {
   sugerirProximoPeriodo,
   type TipoDadoAtributo,
   validarDefinicaoAtributo,
+  validarOpcoesAtributo,
   validarPeriodoConta,
   validarSeguradoConta,
   validarValoresAtributos,
@@ -390,7 +391,7 @@ export async function obrigatoriosPendentesDaConta(
 export async function observacaoDaGuiaPropria(l: Consulta, est: number, guia: number) {
   const g = await guiaDa(l, est, guia);
   const defs = atributosDaGuia(await atributosFontePropria(l, g.fontePagadoraId), g.tipoGuia);
-  if (!defs.length) return { numero: g.numero, texto: null, excede: false };
+  if (!defs.length) return { numero: g.numero, texto: null, excede: false, erros: [] as string[] };
   const vs = await l.consultar<Linha>(
     `SELECT atributo_guia_fonte_pagadora_id AS atributo, atributo_guia_opcao_id AS opcao, valor_texto
        FROM valor_atributo_guia WHERE guia_tiss_id = ? AND excluido_em IS NULL`,
@@ -658,7 +659,7 @@ export const opGravarAtributo = definirOperacao({
   async gravar(tx, e) {
     await existe(tx, 'fonte_pagadora', e.fontePagadoraId, 'fontePagadoraId');
     const outros = (await atributosFontePropria(tx, e.fontePagadoraId)).filter((o) => o.id !== e.id);
-    exigirValido(validarDefinicaoAtributo(e, outros));
+    exigirValido({ ...validarDefinicaoAtributo(e, outros), ...validarOpcoesAtributo(e.opcoes) });
     if (outros.some((o) => o.codigo.toUpperCase() === e.codigo.toUpperCase()))
       throw recusa('duplicado', 'Já existe um campo com este código na operadora.', { campos: ['codigo'] });
     if (e.tipoDado !== 'opcao' && e.opcoes.length)

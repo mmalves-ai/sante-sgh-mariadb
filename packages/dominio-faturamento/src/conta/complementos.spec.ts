@@ -5,11 +5,14 @@ import {
   dependentesAtivos,
   type DefinicaoAtributoGuia,
   guiaAceitaAtributos,
+  caractereForaDoTiss,
   observacaoDosAtributos,
+  recusaCamposOperadoraInvalidos,
   recusaObrigatoriosPendentes,
   recusaObservacaoLonga,
   sugerirProximoPeriodo,
   validarDefinicaoAtributo,
+  validarOpcoesAtributo,
   validarPeriodoConta,
   validarSeguradoConta,
   validarValoresAtributos,
@@ -268,14 +271,106 @@ describe('campo adicional da operadora na guia', () => {
       { atributoId: 3, opcaoId: null, texto: '80' },
       { atributoId: 7, opcaoId: null, texto: 'guardado' },
     ]);
-    // Opção com envio vai pelo envio; sem envio, pelo código. Data inválida, campo de outro tipo de guia e campo
-    // inativo não vão à operadora.
-    expect(r).toEqual({ texto: 'TRAT: Q01; FASE: QT1; MET: sim', excede: false });
-    expect(observacaoDosAtributos(campos, [])).toEqual({ texto: null, excede: false });
+    // Opção com envio vai pelo envio; sem envio, pelo código. Campo de outro tipo de guia e campo inativo ficam
+    // guardados e não vão (sem erro). A data gravada que não vale não vai e fica em erros: o lote recusa a guia.
+    expect(r).toEqual({
+      texto: 'TRAT: Q01; FASE: QT1; MET: sim',
+      excede: false,
+      erros: ['Data do diagnóstico: informe a data (AAAA-MM-DD).'],
+    });
+    expect(observacaoDosAtributos(campos, [])).toEqual({ texto: null, excede: false, erros: [] });
     expect(observacaoDosAtributos([], [{ atributoId: 1, opcaoId: 10, texto: null }])).toEqual({
       texto: null,
       excede: false,
+      erros: [],
     });
+  });
+
+  it('valor gravado que deixou de valer não some: opção inativada, tamanho reduzido e combinação com o pai vão a erros', () => {
+    const campos = atributosDaGuia(
+      defs.map((d) =>
+        d.id === 1 ? { ...d, opcoes: d.opcoes.map((o) => (o.id === 11 ? { ...o, ativo: false } : o)) } : d,
+      ),
+      'consulta',
+    );
+    const r = observacaoDosAtributos(campos, [
+      { atributoId: 1, opcaoId: 11, texto: null }, // opção inativada depois de gravada
+      { atributoId: 6, opcaoId: null, texto: 'texto antigo' }, // tamanho máximo reduzido para 5
+    ]);
+    expect(r.texto).toBeNull();
+    expect(r.erros).toEqual([
+      'Tratamento: opção inexistente ou inativa.',
+      'Observação: no máximo 5 caracteres.',
+    ]);
+    // Opção filha que não combina com a do pai: não vai à operadora (nem é normalizada) e recusa.
+    const dep = observacaoDosAtributos(atributosDaGuia(defs, 'consulta'), [
+      { atributoId: 1, opcaoId: 10, texto: null },
+      { atributoId: 2, opcaoId: 21, texto: null },
+    ]);
+    expect(dep.texto).toBe('TRAT: QT');
+    expect(dep.erros).toEqual(['Fase: a opção não combina com a escolhida no campo de que depende.']);
+    expect(
+      validarValoresAtributos(defs, [
+        { atributoId: 1, opcaoId: 10, texto: null },
+        { atributoId: 2, opcaoId: 21, texto: null },
+      ]).normalizados.map((v) => v.atributoId),
+    ).toEqual([1]);
+    const recusa = recusaCamposOperadoraInvalidos('C1', 'G1', dep.erros)!;
+    expect(recusa.codigo).toBe('guia-campos-operadora-invalidos');
+    expect(recusa.mensagem).toContain('guia G1');
+    expect(recusa.mensagem).toContain('Fase: a opção não combina');
+    expect(recusaCamposOperadoraInvalidos('C1', 'G1', [])).toBeNull();
+  });
+
+  it('caractere fora do ISO-8859-1 recusa ao gravar o valor e a opção, e o lote recusa o que já estava gravado', () => {
+    expect(caractereForaDoTiss('Estádio I – grau 2')).toBe('U+2013');
+    expect(caractereForaDoTiss('“aspas”')).toBe('U+201C');
+    expect(caractereForaDoTiss('ok 😀')).toBe('U+1F600');
+    expect(caractereForaDoTiss('Estádio Ç ° ½ ok')).toBeNull();
+    const texto: DefinicaoAtributoGuia = {
+      ...base,
+      id: 9,
+      codigo: 'NOTA',
+      rotulo: 'Nota',
+      tipoDado: 'texto',
+    };
+    const v = validarValoresAtributos([texto], [{ atributoId: 9, opcaoId: null, texto: 'fase 1 – ciclo 2' }]);
+    expect(v.erros['atributo.9']).toBe(
+      'Nota: o caractere U+2013 não cabe no arquivo TISS (ISO-8859-1); troque-o (travessão por hífen, aspas curvas por retas, sem emoji).',
+    );
+    expect(v.normalizados).toEqual([]);
+    expect(
+      validarValoresAtributos([texto], [{ atributoId: 9, opcaoId: null, texto: 'fase 1 - ciclo 2' }]).erros,
+    ).toEqual({});
+    expect(
+      Object.keys(
+        validarOpcoesAtributo([
+          { codigo: 'E1', valorEnvio: 'ONC–E1' },
+          { codigo: 'E2', valorEnvio: null },
+          { codigo: 'E3’', valorEnvio: 'ok' },
+        ]),
+      ),
+    ).toEqual(['opcoes.0.valorEnvio', 'opcoes.2.codigo']);
+    // Opção gravada antes da conferência, com envio fora do padrão: não vai e recusa, sem trocar o caractere.
+    const lista: DefinicaoAtributoGuia = {
+      ...base,
+      id: 8,
+      codigo: 'EST',
+      rotulo: 'Estadiamento',
+      tipoDado: 'opcao',
+      opcoes: [{ ...op(80, 'E1'), valorEnvio: 'ONC—E1' }],
+    };
+    const r = observacaoDosAtributos(
+      [lista, texto],
+      [
+        { atributoId: 8, opcaoId: 80, texto: null },
+        { atributoId: 9, opcaoId: null, texto: 'ok' },
+      ],
+    );
+    expect(r.texto).toBe('NOTA: ok');
+    expect(r.erros).toEqual([
+      'Estadiamento: o caractere U+2014 não cabe no arquivo TISS (ISO-8859-1); troque-o (travessão por hífen, aspas curvas por retas, sem emoji).',
+    ]);
   });
 
   it('observação acima do limite do padrão é marcada e o lote recusa (nunca se corta)', () => {
