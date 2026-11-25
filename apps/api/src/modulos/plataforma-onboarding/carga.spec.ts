@@ -531,6 +531,7 @@ describe('carga: ações, batimento e progresso', () => {
           linhas_recusadas: 10,
           linhas_faltam: 40,
           tabelas_sem_situacao: 1,
+          tabelas_recusas_desconhecidas: 2,
           por_tabela_top: [{ tabela: 'paciente', linhas_origem: 100, na_base: 60, recusadas: 0, faltam: 40 }],
         },
       },
@@ -540,6 +541,7 @@ describe('carga: ações, batimento e progresso', () => {
       linhasNaBase: 150,
       linhasRecusadas: 10,
       linhasFaltam: 40,
+      tabelasRecusasDesconhecidas: 2,
     });
     expect(p?.base?.porTabelaTop?.[0]).toEqual({
       tabela: 'paciente',

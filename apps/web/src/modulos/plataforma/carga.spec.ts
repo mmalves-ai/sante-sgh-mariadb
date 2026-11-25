@@ -338,6 +338,30 @@ describe('tela Carga e sincronismo', () => {
     w.unmount();
   });
 
+  it('situação da base com recusadas desconhecidas avisa que o "Já na base" é aproximado', async () => {
+    const base = {
+      linhasOrigem: 1000,
+      linhasNaBase: 900,
+      linhasRecusadas: 50,
+      linhasFaltam: 50,
+      tabelas: 2,
+      tabelasLidasNesta: 0,
+      tabelasSemSituacao: 0,
+      tabelasRecusasDesconhecidas: 3,
+    };
+    servidor({
+      [`GET ${B}/conectores`]: () => conectores,
+      [`GET ${B}/clientes/prontocardio/carga`]: () => cargaAtivaResp({ progresso: { ...progresso, base } }),
+    });
+    const w = montar();
+    await flushPromises();
+    await flushPromises();
+    expect(w.find('[data-testid="carga-base-recusas-desconhecidas"]').text()).toContain(
+      'Valor aproximado: em 3 tabelas',
+    );
+    expect(w.find('[data-testid="carga-base-sem-situacao"]').exists()).toBe(false);
+  });
+
   it('acompanha a cada 2 s só enquanto ativa; ao concluir para e relê os conectores; batimento atrasado avisa', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     let n = 0;

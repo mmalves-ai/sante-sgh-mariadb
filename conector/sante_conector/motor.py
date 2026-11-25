@@ -330,10 +330,12 @@ def _carregar(conn, eid, ex, ctl, usuario, senha, iid, tabelas, contagens, sha_a
         b = sb.calcular()
         painel.base = sb
         cont["situacao_base"] = {k: b[k] for k in ("linhas_origem", "linhas_na_base", "linhas_recusadas",
-                                                   "tabelas_sem_situacao", "fontes", "calculo_ms")}
-        painel.log.linha("situação da base: %d de %d linhas na base, %d recusadas, %d tabelas sem situação (%d ms)"
+                                                   "tabelas_sem_situacao", "tabelas_recusas_desconhecidas",
+                                                   "fontes", "calculo_ms", "recusas_ms")}
+        painel.log.linha("situação da base: %d de %d linhas na base, %d recusadas, %d tabelas sem situação,"
+                         " %d com recusadas desconhecidas (%d ms)"
                          % (b["linhas_na_base"], b["linhas_origem"], b["linhas_recusadas"],
-                            b["tabelas_sem_situacao"], b["calculo_ms"]))
+                            b["tabelas_sem_situacao"], b["tabelas_recusas_desconhecidas"], b["calculo_ms"]))
         painel.progresso(None, None)
     except Exception as e:  # noqa: BLE001 - sem a situação, a tela cai no andamento da execução
         cont["situacao_base"] = {"falhou": type(e).__name__}

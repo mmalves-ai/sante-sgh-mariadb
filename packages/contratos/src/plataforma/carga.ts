@@ -26,6 +26,8 @@ export const esquemaBaseCarga = z.object({
   tabelasLidasNesta: contagem.default(0),
   /** Tabelas do plano sem situação conhecida (contam como faltantes). */
   tabelasSemSituacao: contagem.default(0),
+  /** Tabelas marcadas como concluídas cuja contagem de recusadas falhou: o "Já na base" delas é aproximado. */
+  tabelasRecusasDesconhecidas: contagem.nullish(),
   calculoMs: contagem.nullish(),
   calculadaEm: z.string().nullish(),
   /** Até 20 tabelas de destino com mais linhas faltando. */

@@ -621,6 +621,13 @@ onBeforeUnmount(() => {
       <p v-if="base?.tabelasSemSituacao" class="carga__secundario" data-testid="carga-base-sem-situacao">
         {{ t('carga.progresso.baseSemSituacao', { n: n(base.tabelasSemSituacao) }) }}
       </p>
+      <p
+        v-if="base?.tabelasRecusasDesconhecidas"
+        class="carga__secundario"
+        data-testid="carga-base-recusas-desconhecidas"
+      >
+        {{ t('carga.progresso.baseRecusasDesconhecidas', { n: n(base.tabelasRecusasDesconhecidas) }) }}
+      </p>
 
       <span v-if="progresso && !contando" class="carga__rotulo">{{
         t('carga.progresso.conferenciaTitulo')

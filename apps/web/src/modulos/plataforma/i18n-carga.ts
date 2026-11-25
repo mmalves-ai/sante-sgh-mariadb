@@ -95,6 +95,8 @@ export const mensagensCarga = {
     baseRecusadas: 'Recusadas ({n})',
     baseFaltam: 'Faltam ({n})',
     baseSemSituacao: '{n} tabelas sem situação conhecida contam como faltantes.',
+    baseRecusasDesconhecidas:
+      'Valor aproximado: em {n} tabelas não foi possível contar as recusadas, e elas podem aparecer como já na base.',
     baseTop: 'Tabelas com mais linhas faltando',
     baseFaltamColuna: 'Faltam',
     conferenciaTitulo: 'Conferência desta execução',

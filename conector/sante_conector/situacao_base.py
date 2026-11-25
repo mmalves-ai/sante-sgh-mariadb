@@ -9,8 +9,11 @@ fontes já gravadas pelas execuções anteriores do cliente, em ordem de prefer�
 1. `resumo`: o resumo desta tabela (gravado no fim dela, numa execução que a leu inteira);
 2. `conciliacao`: a conciliação por entidade da execução mais recente que a trouxe (`contadores.entidades`:
    registros no destino e recusados);
-3. `concluida`: a marca de tabela concluída (`conector_tabela_concluida`) com a contagem da imagem daquela execução
-   (recusadas desconhecidas: 0);
+3. `concluida`: a marca de tabela concluída (`conector_tabela_concluida`) com a contagem da imagem daquela execução;
+   as recusadas dessas tabelas saem de uma contagem agrupada das linhas RECUSADAS no `conector_origem` (id_destino
+   nulo com regra de recusa), pelo índice (entidade_destino, id_destino), só dessas tabelas: na base = contagem -
+   recusadas. Se essa contagem falhar, a tabela entra em `tabelas_recusas_desconhecidas` e a tela avisa que o "Já na
+   base" dela é aproximado (nunca se afirma em silêncio que as recusadas estão na base);
 4. sem situação: conta como faltante (`tabelas_sem_situacao`).
 
 Ao longo da execução, `linhas_na_base` sobe com as gravadas da tabela (limitado à contagem da origem); no fim de
@@ -48,6 +51,8 @@ class SituacaoBase:
         self.base = {}      # tabela -> [na_base, recusadas] antes desta execução
         self.atual = {}     # tabela -> [na_base, recusadas] das tabelas lidas inteiras nesta execução
         self.fontes = {"resumo": 0, "conciliacao": 0, "concluida": 0, "sem_situacao": 0}
+        self.recusas_desconhecidas = set()  # tabelas `concluida` cuja contagem de recusadas falhou
+        self.recusas_ms = None
         self.calculo_ms = None
         self.calculada_em = None
 
@@ -80,19 +85,50 @@ class SituacaoBase:
                     a[0] = max(a[0], int(v.get("registros_destino") or 0))
                     a[1] = max(a[1], int(v.get("recusados") or 0))
             conciliacao.update(vista)
+        so_concluida = sorted(t for t in concluidas if t not in resumo and t not in conciliacao)
+        recusas = self._recusadas_registradas(so_concluida)
         for t in plano:
             if t in resumo:
                 self.base[t], f = resumo[t], "resumo"
             elif t in conciliacao:
                 self.base[t], f = conciliacao[t], "conciliacao"
             elif t in concluidas:
-                self.base[t], f = [concluidas[t], 0], "concluida"
+                rec = _cap((recusas or {}).get(t, 0), concluidas[t])
+                self.base[t], f = [concluidas[t] - rec, rec], "concluida"
+                if recusas is None:
+                    self.recusas_desconhecidas.add(t)
             else:
                 f = "sem_situacao"
             self.fontes[f] += 1
         self.calculo_ms = int(1000 * (time.monotonic() - t0))
         self.calculada_em = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
         return self.json()
+
+    def _recusadas_registradas(self, tabelas):
+        """{tabela: linhas recusadas registradas} das tabelas dadas, ou None se a contagem falhar. Recusada = linha do
+        `conector_origem` com id_destino nulo e regra de recusa (a mesma definição do reprocessamento). Pelo índice
+        (entidade_destino, id_destino): primeiro as entidades de destino (varredura solta do índice), depois o
+        trecho id_destino nulo de cada uma; só as recusadas são lidas na linha."""
+        if not tabelas:
+            return {}
+        t0 = time.monotonic()
+        try:
+            with self._cur() as c:
+                c.execute("SELECT DISTINCT entidade_destino FROM `%s`.conector_origem" % self.ctl)
+                ents = [e for (e,) in c.fetchall() if e is not None]
+                if not ents:
+                    return {}
+                c.execute("SELECT tabela_origem, COUNT(*) FROM `%s`.conector_origem"
+                          " FORCE INDEX (ix_conector_origem_destino)"
+                          " WHERE entidade_destino IN (%s) AND id_destino IS NULL AND regra_recusa IS NOT NULL"
+                          " AND tabela_origem IN (%s) GROUP BY tabela_origem"
+                          % (self.ctl, ",".join(["%s"] * len(ents)), ",".join(["%s"] * len(tabelas))),
+                          tuple(ents) + tuple(tabelas))
+                return {t: int(n or 0) for t, n in c.fetchall()}
+        except Exception:  # noqa: BLE001 - sem a contagem, as tabelas ficam marcadas como aproximadas
+            return None
+        finally:
+            self.recusas_ms = int(1000 * (time.monotonic() - t0))
 
     # ----- fim de tabela -----
     def fim(self, t):
@@ -106,6 +142,7 @@ class SituacaoBase:
         # sem ele, a recusada já vista é pulada e continua aberta
         rec = _cap(rec_exec if self.reprocessar else max(rec_exec, rec0), cont)
         self.atual[t] = [cont - rec, rec]
+        self.recusas_desconhecidas.discard(t)
         try:
             with self._cur() as c:
                 c.execute("INSERT INTO `%s`.conector_resumo_tabela (tabela_origem, registros_origem, na_base,"
@@ -148,7 +185,8 @@ class SituacaoBase:
             "linhas_faltam": max(0, tot[0] - tot[1] - tot[2]),
             "tabelas": len(self.placar.contagens), "tabelas_lidas_nesta": len(self.atual),
             "tabelas_sem_situacao": self.fontes["sem_situacao"], "fontes": dict(self.fontes),
-            "calculo_ms": self.calculo_ms, "calculada_em": self.calculada_em,
+            "tabelas_recusas_desconhecidas": len(self.recusas_desconhecidas),
+            "calculo_ms": self.calculo_ms, "recusas_ms": self.recusas_ms, "calculada_em": self.calculada_em,
             "por_tabela_top": [{"tabela": nome, "linhas_origem": c, "na_base": na, "recusadas": r, "faltam": f}
                                for f, nome, c, na, r in faltantes[:TOP]],
         }
