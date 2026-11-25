@@ -253,14 +253,14 @@ export class PortaAuditoriaAntimicrobianoPropria {
     return this.ler(c, async (l, est) => {
       const tipos = await l.consultar<Linha>(
         `SELECT id, codigo, descricao, acao, padrao, ativo FROM tipo_auditoria_ccih
-          WHERE excluido_em IS NULL ORDER BY ativo DESC, padrao DESC, descricao`,
+          ORDER BY ativo DESC, padrao DESC, descricao`,
         [],
         { teto: TETO },
       );
       const pareceres = await l.consultar<Linha>(
         `SELECT id, codigo, descricao, permite_prorrogacao, antimicrobiano_id, ativo
            FROM parecer_padrao_auditoria_antimicrobiano
-          WHERE excluido_em IS NULL AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)
+          WHERE (estabelecimento_id IS NULL OR estabelecimento_id = ?)
           ORDER BY ativo DESC, descricao`,
         [est],
         { teto: TETO },
@@ -333,16 +333,13 @@ export class PortaAuditoriaAntimicrobianoPropria {
         'A ficha mudou desde que foi aberta: atualize a fila e audite de novo.',
       );
     const tipo = e.tipo
-      ? await tx.uma<Linha>(
-          'SELECT id, acao, ativo FROM tipo_auditoria_ccih WHERE id = ? AND excluido_em IS NULL',
-          [e.tipo],
-        )
+      ? await tx.uma<Linha>('SELECT id, acao, ativo FROM tipo_auditoria_ccih WHERE id = ?', [e.tipo])
       : null;
     if (e.tipo && !tipo) throw recusar(422, 'tipo-auditoria-inexistente', 'O tipo de auditoria não existe.');
     const padrao = e.parecerPadrao
       ? await tx.uma<Linha>(
           `SELECT id, permite_prorrogacao, ativo FROM parecer_padrao_auditoria_antimicrobiano
-            WHERE id = ? AND excluido_em IS NULL AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)
+            WHERE id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)
               AND (antimicrobiano_id IS NULL OR antimicrobiano_id = ?)`,
           [e.parecerPadrao, est, n(fi['antimicrobiano_id'])],
         )
