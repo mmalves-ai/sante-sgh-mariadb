@@ -18,6 +18,8 @@ import { EstadoProntuario } from '../pep/sessao-prontuario.js';
 import { portaDaPortaria } from '../portaria/modulo.js';
 import { PORTA_PORTARIA, type PortaPortaria } from '../portaria/porta.js';
 import type { ContextoModulo } from '../registro.js';
+import { DireitoRefeicaoController } from './direito-refeicao.controller.js';
+import { PORTA_DIREITO_REFEICAO, PortaDireitoRefeicaoPropria } from './direito-refeicao-propria.js';
 import { NutricaoController } from './nutricao.controller.js';
 import { PORTA_NUTRICAO, type PortaNutricao } from './porta.js';
 import { PortaNutricaoMemoria } from './porta-memoria.js';
@@ -60,10 +62,18 @@ export async function moduloNutricao(
       : null);
   return {
     module: class ModuloNutricao {},
-    controllers: [NutricaoController],
+    controllers: [NutricaoController, DireitoRefeicaoController],
     providers: [
       { provide: PORTA_NUTRICAO, useValue: porta },
       { provide: ESTADO_PRONTUARIO, useValue: new EstadoProntuario() },
+      // F7 (04-HOT linha 133): direito à refeição do acompanhante e a cobrança na conta; sem núcleo, 503.
+      {
+        provide: PORTA_DIREITO_REFEICAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaDireitoRefeicaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       ...(portaria ? [{ provide: PORTA_PORTARIA, useValue: portaria }] : []),
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
     ],
