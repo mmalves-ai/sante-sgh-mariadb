@@ -77,6 +77,8 @@ import {
   PortaRegrasAvisoClinicoPropria,
 } from './avisos-clinicos-regras-propria.js';
 import { NotasPacientePropria } from './notas-paciente-propria.js';
+import { TRANSPLANTE_CLINICO, TransplanteClinicoController } from './transplante-clinico.controller.js';
+import { TransplanteClinicoPropria } from './transplante-clinico-propria.js';
 import { CurvasCrescimentoPropria } from './curvas-crescimento-propria.js';
 import { TERMINOLOGIA_CLINICA, TerminologiaClinicaController } from './terminologia-clinica.controller.js';
 import { TerminologiaClinicaPropria } from './terminologia-clinica-propria.js';
@@ -241,6 +243,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
     providers: [
       { provide: PORTA_CADASTRO, useValue: cadastro },
       { provide: PORTA_REDE, useValue: rede },
+      TransplanteClinicoController,
       { provide: PORTA_PRONTUARIO, useValue: p.prontuario },
       { provide: SERVICO_PRONTUARIO, useValue: new ServicoProntuario(p.prontuario, cadastro) },
       { provide: ESTADO_PRONTUARIO, useValue: new EstadoProntuario() },
@@ -355,6 +358,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new NotasPacientePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L145: doação e transplante de órgãos (doador, receptor, destino, acompanhamento); sem núcleo, 503.
+      {
+        provide: TRANSPLANTE_CLINICO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new TransplanteClinicoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // 03-PEP L131: cópia do prontuário no balcão e cabeçalho da impressão por tipo de documento; sem núcleo, 503.
