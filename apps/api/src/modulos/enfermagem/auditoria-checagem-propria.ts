@@ -22,7 +22,7 @@ import {
   sortearAmostra,
 } from '@sgh/dominio-enfermagem';
 import { type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
-import { fusoDe, instanteDe } from './banco-apoio.js';
+import { civilDe, fusoDe, instanteDe } from './banco-apoio.js';
 import type { AnotacaoGravacao } from './gravacao-direta.js';
 
 export const TABELAS_AUDITORIA_CHECAGEM = [
@@ -67,9 +67,6 @@ export interface PedidoAvaliacao {
   readonly justificativa: string | null;
 }
 
-const isoLocal = (v: unknown): string | null =>
-  v === null || v === undefined ? null : v instanceof Date ? v.toISOString() : String(v).replace(' ', 'T');
-
 async function unidadeDe(l: Leitor, est: number, codigo: string): Promise<{ id: number; setor: number }> {
   const u = await l.uma<{ id: number; setor_funcional_id: number | null }>(
     'SELECT id, setor_funcional_id FROM unidade_internacao WHERE estabelecimento_id = ? AND codigo = ? AND excluido_em IS NULL',
@@ -107,11 +104,18 @@ export async function abrirAuditoriaTx(
   const designados = p.auditores.map((a) => Number(a.usuario));
   if (designados.length) {
     const achados = await tx.consultar<{ id: number }>(
-      `SELECT id FROM usuario WHERE id IN (${designados.map(() => '?').join(', ')}) AND excluido_em IS NULL AND situacao = 'ativo'`,
-      designados,
+      `SELECT u.id FROM usuario u
+        WHERE u.id IN (${designados.map(() => '?').join(', ')}) AND u.excluido_em IS NULL AND u.situacao = 'ativo'
+          AND EXISTS (SELECT 1 FROM usuario_estabelecimento ue WHERE ue.usuario_id = u.id AND ue.estabelecimento_id = ?
+                       AND ue.excluido_em IS NULL AND ue.vigencia_inicio <= CURRENT_DATE
+                       AND (ue.vigencia_fim IS NULL OR ue.vigencia_fim >= CURRENT_DATE))`,
+      [...designados, est],
     );
     if (new Set(achados.map((x) => Number(x.id))).size !== new Set(designados).size)
-      throw recusa('auditor-inexistente', 'Um dos auditores não é usuário ativo.');
+      throw recusa(
+        'auditor-inexistente',
+        'Um dos auditores não é usuário ativo com vínculo vigente neste estabelecimento.',
+      );
   }
   const linhas = await tx.consultar<{ id: number }>(
     `SELECT h.id
@@ -340,6 +344,8 @@ export async function listarAuditorias(
   situacao: SituacaoAuditoria | null,
   id: number | null = null,
 ): Promise<AuditoriaResumo[]> {
+  const fuso = await fusoDe(l, est);
+  const isoLocal = (v: unknown): string | null => civilDe(v, fuso);
   const filtros = [situacao ? 'AND ac.situacao = ?' : '', id === null ? '' : 'AND ac.id = ?'].join(' ');
   const linhas = await l.consultar<Record<string, unknown>>(
     `SELECT ac.id, ac.periodo_inicio, ac.periodo_fim, ui.codigo AS unidade, ac.atendimento_id, us.login,
@@ -397,6 +403,8 @@ export interface AuditoriaDetalhe extends AuditoriaResumo {
 /** A auditoria com os auditores e a amostra, cada checagem com o paciente, a situação e quem checou. */
 export async function lerAuditoria(l: Leitor, est: number, id: number): Promise<AuditoriaDetalhe> {
   const [base] = await listarAuditorias(l, est, null, id);
+  const fuso = await fusoDe(l, est);
+  const isoLocal = (v: unknown): string | null => civilDe(v, fuso);
   const cab = await l.uma<Record<string, unknown>>(
     'SELECT criterio_amostra, observacao, concluida_em FROM auditoria_checagem WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
     [id, est],

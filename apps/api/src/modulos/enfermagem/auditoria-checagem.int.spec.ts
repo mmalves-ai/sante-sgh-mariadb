@@ -34,6 +34,8 @@ import { PortaEnfermagemPropria } from './porta-propria.js';
 const MARCA = 'C1035';
 const MOTIVO = 'C1035-MNC';
 const DIA = '2025-03-10';
+const UNIDADE = 'C1035-UI';
+const UNIDADE2 = 'C1035-UI2';
 
 describe.skipIf(SEM_BANCO)('auditoria das checagens de enfermagem (09-AREA linha 86, MariaDB)', () => {
   let nucleo: NucleoProprio;
@@ -42,6 +44,8 @@ describe.skipIf(SEM_BANCO)('auditoria das checagens de enfermagem (09-AREA linha
   let feitas: number[] = [];
   let pendente = 0;
   let motivo = 0;
+  let semVinculo = 0;
+  let feitaOutro = 0;
 
   const ctx = (usuario = m!.usuario): ContextoNucleo => ({
     cliente: CLIENTE,
@@ -148,6 +152,16 @@ describe.skipIf(SEM_BANCO)('auditoria das checagens de enfermagem (09-AREA linha
       await e.executar(`DELETE FROM auditoria_checagem WHERE ${em}`, ests);
       await e.executar(`DELETE FROM horario_administracao WHERE ${em} AND id <> ?`, [...ests, m!.horario]);
       await e.executar('DELETE FROM motivo_nao_conformidade_checagem WHERE codigo = ?', [MOTIVO]);
+      await e.executar(`DELETE FROM unidade_internacao WHERE ${em} AND codigo IN (?, ?)`, [
+        ...ests,
+        UNIDADE,
+        UNIDADE2,
+      ]);
+      await e.executar(`DELETE FROM unidade_assistencial WHERE ${em} AND codigo IN (?, ?)`, [
+        ...ests,
+        UNIDADE,
+        UNIDADE2,
+      ]);
       for (const sql of sqlLimparTrilha(ests)) await e.executar(sql);
     });
   }
@@ -200,6 +214,70 @@ describe.skipIf(SEM_BANCO)('auditoria das checagens de enfermagem (09-AREA linha
         [MOTIVO],
         "INSERT INTO motivo_nao_conformidade_checagem (codigo, descricao, tipo, criado_em) VALUES (?, 'SEM LEITURA DA PULSEIRA SINTETICO', 'paciente_sem_pulseira', ?)",
         [MOTIVO, agora],
+      );
+      // Vínculo vigente do auditor designado com o estabelecimento; e uma conta só do outro estabelecimento.
+      const vinculo = (usuario: number, est: number) =>
+        garantir(
+          e,
+          'SELECT id FROM usuario_estabelecimento WHERE usuario_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [usuario, est],
+          'INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
+          [usuario, est, '2020-01-01', agora],
+        );
+      await vinculo(m!.usuario2, m!.est);
+      semVinculo = await garantir(
+        e,
+        'SELECT id FROM usuario WHERE login = ?',
+        [`${MARCA.toLowerCase()}.outroest`],
+        "INSERT INTO usuario (login, nome, tipo_conta, dispensa_cpf, criado_em) VALUES (?, 'USUARIO SINTETICO OUTRO ESTABELECIMENTO', 'pessoa', TRUE, ?)",
+        [`${MARCA.toLowerCase()}.outroest`, agora],
+      );
+      await vinculo(semVinculo, m!.outroEst);
+      // Unidade do setor do atendimento e outra de setor diferente (recorte por unidade).
+      const setor = Number(
+        (
+          await e.uma<{ s: number }>('SELECT setor_funcional_id AS s FROM atendimento WHERE id = ?', [
+            m!.atendimento,
+          ])
+        )?.s,
+      );
+      const setor2 = await garantir(
+        e,
+        'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
+        [m!.est, `${MARCA}-SET2`],
+        "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, 'SETOR SINTETICO 2', 'assistencial', ?)",
+        [m!.est, `${MARCA}-SET2`, agora],
+      );
+      for (const [codigo, s] of [
+        [UNIDADE, setor],
+        [UNIDADE2, setor2],
+      ] as const) {
+        const ua = await e.inserir(
+          "INSERT INTO unidade_assistencial (estabelecimento_id, codigo, nome, tipo_unidade, criado_em) VALUES (?, ?, ?, 'internacao', ?)",
+          [m!.est, codigo, `UNIDADE SINTETICA ${codigo}`, agora],
+        );
+        await e.inserir(
+          "INSERT INTO unidade_internacao (estabelecimento_id, unidade_assistencial_id, codigo, descricao, tipo, intensiva, setor_funcional_id, criado_em) VALUES (?, ?, ?, 'UNIDADE SINTETICA', 'uti_adulto', TRUE, ?, ?)",
+          [m!.est, ua, codigo, s, agora],
+        );
+      }
+      // Uma checagem feita no mesmo dia (hora sem par aqui), no outro estabelecimento.
+      feitaOutro = Number(
+        await e.inserir(
+          `INSERT INTO horario_administracao (estabelecimento_id, atendimento_id, prescricao_id, prescricao_item_id,
+                  previsto_em, situacao_checagem_id, situacao_checagem_em, criado_em)
+           SELECT ?, ?, prescricao_id, prescricao_item_id, ?, ?, ?, ?
+             FROM horario_administracao WHERE id = ?`,
+          [
+            m!.outroEst,
+            m!.atendimentoOutro,
+            instanteDe(`${DIA}T14:00`, fuso),
+            administrado,
+            instanteDe(`${DIA}T14:05`, fuso),
+            agora,
+            m!.horario,
+          ],
+        ),
       );
     });
   }, 120_000);
@@ -257,6 +335,12 @@ describe.skipIf(SEM_BANCO)('auditoria das checagens de enfermagem (09-AREA linha
   it('avalia (só auditor; não conformidade com motivo e justificativa) e conclui com totais e resultado', async () => {
     const r = await abrir(ctx());
     const det = await enf.lerNoBanco(ctx(), (l, est) => lerAuditoria(l, est, r.id));
+    // Horários lidos de volta na hora civil do estabelecimento (não em UTC).
+    expect(det.inicio.slice(0, 16)).toBe(`${DIA}T00:00`);
+    expect(det.fim.slice(0, 16)).toBe(`${DIA}T23:59`);
+    expect(det.itens.map((i) => i.previsto.slice(0, 10))).toEqual(det.itens.map(() => DIA));
+    expect(det.itens.every((i) => /T(0[6-9]|1[01]):00/.test(i.previsto))).toBe(true);
+    expect(det.itens.every((i) => /T(0[6-9]|1[01]):05/.test(i.checadoEm ?? ''))).toBe(true);
     expect(det.itens.map((i) => i.horario)).toEqual(r.amostra);
     expect(det.auditores.map((a) => a.papel)).toEqual(['responsavel', 'observador']);
     const [i1, i2, i3, i4] = det.itens.map((i) => i.id) as [number, number, number, number];
@@ -323,6 +407,63 @@ describe.skipIf(SEM_BANCO)('auditoria das checagens de enfermagem (09-AREA linha
       totalAuditado: 3,
       totalConforme: 2,
     });
+  });
+
+  it('recusa auditor sem vínculo vigente com o estabelecimento e recorta pela unidade', async () => {
+    await expect(
+      abrir(ctx(), { auditores: [{ usuario: semVinculo, papel: 'auditor' }] }),
+    ).rejects.toMatchObject({ problema: { codigo: 'auditor-inexistente' } });
+    const pelaUnidade = await abrir(ctx(), { unidade: UNIDADE, atendimento: null, tamanho: 50 });
+    expect(pelaUnidade.candidatas).toBe(6);
+    expect(pelaUnidade.amostra).not.toContain(feitaOutro);
+    expect(
+      await uma(
+        'SELECT setor_funcional_id IS NOT NULL AS s, unidade_internacao_id IS NOT NULL AS u, atendimento_id AS a FROM auditoria_checagem WHERE id = ?',
+        [pelaUnidade.id],
+      ),
+    ).toMatchObject({ s: 1, u: 1, a: null });
+    await expect(abrir(ctx(), { unidade: UNIDADE2, atendimento: null })).rejects.toMatchObject({
+      problema: { codigo: 'sem-checagens' },
+    });
+    await expect(abrir(ctx(), { unidade: 'C1035-NAO', atendimento: null })).rejects.toMatchObject({
+      problema: { codigo: 'unidade-inexistente' },
+    });
+  });
+
+  it('isola o estabelecimento: checagem, atendimento e auditoria do outro ficam de fora', async () => {
+    const outro = (): ContextoNucleo => ({ ...ctx(), estabelecimento: m!.outroEst });
+    // Sem atendimento nem unidade: só as 6 feitas deste estabelecimento, nunca a do outro.
+    const daqui = await abrir(ctx(), { atendimento: null, tamanho: 50 });
+    expect(daqui.candidatas).toBe(6);
+    expect(daqui.amostra).not.toContain(feitaOutro);
+    await expect(abrir(ctx(), { atendimento: m!.atendimentoOutro })).rejects.toMatchObject({
+      problema: { codigo: 'atendimento-inexistente' },
+    });
+    const la = await abrir(outro(), { atendimento: m!.atendimentoOutro, auditores: [], tamanho: 5 });
+    expect(la.amostra).toEqual([feitaOutro]);
+    const item = (await enf.lerNoBanco(outro(), (l, est) => lerAuditoria(l, est, la.id))).itens[0]!.id;
+    const inexistente = { problema: { codigo: 'auditoria-inexistente' } };
+    await expect(enf.lerNoBanco(ctx(), (l, est) => lerAuditoria(l, est, la.id))).rejects.toMatchObject(
+      inexistente,
+    );
+    await expect(
+      avaliar(ctx(), la.id, item, { resultado: 'conforme', motivo: null, justificativa: null }),
+    ).rejects.toMatchObject(inexistente);
+    await expect(concluir(ctx(), la.id)).rejects.toMatchObject(inexistente);
+    await expect(cancelar(ctx(), la.id, 'Tentativa de outro estabelecimento')).rejects.toMatchObject(
+      inexistente,
+    );
+    expect(
+      await enf
+        .lerNoBanco(ctx(), (l, est) => listarAuditorias(l, est, null))
+        .then((x) => x.some((a) => a.id === la.id)),
+    ).toBe(false);
+    expect(
+      await uma(
+        "SELECT a.situacao, COUNT(CASE WHEN i.resultado = 'pendente' THEN 1 END) AS p FROM auditoria_checagem a JOIN auditoria_checagem_item i ON i.auditoria_checagem_id = a.id WHERE a.id = ? GROUP BY a.situacao",
+        [la.id],
+      ),
+    ).toMatchObject({ situacao: 'aberta', p: 1 });
   });
 
   it('cancela com o motivo e mantém a auditoria e a amostra no histórico', async () => {
