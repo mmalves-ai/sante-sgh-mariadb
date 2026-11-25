@@ -11,7 +11,7 @@ import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } fro
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ServicoNotaVinculo } from './nota-vinculo.controller.js';
-import { documentacaoFiscalPropria } from './nota-vinculo-propria.js';
+import { documentacaoFiscalPropria, faturasDocumentacaoPropria } from './nota-vinculo-propria.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -53,6 +53,8 @@ describe.skipIf(SEM_BANCO)('nota fiscal que documenta a fatura ou a conta (Maria
     conta: 0,
     pessoa: 0,
     paciente: 0,
+    atendimento: 0,
+    motivoCancelamento: 0,
   };
   const op = (est = ids.est): ContextoOperacao => ({
     cliente: CLIENTE,
@@ -85,6 +87,7 @@ describe.skipIf(SEM_BANCO)('nota fiscal que documenta a fatura ou a conta (Maria
     await e.executar('DELETE FROM nota_servico WHERE estabelecimento_id = ?', [ids.est]);
     await e.executar('DELETE FROM fatura_fonte_pagadora WHERE estabelecimento_id = ?', [ids.est]);
     await e.executar('DELETE FROM conta_hospitalar WHERE estabelecimento_id = ?', [ids.est]);
+    await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids.est]);
   };
   const CPF_PACIENTE = '00000837901';
   const CPF_OUTRO = '00000837902';
@@ -98,9 +101,10 @@ describe.skipIf(SEM_BANCO)('nota fiscal que documenta a fatura ou a conta (Maria
     e.inserir(
       `INSERT INTO nota_servico (estabelecimento_id, numero_rps, serie_rps, numero_nota, data_emissao, competencia,
          municipio_prestacao_id, tipo_tomador, fonte_pagadora_id, tomador_nome, tomador_documento, conta_hospitalar_id,
-         discriminacao, valor_servicos, base_calculo, valor_liquido, situacao, criado_em)
+         discriminacao, valor_servicos, base_calculo, valor_liquido, situacao, cancelada_em,
+         motivo_cancelamento_documento_fiscal_id, criado_em)
        VALUES (?, ?, 'T', ?, '2026-02-05 10:00:00', '2026-01-01', ?, ?, ?, ?, ?, ?,
-         'SERVICOS HOSPITALARES SINTETICOS', ?, ?, ?, ?, NOW(3))`,
+         'SERVICOS HOSPITALARES SINTETICOS', ?, ?, ?, ?, ?, ?, NOW(3))`,
       [
         ids.est,
         rps,
@@ -115,6 +119,8 @@ describe.skipIf(SEM_BANCO)('nota fiscal que documenta a fatura ou a conta (Maria
         valor,
         valor,
         situacao,
+        situacao === 'cancelada' ? '2026-02-10 10:00:00' : null,
+        situacao === 'cancelada' ? ids.motivoCancelamento : null,
       ],
     );
 
@@ -158,6 +164,13 @@ describe.skipIf(SEM_BANCO)('nota fiscal que documenta a fatura ou a conta (Maria
         "INSERT INTO fonte_pagadora (codigo, nome, tipo, criado_em) VALUES (?, ?, 'operadora', ?)",
         [`${P}FP`, `OPERADORA SINTETICA ${P}`, agora],
       );
+      ids.motivoCancelamento = await garantir(
+        e,
+        'SELECT id FROM motivo_cancelamento_documento_fiscal WHERE codigo = ?',
+        [`${P}MC`],
+        'INSERT INTO motivo_cancelamento_documento_fiscal (codigo, descricao, criado_em) VALUES (?, ?, ?)',
+        [`${P}MC`, `ERRO DE EMISSAO SINTETICO ${P}`, agora],
+      );
       const m = await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM municipio_ibge', []);
       ids.municipio = Number(m?.id ?? 0);
       ids.pessoa = await garantir(
@@ -187,18 +200,33 @@ describe.skipIf(SEM_BANCO)('nota fiscal que documenta a fatura ou a conta (Maria
          VALUES (?, ?, ?, '2026-01-01', '2026-02-01', '2026-02-03 09:00:00', 1000, 50, 50, 'fechada', ?)`,
         [ids.est, `${P}-F1`, ids.fonte, agora],
       );
+      // O atendimento sintético de que as duas contas nascem (a conta hospitalar sempre pertence a um atendimento).
+      ids.atendimento = await e.inserir(
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id,
+           carater_atendimento_tiss_id, fonte_pagadora_id, profissional_id, entrada_em, criado_em, situacao)
+         SELECT ?, ?, ?, (SELECT MIN(id) FROM categoria_atendimento), (SELECT MIN(id) FROM carater_atendimento_tiss),
+                ?, (SELECT MIN(id) FROM profissional), '2026-01-20 08:00:00', ?, 'aberto'`,
+        [ids.est, `${P}-AT1`, ids.paciente, ids.fonte, agora],
+      );
+      const tipoConta = await garantir(
+        e,
+        'SELECT id FROM tipo_conta WHERE codigo = ?',
+        [`${P}-TC`],
+        "INSERT INTO tipo_conta (codigo, descricao, natureza, criado_em) VALUES (?, ?, 'internacao', ?)",
+        [`${P}-TC`, `INTERNACAO ${P}`, agora],
+      );
       ids.conta = await e.inserir(
-        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, paciente_id, fonte_pagadora_id, natureza,
-           competencia, inicio_em, valor_total, criado_em)
-         VALUES (?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 08:00:00', 300, ?)`,
-        [ids.est, `${P}-C1`, ids.paciente, ids.fonte, agora],
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, valor_total, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 08:00:00', 300, ?)`,
+        [ids.est, `${P}-C1`, ids.atendimento, ids.paciente, ids.fonte, tipoConta, agora],
       );
       ids.conta2 = await e.inserir(
-        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, paciente_id, fonte_pagadora_id, natureza,
-           competencia, inicio_em, valor_total, situacao, fechada_em, fechada_por_usuario_id, criado_em)
-         VALUES (?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 08:00:00', 250, 'fechada',
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, valor_total, situacao, fechada_em, fechada_por_usuario_id, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'internacao', '2026-01-01', '2026-01-20 08:00:00', 250, 'fechada',
            '2026-01-25 10:00:00', ?, ?)`,
-        [ids.est, `${P}-C2`, ids.paciente, ids.fonte, ids.usuario, agora],
+        [ids.est, `${P}-C2`, ids.atendimento, ids.paciente, ids.fonte, tipoConta, ids.usuario, agora],
       );
       ids.nota1 = await nota(e, 1, 600, 'autorizada');
       ids.nota2 = await nota(e, 2, 700, 'autorizada');
@@ -361,7 +389,11 @@ describe.skipIf(SEM_BANCO)('nota fiscal que documenta a fatura ou a conta (Maria
 
     // A nota cancelada depois de ligada segue à vista, marcada, e sai da soma documentada.
     await escrever((e) =>
-      e.executar("UPDATE nota_servico SET situacao = 'cancelada' WHERE id = ?", [ids.nota2]),
+      e.executar(
+        `UPDATE nota_servico SET situacao = 'cancelada', cancelada_em = '2026-02-10 10:00:00',
+           motivo_cancelamento_documento_fiscal_id = ? WHERE id = ?`,
+        [ids.motivoCancelamento, ids.nota2],
+      ),
     );
     const v4 = await s.ler(ctxL(), (l, est) => documentacaoFiscalPropria(l, est, 'fatura', ids.fatura));
     expect(v4.ligadas.find((x) => x.notaServicoId === ids.nota2)).toMatchObject({
@@ -420,5 +452,38 @@ describe.skipIf(SEM_BANCO)('nota fiscal que documenta a fatura ou a conta (Maria
     ).toBe('entrada-invalida');
     const v = await s.ler(ctxL(), (l, est) => documentacaoFiscalPropria(l, est, 'conta', ids.conta));
     expect(v.alvo).toMatchObject({ tipo: 'conta', valorDocumentavel: 300, documentacao: 'sem_nota' });
+  });
+
+  it('lista das faturas: a documentação de cada uma é a mesma da tela da fatura, com filtro por competência e situação', async () => {
+    const visao = await s.ler(ctxL(), (l, est) => documentacaoFiscalPropria(l, est, 'fatura', ids.fatura));
+    const lista = await s.ler(ctxL(), (l, est) =>
+      faturasDocumentacaoPropria(l, est, { competencia: '2026-01' }),
+    );
+    const f = lista.find((x) => x.id === ids.fatura);
+    expect(f).toMatchObject({
+      numero: `${P}-F1`,
+      competencia: '2026-01',
+      fontePagadoraId: ids.fonte,
+      fontePagadora: `OPERADORA SINTETICA ${P}`,
+      valorDocumentavel: visao.alvo.valorDocumentavel,
+      valorDocumentado: visao.alvo.valorDocumentado,
+      saldo: visao.alvo.saldo,
+      documentacao: visao.alvo.documentacao,
+    });
+    // Outra competência não traz a fatura; o filtro pela situação da documentação traz só as daquela situação.
+    const outra = await s.ler(ctxL(), (l, est) =>
+      faturasDocumentacaoPropria(l, est, { competencia: '2025-12' }),
+    );
+    expect(outra.some((x) => x.id === ids.fatura)).toBe(false);
+    const mesma = await s.ler(ctxL(), (l, est) =>
+      faturasDocumentacaoPropria(l, est, { documentacao: visao.alvo.documentacao }),
+    );
+    expect(mesma.some((x) => x.id === ids.fatura)).toBe(true);
+    expect(mesma.every((x) => x.documentacao === visao.alvo.documentacao)).toBe(true);
+    // Outro estabelecimento não vê a fatura.
+    const deOutro = await s.ler({ ...ctxL(), estabelecimento: ids.estB }, (l, est) =>
+      faturasDocumentacaoPropria(l, est, {}),
+    );
+    expect(deOutro.some((x) => x.id === ids.fatura)).toBe(false);
   });
 });

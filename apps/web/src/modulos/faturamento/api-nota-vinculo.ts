@@ -74,3 +74,33 @@ export const vincularNota = (
 ) => enviar(`${F}/notas-fiscais/vinculos`, p, qualquer, chave);
 export const desvincularNota = (id: number, versao: number, motivo: string, chave: string) =>
   enviar(`${F}/notas-fiscais/vinculos/${id}/desligamento`, { versao, motivo }, qualquer, chave);
+
+const esquemaFaturas = z.array(
+  z.object({
+    id: z.number(),
+    numero: z.string(),
+    situacao: z.string(),
+    competencia: z.string().nullable(),
+    fontePagadoraId: z.number().nullable(),
+    fontePagadora: z.string().nullable(),
+    valorDocumentavel: z.number(),
+    valorDocumentado: z.number(),
+    saldo: z.number(),
+    notasLigadas: z.number(),
+    documentacao: z.enum(['sem_nota', 'parcial', 'documentada']),
+  }),
+);
+export type FaturaDocumentacao = z.infer<typeof esquemaFaturas>[number];
+export type SituacaoDocumentacao = FaturaDocumentacao['documentacao'];
+
+/** Faturas ao pagador do estabelecimento com a documentação fiscal de cada uma (filtro por competência e situação). */
+export function listarFaturasDocumentacao(f: {
+  competencia?: string;
+  documentacao?: SituacaoDocumentacao | '';
+}) {
+  const q = new URLSearchParams();
+  if (f.competencia) q.set('competencia', f.competencia);
+  if (f.documentacao) q.set('documentacao', f.documentacao);
+  const s = q.toString();
+  return ler(`${F}/faturas${s ? `?${s}` : ''}`, esquemaFaturas);
+}

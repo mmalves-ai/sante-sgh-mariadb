@@ -106,6 +106,9 @@ const emConferencia = computed(
           data-testid="cta-servicos-acessorios"
           >{{ t('faturamento.conta.servicosAcessorios') }}</RouterLink
         >
+        <RouterLink :to="`/faturamento/contas/${id}/notas-fiscais`" data-testid="cta-notas-fiscais">{{
+          t('faturamento.conta.notasFiscais')
+        }}</RouterLink>
         <RouterLink :to="`/faturamento/contas/${id}/movimentos`" data-testid="cta-movimentos">{{
           t('movimentosConta.link')
         }}</RouterLink>

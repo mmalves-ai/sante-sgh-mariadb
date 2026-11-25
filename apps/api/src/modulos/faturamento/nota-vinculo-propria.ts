@@ -25,7 +25,21 @@ import { definirOperacao, type ContextoOperacao, type Executor, type Leitor, rec
 import { z } from 'zod';
 
 type Linha = Record<string, unknown>;
-type Consulta = Pick<Leitor, 'consultar' | 'uma'>;
+type Consulta = Pick<Leitor, 'consultar' | 'uma'> & {
+  consultarParaAtualizar?: (sql: string, p?: readonly unknown[], o?: { teto?: number }) => Promise<Linha[]>;
+};
+/** Uma linha; com trava, pelo SELECT ... FOR UPDATE do escritor (o caminho de leitura recusa a trava escrita à mão). */
+async function linhaUnica(
+  l: Consulta,
+  sql: string,
+  p: readonly unknown[],
+  travar: boolean,
+): Promise<Linha | null> {
+  if (!travar) return l.uma<Linha>(sql, p);
+  if (!l.consultarParaAtualizar) throw new Error('Trava de linha pedida fora da gravação.');
+  const [r] = await l.consultarParaAtualizar(sql, p, { teto: 1 });
+  return r ?? null;
+}
 
 const n = (v: unknown) => Number(v ?? 0);
 const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
@@ -51,18 +65,21 @@ const colunaAlvo = (t: TipoAlvoNota) => (t === 'fatura' ? 'fatura_fonte_pagadora
 
 /** Alvo (fatura ou conta) do estabelecimento, com o valor a documentar e o já documentado por nota. */
 async function alvoDo(l: Consulta, est: number, tipo: TipoAlvoNota, id: number, travar = false) {
-  const sufixo = travar ? ' FOR UPDATE' : '';
   const a =
     tipo === 'fatura'
-      ? await l.uma<Linha>(
+      ? await linhaUnica(
+          l,
           `SELECT id, numero, situacao, fonte_pagadora_id, valor_apresentado, valor_acrescimo, valor_desconto
-             FROM fatura_fonte_pagadora WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL${sufixo}`,
+             FROM fatura_fonte_pagadora WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [id, est],
+          travar,
         )
-      : await l.uma<Linha>(
+      : await linhaUnica(
+          l,
           `SELECT id, numero, situacao, fonte_pagadora_id, valor_total, paciente_id
-             FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL${sufixo}`,
+             FROM conta_hospitalar WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [id, est],
+          travar,
         );
   if (!a)
     throw recusa('nao-encontrado', tipo === 'fatura' ? 'Fatura não encontrada.' : 'Conta não encontrada.', {
@@ -108,11 +125,13 @@ async function alvoDo(l: Consulta, est: number, tipo: TipoAlvoNota, id: number, 
 }
 
 async function notaDa(l: Consulta, est: number, id: number, travar = false) {
-  const ns = await l.uma<Linha>(
+  const ns = await linhaUnica(
+    l,
     `SELECT id, situacao, valor_servicos, fonte_pagadora_id, conta_hospitalar_id, fatura_fonte_pagadora_id,
             tomador_documento FROM nota_servico
-      WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL${travar ? ' FOR UPDATE' : ''}`,
+      WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [id, est],
+    travar,
   );
   if (!ns) throw recusa('nao-encontrado', 'Nota fiscal não encontrada.', { campos: ['notaServicoId'] });
   return ns;
@@ -367,4 +386,67 @@ export async function gravarNotaVinculo(
   const op = OPERACOES_NOTA_VINCULO[nome] as Parameters<Executor['executar']>[0];
   const r = await executor.executar(op, ctx.cliente, entrada, ctx);
   return r.resultado as Record<string, unknown>;
+}
+
+export interface FiltroFaturasNota {
+  /** Mês da competência, `AAAA-MM`. */
+  readonly competencia?: string | null;
+  readonly fontePagadoraId?: number | null;
+  readonly documentacao?: 'sem_nota' | 'parcial' | 'documentada' | null;
+}
+
+/**
+ * Lista das faturas ao pagador do estabelecimento com a documentação fiscal de cada uma (quanto vale, quanto as notas
+ * que documentam cobrem e o que falta), de onde se abre a tela da nota fiscal da fatura. O valor documentável e a
+ * situação vêm da regra do domínio, a mesma da tela da fatura; a nota cancelada não conta.
+ */
+export async function faturasDocumentacaoPropria(l: Leitor, est: number, filtro: FiltroFaturasNota = {}) {
+  const situacoes = [...SITUACOES_NOTA_VINCULAVEIS];
+  const onde: string[] = ['f.estabelecimento_id = ?', 'f.excluido_em IS NULL'];
+  const p: unknown[] = [...situacoes, est];
+  if (filtro.competencia) {
+    onde.push('f.competencia = ?');
+    p.push(`${filtro.competencia}-01`);
+  }
+  if (filtro.fontePagadoraId) {
+    onde.push('f.fonte_pagadora_id = ?');
+    p.push(filtro.fontePagadoraId);
+  }
+  const linhas = await l.consultar<Linha>(
+    `SELECT f.id, f.numero, f.situacao, f.competencia, f.fonte_pagadora_id, fp.nome AS fonte_nome,
+            f.valor_apresentado, f.valor_acrescimo, f.valor_desconto,
+            (SELECT COALESCE(SUM(v.valor_apropriado), 0) FROM vinculo_nota_faturamento v
+               JOIN nota_servico ns ON ns.id = v.nota_servico_id
+              WHERE v.fatura_fonte_pagadora_id = f.id AND v.excluido_em IS NULL
+                AND ns.situacao IN (${situacoes.map(() => '?').join(',')})) AS documentado,
+            (SELECT COUNT(*) FROM vinculo_nota_faturamento v
+              WHERE v.fatura_fonte_pagadora_id = f.id AND v.excluido_em IS NULL) AS notas
+       FROM fatura_fonte_pagadora f LEFT JOIN fonte_pagadora fp ON fp.id = f.fonte_pagadora_id
+      WHERE ${onde.join(' AND ')}
+      ORDER BY f.competencia DESC, f.id DESC LIMIT 300`,
+    p,
+  );
+  return linhas
+    .map((r) => {
+      const valorDocumentavel = valorDocumentavelFatura({
+        valorApresentado: n(r['valor_apresentado']),
+        valorAcrescimo: n(r['valor_acrescimo']),
+        valorDesconto: n(r['valor_desconto']),
+      });
+      const valorDocumentado = n(r['documentado']);
+      return {
+        id: n(r['id']),
+        numero: String(r['numero']),
+        situacao: String(r['situacao']),
+        competencia: dataHora(r['competencia'])?.slice(0, 7) ?? null,
+        fontePagadoraId: nn(r['fonte_pagadora_id']),
+        fontePagadora: txt(r['fonte_nome']),
+        valorDocumentavel,
+        valorDocumentado,
+        saldo: Math.max(0, Math.round((valorDocumentavel - valorDocumentado) * 100) / 100),
+        notasLigadas: n(r['notas']),
+        documentacao: situacaoDocumentacao(valorDocumentavel, valorDocumentado),
+      };
+    })
+    .filter((f) => !filtro.documentacao || f.documentacao === filtro.documentacao);
 }

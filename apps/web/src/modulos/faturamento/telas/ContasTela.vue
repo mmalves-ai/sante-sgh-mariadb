@@ -77,6 +77,9 @@ function buscar() {
     <RouterLink to="/faturamento/protocolos" data-testid="ctas-protocolos">{{
       t('auditoriaTramite.atalhos.protocolos')
     }}</RouterLink>
+    <RouterLink to="/faturamento/faturas" data-testid="ctas-faturas">{{
+      t('faturamento.contas.faturasNotas')
+    }}</RouterLink>
     <p>{{ t('faturamento.contas.texto') }}</p>
     <p class="secundario">{{ t('faturamento.regua') }}</p>
     <form class="filtros" @submit.prevent="buscar">

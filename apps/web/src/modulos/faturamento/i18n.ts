@@ -67,6 +67,7 @@ export const mensagensFaturamento = {
   inferida: 'situação estimada: os passos depois do envio à operadora não são registrados aqui',
   contas: {
     titulo: 'Contas do paciente',
+    faturasNotas: 'Faturas e nota fiscal',
     tituloLancamentos: 'Lançamentos da conta',
     tituloAuditoria: 'Auditoria de contas',
     tituloSigtap: 'Contas SUS no motor de convênios',
@@ -106,6 +107,7 @@ export const mensagensFaturamento = {
     complementos: 'Períodos e segurado',
     ajustes: 'Horário especial, acréscimos, descontos e pacote',
     servicosAcessorios: 'Ambulância e ligações',
+    notasFiscais: 'Nota fiscal',
     sigtap: 'Itens SUS',
     iniciarConferencia: 'Iniciar a conferência',
     concluirConferencia: 'Concluir a conferência',

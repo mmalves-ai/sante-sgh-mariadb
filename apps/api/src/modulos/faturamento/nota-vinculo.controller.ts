@@ -1,10 +1,11 @@
 // A nota fiscal de serviço que documenta a fatura ou a conta (F3.7, 06-FAT linha 36), só com o banco próprio.
+//   GET  /api/faturamento/faturas                          faturamento.conta.ler (lista com a documentação fiscal de cada uma)
 //   GET  /api/faturamento/faturas/:id/notas-fiscais        faturamento.conta.ler (valores, ligadas e candidatas)
 //   GET  /api/faturamento/contas/:id/notas-fiscais         faturamento.conta.ler
 //   POST /api/faturamento/notas-fiscais/vinculos           financeiro.nfse.emitir (liga ou ajusta o valor)
 //   POST /api/faturamento/notas-fiscais/vinculos/:vid/desligamento  financeiro.nfse.emitir (motivo obrigatório; fica marcado e no histórico, não some)
 // As gravações levam Idempotency-Key e passam pelo executor (trilha e autoria na mesma transação).
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import type { ContextoNucleo, Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
 import { recusa } from '@sgh/nucleo';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
@@ -13,6 +14,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import { contextoOperacao, ctxDe, inteiro, problemaDoPreco } from '../precos/base.js';
 import {
   documentacaoFiscalPropria,
+  faturasDocumentacaoPropria,
   gravarNotaVinculo,
   type NomeOperacaoNotaVinculo,
 } from './nota-vinculo-propria.js';
@@ -62,6 +64,29 @@ export class NotaVinculoController {
     } catch (e) {
       throw problemaDoPreco(e);
     }
+  }
+
+  @Get('faturamento/faturas')
+  @Permissao('faturamento.conta.ler')
+  faturas(@Query() q: Record<string, string | undefined>, @Req() req: RequisicaoAutorizada) {
+    return this.rodar(() => {
+      const competencia = q['competencia']?.trim() || null;
+      if (competencia !== null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia))
+        throw recusa('entrada-invalida', 'Competência no formato AAAA-MM.', { campos: ['competencia'] });
+      const documentacao = q['documentacao']?.trim() || null;
+      if (documentacao !== null && !['sem_nota', 'parcial', 'documentada'].includes(documentacao))
+        throw recusa('entrada-invalida', 'Situação da documentação desconhecida.', {
+          campos: ['documentacao'],
+        });
+      const fonte = q['fontePagadoraId'] ? inteiro(q['fontePagadoraId'], 'fontePagadoraId') : null;
+      return this.s().ler(ctxDe(req, 'nota-fatura'), (l, est) =>
+        faturasDocumentacaoPropria(l, est, {
+          competencia,
+          fontePagadoraId: fonte,
+          documentacao: documentacao as 'sem_nota' | 'parcial' | 'documentada' | null,
+        }),
+      );
+    });
   }
 
   @Get('faturamento/faturas/:id/notas-fiscais')
