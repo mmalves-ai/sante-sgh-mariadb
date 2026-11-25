@@ -58,9 +58,9 @@ describe.skipIf(SEM_BANCO)('porta própria da lista de trabalho DICOM (MariaDB, 
       m!.requisicaoImagem,
     ]);
     try {
-      const doDia = (dia: string) =>
-        porta.examesSemItem(c, { desde: dia, ate: dia, atos: [25], teto: 10 }).then((r) => r.itens);
-      expect(await doDia('2026-03-09')).toEqual([{ exame: m!.itemImagem, ato: 25, data: '2026-03-09' }]);
+      // O caminho da tela (GET /sadt/imagem/worklist): os exames de imagem do dia pedido.
+      const doDia = (dia: string) => porta.examesDoDia(c, dia).then((r) => r.itens.map((x) => x.id));
+      expect(await doDia('2026-03-09')).toEqual([m!.itemImagem]);
       expect(await doDia('2026-03-10')).toEqual([]);
       expect(await doDia('2026-03-08')).toEqual([]);
     } finally {
@@ -75,9 +75,6 @@ describe.skipIf(SEM_BANCO)('porta própria da lista de trabalho DICOM (MariaDB, 
     const c = ctx();
     const { hoje } = await porta.relogio(c);
     expect((await porta.examesDoDia(c, hoje)).itens.map((x) => x.id)).toEqual([m!.itemImagem]);
-    expect((await porta.examesSemItem(c, { desde: hoje, ate: hoje, atos: [25], teto: 10 })).itens).toEqual([
-      { exame: m!.itemImagem, ato: 25, data: hoje },
-    ]);
     const cad = await porta.modalidadeDoCadastro(c, [m!.itemImagem]);
     expect(cad.get(m!.itemImagem)).toEqual({ id: m!.modalidade, sigla: 'CT' });
     expect((await porta.modalidades(c)).some((x) => x.sigla === 'CT')).toBe(true);
