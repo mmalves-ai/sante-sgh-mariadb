@@ -125,7 +125,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7, o teto da escala do menu); a contagem acompanha.
 // C2-059 (07-FIN L114): o item "NF-e de saída de mercadoria" do fiscal entrou à mão (mesmo motivo; F7 vai como
 // fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":494,"M":198,"P":57,"N":239};
+// C2-083 (07-FIN L157): o item "Remuneração variável" do repasse médico entrou à mão (mesmo motivo; F8 vai como
+// fase 7, o teto da escala do menu); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":495,"M":198,"P":57,"N":240};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -390,6 +392,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.faturamento-sus.medicos-solicitantes-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Médicos solicitantes SUS"],"titulo":"Médicos solicitantes SUS","selo":"P","fase":5,"rota":"/faturamento/sus/solicitantes","permissao":"faturamento.susSolicitante.ler"},
   {"id":"faturamento.faturamento-sus.transplantes-central-estadual","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Transplantes para a central estadual"],"titulo":"Transplantes para a central estadual","selo":"N","fase":7,"rota":"/faturamento/sus/transplantes","permissao":"faturamento.susTransplante.ler"},
   {"id":"faturamento.repasse-medico.regras-de-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Regras de repasse"],"titulo":"Regras de repasse","selo":"M","fase":3,"rota":"/repasse/regras","permissao":"repasse.regra.ler"},
+  {"id":"faturamento.repasse-medico.remuneracao-variavel","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Remuneração variável"],"titulo":"Remuneração variável","selo":"N","fase":7,"rota":"/repasse/remuneracao-variavel","permissao":"repasse.regra.ler"},
   {"id":"faturamento.repasse-medico.apuracao-faturamento-x-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Apuração"],"titulo":"Apuração","selo":"M","fase":3,"rota":"/repasse/apuracao","permissao":"repasse.apuracao.ler"},
   {"id":"faturamento.repasse-medico.lancamento-de-eventos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Lançamento de eventos"],"titulo":"Lançamento de eventos","selo":"M","fase":3,"rota":"/repasse/lancamentos","permissao":"repasse.lancamento.ler"},
   {"id":"faturamento.repasse-medico.rpa-emissao-inss-irrf-e-eventos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","RPA e eventos"],"titulo":"RPA e eventos","selo":"M","fase":3,"rota":"/repasse/rpa","permissao":"repasse.rpa.ler"},
