@@ -12,7 +12,7 @@ import {
   type SegurancaEmail,
   validarModeloEmail,
   validarServidorEmail,
-} from '@sgh/dominio-acesso';
+} from '@sgh/dominio-acesso/autorizacao';
 import { SanteBotao, SanteCampoTexto, SanteChave, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';

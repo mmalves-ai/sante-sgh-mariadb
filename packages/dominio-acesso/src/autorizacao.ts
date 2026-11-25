@@ -12,3 +12,5 @@ export * from './usuario/login.js';
 export * from './privacidade/pedido-titular.js';
 // 01-ADM L75: regra de alerta conferida na tela enquanto se digita (a mesma do servidor; sem node:crypto).
 export * from './notificacao/notificacao-regra.js';
+// 01-ADM L77: validação do servidor e do modelo de e-mail na tela (a mesma do servidor; sem node:crypto).
+export * from './notificacao/email-configuracao.js';
