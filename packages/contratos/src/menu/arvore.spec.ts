@@ -6,8 +6,8 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('439 itens: M 198, P 57, N 184, iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 439, M: 198, P: 57, N: 184 });
+  it('440 itens: M 198, P 57, N 185, iguais ao cabeçalho do arquivo', () => {
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 440, M: 198, P: 57, N: 185 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(439);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(440);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -305,6 +305,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/farmacia-clinica/interacoes',
         '/faturamento/auditoria', // M30
         '/faturamento/competencias', // M31
+        '/faturamento/conta-corrente', // F7 (07-FIN linha 92)
         '/faturamento/contas',
         '/faturamento/contas-sus',
         '/faturamento/demonstrativos', // M31

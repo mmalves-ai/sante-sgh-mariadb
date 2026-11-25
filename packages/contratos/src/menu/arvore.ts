@@ -41,7 +41,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // F8 (07-FIN linha 79): o item "Desconto e cessão de recebíveis" entrou à mão (mesmo motivo); a contagem acompanha.
 // F8 (03-PEP linha 125): o item "Transporte de pacientes" entrou à mão (mesmo motivo); a contagem acompanha.
 // F8 (09-AREA linha 66): o item "Homologação de fornecedores" entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":439,"M":198,"P":57,"N":184};
+// F7 (07-FIN linha 92): o item "Conta corrente do paciente" entrou à mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":440,"M":198,"P":57,"N":185};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -248,6 +249,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.particular.orcamento-de-particular","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Orçamento de particular"],"titulo":"Orçamento de particular","selo":"P","fase":3,"rota":"/faturamento/particular/orcamentos","permissao":"faturamento.orcamento.ler"},
   {"id":"faturamento.particular.recibos-e-caixa","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Recibos e caixa"],"titulo":"Recibos e caixa","selo":"P","fase":3,"rota":"/faturamento/particular/caixa","permissao":"faturamento.recibo.ler"},
   {"id":"faturamento.particular.pagamento-por-pix-e-cartao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Pagamento por Pix e cartão"],"titulo":"Pagamento por Pix e cartão","selo":"N","fase":3,"rota":"/faturamento/particular/pagamentos","permissao":"faturamento.pagamento.ler"},
+  {"id":"faturamento.particular.conta-corrente-do-paciente","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Conta corrente do paciente"],"titulo":"Conta corrente do paciente","selo":"N","fase":7,"rota":"/faturamento/conta-corrente","permissao":"faturamento.pagamento.ler"},
   {"id":"faturamento.convenios-tiss.guias-tiss-emissao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Guias TISS"],"titulo":"Guias TISS","selo":"M","fase":3,"rota":"/faturamento/guias","permissao":"faturamento.guia.ler"},
   {"id":"faturamento.convenios-tiss.remessa-e-lotes-tiss-xml-envio-protocolo","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Remessa e lotes TISS"],"titulo":"Remessa e lotes TISS","selo":"M","fase":3,"rota":"/faturamento/lotes","permissao":"faturamento.lote.ler"},
   {"id":"faturamento.convenios-tiss.webservices-tiss-por-operadora","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Convênios","Webservices TISS por operadora"],"titulo":"Webservices TISS por operadora","selo":"P","fase":3,"rota":"/integracao/tiss","permissao":"integracao.tiss.ler"},
