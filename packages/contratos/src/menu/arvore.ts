@@ -79,7 +79,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha.
 // C2-033 (08-INTG L136): o item "Fila do ERP corporativo" das integrações entrou à mão (mesmo motivo; F8 vai como fase
 // 7, o teto da escala do menu, como o item "Limites do pedido de exame"); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":461,"M":198,"P":57,"N":206};
+// C2-040 (02-REC L39): o item "Contato ativo antes da consulta" da agenda ambulatorial entrou à mão (mesmo motivo);
+// a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":462,"M":198,"P":57,"N":207};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -111,6 +113,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"agenda.agenda-ambulatorial-consultas.cancelamentos-com-motivo","area":"ATENDIMENTO AO PACIENTE","grupo":"Agenda","caminho":["Agenda","Agenda ambulatorial","Cancelamentos"],"titulo":"Cancelamentos","selo":"M","fase":2,"rota":"/agenda/consultas/cancelamentos","permissao":"agenda.marcacao.ler"},
   {"id":"agenda.agenda-ambulatorial-consultas.lista-de-espera-e-remarcacao-em-lote","area":"ATENDIMENTO AO PACIENTE","grupo":"Agenda","caminho":["Agenda","Agenda ambulatorial","Lista de espera e remarcação em lote"],"titulo":"Lista de espera e remarcação em lote","selo":"N","fase":2,"rota":"/agenda/espera","permissao":"agenda.espera.ler"},
   {"id":"agenda.agenda-ambulatorial-consultas.confirmacao-e-lembretes-whatsapp-sms","area":"ATENDIMENTO AO PACIENTE","grupo":"Agenda","caminho":["Agenda","Agenda ambulatorial","Confirmação e lembretes"],"titulo":"Confirmação e lembretes","selo":"P","fase":3,"rota":null,"permissao":null},
+  {"id":"agenda.agenda-ambulatorial-consultas.contato-ativo-antes-da-consulta","area":"ATENDIMENTO AO PACIENTE","grupo":"Agenda","caminho":["Agenda","Agenda ambulatorial","Contato ativo antes da consulta"],"titulo":"Contato ativo antes da consulta","selo":"N","fase":7,"rota":"/agenda/consultas/contato-ativo","permissao":"agenda.marcacao.ler"},
   {"id":"agenda.agenda-de-exames-sadt.cadastro-de-agendas-de-exames","area":"ATENDIMENTO AO PACIENTE","grupo":"Agenda","caminho":["Agenda","Agenda de exames","Cadastro de agendas de exames"],"titulo":"Cadastro de agendas de exames","selo":"M","fase":2,"rota":"/agenda/exames/agendas","permissao":"agenda.exame.ler"},
   {"id":"agenda.agenda-de-exames-sadt.escala-semanal-da-agenda-de-exames","area":"ATENDIMENTO AO PACIENTE","grupo":"Agenda","caminho":["Agenda","Agenda de exames","Escala semanal da agenda de exames"],"titulo":"Escala semanal da agenda de exames","selo":"M","fase":2,"rota":"/agenda/exames/escalas","permissao":"agenda.exame.ler"},
   {"id":"agenda.agenda-de-exames-sadt.gerar-agenda-e-grade-de-horarios","area":"ATENDIMENTO AO PACIENTE","grupo":"Agenda","caminho":["Agenda","Agenda de exames","Gerar agenda e grade de horários"],"titulo":"Gerar agenda e grade de horários","selo":"M","fase":2,"rota":"/agenda/exames/gerar","permissao":"agenda.exame.ler"},
