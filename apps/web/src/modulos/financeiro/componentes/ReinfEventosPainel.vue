@@ -3,8 +3,15 @@
 // série (um por beneficiário, o tributo com processo vai como suspenso, o aceito que mudou volta como retificador e o
 // aceito que saiu da competência ganha a exclusão); os prontos para envio já vêm marcados para a transmissão ao
 // simulador; o retorno (recibo ou ocorrências) é registrado na linha do evento. O processo com suspensão é mantido
-// aqui, com a conferência na hora (a mesma regra do domínio).
-import { conferirProcessoSuspensao, TRIBUTOS_PROCESSO_REINF } from '@sgh/dominio-financeiro';
+// aqui, com a conferência na hora (a mesma regra do domínio). Na linha do processo: encerrar a suspensão cuja decisão
+// caiu (vale até o dia), anular a lançada por engano e alterar a vara e a vigência do processo, sempre sem apagar.
+// O título com retenção cujo credor não tem CPF nem CNPJ fica fora dos eventos e é avisado no alto do painel.
+import {
+  conferirAlteracaoProcesso,
+  conferirEncerramentoSuspensao,
+  conferirProcessoSuspensao,
+  TRIBUTOS_PROCESSO_REINF,
+} from '@sgh/dominio-financeiro';
 import { SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
@@ -12,11 +19,14 @@ import { useI18n } from 'vue-i18n';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import { novaChave } from '../api-financeiro.js';
 import {
+  alterarProcessoReinf,
+  encerrarSuspensaoReinf,
   type EventoReinfTela,
   gerarEventosReinf,
   gravarProcessoReinf,
   lerPainelReinf,
   lerXmlReinf,
+  type ProcessoReinfTela,
   registrarRetornoReinf,
   transmitirReinf,
 } from '../api-reinf.js';
@@ -65,6 +75,25 @@ const { t } = useI18n({
       todos: 'todos',
       semFim: 'sem fim',
       vigencia: '{de} a {ate}',
+      semDocumento:
+        '{n} título(s) com retenção nesta competência estão fora dos eventos: o credor não tem CPF nem CNPJ no cadastro (títulos {ids}). Complete o cadastro e gere de novo.',
+      processo: 'Processo',
+      vigenciaCol: 'Vigência da suspensão',
+      situacaoSusp: 'Situação da suspensão',
+      acoes: 'Ações',
+      emVigor: 'em vigor',
+      encerrada: 'encerrada em {dia}: {motivo}',
+      anulada: 'anulada: {motivo}',
+      abrir: 'Encerrar ou alterar',
+      fechar: 'Fechar',
+      edicao: 'Suspensão de {tributo} do processo {numero}',
+      fimSuspensao: 'Último dia em que a suspensão vale',
+      motivo: 'Motivo',
+      encerrar: 'Encerrar suspensão',
+      anular: 'Anular (lançada por engano)',
+      dadosProcesso: 'Dados do processo (valem para todas as suspensões dele)',
+      fimProcesso: 'Fim da vigência (opcional)',
+      gravarProcesso: 'Gravar dados do processo',
     },
   },
 });
@@ -77,6 +106,7 @@ const painel = useQuery({
 });
 const eventos = computed(() => painel.data.value?.eventos ?? []);
 const processos = computed(() => painel.data.value?.processos ?? []);
+const semDocumento = computed(() => painel.data.value?.titulosSemDocumento ?? []);
 const serie = ref<'R-2000' | 'R-4000'>('R-4000');
 const series = [
   { valor: 'R-2000', rotulo: 'R-2000 (INSS do serviço tomado)' },
@@ -201,6 +231,66 @@ const incluirProcesso = () =>
     proc.beneficiario = '';
     return r;
   });
+
+// Encerrar ou anular a suspensão e alterar os dados do processo, na linha: conferidos na hora pela regra do domínio.
+const edicao = ref<ProcessoReinfTela | null>(null);
+const fimSusp = reactive({ fim: '', motivo: '' });
+const dados = reactive({ vara: '', vigenciaInicio: '', vigenciaFim: '' });
+function abrirEdicao(p: ProcessoReinfTela) {
+  edicao.value = p;
+  Object.assign(fimSusp, { fim: '', motivo: '' });
+  Object.assign(dados, {
+    vara: p.vara ?? '',
+    vigenciaInicio: p.vigenciaInicio,
+    vigenciaFim: p.vigenciaFimProcesso ?? '',
+  });
+}
+const emVigor = (p: ProcessoReinfTela) => !p.anulada && p.encerradaEm === null;
+const recusaFim = (fim: string | null) =>
+  edicao.value
+    ? conferirEncerramentoSuspensao(
+        {
+          vigenciaInicio: edicao.value.vigenciaInicio,
+          encerradaEm: edicao.value.encerradaEm,
+          anulada: edicao.value.anulada,
+        },
+        { fim, motivo: fimSusp.motivo },
+      )
+    : null;
+const recusaEncerrar = computed(() => (fimSusp.fim ? recusaFim(fimSusp.fim) : null));
+const recusaDados = computed(() =>
+  edicao.value && dados.vigenciaInicio
+    ? conferirAlteracaoProcesso({
+        tipo: edicao.value.tipo,
+        vara: dados.vara.trim() || null,
+        vigenciaInicio: dados.vigenciaInicio,
+        vigenciaFim: dados.vigenciaFim || null,
+      })
+    : null,
+);
+const encerrar = (fim: string | null) =>
+  agir(async () => {
+    const r = await encerrarSuspensaoReinf(
+      { suspensao: edicao.value?.suspensao, fim, motivo: fimSusp.motivo.trim() },
+      novaChave('reinf-suspensao'),
+    );
+    edicao.value = null;
+    return r;
+  });
+const gravarDados = () =>
+  agir(async () => {
+    const r = await alterarProcessoReinf(
+      {
+        processo: edicao.value?.id,
+        vara: dados.vara.trim() || null,
+        vigenciaInicio: dados.vigenciaInicio,
+        vigenciaFim: dados.vigenciaFim || null,
+      },
+      novaChave('reinf-processo-alterar'),
+    );
+    edicao.value = null;
+    return r;
+  });
 const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 </script>
 
@@ -226,6 +316,9 @@ const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curr
     <ErroFaturamento v-if="erro" :erro="erro" />
     <ErroFaturamento v-if="painel.error.value" :erro="painel.error.value" />
     <p v-if="ok" role="status" class="secundario" data-testid="re-ok">{{ ok }}</p>
+    <p v-if="semDocumento.length > 0" role="alert" data-testid="re-sem-documento">
+      {{ t('semDocumento', { n: semDocumento.length, ids: semDocumento.join(', ') }) }}
+    </p>
     <p v-if="eventos.length === 0" class="secundario" data-testid="re-vazio">{{ t('nenhum') }}</p>
     <table v-else class="tabela" data-testid="re-eventos">
       <thead>
@@ -312,15 +405,100 @@ const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curr
 
     <h3>{{ t('processos') }}</h3>
     <table class="tabela" data-testid="re-processos">
+      <thead>
+        <tr>
+          <th scope="col">{{ t('processo') }}</th>
+          <th scope="col">{{ t('tributo') }}</th>
+          <th scope="col">{{ t('beneficiario') }}</th>
+          <th scope="col">{{ t('vigenciaCol') }}</th>
+          <th scope="col">{{ t('situacaoSusp') }}</th>
+          <th scope="col">{{ t('acoes') }}</th>
+        </tr>
+      </thead>
       <tbody>
-        <tr v-for="p in processos" :key="`${p.id}-${p.tributo}-${p.beneficiario}`">
+        <tr v-for="p in processos" :key="p.suspensao" :data-testid="`re-suspensao-${p.suspensao}`">
           <td>{{ p.tipo === 'judicial' ? t('judicial') : t('administrativo') }} {{ p.numero }}</td>
           <td>{{ t(`tributos.${p.tributo}`) }} ({{ p.indicativo }})</td>
           <td>{{ p.beneficiario ?? t('todos') }}</td>
           <td>{{ t('vigencia', { de: p.vigenciaInicio, ate: p.vigenciaFim ?? t('semFim') }) }}</td>
+          <td :data-testid="`re-s-situacao-${p.suspensao}`">
+            <template v-if="p.anulada">{{ t('anulada', { motivo: p.motivoEncerramento ?? '' }) }}</template>
+            <template v-else-if="p.encerradaEm">
+              {{ t('encerrada', { dia: p.encerradaEm, motivo: p.motivoEncerramento ?? '' }) }}
+            </template>
+            <template v-else>{{ t('emVigor') }}</template>
+          </td>
+          <td>
+            <button
+              v-if="podeGerar && emVigor(p)"
+              type="button"
+              :data-testid="`re-s-abrir-${p.suspensao}`"
+              @click="abrirEdicao(p)"
+            >
+              {{ t('abrir') }}
+            </button>
+          </td>
         </tr>
       </tbody>
     </table>
+    <section v-if="edicao" aria-labelledby="re-ed-titulo" data-testid="re-edicao">
+      <h4 id="re-ed-titulo">
+        {{ t('edicao', { tributo: t(`tributos.${edicao.tributo}`), numero: edicao.numero }) }}
+      </h4>
+      <form class="filtros" @submit.prevent="encerrar(fimSusp.fim)">
+        <span class="campo">
+          <label for="re-s-fim">{{ t('fimSuspensao') }}</label>
+          <input id="re-s-fim" v-model="fimSusp.fim" type="date" data-testid="re-s-fim" />
+        </span>
+        <span class="campo">
+          <label for="re-s-motivo">{{ t('motivo') }}</label>
+          <input id="re-s-motivo" v-model="fimSusp.motivo" maxlength="200" data-testid="re-s-motivo" />
+        </span>
+        <button
+          type="submit"
+          :disabled="gravando || !fimSusp.fim || !!recusaEncerrar"
+          data-testid="re-s-encerrar"
+        >
+          {{ t('encerrar') }}
+        </button>
+        <button
+          type="button"
+          :disabled="gravando || !!recusaFim(null)"
+          data-testid="re-s-anular"
+          @click="encerrar(null)"
+        >
+          {{ t('anular') }}
+        </button>
+        <button type="button" data-testid="re-s-fechar" @click="edicao = null">{{ t('fechar') }}</button>
+      </form>
+      <p v-if="recusaEncerrar" role="alert" class="secundario" data-testid="re-s-recusa">
+        {{ recusaEncerrar.mensagem }}
+      </p>
+      <form class="filtros" :aria-label="t('dadosProcesso')" @submit.prevent="gravarDados">
+        <span v-if="edicao.tipo === 'judicial'" class="campo">
+          <label for="re-pa-vara">{{ t('vara') }}</label>
+          <input id="re-pa-vara" v-model="dados.vara" maxlength="4" data-testid="re-pa-vara" />
+        </span>
+        <span class="campo">
+          <label for="re-pa-ini">{{ t('inicio') }}</label>
+          <input id="re-pa-ini" v-model="dados.vigenciaInicio" type="date" data-testid="re-pa-inicio" />
+        </span>
+        <span class="campo">
+          <label for="re-pa-fim">{{ t('fimProcesso') }}</label>
+          <input id="re-pa-fim" v-model="dados.vigenciaFim" type="date" data-testid="re-pa-fim" />
+        </span>
+        <button
+          type="submit"
+          :disabled="gravando || !dados.vigenciaInicio || !!recusaDados"
+          data-testid="re-pa-gravar"
+        >
+          {{ t('gravarProcesso') }}
+        </button>
+      </form>
+      <p v-if="recusaDados" role="alert" class="secundario" data-testid="re-pa-recusa">
+        {{ recusaDados.mensagem }}
+      </p>
+    </section>
     <form class="filtros" :aria-label="t('novoProcesso')" @submit.prevent="incluirProcesso">
       <span class="campo">
         <SanteSelecao v-model="proc.tipo" :rotulo="t('tipo')" :opcoes="tipos" data-testid="re-p-tipo" />

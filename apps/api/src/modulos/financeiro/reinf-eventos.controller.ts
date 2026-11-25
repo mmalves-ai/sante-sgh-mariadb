@@ -2,6 +2,8 @@
 //   GET  /api/financeiro/reinf/painel?periodo=AAAA-MM    eventos da competência com valores, lote e retornos; processos
 //   GET  /api/financeiro/reinf/eventos/:id/xml           XML do evento (retificador com o recibo do original; R-9000)
 //   POST /api/financeiro/reinf/processos                 processo com suspensão (tributo e, se houver, beneficiário)
+//   POST /api/financeiro/reinf/processos/alterar         { processo, vara, vigenciaInicio, vigenciaFim } (vale para todas as suspensões)
+//   POST /api/financeiro/reinf/suspensoes/encerrar       { suspensao, fim, motivo } (fim nulo anula; nada é apagado)
 //   POST /api/financeiro/reinf/gerar                     { serie: R-2000 | R-4000, periodo }
 //   POST /api/financeiro/reinf/transmitir                { periodo, eventos } ao simulador (sem envio externo)
 //   POST /api/financeiro/reinf/retorno                   { evento, aceito, recibo, ocorrencias }
@@ -83,6 +85,33 @@ export class ReinfEventosController {
     return this.gravar(req, 'financeiro.reinfManterProcesso', b, () => 'Processo com suspensão gravado.');
   }
 
+  @Post('processos/alterar')
+  @HttpCode(200)
+  @Permissao('financeiro.reinf.gerar')
+  @AuditadoNoHandler('vara e vigência do processo alteradas pelo executor, com a trilha na mesma transação')
+  alterarProcesso(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    return this.gravar(
+      req,
+      'financeiro.reinfAlterarProcesso',
+      b,
+      (r) => `Processo alterado: vale para ${String(r['suspensoes'])} suspensão(ões) em vigor.`,
+    );
+  }
+
+  @Post('suspensoes/encerrar')
+  @HttpCode(200)
+  @Permissao('financeiro.reinf.gerar')
+  @AuditadoNoHandler(
+    'suspensão encerrada ou anulada pelo executor, sem apagar, com a trilha na mesma transação',
+  )
+  encerrarSuspensao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
+    return this.gravar(req, 'financeiro.reinfEncerrarSuspensao', b, (r) =>
+      r['situacao'] === 'anulada'
+        ? 'Suspensão anulada: não vale em nenhuma competência.'
+        : 'Suspensão encerrada: gere de novo os eventos das competências seguintes.',
+    );
+  }
+
   @Post('gerar')
   @HttpCode(200)
   @Permissao('financeiro.reinf.gerar')
@@ -91,7 +120,12 @@ export class ReinfEventosController {
     return this.gravar(req, 'financeiro.reinfGerarEventos', b, (r) => {
       const g = String(r['quantidadeGerados']);
       const x = String(r['quantidadeExclusoes']);
-      return `${g} evento(s) gerado(s), ${x} exclusão(ões), ${String(r['iguais'])} igual(is) ao já enviado.`;
+      const fora = Number(r['semDocumento'] ?? 0);
+      const aviso =
+        fora > 0
+          ? ` Atenção: ${fora} título(s) com retenção ficaram fora, sem CPF ou CNPJ do beneficiário no cadastro.`
+          : '';
+      return `${g} evento(s) gerado(s), ${x} exclusão(ões), ${String(r['iguais'])} igual(is) ao já enviado.${aviso}`;
     });
   }
 

@@ -33,13 +33,22 @@ export interface ProcessoReinfTela {
   readonly tributo: string;
   readonly beneficiario: string | null;
   readonly vigenciaInicio: string;
+  /** O fim que vale para a suspensão: o do processo ou o encerramento dela, o que vier antes. */
   readonly vigenciaFim: string | null;
   readonly situacao: string;
+  readonly vara: string | null;
+  readonly suspensao: number;
+  readonly vigenciaFimProcesso: string | null;
+  readonly encerradaEm: string | null;
+  readonly anulada: boolean;
+  readonly motivoEncerramento: string | null;
 }
 export interface PainelReinf {
   readonly periodo: string;
   readonly eventos: readonly EventoReinfTela[];
   readonly processos: readonly ProcessoReinfTela[];
+  /** Títulos com retenção na competência fora dos eventos: o credor não tem CPF nem CNPJ no cadastro. */
+  readonly titulosSemDocumento: readonly number[];
 }
 
 export const lerPainelReinf = (periodo: string) =>
@@ -47,6 +56,10 @@ export const lerPainelReinf = (periodo: string) =>
 export const lerXmlReinf = (id: number) => ler(`${P}/eventos/${id}/xml`, confiar<{ xml: string }>());
 export const gravarProcessoReinf = (corpo: unknown, chave: string) =>
   enviar(`${P}/processos`, corpo, confiar<ResultadoFinanceiro>(), chave);
+export const alterarProcessoReinf = (corpo: unknown, chave: string) =>
+  enviar(`${P}/processos/alterar`, corpo, confiar<ResultadoFinanceiro>(), chave);
+export const encerrarSuspensaoReinf = (corpo: unknown, chave: string) =>
+  enviar(`${P}/suspensoes/encerrar`, corpo, confiar<ResultadoFinanceiro>(), chave);
 export const gerarEventosReinf = (corpo: unknown, chave: string) =>
   enviar(`${P}/gerar`, corpo, confiar<ResultadoFinanceiro>(), chave);
 export const transmitirReinf = (corpo: unknown, chave: string) =>
