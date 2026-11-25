@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
 import BuscaPrestador from '../componentes/BuscaPrestador.vue';
+import FixoMinimoRepasse from '../componentes/FixoMinimoRepasse.vue';
 import { decidirRegra, lerRegras, lerVersoes, novaChave, proporRegra, simular } from '../api-repasse.js';
 import { opcoes, reais, usarRepasse } from '../usar-repasse.js';
 
@@ -522,6 +523,7 @@ const regraTexto = (p: VersaoRegraResposta['proposta']) =>
     <p v-else>{{ t('repasse.nenhum') }}</p>
     <ErroFaturamento v-if="erroDecisao" :erro="erroDecisao" />
     <MensagemFaturamento :texto="mensagemDecisao" testid="rg-dec-mensagem" />
+    <FixoMinimoRepasse />
   </section>
 </template>
 

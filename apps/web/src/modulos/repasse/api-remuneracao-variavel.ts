@@ -24,10 +24,16 @@ export interface FaixaMeta {
   premio: number;
 }
 export type FormaPremio = 'percentual_producao' | 'valor_fixo';
-export type TipoRegraVariavel = 'minimo' | 'resultado' | 'meta';
+export type TipoRegraVariavel = 'minimo' | 'fixo' | 'resultado' | 'meta';
 
 export interface PainelRemuneracaoVariavel {
   minimos: (Vigente & { valorMinimo: number; complementoAutomatico: boolean })[];
+  fixos: (Vigente & {
+    descricao: string;
+    valorMensal: number;
+    diaPagamento: number | null;
+    lancamentoAutomatico: boolean;
+  })[];
   resultados: (Vigente & { centroCusto: number | null; centroNome: string | null; percentual: number })[];
   metas: (Vigente & {
     indicador: number;
@@ -72,7 +78,7 @@ export interface SimulacaoRemuneracao {
     debito: number;
     pendencias: string[];
     itens: {
-      tipo: 'complemento_minimo' | 'resultado' | 'produtividade' | 'custo';
+      tipo: 'valor_fixo' | 'complemento_minimo' | 'resultado' | 'produtividade' | 'custo';
       regra: number;
       sentido: 'credito' | 'debito';
       valor: number;
@@ -89,6 +95,8 @@ export const simularVariavel = (apuracao: number, profissional: number) =>
   ler(`${R}/simulacao${qs({ apuracao, profissional })}`, confiar<SimulacaoRemuneracao>());
 export const incluirMinimo = (corpo: unknown) =>
   enviar(`${R}/minimos`, corpo, confiar<{ id: number }>(), novaChave('rv-minimo'));
+export const incluirFixo = (corpo: unknown) =>
+  enviar(`${R}/fixos`, corpo, confiar<{ id: number }>(), novaChave('rv-fixo'));
 export const incluirResultado = (corpo: unknown) =>
   enviar(`${R}/resultados`, corpo, confiar<{ id: number }>(), novaChave('rv-resultado'));
 export const incluirMeta = (corpo: unknown) =>

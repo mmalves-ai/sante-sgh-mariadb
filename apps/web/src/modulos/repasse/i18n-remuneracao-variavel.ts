@@ -19,6 +19,19 @@ export const mensagensRemuneracaoVariavel = {
     valor: 'Valor mínimo (R$)',
     explica: 'Se a produção da apuração não chegar ao mínimo, entra o complemento como evento próprio.',
   },
+  fixo: {
+    titulo: 'Valor fixo mensal',
+    descricao: 'Descrição (ex.: coordenação)',
+    valor: 'Valor mensal (R$)',
+    dia: 'Dia do pagamento (opcional)',
+    automatico: 'Entra sozinho na apuração',
+    manual: 'manual',
+    explica:
+      'Valor contratado que entra uma vez por competência, qualquer que seja a produção; não conta para o mínimo garantido.',
+    secao: 'Valor fixo e mínimo garantido',
+    resumoSecao:
+      'Escolha o médico: o valor fixo mensal e o mínimo garantido dele, a conferência na hora e o que a apuração em aberto vai lançar.',
+  },
   resultado: {
     titulo: 'Percentual do resultado',
     centro: 'Centro de custo',
@@ -62,6 +75,7 @@ export const mensagensRemuneracaoVariavel = {
     lancar: 'Lançar na apuração',
     lancou: '{lancamentos} lançamento(s) e {descontos} desconto(s) gravados.',
     tipos: {
+      valor_fixo: 'Valor fixo mensal',
       complemento_minimo: 'Complemento do mínimo',
       resultado: 'Resultado',
       produtividade: 'Produtividade',
