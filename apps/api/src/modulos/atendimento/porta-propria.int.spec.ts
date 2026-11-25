@@ -932,8 +932,4 @@ describe.skipIf(SEM_BANCO)('porta própria do atendimento contra o MariaDB (clie
         ),
       ).rejects.toMatchObject({ problema: { codigo: 'troca-de-conta' } });
   });
-
-  it('os indicadores do atendimento ainda sem leitura no banco respondem 501', async () => {
-    await expect(porta.indicadores()).rejects.toMatchObject({ status: 501 });
-  });
 });

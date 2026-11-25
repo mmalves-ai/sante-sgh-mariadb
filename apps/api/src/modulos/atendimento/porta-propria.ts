@@ -20,8 +20,9 @@
 // primeira entrada; justificativa e horas pelo domínio; a saída devolve o atendimento a "em atendimento".
 // Herança do atendimento anterior: porta-propria-heranca.ts (regra_heranca_campo por escopo).
 // Correção da ficha (segurado, alteração, correção e estorno do extra): porta-propria-correcao.ts.
+// Indicadores do período (contagens e marcas de tempo): porta-propria-indicadores.ts.
 // Pendente (pedido ao orquestrador): impressos, paciente
-// não identificado, escore do PA, sinais, indicadores e marcação respondem 501 (ou vazio no quadro) até a regra e o
+// não identificado, escore do PA, sinais e marcação respondem 501 (ou vazio no quadro) até a regra e o
 // modelo chegarem.
 import { randomUUID } from 'node:crypto';
 import {
@@ -89,6 +90,7 @@ import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
 import { OPERACOES_CORRECAO_FICHA } from './porta-propria-correcao.js';
 import { gravarEtapaPa, gravarEtapasSePa, lerEtapasPa } from './porta-propria-etapas.js';
+import { diaDeslocado, lerIndicadoresProprios } from './porta-propria-indicadores.js';
 import {
   lerEscoposHeranca,
   lerMarcasHeranca,
@@ -872,8 +874,24 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
     });
   }
 
-  indicadores(): Promise<IndicadoresDados> {
-    return pendenteLeitura('Indicadores do atendimento');
+  /** Os agregados dos indicadores no período (porta-propria-indicadores.ts): só do estabelecimento da sessão. */
+  indicadores(
+    c: ContextoAtendimento,
+    o: { inicio: string; fim: string; unidade?: number },
+  ): Promise<IndicadoresDados> {
+    return this.ler(c, async (l) => {
+      const est = await this.estabelecimento(c, l);
+      const fuso = await this.fuso(l, est);
+      return lerIndicadoresProprios(l, {
+        estabelecimento: est,
+        de: inicioDoDia(o.inicio, fuso),
+        ate: inicioDoDia(diaDeslocado(o.fim, 1), fuso),
+        deVisitas: inicioDoDia(diaDeslocado(o.inicio, -3), fuso),
+        ...(o.unidade ? { unidade: o.unidade } : {}),
+        civil: (d) => localNoFuso(d, fuso),
+        agora: new Date(),
+      });
+    });
   }
 
   apoio(c: ContextoAtendimento): Promise<ApoioAtendimentoDados> {
