@@ -5,6 +5,7 @@
 // puras têm todas texto aqui (conferido pelo tipo).
 import type { CodigoModeloPlano, RecusaAlertaEquipamento, RecusaCicloVida, RecusaPmoc } from '@sgh/contratos';
 import type { RecusaAbertura, RecusaAcao, RecusaCobertura, RecusaExecucao } from '@sgh/dominio-manutencao';
+import { recusasCorretiva, textosCorretiva, textosOficinas } from './i18n-corretiva.js';
 
 const recusasAbertura = {
   'natureza-nao-abre': 'Preventiva, calibração e inspeção nascem do plano de manutenção.',
@@ -597,7 +598,10 @@ export const mensagensManutencao = {
       descarteAviso: 'O descarte encerra o ciclo de vida: o equipamento não volta a ser ativado.',
     },
   },
+  oficinas: textosOficinas,
+  corretiva: textosCorretiva,
   recusas: {
+    corretiva: recusasCorretiva,
     pmoc: recusasPmoc,
     ciclo: recusasCiclo,
     alerta: recusasAlerta,

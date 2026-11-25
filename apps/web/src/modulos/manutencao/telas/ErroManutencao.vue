@@ -9,7 +9,7 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { codigoDaRecusa } from '../api-manutencao.js';
 
 // `grupo` (W0-08): o grupo de recusas procurado primeiro (o alerta e o ciclo de vida têm `desatualizado` e outros próprios).
-const props = defineProps<{ erro: unknown; grupo?: 'alerta' | 'ciclo' | 'pmoc' }>();
+const props = defineProps<{ erro: unknown; grupo?: 'alerta' | 'ciclo' | 'pmoc' | 'corretiva' }>();
 const { t, te } = useI18n();
 const GRUPOS = ['abertura', 'acao', 'execucao', 'cobertura', 'servidor'] as const;
 const chave = computed(() => {

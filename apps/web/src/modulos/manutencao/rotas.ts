@@ -17,4 +17,11 @@ export const rotasManutencao: RouteRecordRaw[] = [
     component: () => import('./telas/EquipamentosTela.vue'),
     meta: { permissao: P.equipamentoLer },
   },
+  {
+    // C2-089: oficinas (pessoas, alçada do aprovador, serviços) e os equipamentos fora para conserto.
+    path: '/manutencao/oficinas',
+    name: 'manutencao.oficinas',
+    component: () => import('./telas/OficinasTela.vue'),
+    meta: { permissao: P.equipamentoLer },
+  },
 ];

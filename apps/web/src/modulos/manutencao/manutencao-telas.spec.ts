@@ -499,6 +499,7 @@ describe('comuns da manutenção', () => {
     expect(rotasManutencao.map((r) => [r.path, r.meta?.['permissao']])).toEqual([
       ['/manutencao/os', 'manutencao.os.abrir'],
       ['/manutencao/equipamentos', 'manutencao.equipamento.ler'],
+      ['/manutencao/oficinas', 'manutencao.equipamento.ler'],
     ]);
   });
 });

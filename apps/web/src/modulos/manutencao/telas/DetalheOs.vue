@@ -34,6 +34,7 @@ import {
 } from '../comum-manutencao.js';
 import OsNoLeitoAviso from '../../adt/componentes/OsNoLeitoAviso.vue';
 import CampoInstante from './CampoInstante.vue';
+import CorretivaExterna from './CorretivaExterna.vue';
 import ErroManutencao from './ErroManutencao.vue';
 import FormCorrigirOs from './FormCorrigirOs.vue';
 import FormQueixaOs from './FormQueixaOs.vue';
@@ -525,6 +526,14 @@ const listaProblemas = computed(() => Object.values(problemas.value));
           <SanteBotao variante="texto" :rotulo="t('manutencao.cancelar')" @acionar="acao = null" />
         </div>
       </form>
+
+      <!-- C2-089: orçamento da OS, decisão do aprovador e conserto externo (remessa e retorno). -->
+      <CorretivaExterna
+        v-if="apoio.pode.atender"
+        :os="o.id"
+        :ligada="apoio.gravacao.ligada"
+        @gravado="(m) => (mensagem = m)"
+      />
 
       <section aria-labelledby="os-historico-titulo">
         <h3 id="os-historico-titulo">{{ t('manutencao.os.historico') }}</h3>
