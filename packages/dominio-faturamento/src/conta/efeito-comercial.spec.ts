@@ -2,7 +2,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { type ContaTiss, montarGuia, montarLote, naturezaPadrao, TABELA_PADRAO } from '../tiss/montagem.js';
 import { type ArquivoEsquema, carregarEsquemas, conferirLote } from '../tiss/validacao.js';
-import { efeitoComercialNaConta, fatorReducaoGuia, valorLinhaGuia } from './efeito-comercial.js';
+import {
+  conferirReducaoComercialDaGuia,
+  efeitoComercialNaConta,
+  fatorReducaoGuia,
+  reducaoComercialDaGuia,
+  valorLinhaGuia,
+} from './efeito-comercial.js';
 
 let esquemas: ArquivoEsquema[];
 beforeAll(async () => {
@@ -132,5 +138,64 @@ describe('guia TISS com o abatimento comercial', () => {
     );
     expect(m.xml).toContain('<ans:reducaoAcrescimo>1.00</ans:reducaoAcrescimo>');
     expect(m.xml).toContain('<ans:valorTotalGeral>1000.00</ans:valorTotalGeral>');
+  });
+});
+
+describe('repartição do abatimento nos itens da guia (fecha no centavo com a conta)', () => {
+  const linhas = (vs: number[]) => vs.map((v) => ({ quantidade: 1, valorUnitario: v }));
+  const totalGuia = (vs: number[], fs: readonly number[]) =>
+    vs.reduce((t, v, k) => t + Math.round(v * (fs[k] ?? 1) * 100), 0) / 100;
+
+  it('divisão exata: fator comum', () => {
+    const r = reducaoComercialDaGuia(linhas([600, 250, 150]), 300);
+    expect(r.fatores).toEqual([0.7, 0.7, 0.7]);
+    expect(r).toMatchObject({ totalGuia: 700, alvo: 700, residuo: 0 });
+  });
+
+  it('divisão não exata (1000 com 333 de abatimento): a guia fecha em 667, não 670', () => {
+    const vs = [600, 250, 150];
+    const r = reducaoComercialDaGuia(linhas(vs), 333);
+    expect(r.residuo).toBe(0);
+    expect(r.totalGuia).toBe(667);
+    expect(totalGuia(vs, r.fatores)).toBe(667);
+    for (const f of r.fatores) expect(Math.round(f * 100)).toBe(f * 100);
+    expect(conferirReducaoComercialDaGuia('C1', r, 667, 333)).toBeNull();
+  });
+
+  it('abatimento abaixo de 0,5% (franquia de 40 sobre 10000): a guia sai com 9960, nunca cheia', () => {
+    const vs = [4000, 3000, 2000, 900, 80, 20];
+    const r = reducaoComercialDaGuia(linhas(vs), 40);
+    expect(r.residuo).toBe(0);
+    expect(totalGuia(vs, r.fatores)).toBe(9960);
+    expect(r.fatores.some((f) => f < 1)).toBe(true);
+  });
+
+  it('guia de um item só que o fator de duas casas não representa: recusa com o resíduo, nunca cobra diferente', () => {
+    const r = reducaoComercialDaGuia(linhas([1000]), 333);
+    expect(r.residuo).not.toBe(0);
+    expect(conferirReducaoComercialDaGuia('C9', r, 667, 333)).toMatchObject({
+      codigo: 'guia-abatimento-sem-fator',
+    });
+    // Sem abatimento: nada a conferir e fator 1.
+    const s = reducaoComercialDaGuia(linhas([1000]), 0);
+    expect(s).toMatchObject({ fatores: [1], residuo: 0, totalGuia: 1000 });
+    expect(conferirReducaoComercialDaGuia('C9', s, 1000, 0)).toBeNull();
+  });
+
+  it('fator por item vai ao XML e o total geral do lote é o da conta (XSD 04.03.00)', async () => {
+    const base = conta(2);
+    const r = reducaoComercialDaGuia(base.itens, 333);
+    const c: ContaTiss = {
+      ...base,
+      itens: base.itens.map((i, k) => {
+        const f = r.fatores[k] ?? 1;
+        return f === 1 ? i : { ...i, reducaoAcrescimo: f };
+      }),
+    };
+    const m = montarLote(prestador, '000000000145', '000000000045', [c], new Date('2026-10-23T13:14:15Z'));
+    expect(m.xml).toContain('<ans:valorTotalGeral>667.00</ans:valorTotalGeral>');
+    expect((await conferirLote(m, esquemas)).erros).toEqual([]);
+    const consulta = montarGuia({ ...c, tipoGuia: 1 }, prestador);
+    expect(consulta.tipo === 'consulta' && consulta.valor).toBe(667);
   });
 });

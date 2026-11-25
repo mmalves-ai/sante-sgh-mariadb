@@ -40,6 +40,8 @@ import {
   recusaCamposOperadoraInvalidos,
   recusaObrigatoriosPendentes,
   recusaObservacaoLonga,
+  conferirReducaoComercialDaGuia,
+  reducaoComercialDaGuia,
 } from '@sgh/dominio-faturamento';
 import {
   type ContextoOperacao,
@@ -349,6 +351,9 @@ async function contaTiss(
   });
   // 06-FAT linha 19: o desconto por volume e a franquia aplicados saem do total da conta e vão à guia pelo fator de
   // redução dos itens; a conferência compara os itens com o total antes desse abatimento.
+  // O fator vai item a item (reducaoComercialDaGuia) para o total da guia fechar no centavo com o valor_total da conta;
+  // se o fator de duas casas do padrão não fecha (guia de um item só, por exemplo), a conta é recusada, nunca cobrada
+  // diferente da conta.
   const bruto = itensGuia.reduce((t, i) => t + Math.round(i.quantidade * i.valorUnitario * 100), 0) / 100;
   const comercial = await abatimentoComercialDaConta(tx, n(ct['id']), bruto);
   const divergente = conferirGuiaComConta({
@@ -358,6 +363,21 @@ async function contaTiss(
     totalConta: Math.round((n(ct['valor_total']) + comercial.abatimento) * 100) / 100,
   });
   if (divergente) throw recusa(divergente.codigo, divergente.mensagem);
+  // O alvo é o próprio valor_total (a folga da conferência acima cobre só o arredondamento das linhas).
+  const abatimentoGuia =
+    comercial.abatimento > 0 ? Math.max(0, Math.round((bruto - n(ct['valor_total'])) * 100) / 100) : 0;
+  const reducao = reducaoComercialDaGuia(itensGuia, abatimentoGuia);
+  const fechamento = conferirReducaoComercialDaGuia(
+    rotulo,
+    reducao,
+    n(ct['valor_total']),
+    comercial.abatimento,
+  );
+  if (fechamento) throw recusa(fechamento.codigo, fechamento.mensagem);
+  const itensReduzidos = itensGuia.map((i, k) => {
+    const f = reducao.fatores[k] ?? 1;
+    return f === 1 ? i : { ...i, reducaoAcrescimo: f };
+  });
 
   const avisos: string[] = [];
   const guiaSolicitacao = (
@@ -419,8 +439,7 @@ async function contaTiss(
       profissionalCodigo: executante?.codigo ?? '',
       executantePadrao: false,
       ...(obs?.texto ? { observacao: obs.texto } : {}),
-      ...(comercial.fator !== null ? { reducaoAcrescimo: comercial.fator } : {}),
-      itens: itensGuia,
+      itens: itensReduzidos,
     },
   };
 }

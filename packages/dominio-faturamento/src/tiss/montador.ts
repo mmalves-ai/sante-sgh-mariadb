@@ -107,10 +107,11 @@ function criarMontadorSoLote(guardar: GuardarXml): MontadorLoteTiss {
   let esquemas: Promise<ArquivoEsquema[]> | null = null;
   return async (d: DadosLoteTiss): Promise<LoteMontado> => {
     const faltas = faltasDoPrestador(d.prestador);
+    // O valor do lote é o da guia: cada linha com o seu fator de redução (abatimento comercial, 06-FAT linha 19).
     const valor =
       d.contas
-        .flatMap((c) => c.itens)
-        .reduce((s, i) => s + Math.round(i.quantidade * i.valorUnitario * 100), 0) / 100;
+        .flatMap((c) => c.itens.map((i) => ({ i, f: i.reducaoAcrescimo ?? c.reducaoAcrescimo ?? 1 })))
+        .reduce((s, { i, f }) => s + Math.round(i.quantidade * i.valorUnitario * f * 100), 0) / 100;
     const vazio = (erros: string[]): LoteMontado => ({
       valido: false,
       erros,

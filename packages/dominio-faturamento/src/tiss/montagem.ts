@@ -61,7 +61,7 @@ const comFator = (f: number | undefined) => (f !== undefined && f !== 1 ? { redu
 
 function executado(i: ItemContaTiss, f?: number): ItemExecutado {
   return {
-    ...comFator(f),
+    ...comFator(i.reducaoAcrescimo ?? f),
     sequencial: i.sequencial,
     data: i.data,
     procedimento: {
@@ -77,7 +77,7 @@ function executado(i: ItemContaTiss, f?: number): ItemExecutado {
 function despesa(i: ItemContaTiss, seq: number, f?: number): Despesa {
   const nat = i.natureza === 'procedimento' ? 'taxa' : i.natureza;
   return {
-    ...comFator(f),
+    ...comFator(i.reducaoAcrescimo ?? f),
     sequencial: seq,
     codigoDespesa: CODIGO_DESPESA[nat],
     data: i.data,
@@ -115,7 +115,11 @@ export function montarGuia(c: ContaTiss, p: DadosPrestador): Guia {
         procedimento: { codigoTabela: proc?.codigoTabela ?? '22', codigo: (proc?.codigo ?? '').slice(0, 10) },
         valor:
           c.itens.reduce(
-            (s, i) => s + Math.round(i.quantidade * i.valorUnitario * (c.reducaoAcrescimo ?? 1) * 100),
+            (s, i) =>
+              s +
+              Math.round(
+                i.quantidade * i.valorUnitario * (i.reducaoAcrescimo ?? c.reducaoAcrescimo ?? 1) * 100,
+              ),
             0,
           ) / 100,
         ...obs,

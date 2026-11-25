@@ -24,6 +24,11 @@ export interface ItemContaTiss {
   readonly descricao: string;
   readonly quantidade: number;
   readonly valorUnitario: number;
+  /**
+   * Fator de redução deste item (reducaoAcrescimo, duas casas), quando o abatimento comercial da conta (06-FAT linha 19)
+   * é repartido item a item para o total da guia fechar no centavo com o total da conta; prevalece sobre o da conta.
+   */
+  readonly reducaoAcrescimo?: number;
 }
 
 export interface ContaTiss {
