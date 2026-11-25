@@ -13,7 +13,7 @@ import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { EmailConfiguracaoPropria } from './email-configuracao-propria.js';
-import type { ResultadoTesteConexao } from './email-teste-conexao.js';
+import type { ResultadoTesteConexao, ServidorParaTeste } from './email-teste-conexao.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -34,6 +34,7 @@ describe.skipIf(SEM_BANCO)('e-mail do sistema no banco próprio', () => {
   const nucleo = new NucleoProprio();
   let teste: ResultadoTesteConexao = { sucesso: true, detalhe: 'Servidor respondeu.' };
   let testados = 0;
+  let testadoCom: ServidorParaTeste | null = null;
   let agora = T0;
   let porta: EmailConfiguracaoPropria;
   const ids = { est: 0, est2: 0, usuario: 0, fin: 0 };
@@ -122,8 +123,9 @@ describe.skipIf(SEM_BANCO)('e-mail do sistema no banco próprio', () => {
       nucleo,
       CLIENTE,
       false,
-      async () => {
+      async (s) => {
         testados++;
+        testadoCom = s;
         return teste;
       },
       () => agora,
@@ -231,6 +233,11 @@ describe.skipIf(SEM_BANCO)('e-mail do sistema no banco próprio', () => {
     agora = new Date(T0.getTime() + 60_000);
     const ok = await porta.testarServidor(ctx(), { servidor });
     expect(ok.resultado).toMatchObject({ servidor, sucesso: true });
+    // C1-063: servidor que exige autenticação vai ao teste com o usuário e a referência da senha (nunca a senha).
+    expect(testadoCom).toMatchObject({
+      usuario: 'envio-sintetico',
+      referenciaCofre: 'email/saida/sintetico',
+    });
     let l = await um(
       'SELECT ultimo_teste_em, ultimo_teste_sucesso, versao FROM servidor_email WHERE id = ?',
       [servidor],

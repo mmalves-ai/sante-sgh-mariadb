@@ -11,6 +11,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { lerReferenciaSegredoLegado } from '@sgh/contratos';
+import { referenciaCofreValida } from '@sgh/dominio-acesso';
 import { lerReferenciaCofre, lerReferenciaCofreConector } from '@sgh/dominio-documento';
 
 export interface Cofre {
@@ -55,7 +56,13 @@ export function decifrarComChave(chave: Buffer, envelope: string): string | null
  * obra carga-painel, a senha do servidor Firebird do cliente (`cofre:conector/<cliente>/firebird-senha`).
  */
 function exigirReferencia(r: string): void {
-  if (!lerReferenciaCofre(r) && !lerReferenciaSegredoLegado(r) && !lerReferenciaCofreConector(r))
+  if (
+    !lerReferenciaCofre(r) &&
+    !lerReferenciaSegredoLegado(r) &&
+    !lerReferenciaCofreConector(r) &&
+    // 01-ADM L77: a senha do servidor de e-mail cadastrado (servidor_email.referencia_cofre, ex.: email/saida/principal).
+    !referenciaCofreValida(r)
+  )
     throw new Error('Referência de cofre inválida.');
 }
 

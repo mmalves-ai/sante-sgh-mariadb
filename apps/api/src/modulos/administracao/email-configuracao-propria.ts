@@ -451,6 +451,13 @@ export class EmailConfiguracaoPropria {
       porta: num(s['porta']),
       seguranca: String(s['seguranca']),
       tempoLimiteSegundos: num(s['tempo_limite_segundos']),
+      // Servidor que exige autenticação: o teste autentica com o usuário e a senha lida do cofre pela referência.
+      ...(bool(s['exige_autenticacao'])
+        ? {
+            usuario: s['usuario_autenticacao'] == null ? null : String(s['usuario_autenticacao']),
+            referenciaCofre: s['referencia_cofre'] == null ? null : String(s['referencia_cofre']),
+          }
+        : {}),
     });
     if (r.neutralizado)
       throw recusa(
@@ -466,7 +473,8 @@ export class EmailConfiguracaoPropria {
 
   private async servidorDoAlcance(l: Leitor, servidor: number, est: number | null) {
     const s = await l.uma(
-      `SELECT id, versao, host, porta, seguranca, tempo_limite_segundos FROM servidor_email
+      `SELECT id, versao, host, porta, seguranca, tempo_limite_segundos, exige_autenticacao, usuario_autenticacao,
+              referencia_cofre FROM servidor_email
         WHERE id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
       [servidor, est],
     );
