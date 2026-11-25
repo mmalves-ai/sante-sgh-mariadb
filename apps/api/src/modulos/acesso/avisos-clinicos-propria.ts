@@ -3,7 +3,8 @@
 // módulo que o gera (aviso_clinico + aviso_clinico_destinatario); aqui o destinatário o lê na central e dá ciência.
 // As regras são as puras de @sgh/dominio-pep (aviso-clinico-caixa.ts). Contrato de efeito:
 //   - leitura: os avisos do usuário da sessão no estabelecimento da sessão (destinatário por usuário), sem os
-//     cancelados e excluídos, os não cientes e os cientes dos últimos 7 dias; nunca o de outra pessoa;
+//     cancelados e excluídos e sem a cópia por e-mail (canal 'email', 03-PEP L133), os não cientes e os cientes
+//     dos últimos 7 dias; nunca o de outra pessoa;
 //   - ciência: no destinatário, lido_em (se ainda não lido), ciente_em, lido_usuario_id e situação 'ciente', com a
 //     versão lida; a repetida não grava; o de outra pessoa e o cancelado são recusados sem gravar; nada é apagado.
 // A trilha da ciência vai pelo executor (mesma transação).
@@ -82,7 +83,7 @@ export class PortaAvisosClinicosPropria extends PortaEstabelecimentoPropria {
            FROM aviso_clinico_destinatario d
            JOIN aviso_clinico a ON a.id = d.aviso_clinico_id
           WHERE d.usuario_id = ? AND a.estabelecimento_id = ? AND d.excluido_em IS NULL AND a.excluido_em IS NULL
-            AND a.situacao <> 'cancelado' AND d.situacao <> 'cancelado'
+            AND a.situacao <> 'cancelado' AND d.situacao <> 'cancelado' AND d.canal <> 'email'
             AND (d.ciente_em IS NULL OR d.ciente_em > ?)
           ORDER BY d.ciente_em IS NOT NULL, a.gerado_em DESC, d.id DESC
           LIMIT ${TETO}`,
