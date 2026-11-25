@@ -88,6 +88,7 @@ import {
 import { lancarItem } from '../faturamento/operacoes.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
+import { gravarImpressoEmitido, lerFichasDoAtendimento } from './regras-impressao.js';
 import { OPERACOES_CORRECAO_FICHA } from './porta-propria-correcao.js';
 import { gravarEtapaPa, gravarEtapasSePa, lerEtapasPa } from './porta-propria-etapas.js';
 import { diaDeslocado, lerIndicadoresProprios } from './porta-propria-indicadores.js';
@@ -386,7 +387,8 @@ function gravadorSobre(tx: TxOperacao, estabelecimento: number): GravadorSghAten
       if (!r.transferencia && a.situacao === 'em_observacao') await mudarSituacao(tx, a, 'em_atendimento');
       return { horas, id: Number(o.id) };
     },
-    registrarImpresso: () => Promise.reject(pendenteGravacao('Registro de impresso')),
+    // 02-REC linha 35: cada emissão fica numerada por impresso do atendimento (a segunda em diante é reimpressão).
+    registrarImpresso: (r) => gravarImpressoEmitido(tx, estabelecimento, r),
     marcarNaoIdentificado: () => Promise.reject(pendenteGravacao('Paciente não identificado')),
     identificarPaciente: () => Promise.reject(pendenteGravacao('Identificação do paciente')),
     registrarEscorePa: () => Promise.reject(pendenteGravacao('Escore do pronto atendimento')),
@@ -399,6 +401,7 @@ const TABELAS_GRAVACAO_DIRETA = [
   'atendimento_etapa_pa',
   'atendimento_situacao_historico',
   'ocupacao_leito_observacao',
+  'atendimento_impresso_emitido',
 ];
 
 export class PortaAtendimentoPropria implements PortaAtendimento {
@@ -1188,9 +1191,16 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
     return new Map();
   }
 
-  /** Pendente: a configuração das fichas (modelo_ficha_impressa e regra_impressao_ficha) ainda não é lida: vale a padrão. */
-  async fichasConfiguradas(): Promise<FichasConfiguradas | null> {
-    return null;
+  /**
+   * As fichas que a regra de impressão manda para o atendimento (02-REC linha 35): por fonte pagadora, especialidade,
+   * grupo de faturamento, unidade e tipo de atendimento. Sem o atendimento, não há o que decidir (vale a padrão).
+   */
+  async fichasConfiguradas(c: ContextoAtendimento, reg?: number): Promise<FichasConfiguradas | null> {
+    if (reg === undefined) return null;
+    const prontas = await this.ler(c, async (l) =>
+      lerFichasDoAtendimento(l, await this.estabelecimento(c, l), reg),
+    );
+    return prontas ? { modelos: [], selecoes: [], prontas } : null;
   }
 
   naoIdentificados(): Promise<

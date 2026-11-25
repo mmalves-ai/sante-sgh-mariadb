@@ -31,6 +31,13 @@ export const rotasAtendimento: RouteRecordRaw[] = [
     meta: { permissao: 'atendimento.atendimento.ler' },
   },
   {
+    // 02-REC linha 35: modelos de ficha e regras de impressão por fonte pagadora, especialidade, grupo e unidade.
+    path: '/recepcao/atendimento/regras-impressao',
+    name: 'atendimento.regrasImpressao',
+    component: () => import('./telas/RegrasImpressaoTela.vue'),
+    meta: { permissao: 'documento.cadastro.editar' },
+  },
+  {
     path: `/recepcao/atendimento/:reg${reg}/segurado`,
     name: 'atendimento.segurado',
     component: () => import('./telas/SeguradoTela.vue'),

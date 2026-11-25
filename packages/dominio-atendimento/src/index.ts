@@ -8,6 +8,8 @@ export * from './fila-consultorio.js';
 export * from './heranca.js';
 export * from './padrao-abertura.js';
 export * from './impressos.js';
+// F3.2 (02-REC linha 35): quais fichas saem pela regra de impressão e a numeração da reimpressão.
+export * from './regra-impressao.js';
 export * from './indicadores.js';
 // F3.2 (02-REC linha 30): o que os grupos lidos do banco do cliente valem para o cálculo dos indicadores.
 export * from './indicadores-leitura.js';

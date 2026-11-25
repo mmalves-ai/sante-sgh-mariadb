@@ -81,12 +81,18 @@ import {
 } from '@sgh/contratos';
 import {
   copiasValidas,
+  copiasValidasDoModelo,
   fichasAImprimir,
   idadeEmAnos,
   type ModeloFicha,
   podeRegistrarDesfecho,
 } from '@sgh/dominio-atendimento';
 import { enfileirarZpl, ErroZpl, zplEtiquetaProntuario, zplPulseira } from '@sgh/dominio-documento';
+import {
+  emitirComIdentificacao,
+  IMPRESSAO_IDENTIFICACAO,
+} from '../administracao/impressao-identificacao-emissao.js';
+import type { ImpressaoIdentificacaoPropria } from '../administracao/impressao-identificacao-propria.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { reautenticar } from '../../autorizacao/reautenticacao.js';
 import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
@@ -156,7 +162,7 @@ const ACOES_SGH_AMBULATORIO = {
 };
 const ACOES_SGH_PA = { etapa: 'pa.etapa.registrar', observacao: 'pa.observacao.alocar' };
 
-const TABELA_IMPRESSO = 'SGH_ATD_IMPRESSO';
+const TABELA_IMPRESSO = 'atendimento_impresso_emitido';
 const TABELA_NAO_IDENTIFICADO = 'SGH_ATD_NAO_IDENTIFICADO';
 
 /** Os apoios de gravação do M20 (uma chave de liberação cada): o controlador do PA usa os mesmos. */
@@ -253,6 +259,9 @@ export class AtendimentoController implements OnModuleDestroy {
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
     @Optional() @Inject(AVISOS_ATENDIMENTO) private readonly avisos: AvisosAtendimento | null = null,
     @Optional() @Inject(BATIDA_EVENTOS_MS) private readonly batidaMs: number = BATIDA_EVENTOS_PADRAO_MS,
+    @Optional()
+    @Inject(IMPRESSAO_IDENTIFICACAO)
+    private readonly identificacao: ImpressaoIdentificacaoPropria | null = null,
   ) {
     this.apoios = new ApoiosAtendimento(porta, trilha, configuracao, cache);
     this.servico = new ServicoAtendimento(porta);
@@ -795,7 +804,7 @@ export class AtendimentoController implements OnModuleDestroy {
   @Post(':reg/impressos')
   @HttpCode(201)
   @Permissao('atendimento.impresso.emitir')
-  @AuditadoNoHandler('impresso do atendimento (SGH_ATD_IMPRESSO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('emissão do impresso (atendimento_impresso_emitido) com a trilha na mesma transação')
   async emitir(
     @Param('reg') reg: string,
     @Body() b: unknown,
@@ -825,7 +834,8 @@ export class AtendimentoController implements OnModuleDestroy {
           campos: ['formato'],
         },
       );
-    if (!copiasValidas(e.impresso, e.copias))
+    // A ficha configurada aceita as cópias que a regra de impressão ou o modelo mandam (até o teto do modelo).
+    if (e.modelo !== undefined ? !copiasValidasDoModelo(e.copias) : !copiasValidas(e.impresso, e.copias))
       throw new ErroProblema(
         'entrada-invalida',
         400,
@@ -850,10 +860,10 @@ export class AtendimentoController implements OnModuleDestroy {
         );
       modelo = { modelo: f.modelo, nome: f.nome };
     }
-    const gerado =
-      e.formato === 'zpl'
-        ? await this.zpl(s, d, e.impresso, e.copias)
-        : await this.pdf(s, d, e.impresso, modelo);
+    // Pulseira e etiqueta: a 1ª impressão fica registrada e a reimpressão só sai com o motivo (01-ADM L79).
+    const gerado = await emitirComIdentificacao(this.identificacao, s, { atendimento: d.reg }, e, () =>
+      e.formato === 'zpl' ? this.zpl(s, d, e.impresso, e.copias) : this.pdf(s, d, e.impresso, modelo),
+    );
     const resumo = createHash('sha256').update(gerado.conteudo).digest('hex');
     await this.apoios.doTipo(d.pa ? 'pa' : null).sgh(
       s,
@@ -896,8 +906,19 @@ export class AtendimentoController implements OnModuleDestroy {
     d: DadosImpresso,
   ): Promise<{ lista: ImpressosAtendimento['fichas']; lida: boolean }> {
     try {
-      const lidas = await this.porta.fichasConfiguradas(s.porta);
+      const lidas = await this.porta.fichasConfiguradas(s.porta, d.reg);
       if (!lidas) return { lista: [], lida: false };
+      // 02-REC linha 35: no banco do cliente a regra de impressão já decidiu as fichas do atendimento.
+      if (lidas.prontas)
+        return {
+          lista: lidas.prontas.map((f) => ({
+            modelo: f.modelo,
+            nome: f.nome,
+            copias: f.copias,
+            ordem: f.ordem,
+          })),
+          lida: true,
+        };
       const modelos: ModeloFicha[] = [...lidas.modelos];
       const lista = fichasAImprimir(
         modelos,

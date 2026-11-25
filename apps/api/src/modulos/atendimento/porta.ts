@@ -33,6 +33,18 @@ export type ContextoAtendimento = ContextoPorta;
 export interface FichasConfiguradas {
   readonly modelos: readonly ModeloFicha[];
   readonly selecoes: readonly SelecaoFicha[];
+  /**
+   * As fichas já decididas pela regra de impressão do banco do cliente (02-REC linha 35), com as vezes em que cada
+   * uma já saiu para o atendimento. Presente: vale esta lista, e modelos e seleções não são usados.
+   */
+  readonly prontas?: readonly {
+    readonly modelo: number;
+    readonly nome: string;
+    readonly copias: number;
+    readonly ordem: number;
+    readonly selecionada: boolean;
+    readonly emitidas: number;
+  }[];
 }
 export type { DimensaoSelecao };
 
@@ -177,7 +189,7 @@ export interface PortaAtendimento extends PortaGravacaoM18<GravadorSghAtendiment
     itens: readonly { cabecalho: string; desde: string }[],
   ): Promise<Map<string, SinaisRecentes>>;
   /** A configuração das fichas a imprimir do estabelecimento (null: sem configuração, vale a ficha padrão). */
-  fichasConfiguradas(c: ContextoAtendimento): Promise<FichasConfiguradas | null>;
+  fichasConfiguradas(c: ContextoAtendimento, reg?: number): Promise<FichasConfiguradas | null>;
   naoIdentificados(c: ContextoAtendimento): Promise<
     {
       paciente: number;
