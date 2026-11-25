@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import { ErroApi } from '../../../casca/erros/problem-details.js';
 import {
   alterarEstabelecimento,
   buscarProfissionais,
@@ -23,13 +24,19 @@ import {
   type Unidade,
 } from '../api-estrutura.js';
 
-const { t } = useI18n();
+const { t, te } = useI18n();
 const cliente = useQueryClient();
 const consulta = useQuery({ queryKey: ['cadastro', 'estrutura-gestao'], queryFn: lerEstrutura });
 const dados = computed(() => consulta.data.value);
 const aba = ref<'estabelecimento' | 'unidades' | 'setores'>('estabelecimento');
 const erro = ref<unknown>(null);
 const ok = ref(false);
+/** O que resolver antes, pelo código da recusa (setor com leitos ativos, paciente no leito, data futura…). */
+const recusa = computed(() => {
+  const codigo = erro.value instanceof ErroApi ? erro.value.problema?.codigo : null;
+  const chave = `estruturaGestao.recusas.${codigo}`;
+  return codigo && te(chave) ? t(chave) : null;
+});
 
 async function fazer(fn: () => Promise<unknown>, depois?: () => void): Promise<void> {
   erro.value = null;
@@ -172,6 +179,7 @@ const nomeUnidade = (id: number | null) =>
     </div>
     <MensagemErro v-if="consulta.isError.value" :erro="consulta.error.value" />
     <MensagemErro v-if="erro" :erro="erro" />
+    <p v-if="recusa" role="alert" data-testid="recusa-motivo">{{ recusa }}</p>
     <p v-if="ok" role="status" data-testid="gravado">{{ t('estruturaGestao.comum.gravado') }}</p>
     <p v-if="consulta.isPending.value">{{ t('estruturaGestao.comum.carregando') }}</p>
 
@@ -382,22 +390,25 @@ const nomeUnidade = (id: number | null) =>
               t('estruturaGestao.setor.precisaCentroCusto')
             }}</small>
           </span>
-          <label>
-            {{ t('estruturaGestao.setor.responsavel') }}
-            <input
-              v-model="termo"
-              :placeholder="(setor['responsavelNome'] as string) || ''"
-              name="setor-responsavel"
-              list="setor-profissionais"
-            />
+          <!-- A lista dos achados fica fora do rótulo da busca: dentro dele, o clique na lista voltava o foco ao campo. -->
+          <span>
+            <label>
+              {{ t('estruturaGestao.setor.responsavel') }}
+              <input
+                v-model="termo"
+                :placeholder="(setor['responsavelNome'] as string) || ''"
+                name="setor-responsavel"
+              />
+            </label>
             <SanteSelecao
               v-if="achados.length"
               v-model="setor['responsavel'] as number | null"
-              :rotulo="t('estruturaGestao.setor.responsavel')"
+              :rotulo="t('estruturaGestao.setor.responsavelAchado')"
               ocultar-rotulo
+              data-testid="setor-responsavel-achado"
               :opcoes="achados.map((p) => ({ valor: p.id, rotulo: p.nome }))"
             />
-          </label>
+          </span>
           <label v-for="c in ['responsavelInicio', 'responsavelFim'] as const" :key="c">
             {{ t(`estruturaGestao.setor.${c}`)
             }}<input v-model="setor[c] as string" type="date" :name="`setor-${c}`" />
@@ -451,7 +462,11 @@ const nomeUnidade = (id: number | null) =>
                 :aria-label="t('estruturaGestao.setor.contato')"
                 :placeholder="t('estruturaGestao.setor.contato')"
               />
-              <input v-model="r.telefoneExterno" :placeholder="t('estruturaGestao.setor.telefoneExterno')" />
+              <input
+                v-model="r.telefoneExterno"
+                :aria-label="t('estruturaGestao.setor.telefoneExterno')"
+                :placeholder="t('estruturaGestao.setor.telefoneExterno')"
+              />
               <label class="marca"
                 ><input
                   v-model="r.principal"

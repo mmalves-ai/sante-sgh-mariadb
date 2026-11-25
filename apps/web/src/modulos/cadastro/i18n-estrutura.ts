@@ -17,6 +17,20 @@ export const mensagensEstruturaGestao = {
     escolha: '— escolha —',
     sim: 'Sim',
   },
+  // Recusa da gravação pelo código devolvido: a tela diz o que resolver antes (o texto geral do erro continua acima).
+  recusas: {
+    'setor-com-filhos-ativos': 'Inative antes os setores subordinados a este.',
+    'setor-com-leitos-ativos': 'Inative antes os leitos das unidades de internação deste setor.',
+    'setor-com-pacientes-internados': 'Há paciente ocupando leito neste setor: transfira ou dê alta antes.',
+    'setor-com-atendimentos-abertos': 'Há atendimentos abertos neste setor: encerre-os antes.',
+    'inativacao-futura': 'A inativação vale no dia em que é gravada: use hoje ou uma data passada.',
+    'inativacao-antes-da-criacao': 'A inativação não pode ser anterior à criação do setor.',
+    'situacao-igual': 'O setor já está nesta situação.',
+    'responsavel-inicio-antes-do-anterior':
+      'O novo responsável começa depois do início do responsável atual.',
+    'ramal-repetido': 'Ramal repetido no setor.',
+    'ramal-invalido': 'O ramal tem de 2 a 10 dígitos.',
+  },
   abas: { estabelecimento: 'Estabelecimento', unidades: 'Unidades', setores: 'Setores e ramais' },
   estabelecimento: {
     titulo: 'Estrutura do estabelecimento',
@@ -69,6 +83,7 @@ export const mensagensEstruturaGestao = {
     unidade: 'Unidade',
     centroCusto: 'Centro de custo',
     responsavel: 'Responsável (digite 3 letras do nome)',
+    responsavelAchado: 'Profissional encontrado',
     responsavelInicio: 'Responsável desde',
     responsavelFim: 'Responsável até',
     historicoResponsaveis: 'Quem já respondeu pelo setor',
