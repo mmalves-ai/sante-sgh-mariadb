@@ -135,6 +135,11 @@ describe.skipIf(SEM_BANCO)('fonte própria do M16 (MariaDB, cliente f22_o1)', ()
         [ids.est, ui, new Date('2026-01-11T02:59:00Z'), agora, agora],
       );
       // Uma internação encerrada por óbito, 3 dias depois da entrada (massa sintética mínima do atendimento).
+      await e.executar(
+        'DELETE i FROM conta_hospitalar_item i JOIN conta_hospitalar ch ON ch.id = i.conta_hospitalar_id WHERE ch.estabelecimento_id = ?',
+        [ids.est],
+      );
+      await e.executar('DELETE FROM conta_hospitalar WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM internacao WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids.est]);
       const catalogo = async (tabela: string, sel: string, p: unknown[], ins: string, pi: unknown[]) => {
@@ -268,6 +273,11 @@ describe.skipIf(SEM_BANCO)('fonte própria do M16 (MariaDB, cliente f22_o1)', ()
   afterAll(async () => {
     if (!nucleo) return;
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-01-05-int' }, async (e) => {
+      await e.executar(
+        'DELETE i FROM conta_hospitalar_item i JOIN conta_hospitalar ch ON ch.id = i.conta_hospitalar_id WHERE ch.estabelecimento_id = ?',
+        [ids.est],
+      );
+      await e.executar('DELETE FROM conta_hospitalar WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM internacao WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids.est]);
       if (ids.profissional) await e.executar('DELETE FROM profissional WHERE id = ?', [ids.profissional]);
@@ -337,6 +347,70 @@ describe.skipIf(SEM_BANCO)('fonte própria do M16 (MariaDB, cliente f22_o1)', ()
       espelho,
     );
     expect(r.divergencias).toEqual([]);
+  });
+
+  it('painel operacional mensal no banco próprio: a internação no mês da entrada; nada fora dele', async () => {
+    const r = await fonte.operacional(c, '2025-12', '2026-02');
+    expect(
+      r.map((m) => [m.periodo, m.internacoes, m.atendimentosExternos, m.consultas, m.cirurgias, m.exames]),
+    ).toEqual([
+      ['2025-12', 0, 0, 0, 0, 0],
+      ['2026-01', 1, 0, 0, 0, 0],
+      ['2026-02', 0, 0, 0, 0, 0],
+    ]);
+  });
+
+  it('painel financeiro mensal nas duas réguas: mês civil do item (fuso do estabelecimento) e competência da conta', async () => {
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-01-05-fin' }, async (e) => {
+      await e.executar("UPDATE estabelecimento SET fuso_horario = 'America/Sao_Paulo' WHERE id = ?", [
+        ids.est,
+      ]);
+      const at = await e.uma<{ fonte_pagadora_id: number }>(
+        'SELECT fonte_pagadora_id FROM atendimento WHERE id = ?',
+        [ids.atendimento],
+      );
+      const tipo = await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM tipo_conta');
+      const item = await e.uma<{ id: number }>('SELECT MIN(id) AS id FROM item_faturavel');
+      const agora = new Date();
+      const conta = await e.inserir(
+        `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'internacao', '2026-02-01', ?, ?)`,
+        [
+          ids.est,
+          `${P}-CT1`,
+          ids.atendimento,
+          ids.paciente,
+          at?.fonte_pagadora_id,
+          tipo?.id,
+          new Date('2026-01-05T13:00:00Z'),
+          agora,
+        ],
+      );
+      // 23h30 de 31/01 no fuso do estabelecimento é 02h30 de 01/02 em UTC: o item é de janeiro.
+      const itens: [number, string, number, number, string][] = [
+        [1, '2026-02-01T02:30:00Z', 100, 80, 'conferido'],
+        [2, '2026-01-10T12:00:00Z', 50, 0, 'lancado'],
+        [3, '2026-01-11T12:00:00Z', 30, 0, 'estornado'],
+      ];
+      for (const [seq, quando, total, pago, sit] of itens)
+        await e.inserir(
+          `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em,
+             quantidade, valor_unitario, valor_total, valor_pago, situacao, criado_em)
+           VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+          [conta, seq, item?.id, new Date(quando), total, total, pago, sit, agora],
+        );
+    });
+    const r = await fonte.financeiro(c, '2026-01', '2026-02');
+    const v = (m: string, regua: string) => {
+      const x = r.find((y) => y.periodo === m && y.regua === regua);
+      return x && [x.cobrado, x.pago, x.cobradoBaixado, x.pagoBaixado];
+    };
+    expect(r).toHaveLength(4);
+    expect(v('2026-01', 'data-do-item')).toEqual([150, 80, 100, 80]);
+    expect(v('2026-02', 'data-do-item')).toEqual([0, 0, 0, 0]);
+    expect(v('2026-01', 'competencia')).toEqual([0, 0, 0, 0]);
+    expect(v('2026-02', 'competencia')).toEqual([150, 80, 100, 80]);
   });
 
   it('dias de censo fechado do período, só do estabelecimento', async () => {

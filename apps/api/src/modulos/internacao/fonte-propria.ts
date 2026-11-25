@@ -9,9 +9,9 @@
 // a hora de entrada e de saída é a do fuso do estabelecimento; o nome do paciente só vira iniciais no servidor.
 // Melhoria: o grupo da saída (óbito, transferência, evasão…) vem do tipo de saída do cadastro de motivos, nunca de
 // faixa de código; a clínica do recorte é a especialidade da internação.
-// Pendências (registradas na saída do lote 01-05): o retrato do censo fechado (o worker que fecha o censo migra na
-// onda 8: até lá nenhum dia vem fechado com linhas), os painéis operacional e financeiro mensais (módulo relatório,
-// onda 4) e a rota de divergências, que comparava o cadastro com o espelho do sistema antigo (no banco próprio o
+// Os painéis operacional e financeiro mensais leem o banco próprio (contagens e somas por mês civil do fuso do
+// estabelecimento). Pendências (registradas na saída do lote 01-05): o retrato do censo fechado (o fechamento guarda
+// a unidade, não a acomodação: o motor recalcula) e a rota de divergências, que comparava o cadastro com o espelho do sistema antigo (no banco próprio o
 // cadastro e o retrato são o mesmo: nenhuma divergência).
 import {
   type CanalVigia,
@@ -460,14 +460,114 @@ export class FonteInternacaoPropria implements FonteInternacao {
     );
   }
 
-  /** Painel operacional mensal: é do módulo relatório (onda 4); sem a apuração, nenhum mês. */
-  async operacional(): Promise<OperacionalDoMes[]> {
-    return [];
+  /**
+   * Painel operacional mensal no banco próprio: contagens por mês civil do estabelecimento (fuso dele). Atendimentos
+   * externos são os de pronto atendimento e externos; consultas, os ambulatoriais e de telessaúde (pelo tipo-base da
+   * categoria); internações pela entrada; cirurgias pelo início (ou pela entrada na sala); exames pelas requisições.
+   * Cancelados e excluídos ficam fora.
+   */
+  operacional(c: CtxInternacao, de: string, ate: string): Promise<OperacionalDoMes[]> {
+    return this.ler(c, async (l, est) => {
+      const { desloc, ini, fim } = janelaMensal(await this.fuso(l, est), de, ate);
+      const por = async (sql: string): Promise<Map<string, number[]>> => {
+        const m = new Map<string, number[]>();
+        for (const r of await l.consultar(sql, [desloc, est, ini, fim]))
+          m.set(String(r['mes']), [n(r['a']), n(r['b'])]);
+        return m;
+      };
+      // Uma consulta por vez na mesma conexão de leitura.
+      const [atend, inter, cir, exa] = (await sequencia([
+        () =>
+          por(`SELECT DATE_FORMAT(a.entrada_em + INTERVAL ? MINUTE, '%Y-%m') AS mes,
+                    SUM(ca.tipo_base IN ('pronto_atendimento','externo')) AS a,
+                    SUM(ca.tipo_base IN ('ambulatorio','telessaude')) AS b
+               FROM atendimento a JOIN categoria_atendimento ca ON ca.id = a.categoria_atendimento_id
+              WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.situacao <> 'cancelado'
+                AND a.entrada_em >= ? AND a.entrada_em < ?
+              GROUP BY mes`),
+        () =>
+          por(`SELECT DATE_FORMAT(i.data_hora_entrada + INTERVAL ? MINUTE, '%Y-%m') AS mes, COUNT(*) AS a, 0 AS b
+               FROM internacao i
+              WHERE i.estabelecimento_id = ? AND i.excluido_em IS NULL AND i.situacao <> 'cancelada'
+                AND i.data_hora_entrada >= ? AND i.data_hora_entrada < ?
+              GROUP BY mes`),
+        () =>
+          por(`SELECT DATE_FORMAT(COALESCE(x.inicio_cirurgia_em, x.entrada_sala_em) + INTERVAL ? MINUTE, '%Y-%m') AS mes,
+                    COUNT(*) AS a, 0 AS b
+               FROM ato_cirurgico x
+              WHERE x.estabelecimento_id = ? AND x.excluido_em IS NULL AND x.situacao <> 'cancelado'
+                AND COALESCE(x.inicio_cirurgia_em, x.entrada_sala_em) >= ?
+                AND COALESCE(x.inicio_cirurgia_em, x.entrada_sala_em) < ?
+              GROUP BY mes`),
+        () =>
+          por(`SELECT DATE_FORMAT(r.solicitado_em + INTERVAL ? MINUTE, '%Y-%m') AS mes, COUNT(*) AS a, 0 AS b
+               FROM requisicao_exame r
+              WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL AND r.situacao <> 'cancelada'
+                AND r.solicitado_em >= ? AND r.solicitado_em < ?
+              GROUP BY mes`),
+      ])) as [Map<string, number[]>, Map<string, number[]>, Map<string, number[]>, Map<string, number[]>];
+      return mesesDe(de, ate).map((m) => ({
+        periodo: m,
+        atendimentosExternos: atend.get(m)?.[0] ?? 0,
+        internacoes: inter.get(m)?.[0] ?? 0,
+        consultas: atend.get(m)?.[1] ?? 0,
+        cirurgias: cir.get(m)?.[0] ?? 0,
+        exames: exa.get(m)?.[0] ?? 0,
+      }));
+    });
   }
 
-  /** Painel financeiro mensal: é do módulo relatório (onda 4); sem a apuração, nenhum mês. */
-  async financeiro(): Promise<FinanceiroDoMes[]> {
-    return [];
+  /**
+   * Painel financeiro mensal no banco próprio, nas duas réguas: pela data do item (mês civil da realização) e pela
+   * competência da conta. Cobrado é o total dos itens que seguem na conta (fora os estornados, transferidos e sem
+   * cobrança) de contas não canceladas; pago é o valor pago dos itens; os "baixados" são os itens com retorno da
+   * fonte pagadora (valor pago ou glosado, item glosado ou conta paga), sobre os quais a glosa se mede.
+   */
+  financeiro(c: CtxInternacao, de: string, ate: string): Promise<FinanceiroDoMes[]> {
+    return this.ler(c, async (l, est) => {
+      const { desloc, ini, fim } = janelaMensal(await this.fuso(l, est), de, ate);
+      const somas = `SUM(i.valor_total) AS cobrado, SUM(i.valor_pago) AS pago,
+                     SUM(CASE WHEN i.valor_pago > 0 OR i.valor_glosado > 0 OR i.situacao = 'glosado' OR ch.situacao = 'paga' THEN i.valor_total ELSE 0 END) AS cobrado_baixado,
+                     SUM(CASE WHEN i.valor_pago > 0 OR i.valor_glosado > 0 OR i.situacao = 'glosado' OR ch.situacao = 'paga' THEN i.valor_pago ELSE 0 END) AS pago_baixado`;
+      const filtro = `ch.estabelecimento_id = ? AND ch.excluido_em IS NULL AND ch.situacao <> 'cancelada'
+                      AND i.excluido_em IS NULL AND i.situacao NOT IN ('estornado','transferido','sem_cobranca')`;
+      const [porItem = [], porComp = []] = await sequencia([
+        () =>
+          l.consultar(
+            `SELECT DATE_FORMAT(i.realizado_em + INTERVAL ? MINUTE, '%Y-%m') AS mes, ${somas}
+             FROM conta_hospitalar_item i JOIN conta_hospitalar ch ON ch.id = i.conta_hospitalar_id
+            WHERE ${filtro} AND i.realizado_em >= ? AND i.realizado_em < ?
+            GROUP BY mes`,
+            [desloc, est, ini, fim],
+          ),
+        () =>
+          l.consultar(
+            `SELECT DATE_FORMAT(ch.competencia, '%Y-%m') AS mes, ${somas}
+             FROM conta_hospitalar_item i JOIN conta_hospitalar ch ON ch.id = i.conta_hospitalar_id
+            WHERE ${filtro} AND ch.competencia BETWEEN ? AND ?
+            GROUP BY mes`,
+            [est, `${de}-01`, `${ate}-01`],
+          ),
+      ]);
+      const mapa = (rs: Record<string, unknown>[]) => new Map(rs.map((r) => [String(r['mes']), r]));
+      const reguas = [
+        ['data-do-item', mapa(porItem)],
+        ['competencia', mapa(porComp)],
+      ] as const;
+      return mesesDe(de, ate).flatMap((m) =>
+        reguas.map(([regua, mp]) => {
+          const r = mp.get(m);
+          return {
+            periodo: m,
+            regua,
+            cobrado: n(r?.['cobrado']),
+            pago: n(r?.['pago']),
+            cobradoBaixado: n(r?.['cobrado_baixado']),
+            pagoBaixado: n(r?.['pago_baixado']),
+          };
+        }),
+      );
+    });
   }
 
   /** O banco do cliente é o de produção (não é cópia diária): os dados valem até agora. */
@@ -521,4 +621,64 @@ export class FonteInternacaoPropria implements FonteInternacao {
 function ramalDe(v: unknown): number | null {
   const s = texto(v).replace(/\D/g, '');
   return s ? Number(s) : null;
+}
+
+/** Meses AAAA-MM de `de` a `ate`, inclusive. */
+function mesesDe(de: string, ate: string): string[] {
+  const r: string[] = [];
+  let [a, m] = de.split('-').map(Number) as [number, number];
+  while (`${a}-${String(m).padStart(2, '0')}` <= ate && r.length < 240) {
+    r.push(`${a}-${String(m).padStart(2, '0')}`);
+    if (m === 12) {
+      a += 1;
+      m = 1;
+    } else m += 1;
+  }
+  return r;
+}
+
+/**
+ * Janela UTC dos meses civis de `de` a `ate` no fuso do estabelecimento e o deslocamento (minutos) que leva o instante
+ * gravado à hora civil, para agrupar por mês no próprio banco (sem depender das tabelas de fuso do servidor).
+ */
+export function janelaMensal(
+  fuso: string,
+  de: string,
+  ate: string,
+): { desloc: number; ini: Date; fim: Date } {
+  const [aa, mm] = ate.split('-').map(Number) as [number, number];
+  const prox = mm === 12 ? `${aa + 1}-01` : `${aa}-${String(mm + 1).padStart(2, '0')}`;
+  const deslocEm = (d: Date) => {
+    const p = Object.fromEntries(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: fuso,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+        .formatToParts(d)
+        .map((x) => [x.type, x.value]),
+    );
+    return Math.round(
+      (Date.UTC(+p['year']!, +p['month']! - 1, +p['day']!, +p['hour']!, +p['minute']!) - d.getTime()) / 60000,
+    );
+  };
+  const ini0 = new Date(`${de}-01T00:00:00Z`);
+  const fim0 = new Date(`${prox}-01T00:00:00Z`);
+  const desloc = deslocEm(ini0);
+  return {
+    desloc,
+    ini: new Date(ini0.getTime() - deslocEm(ini0) * 60000),
+    fim: new Date(fim0.getTime() - deslocEm(fim0) * 60000),
+  };
+}
+
+/** Roda as leituras uma depois da outra (a conexão de leitura é uma só). */
+async function sequencia<T>(fs: readonly (() => Promise<T>)[]): Promise<T[]> {
+  const r: T[] = [];
+  for (const f of fs) r.push(await f());
+  return r;
 }
