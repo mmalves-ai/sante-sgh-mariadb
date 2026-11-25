@@ -3,9 +3,9 @@
 // contas, marcações, modelos e locais SINTÉTICOS; nada vai à cópia). Prova, na tela: a correção da ficha (convênio e
 // observação) com a justificativa; o procedimento extra lançado, corrigido (quantidade) e estornado com a senha; a
 // exclusão da ficha vazia pelo supervisor (pergunta de confirmação e senha); a ficha do agendamento excluída com a
-// marcação voltando (D-EXC-AGE-20); a conta fechada encaminhando a correção ao faturamento; e, no CRUD genérico,
-// incluir e excluir o modelo e o título da ficha, excluir a linha de seleção (chave composta) e incluir e excluir o
-// local de observação, com o modelo usado recusado com os dependentes. Nenhuma tela com a faixa "só consulta".
+// marcação voltando (D-EXC-AGE-20); a conta fechada encaminhando a correção ao faturamento; as fichas a imprimir na
+// tela própria das regras de impressão, pelo atalho dos atendimentos do dia (02-REC linha 35); e, no CRUD genérico,
+// incluir e excluir o local de observação. Nenhuma tela com a faixa "só consulta".
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -222,68 +222,70 @@ test.describe('Atendimento: corrigir a ficha, estornar o extra, excluir; fichas 
     expect(externas).toEqual([]);
   });
 
-  test('fichas a imprimir: incluir e excluir modelo e título, excluir a seleção; o modelo usado é recusado; axe', async ({
+  test('fichas a imprimir: a manutenção é a tela das regras de impressão, aberta pelo atalho; axe', async ({
     page,
   }) => {
+    // 02-REC linha 35: os modelos de ficha e as regras por fonte pagadora, especialidade, grupo e unidade saíram do
+    // CRUD genérico para a tela própria. A manutenção exige o banco do cliente e o E2E roda com a fonte sintética, por
+    // isso a leitura é simulada (massa SINTÉTICA); a gravação e a conferência estão em f32-regras-impressao.spec.ts e o
+    // efeito no banco em apps/api/src/modulos/atendimento/regras-impressao.int.spec.ts.
     const externas = vigiarExternas(page);
-    // As fichas a imprimir são da recepção (opções do cadastro das fichas no grupo da recepção externa).
-    await entrar(page, 'SINT.ATENDIMENTO');
-
-    // Modelo: incluir o 900 (matricial) e excluí-lo; o modelo 1 tem título e seleções e é recusado com a lista.
-    await page.goto('/cadastros/dominios/atendimento/modeloFicha');
-    await expect(page.getByRole('heading', { level: 1, name: 'Fichas a imprimir' })).toBeVisible();
-    await semFaixaDeConsulta(page);
-    await page.getByTestId('botao-incluir').click();
-    let form = page.getByTestId('form-dominio');
-    await form.getByTestId('campo-modelo').fill('900');
-    await escolher(form.getByTestId('campo-grafica'), 'F');
-    await form.getByLabel('Nome', { exact: true }).fill('FICHA E2E');
-    await form.getByLabel('Clínicas (letras)').fill('A');
-    await completarFormulario(form);
-    await semViolacaoAxe(page, 'inclusão do modelo da ficha');
-    await form.getByTestId('botao-salvar').click();
-    await expect(page.getByTestId('mensagem-dominio')).toContainText('Incluído');
-    const tabela = page.getByTestId('tabela-dominio');
-    await excluirLinha(
-      page,
-      tabela.locator('tbody tr', { hasText: 'FICHA E2E' }),
-      'Incluído por engano (teste E2E)',
+    await page.route('**/api/atendimento/regras-impressao**', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          estabelecimento: 7,
+          modelos: [
+            {
+              id: 901,
+              versao: 1,
+              codigo: 'FICHA',
+              titulo: 'FICHA SINTETICA',
+              tipoDocumento: 'ficha_ambulatorial',
+              conteudo: 'Texto sintético.',
+              copias: 1,
+              ordem: 1,
+              somenteRetorno: false,
+              idadeMinima: null,
+              idadeMaxima: null,
+              ativo: true,
+              regrasAtivas: 1,
+            },
+          ],
+          regras: [
+            {
+              id: 801,
+              versao: 1,
+              modelo: 901,
+              estabelecimento: 7,
+              categoria: null,
+              fontePagadora: null,
+              especialidade: null,
+              grupo: null,
+              unidade: null,
+              clinica: null,
+              copias: null,
+              selecionada: true,
+              ativo: true,
+            },
+          ],
+          opcoes: { categorias: [], fontes: [], especialidades: [], grupos: [], unidades: [] },
+        }),
+      }),
     );
-    await expect(page.getByTestId('mensagem-dominio')).toContainText('excluído');
-    await expect(tabela.locator('tbody tr', { hasText: 'FICHA E2E' })).toHaveCount(0);
-    await excluirLinha(page, tabela.locator('tbody tr').first(), 'Modelo sem uso (teste E2E)');
-    const recusa = page.getByTestId('dominio-dependentes');
-    await expect(recusa).toBeVisible();
-    await expect(recusa.getByTestId('dependente-0')).toBeVisible();
-    await semViolacaoAxe(page, 'recusa do modelo com título e seleções');
-
-    // Título: incluir o 900 e excluí-lo.
-    await page.goto('/cadastros/dominios/atendimento/tituloFicha');
-    await expect(page.getByRole('heading', { level: 1, name: 'Títulos das fichas' })).toBeVisible();
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto('/recepcao/atendimento');
+    await page.getByTestId('link-regras-impressao').click();
+    await expect(page).toHaveURL(/\/recepcao\/atendimento\/regras-impressao$/);
+    await expect(page.getByTestId('tela-regras-impressao')).toBeVisible();
     await semFaixaDeConsulta(page);
-    await page.getByTestId('botao-incluir').click();
-    form = page.getByTestId('form-dominio');
-    await form.getByTestId('campo-modelo').fill('900');
-    await escolher(form.getByTestId('campo-grafica'), 'F');
-    await form.getByLabel('Título', { exact: true }).fill('TITULO E2E');
-    await form.getByTestId('botao-salvar').click();
-    await expect(page.getByTestId('mensagem-dominio')).toContainText('Incluído');
-    await excluirLinha(
-      page,
-      tabela.locator('tbody tr', { hasText: 'TITULO E2E' }),
-      'Incluído por engano (teste E2E)',
+    await expect(page.getByTestId('modelo-901')).toContainText('FICHA SINTETICA');
+    await expect(page.getByTestId('regra-801')).toContainText('Todo atendimento');
+    await expect(page.getByTestId('conferir-impressao').getByTestId('conferir-fichas')).toContainText(
+      'FICHA SINTETICA: 1 cópia(s)',
     );
-    await expect(page.getByTestId('mensagem-dominio')).toContainText('excluído');
-    await expect(tabela.locator('tbody tr', { hasText: 'TITULO E2E' })).toHaveCount(0);
-
-    // Seleção (chave composta): a primeira linha das fichas por convênio sai.
-    await page.goto('/cadastros/dominios/atendimento/fichaConvenio');
-    await expect(page.getByRole('heading', { level: 1, name: 'Fichas por convênio' })).toBeVisible();
-    await semFaixaDeConsulta(page);
-    const antes = await tabela.locator('tbody tr').count();
-    await excluirLinha(page, tabela.locator('tbody tr').first(), 'Seleção feita por engano (teste E2E)');
-    await expect(page.getByTestId('mensagem-dominio')).toContainText('excluído');
-    await expect(tabela.locator('tbody tr')).toHaveCount(antes - 1);
+    await semViolacaoAxe(page, '/recepcao/atendimento/regras-impressao (pelo atalho)');
     expect(externas).toEqual([]);
   });
 
