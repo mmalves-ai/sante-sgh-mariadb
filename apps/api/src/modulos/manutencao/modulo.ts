@@ -13,6 +13,8 @@ import { portaDoPatrimonio } from '../patrimonio/modulo.js';
 import { PORTA_PATRIMONIO, type PortaPatrimonio } from '../patrimonio/public-api.js';
 import type { ContextoModulo } from '../registro.js';
 import { GERADOR_PDF_MANUTENCAO, ManutencaoController } from './manutencao.controller.js';
+import { OficinaOrcamentoController, PORTA_OFICINA_ORCAMENTO } from './oficina-orcamento.controller.js';
+import { PortaOficinaOrcamentoPropria } from './oficina-orcamento-propria.js';
 import { PORTA_MANUTENCAO, type PortaManutencao, portaManutencaoIndisponivel } from './porta.js';
 import { PortaManutencaoMemoria } from './porta-memoria.js';
 import { PortaManutencaoPropria } from './porta-propria.js';
@@ -54,10 +56,15 @@ export async function modulo(
           (await converterHtmlEmPdfA(gotenberg, html, { metadados: { Title: titulo } })).pdf;
   return {
     module: ModuloManutencao,
-    controllers: [ManutencaoController],
+    controllers: [ManutencaoController, OficinaOrcamentoController],
     providers: [
       { provide: PORTA_MANUTENCAO, useValue: porta },
       { provide: GERADOR_PDF_MANUTENCAO, useValue: geradorPdf },
+      {
+        provide: PORTA_OFICINA_ORCAMENTO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao ? new PortaOficinaOrcamentoPropria(ctx.nucleo) : null,
+      },
       ...(patrimonio ? [{ provide: PORTA_PATRIMONIO, useValue: patrimonio }] : []),
     ],
     exports: [PORTA_MANUTENCAO],
