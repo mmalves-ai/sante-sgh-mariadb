@@ -7,7 +7,9 @@ import {
   errosEquipe,
   errosFimEquipe,
   errosMembroEquipe,
+  errosResponsavelSemVinculo,
   normalizarCodigoEquipe,
+  responsavelVigenteEm,
   vigenciaDentro,
   vigenciasSobrepostas,
   vinculoVigenteEm,
@@ -106,6 +108,42 @@ describe('equipe do profissional', () => {
     ]);
     expect(errosFimEquipe(V('2026-01-01', '2026-06-30'), [V('2026-01-01', '2026-06-30')])).toEqual([]);
     expect(errosFimEquipe(V('2026-01-01'), [V('2026-01-01')])).toEqual([]);
+  });
+
+  it('responsável vigente derivado dos membros pela data; o informado na equipe vale só sem período registrado', () => {
+    const futuro = [{ id: 1, profissionalId: 10, papel: 'responsavel', ...V('2026-07-01') }];
+    expect(responsavelVigenteEm(futuro, '2026-06-15', null)).toBeNull();
+    expect(responsavelVigenteEm(futuro, '2026-07-01', null)).toBe(10);
+    const encerrado = [
+      { id: 1, profissionalId: 10, papel: 'responsavel', ...V('2026-01-01', '2026-07-10') },
+      { id: 2, profissionalId: 11, papel: 'membro', ...V('2026-01-01') },
+    ];
+    expect(responsavelVigenteEm(encerrado, '2026-07-10', 99)).toBe(10);
+    expect(responsavelVigenteEm(encerrado, '2026-07-11', 99)).toBeNull();
+    // Sem período de responsável entre os membros: vale o informado na equipe (importação).
+    expect(responsavelVigenteEm(encerrado.slice(1), '2026-07-11', 99)).toBe(99);
+    const troca = [
+      { id: 1, profissionalId: 10, papel: 'responsavel', ...V('2026-01-01', '2026-06-30') },
+      { id: 3, profissionalId: 12, papel: 'responsavel', ...V('2026-07-01') },
+    ];
+    expect(responsavelVigenteEm(troca, '2026-06-30', null)).toBe(10);
+    expect(responsavelVigenteEm(troca, '2026-07-01', null)).toBe(12);
+  });
+
+  it('responsável informado na equipe sem período: outro só assume depois de o atual ser registrado', () => {
+    const r = (profissionalId: number, papel = 'responsavel') => ({
+      profissionalId,
+      papel,
+      vigencia: V('2026-07-01'),
+    });
+    expect(errosResponsavelSemVinculo(r(12), [], 10)).toEqual(['responsavel-sem-vinculo']);
+    expect(errosResponsavelSemVinculo(r(10), [], 10)).toEqual([]);
+    expect(errosResponsavelSemVinculo(r(12, 'membro'), [], 10)).toEqual([]);
+    expect(errosResponsavelSemVinculo(r(12), [], null)).toEqual([]);
+    const registrado = [
+      { id: 1, profissionalId: 10, papel: 'responsavel', ...V('2026-01-01', '2026-06-30') },
+    ];
+    expect(errosResponsavelSemVinculo(r(12), registrado, 10)).toEqual([]);
   });
 });
 

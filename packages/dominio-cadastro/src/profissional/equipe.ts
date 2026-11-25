@@ -204,3 +204,35 @@ export function errosCooperado(c: EntradaCooperado, existentes: readonly Vinculo
     erros.push('vigencia-sobreposta');
   return erros;
 }
+
+/**
+ * Responsável da equipe em vigor na data, derivado dos membros: o membro com papel de responsável cuja vigência vale na
+ * data. Sem nenhum período de responsável registrado entre os membros, vale o responsável informado na própria equipe
+ * (`legado`, como o que chega pela importação); havendo períodos e nenhum em vigor na data, a equipe está sem
+ * responsável. Assim o responsável com início futuro passa a valer quando a data chega, e o encerrado deixa de valer no
+ * dia seguinte ao fim, sem depender de uma gravação no dia.
+ */
+export function responsavelVigenteEm(
+  membros: readonly VinculoExistente[],
+  data: string,
+  legado: number | null,
+): number | null {
+  const resp = membros.filter((m) => m.papel === 'responsavel');
+  if (!resp.length) return legado;
+  return resp.find((m) => vinculoVigenteEm(m, data))?.profissionalId ?? null;
+}
+
+/**
+ * Erros do responsável informado na equipe sem período de responsável entre os membros (o que vem da importação): outro
+ * profissional só assume como responsável depois de o atual ser registrado como membro responsável, com a vigência, e
+ * encerrado. O próprio responsável pode ser registrado.
+ */
+export function errosResponsavelSemVinculo(
+  m: EntradaMembroEquipe,
+  membros: readonly VinculoExistente[],
+  legado: number | null,
+): string[] {
+  if (m.papel !== 'responsavel' || legado === null || legado === m.profissionalId) return [];
+  const registrado = membros.some((x) => x.papel === 'responsavel' && x.profissionalId === legado);
+  return registrado ? [] : ['responsavel-sem-vinculo'];
+}

@@ -1,6 +1,7 @@
 // Equipes médicas e cooperativas do profissional no banco próprio (F8, 02-CAD linha 22). A equipe em
 // `equipe_profissional` (código único no estabelecimento, tipo, setor e vigência) com os membros em
-// `equipe_profissional_membro` (papel e vigência; o responsável vigente fica também na equipe), e a cooperativa médica em
+// `equipe_profissional_membro` (papel e vigência; o responsável em vigor é derivado dos membros pela data, e a cópia na
+// equipe é recalculada a cada gravação), e a cooperativa médica em
 // `cooperativa_medica` (sobre a pessoa jurídica do CNPJ, com dados bancários e alíquotas de retenção) com os cooperados
 // em `membro_cooperativa`. O credenciamento por equipe (precos/cobranca-propria) e o favorecido do repasse
 // (repasse/favorecidos-propria) leem estas tabelas. A saída de um membro ou cooperado é o fim da vigência: nada é
@@ -14,7 +15,9 @@ import {
   errosEquipe,
   errosFimEquipe,
   errosMembroEquipe,
+  errosResponsavelSemVinculo,
   normalizarCodigoEquipe,
+  responsavelVigenteEm,
   somenteDigitos,
   type VinculoExistente,
   vinculoVigenteEm,
@@ -61,6 +64,10 @@ const MENSAGENS: Record<string, [string, string]> = {
   'fora-da-vigencia-equipe': ['A vigência do membro tem de caber na vigência da equipe.', 'inicio'],
   'vigencia-sobreposta': ['O profissional já está vinculado num período que se sobrepõe a este.', 'inicio'],
   'responsavel-duplicado': ['A equipe já tem outro responsável neste período.', 'papel'],
+  'responsavel-sem-vinculo': [
+    'A equipe tem um responsável sem período registrado: inclua-o como membro responsável e encerre o período dele antes.',
+    'papel',
+  ],
   'encerramento-nao-antecipa': ['O vínculo já termina antes desta data.', 'fim'],
   'profissional-inexistente': ['Profissional não encontrado ou inativo.', 'profissional'],
   'setor-inexistente': ['Setor não encontrado neste estabelecimento.', 'setor'],
@@ -109,7 +116,7 @@ export type EntradaEquipeTela = z.infer<typeof esquemaEquipe>;
 
 async function lerEquipe(tx: TxOperacao, id: number, est: number) {
   const [x] = await tx.consultarParaAtualizar(
-    `SELECT id, versao, vigencia_inicio, vigencia_fim FROM equipe_profissional
+    `SELECT id, versao, vigencia_inicio, vigencia_fim, responsavel_profissional_id FROM equipe_profissional
       WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [id, est],
   );
@@ -119,6 +126,7 @@ async function lerEquipe(tx: TxOperacao, id: number, est: number) {
     versao: Number(x['versao']),
     inicio: data(x['vigencia_inicio'])!,
     fim: data(x['vigencia_fim']),
+    responsavel: num(x['responsavel_profissional_id']),
   };
 }
 
@@ -135,6 +143,21 @@ async function membrosDaEquipe(tx: TxOperacao, equipe: number): Promise<VinculoE
     inicio: data(l['vigencia_inicio'])!,
     fim: data(l['vigencia_fim']),
   }));
+}
+
+/**
+ * Recalcula a cópia do responsável em vigor hoje na equipe a partir dos membros (regra do domínio) e grava só se mudou.
+ * A leitura deriva o responsável pela data; a cópia acompanha cada gravação dos membros.
+ */
+async function recalcularResponsavel(
+  tx: TxOperacao,
+  eq: { id: number; versao: number; responsavel: number | null },
+  hoje: string,
+): Promise<void> {
+  const membros = await membrosDaEquipe(tx, eq.id);
+  const vigente = responsavelVigenteEm(membros, hoje, eq.responsavel);
+  if (vigente !== eq.responsavel)
+    await tx.alterar('equipe_profissional', eq.id, eq.versao, { responsavel_profissional_id: vigente });
 }
 
 async function conferirProfissional(tx: TxOperacao, id: number): Promise<void> {
@@ -217,9 +240,9 @@ const opIncluirMembro = (t: RegistroTrilhaTela, est: number, hoje: string) =>
       await conferirProfissional(tx, e.profissionalId);
       const existentes = await membrosDaEquipe(tx, e.equipeId);
       const vigencia = { inicio: e.inicio, fim: e.fim };
-      recusarErros(
-        errosMembroEquipe({ profissionalId: e.profissionalId, papel: e.papel, vigencia }, eq, existentes),
-      );
+      const entrada = { profissionalId: e.profissionalId, papel: e.papel, vigencia };
+      recusarErros(errosMembroEquipe(entrada, eq, existentes));
+      recusarErros(errosResponsavelSemVinculo(entrada, existentes, eq.responsavel));
       const id = await tx.incluir('equipe_profissional_membro', {
         equipe_profissional_id: e.equipeId,
         profissional_id: e.profissionalId,
@@ -228,11 +251,7 @@ const opIncluirMembro = (t: RegistroTrilhaTela, est: number, hoje: string) =>
         vigencia_inicio: e.inicio,
         vigencia_fim: e.fim,
       });
-      // O responsável em vigor hoje fica também na equipe (o credenciamento e as telas leem dali).
-      if (e.papel === 'responsavel' && vinculoVigenteEm(vigencia, hoje))
-        await tx.alterar('equipe_profissional', e.equipeId, eq.versao, {
-          responsavel_profissional_id: e.profissionalId,
-        });
+      await recalcularResponsavel(tx, eq, hoje);
       return { id };
     },
     alvo: (_e, r) => ({ tabela: 'equipe_profissional_membro', id: Number(r.id) }),
@@ -261,20 +280,16 @@ const opEncerrarMembro = (t: RegistroTrilhaTela, est: number, hoje: string) =>
         errosEncerramento({ inicio: data(m['vigencia_inicio'])!, fim: data(m['vigencia_fim']) }, e.fim),
       );
       await tx.alterar('equipe_profissional_membro', e.id, e.versao, { vigencia_fim: e.fim });
-      // Responsável que sai: a equipe fica sem responsável até o próximo ser incluído.
-      if (
-        String(m['papel']) === 'responsavel' &&
-        e.fim < hoje &&
-        num(m['responsavel_profissional_id']) === Number(m['profissional_id'])
-      )
-        await tx.alterar(
-          'equipe_profissional',
-          Number(m['equipe_profissional_id']),
-          Number(m['versao_equipe']),
-          {
-            responsavel_profissional_id: null,
-          },
-        );
+      // Responsável que sai: a cópia na equipe acompanha os membros em vigor hoje (o fim futuro mantém até lá).
+      await recalcularResponsavel(
+        tx,
+        {
+          id: Number(m['equipe_profissional_id']),
+          versao: Number(m['versao_equipe']),
+          responsavel: num(m['responsavel_profissional_id']),
+        },
+        hoje,
+      );
       return { id: e.id };
     },
     alvo: (e) => ({ tabela: 'equipe_profissional_membro', id: e.id }),
@@ -340,21 +355,27 @@ const opSalvarCooperativa = (t: RegistroTrilhaTela) =>
         recusarErros(['banco-inexistente']);
       const cnpj = somenteDigitos(e.cnpj);
       // A pessoa jurídica é única por CNPJ: reaproveita a que já existe (mantenedora, fonte pagadora, empresa).
-      const pj = await tx.uma<{ id: unknown }>('SELECT id FROM pessoa_juridica WHERE cnpj = ?', [cnpj]);
-      const pessoa =
-        pj !== null
-          ? Number(pj.id)
-          : await tx.incluir('pessoa_juridica', {
-              cnpj,
-              estrangeira: false,
-              razao_social: e.razaoSocial.trim().replace(/\s+/g, ' '),
-              origem: 'sistema',
-            });
+      // A razão social digitada vale para a pessoa jurídica (a mesma empresa): gravada com versão e trilha quando muda.
+      const razao = e.razaoSocial.trim().replace(/\s+/g, ' ');
+      const [pj] = await tx.consultarParaAtualizar(
+        'SELECT id, versao, razao_social FROM pessoa_juridica WHERE cnpj = ?',
+        [cnpj],
+      );
+      const pessoa = pj
+        ? Number(pj['id'])
+        : await tx.incluir('pessoa_juridica', {
+            cnpj,
+            estrangeira: false,
+            razao_social: razao,
+            origem: 'sistema',
+          });
       const dup = await tx.uma<{ id: unknown }>(
         'SELECT id FROM cooperativa_medica WHERE pessoa_juridica_id = ?',
         [pessoa],
       );
       if (dup && Number(dup.id) !== e.id) recusarErros(['cooperativa-repetida']);
+      if (pj && String(pj['razao_social']) !== razao)
+        await tx.alterar('pessoa_juridica', pessoa, Number(pj['versao']), { razao_social: razao });
       const valores = {
         pessoa_juridica_id: pessoa,
         nome: e.nome.trim().replace(/\s+/g, ' '),
@@ -617,6 +638,20 @@ export class EquipesCooperativasPropria {
             eqs.map((q) => q['id']),
           )
         : [];
+      const vinculos = new Map(membros.map((x) => [Number(x['id']), vinculo(x, true)]));
+      const membrosDe = (equipeId: unknown): VinculoExistente[] =>
+        membros
+          .filter((x) => Number(x['equipe_profissional_id']) === Number(equipeId))
+          .map((x) => {
+            const v = vinculos.get(Number(x['id']))!;
+            return {
+              id: v.id,
+              profissionalId: v.profissionalId,
+              papel: v.papel ?? '',
+              inicio: v.inicio,
+              fim: v.fim,
+            };
+          });
       const coops = await l.consultar(
         `SELECT c.id, c.versao, pj.cnpj, pj.razao_social, c.nome, c.percentual_repasse, c.banco_id, c.agencia,
                 c.agencia_digito, c.conta, c.conta_digito, c.tipo_conta_bancaria, c.retem_ir, c.aliquota_ir,
@@ -660,13 +695,16 @@ export class EquipesCooperativasPropria {
           tipo: String(q['tipo']),
           setorId: num(q['setor_funcional_id']),
           setorNome: txt(q['setor_nome']),
-          responsavelId: num(q['responsavel_profissional_id']),
+          // Derivado dos membros pela data de hoje (o de início futuro passa a valer quando a data chega).
+          responsavelId: responsavelVigenteEm(
+            membrosDe(q['id']),
+            hoje,
+            num(q['responsavel_profissional_id']),
+          ),
           inicio: data(q['vigencia_inicio'])!,
           fim: data(q['vigencia_fim']),
           ativo: bool(q['ativo']),
-          membros: membros
-            .filter((m) => Number(m['equipe_profissional_id']) === Number(q['id']))
-            .map((m) => vinculo(m, true)),
+          membros: membrosDe(q['id']).map((m) => vinculos.get(m.id)!),
         })),
         cooperativas: coops.map((x) => ({
           id: Number(x['id']),

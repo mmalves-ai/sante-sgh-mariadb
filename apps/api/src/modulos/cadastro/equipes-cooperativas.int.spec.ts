@@ -254,6 +254,27 @@ describe.skipIf(SEM_BANCO)('equipes médicas e cooperativas no banco próprio (f
       [cooperativa],
     );
     expect([Number(x!.pct), Number(x!.versao)]).toEqual([75, 2]);
+    // A razão social digitada na alteração vai à pessoa jurídica do CNPJ, com versão, e a visão a mostra.
+    const pj0 = await um<{ v: unknown }>('SELECT versao AS v FROM pessoa_juridica WHERE cnpj = ?', [CNPJ]);
+    await s.salvarCooperativa(
+      c(),
+      coop({
+        id: cooperativa,
+        versao: 2,
+        percentualRepasse: 75,
+        razaoSocial: `  ${MARCA}  COOP   NOVA RAZAO `,
+      }),
+      t('cooperativa_medica'),
+    );
+    expect(
+      await um<{ r: unknown; v: unknown }>(
+        'SELECT razao_social AS r, versao AS v FROM pessoa_juridica WHERE cnpj = ?',
+        [CNPJ],
+      ),
+    ).toMatchObject({ r: `${MARCA} COOP NOVA RAZAO`, v: Number(pj0!.v) + 1 });
+    expect((await s.visao(c(), null)).cooperativas.find((x) => x.id === cooperativa)?.razaoSocial).toBe(
+      `${MARCA} COOP NOVA RAZAO`,
+    );
   });
 
   it('inclui e encerra o cooperado; sobreposição recusada; a visão por profissional mostra os vínculos', async () => {
@@ -290,6 +311,86 @@ describe.skipIf(SEM_BANCO)('equipes médicas e cooperativas no banco próprio (f
     expect(v.cooperativas.find((x) => x.id === cooperativa)?.cooperados).toEqual([
       expect.objectContaining({ profissionalId: m!.profissional, fim: '2026-12-31', vigente: true }),
     ]);
+  });
+
+  it('o responsável vale pela data: início futuro passa a valer quando chega e o fim futuro mantém até o fim', async () => {
+    const eq2 = await s.salvarEquipe(c(), eq({ codigo: `${COD}-R` }), t('equipe_profissional'));
+    const em = (hoje: string) => new EquipesCooperativasPropria(nucleo, CLIENTE_F22, undefined, () => hoje);
+    const resp = async (hoje: string) =>
+      (await em(hoje).visao(c(), null)).equipes.find((x) => x.id === eq2)?.responsavelId ?? null;
+    const coluna = async () =>
+      (await um<{ r: unknown }>(
+        'SELECT responsavel_profissional_id AS r FROM equipe_profissional WHERE id = ?',
+        [eq2],
+      ))!.r;
+    // Hoje é 15/06: o responsável com início em 01/07 ainda não vale (nem na cópia da equipe, nem na visão).
+    const r = await s.incluirMembro(
+      c(),
+      {
+        equipeId: eq2,
+        profissionalId: m!.profissional,
+        papel: 'responsavel',
+        inicio: '2026-07-01',
+        fim: null,
+      },
+      t('equipe_profissional_membro'),
+    );
+    expect(await coluna()).toBeNull();
+    expect(await resp('2026-06-15')).toBeNull();
+    // Quando a data chega, a visão já mostra o responsável, sem gravação no dia.
+    expect(await resp('2026-07-01')).toBe(m!.profissional);
+    // Em 02/07, encerrado com fim em 10/07 (futuro): continua responsável até 10/07; a cópia é recalculada.
+    const vm = Number(
+      (await um<{ v: unknown }>('SELECT versao AS v FROM equipe_profissional_membro WHERE id = ?', [r]))!.v,
+    );
+    await em('2026-07-02').encerrarMembro(
+      c(),
+      { id: r, versao: vm, fim: '2026-07-10' },
+      t('equipe_profissional_membro'),
+    );
+    expect(await coluna()).toBe(m!.profissional);
+    expect(await resp('2026-07-10')).toBe(m!.profissional);
+    expect(await resp('2026-07-11')).toBeNull();
+    // Em 11/07, qualquer gravação dos membros recalcula a cópia: a equipe fica sem responsável.
+    await em('2026-07-11').incluirMembro(
+      c(),
+      { equipeId: eq2, profissionalId: m!.enfermeira, papel: 'enfermeiro', inicio: '2026-07-11', fim: null },
+      t('equipe_profissional_membro'),
+    );
+    expect(await coluna()).toBeNull();
+  });
+
+  it('o responsável informado na equipe sem período (importação) não é sobrescrito sem conferência', async () => {
+    const eq3 = await s.salvarEquipe(c(), eq({ codigo: `${COD}-L` }), t('equipe_profissional'));
+    // Massa sintética: a equipe chega com o responsável preenchido e sem linha de membro, como na importação.
+    await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
+      e.executar('UPDATE equipe_profissional SET responsavel_profissional_id = ? WHERE id = ?', [
+        m!.profissional,
+        eq3,
+      ]),
+    );
+    expect((await s.visao(c(), null)).equipes.find((x) => x.id === eq3)?.responsavelId).toBe(m!.profissional);
+    const membro3 = (prof: number, inicio: string, fim: string | null = null) =>
+      s.incluirMembro(
+        c(),
+        { equipeId: eq3, profissionalId: prof, papel: 'responsavel', inicio, fim },
+        t('equipe_profissional_membro'),
+      );
+    expect(await codigo(membro3(m!.enfermeira, '2026-07-01'))).toBe('responsavel-sem-vinculo');
+    expect(
+      await um('SELECT responsavel_profissional_id AS r FROM equipe_profissional WHERE id = ?', [eq3]),
+    ).toMatchObject({ r: m!.profissional });
+    // Registrado o atual com o período até 30/06, o novo assume em 01/07 (hoje 15/06: o atual segue).
+    await membro3(m!.profissional, '2026-01-01', '2026-06-30');
+    await membro3(m!.enfermeira, '2026-07-01');
+    expect(
+      await um('SELECT responsavel_profissional_id AS r FROM equipe_profissional WHERE id = ?', [eq3]),
+    ).toMatchObject({ r: m!.profissional });
+    const v = await new EquipesCooperativasPropria(nucleo, CLIENTE_F22, undefined, () => '2026-07-01').visao(
+      c(),
+      null,
+    );
+    expect(v.equipes.find((x) => x.id === eq3)?.responsavelId).toBe(m!.enfermeira);
   });
 
   it('cada gravação deixa a trilha', async () => {
