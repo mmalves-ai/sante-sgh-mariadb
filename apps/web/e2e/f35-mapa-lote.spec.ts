@@ -1,10 +1,13 @@
 // E2E @F3.5-05 (F3.5, 05-SADT linha 8): mapa de trabalho da bancada em /sadt/mapa-trabalho. O biomédico vê os exames
 // da bancada com o urgente na frente, retém um exame com o motivo na própria linha (o botão só libera com o motivo) e
 // o devolve à fila; abre o lote de trabalho com um clique (os exames na ordem do suporte, com a posição), imprime e
-// fecha o lote, sem sair da tela. As rotas de retenção e de lote exigem o banco próprio e o E2E roda com a fonte
-// sintética (sem núcleo): as respostas são simuladas pelo Playwright com massa SINTÉTICA. O efeito no banco (lote,
-// sequência, posição, analista, trilha, retido fora do lote, pendente de volta à fila) está em
-// apps/api/src/modulos/sadt/aplicacao/lote-trabalho.int.spec.ts e mapa-trabalho.int.spec.ts.
+// fecha o lote, sem sair da tela. É um E2E SÓ DE TELA: as rotas de retenção e de lote exigem o banco próprio e o E2E
+// roda com a fonte sintética (sem núcleo), então as respostas são simuladas pelo Playwright com massa SINTÉTICA. Ele
+// prova o desenho (ordem, botões, a fila contada pelo servidor, a marca do lote na linha, a folha de impressão só com
+// o lote) e os corpos enviados; não prova o servidor. O efeito no banco (lote, sequência, posição, analista, trilha,
+// retido fora do lote, pendente de volta à fila, mapa e lote com os mesmos exames) está em
+// apps/api/src/modulos/sadt/aplicacao/lote-trabalho.int.spec.ts e mapa-trabalho.int.spec.ts; as permissões e as
+// recusas da rota, em apps/api/src/modulos/sadt/lote-trabalho.controller.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 
@@ -110,7 +113,12 @@ test.describe('Mapa de trabalho: retenção e lote da bancada @F3.5-05 @fase3', 
     await page.route('**/api/sadt/lotes-trabalho**', (rota) => {
       const req = rota.request();
       const caminho = new URL(req.url()).pathname.replace(/^\/api\/sadt\/lotes-trabalho\/?/, '');
-      if (req.method() === 'GET') return json(rota, { lotes: lote ? [lote] : [] });
+      // A fila fora de lote vem do servidor: dois exames em análise até o lote abrir, nenhum depois.
+      if (req.method() === 'GET')
+        return json(rota, {
+          lotes: lote ? [lote] : [],
+          fila: [{ bancada: BANCADA, foraDeLote: lote ? 0 : 2 }],
+        });
       const corpo = (req.postDataJSON() ?? {}) as Record<string, unknown>;
       pedidos.push({ caminho: `lote/${caminho}`, corpo });
       if (caminho === 'abrir')
@@ -175,6 +183,8 @@ test.describe('Mapa de trabalho: retenção e lote da bancada @F3.5-05 @fase3', 
     expect(pedidos[1]).toMatchObject({ caminho: 'soltar', corpo: { exame: 12 } });
 
     // Abrir o lote da bancada com um clique: os exames na ordem do suporte, o urgente na posição 001.
+    await expect(bancada.getByTestId('lote-fila')).toContainText('2 exame(s)');
+    await expect(bancada.getByTestId('mapa-no-lote')).toHaveCount(0);
     await bancada.getByTestId('lote-abrir').click();
     await expect(bancada.getByTestId('lote-mensagem')).toContainText('LT-8');
     expect(pedidos[2]).toMatchObject({ caminho: 'lote/abrir', corpo: { bancada: BANCADA } });
@@ -184,6 +194,12 @@ test.describe('Mapa de trabalho: retenção e lote da bancada @F3.5-05 @fase3', 
     await expect(itens.nth(0)).toContainText('POTASSIO SINTETICO');
     await expect(itens.nth(1)).toContainText('002');
     await expect(bancada.getByTestId('lote')).toContainText('ANALISTA SINTETICO');
+    // Com os dois exames no lote, a fila do servidor zera: o botão de abrir fica desabilitado (não há recusa a
+    // provocar) e cada linha do mapa mostra o lote em que o exame está.
+    await expect(bancada.getByTestId('lote-fila')).toContainText('0 exame(s)');
+    await expect(bancada.getByTestId('lote-abrir')).toBeDisabled();
+    await expect(bancada.getByTestId('mapa-no-lote')).toHaveCount(2);
+    await expect(bancada.getByTestId('mapa-no-lote').first()).toContainText('LT-8');
     await semViolacaoAxe(page, '/sadt/mapa-trabalho (lote aberto)');
 
     // Imprimir registra a impressão no servidor e chama a impressão do navegador.
@@ -192,6 +208,31 @@ test.describe('Mapa de trabalho: retenção e lote da bancada @F3.5-05 @fase3', 
       .poll(() => page.evaluate(() => (window as unknown as { impressoes: number }).impressoes))
       .toBe(1);
     expect(pedidos[3]).toMatchObject({ caminho: 'lote/imprimir', corpo: { lote: 61 } });
+    // No papel sai só a folha do lote escolhido: cabeçalho (número, bancada, analista, dia) e os exames na ordem do
+    // suporte. O menu, as bancadas, os botões e os outros lotes não são impressos.
+    const folha = page.locator('body > [data-testid="folha-lote"]');
+    await expect(folha).toHaveCount(1);
+    await expect(folha).toBeHidden();
+    await page.emulateMedia({ media: 'print' });
+    await expect(folha).toBeVisible();
+    await expect(folha).toContainText('LT-8');
+    await expect(folha).toContainText('BANCADA SINTETICA');
+    await expect(folha).toContainText('ANALISTA SINTETICO');
+    await expect(folha).toContainText('15/03/2026');
+    await expect(folha.getByTestId('folha-lote-item')).toHaveCount(2);
+    await expect(folha.getByTestId('folha-lote-item').nth(0)).toContainText('001');
+    await expect(folha.getByTestId('folha-lote-item').nth(0)).toContainText('POTASSIO SINTETICO');
+    await expect(folha.getByRole('button')).toHaveCount(0);
+    await expect(page.getByTestId('tela-sadt-coleta')).toBeHidden();
+    await expect(page.getByTestId('lote-fechar')).toBeHidden();
+    const visiveis = await page.evaluate(() =>
+      [...document.body.children]
+        .filter((e) => getComputedStyle(e).display !== 'none')
+        .map((e) => e.getAttribute('data-testid')),
+    );
+    expect(visiveis).toEqual(['folha-lote']);
+    await page.emulateMedia({ media: 'screen' });
+    await expect(page.getByTestId('tela-sadt-coleta')).toBeVisible();
 
     // Fechar: o processado fica marcado e o pendente volta à fila; o lote fechado não oferece mais o fechamento.
     await bancada.getByTestId('lote-fechar').click();

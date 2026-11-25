@@ -138,7 +138,9 @@ async function lerLotes(
  * Os exames em análise do setor da bancada, com as bancadas candidatas de cada um (a mesma leitura do mapa), fora os
  * que já estão num lote em andamento e os retidos; na ordem de chegada (a solicitação). A escolha é do domínio.
  */
-const SQL_CANDIDATOS = `SELECT ei.id AS item, b.id AS bancada, b.descricao, mb.limite_exames, mb.id AS modelo,
+const sqlCandidatos = (
+  doSetor: boolean,
+) => `SELECT ei.id AS item, b.id AS bancada, b.descricao, mb.limite_exames, mb.id AS modelo,
          (ei.urgente = TRUE OR r.prioridade <> 'rotina') AS urgente,
          (SELECT abe.amostra_biologica_id FROM amostra_biologica_exame abe
             JOIN amostra_biologica x ON x.id = abe.amostra_biologica_id
@@ -154,7 +156,8 @@ const SQL_CANDIDATOS = `SELECT ei.id AS item, b.id AS bancada, b.descricao, mb.l
                                       AND mbe.excluido_em IS NULL AND mbe.somente_interesse = FALSE
     JOIN bancada_analitica b ON b.id = mb.bancada_analitica_id AND b.ativo = TRUE
                             AND b.setor_diagnostico_id = mb.setor_diagnostico_id
-   WHERE r.estabelecimento_id = ? AND sd.id = ? AND ei.excluido_em IS NULL AND ei.situacao = 'em_analise'
+   WHERE r.estabelecimento_id = ? ${doSetor ? 'AND sd.id = ?' : ''} AND ei.excluido_em IS NULL
+     AND ei.situacao = 'em_analise'
      AND NOT EXISTS (
          SELECT 1 FROM grupo_trabalho_bancada_item gi
            JOIN grupo_trabalho_bancada g ON g.id = gi.grupo_trabalho_bancada_id
@@ -162,6 +165,47 @@ const SQL_CANDIDATOS = `SELECT ei.id AS item, b.id AS bancada, b.descricao, mb.l
             AND (gi.situacao = 'retido'
                  OR (gi.situacao IN ('pendente', 'repetir') AND g.situacao IN ('aberto', 'em_processamento'))))
    ORDER BY COALESCE(r.solicitado_em, ei.criado_em), ei.id`;
+
+/** A fila de uma bancada: os exames em análise fora de lote que ela leva, na ordem de chegada, e o modelo de mapa. */
+interface FilaDaBancada {
+  readonly modelo: BancadaDoItem;
+  readonly candidatos: CandidatoAoLote[];
+}
+
+/** A mesma escolha do mapa: entre as bancadas candidatas do exame, a do modelo mais antigo do setor. */
+function filaPorBancada(linhas: readonly Record<string, unknown>[]): Map<number, FilaDaBancada> {
+  const porItem = new Map<number, { bancadas: BancadaDoItem[]; c: CandidatoAoLote }>();
+  for (const r of linhas) {
+    const item = n(r['item']);
+    const g = porItem.get(item) ?? {
+      bancadas: [],
+      c: { item, urgente: n(r['urgente']) === 1, amostra: r['amostra'] === null ? null : n(r['amostra']) },
+    };
+    g.bancadas.push({
+      item,
+      bancada: n(r['bancada']),
+      nome: String(r['descricao']),
+      limite: r['limite_exames'] === null ? null : n(r['limite_exames']),
+      modelo: n(r['modelo']),
+    });
+    porItem.set(item, g);
+  }
+  const filas = new Map<number, FilaDaBancada>();
+  for (const g of porItem.values()) {
+    const escolhida = escolherBancada(g.bancadas);
+    if (!escolhida) continue;
+    const f = filas.get(escolhida.bancada) ?? { modelo: escolhida, candidatos: [] };
+    f.candidatos.push(g.c);
+    filas.set(escolhida.bancada, f);
+  }
+  return filas;
+}
+
+/** Quantos exames em análise a bancada tem fora de lote (o que o próximo lote pode levar). */
+export interface FilaForaDeLote {
+  readonly bancada: number;
+  readonly foraDeLote: number;
+}
 
 const TABELAS = ['grupo_trabalho_bancada', 'grupo_trabalho_bancada_item', 'sequencia_negocio'];
 
@@ -195,6 +239,19 @@ export class ServicoLoteTrabalho {
     const est = this.est(c);
     return this.nucleo.lerSomente(this.ctxNucleo(c), (l) =>
       lerLotes(l, est, "(g.data_trabalho = ? OR g.situacao IN ('aberto', 'em_processamento'))", [data]),
+    );
+  }
+
+  /**
+   * A fila de cada bancada do estabelecimento: os exames em análise fora de lote, pela mesma leitura e pela mesma
+   * escolha de bancada da abertura do lote (a tela só oferece abrir o lote quando há o que levar).
+   */
+  fila(c: ContextoSadt): Promise<FilaForaDeLote[]> {
+    const est = this.est(c);
+    return this.nucleo.lerSomente(this.ctxNucleo(c), async (l) =>
+      [...filaPorBancada(await l.consultar(sqlCandidatos(false), [est], { teto: 20000 }))].map(
+        ([bancada, f]) => ({ bancada, foraDeLote: f.candidatos.length }),
+      ),
     );
   }
 
@@ -250,36 +307,10 @@ export class ServicoLoteTrabalho {
       const analista = e.analista ?? usuario;
       const a =
         analista === null ? undefined : await tx.uma('SELECT id FROM usuario WHERE id = ?', [analista]);
-      const linhas = b ? await tx.consultar(SQL_CANDIDATOS, [est, b['setor_diagnostico_id']]) : [];
-      // A mesma escolha do mapa: entre as bancadas candidatas do exame, a do modelo mais antigo do setor.
-      const porItem = new Map<number, { bancadas: BancadaDoItem[]; c: CandidatoAoLote }>();
-      for (const r of linhas) {
-        const item = n(r['item']);
-        const g = porItem.get(item) ?? {
-          bancadas: [],
-          c: {
-            item,
-            urgente: n(r['urgente']) === 1,
-            amostra: r['amostra'] === null ? null : n(r['amostra']),
-          },
-        };
-        g.bancadas.push({
-          item,
-          bancada: n(r['bancada']),
-          nome: String(r['descricao']),
-          limite: r['limite_exames'] === null ? null : n(r['limite_exames']),
-          modelo: n(r['modelo']),
-        });
-        porItem.set(item, g);
-      }
-      let modelo: BancadaDoItem | null = null;
-      const candidatos: CandidatoAoLote[] = [];
-      for (const g of porItem.values()) {
-        const escolhida = escolherBancada(g.bancadas);
-        if (escolhida?.bancada !== e.bancada) continue;
-        modelo ??= escolhida;
-        candidatos.push(g.c);
-      }
+      const linhas = b ? await tx.consultar(sqlCandidatos(true), [est, b['setor_diagnostico_id']]) : [];
+      const fila = filaPorBancada(linhas).get(e.bancada);
+      const modelo = fila?.modelo ?? null;
+      const candidatos = fila?.candidatos ?? [];
       const falha = conferirAberturaDoLote({
         bancadaExiste: b !== undefined,
         analistaExiste: a != null,

@@ -86,6 +86,7 @@ import {
   type SetorSadt,
   type ValorCriticoLido,
 } from '@sgh/contratos';
+import { INICIO_DA_FILA_DA_BANCADA } from '@sgh/dominio-sadt';
 import { z } from 'zod';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -415,7 +416,12 @@ export class SadtController implements OnModuleInit, OnModuleDestroy {
     const data = dataIso(q['data'], await this.hoje(s));
     const setor = setorOu(q['setor']) ?? 'laboratorio';
     req.sghAlvo = { tabelaAlvo: TABELA_EXAME, idAlvo: `mapa ${data}` };
-    return { setor, ...(await this.porta.mapa(ctx(s), { setor, inicio: data, fim: data })) };
+    // A fila da bancada: todo exame em análise pedido até o dia escolhido, e não só os pedidos nesse dia (o lote de
+    // trabalho leva os mesmos exames).
+    return {
+      setor,
+      ...(await this.porta.mapa(ctx(s), { setor, inicio: INICIO_DA_FILA_DA_BANCADA, fim: data })),
+    };
   }
 
   @Get('amostras')

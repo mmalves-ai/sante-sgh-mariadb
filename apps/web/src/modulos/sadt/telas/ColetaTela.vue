@@ -9,7 +9,9 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import { lerLotes } from '../api-lote-trabalho.js';
 import { reterExame, soltarExame } from '../api-mapa-trabalho.js';
+import { listarPostos } from '../api-posto-coleta.js';
 import { coletarAmostra, lerColeta, lerMapaTrabalho, novaChave } from '../api-sadt.js';
 import AvisoSadt from '../componentes/AvisoSadt.vue';
 import ErroSadt from '../componentes/ErroSadt.vue';
@@ -48,6 +50,22 @@ const trabalho = useQuery({
   queryFn: () => lerMapaTrabalho('laboratorio', data.value),
   enabled: mapa,
 });
+// O lote em andamento de cada exame do mapa (a mesma leitura do painel de lotes, uma só chamada): a linha mostra em
+// que lote o exame já está.
+const lotesDoDia = useQuery({
+  queryKey: computed(() => ['sadt', 'lotes', data.value]),
+  queryFn: () => lerLotes(data.value),
+  enabled: mapa,
+  retry: false,
+});
+const loteDoExame = computed(() => {
+  const m = new Map<number, string>();
+  for (const l of lotesDoDia.data.value?.lotes ?? [])
+    if (l.situacao === 'aberto' || l.situacao === 'em_processamento')
+      for (const i of l.itens)
+        if (i.situacao === 'pendente' || i.situacao === 'repetir') m.set(i.exame, l.numero);
+  return m;
+});
 // Retenção na bancada: o motivo na própria linha do exame, sem sair do mapa (um clique para devolver à fila).
 const motivoReter = ref<Record<number, string>>({});
 // Os retidos vêm à parte (fora da fila e do lote): aparecem depois dos exames a processar, sem o link da digitação.
@@ -82,6 +100,13 @@ const conferido = ref<Record<number, boolean>>({});
 const ocupado = ref(false);
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
+// O posto de coleta do cadastro: escolhido uma vez na tela, vale para as coletas seguintes (sem posto: beira do leito).
+const postos = useQuery({ queryKey: ['sadt', 'postos-coleta', 'ativos'], queryFn: () => listarPostos() });
+const postoColeta = ref('');
+const opcoesPosto = computed(() => [
+  { valor: '', rotulo: t('sadt.pedido.postos.semPosto') },
+  ...(postos.data.value?.itens ?? []).map((p) => ({ valor: String(p.id), rotulo: p.descricao })),
+]);
 async function coletar(indice: number): Promise<void> {
   const g = coleta.data.value?.grupos[indice];
   if (!g) return;
@@ -95,6 +120,7 @@ async function coletar(indice: number): Promise<void> {
         ...(pulseira.value[indice]?.trim() ? { pulseira: pulseira.value[indice]?.trim() } : {}),
         identificadoresConferidos: conferido.value[indice] === true,
         ...(g.recipiente ? { recipiente: g.recipiente.codigo } : {}),
+        ...(postoColeta.value ? { posto: Number(postoColeta.value) } : {}),
       },
       novaChave('coletar'),
     );
@@ -117,7 +143,15 @@ async function coletar(indice: number): Promise<void> {
       <RouterLink to="/sadt/coleta">{{ t('sadt.coleta.titulo') }}</RouterLink>
       <RouterLink to="/sadt/mapa-trabalho" data-testid="link-mapa">{{ t('sadt.coleta.mapa') }}</RouterLink>
       <RouterLink to="/sadt/amostras">{{ t('sadt.amostras.titulo') }}</RouterLink>
+      <RouterLink to="/sadt/postos-coleta">{{ t('sadt.pedido.postos.abrir') }}</RouterLink>
     </nav>
+    <SanteSelecao
+      v-if="!mapa && opcoesPosto.length > 1"
+      v-model="postoColeta"
+      :rotulo="t('sadt.pedido.postos.naColeta')"
+      :opcoes="opcoesPosto"
+      data-testid="coleta-posto"
+    />
     <div class="filtros">
       <span class="campo">
         <label for="coleta-data">{{ t('sadt.data') }}</label>
@@ -215,6 +249,9 @@ async function coletar(indice: number): Promise<void> {
             <span v-if="e.amostra" class="secundario">
               · {{ e.amostra.codigo }} ({{ e.amostra.rotulo }})</span
             >
+            <span v-if="loteDoExame.has(e.id)" class="secundario" data-testid="mapa-no-lote">
+              · {{ t('sadt.lote.noLote', { numero: loteDoExame.get(e.id) }) }}</span
+            >
             <template v-if="b.codigo !== null">
               <strong v-if="retidoDe(b, e.id) !== null" data-testid="mapa-retido">
                 · {{ t('sadt.coleta.retido', { motivo: retidoDe(b, e.id) }) }}
@@ -238,12 +275,7 @@ async function coletar(indice: number): Promise<void> {
             </template>
           </li>
         </ul>
-        <LotesTrabalhoPainel
-          v-if="b.codigo !== null"
-          :bancada="b.codigo"
-          :data="data"
-          :tem-fila="b.exames.length > 0"
-        />
+        <LotesTrabalhoPainel v-if="b.codigo !== null" :bancada="b.codigo" :data="data" />
       </div>
     </template>
     <p v-if="mensagem" role="status" data-testid="coleta-mensagem">{{ mensagem }}</p>

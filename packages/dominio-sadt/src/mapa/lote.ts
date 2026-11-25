@@ -4,6 +4,13 @@
 // tubos). Fechar o lote marca como processado o exame que já saiu da análise e devolve à fila o que ficou pendente
 // (ele entra no próximo lote); o retido continua retido até ser solto no mapa. Regra pura: a porta lê e grava.
 
+/**
+ * A fila da bancada não depende do dia do pedido: o exame em análise fica no mapa de trabalho até ter resultado, ser
+ * cancelado ou recusado. O mapa lê os exames pedidos desta data em diante (o começo da fila) até o dia escolhido, e o
+ * lote leva os mesmos exames: o que a tela mostra é o que o lote varre.
+ */
+export const INICIO_DA_FILA_DA_BANCADA = '2000-01-01';
+
 /** O exame em análise na bancada, candidato ao lote, na ordem de chegada que a porta leu. */
 export interface CandidatoAoLote {
   readonly item: number;

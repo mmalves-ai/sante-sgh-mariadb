@@ -1,5 +1,5 @@
 // Lote de trabalho da bancada (F3.5, 05-SADT linha 8):
-//   GET  /api/sadt/lotes-trabalho?data            os lotes do dia e os que continuam em andamento
+//   GET  /api/sadt/lotes-trabalho?data            os lotes do dia, os que continuam em andamento e a fila fora de lote
 //   POST /api/sadt/lotes-trabalho/abrir     { bancada, analista? }  abre o lote com os exames em análise fora de lote
 //   POST /api/sadt/lotes-trabalho/fechar    { lote }                fecha o lote (o pendente volta à fila)
 //   POST /api/sadt/lotes-trabalho/imprimir  { lote }                registra a impressão e devolve a folha do lote
@@ -14,6 +14,7 @@ import { corpo } from '../exames/public-api.js';
 import {
   esquemaAbrirLote,
   esquemaLoteAlvo,
+  type FilaForaDeLote,
   type LoteDeTrabalho,
   type ServicoLoteTrabalho,
 } from './aplicacao/lote-trabalho-propria.js';
@@ -36,12 +37,14 @@ export class LoteTrabalhoController {
   async listar(
     @Query() q: Record<string, string>,
     @Req() req: RequisicaoAutorizada,
-  ): Promise<{ lotes: LoteDeTrabalho[] }> {
+  ): Promise<{ lotes: LoteDeTrabalho[]; fila: FilaForaDeLote[] }> {
     const data = /^\d{4}-\d{2}-\d{2}$/.test(q['data'] ?? '')
       ? q['data']!
       : new Date().toISOString().slice(0, 10);
     req.sghAlvo = { tabelaAlvo: 'grupo_trabalho_bancada', idAlvo: `lotes ${data}` };
-    return { lotes: await this.s.listar(sessaoDe(req).porta, data) };
+    const c = sessaoDe(req).porta;
+    const [lotes, fila] = await Promise.all([this.s.listar(c, data), this.s.fila(c)]);
+    return { lotes, fila };
   }
 
   @Post('abrir')

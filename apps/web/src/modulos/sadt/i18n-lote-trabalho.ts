@@ -6,6 +6,11 @@ export const mensagensLoteTrabalho = {
   abrirDica:
     'Leva os exames em análise que estão fora de lote, os urgentes primeiro, até o limite da bancada.',
   nenhum: 'Nenhum lote aberto hoje nesta bancada.',
+  foraDeLote: '{n} exame(s) em análise fora de lote',
+  noLote: 'no lote {numero}',
+  folhaTitulo: 'Mapa de trabalho · lote {numero}',
+  folhaBancada: 'Bancada: {nome}',
+  folhaDia: 'Dia de trabalho: {data}',
   indisponivel: 'Os lotes de trabalho não estão disponíveis nesta fonte de dados.',
   resumo: 'Lote {numero} · {situacao} · {n} exame(s)',
   analista: 'Analista: {nome}',

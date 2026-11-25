@@ -1,4 +1,5 @@
-// Lote de trabalho da bancada (F3.5, 05-SADT linha 8): os lotes do dia, abrir, fechar e imprimir.
+// Lote de trabalho da bancada (F3.5, 05-SADT linha 8): os lotes do dia com a fila fora de lote de cada bancada, abrir,
+// fechar e imprimir.
 import { z } from 'zod';
 import { enviar, ler } from '../exames/api-exames.js';
 
@@ -35,10 +36,15 @@ const esquemaLote = z.object({
 });
 export type LoteDeTrabalho = z.infer<typeof esquemaLote>;
 
-export const lerLotes = (data: string): Promise<LoteDeTrabalho[]> =>
-  ler(`${B}?data=${encodeURIComponent(data)}`, z.object({ lotes: z.array(esquemaLote) })).then(
-    (r) => r.lotes,
-  );
+const esquemaLotesDoDia = z.object({
+  lotes: z.array(esquemaLote),
+  /** Quantos exames em análise cada bancada tem fora de lote (o que o próximo lote leva). */
+  fila: z.array(z.object({ bancada: n, foraDeLote: n })),
+});
+export type LotesDoDia = z.infer<typeof esquemaLotesDoDia>;
+
+export const lerLotes = (data: string): Promise<LotesDoDia> =>
+  ler(`${B}?data=${encodeURIComponent(data)}`, esquemaLotesDoDia);
 
 export const abrirLote = (bancada: number, chave: string): Promise<LoteDeTrabalho> =>
   enviar(`${B}/abrir`, { bancada }, esquemaLote, chave);

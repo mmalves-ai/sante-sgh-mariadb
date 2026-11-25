@@ -4,7 +4,11 @@
 // cada um com a sequência e a posição no suporte, e a trilha; o exame que já está num lote em andamento não entra em
 // outro; o retido não entra em lote e a retenção de um exame do lote fica no próprio lote; a bancada de outro
 // estabelecimento é recusada; fechar marca o processado, devolve o pendente à fila (ele entra no lote seguinte) e não
-// apaga nada; o lote fechado não fecha de novo; imprimir grava a hora da impressão com a trilha.
+// apaga nada; o lote fechado não fecha de novo; imprimir grava a hora da impressão com a trilha. O mapa de trabalho e
+// o lote leem a MESMA fila: os exames da massa foram pedidos três dias antes (não são do dia), aparecem no mapa da
+// bancada pela leitura da rota (do começo da fila até hoje), a contagem fora de lote que a tela recebe é a do mapa
+// menos os que já estão em lote, e é exatamente o que a abertura leva.
+import { INICIO_DA_FILA_DA_BANCADA } from '@sgh/dominio-sadt';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -17,6 +21,7 @@ import {
 } from './copia.spec-util.js';
 import { ServicoLoteTrabalho } from './lote-trabalho-propria.js';
 import { ServicoMapaTrabalho } from './mapa-trabalho-propria.js';
+import { PortaSadtPropria } from '../porta-propria.js';
 
 const codigoDe = (e: unknown) => (e instanceof ErroOperacao ? String(e.problema['codigo'] ?? '') : String(e));
 const dia = () => new Date().toISOString().slice(0, 10);
@@ -90,7 +95,11 @@ describe.skipIf(SEM_BANCO)('lote de trabalho da bancada: abrir, fechar e imprimi
       itemT = await extra(8, false);
       itemU = await extra(9, true);
       // Só os exames deste teste ficam em análise no setor da massa: a requisição de rotina e um exame urgente.
-      await e.executar("UPDATE requisicao_exame SET prioridade = 'rotina' WHERE id = ?", [mm.requisicao]);
+      // Pedidos três dias antes: a fila da bancada não depende do dia do pedido.
+      await e.executar("UPDATE requisicao_exame SET prioridade = 'rotina', solicitado_em = ? WHERE id = ?", [
+        new Date(agora.getTime() - 3 * 86_400_000),
+        mm.requisicao,
+      ]);
       await e.executar("UPDATE exame_item SET situacao = 'em_analise', urgente = FALSE WHERE id = ?", [
         mm.itemLab,
       ]);
@@ -139,8 +148,27 @@ describe.skipIf(SEM_BANCO)('lote de trabalho da bancada: abrir, fechar e imprimi
       ),
     ).toBe(0);
 
+    // Mapa x lote: os exames em análise pedidos em dia anterior estão no mapa da bancada (a leitura da rota, do
+    // começo da fila até hoje) e na fila fora de lote; a leitura só do dia de hoje não os traria.
+    const porta = new PortaSadtPropria(nucleo);
+    const hoje = (await porta.relogio(c)).hoje;
+    const noMapa = async (inicio: string) => {
+      const r = await porta.mapa(c, { setor: 'laboratorio', inicio, fim: hoje });
+      const b = r.bancadas.find((x) => x.codigo === bA);
+      return (b?.exames ?? []).map((x) => x.id).sort((x, y) => x - y);
+    };
+    const fila = async (ctx = c) => (await servico.fila(ctx)).find((f) => f.bancada === bA)?.foraDeLote ?? 0;
+    const quatro = [m!.itemLab, itemR, itemT, itemU].sort((x, y) => x - y);
+    expect(await noMapa(hoje)).toEqual([]);
+    expect(await noMapa(INICIO_DA_FILA_DA_BANCADA)).toEqual(quatro);
+    expect(await fila()).toBe(4);
+    expect(await fila(contexto(m!, m!.base.outroEst))).toBe(0);
+
     // O retido antes da abertura não entra em lote de exames a processar.
     const ret = await mapa.reter(c, { exame: itemT, motivo: 'Aguardando reagente' });
+    const tres = quatro.filter((x) => x !== itemT);
+    expect(await noMapa(INICIO_DA_FILA_DA_BANCADA)).toEqual(tres);
+    expect(await fila()).toBe(3);
 
     const l1 = await servico.abrir(c, { bancada: bA });
     expect(l1.numero).toMatch(/^LT-\d+$/);
@@ -166,13 +194,24 @@ describe.skipIf(SEM_BANCO)('lote de trabalho da bancada: abrir, fechar e imprimi
     expect(Number(g!['aberto_por_usuario_id'])).toBe(c.usuario);
     expect(Math.abs(Date.parse(l1.data) - Date.parse(dia()))).toBeLessThanOrEqual(86_400_000);
     expect(await trilhas(l1.id)).toBeGreaterThanOrEqual(1);
+    // O lote levou os dois primeiros do mapa; sobra um fora de lote. O mapa continua mostrando os três (os do lote
+    // seguem em análise) e a lista de lotes diz em que lote cada um está.
+    expect(await fila()).toBe(1);
+    expect(await noMapa(INICIO_DA_FILA_DA_BANCADA)).toEqual(tres);
 
     // O segundo lote leva só o que sobrou (o de rotina fora do limite); o retido e os do lote 1 não entram.
     const l2 = await servico.abrir(c, { bancada: bA });
     expect(l2.id).not.toBe(l1.id);
     expect(l2.numero).not.toBe(l1.numero);
     expect(l2.itens.map((i) => [i.exame, i.sequencia])).toEqual([[itemR, 1]]);
+    // Fila zerada no servidor: a tela desabilita o botão; a abertura forçada é recusada.
+    expect(await fila()).toBe(0);
     expect(codigoDe(await servico.abrir(c, { bancada: bA }).catch((e: unknown) => e))).toBe('sem-exames');
+    const emLote = (await servico.listar(c, l1.data))
+      .filter((x) => x.bancada === bA && x.situacao === 'aberto')
+      .flatMap((x) => x.itens.filter((i) => i.situacao === 'pendente').map((i) => i.exame))
+      .sort((x, y) => x - y);
+    expect(emLote).toEqual(tres);
 
     // A retenção de um exame que está no lote fica no PRÓPRIO lote (o exame não se duplica em outro lote).
     const r = await mapa.reter(c, { exame: itemR, motivo: 'Amostra hemolisada' });
