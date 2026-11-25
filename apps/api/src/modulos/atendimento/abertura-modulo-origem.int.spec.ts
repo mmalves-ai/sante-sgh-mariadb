@@ -314,6 +314,29 @@ describe.skipIf(SEM_BANCO)('módulo de recepção pela origem da abertura (Maria
     await nucleo.encerrar();
   });
 
+  it('02-CAD linha 13: paciente com óbito registrado não abre atendimento (consulta nem PA), e nada é gravado', async () => {
+    const obito = (falecido: boolean) =>
+      escrever(async (e) => {
+        await e.executar('UPDATE paciente SET falecido = ?, data_hora_obito = ? WHERE id = ?', [
+          falecido,
+          falecido ? new Date('2026-11-20T12:00:00Z') : null,
+          paciente,
+        ]);
+      });
+    const falecido = {
+      problema: expect.objectContaining({ codigo: 'paciente-falecido', campos: ['paciente'] }),
+    };
+    const n = await atendimentosDe(paciente);
+    await obito(true);
+    try {
+      await expect(abrir()).rejects.toMatchObject(falecido);
+      await expect(abrir({ tipo: 'pa', carater: 'urgencia' })).rejects.toMatchObject(falecido);
+      expect(await atendimentosDe(paciente)).toBe(n);
+    } finally {
+      await obito(false);
+    }
+  });
+
   it('canal de entrada: o pronto atendimento sem local usa o módulo da urgência; recusado, nada é gravado', async () => {
     await regra('nomeMae', moduloUrgencia);
     try {

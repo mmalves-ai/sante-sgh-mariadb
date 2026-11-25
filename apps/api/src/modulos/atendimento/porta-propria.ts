@@ -62,6 +62,7 @@ import {
   prioridadeDaSenha,
   type Recusa,
   recusaCancelamento,
+  recusarEntradaDeFalecido,
   recusaConducao,
   recusaMarcacaoNaAbertura,
   recusaSaidaObservacao,
@@ -70,6 +71,7 @@ import {
   situacaoNoConsultorio,
 } from '@sgh/dominio-atendimento';
 import { z } from 'zod';
+import { vidaDoPaciente } from '../cadastro/vida-do-paciente.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { conferirCadastroNaAbertura } from '../cadastro/campos-abertura.js';
 import { nomeNoNucleo } from '../cadastro/porta-propria.js';
@@ -1548,12 +1550,15 @@ const OPERACAO_ABRIR = definirOperacao({
       return x;
     };
     const pac = await exigir(
-      'SELECT id, situacao FROM paciente WHERE id = ? AND excluido_em IS NULL',
+      'SELECT id, situacao, falecido, data_hora_obito FROM paciente WHERE id = ? AND excluido_em IS NULL',
       [num('paciente')],
       'paciente-inexistente',
       'Paciente não encontrado.',
       'paciente',
     );
+    // 02-CAD linha 13: o paciente com óbito registrado não abre atendimento (regra do domínio).
+    const vivo = recusarEntradaDeFalecido(vidaDoPaciente(pac), 'atendimento');
+    if (!vivo.ok) throw recusa(vivo.codigo, vivo.mensagem, { campos: ['paciente'] });
     if (!['ativo', 'provisorio'].includes(String(pac['situacao'])))
       throw recusa('paciente-inativo', 'Cadastro inativo ou unificado: abra pelo cadastro que ficou ativo.', {
         campos: ['paciente'],
