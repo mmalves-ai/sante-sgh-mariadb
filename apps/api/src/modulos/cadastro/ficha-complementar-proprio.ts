@@ -1085,6 +1085,15 @@ export class FichaComplementarPropria {
     return this.ler(c, (l) => lerDadosDoCadastro(l, paciente));
   }
 
+  /** Leitura no estabelecimento da sessão (a resolução do módulo de recepção da abertura usa a mesma leitura). */
+  async lerNoEstabelecimento<T>(
+    c: ContextoPorta,
+    fn: (l: Leitor, estabelecimento: number) => Promise<T>,
+  ): Promise<T> {
+    const est = await this.estabelecimento(c);
+    return this.ler(c, (l) => fn(l, est));
+  }
+
   /** O módulo de recepção do local de atendimento em que a tela trabalha (nulo: nenhum). */
   async moduloDoLocal(c: ContextoPorta, local: number | null): Promise<number | null> {
     if (local === null) return null;

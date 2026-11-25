@@ -22,6 +22,9 @@ const props = defineProps<{
   modulo?: string | number | null;
   /** Local de atendimento em que a recepção abre (senha do guichê): o servidor resolve o módulo de recepção dele. */
   local?: number | null;
+  /** Senha chamada e marcação da agenda de onde a abertura vem: sem local, o servidor tira o módulo delas. */
+  senha?: number | null;
+  marcacao?: number | null;
 }>();
 
 const { t } = useI18n({
@@ -44,9 +47,15 @@ const consulta = useQuery({
     props.idPaciente,
     consultaDoEscopo(escopo.value),
     props.local ?? 0,
+    props.senha ?? 0,
+    props.marcacao ?? 0,
   ]),
   queryFn: (): Promise<CamposPendentes> =>
-    lerCamposPendentes(props.idPaciente, escopo.value, props.local ?? null),
+    lerCamposPendentes(props.idPaciente, escopo.value, {
+      local: props.local ?? null,
+      senha: props.senha ?? null,
+      marcacao: props.marcacao ?? null,
+    }),
   enabled: computed(() => props.idPaciente > 0 && pode('cadastro.paciente.ler')),
   retry: false,
   // O cadastro é completado na ficha, em outra aba: ao voltar, a tela relê e o aviso some sozinho.
@@ -55,7 +64,7 @@ const consulta = useQuery({
   refetchOnWindowFocus: 'always',
 });
 const pendentes = computed(() => (consulta.isError.value ? [] : (consulta.data.value?.pendentes ?? [])));
-// O atalho leva à ficha com o módulo que o servidor aplicou (o do local de atendimento, quando há).
+// O atalho leva à ficha com o módulo que o servidor aplicou (o da origem da abertura, quando há).
 const escopoDaFicha = computed(() => ({
   ...escopo.value,
   modulo: (consulta.isError.value ? null : consulta.data.value?.modulo) ?? escopo.value.modulo,

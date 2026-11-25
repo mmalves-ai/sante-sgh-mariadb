@@ -9,7 +9,9 @@
 // A rota dos campos pendentes exige o banco próprio e é simulada pelo Playwright com massa SINTÉTICA; a recusa de
 // verdade (o que fica no banco) está nos contratos de efeito
 // apps/api/src/modulos/atendimento/abertura-regra-campo.int.spec.ts e
-// apps/api/src/modulos/adt/internacao-regra-campo.int.spec.ts.
+// apps/api/src/modulos/adt/internacao-regra-campo.int.spec.ts; o módulo tirado da origem (canal de entrada e guichê da
+// sessão, sem local) em apps/api/src/modulos/atendimento/abertura-modulo-origem.int.spec.ts (@C1-007: a tela manda
+// também a senha chamada, de onde o servidor tira o módulo quando não há local).
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -19,10 +21,14 @@ const PACIENTE = 1001;
 const CONVENIO = 306;
 const MODULO_DO_LOCAL = 4;
 
+// Cada teste tem contexto novo (sem cookie nem sessão). No lote, o 1º caso ficou 4 min esperando o formulário de
+// entrada (25/11, lote2 da f3-integrar; o 2º caso, igual, entrou em 6 s): a página de entrada não chegou a montar. Uma
+// recarga só, se o formulário não aparecer em 30 s; a espera do campo e o resto do teste ficam iguais.
 async function entrar(page: Page, login: string): Promise<void> {
-  await page.context().clearCookies();
   await page.goto('/entrar');
-  await page.getByTestId('campo-login').fill(login);
+  const campo = page.getByTestId('campo-login');
+  await campo.waitFor({ state: 'visible', timeout: 30_000 }).catch(() => page.reload());
+  await campo.fill(login);
   await page.getByTestId('campo-senha').fill(SENHA);
   await page.getByTestId('botao-entrar').click();
   await expect(page).toHaveURL(/\/inicio/);
@@ -38,7 +44,7 @@ async function escolherPaciente(page: Page): Promise<void> {
   await expect(page.getByTestId('abrir-atd-paciente-escolhido')).toBeVisible();
 }
 
-test.describe('@F3.1 @F3.1-01 regra de campo do cadastro na abertura do atendimento', () => {
+test.describe('@F3.1 @F3.1-01 @C1-007 regra de campo do cadastro na abertura do atendimento', () => {
   test.describe.configure({ timeout: 240_000 });
 
   test('do guichê: avisa na hora o que falta, com o módulo de recepção do local, e leva à ficha com o escopo; axe', async ({
@@ -91,6 +97,8 @@ test.describe('@F3.1 @F3.1-01 regra de campo do cadastro na abertura do atendime
     await escolher(ficha.getByLabel('Tipo', { exact: true }), 'consulta');
     await expect.poll(() => consultas.some((c) => c.get('tipoAtendimento') === 'ambulatorial')).toBe(true);
     expect(consultas.at(-1)?.get('local')).toBe(local);
+    // A origem vai junto: a senha chamada (o servidor tira o módulo dela quando não há local).
+    expect(consultas.at(-1)?.get('senha')).toBe(new URL(page.url()).searchParams.get('senha'));
     expect(consultas.at(-1)?.get('modulo')).toBeNull();
     await expect(page.getByTestId('abrir-atd-cadastro-pendente')).toHaveCount(0);
 

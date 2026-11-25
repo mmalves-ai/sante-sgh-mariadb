@@ -59,8 +59,9 @@ const q = (k: string) => (typeof rota.query[k] === 'string' ? Number(rota.query[
 const senha = q('senha');
 const local = q('local');
 const marcacao = q('marcacao');
-// Módulo de recepção da regra de campo do cadastro: com a senha do guichê, o servidor tira o módulo do local de
-// atendimento (`local`), na conferência da tela e na gravação; `?modulo=` só vale sem local ou com local sem módulo.
+// Módulo de recepção da regra de campo do cadastro: o servidor o tira da origem da abertura, na conferência da tela e
+// na gravação (o local do guichê, o local da marcação ou da senha, depois o canal de entrada e o guichê da sessão);
+// `?modulo=` só vale sem local nem origem registrada com módulo.
 const moduloRecepcao = q('modulo');
 
 // ── Paciente ──
@@ -641,6 +642,8 @@ async function abrir(): Promise<void> {
           :convenio="convenio"
           :modulo="moduloRecepcao"
           :local="local"
+          :senha="senha"
+          :marcacao="marcacao"
         />
         <RepresentacaoNaAbertura v-if="!naoIdentificado" :id-paciente="paciente.id" />
       </template>

@@ -17,6 +17,7 @@ import { TIPOS_ATENDIMENTO_REGRA, type TipoAtendimentoRegra } from '@sgh/dominio
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
+import { moduloRecepcaoDaAbertura } from './campos-abertura.js';
 import { idDaRota, linhaTrilha, problemaDoCadastro, type SessaoCadastro, sessaoDe } from './comum.js';
 import {
   type ContatosPessoa,
@@ -303,6 +304,8 @@ export class FichaComplementarController {
     @Query('tipoAtendimento') tipo: string | undefined,
     @Query('fontePagadora') fonte: string | undefined,
     @Query('local') local: string | undefined,
+    @Query('marcacao') marcacao: string | undefined,
+    @Query('senha') senha: string | undefined,
     @Req() req: RequisicaoAutorizada,
   ): Promise<{ pendentes: { campo: string; rotulo: string }[]; modulo: number | null }> {
     const s = sessaoDe(req);
@@ -310,10 +313,20 @@ export class FichaComplementarController {
     const tipoAtendimento = TIPOS_ATENDIMENTO_REGRA.includes(tipo as TipoAtendimentoRegra)
       ? (tipo as TipoAtendimentoRegra)
       : null;
-    // O módulo de recepção vem do local de atendimento em que a tela trabalha (o mesmo que a abertura resolve ao
-    // gravar); o módulo informado à parte só vale quando não há local ou o local não tem módulo.
+    // O módulo de recepção vem da origem da abertura, a mesma resolução da gravação (moduloRecepcaoDaAbertura): o
+    // local em que a tela trabalha, o local da marcação ou da senha, o módulo informado, o canal de entrada e o guichê
+    // que o usuário ocupa na sessão.
     return this.rodar(async () => {
-      const moduloEscopo = (await this.servico().moduloDoLocal(s.porta, id(local))) ?? id(modulo);
+      const { modulo: moduloEscopo } = await this.servico().lerNoEstabelecimento(s.porta, (l, est) =>
+        moduloRecepcaoDaAbertura(l, est, {
+          tipoAtendimento,
+          local: id(local),
+          marcacao: id(marcacao),
+          senha: id(senha),
+          modulo: id(modulo),
+          usuario: s.porta.usuario,
+        }),
+      );
       const pendentes = await this.servico().camposPendentes(s.porta, n, {
         modulo: moduloEscopo,
         tipoAtendimento,

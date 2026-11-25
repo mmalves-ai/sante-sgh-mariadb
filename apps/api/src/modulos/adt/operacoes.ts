@@ -406,6 +406,7 @@ const internar = definirOperacao<InternarBancoEntrada, ResultadoOperacao>({
       paciente: e.paciente,
       tipo: 'internacao',
       fontePagadora: e.convenio,
+      usuario,
       provisorio: pac['situacao'] === 'provisorio',
     });
     await exigirExiste(tx, 'especialidade_medica', e.especialidade, 'especialidade', 'A especialidade');

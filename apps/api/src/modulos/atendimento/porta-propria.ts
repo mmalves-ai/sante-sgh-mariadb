@@ -1576,6 +1576,9 @@ const OPERACAO_ABRIR = definirOperacao({
       fontePagadora: Number(conv['id']),
       local: num('local'),
       modulo: num('moduloRecepcao'),
+      marcacao: num('marcacao'),
+      senha: num('senha'),
+      usuario: typeof tx.contexto.usuario === 'number' ? tx.contexto.usuario : null,
       provisorio: String(pac['situacao']) === 'provisorio',
     });
     const prof = await exigir(
