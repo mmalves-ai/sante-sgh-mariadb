@@ -97,6 +97,12 @@ export const buscarProfissionais = (termo: string) =>
   ler(`${F}/profissionais-equipe?termo=${encodeURIComponent(termo)}`, esquemaProfissionais);
 export const gravarEquipe = (item: number, participantes: ParticipantePedido[], chave: string) =>
   enviar(`${F}/itens/${item}/equipe`, { participantes }, qualquer, chave);
+/** Lançamento manual com a equipe do ato no mesmo pedido (o item e a equipe numa transação só). */
+export const lancarItemComEquipe = (
+  conta: number,
+  corpo: Record<string, unknown> & { equipe: ParticipantePedido[] },
+  chave: string,
+) => enviar(`${F}/contas/${conta}/itens-com-equipe`, corpo, qualquer, chave);
 export const lancarKit = (conta: number, kitId: number, vezes: number, chave: string) =>
   enviar(`${F}/contas/${conta}/kits`, { kitId, vezes }, qualquer, chave);
 export const transferirItens = (

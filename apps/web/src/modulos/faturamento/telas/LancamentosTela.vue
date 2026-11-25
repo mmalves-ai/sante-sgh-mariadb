@@ -11,7 +11,9 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import { conferirItens, explicarItem, lancarItem, listarItens, novaChave } from '../api-faturamento.js';
+import { lancarItemComEquipe, type ParticipantePedido } from '../api-movimentos.js';
 import AvisoFaturamento from '../componentes/AvisoFaturamento.vue';
+import EquipeLancamento from '../componentes/EquipeLancamento.vue';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
 import MensagemFaturamento from '../componentes/MensagemFaturamento.vue';
 import { data, num, numero, reais, usarFaturamento } from '../usar-faturamento.js';
@@ -58,6 +60,11 @@ const novo = ref({
   aprovador: '',
 });
 
+// Equipe do ato (06-FAT linha 15): honorário e procedimento (grupos 2 e 3) levam a equipe no mesmo pedido.
+const equipe = ref<ParticipantePedido[]>([]);
+const equipeValida = ref(true);
+const aceitaEquipe = computed(() => novo.value.tipo === 2 || novo.value.tipo === 3);
+
 function alternar(i: number) {
   const s = new Set(marcados.value);
   if (s.has(i)) s.delete(i);
@@ -88,29 +95,43 @@ const conferir = () =>
       novaChave('conferir'),
     ),
   );
-const lancar = () =>
-  agir(() =>
-    lancarItem(
-      id.value,
-      {
-        tipo: novo.value.tipo,
-        codigo: Number(novo.value.codigo),
-        quantidade: numero(novo.value.quantidade),
-        data: novo.value.data || apoio.data.value?.hoje,
-        hora: lerHoraDigitada(novo.value.hora) ?? novo.value.hora,
-        local: Number(novo.value.local),
-        ato: Number(novo.value.ato),
-        precoManual: novo.value.manual
-          ? {
-              unitario: numero(novo.value.manual),
-              justificativa: novo.value.justificativa,
-              aprovador: novo.value.aprovador || null,
-            }
-          : null,
-      },
-      novaChave('lancar'),
-    ),
+const pedidoLancamento = () => ({
+  tipo: novo.value.tipo,
+  codigo: Number(novo.value.codigo),
+  quantidade: numero(novo.value.quantidade),
+  data: novo.value.data || apoio.data.value?.hoje,
+  hora: lerHoraDigitada(novo.value.hora) ?? novo.value.hora,
+  local: Number(novo.value.local),
+  ato: Number(novo.value.ato),
+  precoManual: novo.value.manual
+    ? {
+        unitario: numero(novo.value.manual),
+        justificativa: novo.value.justificativa,
+        aprovador: novo.value.aprovador || null,
+      }
+    : null,
+});
+const lancarComEquipe = async () => {
+  const participantes = equipe.value;
+  await lancarItemComEquipe(
+    id.value,
+    { ...pedidoLancamento(), equipe: participantes },
+    novaChave('lancar-equipe'),
   );
+  equipe.value = [];
+  return {
+    mensagem: t('movimentosConta.lancamentoEquipe.lancado', {
+      codigo: novo.value.codigo,
+      n: participantes.length,
+    }),
+  };
+};
+const lancar = () =>
+  !equipeValida.value
+    ? undefined
+    : aceitaEquipe.value && equipe.value.length
+      ? agir(lancarComEquipe)
+      : agir(() => lancarItem(id.value, pedidoLancamento(), novaChave('lancar')));
 </script>
 
 <template>
@@ -298,7 +319,15 @@ const lancar = () =>
           ><label for="lan-n-aprov">{{ t('faturamento.itens.aprovador') }}</label
           ><input id="lan-n-aprov" v-model="novo.aprovador" maxlength="31"
         /></span>
-        <button type="submit" data-testid="lan-n-gravar">{{ t('faturamento.itens.lancar') }}</button>
+        <EquipeLancamento
+          v-if="aceitaEquipe"
+          v-model="equipe"
+          :conta="id"
+          @valida="(v: boolean) => (equipeValida = v)"
+        />
+        <button type="submit" :disabled="aceitaEquipe && !equipeValida" data-testid="lan-n-gravar">
+          {{ t('faturamento.itens.lancar') }}
+        </button>
       </form>
     </section>
   </section>

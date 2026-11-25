@@ -332,6 +332,10 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
       ids['contaEstB'] = await conta(`${P}-CE`, ids['fonteA']!, ids['tabA']!, { est: ids['estB']! });
       ids['contaA'] = await conta(`${P}-CA`, ids['fonteA']!, ids['tabA']!);
       ids['contaB'] = await conta(`${P}-CB`, ids['fonteB']!, ids['tabB']!);
+      // Conta só do lançamento com a equipe (outro paciente): o item novo não mexe nos totais nem nos destinos da A.
+      ids['contaL'] = await conta(`${P}-CL`, ids['fonteA']!, ids['tabA']!, {
+        paciente: ids['outroPaciente']!,
+      });
       const lancado = (seq: number, situacao: string, motivoGlosa: number | null) =>
         e.inserir(
           `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, grupo_faturamento_id,
@@ -462,14 +466,15 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
       Number(
         (
           await linhas('SELECT COUNT(*) AS q FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?', [
-            ids['contaA'],
+            ids['contaL'],
           ])
         )[0]!['q'],
       );
     const antes = await contar();
     const agora = new Date();
+    // Grupo 3 (procedimentos e serviços): o item sintético 83740001 é um procedimento do catálogo.
     const pedido = {
-      tipo: 2,
+      tipo: 3,
       codigo: 83740001,
       quantidade: 1,
       data: agora.toISOString().slice(0, 10),
@@ -481,7 +486,7 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
       await codigoDo(
         s.gravar('lancar.equipe', op(), {
           ...pedido,
-          conta: ids['contaA'],
+          conta: ids['contaL'],
           equipe: [
             { profissionalId: ids['cirurgiao'], funcaoId: ids['fCir'] },
             { profissionalId: ids['auxiliar'], funcaoId: ids['fCir'] },
@@ -492,7 +497,7 @@ describe.skipIf(SEM_BANCO)('movimentos da conta: equipe, kit e transferência (M
     expect(await contar()).toBe(antes);
     const r = await s.gravar('lancar.equipe', op(), {
       ...pedido,
-      conta: ids['contaA'],
+      conta: ids['contaL'],
       equipe: [
         { profissionalId: ids['cirurgiao'], funcaoId: ids['fCir'] },
         { profissionalId: ids['auxiliar'], funcaoId: ids['fAux'] },

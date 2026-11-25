@@ -71,4 +71,14 @@ export const mensagensMovimentosConta = {
   kitIncluirComponente: 'Incluir componente',
   kitSalvar: 'Cadastrar kit',
   kitGravado: 'Kit {codigo} cadastrado: já pode ser lançado.',
+  lancamentoEquipe: {
+    titulo: 'Equipe do ato',
+    texto:
+      'Opcional: quem participou do procedimento entra junto com o item, sem passar pela tela de equipe.',
+    escolhaFuncao: 'Escolha a função',
+    incompleto: 'Escolha o profissional e a função, ou retire o participante.',
+    percentual: 'O da função: {pct}%',
+    semPercentual: 'Informe o %',
+    lancado: 'Item {codigo} lançado com {n} participante(s) na equipe.',
+  },
 } as const;
