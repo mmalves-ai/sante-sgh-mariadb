@@ -9,6 +9,7 @@ export * from './profissional/financeiro.js';
 export * from './solicitante/deduplicacao.js';
 export * from './paciente/mascaramento.js';
 export * from './paciente/historico.js';
+export * from './paciente/demografia.js';
 export * from './captacao/captacao.js';
 export * from './cobertura/cobertura.js';
 export * from './pre-cadastro/pre-cadastro.js';
