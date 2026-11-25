@@ -54,6 +54,7 @@ import {
   reais,
   centavos,
   descontoDoDebito,
+  ratearDebito,
   type ContaParaRpa,
   type DadoFiscalParaRpa,
   destinoDoPagamento,
@@ -624,6 +625,34 @@ export class ServicoRepasse {
       .map(([prestador, x]) => ({ prestador, itens: x.itens, base: reais(x.base), valor: reais(x.valor) }));
   }
 
+  /** O valor apurado de cada profissional por fonte pagadora da conta (centavos; fonte nula: sem fonte na memória). */
+  private async porBeneficiarioEFonte(s: SessaoCadastro, a: ApuracaoRepasseRegistrada) {
+    const ms = await this.porta.memorias(ctx(s), a.id, null);
+    const mapa = new Map<number, Map<number | null, number>>();
+    for (const m of ms) {
+      if (m.pendencia || m.prestador === null) continue;
+      const fontes = mapa.get(m.prestador) ?? new Map<number | null, number>();
+      const fonte = m.fontePagadora ?? null;
+      fontes.set(fonte, (fontes.get(fonte) ?? 0) + centavos(m.valor));
+      mapa.set(m.prestador, fontes);
+    }
+    // uma fonte com saldo negativo (glosa maior que a produção nela) não se lança sozinha: o total do profissional
+    // vai num lançamento só, pelos favorecidos gerais, como antes
+    return new Map(
+      [...mapa.entries()].map(([prestador, fontes]) => {
+        const total = [...fontes.values()].reduce((t, c) => t + c, 0);
+        const lista = [...fontes.entries()].sort((x, y) => (x[0] ?? 0) - (y[0] ?? 0));
+        const separa = lista.every(([, c]) => c >= 0);
+        const partes = separa
+          ? lista.filter(([, c]) => c > 0).map(([fonte, c]) => ({ fonte, centavos: c }))
+          : total > 0
+            ? [{ fonte: null, centavos: total }]
+            : [];
+        return [prestador, partes] as const;
+      }),
+    );
+  }
+
   async apuracao(s: SessaoCadastro, empresa: number, competencia: string): Promise<ApuracaoResposta> {
     const [a, outro] = await Promise.all([
       this.porta.apuracaoDoPeriodo(ctx(s), empresa, competencia),
@@ -848,32 +877,52 @@ export class ServicoRepasse {
         'Débito acima do bruto',
         `${descobertos.length} profissional(is) com débito do repasse acima do bruto da apuração: recalcule a apuração para levar o saldo ao período seguinte.`,
       );
+    // F3.7-11 (06-FAT linha 46): a produção do profissional se lança por fonte pagadora (o favorecido de uma fonte
+    // substitui os gerais nela); cada lançamento se divide pelos favorecidos (porta). O débito se rateia pela proporção
+    // de todas as partes lançadas do profissional (ratearDebito): cada estorno fica no seu lançamento, sem passar dele.
+    const porFonte = await this.porBeneficiarioEFonte(s, a);
     const ids: number[] = [];
     for (const b of beneficiarios) {
-      const r = await this.apoio.executar(
-        s,
-        'repasse.lancarEvento',
-        {
-          origem: 'apuracao',
-          empresa: a.empresa,
-          competencia: a.competencia,
-          data,
-          evento,
-          tipo: 'M',
-          prestador: b.prestador,
-          profissional: await this.registroDoPrestador(s, b.prestador),
-          valor: b.valor,
-          justificativa: `Total do prestador na apuração ${a.id} aprovada`,
-          apuracao: a.id,
-        },
-        'Lançado.',
-        { chaveIdempotencia: `rep-ap-${a.id}-${b.prestador}` },
-      );
-      const original = Number(r.resultado['lancamento']);
-      ids.push(original);
+      const profissional = await this.registroDoPrestador(s, b.prestador);
+      const partes: { lancamento: number; centavos: number }[] = [];
+      for (const f of porFonte.get(b.prestador) ?? []) {
+        const r = await this.apoio.executar(
+          s,
+          'repasse.lancarEvento',
+          {
+            origem: 'apuracao',
+            empresa: a.empresa,
+            competencia: a.competencia,
+            data,
+            evento,
+            tipo: 'M',
+            prestador: b.prestador,
+            profissional,
+            valor: reais(f.centavos),
+            justificativa: `Total do prestador na apuração ${a.id} aprovada`,
+            apuracao: a.id,
+            fontePagadora: f.fonte,
+          },
+          'Lançado.',
+          // sem fonte, a chave de antes (a apuração já lançada não lança de novo)
+          { chaveIdempotencia: `rep-ap-${a.id}-${b.prestador}${f.fonte === null ? '' : `-f${f.fonte}`}` },
+        );
+        // as partes da divisão (a porta devolve os lançamentos e os centavos de cada um; sem divisão, um só)
+        const lancados = (r.resultado['lancamentos'] as unknown as number[] | undefined) ?? [
+          Number(r.resultado['lancamento']),
+        ];
+        const cents = (r.resultado['centavos'] as unknown as number[] | undefined) ?? [f.centavos];
+        lancados.forEach((id, i) => {
+          ids.push(Number(id));
+          partes.push({ lancamento: Number(id), centavos: Number(cents[i] ?? 0) });
+        });
+      }
       const desconto = descontoDoDebito(centavos(b.valor), centavos(debitos.get(b.prestador) ?? 0));
-      if (desconto.estornoCentavos > 0) {
-        const x = await this.apoio.executar(
+      if (desconto.estornoCentavos <= 0) continue;
+      const rateio = ratearDebito(partes, desconto.estornoCentavos);
+      if (!rateio.ok) throw recusar(rateio.codigo, 'Débito acima do bruto', rateio.mensagem);
+      for (const [i, x] of rateio.estornos.entries()) {
+        const r = await this.apoio.executar(
           s,
           'repasse.lancarEvento',
           {
@@ -884,15 +933,15 @@ export class ServicoRepasse {
             evento,
             tipo: 'M',
             prestador: b.prestador,
-            profissional: await this.registroDoPrestador(s, b.prestador),
-            valor: -reais(desconto.estornoCentavos),
+            profissional,
+            valor: -reais(x.centavos),
             justificativa: `Débito do repasse (glosa ou estorno de produção) descontado na apuração ${a.id}`,
-            estornaDe: original,
+            estornaDe: x.lancamento,
           },
           'Lançado.',
-          { chaveIdempotencia: `rep-ap-${a.id}-${b.prestador}-debito` },
+          { chaveIdempotencia: `rep-ap-${a.id}-${b.prestador}-debito${i === 0 ? '' : `-${i}`}` },
         );
-        ids.push(Number(x.resultado['lancamento']));
+        ids.push(Number(r.resultado['lancamento']));
       }
     }
     return {

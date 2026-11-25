@@ -263,6 +263,53 @@ export function dividirRepasse(
   };
 }
 
+/**
+ * Rateia o débito (centavos, positivo) pelas partes já lançadas (o lançamento dividido pelos favorecidos e pelas fontes
+ * pagadoras), na proporção de cada parte: cada estorno fica no seu lançamento e nunca passa dele. Os centavos que sobram
+ * vão pelos maiores restos (empate: a maior parte). O débito acima da soma das partes é recusado (`debito-excede`):
+ * a apuração leva esse saldo ao período seguinte antes de lançar.
+ */
+export function ratearDebito(
+  partes: readonly { readonly lancamento: number; readonly centavos: number }[],
+  debitoCentavos: number,
+):
+  | { readonly ok: true; readonly estornos: readonly { lancamento: number; centavos: number }[] }
+  | { readonly ok: false; readonly codigo: 'debito-excede'; readonly mensagem: string } {
+  const debito = Math.round(debitoCentavos);
+  const usar = partes
+    .filter((p) => p.centavos > 0)
+    .map((p) => ({ lancamento: p.lancamento, centavos: Math.round(p.centavos) }))
+    .sort((a, b) => b.centavos - a.centavos || a.lancamento - b.lancamento);
+  const total = usar.reduce((t, p) => t + p.centavos, 0);
+  if (debito <= 0) return { ok: true, estornos: [] };
+  if (debito > total)
+    return {
+      ok: false,
+      codigo: 'debito-excede',
+      mensagem: 'O débito passa da soma dos lançamentos da apuração; leve o saldo ao período seguinte.',
+    };
+  const brutas = usar.map((p) => Math.floor((debito * p.centavos) / total));
+  let sobra = debito - brutas.reduce((t, v) => t + v, 0);
+  // maiores restos: a sobra (menos de um centavo por parte) vai, um centavo cada, às partes de maior fração (empate: a
+  // maior parte); como cada fração é menor que um centavo e o débito não passa do total, nenhuma parte é ultrapassada
+  const ordem = usar
+    .map((p, i) => ({ i, resto: (debito * p.centavos) % total }))
+    .sort((a, b) => b.resto - a.resto || a.i - b.i);
+  for (const { i } of ordem) {
+    if (sobra <= 0) break;
+    if (brutas[i]! < usar[i]!.centavos) {
+      brutas[i]! += 1;
+      sobra -= 1;
+    }
+  }
+  return {
+    ok: true,
+    estornos: usar
+      .map((p, i) => ({ lancamento: p.lancamento, centavos: brutas[i]! }))
+      .filter((x) => x.centavos > 0),
+  };
+}
+
 // ── Prestador terceiro ─────────────────────────────────────────────────────────────────────────────────────────
 
 export type BaseRepassePrestador = 'cobrado' | 'recebido' | 'misto';

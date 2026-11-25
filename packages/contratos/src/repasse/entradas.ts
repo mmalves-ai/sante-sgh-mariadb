@@ -127,6 +127,11 @@ export const esquemaLancarEventoRepasse = z
     apuracao: id.nullable().default(null),
     /** Lançamento original (id do lançamento de repasse) na origem `estorno`. */
     estornaDe: id.nullable().default(null),
+    /**
+     * Fonte pagadora da produção lançada (a apuração lança por profissional e fonte): o favorecido dessa fonte substitui
+     * os gerais na divisão. Nulo: os favorecidos gerais.
+     */
+    fontePagadora: id.nullable().default(null),
     /** Realizados aprovados (SGH_PES_PLANTAO_REALIZADO.ID) na origem `plantao` (M52.6). */
     plantoes: z.array(id).max(200).default([]),
   })

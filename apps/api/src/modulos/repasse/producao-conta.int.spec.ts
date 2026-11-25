@@ -17,7 +17,8 @@
 //  10. glosa depois da apuração pela função comum à TISS e ao worker (sincronizarGlosaDoItem, com o autor da decisão): o item
 //      guarda a soma das glosas aceitas (duas glosas somam; recorrer uma não zera a outra), a produção é estornada e o
 //      débito cai no período aberto; a apuração desconta só até o bruto do profissional e leva o saldo ao período
-//      seguinte (ligado ao de origem; o recálculo o refaz); o ServicoRepasse.lancarApuracao lança o bruto e o estorno
+//      seguinte (ligado ao de origem; o recálculo o refaz); o ServicoRepasse.lancarApuracao lança o bruto por fonte
+//      pagadora, dividido pelos favorecidos da fonte, e o débito rateado pelas partes; o estorno
 //      ligado (idempotente); o débito criado depois do cálculo de um período conferido sem recálculo é descontado no
 //      período seguinte; a glosa revertida depois do desconto devolve o descontado como crédito, sem repetir.
 // No fim, a massa de negócio é apagada. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
@@ -820,13 +821,29 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     // O lançamento pelo serviço de verdade: o bruto e o estorno ligado a ele (o RPA soma: 300 − 300). Idempotente.
     const evento = await escrever(async (e) => {
       await e.executar("UPDATE apuracao_repasse SET situacao = 'aprovada' WHERE id = ?", [apuracao]);
-      await garantir(
-        e,
-        'SELECT id FROM favorecido_repasse WHERE estabelecimento_id = ? AND profissional_id = ?',
+      // F3.7-11: o favorecido geral (100% ao próprio) e, só na operadora da conta, 60% ao próprio e 40% à empresa dele:
+      // a apuração lança por fonte pagadora, então vale a divisão da operadora.
+      await e.executar(
+        'DELETE FROM favorecido_repasse WHERE estabelecimento_id = ? AND profissional_id = ?',
         [ids.est, ids.profissional],
-        "INSERT INTO favorecido_repasse (estabelecimento_id, profissional_id, tipo_favorecido, vigencia_inicio, criado_em) VALUES (?, ?, 'proprio_profissional', '2026-01-01', ?)",
-        [ids.est, ids.profissional, agora],
       );
+      const pj = await garantir(
+        e,
+        'SELECT id FROM pessoa_juridica WHERE razao_social = ?',
+        [`EMPRESA SINTETICA ${P}`],
+        "INSERT INTO pessoa_juridica (razao_social, cnpj, criado_em) VALUES (?, '38109027000190', ?)",
+        [`EMPRESA SINTETICA ${P}`, agora],
+      );
+      for (const [fonte, tipo, alvo, pct] of [
+        [null, 'proprio_profissional', null, 100],
+        [ids.fonte, 'proprio_profissional', null, 60],
+        [ids.fonte, 'pessoa_juridica', pj, 40],
+      ] as const)
+        await e.inserir(
+          `INSERT INTO favorecido_repasse (estabelecimento_id, profissional_id, fonte_pagadora_id, tipo_favorecido,
+             favorecido_pessoa_juridica_id, percentual, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?, ?, ?, '2026-01-01', ?)`,
+          [ids.est, ids.profissional, fonte, tipo, alvo, pct, agora],
+        );
       return Number(
         (await e.uma<Record<string, unknown>>(
           'SELECT id FROM evento_repasse WHERE estabelecimento_id = ? AND codigo = ?',
@@ -850,21 +867,28 @@ describe.skipIf(SEM_BANCO)('produção do repasse a partir da conta (MariaDB)', 
     const lancados = () =>
       escrever((e) =>
         e.consultar<Record<string, unknown>>(
-          `SELECT l.tipo_lancamento, l.valor, l.estornado_lancamento_repasse_id FROM lancamento_repasse l
+          `SELECT l.id, l.tipo_lancamento, l.valor, l.tipo_favorecido, l.estornado_lancamento_repasse_id FROM lancamento_repasse l
             WHERE l.apuracao_repasse_id = ? OR l.estornado_lancamento_repasse_id IN
               (SELECT x.id FROM lancamento_repasse x WHERE x.apuracao_repasse_id = ?) ORDER BY l.id`,
           [apuracao, apuracao],
         ),
       );
+    // F3.7-11: o bruto de 300 da operadora se divide 180/120 (próprio e empresa); o débito de 300 é maior que a maior
+    // parte e se rateia na proporção (180 e 120), cada estorno ligado à sua parte (antes: recusado, estorno-excede).
     await servico.lancarApuracao(sessao(), apuracao, evento);
     const ls = await lancados();
-    expect(ls.map((l) => [l['tipo_lancamento'], Number(l['valor'])])).toEqual([
-      ['apuracao', 300],
-      ['estorno', -300],
+    expect(ls.map((l) => [l['tipo_lancamento'], l['tipo_favorecido'], Number(l['valor'])])).toEqual([
+      ['apuracao', 'medico', 180],
+      ['apuracao', 'empresa', 120],
+      ['estorno', 'medico', -180],
+      ['estorno', 'empresa', -120],
     ]);
-    expect(ls[1]!['estornado_lancamento_repasse_id']).not.toBeNull();
+    expect(ls.slice(2).map((l) => Number(l['estornado_lancamento_repasse_id']))).toEqual([
+      Number(ls[0]!['id']),
+      Number(ls[1]!['id']),
+    ]);
     await servico.lancarApuracao(sessao(), apuracao, evento);
-    expect(await lancados()).toHaveLength(2);
+    expect(await lancados()).toHaveLength(4);
 
     // O período seguinte desconta o saldo levado (100).
     const proximo = seguinte(periodo);

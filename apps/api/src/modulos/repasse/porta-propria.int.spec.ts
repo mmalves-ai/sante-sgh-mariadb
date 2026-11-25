@@ -790,9 +790,11 @@ describe.skipIf(SEM_BANCO)('porta própria do repasse (MariaDB, cliente f22_o3)'
       conferidoPor: null,
     });
     expect(JSON.parse(resumo!.pendencias)).toEqual({ 'sem-executante': 1 });
-    // A memória completa volta como foi gravada (item da regra, dimensões, descartadas, base, fixo, adicional).
-    expect(await porta.memorias(ctx, apuracao, null)).toEqual([memoria, pendente]);
-    expect(await porta.memorias(ctx, apuracao, ids.profissional)).toEqual([memoria]);
+    // A memória completa volta como foi gravada (item da regra, dimensões, descartadas, base, fixo, adicional), com a
+    // fonte pagadora da conta do item (a apuração lança por profissional e fonte, F3.7-11).
+    const comFonte = (m: object) => ({ ...m, fontePagadora: expect.any(Number) });
+    expect(await porta.memorias(ctx, apuracao, null)).toEqual([comFonte(memoria), comFonte(pendente)]);
+    expect(await porta.memorias(ctx, apuracao, ids.profissional)).toEqual([comFonte(memoria)]);
     // Os pendentes, por página e pelo motivo, com a referência de negócio do item (conta, atendimento, prontuário,
     // procedimento e a data local); o executante ausente fica sem nome.
     const pg = await porta.itensPendentes(ctx, apuracao, {

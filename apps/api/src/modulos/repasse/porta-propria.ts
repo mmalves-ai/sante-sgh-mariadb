@@ -621,8 +621,8 @@ async function aplicarOperacao(
         if (!ap) throw recusa('apuracao-inexistente', 'A apuração não existe neste estabelecimento.');
       }
       const tipoMedico = e['tipo'] === 'M';
-      // F3.7-11 (06-FAT linha 46): o valor se divide pelos favorecidos vigentes na data (dividirRepasse, do domínio);
-      // o estorno fica com o favorecido do lançamento original.
+      // F3.7-11 (06-FAT linha 46): o valor se divide pelos favorecidos vigentes na data (dividirRepasse, do domínio),
+      // os da fonte pagadora do lançamento no lugar dos gerais; o estorno fica com o favorecido do lançamento original.
       const favs = await tx.consultar(
         `SELECT id, fonte_pagadora_id, tipo_favorecido, percentual, vigencia_inicio, vigencia_fim, conta_bancaria_credor_id
            FROM favorecido_repasse WHERE estabelecimento_id = ? AND profissional_id = ? AND ativo = TRUE
@@ -641,7 +641,7 @@ async function aplicarOperacao(
           fim: null,
           contaBancaria: f['conta_bancaria_credor_id'] === null ? null : n(f['conta_bancaria_credor_id']),
         })),
-        null,
+        e['fontePagadora'] === null || e['fontePagadora'] === undefined ? null : n(e['fontePagadora']),
         dia,
       );
       if (!divisao.ok) throw recusa(divisao.codigo, divisao.mensagem);
@@ -693,9 +693,13 @@ async function aplicarOperacao(
         return { lancamento: await linha(n(o?.['f']), String(o?.['t']) as TipoFavorecido, valor, pct) };
       }
       const ids: number[] = [];
+      const cents: number[] = [];
       for (const p of divisao.partes)
-        if (p.centavos !== 0) ids.push(await linha(p.favorecido, p.tipo, p.centavos / 100, p.percentual));
-      return { lancamento: ids[0]!, lancamentos: ids };
+        if (p.centavos !== 0) {
+          ids.push(await linha(p.favorecido, p.tipo, p.centavos / 100, p.percentual));
+          cents.push(p.centavos);
+        }
+      return { lancamento: ids[0]!, lancamentos: ids, centavos: cents };
     }
     case 'repasse.emitirRpa': {
       const ids = (e['lancamentos'] as number[]).map(Number);
@@ -1257,9 +1261,11 @@ export class PortaRepassePropria implements PortaRepasse {
         await l.consultar(
           `SELECT x.producao_repasse_id, x.profissional_id, x.valor_faturado, x.percentual_repasse, x.valor_repasse,
                   x.regra_repasse_item_id, x.dimensoes, x.dimensoes_ignoradas, x.base_calculo, x.valor_fixo,
-                  x.valor_sem_adicional, x.adicional, x.pendencia
+                  x.valor_sem_adicional, x.adicional, x.pendencia, ch.fonte_pagadora_id
              FROM apuracao_repasse_item x
              JOIN apuracao_repasse a ON a.id = x.apuracao_repasse_id AND a.estabelecimento_id = ?
+             LEFT JOIN producao_repasse pr ON pr.id = x.producao_repasse_id
+             LEFT JOIN conta_hospitalar ch ON ch.id = COALESCE(x.conta_hospitalar_id, pr.conta_hospitalar_id)
             WHERE x.apuracao_repasse_id = ? AND x.excluido_em IS NULL${prestador === null ? '' : ' AND x.profissional_id = ?'}
             ORDER BY x.sequencia`,
           prestador === null ? [est, apuracao] : [est, apuracao, prestador],
@@ -1280,6 +1286,7 @@ export class PortaRepassePropria implements PortaRepasse {
         adicional: adicionalDaColuna(r['adicional']),
         valor: n(r['valor_repasse']),
         pendencia: textoN(r['pendencia']),
+        fontePagadora: nn(r['fonte_pagadora_id']),
       })),
     );
   }

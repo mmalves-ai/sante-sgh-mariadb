@@ -19,6 +19,7 @@ import {
   validarEncerramento,
   TIPOS_FAVORECIDO,
   type TipoFavorecido,
+  validarFavorecido,
   validarPrestadorTerceiro,
 } from '@sgh/dominio-repasse';
 import { ErroOperacao, type Leitor } from '@sgh/nucleo';
@@ -312,11 +313,14 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
     );
   }
 
-  incluirFavorecido(
+  async incluirFavorecido(
     c: ContextoPortaPropria,
     entrada: unknown,
   ): Promise<{ id: number; encerrados: number[] }> {
     const e = entradaValida(esquemaFavorecido, entrada);
+    // a forma (alvo do tipo, parte, vigência) se confere antes de ir ao banco: o alvo de outro tipo é 422, não 404
+    const forma = validarFavorecido(e);
+    if (forma.length) throw recusaRegra('Favorecido recusado', forma);
     return this.gravar(c, 'repasse.favorecido.incluir', ['favorecido_repasse'], async (tx, est) => {
       const prof = await tx.uma('SELECT id FROM profissional WHERE id = ? AND excluido_em IS NULL', [
         e.profissional,
@@ -358,9 +362,9 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
           ]);
       }
       const existentes: FavorecidoVigente[] = (
-        await tx.consultar<Linha>(
+        await tx.consultarParaAtualizar<Linha>(
           `SELECT id, fonte_pagadora_id, tipo_favorecido, percentual, vigencia_inicio, vigencia_fim, versao
-             FROM favorecido_repasse WHERE estabelecimento_id = ? AND profissional_id = ? AND ativo FOR UPDATE`,
+             FROM favorecido_repasse WHERE estabelecimento_id = ? AND profissional_id = ? AND ativo`,
           [est.id, e.profissional],
         )
       ).map((x) => ({
@@ -396,7 +400,11 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
   }
 
   /** Encerra a vigência (com a versão lida); o registro fica para o histórico e para os lançamentos que o citam. */
-  encerrarFavorecido(c: ContextoPortaPropria, favorecido: number, entrada: unknown): Promise<{ id: number }> {
+  async encerrarFavorecido(
+    c: ContextoPortaPropria,
+    favorecido: number,
+    entrada: unknown,
+  ): Promise<{ id: number }> {
     const x = entradaValida(z.object({ versao, fim: data }).strict(), entrada);
     return this.gravar(c, 'repasse.favorecido.encerrar', ['favorecido_repasse'], async (tx, est) => {
       const f = await tx.uma<Linha>(
@@ -431,7 +439,7 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
     );
   }
 
-  incluirPrestador(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
+  async incluirPrestador(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {
     const e = entradaValida(esquemaPrestador, entrada);
     const problemas = validarPrestadorTerceiro(e);
     if (problemas.length) throw recusaRegra('Prestador recusado', problemas);
@@ -486,7 +494,11 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
   }
 
   /** Muda o percentual, a base ou os contatos, ou inativa/reativa (com a versão lida; nada apagado). */
-  alterarPrestador(c: ContextoPortaPropria, prestador: number, entrada: unknown): Promise<{ id: number }> {
+  async alterarPrestador(
+    c: ContextoPortaPropria,
+    prestador: number,
+    entrada: unknown,
+  ): Promise<{ id: number }> {
     const x = entradaValida(
       z
         .object({
@@ -529,7 +541,7 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
   }
 
   /** Inclui a conta de crédito do prestador terceiro: o titular é o próprio prestador (nome e documento dele). */
-  incluirContaPrestador(
+  async incluirContaPrestador(
     c: ContextoPortaPropria,
     prestador: number,
     entrada: unknown,

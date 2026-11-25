@@ -48,6 +48,8 @@ export interface MemoriaCalculoRegistrada {
   readonly adicional: string | null;
   readonly valor: number;
   readonly pendencia: string | null;
+  /** Fonte pagadora da conta do item (a apuração lança por profissional e fonte); ausente na fonte sem conta. */
+  readonly fontePagadora?: number | null;
 }
 
 export type MemoriaCalculoParaGravar = MemoriaCalculoRegistrada;

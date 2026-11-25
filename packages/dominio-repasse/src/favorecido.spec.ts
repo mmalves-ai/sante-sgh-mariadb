@@ -6,6 +6,7 @@ import {
   type FavorecidoNovo,
   partesDaFonte,
   planejarFavorecido,
+  ratearDebito,
   retencoesDoFavorecido,
   validarEncerramento,
   validarFavorecido,
@@ -235,5 +236,68 @@ describe('favorecido por fonte pagadora, divisão do lançamento e encerramento 
       vigentes: enq,
     });
     expect(donoDaConta('pessoa_juridica')).toBe('fornecedor_da_empresa');
+  });
+
+  it('ratearDebito: o débito se rateia pela proporção das partes lançadas, centavos pelos maiores restos, nunca acima de uma parte', () => {
+    // 60/40 de 1000,01 lançados; débito de 100,00 → 60,00 e 40,00
+    expect(
+      ratearDebito(
+        [
+          { lancamento: 2, centavos: 40000 },
+          { lancamento: 1, centavos: 60001 },
+        ],
+        10000,
+      ),
+    ).toEqual({
+      ok: true,
+      estornos: [
+        { lancamento: 1, centavos: 6000 },
+        { lancamento: 2, centavos: 4000 },
+      ],
+    });
+    // débito maior que a maior parte (antes recusado): rateado entre as duas
+    const r = ratearDebito(
+      [
+        { lancamento: 1, centavos: 60000 },
+        { lancamento: 2, centavos: 40000 },
+      ],
+      70001,
+    );
+    expect(r.ok && r.estornos).toEqual([
+      { lancamento: 1, centavos: 42001 },
+      { lancamento: 2, centavos: 28000 },
+    ]);
+    // três partes iguais e débito indivisível: a sobra vai às primeiras
+    const t = ratearDebito(
+      [
+        { lancamento: 3, centavos: 100 },
+        { lancamento: 1, centavos: 100 },
+        { lancamento: 2, centavos: 100 },
+      ],
+      200,
+    );
+    expect(t.ok && t.estornos.map((x) => x.centavos).reduce((a, b) => a + b, 0)).toBe(200);
+    expect(t.ok && t.estornos.every((x) => x.centavos <= 100)).toBe(true);
+    // todo o lançado: cada parte estornada inteira
+    expect(
+      ratearDebito(
+        [
+          { lancamento: 1, centavos: 500 },
+          { lancamento: 2, centavos: 300 },
+        ],
+        800,
+      ),
+    ).toEqual({
+      ok: true,
+      estornos: [
+        { lancamento: 1, centavos: 500 },
+        { lancamento: 2, centavos: 300 },
+      ],
+    });
+    expect(ratearDebito([{ lancamento: 1, centavos: 500 }], 0)).toEqual({ ok: true, estornos: [] });
+    expect(ratearDebito([{ lancamento: 1, centavos: 500 }], 501)).toMatchObject({
+      ok: false,
+      codigo: 'debito-excede',
+    });
   });
 });
