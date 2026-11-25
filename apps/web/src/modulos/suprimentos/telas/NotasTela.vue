@@ -4,11 +4,23 @@
 // unidade de compra, marca e os lotes (validade obrigatória e não passada); o XML da NF-e pré-preenche. A conferência
 // contra o pedido aplica as tolerâncias dos parâmetros; fora delas, a nota só consolida com a aprovação do comprador
 // (o texto vai junto). O saldo, o lote no local e o custo médio são do banco.
+// C2-038 (05-SUP linha 21): o XML traz os impostos por item e as despesas (frete, seguro, outras, desconto); cada item
+// do estoque é ligado à linha do XML (quantidade, unitário, lotes e impostos vêm dela). O custo de entrada de cada item
+// aparece na hora pela regra do domínio; a nota pode usar a conferência física validada da entrega.
+import { custoEntradaNota } from '@sgh/contratos/regras-suprimentos';
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQueryClient } from '@tanstack/vue-query';
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { lerXmlNota, novaChave, registrarNota } from '../api-suprimentos.js';
+import {
+  type ConferenciaResumoTela,
+  type ImpostoXmlTela,
+  lerXmlNotaCompleta,
+  listarConferencias,
+  type NotaXmlCompletaTela,
+} from '../api-conferencia-recebimento.js';
+import { novaChave, registrarNota } from '../api-suprimentos.js';
+import { TRIBUTOS_ROTULO, textoConferencia as kc } from '../i18n-conferencia-recebimento.js';
 import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
 import type { LeituraCodigo as Leitura } from '../api-etiqueta.js';
 import BuscaItem from '../componentes/BuscaItem.vue';
@@ -27,6 +39,9 @@ interface LinhaNota {
   fator: string;
   marca: string;
   lotes: { lote: string; validade: string; quantidade: string }[];
+  /** C2-038: a linha do XML ligada ('' = nenhuma) e os impostos dela. */
+  xml: string;
+  impostos: ImpostoXmlTela[];
 }
 
 const { t } = useI18n();
@@ -41,6 +56,72 @@ const pedidoAno = ref('');
 const pedidoDoc = ref('');
 const desconto = ref('');
 const frete = ref('');
+const seguro = ref('');
+const outros = ref('');
+const notaXml = ref<NotaXmlCompletaTela | null>(null);
+const conferencia = ref('');
+const conferencias = ref<ConferenciaResumoTela[]>([]);
+onMounted(async () => {
+  try {
+    conferencias.value = (await listarConferencias('validada')).filter((c) => c.nota === null);
+  } catch {
+    conferencias.value = [];
+  }
+});
+const opcoesConferencias = computed(() => [
+  { valor: '', rotulo: kc('semConferencia') },
+  ...conferencias.value
+    .filter((c) => !fornecedor.value || c.fornecedor === Number(fornecedor.value))
+    .map((c) => ({ valor: String(c.id), rotulo: `${c.id} · ${c.fornecedorNome} · ${c.localNome}` })),
+]);
+const opcoesXml = computed(() => [
+  { valor: '', rotulo: kc('semLigacao') },
+  ...(notaXml.value?.itens ?? []).map((x, k) => ({
+    valor: String(k),
+    rotulo: `${k + 1} · ${x.codigoFornecedor} · ${x.descricao}`,
+  })),
+]);
+/** Liga o item do estoque à linha do XML: quantidade, unitário, lotes e impostos vêm dela. */
+function ligar(l: LinhaNota, v: string): void {
+  l.xml = v;
+  const x = v === '' ? null : notaXml.value?.itens[Number(v)];
+  l.impostos = x ? [...x.impostos] : [];
+  if (!x) return;
+  l.quantidade = String(x.quantidade);
+  l.unitario = String(x.valorUnitario);
+  if (l.rastreavel && x.lotes.length)
+    l.lotes = x.lotes.map((y) => ({ lote: y.lote, validade: y.validade, quantidade: String(y.quantidade) }));
+}
+/** Um imposto do item: tributo, base × alíquota = valor e o CST. */
+const textoImposto = (i: ImpostoXmlTela): string =>
+  kc('impostoLinha', {
+    tributo: TRIBUTOS_ROTULO[i.tributo] ?? i.tributo,
+    base: reais(i.base),
+    aliquota: i.aliquota,
+    valor: reais(i.valor),
+    cst: i.cst ?? '—',
+  });
+/** O custo de entrada na hora, pela regra do domínio (prévia pelo padrão do hospital). */
+const custo = computed(() =>
+  custoEntradaNota(
+    linhas.value.map((l) => {
+      const q = numero(l.quantidade || '0') || 0;
+      const f = numero(l.fator || '0') || 0;
+      return {
+        quantidade: q,
+        valorUnitario: numero(l.unitario || '0') || 0,
+        quantidadeEstoque: f > 0 ? q * f : q,
+        impostos: l.impostos,
+      };
+    }),
+    {
+      desconto: numero(desconto.value || '0') || 0,
+      frete: numero(frete.value || '0') || 0,
+      seguro: numero(seguro.value || '0') || 0,
+      outros: numero(outros.value || '0') || 0,
+    },
+  ),
+);
 const aprovacao = ref('');
 const linhas = ref<LinhaNota[]>([]);
 const erro = ref<unknown>(null);
@@ -64,6 +145,8 @@ function incluir(i: { codigo: number; nome: string; rastreavel: boolean }): void
     fator: '',
     marca: '',
     lotes: i.rastreavel ? [{ lote: '', validade: '', quantidade: '' }] : [],
+    xml: '',
+    impostos: [],
   });
 }
 /** A leitura do código da embalagem: inclui o item e preenche o lote e a validade lidos (soma a quantidade). */
@@ -87,10 +170,16 @@ async function carregarXml(ev: Event): Promise<void> {
   if (!arquivo) return;
   erro.value = null;
   try {
-    const n = await lerXmlNota(await arquivo.text());
+    const n = await lerXmlNotaCompleta(await arquivo.text());
+    notaXml.value = n;
     numeroNota.value = String(n.numero);
     serie.value = n.serie;
     emissao.value = n.emissao.slice(0, 10);
+    const texto = (v: number) => (v > 0 ? String(v) : '');
+    frete.value = texto(n.frete);
+    seguro.value = texto(n.seguro);
+    outros.value = texto(n.outros);
+    desconto.value = texto(n.desconto);
     avisos.value = [t('suprimentos.notas.xmlLido', { nome: n.nomeEmitente, n: n.itens.length })];
   } catch (x) {
     erro.value = x;
@@ -109,6 +198,9 @@ async function gravar(): Promise<void> {
         local: Number(local.value),
         ...(numero(desconto.value || '0') > 0 ? { desconto: numero(desconto.value) } : {}),
         ...(numero(frete.value || '0') > 0 ? { frete: numero(frete.value) } : {}),
+        ...(numero(seguro.value || '0') > 0 ? { seguro: numero(seguro.value) } : {}),
+        ...(numero(outros.value || '0') > 0 ? { outros: numero(outros.value) } : {}),
+        ...(Number(conferencia.value) > 0 ? { conferencia: Number(conferencia.value) } : {}),
         ...(Number(pedidoDoc.value) > 0
           ? { pedido: { ano: Number(pedidoAno.value), doc: Number(pedidoDoc.value) } }
           : {}),
@@ -122,6 +214,13 @@ async function gravar(): Promise<void> {
           lotes: l.lotes
             .filter((x) => x.lote.trim())
             .map((x) => ({ lote: x.lote.trim(), validade: x.validade, quantidade: numero(x.quantidade) })),
+          impostos: l.impostos.map((i) => ({
+            tributo: i.tributo,
+            base: i.base,
+            aliquota: i.aliquota,
+            valor: i.valor,
+            cst: i.cst,
+          })),
         })),
       },
       novaChave('nota'),
@@ -129,6 +228,8 @@ async function gravar(): Promise<void> {
     mensagem.value = r.mensagem;
     avisos.value = r.avisos;
     linhas.value = [];
+    notaXml.value = null;
+    conferencia.value = '';
     await cliente.invalidateQueries({ queryKey: ['suprimentos'] });
   } catch (x) {
     erro.value = x;
@@ -141,6 +242,9 @@ const { filtro, pagina, lista, haSeguinte } = usarListaDocumentos('nota');
   <section class="tela-agenda" aria-labelledby="nf-titulo" data-testid="tela-suprimentos-notas">
     <h1 id="nf-titulo">{{ t('suprimentos.notas.titulo') }}</h1>
     <p>{{ t('suprimentos.notas.texto') }}</p>
+    <RouterLink to="/suprimentos/notas-fiscais/conferencias" data-testid="nf-conferencias">{{
+      kc('atalho')
+    }}</RouterLink>
     <AvisoSuprimentos
       :motivo="pode('suprimentos.registrarEntradaNF') ? null : motivo('suprimentos.registrarEntradaNF')"
     />
@@ -191,9 +295,23 @@ const { filtro, pagina, lista, haSeguinte } = usarListaDocumentos('nota');
         </span>
         <span class="campo">
           <label for="nf-frete">{{ t('suprimentos.notas.frete') }}</label>
-          <input id="nf-frete" v-model="frete" inputmode="decimal" />
+          <input id="nf-frete" v-model="frete" inputmode="decimal" data-testid="nf-frete" />
+        </span>
+        <span class="campo">
+          <label for="nf-seguro">{{ kc('seguro') }}</label>
+          <input id="nf-seguro" v-model="seguro" inputmode="decimal" data-testid="nf-seguro" />
+        </span>
+        <span class="campo">
+          <label for="nf-outros">{{ kc('outros') }}</label>
+          <input id="nf-outros" v-model="outros" inputmode="decimal" data-testid="nf-outros" />
         </span>
       </div>
+      <SanteSelecao
+        v-model="conferencia"
+        :rotulo="kc('conferenciaDaNota')"
+        :opcoes="opcoesConferencias"
+        data-testid="nf-conferencia"
+      />
       <LeituraCodigo testid="nf-leitura" @lido="lido" />
       <BuscaItem testid="nf-busca" @escolher="incluir" />
       <table v-if="linhas.length" class="tabela" data-testid="nf-itens">
@@ -210,6 +328,8 @@ const { filtro, pagina, lista, haSeguinte } = usarListaDocumentos('nota');
             <th scope="col">{{ t('suprimentos.notas.fator') }}</th>
             <th scope="col">{{ t('suprimentos.cotacao.marca') }}</th>
             <th scope="col">{{ t('suprimentos.lotes') }}</th>
+            <th scope="col">{{ kc('impostos') }}</th>
+            <th scope="col">{{ kc('custoUnitario') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -304,10 +424,34 @@ const { filtro, pagina, lista, haSeguinte } = usarListaDocumentos('nota');
               />
               <span v-else>—</span>
             </td>
+            <td>
+              <SanteSelecao
+                v-if="notaXml"
+                :model-value="l.xml"
+                :rotulo="kc('ligarXml')"
+                :opcoes="opcoesXml"
+                :data-testid="`nf-xml-linha-${l.item}`"
+                @update:model-value="(v: string) => ligar(l, v)"
+              />
+              <ul v-if="l.impostos.length" :data-testid="`nf-impostos-${l.item}`">
+                <li v-for="i in l.impostos" :key="i.tributo">
+                  {{ textoImposto(i) }}
+                </li>
+              </ul>
+              <span v-else class="secundario">{{ kc('semImposto') }}</span>
+            </td>
+            <td :data-testid="`nf-custo-${l.item}`">
+              {{ reais(custo.itens[k]?.custoUnitario ?? 0) }}
+            </td>
           </tr>
         </tbody>
       </table>
       <p v-if="linhas.length">{{ t('suprimentos.notas.totalItens') }} {{ reais(total) }}</p>
+      <template v-if="linhas.length">
+        <p data-testid="nf-total-nota">{{ kc('totalNota', { valor: reais(custo.valorTotal) }) }}</p>
+        <p data-testid="nf-custo-entrada">{{ kc('custoEntrada') }}: {{ reais(custo.custoTotal) }}</p>
+        <p class="secundario">{{ kc('custoPrevia') }}</p>
+      </template>
       <span class="campo">
         <label for="nf-aprov">{{ t('suprimentos.notas.aprovacao') }}</label>
         <input id="nf-aprov" v-model="aprovacao" data-testid="nf-aprovacao" />

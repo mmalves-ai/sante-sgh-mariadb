@@ -163,6 +163,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     component: () => import('./telas/NotasTela.vue'),
     meta: { permissao: 'suprimentos.nota.ler' },
   },
+  // C2-038 (05-SUP linha 21): a conferência física do recebimento (aberta pela tela da nota fiscal).
+  {
+    path: '/suprimentos/notas-fiscais/conferencias',
+    name: 'suprimentos.notas.conferencias',
+    component: () => import('./telas/ConferenciaRecebimentoTela.vue'),
+    meta: { permissao: 'suprimentos.nota.ler' },
+  },
   {
     // F3.6 (05-SUP linhas 1, 3 e 6): cadastro do item e do local, escopo do usuário e lista de separação.
     path: '/suprimentos/itens/cadastro/:id(\\d+)?',

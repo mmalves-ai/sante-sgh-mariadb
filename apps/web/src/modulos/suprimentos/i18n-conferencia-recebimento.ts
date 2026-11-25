@@ -1,0 +1,116 @@
+// Textos da conferência física do recebimento e dos impostos da nota de entrada (C2-038, 05-SUP linha 21).
+export const mensagensConferenciaRecebimento = {
+  titulo: 'Conferência física do recebimento',
+  texto:
+    'Quem recebe a entrega conta cada item, lê o lote e a validade e aponta avaria, temperatura ou produto errado. A divergência é calculada na hora contra o pedido; outra pessoa valida, e a nota de entrada usa a conferência validada uma vez só. Nada é apagado: o cancelamento pede o motivo.',
+  voltar: 'Voltar à entrada por nota fiscal',
+  carregando: 'Carregando…',
+  escolha: 'Escolha',
+  todas: 'Todas',
+  filtroSituacao: 'Situação',
+  lista: 'Conferências do estabelecimento',
+  vazia: 'Nenhuma conferência nesta situação.',
+  nova: 'Nova conferência',
+  tipo: 'Tipo de recebimento',
+  fornecedor: 'Fornecedor (código)',
+  local: 'Local que recebe',
+  pedidoAno: 'Pedido: ano',
+  pedido: 'Pedido: número',
+  trazerPedido: 'Trazer os itens do pedido',
+  pedidoSemSaldo: 'O pedido não tem saldo a receber.',
+  numeroNota: 'Número da nota (opcional)',
+  serie: 'Série',
+  observacaoGeral: 'Observação',
+  item: 'Item',
+  esperada: 'Esperada',
+  conferida: 'Conferida',
+  lote: 'Lote',
+  validade: 'Validade',
+  apontamento: 'Apontamento',
+  observacao: 'O que foi encontrado',
+  divergencia: 'Divergência',
+  retirar: 'Retirar',
+  semEsperada: 'às cegas',
+  registrar: 'Registrar a conferência',
+  registrada: 'Conferência {id} registrada: {situacao} ({divergentes} item(ns) com divergência).',
+  detalhe: 'Conferência {id}',
+  conferente: 'Conferente',
+  validador: 'Validador',
+  chegada: 'Chegada',
+  nota: 'Nota de entrada',
+  divergentes: 'Divergentes',
+  abrir: 'Abrir',
+  justificativa: 'Justificativa da aceitação',
+  validar: 'Validar',
+  validada: 'Conferência {id} validada.',
+  motivo: 'Motivo do cancelamento',
+  cancelar: 'Cancelar a conferência',
+  cancelada: 'Conferência {id} cancelada.',
+  motivoCancelamento: 'Motivo do cancelamento: {motivo}',
+  // Na tela da nota de entrada.
+  atalho: 'Conferência física do recebimento',
+  conferenciaDaNota: 'Conferência física validada desta entrega',
+  semConferencia: 'Sem conferência ligada',
+  xmlItens: 'Itens do XML (ligue cada um ao item do estoque)',
+  ligarXml: 'Linha do XML',
+  semLigacao: 'Sem linha do XML',
+  impostos: 'Impostos',
+  tributo: 'Tributo',
+  base: 'Base',
+  aliquota: 'Alíquota (%)',
+  valor: 'Valor',
+  cst: 'CST',
+  impostoLinha: '{tributo}: {base} × {aliquota}% = {valor} (CST {cst})',
+  semImposto: 'Sem imposto destacado.',
+  seguro: 'Seguro',
+  outros: 'Outras despesas',
+  custoEntrada: 'Custo de entrada',
+  custoUnitario: 'Custo unitário',
+  custoPrevia:
+    'Prévia pelo padrão do hospital (sem crédito de ICMS, IPI, PIS nem COFINS). A gravação aplica o parâmetro de crédito do estabelecimento.',
+  totalNota: 'Total da nota (produtos − desconto + frete + seguro + outras + IPI + ICMS-ST): {valor}',
+} as const;
+
+export const SITUACOES_ROTULO: Record<string, string> = {
+  aberta: 'Aberta',
+  conferida: 'Conferida',
+  divergente: 'Divergente',
+  validada: 'Validada',
+  cancelada: 'Cancelada',
+};
+export const TIPOS_ROTULO: Record<string, string> = {
+  compra: 'Compra',
+  doacao: 'Doação',
+  consignado: 'Consignado',
+  emprestimo: 'Empréstimo',
+  bonificacao: 'Bonificação',
+};
+export const APONTAMENTOS_ROTULO: Record<string, string> = {
+  avaria: 'Avaria',
+  lote: 'Lote diferente',
+  produto_errado: 'Produto errado',
+  temperatura: 'Temperatura fora da faixa',
+};
+export const DIVERGENCIAS_ROTULO: Record<string, string> = {
+  nenhuma: 'Nenhuma',
+  falta: 'Falta',
+  sobra: 'Sobra',
+  avaria: 'Avaria',
+  validade: 'Validade curta ou vencida',
+  lote: 'Lote diferente',
+  produto_errado: 'Produto errado',
+  temperatura: 'Temperatura fora da faixa',
+};
+export const TRIBUTOS_ROTULO: Record<string, string> = {
+  ICMS: 'ICMS',
+  ICMS_ST: 'ICMS-ST',
+  FCP_ST: 'FCP-ST',
+  IPI: 'IPI',
+  PIS: 'PIS',
+  COFINS: 'COFINS',
+};
+
+type Chave = keyof typeof mensagensConferenciaRecebimento;
+/** O texto com os parâmetros {nome} trocados. */
+export const textoConferencia = (chave: Chave, p: Record<string, string | number> = {}): string =>
+  mensagensConferenciaRecebimento[chave].replace(/\{(\w+)\}/g, (_x, n: string) => String(p[n] ?? ''));
