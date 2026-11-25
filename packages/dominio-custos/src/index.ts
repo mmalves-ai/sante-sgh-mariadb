@@ -10,3 +10,4 @@ export * from './custo-conta.js';
 export * from './indicador.js';
 export * from './exportacao.js';
 export * from './apuracao.js';
+export * from './custo-padrao.js';
