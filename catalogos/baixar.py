@@ -42,6 +42,8 @@ FONTES = {
     # Tipos de logradouro: Tabela 20 das tabelas do leiaute vigente do eSocial (a versão é a do leiaute).
     "logradouro": ("https://www.gov.br/esocial/pt-br/documentacao-tecnica/leiautes-esocial-versao-s-1-3-nt-08-2026/"
                    "tabelas.html", 5, "esocial-s-1.3-nt-08-2026"),
+    # Etnias indígenas: tabelas auxiliares do SIA/SUS publicadas pelo DATASUS (CNV/etnia.cnv dentro do pacote).
+    "etnia_indigena": ("ftp://ftp.datasus.gov.br/dissemin/publicos/SIASUS/200801_/Auxiliar/TAB_SIA.zip", 150, None),
 }
 
 
