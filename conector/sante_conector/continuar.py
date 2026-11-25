@@ -90,7 +90,25 @@ def _aceitos(sha256):
     return {sha256} if isinstance(sha256, str) else set(sha256 or ())
 
 
-def _uma(conn, ctl, anterior, plano, contagens, sha256):
+def _principais(c, ctl, tabela, destinos, cache):
+    """{imagem_id: chaves principais da tabela} no conector_origem. Uma varredura por tabela na continuação inteira:
+    `cache` vale para todos os elos da cadeia e da base declarada (antes, cada elo refazia a contagem de todas as
+    tabelas, uma varredura do conector_origem inteiro por elo, dezenas de minutos antes de a carga começar)."""
+    if cache is not None and tabela in cache:
+        return cache[tabela]
+    cond, args = _sql_principal(destinos)
+    # FORCE INDEX: com a estatística desatualizada, o otimizador escolhia a varredura da tabela inteira (195 M
+    # linhas) para as tabelas grandes; pelo índice da chave, só as linhas da tabela (7,5 M em 30 s na base real)
+    c.execute("SELECT imagem_id, COUNT(*) FROM `%s`.conector_origem FORCE INDEX (uq_conector_origem_chave)"
+              " WHERE tabela_origem=%%s AND %s"
+              " GROUP BY imagem_id" % (ctl, cond), [tabela] + args)
+    r = {int(i) if i is not None else None: int(n) for i, n in c.fetchall()}
+    if cache is not None:
+        cache[tabela] = r
+    return r
+
+
+def _uma(conn, ctl, anterior, plano, contagens, sha256, cache=None):
     """Concluídas pela própria execução `anterior` (marca ou dedução), sem a cadeia."""
     with conn.cursor() as c:
         c.execute("SELECT id, sha256 FROM `%s`.imagem WHERE execucao_id=%%s" % ctl, (anterior,))
@@ -113,10 +131,8 @@ def _uma(conn, ctl, anterior, plano, contagens, sha256):
             n = int(contagens.get(t, -1))
             if not marcadas and (lidas.get(t, 0) <= 0 or lidas.get(t, 0) != n):
                 continue
-            cond, args = _sql_principal(p["destinos"])
-            c.execute("SELECT COUNT(*), COALESCE(SUM(imagem_id=%%s), 0) FROM `%s`.conector_origem"
-                      " WHERE tabela_origem=%%s AND %s" % (ctl, cond), [img, t] + args)
-            total, desta = (int(x) for x in c.fetchone())
+            por_imagem = _principais(c, ctl, t, p["destinos"], cache)
+            total, desta = sum(por_imagem.values()), por_imagem.get(img, 0)
             # mais chaves principais (de qualquer imagem) que linhas no arquivo: há chave antiga que sumiu do arquivo
             # e entraria nas vistas refeitas (a conciliação divergiria); a tabela roda de novo
             if total > n:
@@ -126,16 +142,17 @@ def _uma(conn, ctl, anterior, plano, contagens, sha256):
         return saida, ("marca" if marcadas else "deducao"), img
 
 
-def concluidas(conn, ctl, anterior, plano, contagens, sha256, contadores_de=None, _heranca=True):
+def concluidas(conn, ctl, anterior, plano, contagens, sha256, contadores_de=None, _heranca=True, _cache=None):
     """Tabelas do plano concluídas pela execução `anterior` (regra no cabeçalho). Devolve {"tabelas": set,
     "regra": "marca"|"deducao" (com "+cadeia" quando herdou), "imagem_anterior": id, "origem": {tabela: execução
     das pendências}, "duas_fases": tabelas refeitas por terem coluna em duas fases}. Recusa se o arquivo não é o
     mesmo. `contadores_de(id)`: contadores da execução (cadeia de continuações; None = sem cadeia)."""
+    _cache = {} if _cache is None else _cache
     de = None
     if contadores_de is not None:
         de = (contadores_de(anterior) or {}).get("continuar_de")
     try:
-        tabs, regra, img = _uma(conn, ctl, anterior, plano, contagens, sha256)
+        tabs, regra, img = _uma(conn, ctl, anterior, plano, contagens, sha256, _cache)
     except SemImagem:
         if not de:
             raise
@@ -143,7 +160,7 @@ def concluidas(conn, ctl, anterior, plano, contagens, sha256, contadores_de=None
     origem = {t: anterior for t in tabs}
     if de:  # a continuação `anterior` falhou antes de marcar o que herdou: herda da que ela continuava
         try:
-            r = concluidas(conn, ctl, int(de), plano, contagens, sha256, contadores_de, _heranca=False)
+            r = concluidas(conn, ctl, int(de), plano, contagens, sha256, contadores_de, _heranca=False, _cache=_cache)
         except SemImagem:  # a ponta da cadeia caiu antes da imagem (e não continua outra): não traz nada
             r = {"origem": {}, "regra": "sem_imagem", "imagem_anterior": None}
             regra = "%s+cadeia(%d:sem_imagem)" % (regra, int(de))
@@ -156,7 +173,8 @@ def concluidas(conn, ctl, anterior, plano, contagens, sha256, contadores_de=None
     if base and base["aceita"]:  # regra 6: a origem anterior com a mesma base, declarada pelo administrador
         try:
             r = concluidas(conn, ctl, base["execucao_anterior"], plano, contagens,
-                           _aceitos(sha256) | set(base["sha256_aceitos"]), contadores_de, _heranca=False)
+                           _aceitos(sha256) | set(base["sha256_aceitos"]), contadores_de, _heranca=False,
+                           _cache=_cache)
             for t, e in r["origem"].items():
                 origem.setdefault(t, e)
             regra = "%s+base_declarada(%d:%s)" % (regra, base["origem_anterior"], base["prova"])

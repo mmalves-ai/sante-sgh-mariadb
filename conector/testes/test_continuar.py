@@ -239,6 +239,37 @@ class RegraConcluidas(unittest.TestCase):
         plano_f = plano + [{"tabela": "F", "destinos": ["dest_f"]}]
         r = continuar.concluidas(self.root, self.ctl, 7, plano_f, dict(cont, F=2), "a" * 64)
         self.assertEqual(r["tabelas"], {"B"})
+        # uma varredura do conector_origem por tabela na continuação inteira: a contagem fica em cache entre os elos
+        # da cadeia (antes, cada elo refazia a varredura de todas as tabelas, minutos por elo na base real)
+        with self.root.cursor() as c:
+            c.execute("SELECT id FROM `%s`.imagem WHERE execucao_id=9" % self.ctl)
+            img9 = c.fetchone()[0]
+        self._x("INSERT INTO {b}.conector_tabela_concluida (execucao_id, imagem_id, tabela_origem, onda, origem,"
+                " criado_em) VALUES (9, %s, 'B', 0, 'carregada', UTC_TIMESTAMP(3))", (img9,))
+        self.root.commit()
+        varreduras = []
+
+        class _Conta:
+            def __init__(s, conn):
+                s.conn = conn
+
+            def cursor(s):
+                cur = s.conn.cursor()
+                original = cur.execute
+
+                def execute(sql, args=None):
+                    if "conector_origem" in sql:
+                        varreduras.append(args[0])
+                    return original(sql, args)
+                cur.execute = execute
+                return cur
+
+            def __getattr__(s, nome):
+                return getattr(s.conn, nome)
+
+        r = continuar.concluidas(_Conta(self.root), self.ctl, 9, plano_f, dict(cont, F=2), "a" * 64, cadeia.get)
+        self.assertEqual((r["tabelas"], r["origem"]), ({"B"}, {"B": 9}))
+        self.assertEqual(sorted(varreduras), ["B", "F"])  # B marcada na 9 e na 7: contada uma vez só
         # coluna em duas fases (autorreferência): a referência adiada só existe na memória até o _fase2; nunca pulada
         plano_b = [dict(p, duas_fases={p["tabela"]}, colunas={"dest_b": [{"coluna": "PAI", "destino": "pai_id",
                                                                          "referencia": "B"}]})
