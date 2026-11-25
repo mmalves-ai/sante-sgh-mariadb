@@ -985,13 +985,24 @@ const cancelarAlta = definirOperacao<CancelarAltaBancoEntrada, ResultadoOperacao
       });
       await encerrarPeriodoDaLimpeza(tx, n(l['id']), usuario, agora);
     }
+    // 04-INT L81: a alta desfeita não tira o paciente do leito. O retorno cobre o intervalo desde a saída (a ocupação
+    // encerrada fica na história), salvo o trecho em que outro paciente usou o leito; assim as diárias do intervalo
+    // voltam a ser devidas.
+    const outro = await tx.uma(
+      "SELECT MAX(data_hora_fim) AS fim FROM ocupacao_leito WHERE leito_hospitalar_id = ? AND internacao_id <> ? AND situacao <> 'cancelada' AND excluido_em IS NULL AND data_hora_fim > ?",
+      [leito, e.internacao, alta['alta_em']],
+    );
+    const desde = [new Date(alta['alta_em'] as Date), outro?.['fim'] ? new Date(outro['fim'] as Date) : null]
+      .filter((d): d is Date => d !== null && !Number.isNaN(d.getTime()))
+      .reduce((a, b) => (b.getTime() > a.getTime() ? b : a), new Date(0));
+    const retornoDesde = desde.getTime() > 0 && desde.getTime() < agora.getTime() ? desde : agora;
     await tx.incluir('ocupacao_leito', {
       estabelecimento_id: est,
       internacao_id: e.internacao,
       leito_hospitalar_id: leito,
       unidade_internacao_id: n(i['unidade_internacao_id']),
       acomodacao_id: n(i['acomodacao_id']),
-      data_hora_inicio: agora,
+      data_hora_inicio: retornoDesde,
       tipo_movimento: 'retorno',
       registro_usuario_id: usuario,
       situacao: 'ativa',
