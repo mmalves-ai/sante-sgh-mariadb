@@ -343,21 +343,66 @@ describe.skipIf(SEM_BANCO)('PortaProjetoResultadoPropria contra o MariaDB (contr
     await expect(
       porta.estornar(ctx(), a.id, { versao: a.versao + 1, motivo: 'De novo' }),
     ).rejects.toMatchObject(recusa);
-    // O documento volta a ter 1000 livres; reapropriar no mesmo projeto reativa a linha (sem duplicar).
+    // O documento volta a ter 1000 livres; reapropriar no mesmo projeto grava linha nova e o estorno continua legível.
     const r = await porta.apropriar(ctx(), m['projeto']!, {
       origem: 'titulo',
       documento: m['pagar']!,
       valor: 250,
       data: '2027-04-01',
     });
-    expect(r.id).toBe(a.id);
+    expect(r.id).not.toBe(a.id);
     const [v] = await ler(
       'SELECT valor, excluido_em, etapa_projeto_id FROM apropriacao_projeto WHERE id = ?',
-      [a.id],
+      [r.id],
     );
     expect(Number(v!['valor'])).toBe(250);
     expect(v!['excluido_em']).toBeNull();
     expect(v!['etapa_projeto_id']).toBeNull();
+    const [h] = await ler(
+      'SELECT valor, excluido_em, excluido_por, observacao, etapa_projeto_id FROM apropriacao_projeto WHERE id = ?',
+      [a.id],
+    );
+    expect(Number(h!['valor'])).toBe(700);
+    expect(h!['excluido_em']).not.toBeNull();
+    expect(Number(h!['excluido_por'])).toBe(m['usuario']);
+    expect(String(h!['observacao'])).toContain('Estorno: Lançado no projeto errado');
+    expect(Number(h!['etapa_projeto_id'])).toBe(m['etapa2']);
+    const comHistorico = await porta.projeto(ctx(), m['projeto']!);
+    expect(comHistorico.apropriacoes.filter((x) => x.documento === m['pagar'])).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: a.id, estornada: true }),
+        expect.objectContaining({ id: r.id, estornada: false }),
+      ]),
+    );
+    // Duas apropriações simultâneas do mesmo título em projetos diferentes: a trava do documento serializa, e só uma
+    // cabe nos 750 livres (a soma nunca passa do valor do documento).
+    const novo = (codigo: string) =>
+      porta.salvarProjeto(ctx(), null, {
+        codigo,
+        descricao: `Concorrência sintética ${codigo}`,
+        tipo: 'pesquisa',
+        verba: 5000,
+      });
+    const p1 = await novo('conc-1');
+    const p2 = await novo('conc-2');
+    const disputa = await Promise.allSettled(
+      [p1!.id!, p2!.id!].map((pid) =>
+        porta.apropriar(ctx(), pid, {
+          origem: 'titulo',
+          documento: m['pagar']!,
+          valor: 500,
+          data: '2027-04-02',
+        }),
+      ),
+    );
+    expect(disputa.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+    const rejeitada = disputa.find((x) => x.status === 'rejected') as PromiseRejectedResult;
+    expect(rejeitada.reason).toMatchObject(recusa);
+    const [soma] = await ler(
+      'SELECT SUM(valor) AS v FROM apropriacao_projeto WHERE titulo_pagar_id = ? AND excluido_em IS NULL',
+      [m['pagar']],
+    );
+    expect(Number(soma!['v'])).toBe(750);
     // Projeto concluído não recebe apropriação.
     const atual = await porta.projeto(ctx(), m['projeto']!);
     const base = projetoBase();

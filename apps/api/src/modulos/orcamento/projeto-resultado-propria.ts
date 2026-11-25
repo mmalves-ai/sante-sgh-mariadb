@@ -8,7 +8,8 @@
 //     estoque ou contrato), a natureza, a etapa, o percentual do documento e o valor; o valor realizado da etapa
 //     (`etapa_projeto.valor_realizado`) é recalculado pelas despesas apropriadas a ela;
 //   - estorno: marca a apropriação como excluída (excluido_em/excluido_por, com o motivo na observação) e recalcula a
-//     etapa; nada se apaga;
+//     etapa; nada se apaga, e apropriar de novo o mesmo documento grava linha nova (o estorno fica como histórico);
+//     o documento de origem é travado antes do teto entre projetos (duas apropriações simultâneas não passam do valor);
 //   - resultado: orçado × realizado, receita − despesa, etapas e centros, calculado na leitura pelo domínio.
 // Cada gravação confere a versão lida e grava a trilha pelo executor.
 import {
@@ -154,6 +155,18 @@ const SQL_DOCUMENTO: Readonly<Record<OrigemApropriacao, string>> = {
   contrato: `SELECT d.id, d.numero, d.data_emissao AS data, COALESCE(d.valor_global, d.valor_estimado, 0) AS valor,
                   d.situacao IN ('cancelado', 'rascunho') AS cancelado, d.objeto AS descricao
              FROM contrato_fornecedor d WHERE d.estabelecimento_id = ? AND d.excluido_em IS NULL`,
+};
+
+/**
+ * A trava do documento de origem (SELECT ... FOR UPDATE pelo consultarParaAtualizar): serializa as apropriações do
+ * mesmo documento, em qualquer projeto, para o livre entre projetos ser lido e gravado sem corrida.
+ */
+const SQL_TRAVA_DOCUMENTO: Readonly<Record<OrigemApropriacao, string>> = {
+  titulo: 'SELECT id FROM titulo_pagar WHERE id = ? AND estabelecimento_id = ?',
+  titulo_receber: 'SELECT id FROM titulo_receber WHERE id = ? AND estabelecimento_id = ?',
+  lancamento: 'SELECT id FROM lancamento_contabil WHERE id = ? AND estabelecimento_id = ?',
+  consumo: 'SELECT id FROM movimento_estoque WHERE id = ? AND estabelecimento_id = ?',
+  contrato: 'SELECT id FROM contrato_fornecedor WHERE id = ? AND estabelecimento_id = ?',
 };
 
 const documentoLido = (x: Record<string, unknown>) => ({
@@ -597,6 +610,15 @@ export class PortaProjetoResultadoPropria extends PortaEstabelecimentoPropria {
         { teto: 1 },
       );
       if (!p) throw naoEncontrado('Projeto');
+      // Trava o documento antes de ler o que ele já tem apropriado (o teto vale entre todos os projetos).
+      const [travado] = await tx.consultarParaAtualizar(
+        SQL_TRAVA_DOCUMENTO[e.origem],
+        [e.documento, est.id],
+        {
+          teto: 1,
+        },
+      );
+      if (!travado) throw naoEncontrado('Documento de origem');
       const base = SQL_DOCUMENTO[e.origem];
       const linha = await tx.uma(`${base} AND d.id = ?`, [est.id, e.documento]);
       if (!linha) throw naoEncontrado('Documento de origem');
@@ -611,7 +633,7 @@ export class PortaProjetoResultadoPropria extends PortaEstabelecimentoPropria {
       }
       const coluna = COLUNA_ORIGEM[e.origem];
       const mesmo = await tx.uma(
-        `SELECT id, versao, excluido_em FROM apropriacao_projeto WHERE projeto_id = ? AND ${coluna} = ?`,
+        `SELECT id FROM apropriacao_projeto WHERE projeto_id = ? AND ${coluna} = ? AND excluido_em IS NULL`,
         [projetoId, e.documento],
       );
       const r = conferirApropriacao({
@@ -627,7 +649,7 @@ export class PortaProjetoResultadoPropria extends PortaEstabelecimentoPropria {
         origemCancelada: doc.cancelado,
       });
       const problemas = [...r.problemas];
-      if (mesmo && mesmo['excluido_em'] === null)
+      if (mesmo)
         problemas.unshift({
           campo: 'documento',
           mensagem: 'O documento já está apropriado a este projeto; estorne antes de apropriar de novo.',
@@ -642,23 +664,13 @@ export class PortaProjetoResultadoPropria extends PortaEstabelecimentoPropria {
         data_apropriacao: e.data,
         observacao: e.observacao || null,
       };
-      let aid: number;
-      if (mesmo) {
-        // A apropriação estornada volta (chave única por projeto e documento), com os valores novos.
-        aid = num(mesmo['id']);
-        await tx.alterar(T_APROPRIACAO, aid, num(mesmo['versao']), {
-          ...campos,
-          excluido_em: null,
-          excluido_por: null,
-        });
-      } else {
-        aid = await tx.incluir(T_APROPRIACAO, {
-          projeto_id: projetoId,
-          tipo_origem: e.origem,
-          [coluna]: e.documento,
-          ...campos,
-        });
-      }
+      // Sempre linha nova: a apropriação estornada fica como está (histórico com o motivo, quem e quando).
+      const aid = await tx.incluir(T_APROPRIACAO, {
+        projeto_id: projetoId,
+        tipo_origem: e.origem,
+        [coluna]: e.documento,
+        ...campos,
+      });
       await recalcularEtapa(tx, e.etapa);
       return { tabela: T_APROPRIACAO, id: aid, valor: a.valor, natureza: a.natureza };
     });

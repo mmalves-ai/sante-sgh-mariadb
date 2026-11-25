@@ -827,7 +827,7 @@ aplicacao_financeira	FIN	principal	F3	Aplicação financeira com instituição, 
 apolice_seguro	FIN	principal	F8	Apólice de seguro patrimonial, com seguradora, vigência e prêmio	MV SEGUROS	07	2
 apontamento_producao_contrato	FIN	principal	F8	Apontamento da produção do terceiro no período para conferência	MV GCTO_APONTAMENTO, GCTO_LOTE_APONTAMENTO	07	2
 apropriacao_imobilizado_andamento	FIN	item	F8	Custo apropriado ao imobilizado em andamento, ligado ao título ou à nota	MV IMOB_AND_BEM	07	1
-apropriacao_projeto	FIN	vinculo	F8	Apropriação de título a pagar ou a receber, lançamento, consumo ou contrato ao projeto, com natureza (receita ou despesa) e etapa	MV PROJETO_ORCAMENTARIO, GCTO_CONTRATO_PROJ; natureza, etapa e título a receber (07-FIN linha 128; migração 14_FIN/99_apropriacao_projeto_natureza)	07	4
+apropriacao_projeto	FIN	vinculo	F8	Apropriação de título a pagar ou a receber, lançamento, consumo ou contrato ao projeto, com natureza (receita ou despesa) e etapa	MV PROJETO_ORCAMENTARIO, GCTO_CONTRATO_PROJ; natureza, etapa e título a receber (07-FIN linha 128; migração 14_FIN/99_apropriacao_projeto_natureza; estorno preservado com unicidade só entre as vigentes, migração 14_FIN/99_apropriacao_projeto_vigente)	07	4
 aprovacao_orcamento	FIN	historico	F7	Envio, aprovação e devolução da versão, com autor e parecer	MV ORCA_CONTROLE_CONCLUSAO; mecanismo de aprovação do 01	07	9
 aprovador_etapa	FIN	vinculo	F8	Usuário ou papel que aprova uma etapa do fluxo, com substituto e permissão de aprovar pelo celular	MV ALCA_APROVADOR, ALCA_APROVADOR_MOB, ALCA_APROVADOR_STAT	07	4
 apuracao_consolidacao	FIN	principal	F8	Rodada de consolidação por período, com situação e responsável	MV LOTE_GERENCIAL	07	1
