@@ -36,4 +36,17 @@ export const rotasPatrimonio: RouteRecordRaw[] = [
     component: () => import('./ParametrosTela.vue'),
     meta: { permissao: 'patrimonio.parametroPatrimonio.ler' },
   },
+  // C2-072 (07-FIN L149; CPC 27): obras em andamento e seguro dos bens; gravar pede patrimonio.bem.cadastrar.
+  {
+    path: '/patrimonio/obras',
+    name: 'patrimonio.obras',
+    component: () => import('./ObrasTela.vue'),
+    meta: { permissao: 'patrimonio.bem.ler' },
+  },
+  {
+    path: '/patrimonio/seguros',
+    name: 'patrimonio.seguros',
+    component: () => import('./SegurosTela.vue'),
+    meta: { permissao: 'patrimonio.bem.ler' },
+  },
 ];

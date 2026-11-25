@@ -74,6 +74,7 @@ export const mensagensComplementosPatrimonio = {
     nota: 'Nota de entrada nº {n}',
     apropriar: 'Apropriar custo',
     dataApropriacao: 'Data',
+    origemDocumento: 'Documento do custo',
     tituloCampo: 'Título a pagar (nº)',
     notaCampo: 'Nota de entrada (nº)',
     descricaoApropriacao: 'Descrição',

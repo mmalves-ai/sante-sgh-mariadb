@@ -32,6 +32,7 @@ import {
   rotuloCentro,
   rotuloCompetencia,
 } from './comum-patrimonio.js';
+import AgregacoesBem from './AgregacoesBem.vue';
 import AjustesBem from './AjustesBem.vue';
 import ErroPatrimonio from './ErroPatrimonio.vue';
 
@@ -436,6 +437,7 @@ async function confirmarBaixa() {
       </form>
 
       <AjustesBem :bem="b" :pode-ajustar="apoio.acoes.calcular" />
+      <AgregacoesBem :bem="b" :pode-agregar="apoio.acoes.cadastrar" :hoje="hoje" />
 
       <h3>{{ t('patrimonio.ficha.historico') }}</h3>
       <p v-if="movimentos.isError.value" class="secundario">—</p>
