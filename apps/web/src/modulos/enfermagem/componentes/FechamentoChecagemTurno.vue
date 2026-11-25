@@ -52,6 +52,7 @@ const { t } = useI18n({
       doSetor: 'Setor inteiro',
       passados: '{n} pendente(s) passado(s) adiante: {lista}',
       porque: 'Justificativa: {j}',
+      registrado: 'Registrado no prontuário de {n} paciente(s), à espera de assinatura',
       reaberto: 'Reaberto em {quando}: {motivo}',
       atendimento: 'atendimento {n}',
     },
@@ -198,6 +199,9 @@ function reabrir(id: number): Promise<void> {
           }}
         </span>
         <span v-if="f.justificativaPendencias"> · {{ t('porque', { j: f.justificativaPendencias }) }}</span>
+        <span v-if="(f.documentos?.length ?? 0) > 0" :data-testid="`turno-fechamento-prontuario-${f.id}`">
+          · {{ t('registrado', { n: f.documentos!.length }) }}
+        </span>
         <span v-if="f.situacao === 'reaberto'">
           · {{ t('reaberto', { quando: quando(f.reabertoEm ?? ''), motivo: f.motivoReabertura ?? '' }) }}
         </span>

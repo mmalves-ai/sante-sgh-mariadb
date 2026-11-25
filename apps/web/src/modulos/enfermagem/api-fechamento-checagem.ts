@@ -21,6 +21,8 @@ export interface FechamentoChecagem {
   anterior: boolean;
   travados: number[];
   pendentes: { horario: number; atendimento: number; previsto: string; anterior: boolean }[];
+  /** O registro do turno no prontuário de cada paciente (documento lançado, à espera de assinatura). */
+  documentos?: { atendimento: number; paciente: number; documento: number }[];
 }
 
 export interface FechamentoFeito {
@@ -28,6 +30,7 @@ export interface FechamentoFeito {
   travados: number;
   pendentes: number[];
   pendentesAnteriores: number[];
+  documentos?: { atendimento: number; paciente: number; documento: number }[];
   mensagem: string;
 }
 

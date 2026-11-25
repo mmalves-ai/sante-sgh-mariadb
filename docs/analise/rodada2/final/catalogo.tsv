@@ -410,8 +410,8 @@ caixa_instrumental	CC	principal	F7	Modelo de caixa ou kit cirúrgico, com especi
 caixa_instrumental_item	CC	item	F7	Composição da caixa: instrumental, quantidade e ordem de montagem	MV IT_CX_KIT, ITCAIXA_CIRURGICA, IMG_IT_CX_KIT	04	3
 carater_cirurgia	CC	dominio	F3	Caráter da cirurgia (eletiva, urgência, emergência, acidente)	SPDATA CCTPURGENCIA 3	04	3
 carater_cirurgia_contato	CC	item	F7	E-mails e telefones avisados quando uma cirurgia de certo caráter é marcada, com texto da mensagem	rodada2:nova	04	3
-cartao_preferencia_cirurgiao	CC	principal	F8	Cartão de preferência do cirurgião por procedimento: posição, luvas, fios, equipamentos e observações	MV AVISO_CIRURGIA_PREFERENCIA	04	3
-cartao_preferencia_cirurgiao_item	CC	item	F8	Material, instrumental ou equipamento preferido no cartão, com quantidade	MV AVISO_CIRURGIA_PREFERENCIA	04	2
+cartao_preferencia_cirurgiao	CC	principal	F8	Cartão de preferência do cirurgião por procedimento, grupo de procedimentos ou geral, com vigência: posição, luvas, fios, equipamentos e observações	MV AVISO_CIRURGIA_PREFERENCIA; vigência (vigencia_inicio/vigencia_fim) e cartão por grupo (C1-012; migração 08_CC/96_cartao_preferencia_vigencia_kit)	04	3
+cartao_preferencia_cirurgiao_item	CC	item	F8	Material, instrumental, equipamento ou kit padrão preferido no cartão, com quantidade	MV AVISO_CIRURGIA_PREFERENCIA; kit padrão do cadastro de kits (kit_material_id, natureza kit; C1-012; migração 08_CC/96_cartao_preferencia_vigencia_kit)	04	2
 checklist_cirurgia_segura	CC	principal	F7	Checklist aplicado num ato cirúrgico, com situação por momento e responsável	MV CHECK_LIST; new-sgh dominio-cirurgia/checklist	04	0
 ciclo_esterilizacao	CC	principal	F7	Ciclo de esterilização ou lavagem: equipamento, lote, operador, início, fim, parâmetros e liberação	MV ESTERILIZACAO, PREPARACAO_LOTE, MAQ_ESTER_CICLO	04	1
 ciclo_esterilizacao_item	CC	item	F7	Pacotes colocados na carga do ciclo	MV ESTERILIZA_SOLICITACAO_CME	04	1
@@ -1754,6 +1754,7 @@ faixa_sinal_vital_classificacao	PEP	configuracao	F3	Faixa de sinal vital por ida
 fator_interferencia_sinal_vital	PEP	dominio	F3	Fator que interfere na leitura de um sinal vital na classificação (arritmia, oxigênio suplementar, febre recente, uso de antitérmico)	Área 1 (classif. risco PA); DBAMV.SACR_FATOR_AFERICAO	10	1
 favorito_prescritor	PEP	configuracao	F3	Itens ou protocolos favoritos do prescritor para uso rápido	MV: PW_FAVORITO_PRESCRICAO	03	9
 fechamento_checagem_horario	PEP	item	F3	Composição do fechamento da checagem do turno: horários travados e pendentes passados ao turno seguinte	Produto (03-PEP L113, correção da revisão)	03	0
+fechamento_checagem_paciente	PEP	item	F3	Registro do fechamento da checagem do turno por paciente, ligado ao documento do prontuário gerado	Produto (03-PEP L113, C1-023)	03	0
 fechamento_horario_checagem	PEP	principal	F3	Fechamento do período de checagem do setor, que trava os horários já conferidos	MV: PW_FECHAMENTO_HORARIO_CHECAGEM*, PW_HORARIO_FECHADO_CHECAGEM*	03	2
 ficha_antimicrobiano	PEP	principal	F3	Justificativa de uso do antimicrobiano: indicação, sítio, cultura, tempo previsto e reavaliação	MV: AVALIACAO_ANTIMICROBIANO_PRSCT; depende: liberacao_antimicrobiano (05), antimicrobiano (05)	03	4
 filtro_resultado_usuario	PEP	configuracao	F3	Filtro salvo pelo profissional para consultar resultados de exames (grupos, período, exames escolhidos)	SPDATA: PRFILTROUSUARIO (140)	03	1

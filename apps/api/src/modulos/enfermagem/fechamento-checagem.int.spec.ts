@@ -168,6 +168,18 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
         `UPDATE horario_administracao SET fechamento_horario_checagem_id = NULL WHERE ${em}`,
         ests,
       );
+      // O registro do turno no prontuário (C1-023): a ligação, o evento e o documento sintéticos deste teste.
+      const fp = `fechamento_checagem_paciente fp JOIN fechamento_horario_checagem f ON f.id = fp.fechamento_horario_checagem_id AND f.${em}`;
+      await e.executar(
+        `DELETE ev FROM documento_prontuario_evento ev JOIN ${fp} ON fp.documento_prontuario_id = ev.documento_prontuario_id`,
+        ests,
+      );
+      await e.executar(`UPDATE ${fp} SET fp.documento_prontuario_id = NULL`, ests);
+      await e.executar(
+        `DELETE d FROM documento_prontuario d JOIN ${fp} ON d.entidade_origem = 'fechamento_checagem_paciente' AND d.entidade_origem_id = fp.id`,
+        ests,
+      );
+      await e.executar(`DELETE fp FROM ${fp}`, ests);
       await e.executar(
         `DELETE x FROM fechamento_checagem_horario x JOIN fechamento_horario_checagem f ON f.id = x.fechamento_horario_checagem_id WHERE f.${em}`,
         ests,
@@ -276,6 +288,21 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
             "SELECT id FROM situacao_checagem WHERE categoria = 'pendente' AND ativo AND processo_enfermagem = 'administracao' ORDER BY ordem IS NULL, ordem, id LIMIT 1",
           )
         )?.id,
+      );
+      // O registro do turno vai ao prontuário (C1-023): tipo de documento e situação "lançado" do cliente.
+      await garantir(
+        e,
+        "SELECT id FROM tipo_documento_clinico WHERE categoria IN ('relatorio','outro') AND ativo LIMIT 1",
+        [],
+        "INSERT INTO tipo_documento_clinico (codigo, descricao, categoria, criado_em) VALUES (?, 'Relatório sintético', 'relatorio', ?)",
+        [`${MARCA}-REL`, agora],
+      );
+      await garantir(
+        e,
+        "SELECT id FROM situacao_documento_prontuario WHERE categoria = 'lancado' AND ativo LIMIT 1",
+        [],
+        "INSERT INTO situacao_documento_prontuario (codigo, descricao, categoria, criado_em) VALUES (?, 'Lançado (sintético)', 'lancado', ?)",
+        [`${MARCA}-LANC`, agora],
       );
       const tipo = await garantir(
         e,
@@ -474,6 +501,46 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
         [hp, r.id],
       ),
     ).toMatchObject({ t: 4, p: 2, a: 1 });
+    // O registro do turno vai ao prontuário do paciente: um documento por atendimento, lançado, autor = profissional.
+    expect(anterior.documentos).toHaveLength(1);
+    expect(r.documentos).toEqual([
+      { atendimento: m!.atendimento, paciente: m!.paciente, documento: expect.any(Number) },
+    ]);
+    const doc = r.documentos[0]!.documento;
+    expect(doc).not.toBe(anterior.documentos[0]!.documento);
+    expect(
+      await uma(
+        'SELECT quantidade_administrados AS a, quantidade_nao_administrados AS n, quantidade_suspensos AS s, quantidade_pendentes AS p, atendimento_id AS at, paciente_id AS pa, documento_prontuario_id AS d FROM fechamento_checagem_paciente WHERE fechamento_horario_checagem_id = ?',
+        [r.id],
+      ),
+    ).toMatchObject({ a: 3, n: 1, s: 0, p: 2, at: m!.atendimento, pa: m!.paciente, d: doc });
+    expect(
+      await uma(
+        `SELECT d.entidade_origem AS o, d.paciente_id AS pa, d.atendimento_id AS at, d.profissional_id AS pr, d.estabelecimento_id AS e,
+                d.titulo, sd.categoria AS sit, td.categoria AS cat, d.numero_versao AS v, d.excluido_em IS NULL AS vivo,
+                JSON_LENGTH(JSON_EXTRACT(d.conteudo, '$.hash_conteudo')) AS temHash,
+                (SELECT COUNT(*) FROM documento_prontuario_evento ev WHERE ev.documento_prontuario_id = d.id AND ev.acao = 'criacao') AS ev
+           FROM documento_prontuario d
+           JOIN situacao_documento_prontuario sd ON sd.id = d.situacao_documento_prontuario_id
+           JOIN tipo_documento_clinico td ON td.id = d.tipo_documento_clinico_id
+          WHERE d.id = ?`,
+        [doc],
+      ),
+    ).toMatchObject({
+      o: 'fechamento_checagem_paciente',
+      pa: m!.paciente,
+      at: m!.atendimento,
+      pr: m!.profissional,
+      e: m!.est,
+      sit: 'lancado',
+      v: 1,
+      vivo: 1,
+      temHash: 1,
+      ev: 1,
+    });
+    expect(
+      String((await uma('SELECT titulo FROM documento_prontuario WHERE id = ?', [doc]))?.['titulo'] ?? ''),
+    ).toMatch(/^Registro de checagem do turno (diurno|noturno) de \d{2}\/\d{2}\/\d{4}$/);
     for (const [x, esperado] of [
       [h[0]!, r.id],
       [h[1]!, r.id],
@@ -561,6 +628,16 @@ describe.skipIf(SEM_BANCO)('fechamento da checagem do turno e lote lido (03-PEP 
     // Os dois conjuntos continuam no banco: o reaberto com os 4 de antes, o novo com os 5.
     expect([...lidos[1]!.travados].sort()).toEqual([h[0], h[1], h[3], h[4]].sort());
     expect([...lidos[0]!.travados].sort()).toEqual([h[0], h[1], h[3], h[4], hp].sort());
+    // O documento do fechamento reaberto fica no prontuário (nunca apagado); o novo fechamento gera outro.
+    expect(lidos[1]!.documentos).toEqual(f.documentos);
+    expect(lidos[0]!.documentos).toEqual(novo.documentos);
+    expect(novo.documentos[0]!.documento).not.toBe(f.documentos[0]!.documento);
+    expect(
+      await uma('SELECT COUNT(*) AS n FROM documento_prontuario WHERE id IN (?, ?) AND excluido_em IS NULL', [
+        f.documentos[0]!.documento,
+        novo.documentos[0]!.documento,
+      ]),
+    ).toMatchObject({ n: 2 });
     expect(
       await uma('SELECT fechamento_horario_checagem_id AS f FROM horario_administracao WHERE id = ?', [h[0]]),
     ).toMatchObject({ f: novo.id });

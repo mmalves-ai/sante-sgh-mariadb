@@ -107,9 +107,10 @@ export class FechamentoChecagemController {
       ok: true,
       ...r,
       mensagem:
-        r.pendentes.length > 0
+        (r.pendentes.length > 0
           ? `Turno fechado: ${r.travados} horário(s) travado(s); ${r.pendentes.length} pendente(s) segue(m) para o próximo turno${r.pendentesAnteriores.length > 0 ? `, ${r.pendentesAnteriores.length} deles vindo(s) de turno anterior` : ''}.`
-          : `Turno fechado: ${r.travados} horário(s) travado(s).`,
+          : `Turno fechado: ${r.travados} horário(s) travado(s).`) +
+        ` Registro do turno lançado no prontuário de ${r.documentos.length} paciente(s), à espera de assinatura.`,
     };
   }
 

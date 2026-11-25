@@ -9,13 +9,21 @@
 // volta a ser listado e justificado; resolvido depois, é travado por ele. A composição de cada fechamento (travados e
 // pendentes) fica em fechamento_checagem_horario, que nunca se apaga; a justificativa e a quantidade de pendentes, no
 // próprio fechamento.
+// Registro no prontuário (C1-023): cada fechamento gera, por atendimento da composição, um documento do prontuário
+// (documento_prontuario, lançado e à espera da assinatura do enfermeiro, autor = profissional da sessão) com o resumo do
+// turno do paciente (registrosDoTurno, no domínio); a ligação fica em fechamento_checagem_paciente. A reabertura não
+// apaga o documento: ele fica no histórico e o novo fechamento gera outro.
+import { createHash } from 'node:crypto';
 import {
   conferirFechamentoChecagem,
   conferirReabertura,
+  RecusaRegistroTurno,
+  registrosDoTurno,
   resumirFechamento,
   turnoDoDia,
 } from '@sgh/dominio-enfermagem';
 import { type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
+import { documentoProntuario, sessao, TABELAS_DOCUMENTO } from '../pep/documentos-propria-operacoes.js';
 import type { AnotacaoGravacao } from './gravacao-direta.js';
 import { fusoDe, instanteDe } from './banco-apoio.js';
 import { letraDaSituacao } from './operacoes.js';
@@ -23,7 +31,9 @@ import { letraDaSituacao } from './operacoes.js';
 export const TABELAS_FECHAMENTO = [
   'fechamento_horario_checagem',
   'fechamento_checagem_horario',
+  'fechamento_checagem_paciente',
   'horario_administracao',
+  ...TABELAS_DOCUMENTO,
 ] as const;
 
 /** Quanto antes do turno o pendente passado adiante ainda é procurado. */
@@ -45,6 +55,14 @@ export interface FechamentoFeito {
   readonly naoAdministrados: number;
   readonly suspensos: number;
   readonly pendentesAnteriores: readonly number[];
+  /** Os documentos do prontuário gerados, um por atendimento da composição. */
+  readonly documentos: readonly DocumentoDoFechamento[];
+}
+
+export interface DocumentoDoFechamento {
+  readonly atendimento: number;
+  readonly paciente: number;
+  readonly documento: number;
 }
 
 export interface HorarioDoFechamento {
@@ -71,6 +89,8 @@ export interface FechamentoLido {
   /** A composição gravada: os horários que o fechamento travou e os pendentes que ele passou adiante. */
   readonly travados: readonly number[];
   readonly pendentes: readonly HorarioDoFechamento[];
+  /** Os documentos do prontuário do registro do turno, por atendimento. */
+  readonly documentos: readonly DocumentoDoFechamento[];
 }
 
 async function unidadeDoEstabelecimento(
@@ -107,7 +127,7 @@ export async function fecharChecagemTx(
   const u = await unidadeDoEstabelecimento(tx, est, p.unidade);
   const { inicio, fim } = await janelaDe(tx, est, p.data, p.turno);
   const linhas = await tx.consultarParaAtualizar<Record<string, unknown>>(
-    `SELECT h.id, h.versao, h.suspenso, h.situacao_checagem_id, sc.categoria, f.situacao AS fechamento,
+    `SELECT h.id, h.versao, h.suspenso, h.atendimento_id, a.paciente_id, h.situacao_checagem_id, sc.categoria, f.situacao AS fechamento,
             h.previsto_em < ? AS anterior,
             EXISTS (SELECT 1 FROM fechamento_checagem_horario fc
                      WHERE fc.horario_administracao_id = h.id AND fc.papel = 'pendente') AS passou_pendente
@@ -133,10 +153,17 @@ export async function fecharChecagemTx(
   const versao = new Map(linhas.map((h) => [Number(h['id']), Number(h['versao'])]));
   const situacao = new Map(linhas.map((h) => [Number(h['id']), Number(h['situacao_checagem_id'])]));
   const anteriores = new Set(linhas.filter((h) => Number(h['anterior']) === 1).map((h) => Number(h['id'])));
+  const letra = new Map(linhas.map((h) => [Number(h['id']), letraDaSituacao(h['categoria'], h['suspenso'])]));
+  const doPaciente = new Map(
+    linhas.map((h) => [
+      Number(h['id']),
+      { atendimento: Number(h['atendimento_id']), paciente: Number(h['paciente_id']) },
+    ]),
+  );
   const r = resumirFechamento(
     linhas.map((h) => ({
       id: Number(h['id']),
-      letra: letraDaSituacao(h['categoria'], h['suspenso']),
+      letra: letra.get(Number(h['id']))!,
       travado: h['fechamento'] === 'fechado',
       anterior: Number(h['anterior']) === 1,
       passouPendente: Number(h['passou_pendente']) === 1,
@@ -173,8 +200,31 @@ export async function fecharChecagemTx(
     await tx.alterar('horario_administracao', h, versao.get(h)!, { fechamento_horario_checagem_id: id });
   }
   for (const h of r.pendentes) await compor(h, 'pendente');
+  const documentos = await registrarNoProntuario(
+    tx,
+    est,
+    id,
+    p,
+    fim,
+    [
+      ...r.aTravar.map((h) => ({ h, papel: 'travado' as const })),
+      ...r.pendentes.map((h) => ({ h, papel: 'pendente' as const })),
+    ].map(({ h, papel }) => ({
+      id: h,
+      ...doPaciente.get(h)!,
+      letra: letra.get(h)!,
+      papel,
+      anterior: anteriores.has(h),
+    })),
+  );
   anotacao.motivo = r.pendentes.length > 0 ? (p.justificativa ?? '').trim() : null;
-  anotacao.dados = { travados: r.aTravar.length, pendentes: r.pendentes, unidade: p.unidade, turno: p.turno };
+  anotacao.dados = {
+    travados: r.aTravar.length,
+    pendentes: r.pendentes,
+    unidade: p.unidade,
+    turno: p.turno,
+    documentos: documentos.map((d) => d.documento),
+  };
   return {
     id,
     travados: r.aTravar.length,
@@ -183,7 +233,69 @@ export async function fecharChecagemTx(
     naoAdministrados: r.naoAdministrados,
     suspensos: r.suspensos,
     pendentesAnteriores: r.pendentesAnteriores,
+    documentos,
   };
+}
+
+/**
+ * Grava o registro do turno no prontuário de cada paciente da composição: a linha de fechamento_checagem_paciente e o
+ * documento do prontuário (lançado, autor = profissional da sessão, hash do conteúdo calculado pelo domínio).
+ */
+async function registrarNoProntuario(
+  tx: TxOperacao,
+  est: number,
+  fechamento: number,
+  p: PedidoFechamento,
+  fim: Date,
+  horarios: Parameters<typeof registrosDoTurno>[0],
+): Promise<DocumentoDoFechamento[]> {
+  let registros: ReturnType<typeof registrosDoTurno>;
+  try {
+    registros = registrosDoTurno(horarios, {
+      data: p.data,
+      turno: p.turno,
+      unidade: p.unidade,
+      justificativa: p.justificativa,
+    });
+  } catch (e) {
+    if (e instanceof RecusaRegistroTurno) throw recusa(e.codigo, e.message);
+    throw e;
+  }
+  if (registros.length === 0) return [];
+  const s = await sessao(tx, { id: est, fuso: await fusoDe(tx, est) }, null, false);
+  if (s.profissional === null)
+    throw recusa(
+      'sem-profissional',
+      'A conta da sessão não tem vínculo de profissional vigente neste estabelecimento: o registro do turno no prontuário precisa do autor.',
+    );
+  const agora = new Date();
+  const referencia = fim.getTime() < agora.getTime() ? fim : agora;
+  const feitos: DocumentoDoFechamento[] = [];
+  for (const g of registros) {
+    const linha = await tx.incluir('fechamento_checagem_paciente', {
+      fechamento_horario_checagem_id: fechamento,
+      atendimento_id: g.atendimento,
+      paciente_id: g.paciente,
+      quantidade_administrados: g.administrados,
+      quantidade_nao_administrados: g.naoAdministrados,
+      quantidade_suspensos: g.suspensos,
+      quantidade_pendentes: g.pendentes.length,
+    });
+    const documento = await documentoProntuario(tx, s, {
+      categoria: 'relatorio',
+      paciente: g.paciente,
+      atendimento: g.atendimento,
+      tabela: 'fechamento_checagem_paciente',
+      id: linha,
+      titulo: g.titulo,
+      referencia,
+      hash: createHash('sha256').update(JSON.stringify(g.conteudo)).digest('hex'),
+      comoSuporte: false,
+    });
+    await tx.alterar('fechamento_checagem_paciente', linha, 1, { documento_prontuario_id: documento });
+    feitos.push({ atendimento: g.atendimento, paciente: g.paciente, documento });
+  }
+  return feitos;
 }
 
 /** Reabre o fechamento vigente com o motivo: os horários deixam de estar travados; o fechamento fica no histórico. */
@@ -247,6 +359,16 @@ export async function fechamentosDoDia(
         ids,
       )
     : [];
+  const docs = ids.length
+    ? await l.consultar<Record<string, unknown>>(
+        `SELECT fp.fechamento_horario_checagem_id AS f, fp.atendimento_id, fp.paciente_id, fp.documento_prontuario_id
+           FROM fechamento_checagem_paciente fp
+          WHERE fp.fechamento_horario_checagem_id IN (${ids.map(() => '?').join(', ')})
+            AND fp.documento_prontuario_id IS NOT NULL
+          ORDER BY fp.atendimento_id`,
+        ids,
+      )
+    : [];
   const doFechamento = (id: number, papel: string) =>
     composicao.filter((c) => Number(c['f']) === id && c['papel'] === papel);
   return linhas.map((f) => ({
@@ -270,5 +392,12 @@ export async function fechamentosDoDia(
       previsto: isoLocal(c['previsto_em']),
       anterior: Number(c['turno_anterior']) === 1,
     })),
+    documentos: docs
+      .filter((d) => Number(d['f']) === Number(f['id']))
+      .map((d) => ({
+        atendimento: Number(d['atendimento_id']),
+        paciente: Number(d['paciente_id']),
+        documento: Number(d['documento_prontuario_id']),
+      })),
   }));
 }

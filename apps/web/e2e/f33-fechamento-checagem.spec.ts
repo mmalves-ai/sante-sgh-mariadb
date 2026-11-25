@@ -39,9 +39,10 @@ interface Fechamento {
   anterior: boolean;
   travados: number[];
   pendentes: { horario: number; atendimento: number; previsto: string; anterior: boolean }[];
+  documentos?: { atendimento: number; paciente: number; documento: number }[];
 }
 
-test.describe('fechamento da checagem do turno (03-PEP L113) @F33', () => {
+test.describe('fechamento da checagem do turno (03-PEP L113) @F33 @C1-023', () => {
   test('recebidos do turno anterior, fechamento por paciente com justificativa, histórico e reabertura com motivo', async ({
     page,
   }) => {
@@ -94,6 +95,8 @@ test.describe('fechamento da checagem do turno (03-PEP L113) @F33', () => {
         justificativaPendencias: String(corpo['justificativa'] ?? ''),
         anterior: false,
         travados: [9010, 9011],
+        // C1-023: o registro do turno vai ao prontuário do paciente (documento lançado, à espera de assinatura).
+        documentos: [{ atendimento: atendimento ?? 0, paciente: 1, documento: 7001 }],
         pendentes: [
           { horario: 9004, atendimento: atendimento ?? 0, previsto: '2026-11-24T06:00', anterior: true },
         ],
@@ -106,7 +109,9 @@ test.describe('fechamento da checagem do turno (03-PEP L113) @F33', () => {
           travados: 2,
           pendentes: [9004],
           pendentesAnteriores: [9004],
-          mensagem: 'Turno fechado.',
+          documentos: [{ atendimento: atendimento ?? 0, paciente: 1, documento: 7001 }],
+          mensagem:
+            'Turno fechado. Registro do turno lançado no prontuário de 1 paciente(s), à espera de assinatura.',
         },
         201,
       );
@@ -140,6 +145,11 @@ test.describe('fechamento da checagem do turno (03-PEP L113) @F33', () => {
     await expect(novo).toContainText('Paciente:');
     await expect(page.getByTestId('turno-fechamento-passados-802')).toContainText('06:00');
     await expect(novo).toContainText('Dose das 06:00 segue pendente');
+    // C1-023: o fechamento mostra que o registro do turno foi lançado no prontuário do paciente.
+    await expect(page.getByTestId('turno-fechamento-prontuario-802')).toContainText(
+      'Registrado no prontuário de 1 paciente(s), à espera de assinatura',
+    );
+    await expect(bloco).toContainText('Registro do turno lançado no prontuário de 1 paciente(s)');
     await semViolacaoAxe(page, '/enfermagem/turno (fechamento)');
 
     // A reabertura pede o motivo (mínimo de 10 caracteres) e fica no histórico.
