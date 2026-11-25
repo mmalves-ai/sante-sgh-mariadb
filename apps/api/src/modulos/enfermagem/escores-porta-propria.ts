@@ -62,6 +62,7 @@ import {
   gravacaoDireta,
 } from './gravacao-direta.js';
 import type { NucleoEnfermagem } from './porta-propria.js';
+import { etapasNaInclusaoTx, fecharEtapasNaSaida } from './protocolo-criterios-propria.js';
 import type {
   AcionamentoTrrRegistrado,
   AdendoChecagemLido,
@@ -348,6 +349,8 @@ export class PortaEscoresPropria implements PortaEscores {
         'parada_cardiorrespiratoria_ficha',
         'inclusao_protocolo_paciente',
         'inclusao_protocolo_evento',
+        'inclusao_protocolo_etapa',
+        'inclusao_protocolo_criterio',
         'protocolo_gerenciado',
         'lesao_pele_paciente',
         'lesao_pele_avaliacao',
@@ -2579,7 +2582,7 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       if (p.escore !== null && abertas.some((x) => x.tipo === p.tipo && numOuNulo(x.escore) === p.escore))
         throw recusa('alerta-ja-usado', 'Este alerta do NEWS2 já abriu o protocolo de sepse.');
       const agora = new Date();
-      return tx.incluir('inclusao_protocolo_paciente', {
+      const inclusao = await tx.incluir('inclusao_protocolo_paciente', {
         estabelecimento_id: est,
         protocolo_gerenciado_id: Number(pg.id),
         paciente_id: p.paciente,
@@ -2596,6 +2599,9 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
           observacao: p.observacao,
         }),
       });
+      // As etapas com meta e o retrato dos critérios nascem com a inclusão (C2-042): o relógio começa no horário zero.
+      await etapasNaInclusaoTx(tx, est, inclusao);
+      return inclusao;
     },
     async eventoProtocoloInternado(x) {
       const [p] = await tx.consultarParaAtualizar<{ id: number; versao: number; situacao: string }>(
@@ -2639,6 +2645,14 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
           situacao: 'encerrado',
           encerrado_em: x.ocorridoEm ? await quando(x.ocorridoEm) : agora,
           encerrado_por_usuario_id: tx.contexto.usuario,
+        });
+      // Na saída (encerramento ou inativação por engano) as etapas pendentes ganham situação final (C2-042).
+      if (x.tipoEvento === 'encerramento' || x.tipoEvento === 'inativacao')
+        await fecharEtapasNaSaida(tx, est, Number(p.id), {
+          em: x.tipoEvento === 'encerramento' && x.ocorridoEm ? await quando(x.ocorridoEm) : agora,
+          forma: x.tipoEvento,
+          motivo,
+          usuario: tx.contexto.usuario,
         });
       const comSegundos = (t: string | null) => (t ? (t.length === 16 ? `${t}:00` : t.slice(0, 19)) : null);
       // A inativação por engano não muda a inclusão (fica visível, com o evento); a saída é o encerramento.

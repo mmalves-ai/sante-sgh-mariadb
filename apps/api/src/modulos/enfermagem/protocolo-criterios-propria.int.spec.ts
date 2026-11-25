@@ -12,7 +12,6 @@ import { sqlLimparTrilha } from '../../teste/limpar-trilha.spec-util.js';
 import { fusoDe, instanteDe, localNoFuso } from './banco-apoio.js';
 import {
   CLIENTE,
-  garantir,
   garantirCliente,
   limparMassa,
   type MassaEnfermagem,
@@ -27,6 +26,8 @@ import {
   definicaoProtocolo,
   elegiveisDoEstabelecimento,
   etapasDaInclusao,
+  etapasNaInclusaoTx,
+  fecharEtapasNaSaida,
   gravarFormulaTx,
   inativarCriterioTx,
   incluirCriterioTx,
@@ -92,7 +93,7 @@ describe.skipIf(SEM_BANCO)(
       finalidade: 'entrada',
       grupo: null,
       categoria: 'sinal_vital',
-      campo: 'fc',
+      campo: 'frequencia_cardiaca',
       termo: null,
       valorTexto: null,
       valorMinimo: null,
@@ -138,22 +139,7 @@ describe.skipIf(SEM_BANCO)(
       agora = localNoFuso(new Date(), fuso).slice(0, 16);
       await nucleo.escrever({ cliente: CLIENTE, correlacao: `${MARCA}-preparo` }, async (e) => {
         const instante = new Date();
-        for (const [codigo, descricao] of [
-          ['temperatura', 'Temperatura'],
-          ['fc', 'Frequência cardíaca'],
-          ['fr', 'Frequência respiratória'],
-          ['pas', 'Pressão arterial sistólica'],
-        ] as const)
-          await garantir(
-            e,
-            'SELECT id FROM parametro_vital WHERE codigo = ?',
-            [codigo],
-            'INSERT INTO parametro_vital (codigo, descricao, criado_em) VALUES (?, ?, ?)',
-            [codigo, descricao, instante],
-          );
-        await e.executar(
-          "UPDATE parametro_vital SET ativo = TRUE WHERE codigo IN ('temperatura', 'fc', 'fr', 'pas')",
-        );
+        // O catálogo de parâmetros vitais é usado como a carga entrega (nenhum parâmetro próprio do teste).
         // Paciente adulto (o modelo da sepse vale a partir de 18 anos).
         await e.executar(
           "UPDATE pessoa_fisica SET data_nascimento = '1970-05-10' WHERE id = (SELECT pessoa_fisica_id FROM paciente WHERE id = ?)",
@@ -184,7 +170,13 @@ describe.skipIf(SEM_BANCO)(
          JOIN tipo_criterio_clinico t ON t.id = c.tipo_criterio_clinico_id WHERE c.protocolo_gerenciado_id = ? ORDER BY c.sequencia`,
         [protocolo],
       );
-      expect(crit.map((c) => c.campo)).toEqual(['temperatura', 'temperatura', 'fc', 'fr', 'pas']);
+      expect(crit.map((c) => c.campo)).toEqual([
+        'temperatura',
+        'temperatura',
+        'frequencia_cardiaca',
+        'frequencia_respiratoria',
+        'pressao_sistolica',
+      ]);
       expect(new Set(crit.map((c) => c.categoria))).toEqual(new Set(['sinal_vital']));
       const metas = await ler<{ meta_minutos: unknown; obrigatoria: unknown }>(
         'SELECT meta_minutos, obrigatoria FROM protocolo_gerenciado_etapa WHERE protocolo_gerenciado_id = ? ORDER BY sequencia',
@@ -259,8 +251,8 @@ describe.skipIf(SEM_BANCO)(
         let seq = 0;
         for (const [codigo, valor] of [
           ['temperatura', 38.9],
-          ['fc', 118],
-          ['pas', 120],
+          ['frequencia_cardiaca', 118],
+          ['pressao_sistolica', 120],
         ] as const)
           await e.executar(
             `INSERT INTO afericao_valor (afericao_id, sequencia, parametro_vital_id, valor_numerico, criado_em)
@@ -399,11 +391,91 @@ describe.skipIf(SEM_BANCO)(
       ).toBeGreaterThanOrEqual(4);
     });
 
+    it('na saída do protocolo as etapas pendentes ganham situação final, sem apagar nada', async () => {
+      const situacoes = async (id: number) =>
+        (
+          await ler<{ situacao: string; observacao: string | null }>(
+            'SELECT situacao, observacao FROM inclusao_protocolo_etapa WHERE inclusao_protocolo_paciente_id = ? ORDER BY sequencia',
+            [id],
+          )
+        ).map((x) => x.situacao);
+      const antes = await situacoes(inclusao);
+      expect(antes).toContain('em_andamento');
+      // Encerramento agora: horário zero 90 min atrás, a meta de 60 min já venceu (perdida); a de 180 min, cancelada.
+      const n = await naInclusao<number>('enfermagem.encerrar-protocolo', (tx, est) =>
+        fecharEtapasNaSaida(tx, est, inclusao, {
+          em: new Date(),
+          forma: 'encerramento',
+          motivo: 'Alta da unidade',
+          usuario: m!.usuario,
+        }),
+      );
+      expect(n).toBe(antes.filter((x) => x === 'em_andamento').length);
+      const depois = await situacoes(inclusao);
+      expect(depois).toHaveLength(antes.length);
+      expect(depois).not.toContain('em_andamento');
+      expect(
+        await contar(
+          `SELECT COUNT(*) AS n FROM inclusao_protocolo_etapa WHERE inclusao_protocolo_paciente_id = ?
+            AND observacao LIKE 'Protocolo encerrado: Alta%' AND concluida_em IS NOT NULL`,
+          [inclusao],
+        ),
+      ).toBe(n);
+    });
+
+    it('a inclusão nova já nasce com as etapas e o retrato; a inativada fecha as etapas como canceladas', async () => {
+      // A inclusão anterior foi encerrada (os fluxos de inclusão gravam a linha e chamam etapasNaInclusaoTx juntos).
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: `${MARCA}-encerra` }, (e) =>
+        e.executar(
+          "UPDATE inclusao_protocolo_paciente SET situacao = 'encerrado', encerrado_em = ? WHERE id = ?",
+          [new Date(), inclusao],
+        ),
+      );
+      const zero = localNoFuso(new Date(Date.now() - 5 * 60_000), fuso).slice(0, 16);
+      const nova = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${MARCA}-inclusao2` }, (e) =>
+        e.inserir(
+          `INSERT INTO inclusao_protocolo_paciente (estabelecimento_id, protocolo_gerenciado_id, paciente_id, atendimento_id,
+           forma_inclusao, horario_zero_em, situacao, aceito_por_usuario_id, aceito_em, criado_em)
+         VALUES (?, ?, ?, ?, 'manual', ?, 'ativo', ?, ?, ?)`,
+          [
+            m!.est,
+            protocolo,
+            m!.paciente,
+            m!.atendimento,
+            instanteDe(zero, fuso),
+            m!.usuario,
+            new Date(),
+            new Date(),
+          ],
+        ),
+      );
+      const r = await naInclusao<{ etapas: number; criterios: number }>(
+        'enfermagem.incluir-protocolo',
+        (tx, est) => etapasNaInclusaoTx(tx, est, nova),
+      );
+      expect(r.etapas).toBe(6);
+      expect(r.criterios).toBeGreaterThan(0);
+      const n = await naInclusao<number>('enfermagem.inativar-protocolo', (tx, est) =>
+        fecharEtapasNaSaida(tx, est, nova, {
+          em: new Date(),
+          forma: 'inativacao',
+          motivo: 'Paciente errado',
+          usuario: m!.usuario,
+        }),
+      );
+      expect(n).toBe(6);
+      const linhas = await ler<{ situacao: string }>(
+        'SELECT situacao FROM inclusao_protocolo_etapa WHERE inclusao_protocolo_paciente_id = ?',
+        [nova],
+      );
+      expect(linhas.map((x) => x.situacao)).toEqual(Array(6).fill('cancelada'));
+    });
+
     it('o critério inativado fica no banco; a fórmula não fica apontando para grupo vazio', async () => {
       const def = await lerNoBanco<Awaited<ReturnType<typeof definicaoProtocolo>>>((l, est) =>
         definicaoProtocolo(l, est, protocolo),
       );
-      const pas = def.criterios.find((c) => c.campo === 'pas')!;
+      const pas = def.criterios.find((c) => c.campo === 'pressao_sistolica')!;
       const hipotermia = def.criterios.find((c) => c.campo === 'temperatura' && c.valorMaximo !== null)!;
       const inativar = (id: number, versao: number) =>
         config('enfermagem.inativar-criterio-protocolo', (tx, est, an) =>

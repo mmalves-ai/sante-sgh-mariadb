@@ -29,6 +29,7 @@ import {
   restricaoViolada,
   type ResultadoOperacao,
 } from '@sgh/nucleo';
+import { fecharEtapasNaSaida } from '../enfermagem/protocolo-criterios-propria.js';
 import {
   bool,
   civilOuNull,
@@ -726,7 +727,7 @@ class GravadorProprio implements GravadorClassificacao {
   /** A meta, o item do checklist ou o encerramento: uma vez cada, e nada depois do encerramento. */
   async registrarEventoProtocolo(p: NovoEventoProtocolo): Promise<number> {
     const inc = await this.e.consultarParaAtualizar(
-      'SELECT id FROM inclusao_protocolo_paciente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      'SELECT id, estabelecimento_id FROM inclusao_protocolo_paciente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
       [p.protocoloPaciente, this.ctx.estabelecimento],
     );
     if (inc.length === 0)
@@ -763,6 +764,14 @@ class GravadorProprio implements GravadorClassificacao {
         this.ctx.usuario,
       ],
     );
+    // No encerramento, as etapas com meta ainda pendentes ganham situação final, com o motivo (C2-042).
+    if (p.tipoEvento === 'encerramento')
+      await fecharEtapasNaSaida(this.e, num(inc[0]!['estabelecimento_id']), p.protocoloPaciente, {
+        em: this.instanteDe(p.ocorridoEm) ?? this.instante,
+        forma: 'encerramento',
+        motivo: p.motivo,
+        usuario: num(u['id']),
+      });
     await this.trilhaDireta('inclusao_protocolo_registro', id, {
       protocoloPaciente: p.protocoloPaciente,
       tipo: p.tipoEvento,

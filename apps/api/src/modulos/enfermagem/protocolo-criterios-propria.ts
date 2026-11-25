@@ -39,9 +39,10 @@ import {
   relogioDaEtapa,
   type SituacaoEtapa,
   situacaoAoConcluir,
+  situacaoAoSairDoProtocolo,
   somarMinutos,
 } from '@sgh/dominio-enfermagem';
-import { type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
+import { type Escritor, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import {
   booleano,
   civilDe,
@@ -700,6 +701,33 @@ export async function iniciarEtapasTx(
   id: number,
   agora: string,
 ): Promise<{ inclusao: number; etapas: number; criterios: number; elegivel: boolean }> {
+  const r = await iniciarEtapasDaInclusao(tx, est, id, agora, true);
+  an.dados = { protocolo: r.protocolo, etapas: r.etapas, criterios: r.criterios, elegivel: r.elegivel };
+  return { inclusao: id, etapas: r.etapas, criterios: r.criterios, elegivel: r.elegivel };
+}
+
+/**
+ * As etapas com meta e o retrato dos critérios nascem na mesma transação da inclusão (PA e internado): o relógio das
+ * metas começa no horário zero sem depender de outro clique. Protocolo sem etapas configuradas: a inclusão segue e as
+ * etapas podem ser iniciadas depois, quando a diretoria configurar as metas. Devolve quantas etapas e critérios gravou.
+ */
+export async function etapasNaInclusaoTx(
+  tx: TxOperacao,
+  est: number,
+  id: number,
+): Promise<{ etapas: number; criterios: number }> {
+  const agora = civil16(new Date(), await fusoDe(tx, est))!;
+  const r = await iniciarEtapasDaInclusao(tx, est, id, agora, false);
+  return { etapas: r.etapas, criterios: r.criterios };
+}
+
+async function iniciarEtapasDaInclusao(
+  tx: TxOperacao,
+  est: number,
+  id: number,
+  agora: string,
+  exigirEtapas: boolean,
+): Promise<{ protocolo: number; etapas: number; criterios: number; elegivel: boolean }> {
   const fuso = await fusoDe(tx, est);
   const inc = await inclusaoDe(tx, est, id, tx);
   if (!['sugerido', 'ativo'].includes(texto(inc['situacao'])))
@@ -712,7 +740,7 @@ export async function iniciarEtapasTx(
   const protocolo = num(inc['protocolo_gerenciado_id']);
   const atendimento = num(inc['atendimento_id']);
   const etapas = await etapasDe(tx, protocolo);
-  if (etapas.length === 0)
+  if (etapas.length === 0 && exigirEtapas)
     throw recusa('protocolo-sem-etapas', 'O protocolo não tem etapas: configure as etapas e as metas antes.');
   const zero = civil16(inc['horario_zero_em'], fuso) ?? agora;
   const demo = (await demografiaDe(tx, [atendimento], agora)).get(atendimento);
@@ -760,8 +788,53 @@ export async function iniciarEtapasTx(
       criterios++;
     }
   }
-  an.dados = { protocolo, etapas: plano.length, criterios, elegivel };
-  return { inclusao: id, etapas: plano.length, criterios, elegivel };
+  return { protocolo, etapas: plano.length, criterios, elegivel };
+}
+
+/**
+ * Saída da inclusão (encerramento do protocolo ou inativação por engano): cada etapa ainda em andamento recebe a
+ * situação final pela regra do domínio, com a hora da saída e o motivo na observação. Nada é apagado. Pela transação
+ * do executor (TxOperacao: versão e auditoria pelo alterar) ou pelo escritor direto (colunas de auditoria explícitas).
+ */
+export async function fecharEtapasNaSaida(
+  e: Escritor | TxOperacao,
+  est: number,
+  inclusao: number,
+  saida: { em: Date; forma: 'encerramento' | 'inativacao'; motivo: string | null; usuario: number | null },
+): Promise<number> {
+  const fuso = await fusoDe(e, est);
+  const pendentes = await e.consultarParaAtualizar(
+    `SELECT id, versao, iniciada_em, prazo_meta_em FROM inclusao_protocolo_etapa
+      WHERE inclusao_protocolo_paciente_id = ? AND situacao = 'em_andamento' AND excluido_em IS NULL ORDER BY sequencia`,
+    [inclusao],
+  );
+  const saidaCivil = civil16(saida.em, fuso)!;
+  const rotulo = saida.forma === 'encerramento' ? 'Protocolo encerrado' : 'Inclusão inativada por engano';
+  const observacao = (saida.motivo?.trim() ? `${rotulo}: ${saida.motivo.trim()}` : rotulo).slice(0, 2000);
+  for (const r of pendentes) {
+    const v = r['iniciada_em'];
+    const inicio = v instanceof Date ? v : new Date(`${String(v).replace(' ', 'T')}Z`);
+    const concluida = saida.em < inicio ? inicio : saida.em;
+    const situacao = situacaoAoSairDoProtocolo(civil16(r['prazo_meta_em'], fuso), saidaCivil, saida.forma);
+    const valores = { concluida_em: concluida, situacao, responsavel_usuario_id: saida.usuario, observacao };
+    if ('alterar' in e) await e.alterar(T_INC_ETAPA, num(r['id']), num(r['versao']), valores);
+    else
+      await e.executar(
+        `UPDATE inclusao_protocolo_etapa SET concluida_em = ?, situacao = ?, responsavel_usuario_id = ?, observacao = ?,
+                alterado_em = ?, alterado_por = ?, versao = versao + 1 WHERE id = ? AND versao = ?`,
+        [
+          concluida,
+          situacao,
+          saida.usuario,
+          observacao,
+          new Date(),
+          saida.usuario,
+          num(r['id']),
+          num(r['versao']),
+        ],
+      );
+  }
+  return pendentes.length;
 }
 
 async function etapaDaInclusaoTravada(tx: TxOperacao, est: number, id: number) {

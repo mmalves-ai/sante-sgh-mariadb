@@ -15,8 +15,9 @@ export const PERMISSOES_PROTOCOLO_GERENCIADO_M44: readonly DeclaracaoPermissao[]
     descricao:
       'Ver o relógio dos protocolos gerenciados do PA (sepse, dor torácica, AVC, trauma): pacientes incluídos, metas e prazos',
 
+    // Quem registra as etapas à beira do leito também vê o alerta de elegível e o relógio das metas (C2-042).
     concessaoPorPerfil: 'por-perfil',
-    perfis: ['diretoria-clinica'],
+    perfis: ['diretoria-clinica', 'assistencial-com-conselho'],
     categoria: 'clinica',
     criticidade: 'sensivel',
     escopos: ['unidade', 'local'],

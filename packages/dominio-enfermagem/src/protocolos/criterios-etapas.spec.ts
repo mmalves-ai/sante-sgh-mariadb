@@ -17,6 +17,7 @@ import {
   problemasDoCriterio,
   relogioDaEtapa,
   situacaoAoConcluir,
+  situacaoAoSairDoProtocolo,
 } from './criterios-etapas.js';
 
 const ADULTO = { sexo: 'masculino' as const, idadeDias: 40 * 365 };
@@ -142,14 +143,20 @@ describe('fórmula de entrada', () => {
   });
 
   it('sepse: dois sinais alterados abrem o alerta; um só, não', () => {
-    const dois = [sinal('temperatura', 38.9, '2026-11-25T09:00'), sinal('fc', 112, '2026-11-25T09:00')];
+    const dois = [
+      sinal('temperatura', 38.9, '2026-11-25T09:00'),
+      sinal('frequencia_cardiaca', 112, '2026-11-25T09:00'),
+    ];
     const a = avaliarEntrada(FORMULA_SEPSE, SEPSE, dois, ADULTO, AGORA);
     expect(a.elegivel).toBe(true);
     expect(a.regraAvaliada).toContain('temperatura: sim');
     expect(a.regraAvaliada).toContain('hipotensao: não');
     expect(avaliarEntrada(FORMULA_SEPSE, SEPSE, dois.slice(0, 1), ADULTO, AGORA).elegivel).toBe(false);
     // A hipotermia vale pelo mesmo grupo (um critério do grupo basta).
-    const hipo = [sinal('temperatura', 35.2, '2026-11-25T09:00'), sinal('pas', 88, '2026-11-25T09:00')];
+    const hipo = [
+      sinal('temperatura', 35.2, '2026-11-25T09:00'),
+      sinal('pressao_sistolica', 88, '2026-11-25T09:00'),
+    ];
     expect(avaliarEntrada(FORMULA_SEPSE, SEPSE, hipo, ADULTO, AGORA).elegivel).toBe(true);
   });
 
@@ -185,7 +192,10 @@ describe('alerta de paciente elegível', () => {
     mensagem: 'Suspeita de sepse',
     criterios: SEPSE,
   };
-  const fatos = [sinal('temperatura', 39, '2026-11-25T09:10'), sinal('fc', 115, '2026-11-25T09:20')];
+  const fatos = [
+    sinal('temperatura', 39, '2026-11-25T09:10'),
+    sinal('frequencia_cardiaca', 115, '2026-11-25T09:20'),
+  ];
 
   it('lista o elegível com os critérios atendidos e o tempo zero sugerido; não repete o aberto', () => {
     const c = { atendimento: 5, paciente: 7, dados: ADULTO, fatos };
@@ -308,5 +318,30 @@ describe('etapas com meta de tempo', () => {
     expect(problemaDaFormula(FORMULA_SEPSE!, grupos)).toBeNull();
     for (const c of MODELOS_PROTOCOLO['sepse']!.criterios)
       expect(problemasDoCriterio({ ...c, finalidade: 'entrada' })).toEqual([]);
+  });
+
+  it('o modelo da sepse usa os códigos do catálogo padrão de parâmetros vitais', () => {
+    // O catálogo que todo cliente recebe (parametro_vital): o modelo não pode depender de código próprio do hospital.
+    const CATALOGO = [
+      'pressao_sistolica',
+      'pressao_diastolica',
+      'frequencia_cardiaca',
+      'frequencia_respiratoria',
+    ];
+    const campos = MODELOS_PROTOCOLO['sepse']!.criterios.map((c) => c.campo!);
+    for (const c of campos) expect([...CATALOGO, 'temperatura']).toContain(c);
+  });
+
+  it('na saída do protocolo a etapa pendente ganha situação final', () => {
+    // Encerramento depois do prazo: meta perdida; antes do prazo ou sem meta: cancelada.
+    expect(situacaoAoSairDoProtocolo('2026-11-25T10:00', '2026-11-25T10:05', 'encerramento')).toBe(
+      'meta_perdida',
+    );
+    expect(situacaoAoSairDoProtocolo('2026-11-25T10:00', '2026-11-25T09:55', 'encerramento')).toBe(
+      'cancelada',
+    );
+    expect(situacaoAoSairDoProtocolo(null, '2026-11-25T12:00', 'encerramento')).toBe('cancelada');
+    // Inclusão lançada por engano: a meta não conta como perdida.
+    expect(situacaoAoSairDoProtocolo('2026-11-25T10:00', '2026-11-25T11:00', 'inativacao')).toBe('cancelada');
   });
 });

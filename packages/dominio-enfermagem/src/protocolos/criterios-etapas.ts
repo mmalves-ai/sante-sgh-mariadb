@@ -547,6 +547,20 @@ export type SituacaoEtapa = 'em_andamento' | 'meta_atingida' | 'meta_perdida' | 
 export const situacaoAoConcluir = (prazo: string | null, concluidaEm: string): SituacaoEtapa =>
   prazo === null || diferencaMinutos(concluidaEm, prazo) >= 0 ? 'meta_atingida' : 'meta_perdida';
 
+/**
+ * Situação final da etapa ainda em andamento quando a inclusão sai do protocolo (nada é apagado): no encerramento,
+ * meta perdida se o prazo já tinha passado e cancelada se não; na inativação por engano, sempre cancelada (a inclusão
+ * não valeu, então a meta não conta como perdida).
+ */
+export function situacaoAoSairDoProtocolo(
+  prazo: string | null,
+  saidaEm: string,
+  forma: 'encerramento' | 'inativacao',
+): 'meta_perdida' | 'cancelada' {
+  if (forma === 'inativacao' || prazo === null) return 'cancelada';
+  return diferencaMinutos(saidaEm, prazo) < 0 ? 'meta_perdida' : 'cancelada';
+}
+
 export type ProblemaEtapa =
   | 'etapa-ja-concluida'
   | 'conclusao-antes-do-inicio'
@@ -684,9 +698,15 @@ export const MODELOS_PROTOCOLO: Readonly<Partial<Record<string, ModeloProtocolo>
     criterios: [
       criterioSinal('temperatura', 'temperatura', 38.3, null, 'Temperatura ≥ 38,3 °C'),
       criterioSinal('temperatura', 'temperatura', null, 35.9, 'Temperatura ≤ 35,9 °C'),
-      criterioSinal('frequencia_cardiaca', 'fc', 91, null, 'Frequência cardíaca > 90 bpm'),
-      criterioSinal('frequencia_respiratoria', 'fr', 21, null, 'Frequência respiratória > 20 irpm'),
-      criterioSinal('hipotensao', 'pas', null, 100, 'Pressão sistólica ≤ 100 mmHg'),
+      criterioSinal('frequencia_cardiaca', 'frequencia_cardiaca', 91, null, 'Frequência cardíaca > 90 bpm'),
+      criterioSinal(
+        'frequencia_respiratoria',
+        'frequencia_respiratoria',
+        21,
+        null,
+        'Frequência respiratória > 20 irpm',
+      ),
+      criterioSinal('hipotensao', 'pressao_sistolica', null, 100, 'Pressão sistólica ≤ 100 mmHg'),
     ],
     etapas: [
       etapa('Lactato sérico coletado', 'exame', 60),

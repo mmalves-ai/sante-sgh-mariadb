@@ -19,6 +19,7 @@ import {
   recusa,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { etapasNaInclusaoTx } from '../enfermagem/protocolo-criterios-propria.js';
 import { bool, instanteDaHoraCivil, num, txt } from './banco.js';
 import type { VinculoDaSessao } from './classificacao-porta.js';
 import type { MotivoClassificacao, SinaisVitais } from './tipos.js';
@@ -727,7 +728,7 @@ export const opPublicarGerenciado = definirOperacao({
 
 export const opIncluirProtocolo = definirOperacao({
   nome: 'protocolo_gerenciado.incluir_paciente',
-  tabelas: ['inclusao_protocolo_paciente', 'inclusao_protocolo_criterio'],
+  tabelas: ['inclusao_protocolo_paciente', 'inclusao_protocolo_criterio', 'inclusao_protocolo_etapa'],
   entrada: esquemaIncluirProtocolo,
   async gravar(tx, p) {
     const s = await sessao(tx);
@@ -774,6 +775,8 @@ export const opIncluirProtocolo = definirOperacao({
         identificador: k.slice(0, 100),
         atendido: true,
       });
+    // As etapas com meta nascem com a inclusão (C2-042): o relógio de cada etapa começa no horário zero.
+    await etapasNaInclusaoTx(tx, s.estabelecimento, id);
     return { id };
   },
   eventos: (p, r) => [
