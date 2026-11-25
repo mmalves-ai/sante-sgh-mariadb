@@ -303,6 +303,14 @@ export class PortaPrescricaoDigitalPropria extends BaseComunicacaoPropria {
         );
         if (erros.length > 0 || !s || !d) throw recusa(erros, 'Envio recusado');
         const sid = num(s['id']);
+        const itens = await tx.consultar(
+          `SELECT i.sequencia, i.medicamento, i.concentracao, i.forma_farmaceutica, i.via_descricao, i.posologia,
+                  i.quantidade_descricao, i.uso_continuo
+             FROM receita_medica_item i WHERE i.receita_medica_id = ? AND i.suspenso = FALSE AND i.excluido_em IS NULL
+            ORDER BY i.sequencia LIMIT 200`,
+          [e.receita],
+          { teto: 200 },
+        );
         const id = await tx.incluir(T_ENVIO, {
           estabelecimento_id: est,
           atendimento_id: num(r['atendimento_id']),
@@ -330,6 +338,16 @@ export class PortaPrescricaoDigitalPropria extends BaseComunicacaoPropria {
             hash: String(d['hash_conteudo']),
             arquivo: num(d['arquivo_id']),
           },
+          itens: itens.map((i) => ({
+            sequencia: num(i['sequencia']),
+            medicamento: String(i['medicamento']),
+            concentracao: txtOuNull(i['concentracao']),
+            formaFarmaceutica: txtOuNull(i['forma_farmaceutica']),
+            via: txtOuNull(i['via_descricao']),
+            posologia: String(i['posologia']),
+            quantidade: String(i['quantidade_descricao']),
+            usoContinuo: bool(i['uso_continuo']),
+          })),
           identificadorExterno: null,
           motivo: null,
         });
@@ -364,17 +382,27 @@ export class PortaPrescricaoDigitalPropria extends BaseComunicacaoPropria {
         );
         if (!x) throw naoEncontrado('Envio');
         if (num(x['versao']) !== e.versao) throw conflito();
-        const erros = conferirCancelamentoPrescricaoDigital(String(x['situacao']), e.motivo);
+        // A mensagem do envio TRAVADA (a mesma linha que o worker reserva pela versão): ou o cancelamento a tira da fila
+        // antes da reserva (e a reserva do worker dá conflito), ou o worker já a reservou ("enviando") e o cancelamento
+        // espera o retorno, para não deixar a receita valendo na plataforma sem o pedido de cancelamento.
+        const msg = numOuNull(x['mensagem_integracao_saida_id']);
+        const [m] =
+          msg === null
+            ? []
+            : await tx.consultarParaAtualizar(
+                'SELECT id, situacao, versao FROM mensagem_integracao_saida WHERE id = ?',
+                [msg],
+                { teto: 1 },
+              );
+        const erros = conferirCancelamentoPrescricaoDigital(
+          String(x['situacao']),
+          e.motivo,
+          m ? String(m['situacao']) : null,
+        );
         if (erros.length > 0) throw recusa(erros, 'Cancelamento recusado');
         // A mensagem do envio ainda não entregue sai da fila (cancelada, não apagada).
-        const msg = numOuNull(x['mensagem_integracao_saida_id']);
-        if (msg !== null) {
-          const m = await tx.uma(
-            "SELECT id, versao FROM mensagem_integracao_saida WHERE id = ? AND situacao IN ('pendente','erro','rejeitada','expirada')",
-            [msg],
-          );
-          if (m) await tx.alterar(T_SAIDA, msg, num(m['versao']), { situacao: 'cancelada' });
-        }
+        if (m && ['pendente', 'erro', 'rejeitada', 'expirada'].includes(String(m['situacao'])))
+          await tx.alterar(T_SAIDA, num(m['id']), num(m['versao']), { situacao: 'cancelada' });
         const identificador = txtOuNull(x['identificador_externo']);
         let mensagem: number | null = null;
         if (cancelamentoVaiAPlataforma(identificador) && numOuNull(x['parceiro_id']) !== null)

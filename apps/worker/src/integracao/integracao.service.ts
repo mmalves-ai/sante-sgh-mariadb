@@ -7,7 +7,13 @@
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { LIMITE_MORTO_SEM_TRATAMENTO_MIN } from '@sgh/contratos';
 import { alertasDeMortos } from '@sgh/dominio-integracao';
-import { FORMATO_CLIENTE, lerInteiroAmbiente, NucleoProprio } from '@sgh/nucleo';
+import {
+  type ArmazemArquivos,
+  criarArmazemLocal,
+  FORMATO_CLIENTE,
+  lerInteiroAmbiente,
+  NucleoProprio,
+} from '@sgh/nucleo';
 import { logger } from '../logger.js';
 import { type AcessoIntegracao, acessoDoNucleo } from './acesso.js';
 import { cicloEntrega, type Enviador } from './entrega.js';
@@ -73,6 +79,7 @@ export class IntegracaoService implements OnApplicationBootstrap, OnApplicationS
     const ja = this.clientes.get(cliente);
     if (ja) return ja;
     const acesso = acessoDoNucleo(nucleo, cliente, 'integracao');
+    let armazem: ArmazemArquivos | null = null;
     const enviador = criarEnviador({
       ambiente: process.env['AMBIENTE']?.trim() ?? 'dev',
       produto: process.env['PRODUTO_NOME']?.trim() || 'SGH',
@@ -89,6 +96,15 @@ export class IntegracaoService implements OnApplicationBootstrap, OnApplicationS
       ler: (h, fn) => acesso.ler(h, fn),
       // F8 (08-INTG L132): o retorno da prescrição digital gravado no envio, pela operação declarada.
       gravar: (h, fn, o) => acesso.gravar(h, fn, o),
+      // F8 (08-INTG L132): o documento assinado da receita, lido do armazém do cliente (conferido pelo resumo).
+      lerArquivo: async (_h, id) => {
+        armazem ??= criarArmazemLocal(nucleo, { env: process.env });
+        const a = await armazem.ler(
+          { cliente, estabelecimento: null, usuario: null, correlacao: 'integracao.prescricao' },
+          id,
+        );
+        return { conteudo: a.conteudo, tipoMime: a.metadado.tipoMime, hash: a.metadado.hash };
+      },
       agora: () => new Date(),
     });
     const c = { acesso, enviador };

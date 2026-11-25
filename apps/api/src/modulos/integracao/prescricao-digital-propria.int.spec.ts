@@ -3,8 +3,10 @@
 // assinatura ICP-Brasil e a de outro signatário são recusadas sem gravar nada; a receita assinada pelo prescritor grava
 // o envio pendente (documento, assinatura e resumo ligados) e a mensagem JSON na fila de saída do ponto da plataforma
 // (criado por HTTP REST), com o envio apontando para a mensagem; o repetido é recusado; a visão por paciente traz a
-// receita com o envio; o cancelamento exige motivo e a versão lida, não apaga nada, tira da fila a mensagem ainda não
-// entregue e, quando a plataforma já devolveu o identificador, põe o pedido de cancelamento na fila.
+// receita com o envio e os itens no pedido; o cancelamento exige motivo e a versão lida, espera enquanto o worker entrega
+// (mensagem em "enviando"), não apaga nada, tira da fila a mensagem ainda não entregue e, quando a plataforma já
+// devolveu o identificador, põe o pedido de cancelamento na fila. A gravação REAL do retorno da plataforma (e a aceita
+// atrasada de envio cancelado) é provada no contrato do worker: apps/worker/src/integracao/prescricao-digital.int.spec.ts.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -29,6 +31,10 @@ async function limpar(e: Escritor): Promise<void> {
     const doc = `(SELECT x.id FROM (SELECT id FROM documento_assinado WHERE estabelecimento_id IN ${est}) x)`;
     await e.executar(`DELETE FROM assinatura_documento WHERE documento_assinado_id IN ${doc}`, [P]);
     await e.executar(`DELETE FROM documento_assinado WHERE estabelecimento_id IN ${est}`, [P]);
+    await e.executar(
+      `DELETE FROM receita_medica_item WHERE receita_medica_id IN (SELECT x.id FROM (SELECT id FROM receita_medica WHERE estabelecimento_id IN ${est}) x)`,
+      [P],
+    );
     await e.executar(`DELETE FROM receita_medica WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar("DELETE FROM tipo_receita WHERE codigo = 'c2018-tr'");
     await e.executar("DELETE FROM parceiro_dados WHERE codigo LIKE 'c2018-%'");
@@ -166,6 +172,15 @@ describe.skipIf(SEM_BANCO)('Prescrição digital por plataforma externa (contrat
         };
         const r1 = await receita('r1');
         await assinar(r1, 'icp-brasil', presc, 'a');
+        const item = (seq: number, suspenso: boolean) =>
+          e.executar(
+            `INSERT INTO receita_medica_item (receita_medica_id, sequencia, medicamento, concentracao, posologia,
+             quantidade_descricao, suspenso, motivo_suspensao, criado_em) VALUES (?, ?, 'Fármaco sintético', '500 mg',
+             '1 comprimido de 8 em 8 horas', '1 caixa', ?, ?, ?)`,
+            [r1, seq, suspenso, suspenso ? 'Troca (teste)' : null, agora],
+          );
+        await item(1, false);
+        await item(2, true);
         const r2 = await receita('r2');
         await assinar(r2, 'eletronica-avancada', presc, 'b');
         const r3 = await receita('r3');
@@ -226,6 +241,10 @@ describe.skipIf(SEM_BANCO)('Prescrição digital por plataforma externa (contrat
     });
     const pedido = JSON.parse(String(s!['conteudo'])) as Record<string, unknown>;
     expect(pedido['documento']).toMatchObject({ hash: H('a'), codigoVerificacao: `${P}-a` });
+    // Os itens da receita vão no pedido (o suspenso não).
+    expect(pedido['itens']).toEqual([
+      expect.objectContaining({ sequencia: 1, medicamento: 'Fármaco sintético', quantidade: '1 caixa' }),
+    ]);
     expect((await erro(porta.enviar(ctx(), { receita: m.r1, plataforma: 'c2018-plat' }))).codigo).toBe(
       'envio-repetido',
     );
@@ -248,6 +267,20 @@ describe.skipIf(SEM_BANCO)('Prescrição digital por plataforma externa (contrat
     expect(
       (await erro(porta.cancelar(ctx(), id, { motivo: 'Troca do tratamento', versao: 99 }))).codigo,
     ).toBe('conflito-versao');
+    // O worker reservou a mensagem (entregando agora): o cancelamento espera e nada muda.
+    const msg = Number(e!['mensagem_integracao_saida_id']);
+    const fila = (s: string) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `fila-${P}` }, (w) =>
+        w.executar('UPDATE mensagem_integracao_saida SET situacao = ? WHERE id = ?', [s, msg]),
+      );
+    await fila('enviando');
+    expect(
+      (await erro(porta.cancelar(ctx(), id, { motivo: 'Troca do tratamento', versao: Number(e!['versao']) })))
+        .codigo,
+    ).toBe('envio-em-andamento');
+    const [ainda] = await ler('SELECT situacao FROM envio_prescricao_plataforma WHERE id = ?', [id]);
+    expect(ainda!['situacao']).toBe('pendente');
+    await fila('pendente');
     const r = await porta.cancelar(ctx(), id, {
       motivo: 'Troca do tratamento',
       versao: Number(e!['versao']),

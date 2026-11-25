@@ -92,6 +92,11 @@ export interface ConfiguracaoEnviadores {
     fn: (tx: TxOperacao) => Promise<T>,
     opcoes: { readonly operacao: string; readonly tabelas: readonly string[] },
   ) => Promise<T>;
+  /** F8 (08-INTG L132): o documento assinado da receita lido do armazém de arquivos (anexado na entrega). */
+  readonly lerArquivo?: (
+    hospital: string,
+    id: number,
+  ) => Promise<{ readonly conteudo: Uint8Array; readonly tipoMime: string; readonly hash: string }>;
   /** A porta MLLP do canal no motor (padrão: a do canal versionado; o teste usa a do contêiner descartável). */
   readonly portaDoCanal?: (canal: string) => number;
   /**

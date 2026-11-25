@@ -127,12 +127,23 @@ export function conferirEnvioPrescricaoDigital(
   return erros;
 }
 
-/** Confere o cancelamento do envio; a receita já dispensada na farmácia não se cancela. */
+/**
+ * Confere o cancelamento do envio; a receita já dispensada na farmácia não se cancela. Enquanto o worker entrega a
+ * receita (a mensagem do envio em "enviando"), o cancelamento espera: a plataforma pode aceitar a receita nesse
+ * instante, e o cancelamento só sai depois do retorno (com o identificador), nunca às cegas.
+ */
 export function conferirCancelamentoPrescricaoDigital(
   situacao: string,
   motivo: string,
+  situacaoMensagemEnvio: string | null = null,
 ): ErroPrescricaoDigital[] {
   const erros: ErroPrescricaoDigital[] = [];
+  if (situacaoMensagemEnvio === 'enviando')
+    erros.push({
+      campo: 'situacao',
+      codigo: 'envio-em-andamento',
+      mensagem: 'A receita está sendo entregue à plataforma agora; cancele de novo em instantes.',
+    });
   if (situacao === 'cancelada')
     erros.push({ campo: 'situacao', codigo: 'ja-cancelada', mensagem: 'O envio já está cancelado.' });
   else if (situacao === 'dispensada')
@@ -166,13 +177,30 @@ export interface PedidoPrescricaoDigital {
   readonly documento: {
     readonly codigoVerificacao: string;
     readonly hash: string;
+    /** O arquivo assinado no armazém do cliente: o worker o lê na entrega e anexa o conteúdo ao corpo. */
     readonly arquivo: number;
   } | null;
+  /** Os itens da receita (o que a farmácia dispensa), sem os suspensos. */
+  readonly itens?: readonly ItemPedidoPrescricao[];
   readonly identificadorExterno: string | null;
   readonly motivo: string | null;
 }
 
-/** O conteúdo JSON que vai à plataforma (sem o texto clínico: o documento vai pelo arquivo assinado e o resumo). */
+export interface ItemPedidoPrescricao {
+  readonly sequencia: number;
+  readonly medicamento: string;
+  readonly concentracao: string | null;
+  readonly formaFarmaceutica: string | null;
+  readonly via: string | null;
+  readonly posologia: string;
+  readonly quantidade: string;
+  readonly usoContinuo: boolean;
+}
+
+/**
+ * O conteúdo JSON gravado na fila de saída: a receita, os itens e a referência ao documento assinado (o arquivo vai
+ * anexado pelo worker na hora da entrega, lido do armazém e conferido pelo resumo; não fica duplicado na fila).
+ */
 export function montarPedidoPrescricaoDigital(p: PedidoPrescricaoDigital): string {
   return JSON.stringify({
     versao: '1',
@@ -180,10 +208,62 @@ export function montarPedidoPrescricaoDigital(p: PedidoPrescricaoDigital): strin
     envio: p.envio,
     estabelecimento: p.estabelecimento,
     receita: p.receita,
+    itens: p.itens ?? [],
     documento: p.documento,
     identificadorExterno: p.identificadorExterno,
     motivo: p.motivo,
   });
+}
+
+/** O documento assinado (PDF ou CMS ICP-Brasil) lido do armazém de arquivos. */
+export interface ArquivoAssinadoEntrega {
+  readonly conteudo: Uint8Array;
+  readonly tipoMime: string;
+  /** SHA-256 do conteúdo, conferido pelo armazém na leitura. */
+  readonly hash: string;
+}
+
+/** O arquivo de que o pedido gravado precisa na entrega (null: o pedido não leva documento, como o cancelamento). */
+export function arquivoDoPedidoPrescricao(conteudo: string): number | null {
+  const p = JSON.parse(conteudo) as { evento?: string; documento?: { arquivo?: unknown } | null };
+  if (p.evento !== EVENTO_PRESCRICAO_DIGITAL_ENVIO) return null;
+  const a = p.documento?.arquivo;
+  return typeof a === 'number' && Number.isInteger(a) && a > 0 ? a : null;
+}
+
+/**
+ * O corpo que vai à plataforma: o pedido gravado com o documento assinado ANEXADO (base64, tipo, tamanho e resumo
+ * SHA-256), para a plataforma guardar e a farmácia validar a assinatura ICP-Brasil. O envio sem o arquivo é recusado
+ * (nunca vai à plataforma uma receita sem o documento assinado); o cancelamento não leva documento.
+ */
+export function montarCorpoEntregaPrescricao(
+  conteudo: string,
+  arquivo: ArquivoAssinadoEntrega | null,
+): { readonly corpo: string } | { readonly erro: ErroPrescricaoDigital } {
+  const p = JSON.parse(conteudo) as Record<string, unknown> & { documento?: Record<string, unknown> | null };
+  if (p['evento'] !== EVENTO_PRESCRICAO_DIGITAL_ENVIO) return { corpo: conteudo };
+  if (!p.documento || !arquivo || arquivo.conteudo.length === 0 || !/^[0-9a-f]{64}$/.test(arquivo.hash))
+    return {
+      erro: {
+        campo: 'documento',
+        codigo: 'documento-sem-arquivo',
+        mensagem: 'O documento assinado da receita não foi encontrado no armazém; nada foi enviado.',
+      },
+    };
+  const doc = { ...p.documento };
+  delete doc['arquivo'];
+  return {
+    corpo: JSON.stringify({
+      ...p,
+      documento: {
+        ...doc,
+        tipoMime: arquivo.tipoMime,
+        tamanhoBytes: arquivo.conteudo.length,
+        hashArquivo: arquivo.hash,
+        conteudoBase64: Buffer.from(arquivo.conteudo).toString('base64'),
+      },
+    }),
+  };
 }
 
 export interface RetornoPrescricaoDigital {
@@ -221,15 +301,24 @@ export function lerRetornoPrescricaoDigital(corpo: unknown): RetornoPrescricaoDi
 
 export type EfeitoRetorno =
   | { readonly acao: 'ignorar'; readonly motivo: string }
-  | { readonly acao: 'recusar'; readonly erro: ErroPrescricaoDigital }
+  /** A resposta não serve (a aceita incompleta): o envio fica em erro, com a resposta guardada, sem nova tentativa. */
+  | { readonly acao: 'recusar'; readonly situacao: 'erro'; readonly erro: ErroPrescricaoDigital }
+  /**
+   * A plataforma aceitou a receita que o hospital já cancelou (retorno atrasado): o envio continua cancelado, guarda o
+   * identificador devolvido e o pedido de cancelamento vai à plataforma, para a receita não ficar valendo lá.
+   */
+  | { readonly acao: 'cancelar-na-plataforma'; readonly identificadorExterno: string }
   | { readonly acao: 'aplicar'; readonly situacao: SituacaoPrescricaoDigital };
 
 /**
  * O efeito do retorno na situação do envio: a aceita exige identificador, código e endereço https de validação; o
- * envio cancelado aqui fica cancelado (retorno atrasado é ignorado, nada se sobrescreve); a dispensada é final.
+ * envio cancelado aqui fica cancelado (nada se sobrescreve), mas a aceita atrasada leva o cancelamento à plataforma;
+ * a dispensada é final. A rejeição é resultado final (não se reenvia a receita que a plataforma recusou).
  */
 export function efeitoDoRetornoPrescricao(atual: string, r: RetornoPrescricaoDigital): EfeitoRetorno {
   if (atual === 'dispensada') return { acao: 'ignorar', motivo: 'receita já dispensada' };
+  if (atual === 'cancelada' && r.situacao === 'aceita' && r.identificadorExterno)
+    return { acao: 'cancelar-na-plataforma', identificadorExterno: r.identificadorExterno };
   if (atual === 'cancelada' && r.situacao !== 'cancelada')
     return { acao: 'ignorar', motivo: 'envio cancelado no hospital' };
   if (r.situacao === 'aceita') {
@@ -237,6 +326,7 @@ export function efeitoDoRetornoPrescricao(atual: string, r: RetornoPrescricaoDig
     if (!r.identificadorExterno || !r.codigoValidacao || !urlOk)
       return {
         acao: 'recusar',
+        situacao: 'erro',
         erro: {
           campo: 'retorno',
           codigo: 'retorno-incompleto',
