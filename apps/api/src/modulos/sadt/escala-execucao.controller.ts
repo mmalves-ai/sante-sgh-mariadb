@@ -1,7 +1,9 @@
 // Escala de execução do diagnóstico (F3.5, 05-SADT linha 19): quem executa ou lauda em cada setor, em que dias e
 // horários (inclusive o plantão que vira a noite) e quais exames atende, com o limite por turno e as vagas reservadas.
-//   GET  /api/sadt/escalas-execucao[?setor=]          as escalas do estabelecimento (vigentes primeiro)
-//   GET  /api/sadt/escalas-execucao/opcoes            nomes para os combos da tela e o dia de hoje
+//   GET  /api/sadt/escalas-execucao[?setor=&outros=1&desde=]  as escalas que ainda valem (vigentes primeiro); com
+//                                                     `outros`, as dos outros setores vêm sem os exames (choque)
+//   GET  /api/sadt/escalas-execucao/opcoes            nomes para os combos pequenos da tela e o dia de hoje
+//   GET  /api/sadt/escalas-execucao/opcoes/busca?tipo=exame|profissional&termo=   busca por digitação (30 nomes)
 //   GET  /api/sadt/escalas-execucao/fila?setor=       a fila do setor na ordem de chamada (urgência, prioridade
 //                                                     legal, chegada), com quem está escalado agora para cada exame
 //   POST /api/sadt/escalas-execucao                   inclui (a regra confere tudo e o choque do mesmo executante)
@@ -33,8 +35,30 @@ export class EscalaExecucaoController {
 
   @Get()
   @Permissao('sadt.catalogo.ler')
-  listar(@Query('setor') setor: string | undefined, @Req() req: RequisicaoAutorizada) {
-    return this.s.listar(sessaoDe(req).porta, setor ? idDaRota(setor) : null);
+  listar(
+    @Query('setor') setor: string | undefined,
+    @Query('outros') outros: string | undefined,
+    @Query('desde') desde: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    if (desde !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(desde))
+      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'A data deve ser AAAA-MM-DD.');
+    return this.s.listar(sessaoDe(req).porta, setor ? idDaRota(setor) : null, {
+      outros: outros === '1',
+      desde: desde ?? null,
+    });
+  }
+
+  @Get('opcoes/busca')
+  @Permissao('sadt.catalogo.ler')
+  buscar(
+    @Query('tipo') tipo: string | undefined,
+    @Query('termo') termo: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    if (tipo !== 'exame' && tipo !== 'profissional')
+      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Informe o que buscar.');
+    return this.s.buscar(sessaoDe(req).porta, tipo, (termo ?? '').slice(0, 80));
   }
 
   @Get('opcoes')

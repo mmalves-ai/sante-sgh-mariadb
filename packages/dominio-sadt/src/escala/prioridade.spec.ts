@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { EscalaExecucao } from './execucao.js';
 import {
+  esperaNoDia,
   diasSemCobertura,
   gradeDaSemana,
   type GrupoPrioridade,
@@ -111,5 +112,38 @@ describe('diasSemCobertura', () => {
     };
     expect(diasSemCobertura([escala, quarta], '2026-12-01')).toEqual([1, 5, 6, 7]);
     expect(diasSemCobertura([], '2026-12-01')).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+});
+
+describe('esperaNoDia', () => {
+  const pedido = (
+    pedidoEm: string,
+    previstoPara: string | null = null,
+    agendadoPara: string | null = null,
+  ) => ({
+    pedidoEm,
+    previstoPara,
+    agendadoPara,
+  });
+  it('o pedido sem horário espera no dia do pedido e no seguinte; o mais antigo vira pendência', () => {
+    expect(esperaNoDia(pedido('2026-11-25'), '2026-11-25')).toBe('hoje');
+    expect(esperaNoDia(pedido('2026-11-24'), '2026-11-25')).toBe('hoje');
+    expect(esperaNoDia(pedido('2026-11-23'), '2026-11-25')).toBe('antigo');
+    expect(esperaNoDia(pedido('2026-08-10'), '2026-11-25')).toBe('antigo');
+    // A virada do mês e a janela pedida pelo setor.
+    expect(esperaNoDia(pedido('2026-11-30'), '2026-12-01')).toBe('hoje');
+    expect(esperaNoDia(pedido('2026-11-23'), '2026-11-25', 2)).toBe('hoje');
+    expect(esperaNoDia(pedido('2026-11-24'), '2026-11-25', 0)).toBe('antigo');
+  });
+  it('o pedido com data prevista espera a partir dela, não a partir do pedido', () => {
+    expect(esperaNoDia(pedido('2026-11-10', '2026-11-25'), '2026-11-25')).toBe('hoje');
+    expect(esperaNoDia(pedido('2026-11-10', '2026-11-28'), '2026-11-25')).toBe('futuro');
+    expect(esperaNoDia(pedido('2026-11-10', '2026-11-20'), '2026-11-25')).toBe('antigo');
+  });
+  it('o exame com horário marcado espera só no dia do horário', () => {
+    expect(esperaNoDia(pedido('2026-11-10', null, '2026-11-25'), '2026-11-25')).toBe('hoje');
+    expect(esperaNoDia(pedido('2026-11-25', null, '2026-11-26'), '2026-11-25')).toBe('futuro');
+    // Marcado para ontem e não executado: não entra na fila de hoje pela véspera, fica como pendência.
+    expect(esperaNoDia(pedido('2026-11-10', '2026-11-25', '2026-11-24'), '2026-11-25')).toBe('antigo');
   });
 });

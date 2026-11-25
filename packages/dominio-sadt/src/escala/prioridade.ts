@@ -82,3 +82,36 @@ export function diasSemCobertura(escalas: readonly EscalaExecucao[], referencia:
   const grades = escalas.map((e) => gradeDaSemana(e, referencia));
   return [1, 2, 3, 4, 5, 6, 7].filter((d) => grades.every((g) => g[d - 1]!.plantoes.length === 0));
 }
+
+/**
+ * Quantos dias civis para trás o pedido sem horário marcado ainda espera na fila do dia: o pedido da véspera (o da
+ * noite, o do paciente internado) continua na fila; o mais antigo sai dela e é contado à parte, como pendência.
+ */
+export const DIAS_DE_ESPERA_NA_FILA = 1;
+
+/** As datas civis (AAAA-MM-DD, no fuso do estabelecimento) que dizem em que dia o exame pedido espera a execução. */
+export interface EsperaDoExame {
+  /** O dia em que o exame foi pedido. */
+  readonly pedidoEm: string;
+  /** O dia previsto para a coleta ou a execução, quando o pedido já saiu com data. */
+  readonly previstoPara: string | null;
+  /** O dia do horário marcado na agenda, quando o exame é agendado. */
+  readonly agendadoPara: string | null;
+}
+
+/**
+ * Em que fila o exame pedido está num dia: na de `hoje`, entre as pendências `antigo` (ficou para trás sem execução)
+ * ou no `futuro` (marcado ou previsto para outro dia). O exame com horário marcado espera só no dia do horário; o
+ * pedido sem horário espera no dia previsto (ou no do pedido) e nos `dias` seguintes.
+ */
+export function esperaNoDia(
+  e: EsperaDoExame,
+  hoje: string,
+  dias: number = DIAS_DE_ESPERA_NA_FILA,
+): 'hoje' | 'antigo' | 'futuro' {
+  if (e.agendadoPara !== null)
+    return e.agendadoPara === hoje ? 'hoje' : e.agendadoPara < hoje ? 'antigo' : 'futuro';
+  const referencia = e.previstoPara ?? e.pedidoEm;
+  if (referencia > hoje) return 'futuro';
+  return referencia >= somarDias(hoje, -dias) ? 'hoje' : 'antigo';
+}

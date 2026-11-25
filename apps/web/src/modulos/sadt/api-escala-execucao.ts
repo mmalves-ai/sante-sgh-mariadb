@@ -26,6 +26,9 @@ const esquemaEscala = z.object({
   setor: n,
   profissional: n.nullable(),
   recurso: n.nullable(),
+  // Os nomes de quem executa vêm com a escala (a tela não carrega o cadastro de profissionais).
+  profissionalNome: txt.nullable().default(null),
+  recursoNome: txt.nullable().default(null),
   papel: z.enum(['executa', 'lauda']),
   descricao: txt,
   vigenciaInicio: txt,
@@ -40,9 +43,7 @@ export type EscalaGravada = z.infer<typeof esquemaEscala>;
 
 const esquemaOpcoes = z.object({
   setores: z.array(nome),
-  profissionais: z.array(nome),
   recursos: z.array(nome),
-  exames: z.array(nome),
   gruposPrioridade: z.array(nome),
   hoje: txt,
 });
@@ -53,6 +54,9 @@ const esquemaFila = z.object({
   data: txt,
   hora: txt,
   semExecutante: n,
+  // Quantos esperam hoje (os itens são os primeiros da ordem) e quantos pedidos antigos ficaram sem execução.
+  total: n.default(0),
+  antigos: n.default(0),
   itens: z.array(
     z.object({
       id: n,
@@ -68,7 +72,14 @@ const esquemaFila = z.object({
       grupoPrioridade: n.nullable(),
       grupoPrioridadeNome: txt.nullable(),
       executantes: z.array(
-        z.object({ escala: n, descricao: txt, profissional: n.nullable(), recurso: n.nullable() }),
+        z.object({
+          escala: n,
+          descricao: txt,
+          profissional: n.nullable(),
+          recurso: n.nullable(),
+          profissionalNome: txt.nullable().default(null),
+          recursoNome: txt.nullable().default(null),
+        }),
       ),
     }),
   ),
@@ -100,8 +111,15 @@ export interface CorpoEscala {
   }[];
 }
 
-/** Todas as escalas do estabelecimento (a tela filtra o setor e confere o choque do executante entre setores). */
-export const listarEscalas = () => ler(B, z.array(esquemaEscala));
+/**
+ * As escalas que ainda valem a partir de `desde`: as do setor com a lista de exames e as dos outros setores só com os
+ * plantões (a tela confere com elas o choque do mesmo executante entre setores).
+ */
+export const listarEscalas = (setor: number, desde: string) =>
+  ler(`${B}${qs({ setor, outros: 1, desde })}`, z.array(esquemaEscala));
+/** A busca por digitação do exame ou do profissional (os primeiros nomes com as palavras digitadas). */
+export const buscarNaEscala = (tipo: 'exame' | 'profissional', termo: string) =>
+  ler(`${B}/opcoes/busca${qs({ tipo, termo })}`, z.array(nome));
 export const lerOpcoesDaEscala = () => ler(`${B}/opcoes`, esquemaOpcoes);
 export const lerFilaDoSetor = (setor: number) => ler(`${B}/fila${qs({ setor })}`, esquemaFila);
 export const incluirEscala = (e: CorpoEscala, chave: string) => enviar(B, e, z.object({ id: n }), chave);

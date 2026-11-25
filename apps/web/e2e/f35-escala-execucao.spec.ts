@@ -29,17 +29,24 @@ async function entrar(page: Page, login: string): Promise<void> {
 const json = (rota: Route, corpo: unknown, status = 200) =>
   rota.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
 
+const PROFISSIONAIS = [
+  { id: 71, nome: 'PROFISSIONAL SINTETICO A' },
+  { id: 72, nome: 'PROFISSIONAL SINTETICO B' },
+];
+const EXAMES = [{ id: 501, nome: 'HEMOGRAMA SINTETICO' }];
+// A busca por digitação do profissional e do exame: sem termo, os primeiros nomes; com termo, os que o contêm.
+const busca = (url: URL) => {
+  const termo = (url.searchParams.get('termo') ?? '').toUpperCase();
+  return (url.searchParams.get('tipo') === 'exame' ? EXAMES : PROFISSIONAIS).filter((x) =>
+    x.nome.includes(termo),
+  );
+};
 const OPCOES = {
   setores: [
     { id: 601, nome: 'LABORATORIO SINTETICO' },
     { id: 602, nome: 'IMAGEM SINTETICA' },
   ],
-  profissionais: [
-    { id: 71, nome: 'PROFISSIONAL SINTETICO A' },
-    { id: 72, nome: 'PROFISSIONAL SINTETICO B' },
-  ],
   recursos: [{ id: 81, nome: 'SALA SINTETICA 1' }],
-  exames: [{ id: 501, nome: 'HEMOGRAMA SINTETICO' }],
   gruposPrioridade: [{ id: 1, nome: 'MAIOR DE 80 ANOS' }],
   hoje: HOJE,
 };
@@ -49,6 +56,8 @@ const escala = (id: number, setor: number, profissional: number, descricao: stri
   setor,
   profissional,
   recurso: null,
+  profissionalNome: PROFISSIONAIS.find((x) => x.id === profissional)?.nome ?? null,
+  recursoNome: null,
   papel: 'executa',
   descricao,
   vigenciaInicio: '2026-11-01',
@@ -72,6 +81,8 @@ const FILA = {
   data: HOJE,
   hora: '10:00',
   semExecutante: 1,
+  total: 2,
+  antigos: 3,
   itens: [
     {
       id: 9002,
@@ -86,7 +97,16 @@ const FILA = {
       situacao: 'solicitado',
       grupoPrioridade: null,
       grupoPrioridadeNome: null,
-      executantes: [{ escala: 11, descricao: 'Bancada da manhã', profissional: 71, recurso: null }],
+      executantes: [
+        {
+          escala: 11,
+          descricao: 'Bancada da manhã',
+          profissional: 71,
+          recurso: null,
+          profissionalNome: 'PROFISSIONAL SINTETICO A',
+          recursoNome: null,
+        },
+      ],
     },
     {
       id: 9001,
@@ -110,6 +130,7 @@ test.describe('@F3.5-11 escala de execução do diagnóstico', () => {
   test.setTimeout(180_000);
   test('grade da semana, conflito na hora, gravação, fila do setor e encerramento; axe', async ({ page }) => {
     const pedidos: { caminho: string; corpo: Record<string, unknown> }[] = [];
+    const leituras: string[] = [];
     // O laboratório tem a bancada da manhã (segunda e terça) e o noturno de terça; o profissional B já está escalado
     // na IMAGEM na quarta das 08:00 às 12:00: é com ela que a escala nova vai chocar.
     let escalas: unknown[] = [
@@ -122,7 +143,9 @@ test.describe('@F3.5-11 escala de execução do diagnóstico', () => {
       const caminho = new URL(req.url()).pathname.replace(/^\/api\/sadt\/escalas-execucao\/?/, '');
       if (req.method() === 'GET') {
         if (caminho === 'opcoes') return json(rota, OPCOES);
+        if (caminho === 'opcoes/busca') return json(rota, busca(new URL(req.url())));
         if (caminho === 'fila') return json(rota, FILA);
+        leituras.push(new URL(req.url()).search);
         return json(rota, escalas);
       }
       const corpo = (req.postDataJSON() ?? {}) as Record<string, unknown>;
@@ -172,6 +195,11 @@ test.describe('@F3.5-11 escala de execução do diagnóstico', () => {
     await expect(linhasDaFila.nth(1)).toContainText('MAIOR DE 80 ANOS');
     await expect(linhasDaFila.nth(1)).toContainText('Ninguém escalado');
     await expect(page.getByTestId('escala-fila-sem-executante')).toBeVisible();
+    // A fila é a do dia: os pedidos antigos sem execução são avisados à parte, fora da ordem de chamada.
+    await expect(page.getByTestId('escala-fila-antigos')).toContainText('3 exame');
+    await expect(page.getByTestId('escala-fila-parte')).toHaveCount(0);
+    // A leitura das escalas é a do setor, desde a semana mostrada, com as dos outros setores só para o choque.
+    expect(leituras[0]).toBe('?setor=601&outros=1&desde=2026-11-22');
 
     // A escala nova: antes de mexer, nada de aviso; o botão só libera com tudo conferido.
     const gravar = page.getByTestId('escala-gravar');
@@ -182,7 +210,10 @@ test.describe('@F3.5-11 escala de execução do diagnóstico', () => {
     // Tudo o que falta de uma vez (executante e exame), sem ir ao servidor.
     await expect(page.getByTestId('escala-pendencias')).toContainText('Informe o profissional');
     await expect(page.getByTestId('escala-pendencias')).toContainText('ao menos um exame');
+    // O profissional é buscado por digitação: o combo passa a trazer só quem tem o nome digitado.
+    await page.getByTestId('escala-profissional-busca').fill('sintetico b');
     await escolher(page.getByTestId('escala-profissional'), { rotulo: 'PROFISSIONAL SINTETICO B' });
+    await page.getByTestId('escala-exame-busca').fill('hemo');
     await escolher(page.getByTestId('escala-exame-mais'), { rotulo: 'HEMOGRAMA SINTETICO' });
     await expect(page.getByTestId('escala-exame-0')).toContainText('HEMOGRAMA SINTETICO');
     // Quarta das 07:00 às 13:00 (o padrão do plantão): choca com a escala do profissional B na IMAGEM.
@@ -246,7 +277,9 @@ test.describe('@F3.5-11 escala de execução do diagnóstico', () => {
       const caminho = new URL(req.url()).pathname.replace(/^\/api\/sadt\/escalas-execucao\/?/, '');
       if (req.method() === 'GET') {
         if (caminho === 'opcoes') return json(rota, OPCOES);
-        if (caminho === 'fila') return json(rota, { ...FILA, itens: [], semExecutante: 0 });
+        if (caminho === 'opcoes/busca') return json(rota, busca(new URL(req.url())));
+        if (caminho === 'fila')
+          return json(rota, { ...FILA, itens: [], semExecutante: 0, total: 0, antigos: 0 });
         return json(rota, []);
       }
       // Outra pessoa gravou uma escala do mesmo profissional enquanto a tela estava aberta: o servidor recusa.

@@ -42,6 +42,8 @@ export const mensagensEscalaExecucao = {
     titulo: 'Nova escala',
     papel: 'Papel',
     profissional: 'Profissional',
+    buscarProfissional: 'Buscar profissional pelo nome',
+    buscarExame: 'Buscar exame pelo nome',
     recurso: 'Sala ou equipamento',
     nenhum: 'Nenhum',
     descricao: 'Descrição',
@@ -85,7 +87,9 @@ export const mensagensEscalaExecucao = {
   fila: {
     titulo: 'Fila do setor agora',
     ajuda:
-      'A ordem de chamada: primeiro o pedido urgente, depois a prioridade legal do paciente, depois quem chegou antes.',
+      'Quem espera a execução hoje, na ordem de chamada: primeiro o pedido urgente, depois a prioridade legal do paciente, depois quem chegou antes. O exame com horário marcado entra no dia do horário, pela chegada registrada na recepção; o pedido sem horário fica na fila no dia do pedido e no seguinte.',
+    antigos: '{n} exame(s) pedido(s) em dias anteriores ficaram sem execução e não estão nesta fila.',
+    parte: 'Mostrando os {n} primeiros da ordem de chamada, de {total} que esperam hoje.',
     atualizar: 'Atualizar a fila',
     momento: 'Posição em {data} às {hora}',
     vazia: 'Ninguém aguardando execução neste setor.',

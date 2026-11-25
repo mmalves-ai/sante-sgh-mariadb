@@ -20,6 +20,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import {
+  buscarNaEscala,
   camposDaRecusa,
   type CorpoEscala,
   encerrarEscala,
@@ -35,10 +36,22 @@ import ErroSadt from '../componentes/ErroSadt.vue';
 const { t, te } = useI18n();
 const cliente = useQueryClient();
 const opcoes = useQuery({ queryKey: ['sadt', 'escala', 'opcoes'], queryFn: lerOpcoesDaEscala });
-const escalas = useQuery({ queryKey: ['sadt', 'escala', 'lista'], queryFn: listarEscalas });
 
 const setor = ref('');
 const referencia = ref('');
+// As escalas que ainda valem desde a semana mostrada (ou desde hoje, se a semana mostrada é futura: o choque da escala
+// nova é conferido com as que valem a partir de hoje). A encerrada há mais tempo fica no cadastro e não é lida.
+const desde = computed(() => {
+  const hoje = opcoes.data.value?.hoje ?? '';
+  if (!referencia.value || !hoje) return '';
+  const semana = inicioDaSemana(referencia.value);
+  return semana < hoje ? semana : hoje;
+});
+const escalas = useQuery({
+  queryKey: ['sadt', 'escala', 'lista', setor, desde],
+  queryFn: () => listarEscalas(Number(setor.value), desde.value),
+  enabled: computed(() => setor.value !== '' && desde.value !== ''),
+});
 watch(
   () => opcoes.data.value,
   (o) => {
@@ -66,11 +79,48 @@ const comEscolha = (lista: readonly Nome[] | undefined, vazio: string) => [
   ...(lista ?? []).map((x) => ({ valor: String(x.id), rotulo: x.nome })),
 ];
 const opcoesSetor = computed(() => comEscolha(opcoes.data.value?.setores, t('sadt.escala.escolha')));
-const opcoesProfissional = computed(() =>
-  comEscolha(opcoes.data.value?.profissionais, t('sadt.escala.form.nenhum')),
-);
+// O profissional e o exame são cadastros grandes: a tela busca por digitação (os primeiros nomes vêm sem digitar) e
+// guarda o nome de quem já foi escolhido, para o combo e a grade não perderem o nome quando a busca muda.
+function buscaComAtraso(tipo: 'exame' | 'profissional') {
+  const digitado = ref('');
+  const termo = ref('');
+  let relogio: ReturnType<typeof setTimeout> | undefined;
+  watch(digitado, (v) => {
+    clearTimeout(relogio);
+    relogio = setTimeout(() => (termo.value = v.trim()), 250);
+  });
+  const achados = useQuery({
+    queryKey: ['sadt', 'escala', 'busca', tipo, termo],
+    queryFn: () => buscarNaEscala(tipo, termo.value),
+    staleTime: 60_000,
+  });
+  return { digitado, achados };
+}
+const buscaProfissional = buscaComAtraso('profissional');
+const buscaExame = buscaComAtraso('exame');
+const nomesEscolhidos = ref<{ profissional: Record<number, string>; exame: Record<number, string> }>({
+  profissional: {},
+  exame: {},
+});
+function lembrarNome(tipo: 'exame' | 'profissional', v: string): void {
+  const achado = (tipo === 'exame' ? buscaExame : buscaProfissional).achados.data.value?.find(
+    (x) => String(x.id) === v,
+  );
+  if (achado) nomesEscolhidos.value[tipo][achado.id] = achado.nome;
+}
+const opcoesProfissional = computed(() => {
+  const achados = buscaProfissional.achados.data.value ?? [];
+  const atual = nova.value.profissional ? Number(nova.value.profissional) : null;
+  const guardado = atual !== null ? nomesEscolhidos.value.profissional[atual] : undefined;
+  return comEscolha(
+    atual !== null && guardado !== undefined && !achados.some((x) => x.id === atual)
+      ? [{ id: atual, nome: guardado }, ...achados]
+      : achados,
+    t('sadt.escala.form.nenhum'),
+  );
+});
 const opcoesRecurso = computed(() => comEscolha(opcoes.data.value?.recursos, t('sadt.escala.form.nenhum')));
-const opcoesExame = computed(() => comEscolha(opcoes.data.value?.exames, t('sadt.escala.escolha')));
+const opcoesExame = computed(() => comEscolha(buscaExame.achados.data.value, t('sadt.escala.escolha')));
 const opcoesGrupo = computed(() =>
   comEscolha(opcoes.data.value?.gruposPrioridade, t('sadt.escala.form.nenhum')),
 );
@@ -84,8 +134,19 @@ const opcoesDia = computed(() => [
 ]);
 const nomeDe = (lista: readonly Nome[] | undefined, id: number | null): string =>
   id === null ? '' : ((lista ?? []).find((x) => x.id === id)?.nome ?? `#${id}`);
-const executanteDe = (e: { profissional: number | null; recurso: number | null }): string =>
-  [nomeDe(opcoes.data.value?.profissionais, e.profissional), nomeDe(opcoes.data.value?.recursos, e.recurso)]
+const nomeGuardado = (tipo: 'exame' | 'profissional', id: number | null): string =>
+  id === null ? '' : (nomesEscolhidos.value[tipo][id] ?? `#${id}`);
+// O nome de quem executa vem com a escala gravada; o da escala nova é o que a busca trouxe na escolha.
+const executanteDe = (e: {
+  profissional: number | null;
+  recurso: number | null;
+  profissionalNome?: string | null;
+  recursoNome?: string | null;
+}): string =>
+  [
+    e.profissionalNome ?? nomeGuardado('profissional', e.profissional),
+    e.recursoNome ?? nomeDe(opcoes.data.value?.recursos, e.recurso),
+  ]
     .filter(Boolean)
     .join(' · ');
 
@@ -180,6 +241,7 @@ function mexeu(): void {
 function incluirExame(v: string): void {
   exameEscolhido.value = '';
   if (!v || nova.value.exames.some((x) => x.exame === Number(v))) return;
+  lembrarNome('exame', v);
   nova.value.exames.push({ exame: Number(v), limite: '', grupo: '', vagas: '0' });
   mexeu();
 }
@@ -424,8 +486,19 @@ const horaLocal = (iso: string): string =>
             :rotulo="t('sadt.escala.form.profissional')"
             :opcoes="opcoesProfissional"
             data-testid="escala-profissional"
-            @update:model-value="(v: string) => ((nova.profissional = v), mexeu())"
+            @update:model-value="
+              (v: string) => (lembrarNome('profissional', v), (nova.profissional = v), mexeu())
+            "
           />
+          <label>
+            {{ t('sadt.escala.form.buscarProfissional') }}
+            <input
+              v-model="buscaProfissional.digitado.value"
+              maxlength="80"
+              data-testid="escala-profissional-busca"
+              @input.stop
+            />
+          </label>
           <SanteSelecao
             :model-value="nova.recurso"
             :rotulo="t('sadt.escala.form.recurso')"
@@ -522,6 +595,10 @@ const horaLocal = (iso: string): string =>
             data-testid="escala-exame-mais"
             @update:model-value="incluirExame"
           />
+          <label>
+            {{ t('sadt.escala.form.buscarExame') }}
+            <input v-model="buscaExame.digitado.value" maxlength="80" data-testid="escala-exame-busca" />
+          </label>
         </div>
         <div
           v-for="(x, i) in nova.exames"
@@ -530,7 +607,7 @@ const horaLocal = (iso: string): string =>
           :data-testid="`escala-exame-${i}`"
           @input="mexeu"
         >
-          <strong>{{ nomeDe(opcoes.data.value?.exames, x.exame) }}</strong>
+          <strong>{{ nomeGuardado('exame', x.exame) }}</strong>
           <label>
             {{ t('sadt.escala.form.limite') }}
             <input v-model="x.limite" type="number" min="1" inputmode="numeric" />
@@ -547,7 +624,7 @@ const horaLocal = (iso: string): string =>
           </label>
           <SanteBotao
             variante="texto"
-            :rotulo="t('sadt.escala.form.tirarExame', { nome: nomeDe(opcoes.data.value?.exames, x.exame) })"
+            :rotulo="t('sadt.escala.form.tirarExame', { nome: nomeGuardado('exame', x.exame) })"
             :data-testid="`escala-exame-tirar-${i}`"
             @acionar="(nova.exames.splice(i, 1), mexeu())"
           />
@@ -606,6 +683,21 @@ const horaLocal = (iso: string): string =>
         <template v-else-if="fila.data.value">
           <p v-if="fila.data.value.itens.length === 0" data-testid="escala-fila-vazia">
             {{ t('sadt.escala.fila.vazia') }}
+          </p>
+          <div v-if="fila.data.value.antigos > 0" data-testid="escala-fila-antigos">
+            <SanteAlerta
+              variante="aviso"
+              :texto="t('sadt.escala.fila.antigos', { n: fila.data.value.antigos })"
+            />
+          </div>
+          <p
+            v-if="fila.data.value.total > fila.data.value.itens.length"
+            class="discreto"
+            data-testid="escala-fila-parte"
+          >
+            {{
+              t('sadt.escala.fila.parte', { n: fila.data.value.itens.length, total: fila.data.value.total })
+            }}
           </p>
           <div v-if="fila.data.value.semExecutante > 0" data-testid="escala-fila-sem-executante">
             <SanteAlerta
