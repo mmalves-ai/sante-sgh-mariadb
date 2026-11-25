@@ -574,3 +574,18 @@ situação); F7 29/60/20; F8 13/34/57; total 140 de ~457 cobertas (30%). Fichas 
 meu no fim; migrações do cliente_prontocardio com ela. API 3310 no ar (build 16h35, override prontocardio). Ferramentas
 novas: `tools/obra/vaga-teste.sh` (78d573eb) e e2e-vm.sh sem impasse de trava (374e629d). Relatório de 50 min: a
 corrente de CronCreate morre com a sessão; ao retomar, recriar (formato na memória formato-relatorio-50min).
+
+## 24/11 23h40: f3-fechar caiu pelo limite de uso do modelo
+
+- A rodada f3-fechar (run `wf_dc4ab459-577`, lançada às 21h10 quando a sessão estava no Fable) parou às 23h40: o
+  limite de uso do Fable acabou (volta em 01/12) e 204 chamadas foram recusadas, 8 dos 9 integradores entre elas. Os
+  agentes herdam o modelo da sessão no momento do lançamento; a sessão voltou ao Opus às 23h30.
+- Ficaram 53 funções com resultado (25 prontas) e 131 mudanças sem commit. Cópia em
+  `sante-sgh-dados/obra/pausa-20261125-limite/` (patch, arquivos novos, status, resultados por marco em
+  por-marco.json, leitor ler-marco.py, integrador-F3.1.json com 30 E2E e 15 vermelhos).
+- Custo medido antes da queda: ~185 M para 25 prontas (7,4 M por função pronta, acima do portão de 5 M): metade dos
+  construtores trabalha em função que depende de decisão de produto ou de outro módulo.
+- **Em curso (Opus):** f3-integrar (run `wf_9acb1d02-4dd`): sobras sem commit por marco, um lote de E2E só, correção,
+  segundo lote e ficha por marco.
+- **Depois:** triagem barata (leitura, ~0,3 M por função) das ~90 funções restantes da F3 e das 171 da F7/F8 antes de
+  construir; só o que for fechável por agente vai para construção; o resto vira lista de decisões para o dono.
