@@ -79,7 +79,22 @@ export const mensagensLigacoes = {
     unificar: 'Unificar neste cadastro',
     unificarTitulo: 'Unificar {nome} neste cadastro',
     unificarAjuda:
-      'O cadastro duplicado fica inativo e passa a apontar para este. Atendimentos e pedidos já feitos não mudam. O código em cada fonte pagadora passa para este cadastro onde ele ainda não tem. Dá para desfazer.',
+      'O cadastro duplicado fica inativo e passa a apontar para este. Atendimentos e pedidos já feitos não mudam; os novos passam a nascer neste cadastro. O código em cada fonte pagadora passa para este cadastro onde ele ainda não tem. Dá para desfazer: o duplicado volta à situação que tinha.',
+    unificarTraz: 'Este cadastro recebe do duplicado o que ainda não tem:',
+    unificarDifere: 'Os dois têm valores diferentes (fica o deste cadastro):',
+    unificarRegistro:
+      'Se o registro certo no conselho é o do duplicado, corrija o número nesta ficha depois de unificar: os dois cadastros trocam de registro.',
+    campoUnificacao: {
+      cpf: 'CPF',
+      cns: 'cartão nacional de saúde',
+      ocupacao: 'ocupação',
+      especialidade: 'especialidade',
+      instituicaoNome: 'instituição',
+      instituicaoCnpj: 'CNPJ da instituição',
+      instituicaoCnes: 'CNES da instituição',
+      telefone: 'telefone',
+      email: 'e-mail',
+    },
     unificarMotivo: 'Motivo da unificação (ao menos 10 letras)',
     unificarConfirmar: 'Unificar',
     unificarPergunta: 'Unificar o cadastro duplicado neste?',

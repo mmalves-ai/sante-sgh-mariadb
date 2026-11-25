@@ -60,6 +60,8 @@ const duplicado = ref<Parecido | null>(null);
 const motivoUnificar = ref('');
 const motivoDesfazer = ref('');
 const podeUnificar = computed(() => editar.value && !!f.value?.ativo && !f.value?.unificadoEm);
+const camposDaUnificacao = (campos: readonly string[]) =>
+  campos.map((c) => t(`ligacoes.solicitante.campoUnificacao.${c}`)).join(', ');
 function escolherDuplicado(p: Parecido | null): void {
   duplicado.value = p;
   motivoUnificar.value = '';
@@ -225,6 +227,13 @@ const gravarDados = () =>
                 <strong>{{ t('ligacoes.solicitante.unificarTitulo', { nome: p.nome }) }}.</strong>
                 {{ t('ligacoes.solicitante.unificarAjuda') }}
               </p>
+              <p v-if="p.traz?.length" data-testid="sol-unificar-traz">
+                {{ t('ligacoes.solicitante.unificarTraz') }} {{ camposDaUnificacao(p.traz) }}.
+              </p>
+              <p v-if="p.difere?.length" data-testid="sol-unificar-difere">
+                {{ t('ligacoes.solicitante.unificarDifere') }} {{ camposDaUnificacao(p.difere) }}.
+              </p>
+              <p data-testid="sol-unificar-registro">{{ t('ligacoes.solicitante.unificarRegistro') }}</p>
               <div class="campo">
                 <label for="sol-motivo-unificar">{{ t('ligacoes.solicitante.unificarMotivo') }}</label>
                 <input

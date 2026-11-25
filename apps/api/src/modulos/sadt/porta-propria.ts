@@ -1945,6 +1945,7 @@ export class PortaSadtPropria implements PortaSadt {
     );
   }
 
+  // O cadastro unificado em outro não entra na escolha: o pedido novo nasce no cadastro que continua (02-CAD linha 20).
   solicitantes(c: ContextoSadt, o: { termo?: string; numero?: number; uf?: string }) {
     return this.ler(c, async (l) => {
       const p: unknown[] = [];
@@ -1967,7 +1968,8 @@ export class PortaSadtPropria implements PortaSadt {
              FROM solicitante_externo s
              JOIN conselho_classe cc ON cc.id = s.conselho_classe_id
              JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
-            WHERE s.excluido_em IS NULL ${f} ORDER BY s.nome, s.id LIMIT 50`,
+            WHERE s.excluido_em IS NULL AND s.sucessor_solicitante_externo_id IS NULL ${f}
+            ORDER BY s.nome, s.id LIMIT 50`,
           p,
           { teto: 50 },
         )

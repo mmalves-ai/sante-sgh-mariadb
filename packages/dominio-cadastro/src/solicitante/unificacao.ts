@@ -81,3 +81,88 @@ export function solicitanteVigente(id: number, sucessorDe: ReadonlyMap<number, n
     atual = prox;
   }
 }
+
+/** Dados de identificação e contato que o cadastro que continua pode receber do duplicado. */
+export interface DadosSolicitanteNaUnificacao {
+  readonly cpf: string | null;
+  readonly cns: string | null;
+  readonly ocupacao: number | null;
+  readonly especialidade: number | null;
+  readonly instituicaoNome: string | null;
+  readonly instituicaoCnpj: string | null;
+  readonly instituicaoCnes: string | null;
+  readonly telefone: string | null;
+  readonly email: string | null;
+}
+export type CampoSolicitanteNaUnificacao = keyof DadosSolicitanteNaUnificacao;
+
+const CAMPOS_SIMPLES = ['cpf', 'cns', 'ocupacao', 'especialidade', 'telefone', 'email'] as const;
+const CAMPOS_INSTITUICAO = ['instituicaoNome', 'instituicaoCnpj', 'instituicaoCnes'] as const;
+const vazio = (v: string | number | null) => v === null || String(v).trim() === '';
+const mesmoValor = (a: string | number | null, b: string | number | null) =>
+  String(a).trim().toUpperCase() === String(b).trim().toUpperCase();
+
+/**
+ * Dados de identificação na unificação: `herdar` é o que o cadastro que continua NÃO tem e o duplicado tem (CPF,
+ * cartão nacional de saúde, ocupação, especialidade, telefone, e-mail); a instituição vem inteira (nome, CNPJ e
+ * CNES juntos) só quando o que continua não tem nenhum dos três, para não misturar duas instituições. `divergentes`
+ * são os campos que os dois têm com valor diferente: fica o do cadastro que continua e a tela mostra a diferença.
+ * O registro no conselho não entra aqui: ele é a chave do cadastro (ver `registroNaAlteracao`).
+ */
+export function dadosNaUnificacao(
+  mantido: DadosSolicitanteNaUnificacao,
+  absorvido: DadosSolicitanteNaUnificacao,
+): { herdar: Partial<DadosSolicitanteNaUnificacao>; divergentes: CampoSolicitanteNaUnificacao[] } {
+  const herdar: Partial<Record<CampoSolicitanteNaUnificacao, string | number | null>> = {};
+  const divergentes: CampoSolicitanteNaUnificacao[] = [];
+  for (const c of CAMPOS_SIMPLES) {
+    if (vazio(absorvido[c])) continue;
+    if (vazio(mantido[c])) herdar[c] = absorvido[c];
+    else if (!mesmoValor(mantido[c], absorvido[c])) divergentes.push(c);
+  }
+  const semInstituicao = CAMPOS_INSTITUICAO.every((c) => vazio(mantido[c]));
+  for (const c of CAMPOS_INSTITUICAO) {
+    if (vazio(absorvido[c])) continue;
+    if (semInstituicao) herdar[c] = absorvido[c];
+    else if (!vazio(mantido[c]) && !mesmoValor(mantido[c], absorvido[c])) divergentes.push(c);
+  }
+  return { herdar: herdar as Partial<DadosSolicitanteNaUnificacao>, divergentes };
+}
+
+/**
+ * Situação do cadastro ao desfazer a unificação: volta exatamente a que ele tinha antes. Quem estava ativo volta
+ * ativo (sem data de inativação); quem já estava inativo continua inativo, com a data de inativação que tinha.
+ * `ativoAntes` nulo é a unificação gravada antes de a situação anterior ser guardada: vale o que o banco deduziu.
+ */
+export function situacaoAoDesfazerUnificacao(ativoAntes: boolean | null): { reativar: boolean } {
+  return { reativar: ativoAntes !== false };
+}
+
+/** Registro no conselho como está gravado (texto), para a chave única do banco. */
+export interface RegistroGravado {
+  readonly conselho: string;
+  readonly uf: string;
+  readonly numero: string;
+}
+const mesmoRegistro = (a: RegistroGravado, b: RegistroGravado) =>
+  a.conselho.toUpperCase() === b.conselho.toUpperCase() &&
+  a.uf.toUpperCase() === b.uf.toUpperCase() &&
+  a.numero === b.numero;
+
+/**
+ * Correção do registro do cadastro que continua quando o número certo era o do duplicado unificado NELE. Colisão
+ * com um cadastro de fora é recusa (`recusar` traz os ids). Colisão só com os próprios unificados é aceita; se o
+ * texto novo é exatamente o de um deles, os dois trocam de registro (`trocarCom`): o duplicado guarda o número que
+ * este cadastro tinha, e a chave única do banco continua valendo.
+ */
+export function registroNaAlteracao(e: {
+  id: number;
+  anterior: RegistroGravado;
+  novo: RegistroGravado;
+  /** Cadastros com a mesma chave de registro (conselho, UF e número normalizados). */
+  iguais: readonly { id: number; sucessor: number | null; registro: RegistroGravado }[];
+}): { recusar: number[]; trocarCom: number | null } {
+  const recusar = e.iguais.filter((o) => o.sucessor !== e.id).map((o) => o.id);
+  if (recusar.length || mesmoRegistro(e.anterior, e.novo)) return { recusar, trocarCom: null };
+  return { recusar, trocarCom: e.iguais.find((o) => mesmoRegistro(o.registro, e.novo))?.id ?? null };
+}

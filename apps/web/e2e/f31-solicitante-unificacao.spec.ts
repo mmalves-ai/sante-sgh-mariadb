@@ -92,6 +92,8 @@ async function simular(page: Page, s: Estado): Promise<void> {
               ativo: true,
               versao: 3,
               motivo: 'mesmo-nome',
+              traz: ['cpf', 'telefone'],
+              difere: ['email'],
             },
           ],
     }),
@@ -160,6 +162,11 @@ test.describe('ficha do solicitante externo e unificação do duplicado @F3.1-10
     await page.getByTestId(`sol-unificar-${DUPLICADO}`).click();
     const painel = page.getByTestId('sol-unificar-painel');
     await expect(painel).toContainText('Atendimentos e pedidos já feitos não mudam');
+    // Antes de confirmar, a tela diz o que este cadastro recebe do duplicado, o que os dois têm diferente e como
+    // ficar com o registro do duplicado.
+    await expect(page.getByTestId('sol-unificar-traz')).toContainText('CPF, telefone');
+    await expect(page.getByTestId('sol-unificar-difere')).toContainText('e-mail');
+    await expect(page.getByTestId('sol-unificar-registro')).toContainText('trocam de registro');
 
     // Validação na hora: sem motivo de ao menos 10 letras o botão não libera. Cancelar fecha sem pedir nada.
     const confirmar = page.getByTestId('sol-unificar-confirmar');

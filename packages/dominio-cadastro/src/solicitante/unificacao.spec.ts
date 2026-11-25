@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   codigosNaUnificacao,
+  dadosNaUnificacao,
   errosDesfazerUnificacao,
   errosUnificacao,
+  registroNaAlteracao,
+  situacaoAoDesfazerUnificacao,
   solicitanteVigente,
 } from './unificacao.js';
 
@@ -81,5 +84,88 @@ describe('unificação de solicitante externo (02-CAD linha 20)', () => {
     expect(solicitanteVigente(1, m)).toBe(1);
     expect(solicitanteVigente(99, m)).toBe(99);
     expect(solicitanteVigente(7, m)).toBe(7);
+  });
+
+  it('o que continua recebe do duplicado só o dado que não tem; a instituição vem inteira ou não vem', () => {
+    const semNada = {
+      cpf: null,
+      cns: null,
+      ocupacao: null,
+      especialidade: null,
+      instituicaoNome: null,
+      instituicaoCnpj: null,
+      instituicaoCnes: null,
+      telefone: null,
+      email: null,
+    };
+    const r = dadosNaUnificacao(
+      {
+        ...semNada,
+        cpf: '11111111111',
+        email: 'a@sintetico.test',
+        instituicaoNome: 'CLINICA A',
+        telefone: ' ',
+      },
+      {
+        ...semNada,
+        cpf: '22222222222', // os dois têm e diferem: fica o do que continua
+        cns: '700000000000001', // falta: herda
+        ocupacao: 7,
+        email: 'A@SINTETICO.TEST', // igual sem caixa
+        telefone: '3100000000', // o que continua só tem espaço: herda
+        instituicaoNome: 'CLINICA B', // diverge
+        instituicaoCnpj: '11111111000191', // não herda: o que continua já tem instituição
+      },
+    );
+    expect(r.herdar).toEqual({ cns: '700000000000001', ocupacao: 7, telefone: '3100000000' });
+    expect(r.divergentes).toEqual(['cpf', 'instituicaoNome']);
+    const inst = dadosNaUnificacao(semNada, {
+      ...semNada,
+      instituicaoNome: 'CLINICA B',
+      instituicaoCnes: '1234567',
+    });
+    expect(inst.herdar).toEqual({ instituicaoNome: 'CLINICA B', instituicaoCnes: '1234567' });
+    expect(inst.divergentes).toEqual([]);
+  });
+
+  it('desfazer devolve a situação anterior: quem já estava inativo não é reativado', () => {
+    expect(situacaoAoDesfazerUnificacao(true)).toEqual({ reativar: true });
+    expect(situacaoAoDesfazerUnificacao(false)).toEqual({ reativar: false });
+    expect(situacaoAoDesfazerUnificacao(null)).toEqual({ reativar: true });
+  });
+
+  it('o registro do que continua pode assumir o do duplicado unificado nele (troca); o de outro cadastro é recusa', () => {
+    const reg = (numero: string) => ({ conselho: 'CRM', uf: 'MG', numero });
+    const meu = { id: 1, anterior: reg('100'), novo: reg('200') };
+    // o duplicado unificado neste cadastro tem o número certo: troca com ele
+    expect(registroNaAlteracao({ ...meu, iguais: [{ id: 2, sucessor: 1, registro: reg('200') }] })).toEqual({
+      recusar: [],
+      trocarCom: 2,
+    });
+    // mesma chave, texto diferente (zero à esquerda): não precisa trocar, a chave única do banco não colide
+    expect(registroNaAlteracao({ ...meu, iguais: [{ id: 2, sucessor: 1, registro: reg('0200') }] })).toEqual({
+      recusar: [],
+      trocarCom: null,
+    });
+    // cadastro de fora, ou unificado em OUTRO: recusa
+    expect(
+      registroNaAlteracao({
+        ...meu,
+        iguais: [
+          { id: 2, sucessor: 1, registro: reg('200') },
+          { id: 3, sucessor: null, registro: reg('0200') },
+          { id: 4, sucessor: 9, registro: reg('00200') },
+        ],
+      }),
+    ).toEqual({ recusar: [3, 4], trocarCom: null });
+    // sem mudar o registro, o próprio unificado com a mesma chave não impede gravar os outros campos
+    expect(
+      registroNaAlteracao({
+        id: 1,
+        anterior: reg('200'),
+        novo: reg('200'),
+        iguais: [{ id: 2, sucessor: 1, registro: reg('0200') }],
+      }),
+    ).toEqual({ recusar: [], trocarCom: null });
   });
 });

@@ -369,7 +369,7 @@ sigla_conselho	CAD	catalogo_publico	F3	Siglas de inscrição válidas para cada 
 sinonimo_especialidade	CAD	item	F8	Termos populares de cada especialidade usados na busca do guia de rede e do portal	rodada2:nova	02	1
 situacao_convivio_familiar	CAD	catalogo_publico	F3	Situação de convívio familiar da tabela do e-SUS	F15; SPDATA TBSITCONJUGAL (7); MV SITUACAO_FAMILIAR; areas-sem-dono #11; paridade estrutural: era F7	02	2
 situacao_posse_plano	CAD	dominio	F3	Resposta do paciente sobre ter plano de saúde ou cartão de desconto, usada na captação e no perfil	rodada2:nova	02	1
-solicitante_externo	CAD	principal	F3	Profissional de fora que pede consulta ou exame, com conselho, UF, ocupação e contato	F20; SPDATA TBMEDSOL; MV PRESTADOR_EXTERNO, PRESTADOR_REFERENCIA; duplicado unificado por ponteiro para o cadastro que continua, sem apagar nem alterar registro clínico (02-CAD linha 20; migração 03_CAD/98_solicitante_unificacao)	02	7
+solicitante_externo	CAD	principal	F3	Profissional de fora que pede consulta ou exame, com conselho, UF, ocupação e contato	F20; SPDATA TBMEDSOL; MV PRESTADOR_EXTERNO, PRESTADOR_REFERENCIA; duplicado unificado por ponteiro para o cadastro que continua, sem apagar nem alterar registro clínico (02-CAD linha 20; migração 03_CAD/98_solicitante_unificacao); situação anterior guardada para o desfazer (migração 03_CAD/99_solicitante_unificacao_situacao)	02	7
 solicitante_externo_fonte_pagadora	CAD	vinculo	F3	Código do solicitante externo em cada fonte pagadora	F20; SPDATA TBMEDSOL_CODCON	02	1
 suspeita_duplicidade	CAD	principal	F3	Pares de cadastros com indício de duplicidade, com pontuação, critério e decisão do analista	F7; carga do dia 0; dono 02 (conflitos.md)	02	0
 telefone_pessoa	CAD	item	F3	Telefones da pessoa com tipo, DDD, ramal, consentimento para mensagem e indicação de principal	F3; SPDATA HTPACTELEFONE, TBTIPOTELEFONE; MV CONTATO_PACIENTE	02	8
@@ -1033,7 +1033,7 @@ motivo_adiantamento_paciente	FIN	dominio	F3	Motivo do depósito ou caução rece
 motivo_baixa_bem	FIN	dominio	F7	Motivos de baixa do bem	MV MOT_BAIXA	07	1
 motivo_bloqueio_titulo	FIN	dominio	F3	Motivos de bloqueio de pagamento: falta de aprovação, divergência de nota, pendência fiscal, ordem judicial	MV BLOQUEIO_ALCADA_FINAN	07	0
 motivo_cancelamento_cheque	FIN	dominio	F7	Motivo para cancelar cheque emitido, indicando se a folha fica inutilizada	rodada2:nova	07	1
-motivo_cancelamento_documento_fiscal	FIN	dominio	F3	Motivo para cancelar nota de serviço, nota de mercadoria ou nota de crédito e débito, com o código exigido pelo provedor municipal ou pela Sefaz	rodada2:nova	07	4
+motivo_cancelamento_documento_fiscal	FIN	dominio	F3	Motivo para cancelar nota de serviço, nota de mercadoria ou nota de crédito e débito, com o código exigido pelo provedor municipal ou pela Sefaz	rodada2:nova; motivos padrão do cancelamento e da substituição da nota de serviço (07-FIN linha 113; migração 14_FIN/90_nota_servico_prazo)	07	4
 motivo_devolucao_cheque	FIN	dominio	F7	Motivo de devolução de cheque recebido, seguindo as alíneas da compensação bancária	rodada2:nova	07	1
 motivo_lancamento_contabil	FIN	dominio	F7	Motivos de lançamento manual e de estorno	MV MOTIVO_LCTO	07	1
 motivo_movimento_orcamento	FIN	dominio	F7	Motivos de transferência, ajuste ou revisão de valores orçados	rodada2:nova	07	2
@@ -1136,7 +1136,7 @@ regra_contabilizacao_item	FIN	item	F7	Linha da regra: conta a débito e a crédi
 regra_controle_orcamentario	FIN	configuracao	F8	Regra de controle na operação: conferir saldo, bloquear ou alertar, por centro, natureza e documento	MV ORCA_CONTROLE, ORCA_CONTROLE_CONTA	07	2
 regra_deducao_nota_servico	FIN	configuracao	F7	Regra por fonte pagadora e grupo de item que diz quais parcelas do valor são deduzidas na nota fiscal de serviço	rodada2:nova	07	1
 regra_importacao_custo	FIN	configuracao	F8	Setor e natureza de custo que recebem valores importados de outros módulos (repasse médico) no custeio, com vigência	rodada2:nova	07	1
-regra_iss_municipio	FIN	configuracao	F3	Alíquota, retenção e local de incidência do ISS por município e serviço	SPDATA TBMUIBGE; MV SERVICO_NTFS, TRIBUTO_MUNICIPAL; município pelo catalogo_publico ibge	07	2
+regra_iss_municipio	FIN	configuracao	F3	Alíquota, retenção e local de incidência do ISS por município e serviço	SPDATA TBMUIBGE; MV SERVICO_NTFS, TRIBUTO_MUNICIPAL; município pelo catalogo_publico ibge; prazo do município para cancelar e substituir a nota de serviço (07-FIN linha 113; migração 14_FIN/90_nota_servico_prazo)	07	2
 regra_pis_cofins_conta	FIN	configuracao	F7	CST de PIS e COFINS e natureza do crédito por conta contábil, para a escrituração das contribuições	rodada2:nova	07	1
 regra_rateio_financeiro	FIN	configuracao	F3	Modelo de rateio reutilizável por natureza, com centros e percentuais	MV REGRA_RATEIO_FNFI	07	1
 regra_rateio_financeiro_item	FIN	item	F3	Centro de custo e percentual dentro de uma regra de rateio	MV REGRA_RATEIO_FNFI	07	2
@@ -1180,7 +1180,7 @@ sla_contrato	FIN	configuracao	F8	Acordo de nível de serviço por contrato e ser
 socio_titular_ecf	FIN	item	F7	Sócio ou titular informado na ECF, com participação e rendimentos	MV SPED_ECF_IDENT_SOCIOS_TITULAR, SPED_ECF_RENDIMENTOS_DIRI_CONS	07	2
 subgrupo_natureza_financeira	FIN	principal	F3	Subgrupo do plano gerencial, entre o grupo e a natureza	SPDATA TBGRUDES; MV CLASSIFICACAO_CONTA_FNFI	07	3
 suprimento_caixa	FIN	item	F3	Reforço de troco na sessão de caixa, com origem e responsável	MV EXTRA_CAIXA	07	0
-suspensao_processo_tributario	FIN	item	F3	Indicativo de suspensão de exigibilidade do processo, com código, data e valor suspenso	MV REINF_PROCESSO_SUSPENSAO; SPDATA FPESOCINDSUSP; tributo e beneficiário da suspensão (07-FIN linha 111; migração 14_FIN/98_suspensao_tributo)	07	7
+suspensao_processo_tributario	FIN	item	F3	Indicativo de suspensão de exigibilidade do processo, com código, data e valor suspenso	MV REINF_PROCESSO_SUSPENSAO; SPDATA FPESOCINDSUSP; tributo e beneficiário da suspensão (07-FIN linha 111; migração 14_FIN/98_suspensao_tributo); encerramento e anulação da suspensão com motivo, sem apagar (07-FIN linha 111; migração 14_FIN/90_suspensao_encerramento)	07	7
 tabela_fiscal_oficial	FIN	catalogo_publico	F3	Tabelas oficiais fiscais (CST, natureza do crédito, gênero, modelo de documento), com fonte e versão	SPDATA SDCSTPIS, SDCSTCOFINS, SDNATCREDITO, SDGENERO, SDTIPODOCTO, COTIPOITEM, DMCADLEIAUTE; MV CST_DI, CSOSN	07	13
 talao_cheque	FIN	principal	F7	Talão de cheques da conta bancária, com faixa de numeração inicial, final e próxima folha a emitir	rodada2:nova	07	1
 tarifa_bancaria	FIN	item	F7	Tarifa cobrada pelo banco na cobrança ou no pagamento, com origem no retorno e lançamento gerado	MV TARIFA_BANCARIA_RET	07	1

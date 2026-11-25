@@ -12,6 +12,7 @@
 // O "registro" da tela é o id da internação; o prontuário é o número do prontuário do paciente; o solicitante é o CPF
 // do profissional da casa ou do solicitante externo (o banco guarda a chave, nunca o CPF de novo).
 import { type Escritor, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
+import { solicitanteQueRespondeHoje } from '../cadastro/solicitante-vigente.js';
 import type { SolicitanteAihLido } from './porta-aih.js';
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
 import { gravarRemessa } from './porta-propria-arquivos.js';
@@ -341,10 +342,19 @@ export class LeiturasAihPropria {
         externo: null,
         lido: { cpf: c, nome: txt(p['nome']), cns: txtOuNulo(p['cns']) },
       };
-    const e = await this.l.uma(
-      'SELECT id, nome, cns FROM solicitante_externo WHERE cpf = ? AND excluido_em IS NULL ORDER BY id LIMIT 1',
+    // O cadastro unificado em outro não recebe pedido novo (02-CAD linha 20): entre os de mesmo CPF vale primeiro o
+    // que não foi unificado e está ativo, e o escolhido é sempre o cadastro que responde hoje (segue o ponteiro).
+    const achado = await this.l.uma(
+      `SELECT id FROM solicitante_externo WHERE cpf = ? AND excluido_em IS NULL
+        ORDER BY (sucessor_solicitante_externo_id IS NOT NULL), (ativo = FALSE), id LIMIT 1`,
       [c],
     );
+    const e = achado
+      ? await this.l.uma(
+          'SELECT id, nome, cns FROM solicitante_externo WHERE id = ? AND excluido_em IS NULL',
+          [await solicitanteQueRespondeHoje(this.l, num(achado['id']))],
+        )
+      : null;
     if (e)
       return {
         profissional: null,

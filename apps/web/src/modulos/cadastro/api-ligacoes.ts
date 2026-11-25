@@ -62,6 +62,10 @@ export interface Parecido {
   /** Versão lida do cadastro parecido (a unificação a confere). */
   versao?: number;
   motivo: 'mesmo-registro' | 'mesmo-nome' | 'numero-proximo';
+  /** Dados que a unificação traria deste parecido para a ficha aberta (ela não os tem). Só os nomes dos campos. */
+  traz?: string[];
+  /** Dados que os dois têm diferentes: na unificação fica o da ficha aberta. */
+  difere?: string[];
 }
 /** Cadastro do outro lado de uma unificação (02-CAD linha 20). */
 export interface SolicitanteUnificado {
