@@ -13,6 +13,7 @@ const telas = computed(() =>
     { rota: '/qualidade/gestao/auditorias', rotulo: 'auditorias', permissao: P.gestaoLer },
     { rota: '/qualidade/gestao/comissoes', rotulo: 'comissoes', permissao: P.gestaoLer },
     { rota: '/qualidade/gestao/riscos', rotulo: 'riscos', permissao: P.gestaoLer },
+    { rota: '/qualidade/gestao/estrategia', rotulo: 'estrategia', permissao: P.gestaoLer },
     { rota: '/qualidade/ouvidoria', rotulo: 'ouvidoria', permissao: P.ouvidoriaLer },
     // W0-04 (M5)
     {

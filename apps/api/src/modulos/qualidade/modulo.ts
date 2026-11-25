@@ -39,6 +39,8 @@ import {
 import { PortaAuditoriaAntimicrobianoPropria } from './porta-auditoria-antimicrobiano-propria.js';
 import { PortaAnaliseCulturaPropria } from './porta-analise-cultura-propria.js';
 import { NotificacaoIrasController, PORTA_NOTIFICACAO_IRAS } from './notificacao-iras.controller.js';
+import { GESTAO_ESTRATEGICA, GestaoEstrategicaController } from './gestao-estrategica.controller.js';
+import { GestaoEstrategicaPropria } from './gestao-estrategica-propria.js';
 import { PortaNotificacaoIrasPropria } from './porta-notificacao-iras-propria.js';
 import { PerfilCidController, PORTA_PERFIL_CID } from './perfil-cid.controller.js';
 import { PortaPerfilCidPropria } from './porta-perfil-cid-propria.js';
@@ -142,6 +144,7 @@ export async function modulo(
       AgravoController,
       GestaoQualidadeController,
       RevisaoProntuarioController,
+      GestaoEstrategicaController,
     ],
     providers: [
       { provide: PORTA_QUALIDADE, useValue: opcoes.qualidade ?? padrao?.qualidade },
@@ -170,6 +173,14 @@ export async function modulo(
       {
         provide: PORTA_PERFIL_CID,
         useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new PortaPerfilCidPropria(ctx.nucleo) : null,
+      },
+      // Gestão estratégica (C2-066, 01-ADM L118): mapa BSC, iniciativas e reuniões de análise crítica; sem banco, 503.
+      {
+        provide: GESTAO_ESTRATEGICA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new GestaoEstrategicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
       },
       { provide: PORTA_AGRAVO, useValue: opcoes.agravo ?? padrao?.agravo },
       { provide: PORTA_GESTAO, useValue: opcoes.gestao ?? padrao?.gestao },

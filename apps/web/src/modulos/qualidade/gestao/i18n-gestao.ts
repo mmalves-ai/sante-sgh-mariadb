@@ -5,6 +5,7 @@
 // os textos das recusas, de @sgh/dominio-qualidade (os mesmos da API). Sem nome de sistema antigo (ADR 0023). Sem "|"
 // nem "@".
 import { MENSAGENS_RECUSA_GESTAO } from '@sgh/dominio-qualidade';
+import { mensagensEstrategia } from './i18n-estrategia.js';
 
 /** Toda recusa da gestão da qualidade (os textos ficam em @sgh/dominio-qualidade, os mesmos da API). */
 export const RECUSAS_GESTAO = MENSAGENS_RECUSA_GESTAO;
@@ -33,8 +34,11 @@ export const mensagensGestaoQualidade = {
   registradoPor: 'Registrado por {usuario} em {data}',
   sim: 'Sim',
   nao: 'Não',
+  // C2-066: gestão estratégica (mapa BSC, iniciativas e reuniões de análise crítica).
+  estrategia: mensagensEstrategia,
   nav: {
     rotulo: 'Gestão da qualidade',
+    estrategia: 'Gestão estratégica',
     documentos: 'Documentos',
     indicadores: 'Indicadores',
     auditorias: 'Auditorias internas',

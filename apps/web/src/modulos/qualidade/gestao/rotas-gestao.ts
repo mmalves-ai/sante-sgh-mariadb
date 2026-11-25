@@ -35,6 +35,12 @@ export const rotasGestaoQualidade: RouteRecordRaw[] = [
     meta: { permissao: P.gestaoLer },
   },
   {
+    path: '/qualidade/gestao/estrategia',
+    name: 'qualidade.gestao.estrategia',
+    component: () => import('./telas/EstrategiaTela.vue'),
+    meta: { permissao: P.gestaoLer },
+  },
+  {
     path: '/qualidade/ouvidoria',
     name: 'qualidade.ouvidoria',
     component: () => import('./telas/OuvidoriaTela.vue'),
