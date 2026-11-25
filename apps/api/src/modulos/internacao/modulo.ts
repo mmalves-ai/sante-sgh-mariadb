@@ -22,6 +22,11 @@ import { FonteInternacaoMemoria, variantesSinteticasRede } from './fonte-memoria
 import { FonteInternacaoPropria } from './fonte-propria.js';
 import { LeitosController } from './leitos.controller.js';
 import { RelatorioController } from './relatorio.controller.js';
+import { ApuracaoIndicadoresController } from './apuracao-indicadores.controller.js';
+import {
+  PORTA_APURACAO_INTERNACAO,
+  PortaApuracaoInternacaoPropria,
+} from '../relatorio/apuracao-internacao-propria.js';
 import { ServicoInternacao } from './servico.js';
 import {
   BATIDA_EVENTOS_MS,
@@ -75,9 +80,17 @@ export async function modulo(
         });
   return {
     module: ModuloInternacao,
-    controllers: [LeitosController, RelatorioController],
+    controllers: [LeitosController, RelatorioController, ApuracaoIndicadoresController],
     providers: [
       { provide: FONTE_INTERNACAO, useValue: fonte },
+      // 01-REL L112: apuração dos indicadores de internação gravada no banco do cliente (sem ele, 503).
+      {
+        provide: PORTA_APURACAO_INTERNACAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaApuracaoInternacaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       { provide: MOTOR_VIGIA, useValue: vigia },
       { provide: BATIDA_EVENTOS_MS, useValue: opcoes.batidaEventosMs ?? BATIDA_EVENTOS_PADRAO_MS },
       {

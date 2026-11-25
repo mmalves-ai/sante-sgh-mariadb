@@ -35,4 +35,11 @@ export const rotasRelatorios: RouteRecordRaw[] = [
     component: () => import('./telas/CargasDataMartTela.vue'),
     meta: { permissao: 'relatorio.datamart.ler' },
   },
+  {
+    // 01-REL L112: os painéis gerenciais montados pelo hospital (abrir e, com a permissão, montar).
+    path: '/relatorios/paineis-gerenciais',
+    name: 'relatorios.paineisGerenciais',
+    component: () => import('./telas/PaineisGerenciaisTela.vue'),
+    meta: { permissao: 'relatorio.painelGerencial.ler' },
+  },
 ];

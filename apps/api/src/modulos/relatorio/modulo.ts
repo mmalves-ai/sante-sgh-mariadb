@@ -22,6 +22,8 @@ import { CARGAS_DATAMART, PortaCargasDataMartPropria } from './datamart-cargas-p
 import { CargasDataMartController } from './datamart-cargas.controller.js';
 import { FilaEnvioPorValkey } from './infra/fila-envio.js';
 import { PaginaInicialController } from './pagina-inicial.controller.js';
+import { PainelGerencialController } from './painel-gerencial.controller.js';
+import { PORTA_PAINEL_GERENCIAL, PortaPainelGerencialPropria } from './painel-gerencial-propria.js';
 import { PORTA_PAGINA_INICIAL, PortaPaginaInicialPropria } from './pagina-inicial-propria.js';
 import { PORTA_RELATORIO, type PortaRelatorio } from './porta.js';
 import { PortaRelatorioMemoria } from './porta-memoria.js';
@@ -83,6 +85,7 @@ export async function moduloRelatorio(
       BiRedeController,
       CargasDataMartController,
       PaginaInicialController,
+      PainelGerencialController,
     ],
     providers: [
       { provide: PORTA_RELATORIO, useValue: porta },
@@ -100,6 +103,14 @@ export async function moduloRelatorio(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaPaginaInicialPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 01-REL L112: painéis gerenciais montados pelo hospital (só com o banco do cliente; sem ele, 503).
+      {
+        provide: PORTA_PAINEL_GERENCIAL,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaPainelGerencialPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       { provide: FILA_ENVIO_RELATORIO, useValue: fila },

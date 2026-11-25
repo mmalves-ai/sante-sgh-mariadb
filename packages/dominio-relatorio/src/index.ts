@@ -16,3 +16,6 @@ export * from './datamart-registro.js';
 export * from './datamart-pedido.js';
 // 01-ADM L114: página inicial montada pelo hospital (blocos, perfis, escolha do modelo e gráfico do indicador).
 export * from './pagina-inicial.js';
+export * from './painel-gerencial.js';
+// 01-REL L112: apuração dos indicadores obrigatórios de internação pelo censo (fora da qualidade).
+export * from './apuracao-internacao.js';

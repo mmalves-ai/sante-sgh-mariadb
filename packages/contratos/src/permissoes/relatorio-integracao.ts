@@ -23,6 +23,10 @@ export const PERMISSOES_M34_CODIGOS = {
   paginaInicialLer: 'relatorio.paginaInicial.ler',
   paginaInicialEditar: 'relatorio.paginaInicial.editar',
   paginaInicialEditarRede: 'relatorio.paginaInicial.editarRede',
+  // 01-REL L112: painéis gerenciais montados pelo hospital (quadros de indicadores e quem abre).
+  painelGerencialLer: 'relatorio.painelGerencial.ler',
+  painelGerencialEditar: 'relatorio.painelGerencial.editar',
+  indicadorApurar: 'relatorio.indicador.apurar',
   configuracaoLer: 'integracao.configuracao.ler',
   fhirLer: 'integracao.fhir.ler',
   fhirEnviar: 'integracao.fhir.enviar',
@@ -422,5 +426,33 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     perfis: [...ADMIN],
     categoria: 'administrativa',
     criticidade: 'sensivel',
+  },
+  // 01-REL L112: painéis gerenciais; recurso só do novo, concedido por perfil. Abrir um painel pede ainda a
+  // permissão do próprio painel (perfil ou pessoa, com vigência), conferida pelo servidor.
+  {
+    codigo: C.painelGerencialLer,
+    descricao:
+      'Abrir os painéis gerenciais liberados para o perfil ou a pessoa (indicadores apurados e meta)',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN, 'diretoria-clinica', 'diretoria-rede', 'gestao-qualidade', 'gestor-setor'],
+    categoria: 'administrativa',
+    criticidade: 'normal',
+  },
+  {
+    codigo: C.painelGerencialEditar,
+    descricao: 'Montar os painéis gerenciais (quadros, ordem e quem abre), pôr em uso e tirar de uso',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN, 'gestao-qualidade'],
+    categoria: 'administrativa',
+    criticidade: 'normal',
+  },
+  {
+    codigo: C.indicadorApurar,
+    descricao:
+      'Apurar no mês os indicadores obrigatórios de internação pelo censo (ocupação, permanência, giro, mortalidade)',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN, 'diretoria-clinica', 'gestao-qualidade'],
+    categoria: 'administrativa',
+    criticidade: 'normal',
   },
 ];
