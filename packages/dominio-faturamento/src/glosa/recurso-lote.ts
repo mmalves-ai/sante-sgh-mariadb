@@ -89,23 +89,38 @@ export const valorPadraoDoRecurso = (
 ): number => centavos(g.valorGlosado - g.valorAceito - (g.retornoAnterior?.valorAcatado ?? 0));
 
 /**
- * Agrupa os itens do pedido em lotes de recurso: um por fonte pagadora e, na reapresentação, por recurso anterior (o
- * recurso novo fica ligado ao que teve o retorno), na ordem em que aparecem.
+ * Agrupa os itens do pedido em lotes de recurso: um por fonte pagadora, por lote TISS de origem (a guia de recurso da
+ * TISS cita um lote e um protocolo) e, na reapresentação, por recurso anterior (o recurso novo fica ligado ao que teve o
+ * retorno), na ordem em que aparecem.
  */
 export function lotesDeRecurso<
-  T extends { readonly fontePagadora: number; readonly recursoAnterior?: number | null },
+  T extends {
+    readonly fontePagadora: number;
+    readonly recursoAnterior?: number | null;
+    readonly loteOrigem?: number | null;
+  },
 >(
   itens: readonly T[],
 ): {
   readonly fontePagadora: number;
   readonly recursoAnterior: number | null;
+  readonly loteOrigem: number | null;
   readonly itens: readonly T[];
 }[] {
-  const mapa = new Map<string, { fontePagadora: number; recursoAnterior: number | null; itens: T[] }>();
+  const mapa = new Map<
+    string,
+    { fontePagadora: number; recursoAnterior: number | null; loteOrigem: number | null; itens: T[] }
+  >();
   for (const i of itens) {
     const anterior = i.recursoAnterior ?? null;
-    const chave = `${i.fontePagadora}|${anterior ?? ''}`;
-    const l = mapa.get(chave) ?? { fontePagadora: i.fontePagadora, recursoAnterior: anterior, itens: [] };
+    const origem = i.loteOrigem ?? null;
+    const chave = `${i.fontePagadora}|${origem ?? ''}|${anterior ?? ''}`;
+    const l = mapa.get(chave) ?? {
+      fontePagadora: i.fontePagadora,
+      recursoAnterior: anterior,
+      loteOrigem: origem,
+      itens: [],
+    };
     l.itens.push(i);
     mapa.set(chave, l);
   }

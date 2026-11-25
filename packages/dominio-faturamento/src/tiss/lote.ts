@@ -155,10 +155,29 @@ export interface RecursoGlosa {
   readonly data: string;
   readonly guias: readonly {
     readonly numeroGuiaOrigem: string;
+    /** Número da guia na operadora e senha, quando a guia de origem os tem. */
+    readonly numeroGuiaOperadora?: string | null;
+    readonly senha?: string | null;
+    /** Recurso da guia completa (sem `itens`): o código e a justificativa da guia. */
     readonly codigoGlosa: string;
     readonly justificativa: string;
     readonly valorRecursado: number;
+    /** Recurso por item (itensGuia): cada item glosado com o código, a justificativa e o valor pleiteado. */
+    readonly itens?: readonly ItemRecursoGlosa[];
   }[];
+}
+
+/** Item recorrido da guia (itensGuia do ctm_recursoGlosa): o procedimento ou a despesa como foi apresentado. */
+export interface ItemRecursoGlosa {
+  readonly sequencial: number;
+  /** AAAA-MM-DD da realização. */
+  readonly dataInicio: string;
+  readonly codigoTabela: string;
+  readonly codigoProcedimento: string;
+  readonly descricaoProcedimento: string;
+  readonly codigoGlosa: string;
+  readonly valorRecursado: number;
+  readonly justificativa: string;
 }
 
 export class ErroLoteTiss extends Error {
@@ -498,7 +517,11 @@ export function mensagemLoteGuias(cab: Cabecalho, numeroLote: string, guias: rea
 /** Recurso de glosa por guia completa (RECURSO_GLOSA), também só em 04.03.00 (DP-47.7). */
 export function mensagemRecursoGlosa(cab: Cabecalho, r: RecursoGlosa): MensagemTiss {
   if (r.guias.length === 0 || r.guias.length > 100) throw new ErroLoteTiss('O recurso tem de 1 a 100 guias.');
-  const total = r.guias.reduce((s, g) => s + Math.round(g.valorRecursado * 100), 0) / 100;
+  const valorDaGuia = (g: RecursoGlosa['guias'][number]) =>
+    g.itens?.length
+      ? g.itens.reduce((s, i) => s + Math.round(i.valorRecursado * 100), 0)
+      : Math.round(g.valorRecursado * 100);
+  const total = r.guias.reduce((s, g) => s + valorDaGuia(g), 0) / 100;
   const corpo = el(
     'prestadorParaOperadora',
     el(
@@ -518,13 +541,34 @@ export function mensagemRecursoGlosa(cab: Cabecalho, r: RecursoGlosa): MensagemT
             el(
               'recursoGuia',
               el('numeroGuiaOrigem', g.numeroGuiaOrigem),
+              opcional('numeroGuiaOperadora', g.numeroGuiaOperadora || null),
+              opcional('senha', g.senha || null),
               el(
                 'opcaoRecursoGuia',
-                el(
-                  'recursoGuiaCompleta',
-                  el('codGlosaGuia', g.codigoGlosa),
-                  el('justificativaGuia', g.justificativa),
-                ),
+                ...(g.itens?.length
+                  ? g.itens.map((i) =>
+                      el(
+                        'itensGuia',
+                        el('sequencialItem', String(i.sequencial)),
+                        el('dataInicio', i.dataInicio),
+                        el(
+                          'procRecurso',
+                          el('codigoTabela', i.codigoTabela),
+                          el('codigoProcedimento', i.codigoProcedimento),
+                          el('descricaoProcedimento', i.descricaoProcedimento),
+                        ),
+                        el('codGlosaItem', i.codigoGlosa),
+                        el('valorRecursado', dinheiro(i.valorRecursado)),
+                        el('justificativaItem', i.justificativa),
+                      ),
+                    )
+                  : [
+                      el(
+                        'recursoGuiaCompleta',
+                        el('codGlosaGuia', g.codigoGlosa),
+                        el('justificativaGuia', g.justificativa),
+                      ),
+                    ]),
               ),
             ),
           ),

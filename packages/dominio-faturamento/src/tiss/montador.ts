@@ -2,8 +2,9 @@
 // com os números gravados pelo contador, valida no XSD oficial (com o hash do epílogo conferido), explica o erro em
 // português e, só se válida, guarda o XML (S3 com Object Lock na API; memória nos testes) pela chave única do lote e do
 // hash, com o SHA-256 do arquivo. Nada é guardado quando o XSD recusa.
-import type { DadosLoteTiss, LoteMontado, MontadorLoteTiss } from '@sgh/contratos';
-import { faltasDoPrestador, explicarErroXsd, montarLote } from './montagem.js';
+import type { DadosLoteTiss, DadosPrestador, LoteMontado, MontadorLoteTiss } from '@sgh/contratos';
+import type { RecursoGlosa } from './lote.js';
+import { faltasDoPrestador, explicarErroXsd, montarLote, montarRecurso } from './montagem.js';
 import { type ArquivoEsquema, carregarEsquemas, conferirLote } from './validacao.js';
 
 /** Guarda imutável: grava a chave nova (recusa sobrescrever) e devolve a versão do objeto. */
@@ -21,7 +22,88 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
 export const chaveXmlLote = (d: Pick<DadosLoteTiss, 'hospital' | 'convenio' | 'numeroLote'>, hash: string) =>
   `${d.hospital}/tiss/lotes/${d.convenio}/${d.numeroLote}-${hash.slice(0, 16)}.xml`;
 
-export function criarMontadorLote(guardar: GuardarXml): MontadorLoteTiss {
+/** O que a guia de recurso de glosa precisa para virar o XML do lote de recurso (F3.7, 06-FAT linha 34). */
+export interface DadosRecursoTiss {
+  readonly hospital: string;
+  readonly convenio: number;
+  /** Número do lote TISS do recurso (sequência do estabelecimento); é o sequencial da transação. */
+  readonly numeroLote: string;
+  readonly prestador: Pick<DadosPrestador, 'registroAns' | 'codigoPrestador'>;
+  readonly recurso: RecursoGlosa;
+  readonly agora: Date;
+}
+
+export type MontadorRecursoTiss = (d: DadosRecursoTiss) => Promise<LoteMontado>;
+
+/** O montador do lote com o do recurso de glosa (a mesma guarda e o mesmo validador). */
+export type MontadorLoteComRecurso = MontadorLoteTiss & { readonly recurso: MontadorRecursoTiss };
+
+/** Chave do XML do recurso: estabelecimento, convênio, número do lote do recurso e o hash do arquivo. */
+export const chaveXmlRecurso = (
+  d: Pick<DadosRecursoTiss, 'hospital' | 'convenio' | 'numeroLote'>,
+  hash: string,
+) => `${d.hospital}/tiss/recursos/${d.convenio}/${d.numeroLote}-${hash.slice(0, 16)}.xml`;
+
+/**
+ * Monta a mensagem RECURSO_GLOSA, valida no XSD oficial (hash do epílogo conferido) e, só se válida, guarda o XML pela
+ * chave do lote do recurso. Nada é guardado quando o XSD recusa; o erro volta explicado em português.
+ */
+export function criarMontadorRecurso(
+  guardar: GuardarXml,
+  carregar: () => Promise<ArquivoEsquema[]> = carregarEsquemas,
+): MontadorRecursoTiss {
+  let esquemas: Promise<ArquivoEsquema[]> | null = null;
+  return async (d) => {
+    const valor =
+      d.recurso.guias
+        .flatMap((g) => (g.itens?.length ? g.itens.map((i) => i.valorRecursado) : [g.valorRecursado]))
+        .reduce((s, v) => s + Math.round(v * 100), 0) / 100;
+    const vazio = (erros: string[], hashEpilogo = '', bytes = 0): LoteMontado => ({
+      valido: false,
+      erros,
+      explicacao: erros.map(explicarErroXsd),
+      versao: '04.03.00',
+      hashEpilogo,
+      hashArquivo: '',
+      bytes,
+      guias: d.recurso.guias.length,
+      valor,
+      chaveObjeto: '',
+      versaoObjeto: null,
+    });
+    let m;
+    try {
+      m = montarRecurso({ ...d.prestador, cnes: '', nome: '' }, d.numeroLote, d.recurso, d.agora);
+    } catch (e) {
+      return vazio([e instanceof Error ? e.message : String(e)]);
+    }
+    esquemas ??= carregar();
+    const c = await conferirLote(m, await esquemas);
+    if (c.estado !== 'pronto') return vazio(c.erros as string[], m.hash, m.bytes.length);
+    const hashArquivo = await sha256Hex(m.bytes);
+    const chave = chaveXmlRecurso(d, hashArquivo);
+    const g = await guardar(chave, m.bytes);
+    return {
+      valido: true,
+      erros: [],
+      explicacao: [],
+      versao: m.versao,
+      hashEpilogo: m.hash,
+      hashArquivo,
+      bytes: m.bytes.length,
+      guias: d.recurso.guias.length,
+      valor,
+      chaveObjeto: chave,
+      versaoObjeto: g.versao,
+    };
+  };
+}
+
+export function criarMontadorLote(guardar: GuardarXml): MontadorLoteComRecurso {
+  return Object.assign(criarMontadorSoLote(guardar), { recurso: criarMontadorRecurso(guardar) });
+}
+
+function criarMontadorSoLote(guardar: GuardarXml): MontadorLoteTiss {
   let esquemas: Promise<ArquivoEsquema[]> | null = null;
   return async (d: DadosLoteTiss): Promise<LoteMontado> => {
     const faltas = faltasDoPrestador(d.prestador);
