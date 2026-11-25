@@ -6,6 +6,7 @@ import {
   donoDaConta,
   type EnquadramentoDoFornecedor,
   planejarEnquadramento,
+  problemasDoProcesso,
   planejarFavorecido,
   retencoesDoFavorecido,
   type TipoFavorecido,
@@ -57,6 +58,17 @@ const FONTES = [
 const TRIBUTOS = [
   { id: 51, codigo: 'ISS', descricao: 'Imposto sobre serviços' },
   { id: 52, codigo: 'IRRF', descricao: 'Imposto de renda retido na fonte' },
+];
+const PROCESSOS = [
+  {
+    id: 61,
+    numero: '00000000000000000061',
+    descricao: 'Processo sintético',
+    tipo: 'judicial',
+    situacao: 'ativo',
+    inicio: '2025-01-01',
+    fim: null,
+  },
 ];
 
 const hoje = () => new Date().toISOString().slice(0, 10);
@@ -234,11 +246,19 @@ export class PortaFavorecidosRepasseMemoria implements PortaFavorecidosRepasse {
     return TRIBUTOS.map((t) => ({ ...t }));
   }
 
+  async listarProcessosJudiciais() {
+    return PROCESSOS.filter((p) => p.tipo === 'judicial' && p.situacao === 'ativo').map(
+      ({ id, numero, descricao, inicio, fim }) => ({ id, numero, descricao, inicio, fim }),
+    );
+  }
+
   async incluirEnquadramento(_c: ContextoPortaPropria, fornecedor: number, entrada: unknown) {
     const x = entradaValida(esquemaEnquadramento, entrada);
     if (![...EMPRESAS, ...COOPERATIVAS].some((e) => e.fornecedor === fornecedor))
       throw naoEncontrado('Fornecedor');
     if (x.tributo !== null && !TRIBUTOS.some((t) => t.id === x.tributo)) throw naoEncontrado('Tributo');
+    const doProcesso = problemasDoProcesso(x, PROCESSOS.find((p) => p.id === x.processoTributario) ?? null);
+    if (doProcesso.length) throw recusaRegra('Enquadramento recusado', doProcesso);
     const doFornecedor = this.enquadramentos.filter((e) => e.fornecedor === fornecedor);
     const plano = planejarEnquadramento(
       x,
@@ -326,8 +346,10 @@ export class PortaFavorecidosRepasseMemoria implements PortaFavorecidosRepasse {
     if (!p) throw naoEncontrado('Prestador');
     if (p.versao !== x.versao)
       throw new ErroOperacao(409, 'conflito-versao', 'Registro alterado', 'Recarregue e tente de novo.');
-    const mud: Partial<PrestadorTerceiro> = { ...x };
-    delete mud.versao;
+    // Só os campos enviados (exactOptionalPropertyTypes: o ausente não vira undefined no registro).
+    const mud = Object.fromEntries(
+      Object.entries(x).filter(([k, v]) => k !== 'versao' && v !== undefined),
+    ) as Partial<PrestadorTerceiro>;
     Object.assign(p, mud, { versao: p.versao + 1 });
     if (x.ativo === false) p.inativadoEm = hoje();
     return { id: p.id };

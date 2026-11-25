@@ -53,7 +53,10 @@ export const mensagensFavorecidos = {
   enquadramento: {
     titulo: 'Enquadramento tributário do fornecedor: {nome}',
     resumo:
-      'O mesmo cadastro fiscal do contas a pagar. O novo enquadramento de um tributo encerra o anterior no dia de antes; decisão judicial se cadastra no contas a pagar, com o processo.',
+      'O mesmo cadastro fiscal do contas a pagar. O novo enquadramento de um tributo encerra o anterior no dia de antes; a decisão judicial cita o processo judicial ativo do estabelecimento.',
+    processo: 'Processo judicial',
+    processoEscolha: 'Escolha o processo',
+    processoFalta: 'Decisão judicial exige o processo judicial (vigente no início).',
     tributo: 'Tributo',
     todos: 'Todos os tributos',
     regime: 'Regime',

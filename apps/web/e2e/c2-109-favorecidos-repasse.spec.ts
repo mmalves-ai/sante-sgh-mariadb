@@ -139,6 +139,19 @@ test.describe('@C2-109 favorecidos do repasse e prestadores terceiros', () => {
     await page.getByTestId('fv-enq-aliquota').fill('150');
     await expect(page.getByTestId('fv-enq-aliquota-erro')).toBeVisible();
     await expect(page.getByTestId('fv-enq-gravar')).toBeDisabled();
+    // 0,07 tem 2 casas: vale (a regra do domínio tolera o ponto flutuante); 2,12345 passa de 4 casas.
+    await page.getByTestId('fv-enq-aliquota').fill('2.12345');
+    await expect(page.getByTestId('fv-enq-aliquota-erro')).toBeVisible();
+    await page.getByTestId('fv-enq-aliquota').fill('0.07');
+    await expect(page.getByTestId('fv-enq-aliquota-erro')).toBeHidden();
+    // Decisão judicial pede o processo judicial vigente: sem ele, aviso e botão desligado.
+    await escolher(page.getByTestId('fv-enq-regime'), 'decisao_judicial');
+    await expect(page.getByTestId('fv-enq-processo-erro')).toBeVisible();
+    await expect(page.getByTestId('fv-enq-gravar')).toBeDisabled();
+    await escolher(page.getByTestId('fv-enq-processo'), '61');
+    await expect(page.getByTestId('fv-enq-processo-erro')).toBeHidden();
+    await escolher(page.getByTestId('fv-enq-regime'), 'lucro_presumido');
+    await expect(page.getByTestId('fv-enq-processo')).toBeHidden();
     await page.getByTestId('fv-enq-aliquota').fill('2');
     await expect(page.getByTestId('fv-enq-aliquota-erro')).toBeHidden();
     await page.getByTestId('fv-enq-gravar').click();

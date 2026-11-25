@@ -85,6 +85,12 @@ export const alterarPrestadorTerceiro = (id: number, corpo: unknown) =>
 /** Os tributos ativos, para o enquadramento do fornecedor (nenhum escolhido: vale para todos). */
 export const lerTributos = () =>
   ler(`${R}/favorecidos/tributos`, itens<{ id: number; codigo: string; descricao: string }>());
+/** Os processos judiciais ativos do estabelecimento, para o enquadramento por decisão judicial. */
+export const lerProcessosJudiciais = () =>
+  ler(
+    `${R}/favorecidos/processos-judiciais`,
+    itens<{ id: number; numero: string; descricao: string | null; inicio: string; fim: string | null }>(),
+  );
 /** O enquadramento tributário do fornecedor (o mesmo cadastro do contas a pagar); o anterior do tributo termina antes. */
 export const incluirEnquadramento = (fornecedor: number, corpo: unknown) =>
   enviar(

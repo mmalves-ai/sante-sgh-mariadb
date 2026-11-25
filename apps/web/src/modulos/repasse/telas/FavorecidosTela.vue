@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { aliquotaIssValida } from '@sgh/dominio-repasse';
 import { SanteSelecao } from '@sgh/ui';
 // Favorecidos do repasse e prestadores terceiros (F3.7, 06-FAT linha 46): `/repasse/favorecidos`. Visão por médico: a
 // busca escolhe o médico e a tela mostra, de uma vez, o histórico dos favorecidos (vigentes primeiro), a soma das
@@ -28,6 +29,7 @@ import {
   lerContasPrestador,
   lerFavorecidos,
   lerPrestadoresTerceiros,
+  lerProcessosJudiciais,
   lerTributos,
   type TipoFavorecido,
 } from '../api-favorecidos.js';
@@ -176,6 +178,7 @@ const enq = reactive({
   regime: 'simples_nacional',
   retem: true,
   aliquota: '',
+  processo: '',
   fundamento: '',
   inicio: '',
   fim: '',
@@ -186,16 +189,30 @@ const tributos = useQuery({
   enabled: computed(() => enq.fornecedor > 0),
 });
 const aliquotaEnq = computed(() => (enq.aliquota === '' ? null : Number(enq.aliquota)));
-const aliquotaValida = computed(
-  () =>
-    aliquotaEnq.value === null ||
-    (Number.isFinite(aliquotaEnq.value) &&
-      aliquotaEnq.value >= 0 &&
-      aliquotaEnq.value <= 100 &&
-      Math.round(aliquotaEnq.value * 10_000) === aliquotaEnq.value * 10_000),
+// A mesma regra do domínio (tolerância do ponto flutuante: 0,07 e 2,0001 valem).
+const aliquotaValida = computed(() => aliquotaIssValida(aliquotaEnq.value));
+const judicial = computed(() => enq.regime === 'decisao_judicial');
+const processos = useQuery({
+  queryKey: ['repasse', 'favorecidos-processos-judiciais'],
+  queryFn: lerProcessosJudiciais,
+  enabled: computed(() => enq.fornecedor > 0 && judicial.value),
+});
+// Só os processos vigentes no início escolhido: a recusa do servidor não chega a acontecer.
+const processosVigentes = computed(() =>
+  (processos.data.value ?? []).filter(
+    (p) => p.inicio <= enq.inicio && (p.fim === null || p.fim >= enq.inicio),
+  ),
+);
+const processoValido = computed(
+  () => !judicial.value || processosVigentes.value.some((p) => String(p.id) === enq.processo),
 );
 const enqValido = computed(
-  () => enq.fornecedor > 0 && !!enq.inicio && aliquotaValida.value && (!enq.fim || enq.fim >= enq.inicio),
+  () =>
+    enq.fornecedor > 0 &&
+    !!enq.inicio &&
+    aliquotaValida.value &&
+    processoValido.value &&
+    (!enq.fim || enq.fim >= enq.inicio),
 );
 function abrirEnquadramento(fornecedor: number, nome: string | null) {
   Object.assign(enq, {
@@ -205,6 +222,7 @@ function abrirEnquadramento(fornecedor: number, nome: string | null) {
     regime: 'simples_nacional',
     retem: true,
     aliquota: '',
+    processo: '',
     fundamento: '',
     inicio: hoje.value,
     fim: '',
@@ -219,6 +237,7 @@ async function gravarEnquadramento() {
       regime: enq.regime,
       retem: enq.retem,
       aliquotaIss: aliquotaEnq.value,
+      processoTributario: judicial.value ? Number(enq.processo) : null,
       fundamentoLegal: enq.fundamento.trim() || null,
       inicio: enq.inicio,
       fim: enq.fim || null,
@@ -426,12 +445,30 @@ async function alternarAtivo(id: number, versao: number, ativo: boolean) {
                     'imune',
                     'isento',
                     'substituto_tributario',
+                    'decisao_judicial',
                     'outro',
                   ] as const
                 ).map((x) => ({ valor: x, rotulo: t(`repasse.favorecidos.regimes.${x}`) }))
               "
               data-testid="fv-enq-regime"
             />
+          </span>
+          <span v-if="judicial" class="campo">
+            <SanteSelecao
+              v-model="enq.processo"
+              :rotulo="t('repasse.favorecidos.enquadramento.processo')"
+              :opcoes="[
+                { valor: '', rotulo: t('repasse.favorecidos.enquadramento.processoEscolha') },
+                ...processosVigentes.map((x) => ({
+                  valor: String(x.id),
+                  rotulo: x.descricao ? `${x.numero} · ${x.descricao}` : x.numero,
+                })),
+              ]"
+              data-testid="fv-enq-processo"
+            />
+            <small v-if="!processoValido" role="alert" data-testid="fv-enq-processo-erro">
+              {{ t('repasse.favorecidos.enquadramento.processoFalta') }}
+            </small>
           </span>
           <label class="campo">
             <input v-model="enq.retem" type="checkbox" data-testid="fv-enq-retem" />

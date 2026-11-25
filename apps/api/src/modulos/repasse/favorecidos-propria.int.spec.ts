@@ -60,9 +60,14 @@ describe.skipIf(SEM_BANCO)('favorecidos e prestadores terceiros do repasse (Mari
       await e.executar('DELETE FROM lancamento_repasse WHERE estabelecimento_id = ?', [ids.est]);
       await limparTrilhaDaMassa(e, { ids: [ids.est] });
       await e.executar('DELETE FROM favorecido_repasse WHERE estabelecimento_id = ?', [ids.est]);
-      await e.executar('DELETE FROM enquadramento_tributario_participante WHERE estabelecimento_id = ?', [
-        ids.est,
-      ]);
+      await e.executar(
+        'DELETE FROM enquadramento_tributario_participante WHERE estabelecimento_id = ? OR empresa_fornecedora_id = ?',
+        [ids.est, ids.fornecedor],
+      );
+      await e.executar(
+        'DELETE FROM processo_tributario WHERE estabelecimento_id = ? AND numero_processo LIKE ?',
+        [ids.est, `${P}%`],
+      );
       await e.executar(
         'DELETE FROM conta_bancaria_credor WHERE prestador_terceiro_id IN (SELECT id FROM prestador_terceiro WHERE estabelecimento_id = ?)',
         [ids.est],
@@ -420,5 +425,56 @@ describe.skipIf(SEM_BANCO)('favorecidos e prestadores terceiros do repasse (Mari
       ),
     ).toBe('regra-violada');
     expect((await porta.listarTributos(c())).every((t) => t.id > 0 && t.codigo.length > 0)).toBe(true);
+  });
+
+  it('decisão judicial com o processo judicial; o geral aberto do tributo recusa o deste estabelecimento', async () => {
+    const proc = (tipo: string, situacao: string, numero: string) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 't-f3711' }, (e) =>
+        e.inserir(
+          `INSERT INTO processo_tributario (estabelecimento_id, tipo, numero_processo, codigo_vara, vigencia_inicio, situacao, criado_em)
+           VALUES (?, ?, ?, '0001', '2026-01-01', ?, NOW(3))`,
+          [ids.est, tipo, `${P}${numero}`, situacao],
+        ),
+      );
+    const judicial = await proc('judicial', 'ativo', '0001');
+    const administrativo = await proc('administrativo', 'ativo', '0002');
+    const encerrado = await proc('judicial', 'encerrado', '0003');
+    expect((await porta.listarProcessosJudiciais(c())).map((p) => p.id)).toEqual([judicial]);
+    const dj = { regime: 'decisao_judicial', tributo: null, inicio: '2026-12-15' };
+    for (const p of [administrativo, encerrado, 999_999_999])
+      expect(
+        await recusa(porta.incluirEnquadramento(c(), ids.fornecedor, { ...dj, processoTributario: p })),
+      ).toBe('regra-violada');
+    const ok = await porta.incluirEnquadramento(c(), ids.fornecedor, { ...dj, processoTributario: judicial });
+    const gravado = await um(
+      'SELECT regime, processo_tributario_id AS p FROM enquadramento_tributario_participante WHERE id = ?',
+      [ok.id],
+    );
+    expect([gravado?.['regime'], Number(gravado?.['p'])]).toEqual(['decisao_judicial', judicial]);
+    // Um enquadramento geral (todos os estabelecimentos) aberto de outro tributo: o deste estabelecimento recusa.
+    const tributo = (await porta.listarTributos(c()))[0]!.id;
+    const geral = await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-f3711' }, (e) =>
+      e.inserir(
+        `INSERT INTO enquadramento_tributario_participante
+           (estabelecimento_id, empresa_fornecedora_id, tributo_id, regime, retem_tributo, vigencia_inicio, ativo, criado_em)
+         VALUES (NULL, ?, ?, 'lucro_real', TRUE, '2026-01-01', TRUE, NOW(3))`,
+        [ids.fornecedor, tributo],
+      ),
+    );
+    expect(
+      await recusa(
+        porta.incluirEnquadramento(c(), ids.fornecedor, { regime: 'mei', tributo, inicio: '2026-12-15' }),
+      ),
+    ).toBe('regra-violada');
+    const g = await um(
+      'SELECT vigencia_fim AS f, ativo FROM enquadramento_tributario_participante WHERE id = ?',
+      [geral],
+    );
+    expect([g?.['f'], Boolean(g?.['ativo'])]).toEqual([null, true]);
+    const n = await um(
+      'SELECT COUNT(*) AS n FROM enquadramento_tributario_participante WHERE empresa_fornecedora_id = ? AND tributo_id = ?',
+      [ids.fornecedor, tributo],
+    );
+    expect(Number(n?.['n'])).toBe(1);
   });
 });

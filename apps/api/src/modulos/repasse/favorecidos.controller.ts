@@ -6,6 +6,7 @@
 //   POST /api/repasse/favorecidos                      inclui; o anterior do mesmo tipo e fonte termina no dia de antes
 //   POST /api/repasse/favorecidos/:id/encerrar         { versao, fim } encerra a vigência (nada apagado)
 //   GET  /api/repasse/favorecidos/tributos              tributos ativos (para o enquadramento do fornecedor)
+//   GET  /api/repasse/favorecidos/processos-judiciais   processos judiciais ativos (enquadramento por decisão judicial)
 //   POST /api/repasse/favorecidos/fornecedores/:id/enquadramentos  enquadramento tributário do fornecedor (o mesmo
 //        cadastro do contas a pagar); o anterior aberto do mesmo tributo termina no dia de antes
 //   GET  /api/repasse/prestadores-terceiros?busca=     prestadores terceiros (ativos primeiro)
@@ -133,6 +134,12 @@ export class FavorecidosRepasseController {
   @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.ler)
   tributos(@Req() req: RequisicaoAutorizada) {
     return this.com(req, async (p, c) => ({ itens: await p.listarTributos(c) }));
+  }
+
+  @Get('favorecidos/processos-judiciais')
+  @Permissao(PERMISSOES_FAVORECIDOS_REPASSE.ler)
+  processosJudiciais(@Req() req: RequisicaoAutorizada) {
+    return this.com(req, async (p, c) => ({ itens: await p.listarProcessosJudiciais(c) }));
   }
 
   @Post('favorecidos/fornecedores/:id/enquadramentos')

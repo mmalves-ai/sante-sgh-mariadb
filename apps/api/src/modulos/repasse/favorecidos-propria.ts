@@ -16,6 +16,7 @@ import {
   type FavorecidoVigente,
   planejarEnquadramento,
   planejarFavorecido,
+  problemasDoProcesso,
   retencoesDoFavorecido,
   validarEncerramento,
   TIPOS_FAVORECIDO,
@@ -49,6 +50,7 @@ export type PortaFavorecidosRepasse = Pick<
   | 'incluirFavorecido'
   | 'encerrarFavorecido'
   | 'listarTributos'
+  | 'listarProcessosJudiciais'
   | 'incluirEnquadramento'
   | 'listarPrestadores'
   | 'incluirPrestador'
@@ -117,6 +119,7 @@ export const esquemaEnquadramento = z
     regime: z.string().trim().min(1).max(30),
     retem: z.boolean().default(true),
     aliquotaIss: z.number().nullable().default(null),
+    processoTributario: id.nullable().default(null),
     fundamentoLegal: z.string().trim().max(300).nullable().default(null),
     inicio: data,
     fim: data.nullable().default(null),
@@ -468,6 +471,28 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
     );
   }
 
+  /** Os processos judiciais ativos do estabelecimento, para o enquadramento por decisão judicial. */
+  listarProcessosJudiciais(
+    c: ContextoPortaPropria,
+  ): Promise<{ id: number; numero: string; descricao: string | null; inicio: string; fim: string | null }[]> {
+    return this.ler(c, 'processos-judiciais', async (l, est) =>
+      (
+        await l.consultar<Linha>(
+          `SELECT id, numero_processo, descricao, vigencia_inicio, vigencia_fim FROM processo_tributario
+            WHERE estabelecimento_id = ? AND tipo = 'judicial' AND situacao = 'ativo' AND excluido_em IS NULL
+            ORDER BY vigencia_inicio DESC, id DESC LIMIT 200`,
+          [est.id],
+        )
+      ).map((x) => ({
+        id: num(x['id']),
+        numero: String(x['numero_processo']),
+        descricao: x['descricao'] === null ? null : String(x['descricao']),
+        inicio: dataTexto(x['vigencia_inicio'])!,
+        fim: dataTexto(x['vigencia_fim']),
+      })),
+    );
+  }
+
   /**
    * Inclui o enquadramento tributário do fornecedor do favorecido (o cadastro fiscal do contas a pagar), neste
    * estabelecimento: o anterior aberto do mesmo tributo termina no dia de antes (planejarEnquadramento), nada apagado.
@@ -492,10 +517,30 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
         if (!f) throw naoEncontrado('Fornecedor');
         if (x.tributo !== null && !(await tx.uma('SELECT id FROM tributo WHERE id = ?', [x.tributo])))
           throw naoEncontrado('Tributo');
+        if (x.processoTributario !== null) {
+          const pr = await tx.uma<Linha>(
+            `SELECT tipo, situacao, vigencia_inicio, vigencia_fim FROM processo_tributario
+              WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+            [x.processoTributario, est.id],
+          );
+          const problemas = problemasDoProcesso(
+            x,
+            pr
+              ? {
+                  tipo: String(pr['tipo']),
+                  situacao: String(pr['situacao']),
+                  inicio: dataTexto(pr['vigencia_inicio'])!,
+                  fim: dataTexto(pr['vigencia_fim']),
+                }
+              : null,
+          );
+          if (problemas.length) throw recusaRegra('Enquadramento recusado', problemas);
+        }
+        // O geral (sem estabelecimento) vale aqui também: entra na conferência, para não ficarem dois vigentes.
         const existentes = await tx.consultarParaAtualizar<Linha>(
-          `SELECT id, tributo_id, vigencia_inicio, vigencia_fim, versao
+          `SELECT id, tributo_id, vigencia_inicio, vigencia_fim, versao, estabelecimento_id
              FROM enquadramento_tributario_participante
-            WHERE empresa_fornecedora_id = ? AND estabelecimento_id = ? AND ativo`,
+            WHERE empresa_fornecedora_id = ? AND (estabelecimento_id = ? OR estabelecimento_id IS NULL) AND ativo`,
           [fornecedor, est.id],
         );
         const plano = planejarEnquadramento(
@@ -505,6 +550,7 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
             tributo: numOuNull(e['tributo_id']),
             inicio: dataTexto(e['vigencia_inicio'])!,
             fim: dataTexto(e['vigencia_fim']),
+            geral: e['estabelecimento_id'] === null,
           })),
         );
         if (plano.problemas.length) throw recusaRegra('Enquadramento recusado', plano.problemas);
@@ -521,6 +567,7 @@ export class PortaFavorecidosRepassePropria extends PortaEstabelecimentoPropria 
           regime: x.regime,
           retem_tributo: x.retem,
           aliquota_iss: x.aliquotaIss,
+          processo_tributario_id: x.processoTributario,
           fundamento_legal: x.fundamentoLegal,
           vigencia_inicio: x.inicio,
           vigencia_fim: x.fim,
