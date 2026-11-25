@@ -241,6 +241,18 @@ function detalheDaCritica(v: unknown): string {
 }
 
 /** O detalhe da montagem (JSON curto) como JSON válido para a coluna. */
+/** O detalhe gravado (texto ou JSON já interpretado pelo driver) é o mesmo que o novo? */
+function mesmoDetalhe(gravado: unknown, novo: string): boolean {
+  const canon = (v: unknown): string => {
+    try {
+      return JSON.stringify(typeof v === 'string' ? JSON.parse(v) : (v ?? null));
+    } catch {
+      return String(v);
+    }
+  };
+  return canon(gravado) === canon(novo);
+}
+
 function detalheParaGravar(d: string): string {
   try {
     JSON.parse(d);
@@ -879,6 +891,10 @@ export class LeituraSusPropria implements LeituraSus {
     return this.aihs().aihsParaApresentar(...a);
   }
 
+  diariasUtiGravadas(...a: Parameters<LeiturasAihPropria['diariasUtiGravadas']>) {
+    return this.aihs().diariasUtiGravadas(...a);
+  }
+
   paginaAihs(...a: Parameters<LeiturasAihPropria['paginaAihs']>) {
     return this.aihs().paginaAihs(...a);
   }
@@ -1008,7 +1024,7 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     const agora = new Date();
     const existentes = new Map<string, Linha>();
     for (const x of await this.tx.consultarParaAtualizar(
-      'SELECT id, versao, chave_critica, situacao FROM critica_sus WHERE competencia_sus_id = ? AND excluido_em IS NULL',
+      'SELECT id, versao, chave_critica, situacao, detalhe FROM critica_sus WHERE competencia_sus_id = ? AND excluido_em IS NULL',
       [c.id],
     ))
       existentes.set(txt(x['chave_critica']), x);
@@ -1034,15 +1050,24 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
       if (x.gravidade === 'bloqueante') bloqueantes += 1;
       else if (txt(ex?.['situacao']) !== 'justificada') avisos += 1;
       if (ex) {
+        // A chave é estável e o detalhe pode mudar (as quantidades do teto de diárias de UTI): a linha fica, com a
+        // situação e a justificativa, e o detalhe passa a ser o da crítica de agora.
+        const detalhe = detalheParaGravar(x.detalhe);
+        const novoDetalhe = mesmoDetalhe(ex['detalhe'], detalhe) ? {} : { detalhe };
         if (txt(ex['situacao']) === 'corrigida') {
           await this.tx.alterar('critica_sus', num(ex['id']), num(ex['versao']), {
             situacao: 'aberta',
             criticada_em: agora,
             tratada_em: null,
             tratada_por_usuario_id: null,
+            ...novoDetalhe,
           });
           reabertas += 1;
-        } else mantidas += 1;
+        } else {
+          if ('detalhe' in novoDetalhe)
+            await this.tx.alterar('critica_sus', num(ex['id']), num(ex['versao']), novoDetalhe);
+          mantidas += 1;
+        }
         continue;
       }
       await this.tx.incluir('critica_sus', {

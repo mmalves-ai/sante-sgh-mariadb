@@ -26,7 +26,7 @@ import {
   TABELAS_SUS_AIH,
 } from './porta-propria-aih.js';
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
-import { type AihMontada, criticasTetoDiariasUti } from './montagem-aih.js';
+import { type AihMontada, chaveDaCriticaAih, criticasTetoDiariasUti } from './montagem-aih.js';
 import { GravacaoSusPropria, LeituraSusPropria, TABELAS_SUS } from './porta-propria.js';
 import { ErroAih, type NovoArquivoSus } from './tipos.js';
 
@@ -1136,11 +1136,135 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
           tipoUti: Number(TIPO_UTI),
           competenciaDiarias: '202602',
           diarias: 30,
+          diariasOutrasAihs: 0,
           teto: 28,
           excedente: 2,
         },
       }),
     ]);
     expect(criticasTetoDiariasUti(diarias(28), dados.capacidadesUti ?? [])).toEqual([]);
+
+    // O total do mês das diárias: as diárias de janeiro já gravadas pela AIH fechada do caso anterior (2 do tipo)
+    // entram na soma da AIH de outro arquivo. A leitura deixa de fora as AIHs deste arquivo (exceto).
+    const daFechada = Number(
+      (
+        await nucleo.lerSomente({ cliente: CLIENTE, correlacao }, (l) =>
+          l.uma<{ id: number }>(
+            `SELECT a.id FROM autorizacao_internacao_sus a JOIN conta_aih c ON c.autorizacao_internacao_sus_id = a.id
+               JOIN diaria_uti_sus d ON d.conta_aih_id = c.id
+              WHERE a.estabelecimento_id = ? AND c.situacao = 'fechada' AND d.competencia = '202601'
+              ORDER BY a.id DESC LIMIT 1`,
+            [ids.est],
+          ),
+        )
+      )?.id ?? 0,
+    );
+    expect(daFechada).toBeGreaterThan(0);
+    const gravadas = (exceto: number[]) =>
+      nucleo.lerSomente({ cliente: CLIENTE, estabelecimento: ids.est, correlacao }, (l) =>
+        new LeituraSusPropria(l, ids.est).diariasUtiGravadas(['202601'], exceto),
+      );
+    const todas = await gravadas([]);
+    const semA = await gravadas([daFechada]);
+    const jan = (xs: { tipo: number; competencia: string; diarias: number }[]) =>
+      xs.find((x) => x.tipo === Number(TIPO_UTI) && x.competencia === '202601')?.diarias ?? 0;
+    expect(jan(todas) - jan(semA)).toBe(2);
+    expect(await gravadas([])).toEqual(todas);
+    expect(
+      await nucleo.lerSomente({ cliente: CLIENTE, estabelecimento: ids.est, correlacao }, (l) =>
+        new LeituraSusPropria(l, ids.est).diariasUtiGravadas([], []),
+      ),
+    ).toEqual([]);
+    // Capacidade de janeiro (1 leito: teto 31). As diárias deste arquivo que cabem sozinhas no teto passam dele com
+    // as já gravadas em outro arquivo.
+    const capJan = [
+      ...(dados.capacidadesUti ?? []),
+      { ...(dados.capacidadesUti ?? [])[0]!, id: 99, competencia: '2026-01-01', quantidadeLeitos: 1 },
+    ];
+    const outras = jan(todas);
+    const noArquivo = 31 - outras + 1;
+    const doArquivo = [
+      {
+        diariasCompetencia: [
+          { tipo: Number(TIPO_UTI), procedimento: SIG_U, competencia: '202601', diarias: noArquivo },
+        ],
+      },
+    ] as unknown as AihMontada[];
+    expect(criticasTetoDiariasUti(doArquivo, capJan)).toEqual([]);
+    expect(criticasTetoDiariasUti(doArquivo, capJan, todas)).toEqual([
+      expect.objectContaining({
+        regra: 'diarias-uti-acima-do-teto',
+        detalhe: expect.objectContaining({ diarias: 32, diariasOutrasAihs: outras, teto: 31, excedente: 1 }),
+      }),
+    ]);
+
+    // A crítica que reaparece com outra quantidade mantém a linha: o aviso do tipo sem capacidade justificado segue
+    // justificado (com o detalhe novo) e o bloqueante segue na mesma linha.
+    const comp = await gravar(ids.est, (_g, tx) =>
+      new GravacaoSusPropria(tx, ids.est).abrir({ instrumento: 'aih', competencia: '202611', por: 'x' }),
+    );
+    const semCap = (n: number, m: number) =>
+      [
+        {
+          diariasCompetencia: [
+            { tipo: 9399, procedimento: SIG_U, competencia: '202602', diarias: n },
+            { tipo: Number(TIPO_UTI), procedimento: SIG_U, competencia: '202602', diarias: m },
+          ],
+        },
+      ] as unknown as AihMontada[];
+    const criticar = async (n: number, m: number) => {
+      const atual = await nucleo.lerSomente({ cliente: CLIENTE, estabelecimento: ids.est, correlacao }, (l) =>
+        new LeituraSusPropria(l, ids.est).competencia('aih', '202611'),
+      );
+      const novas = criticasTetoDiariasUti(semCap(n, m), dados.capacidadesUti ?? []).map((c) => ({
+        chave: chaveDaCriticaAih(c),
+        regra: c.regra,
+        gravidade: c.gravidade,
+        conta: null,
+        convenio: null,
+        atendimento: null,
+        item: null,
+        detalhe: JSON.stringify(c.detalhe),
+      }));
+      expect(novas.map((c) => c.regra)).toEqual(['diarias-uti-acima-do-teto', 'diarias-uti-sem-capacidade']);
+      return gravar(ids.est, (_g, tx) =>
+        new GravacaoSusPropria(tx, ids.est).gravarCriticas({ id: atual!.id, versao: atual!.versao }, novas, {
+          registros: 1,
+          cnes: null,
+        }),
+      );
+    };
+    const linhas = () =>
+      nucleo.lerSomente({ cliente: CLIENTE, correlacao }, (l) =>
+        l.consultar(
+          `SELECT id, codigo_regra AS regra, situacao, justificativa, versao, detalhe FROM critica_sus
+            WHERE competencia_sus_id = ? ORDER BY sequencia`,
+          [comp.id],
+        ),
+      );
+    await criticar(3, 30);
+    const antes = await linhas();
+    expect(antes.map((x) => [x['regra'], x['situacao']])).toEqual([
+      ['diarias-uti-acima-do-teto', 'aberta'],
+      ['diarias-uti-sem-capacidade', 'aberta'],
+    ]);
+    const aviso = antes[1]!;
+    await gravar(ids.est, (_g, tx) =>
+      new GravacaoSusPropria(tx, ids.est).justificar(
+        { id: Number(aviso['id']), versao: Number(aviso['versao']) },
+        'Leito do tipo em credenciamento (teste)',
+      ),
+    );
+    const r = await criticar(5, 33);
+    expect(r).toMatchObject({ novas: 0, corrigidas: 0 });
+    const depois = await linhas();
+    expect(depois.map((x) => [x['id'], x['regra'], x['situacao']])).toEqual([
+      [antes[0]!['id'], 'diarias-uti-acima-do-teto', 'aberta'],
+      [aviso['id'], 'diarias-uti-sem-capacidade', 'justificada'],
+    ]);
+    expect(depois[1]!['justificativa']).toBe('Leito do tipo em credenciamento (teste)');
+    const det = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown>;
+    expect(det(depois[0]!['detalhe'])).toMatchObject({ diarias: 33, teto: 28, excedente: 5 });
+    expect(det(depois[1]!['detalhe'])).toMatchObject({ tipoUti: 9399, diarias: 5 });
   }, 120_000);
 });

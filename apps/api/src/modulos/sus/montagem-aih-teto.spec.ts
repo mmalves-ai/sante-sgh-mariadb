@@ -3,7 +3,12 @@
 import { cnsValido } from '@sgh/contratos';
 import type { LinhaCapacidadeSus } from '@sgh/dominio-internacao';
 import { describe, expect, it } from 'vitest';
-import { type AihMontada, criticaAihDaCompetencia, criticasTetoDiariasUti } from './montagem-aih.js';
+import {
+  type AihMontada,
+  chaveDaCriticaAih,
+  criticaAihDaCompetencia,
+  criticasTetoDiariasUti,
+} from './montagem-aih.js';
 import { cnsSintetico } from './porta-memoria.js';
 import type { ParametrosSus } from './montagem.js';
 
@@ -65,12 +70,26 @@ describe('teto das diárias de UTI na crítica da AIH', () => {
         regra: 'diarias-uti-acima-do-teto',
         gravidade: 'bloqueante',
         conta: null,
-        detalhe: { tipoUti: 75, competenciaDiarias: '202602', diarias: 30, teto: 28, excedente: 2 },
+        detalhe: {
+          tipoUti: 75,
+          competenciaDiarias: '202602',
+          diarias: 30,
+          diariasOutrasAihs: 0,
+          teto: 28,
+          excedente: 2,
+        },
       }),
       expect.objectContaining({
         regra: 'diarias-uti-sem-capacidade',
         gravidade: 'aviso',
-        detalhe: { tipoUti: 76, competenciaDiarias: '202602', diarias: 2, teto: null, excedente: 0 },
+        detalhe: {
+          tipoUti: 76,
+          competenciaDiarias: '202602',
+          diarias: 2,
+          diariasOutrasAihs: 0,
+          teto: null,
+          excedente: 0,
+        },
       }),
     ]);
   });
@@ -102,5 +121,56 @@ describe('teto das diárias de UTI na crítica da AIH', () => {
       ['diarias-uti-acima-do-teto', 'bloqueante'],
       ['diarias-uti-sem-capacidade', 'aviso'],
     ]);
+  });
+
+  it('as diárias de um mês repartidas em dois arquivos somam no teto do mês das diárias', () => {
+    // A AIH de março traz 20 diárias de fevereiro; outra AIH, apresentada em fevereiro, já gravou 10 de fevereiro.
+    // Sozinhas, as 20 cabem no teto de 28; com as 10 já gravadas passam dele em 2.
+    const marco = [montada(3, [{ tipo: 75, competencia: '202602', diarias: 20 }])];
+    expect(criticasTetoDiariasUti(marco, [cap({})])).toEqual([]);
+    const outras = [
+      { tipo: 75, competencia: '202602', diarias: 10 },
+      // De outro mês e de outro tipo: não são deste arquivo criticar.
+      { tipo: 75, competencia: '202601', diarias: 40 },
+      { tipo: 76, competencia: '202602', diarias: 9 },
+    ];
+    expect(criticasTetoDiariasUti(marco, [cap({})], outras)).toEqual([
+      expect.objectContaining({
+        regra: 'diarias-uti-acima-do-teto',
+        gravidade: 'bloqueante',
+        detalhe: {
+          tipoUti: 75,
+          competenciaDiarias: '202602',
+          diarias: 30,
+          diariasOutrasAihs: 10,
+          teto: 28,
+          excedente: 2,
+        },
+      }),
+    ]);
+    const p = { cnes: '9999991', habilitacoes: new Set<string>() } as unknown as ParametrosSus;
+    const pAih = { utiPorAcomodacao: '', diretorClinicoCns: DIRETOR };
+    const m = criticaAihDaCompetencia('202603', [], [], marco, p, pAih, [9_999_991], [cap({})], outras);
+    expect(m.criticas.map((c) => [c.regra, c.gravidade])).toEqual([
+      ['diarias-uti-acima-do-teto', 'bloqueante'],
+    ]);
+  });
+
+  it('a chave da crítica do teto é só o tipo e a competência das diárias: outra quantidade mantém a linha', () => {
+    const [a] = criticasTetoDiariasUti(aihs, [cap({})]);
+    const [b] = criticasTetoDiariasUti(
+      [montada(4, [{ tipo: 75, competencia: '202602', diarias: 45 }])],
+      [cap({})],
+      [{ tipo: 75, competencia: '202602', diarias: 3 }],
+    );
+    expect(a?.detalhe['diarias']).toBe(30);
+    expect(b?.detalhe['diarias']).toBe(48);
+    expect(chaveDaCriticaAih(a!)).toBe(chaveDaCriticaAih(b!));
+    expect(chaveDaCriticaAih(a!)).toBe('diarias-uti-acima-do-teto||||competenciaDiarias=202602;tipoUti=75');
+    // Outro tipo ou outro mês é outra crítica; as demais regras seguem a chave com o detalhe inteiro.
+    const [, semCap] = criticasTetoDiariasUti(aihs, [cap({})]);
+    expect(chaveDaCriticaAih(semCap!)).not.toBe(chaveDaCriticaAih(a!));
+    const outra = { ...a!, regra: 'aih-sem-laudo' as const, detalhe: { registro: 1, competencia: '202602' } };
+    expect(chaveDaCriticaAih(outra)).toBe('aih-sem-laudo||||competencia=202602;registro=1');
   });
 });

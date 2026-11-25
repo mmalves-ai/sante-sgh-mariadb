@@ -18,7 +18,7 @@ import {
 } from '@sgh/dominio-faturamento';
 import { type Escritor, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { solicitanteQueRespondeHoje } from '../cadastro/solicitante-vigente.js';
-import type { SolicitanteAihLido } from './porta-aih.js';
+import type { DiariasUtiGravadas, SolicitanteAihLido } from './porta-aih.js';
 import type { PonteAihDoRetorno } from './porta-propria-apac-retorno.js';
 import { gravarRemessa } from './porta-propria-arquivos.js';
 import {
@@ -221,6 +221,43 @@ export class LeiturasAihPropria {
       { teto: 20_000 },
     );
     return ls.map(aihDaLinha);
+  }
+
+  /**
+   * As diárias de UTI gravadas na última conta das AIHs fechadas, apresentadas ou aprovadas do estabelecimento, fora das
+   * dadas (as deste arquivo), nas competências de diária pedidas, somadas por tipo do SIH (o código do domínio SUS da
+   * habilitação) e competência: o total do mês que o teto da capacidade contratada confere (Leitos do sistema público).
+   */
+  async diariasUtiGravadas(
+    competencias: readonly string[],
+    exceto: readonly number[],
+  ): Promise<DiariasUtiGravadas[]> {
+    const comps = [...new Set(competencias.map((c) => c.trim()).filter((c) => /^\d{6}$/.test(c)))];
+    if (comps.length === 0) return [];
+    const fora = [...new Set(exceto.filter((x) => Number.isSafeInteger(x) && x > 0))];
+    const ls = await this.l.consultar(
+      `SELECT COALESCE(ds.codigo_oficial, ds.codigo) AS tipo, d.competencia, SUM(d.quantidade_cobrada) AS diarias
+         FROM autorizacao_internacao_sus a
+         JOIN conta_aih c ON ${ULTIMA_CONTA}
+         JOIN diaria_uti_sus d ON d.conta_aih_id = c.id AND d.excluido_em IS NULL
+         JOIN leito_uti_habilitado h ON h.id = d.leito_uti_habilitado_id
+         JOIN dominio_sus ds ON ds.id = h.tipo_uti_dominio_sus_id
+        WHERE a.estabelecimento_id = ? AND a.situacao NOT IN ('negada','cancelada','devolvida','solicitada')
+          AND c.situacao IN ('fechada','apresentada','aprovada')
+          AND d.competencia IN (${marcadores(comps.length)})
+          ${fora.length ? `AND a.id NOT IN (${marcadores(fora.length)})` : ''}
+        GROUP BY COALESCE(ds.codigo_oficial, ds.codigo), d.competencia
+        ORDER BY d.competencia, tipo`,
+      [this.est, ...comps, ...fora],
+      { teto: 5_000 },
+    );
+    return ls
+      .map((x) => ({
+        tipo: Number(txt(x['tipo'])),
+        competencia: txt(x['competencia']),
+        diarias: num(x['diarias']),
+      }))
+      .filter((x) => Number.isFinite(x.tipo) && x.diarias > 0);
   }
 
   async paginaAihs(

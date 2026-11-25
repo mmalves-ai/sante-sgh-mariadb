@@ -25,7 +25,7 @@ import {
 } from '@sgh/dominio-faturamento';
 import { conferirTetosDiarias, type LinhaCapacidadeSus } from '@sgh/dominio-internacao';
 import { cnesDaCompetencia, type ParametrosSus } from './montagem.js';
-import type { DadosAihLidos } from './porta-aih.js';
+import type { DadosAihLidos, DiariasUtiGravadas } from './porta-aih.js';
 import { type AihRegistro, type EquivalenciaSus, type ItemAih, type NovaCriticaSus } from './tipos.js';
 
 /** Os parâmetros da AIH (`faturamento.sus.aih.*`). */
@@ -212,28 +212,65 @@ export interface MontagemAihCompetencia {
   readonly apresentaveis: readonly AihMontada[];
 }
 
+/** As regras do teto de diárias de UTI e os campos do detalhe que mudam de uma crítica para outra (fora da chave). */
+const REGRAS_TETO_UTI: ReadonlySet<string> = new Set([
+  'diarias-uti-acima-do-teto',
+  'diarias-uti-sem-capacidade',
+]);
+const CAMPOS_VARIAVEIS_TETO = ['diarias', 'diariasOutrasAihs', 'teto', 'excedente'] as const;
+
 /**
- * O teto das diárias de UTI (Leitos do sistema público, 04-INT linha 79): as diárias das AIHs a apresentar somadas por
- * tipo de UTI e competência da diária e conferidas pelo domínio contra a capacidade contratada vigente (leitos × dias do
- * mês). Acima do teto sem liberação é bloqueante; o tipo sem capacidade, quando o cadastro é usado, é aviso. A soma é
- * só do que vai neste arquivo (as diárias já apresentadas em outra competência não entram): nunca critica a mais.
+ * A chave estável da crítica da competência AIH (`chaveDaCritica`). No teto das diárias de UTI a chave é só o tipo de UTI
+ * e a competência das diárias: as quantidades (diárias, teto, excedente) ficam no detalhe, fora da chave, e a crítica
+ * que reaparece com outra quantidade mantém a linha, a situação e a justificativa.
+ */
+export function chaveDaCriticaAih(c: CriticaCiha): string {
+  if (!REGRAS_TETO_UTI.has(c.regra)) return chaveDaCritica(c);
+  const detalhe: Record<string, string | number | null> = { ...c.detalhe };
+  for (const k of CAMPOS_VARIAVEIS_TETO) delete detalhe[k];
+  return chaveDaCritica({ ...c, detalhe });
+}
+
+/**
+ * O teto das diárias de UTI (Leitos do sistema público, 04-INT linha 79), conferido pelo total do mês das diárias:
+ * as diárias das AIHs a apresentar neste arquivo somadas, por tipo de UTI e competência da diária, às diárias já
+ * gravadas das outras AIHs fechadas ou apresentadas (em outra competência de apresentação: a AIH vai pela competência
+ * da alta, e as diárias de um mês podem ficar repartidas entre arquivos), e conferidas pelo domínio contra a
+ * capacidade contratada vigente da competência das diárias (leitos × dias do mês). Acima do teto sem liberação é
+ * bloqueante; o tipo sem capacidade, quando o cadastro é usado, é aviso. O detalhe leva o total e a parte das outras
+ * AIHs (`diariasOutrasAihs`).
  */
 export function criticasTetoDiariasUti(
   apresentaveis: readonly AihMontada[],
   capacidadesUti: readonly LinhaCapacidadeSus[],
+  outrasAihs: readonly DiariasUtiGravadas[] = [],
 ): CriticaCiha[] {
-  const diarias = apresentaveis.flatMap((m) =>
+  const doArquivo = apresentaveis.flatMap((m) =>
     m.diariasCompetencia.map((d) => ({ tipo: d.tipo, competencia: d.competencia, diarias: d.diarias })),
   );
-  return conferirTetosDiarias(diarias, capacidadesUti).map((r) =>
-    criticaDe(r.situacao === 'critica' ? 'diarias-uti-acima-do-teto' : 'diarias-uti-sem-capacidade', null, {
-      tipoUti: r.tipo,
-      competenciaDiarias: r.competencia.slice(0, 7).replace('-', ''),
-      diarias: r.diarias,
-      teto: r.teto,
-      excedente: r.excedente,
-    }),
-  );
+  // Só as competências e os tipos que este arquivo traz: o que não tem diária aqui não é deste arquivo criticar.
+  const doArquivoChaves = new Set(doArquivo.map((d) => `${d.tipo}|${d.competencia.trim()}`));
+  const outras = outrasAihs.filter((d) => doArquivoChaves.has(`${d.tipo}|${d.competencia.trim()}`));
+  const outrasPor = new Map<string, number>();
+  for (const d of outras) {
+    const k = `${d.tipo}|${d.competencia.trim()}`;
+    outrasPor.set(k, (outrasPor.get(k) ?? 0) + Math.max(0, d.diarias));
+  }
+  return conferirTetosDiarias([...doArquivo, ...outras], capacidadesUti).map((r) => {
+    const competenciaDiarias = r.competencia.slice(0, 7).replace('-', '');
+    return criticaDe(
+      r.situacao === 'critica' ? 'diarias-uti-acima-do-teto' : 'diarias-uti-sem-capacidade',
+      null,
+      {
+        tipoUti: r.tipo,
+        competenciaDiarias,
+        diarias: r.diarias,
+        diariasOutrasAihs: outrasPor.get(`${r.tipo}|${competenciaDiarias}`) ?? 0,
+        teto: r.teto,
+        excedente: r.excedente,
+      },
+    );
+  });
 }
 
 /**
@@ -250,6 +287,7 @@ export function criticaAihDaCompetencia(
   pAih: ParametrosAih,
   cnesCadastrados: readonly number[],
   capacidadesUti: readonly LinhaCapacidadeSus[] = [],
+  diariasOutrasAihs: readonly DiariasUtiGravadas[] = [],
 ): MontagemAihCompetencia {
   const todas: CriticaCiha[] = [];
   const cnes = cnesDaCompetencia(p, cnesCadastrados);
@@ -272,9 +310,9 @@ export function criticaAihDaCompetencia(
     }
   }
   for (const m of apresentaveis) todas.push(...m.resultado.criticas);
-  todas.push(...criticasTetoDiariasUti(apresentaveis, capacidadesUti));
+  todas.push(...criticasTetoDiariasUti(apresentaveis, capacidadesUti, diariasOutrasAihs));
   const criticas: NovaCriticaSus[] = todas.map((c) => ({
-    chave: chaveDaCritica(c),
+    chave: chaveDaCriticaAih(c),
     regra: c.regra,
     gravidade: c.gravidade,
     conta: c.conta,

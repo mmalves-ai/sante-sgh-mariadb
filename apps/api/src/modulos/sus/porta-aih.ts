@@ -60,6 +60,13 @@ export interface DadosAihLidos {
   readonly cnesCadastrados: readonly number[];
 }
 
+/** As diárias de UTI já gravadas de outras AIHs, por tipo do SIH e competência da diária (AAAAMM). */
+export interface DiariasUtiGravadas {
+  readonly tipo: number;
+  readonly competencia: string;
+  readonly diarias: number;
+}
+
 export interface LeituraSusAih {
   /** A internação pelo registro, com a conta SUS escolhida pelos convênios SUS do estabelecimento. */
   internacaoAih(registro: number, conveniosSus: readonly number[]): Promise<InternacaoAih | null>;
@@ -86,6 +93,14 @@ export interface LeituraSusAih {
   aihPorNumero(numero: string): Promise<AihRegistro | null>;
   aihsDasInternacoes(registros: readonly number[]): Promise<AihRegistro[]>;
   aihsParaApresentar(competencia: string): Promise<AihRegistro[]>;
+  /**
+   * As diárias de UTI já gravadas (a última conta) das AIHs fechadas ou apresentadas fora das dadas, por tipo do SIH e
+   * competência da diária, só nas competências pedidas: o total do mês para o teto da capacidade contratada.
+   */
+  diariasUtiGravadas?(
+    competencias: readonly string[],
+    exceto: readonly number[],
+  ): Promise<DiariasUtiGravadas[]>;
   paginaAihs(
     f: FiltroAihsPorta,
   ): Promise<{ itens: AihRegistro[]; total: number; porSituacao: Record<string, number> }>;

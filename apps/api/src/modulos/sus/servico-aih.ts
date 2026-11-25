@@ -747,6 +747,17 @@ export class ServicoSusAih {
       const cadastrados = cnesCadastrados.length
         ? cnesCadastrados
         : (await l.dadosAih([], [], [], s.parametros.conveniosSus)).cnesCadastrados;
+      // O teto da capacidade é do mês das diárias: as diárias já gravadas das AIHs de outros arquivos entram na soma.
+      const competenciasDiarias = [
+        ...new Set(apresentaveis.flatMap((m) => m.diariasCompetencia.map((d) => d.competencia))),
+      ];
+      const outrasAihs =
+        capacidadesUti.length > 0 && competenciasDiarias.length > 0 && l.diariasUtiGravadas
+          ? await l.diariasUtiGravadas(
+              competenciasDiarias,
+              apresentaveis.map((m) => m.aih.id),
+            )
+          : [];
       return {
         comp,
         m: criticaAihDaCompetencia(
@@ -758,6 +769,7 @@ export class ServicoSusAih {
           pAih,
           cadastrados,
           capacidadesUti,
+          outrasAihs,
         ),
         pAih,
       };
