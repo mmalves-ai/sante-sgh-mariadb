@@ -19,6 +19,7 @@ export * from './retencao-sofrida.js';
 export * from './remessa.js';
 export * from './retorno-pagamento.js';
 export * from './chave-pix.js';
+export * from './credor-conta.js';
 export * from './pagamento-eletronico.js';
 export * from './adiantamento.js';
 export * from './indicadores.js';

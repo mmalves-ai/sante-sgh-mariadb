@@ -3,9 +3,11 @@
 //   GET  /api/financeiro/pagamento-eletronico/retornos?remessa=           retornos lidos da remessa, linha a linha
 //   POST /api/financeiro/pagamento-eletronico/retornos                    { remessa, nomeArquivo, conteudo }
 //   GET  /api/financeiro/pagamento-eletronico/retorno-simulado?remessa=   o retorno do simulador (fora de produção)
-//   GET  /api/financeiro/pagamento-eletronico/credores?busca=             credores pelo nome ou documento
-//   GET  /api/financeiro/pagamento-eletronico/credores/contas?fornecedor= contas e chaves do credor (mascaradas)
-//   POST /api/financeiro/pagamento-eletronico/credores/contas             incluir, alterar ou desativar a conta
+//   GET  /api/financeiro/pagamento-eletronico/credores?busca=&tipo=       credores (fornecedor; tipo=prestador: prestador terceiro)
+//   GET  /api/financeiro/pagamento-eletronico/credores/contas?tipo=&credor= contas e chaves do credor (mascaradas);
+//                                                                         ?fornecedor= é a forma curta do fornecedor
+//   POST /api/financeiro/pagamento-eletronico/credores/contas             incluir, alterar ou desativar a conta (C1-026:
+//                                                                         permissão própria, separada de quem gera a remessa)
 //   GET  /api/financeiro/pagamento-eletronico/bancos                      bancos da lista oficial
 //   GET  /api/financeiro/pagamento-eletronico/pix/parcelas                parcelas em aberto para a remessa por Pix
 //   POST /api/financeiro/pagamento-eletronico/pix/remessas                { conta, parcelas, dataPagamento }
@@ -14,6 +16,12 @@
 import { createHash } from 'node:crypto';
 import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Query, Req } from '@nestjs/common';
 import type { ResultadoFinanceiro } from '@sgh/contratos';
+import {
+  credorDaConta,
+  credorRecusado,
+  TIPOS_CREDOR_CONTA,
+  type TipoCredorConta,
+} from '@sgh/dominio-financeiro';
 import type { Executor, Leitor, NucleoProprio } from '@sgh/nucleo';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -32,6 +40,7 @@ import {
   montarRemessaPix,
   OPERACOES_PAGAMENTO_ELETRONICO,
   parcelasParaPix,
+  prestadoresParaPagamento,
   remessasComPendencia,
   retornoSimulado,
   retornosDaRemessa,
@@ -160,18 +169,35 @@ export class PagamentoEletronicoController {
 
   @Get('credores')
   @Permissao('financeiro.tituloPagar.ler')
-  credores(@Query('busca') busca: string | undefined, @Req() req: RequisicaoAutorizada) {
+  credores(
+    @Query('busca') busca: string | undefined,
+    @Query('tipo') tipo: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
     const termo = (busca ?? '').trim().slice(0, 80);
-    if (termo.length < 2) return [];
+    if (termo.length < 2 && !/^\d$/.test(termo)) return [];
+    if (tipo === 'prestador') return this.ler(req, (l, est) => prestadoresParaPagamento(l, est, termo));
     return this.ler(req, (l) => credoresParaPagamento(l, termo));
   }
 
   @Get('credores/contas')
   @Permissao('financeiro.tituloPagar.ler')
-  contas(@Query('fornecedor') fornecedor: string | undefined, @Req() req: RequisicaoAutorizada) {
-    const n = inteiroOuNulo(fornecedor);
-    if (!n) throw new ErroProblema('entrada-invalida', 400, 'Credor inválido', 'Escolha o credor.');
-    return this.ler(req, (l) => contasDoCredor(l, n));
+  contas(
+    @Query('fornecedor') fornecedor: string | undefined,
+    @Query('tipo') tipo: string | undefined,
+    @Query('credor') credor: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const tipoCredor = TIPOS_CREDOR_CONTA.includes(tipo as TipoCredorConta)
+      ? (tipo as TipoCredorConta)
+      : undefined;
+    const r = credorDaConta({
+      fornecedor: fornecedor === undefined ? undefined : (inteiroOuNulo(fornecedor) ?? 0),
+      tipoCredor: tipo === undefined ? undefined : (tipoCredor ?? ('?' as TipoCredorConta)),
+      credor: credor === undefined ? undefined : (inteiroOuNulo(credor) ?? 0),
+    });
+    if (credorRecusado(r)) throw new ErroProblema('entrada-invalida', 400, 'Credor inválido', r.mensagem);
+    return this.ler(req, (l) => contasDoCredor(l, r));
   }
 
   @Get('bancos')
@@ -182,7 +208,7 @@ export class PagamentoEletronicoController {
 
   @Post('credores/contas')
   @HttpCode(200)
-  @Permissao('financeiro.parametro.editar')
+  @Permissao('financeiro.contaCredor.manter')
   @AuditadoNoHandler('financeiro.manterContaCredor pelo executor (trilha na mesma transação)')
   manterConta(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFinanceiro> {
     return this.gravar(req, 'financeiro.manterContaCredor', corpo(esquemaContaCredor, b), (r) =>

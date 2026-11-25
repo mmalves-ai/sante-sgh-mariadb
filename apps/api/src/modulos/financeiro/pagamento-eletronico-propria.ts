@@ -5,13 +5,18 @@
 // mesmo arquivo não entra duas vezes (impressão digital). Cada linha vira um item do retorno com a ocorrência; o pago
 // ganha a baixa na conta da remessa com o movimento bancário (data e valor efetivos do banco), o rejeitado devolve a
 // parcela à fila com o motivo e o agendado continua aguardando. O vínculo da parcela com a remessa é respondido aqui.
-// Dados bancários do credor: conta em banco e chave Pix conferidas no domínio; nada se apaga (desativar guarda a linha e
+// Dados bancários do credor (fornecedor, profissional ou prestador terceiro, C1-026): conta em banco e chave Pix conferidas no domínio; nada se apaga (desativar guarda a linha e
 // a chave trocada fica no histórico de chaves). A lista mostra o dado mascarado.
 // Remessa por Pix: o arquivo é montado pela regra do domínio com a chave preferencial do credor; a gravação remonta o
 // arquivo sob a trava e só registra se a impressão digital for a do arquivo guardado.
 import { createHash } from 'node:crypto';
 import {
+  type ChaveCandidata,
   conferirContaCredor,
+  type CredorDaConta,
+  credorDaConta,
+  credorRecusado,
+  escolherChavePix,
   gerarCnab240Pix,
   lerRetornoCnab240,
   mascararDadoBancario,
@@ -20,7 +25,9 @@ import {
   remessaPixRecusada,
   retornoRecusado,
   TIPOS_CONTA_CREDOR,
+  TIPOS_CREDOR_CONTA,
   type TipoChavePix,
+  type TipoCredorConta,
   type TituloRemessaPix,
 } from '@sgh/dominio-financeiro';
 import {
@@ -308,18 +315,44 @@ export const esquemaAlterarContaCredor = z
     ...dadosConta,
   })
   .strict();
+// O credor da conta nova: o par (tipoCredor, credor) ou `fornecedor` sozinho (forma curta); a regra é a do domínio.
 export const esquemaContaCredor = z.discriminatedUnion('acao', [
-  z.object({ acao: z.literal('incluir'), fornecedor: id, ...dadosConta }).strict(),
+  z
+    .object({
+      acao: z.literal('incluir'),
+      fornecedor: id.optional(),
+      tipoCredor: z.enum(TIPOS_CREDOR_CONTA).optional(),
+      credor: id.optional(),
+      ...dadosConta,
+    })
+    .strict(),
   esquemaAlterarContaCredor,
   z.object({ acao: z.literal('desativar'), contaCredor: id, versao: id }).strict(),
 ]);
 type ContaCredorEntradaOp = z.infer<typeof esquemaContaCredor>;
 
+/** Coluna da conta do credor para cada tipo (a conta é de um credor só: o CHECK do banco confere). */
+const COLUNA_DO_CREDOR: Readonly<
+  Record<TipoCredorConta, 'empresa_fornecedora_id' | 'profissional_id' | 'prestador_terceiro_id'>
+> = {
+  fornecedor: 'empresa_fornecedora_id',
+  profissional: 'profissional_id',
+  prestador: 'prestador_terceiro_id',
+};
+/** O credor da linha gravada (nulo: conta de pessoa física avulsa, fora deste cadastro). */
+const credorDaLinha = (l: Record<string, unknown>): CredorDaConta | null => {
+  for (const tipo of TIPOS_CREDOR_CONTA) {
+    const v = l[COLUNA_DO_CREDOR[tipo]];
+    if (v !== null && v !== undefined) return { tipo, id: numero(v) };
+  }
+  return null;
+};
+
 const manterContaCredor = definirOperacao<ContaCredorEntradaOp, ResultadoOperacao>({
   nome: 'financeiro.manter_conta_credor',
   tabelas: ['conta_bancaria_credor', 'chave_pix_credor'],
   entrada: esquemaContaCredor as never,
-  async gravar(tx, e) {
+  async gravar(tx, e, ctx) {
     const desativarChaves = async (contaCredor: number, menos: string | null) => {
       const chaves = await tx.consultarParaAtualizar(
         'SELECT id, versao, chave FROM chave_pix_credor WHERE conta_bancaria_credor_id = ? AND ativa = TRUE',
@@ -341,12 +374,12 @@ const manterContaCredor = definirOperacao<ContaCredorEntradaOp, ResultadoOperaca
     };
     const lerLinha = async (contaCredor: number, versao: number) => {
       const [l] = await tx.consultarParaAtualizar(
-        'SELECT id, versao, empresa_fornecedora_id, ativo FROM conta_bancaria_credor WHERE id = ?',
+        `SELECT id, versao, empresa_fornecedora_id, profissional_id, prestador_terceiro_id, ativo
+           FROM conta_bancaria_credor WHERE id = ?`,
         [contaCredor],
         { teto: 1 },
       );
-      if (!l || l['empresa_fornecedora_id'] === null)
-        throw recusa('conta-inexistente', 'A conta do credor não existe.');
+      if (!l || credorDaLinha(l) === null) throw recusa('conta-inexistente', 'A conta do credor não existe.');
       if (numero(l['versao']) !== versao)
         throw recusa('versao-desatualizada', 'Outra pessoa alterou a conta do credor: releia.');
       return l;
@@ -358,7 +391,14 @@ const manterContaCredor = definirOperacao<ContaCredorEntradaOp, ResultadoOperaca
         preferencial: false,
       });
       await desativarChaves(e.contaCredor, null);
-      return { contaCredor: e.contaCredor, fornecedor: numero(l['empresa_fornecedora_id']), acao: e.acao };
+      const dono = credorDaLinha(l) as CredorDaConta;
+      return {
+        contaCredor: e.contaCredor,
+        tipoCredor: dono.tipo,
+        credor: dono.id,
+        fornecedor: dono.tipo === 'fornecedor' ? dono.id : null,
+        acao: e.acao,
+      };
     }
     const conferida = conferirContaCredor(e);
     if ('codigo' in conferida)
@@ -366,21 +406,33 @@ const manterContaCredor = definirOperacao<ContaCredorEntradaOp, ResultadoOperaca
     const atual = e.acao === 'alterar' ? await lerLinha(e.contaCredor, e.versao) : null;
     if (atual && !atual['ativo'])
       throw recusa('conta-desativada', 'A conta do credor está desativada: inclua uma nova.');
-    const fornecedor = atual
-      ? numero(atual['empresa_fornecedora_id'])
-      : e.acao === 'incluir'
-        ? e.fornecedor
-        : 0;
-    const f = await tx.uma('SELECT id FROM empresa_fornecedora WHERE id = ?', [fornecedor]);
-    if (!f) throw recusa('credor-inexistente', 'O credor não existe.', { campos: ['fornecedor'] });
+    let dono: CredorDaConta;
+    if (atual) dono = credorDaLinha(atual) as CredorDaConta;
+    else {
+      const r = credorDaConta(e.acao === 'incluir' ? e : {});
+      if (credorRecusado(r)) throw recusa(r.codigo, r.mensagem, { campos: [...(r.campos ?? [])] });
+      dono = r;
+    }
+    // O credor existe no cadastro dele; o prestador terceiro é do estabelecimento da sessão.
+    const existe =
+      dono.tipo === 'fornecedor'
+        ? await tx.uma('SELECT id FROM empresa_fornecedora WHERE id = ?', [dono.id])
+        : dono.tipo === 'profissional'
+          ? await tx.uma('SELECT id FROM profissional WHERE id = ? AND excluido_em IS NULL', [dono.id])
+          : await tx.uma(
+              'SELECT id FROM prestador_terceiro WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+              [dono.id, estabelecimentoDe(ctx)],
+            );
+    if (!existe) throw recusa('credor-inexistente', 'O credor não existe.', { campos: ['credor'] });
+    const coluna = COLUNA_DO_CREDOR[dono.tipo];
     if (conferida.banco !== null) {
       const b = await tx.uma('SELECT id FROM banco WHERE id = ?', [conferida.banco]);
       if (!b) throw recusa('banco-inexistente', 'Escolha o banco da lista.', { campos: ['banco'] });
     }
     const outras = await tx.consultarParaAtualizar(
       `SELECT id, versao, banco_id, numero_agencia, numero_conta, chave_pix, preferencial
-         FROM conta_bancaria_credor WHERE empresa_fornecedora_id = ? AND ativo = TRUE AND id <> ?`,
-      [fornecedor, atual ? numero(atual['id']) : 0],
+         FROM conta_bancaria_credor WHERE ${coluna} = ? AND ativo = TRUE AND id <> ?`,
+      [dono.id, atual ? numero(atual['id']) : 0],
       { teto: 200 },
     );
     const repetida = outras.some(
@@ -420,11 +472,7 @@ const manterContaCredor = definirOperacao<ContaCredorEntradaOp, ResultadoOperaca
     if (atual) {
       contaCredor = numero(atual['id']);
       await tx.alterar('conta_bancaria_credor', contaCredor, e.acao === 'alterar' ? e.versao : 1, valores);
-    } else
-      contaCredor = await tx.incluir('conta_bancaria_credor', {
-        empresa_fornecedora_id: fornecedor,
-        ...valores,
-      });
+    } else contaCredor = await tx.incluir('conta_bancaria_credor', { [coluna]: dono.id, ...valores });
     // A chave trocada não some: fica desativada no histórico de chaves; a nova entra como a padrão da conta.
     const mantida = await desativarChaves(contaCredor, conferida.chavePix);
     if (conferida.chavePix !== null && conferida.tipoChavePix !== null && !mantida) {
@@ -451,7 +499,14 @@ const manterContaCredor = definirOperacao<ContaCredorEntradaOp, ResultadoOperaca
           data_ativacao: hojeIso(),
         });
     }
-    return { contaCredor, fornecedor, acao: e.acao, preferencial };
+    return {
+      contaCredor,
+      tipoCredor: dono.tipo,
+      credor: dono.id,
+      fornecedor: dono.tipo === 'fornecedor' ? dono.id : null,
+      acao: e.acao,
+      preferencial,
+    };
   },
   alvo: (_e, r) => ({ tabela: 'conta_bancaria_credor', id: numero(r['contaCredor']) || null }),
   eventos: (_e, r) => [
@@ -459,7 +514,8 @@ const manterContaCredor = definirOperacao<ContaCredorEntradaOp, ResultadoOperaca
       tipo: 'financeiro.conta_credor.mantida',
       carga: {
         contaCredor: numero(r['contaCredor']),
-        fornecedor: numero(r['fornecedor']),
+        tipoCredor: texto(r['tipoCredor']),
+        credor: numero(r['credor']),
         acao: texto(r['acao']),
       },
     },
@@ -477,8 +533,10 @@ export interface RemessaPixMontada {
 }
 
 /**
- * Monta o arquivo da remessa por Pix com a chave preferencial ativa de cada credor. Recusa parcela de outro
- * estabelecimento, sem saldo, de credor que não é fornecedor ou que já está numa remessa aguardando o retorno.
+ * Monta o arquivo da remessa por Pix com a chave ativa de cada credor (fornecedor ou profissional; sem chave dele, a do
+ * prestador terceiro ligado, pela regra do domínio `escolherChavePix`); o documento do favorecido é o do titular da
+ * chave. Recusa parcela de outro estabelecimento, sem saldo, de credor que não é fornecedor nem profissional ou que já
+ * está numa remessa aguardando o retorno.
  */
 export async function montarRemessaPix(
   l: Leitor,
@@ -499,18 +557,15 @@ export async function montarRemessaPix(
     });
   const unicas = [...new Set(parcelas)];
   const linhas = await l.consultar(
-    `SELECT p.id, p.saldo, p.situacao, p.vencimento, f.razao_social, f.cnpj, f.cpf,
-            (SELECT cc.tipo_chave_pix FROM conta_bancaria_credor cc
-              WHERE cc.empresa_fornecedora_id = t.empresa_fornecedora_id AND cc.ativo = TRUE
-                AND cc.chave_pix IS NOT NULL ORDER BY cc.preferencial DESC, cc.id DESC LIMIT 1) AS tipo_chave,
-            (SELECT cc.chave_pix FROM conta_bancaria_credor cc
-              WHERE cc.empresa_fornecedora_id = t.empresa_fornecedora_id AND cc.ativo = TRUE
-                AND cc.chave_pix IS NOT NULL ORDER BY cc.preferencial DESC, cc.id DESC LIMIT 1) AS chave,
+    `SELECT p.id, p.saldo, p.situacao, p.vencimento, t.empresa_fornecedora_id, t.profissional_id,
+            COALESCE(f.razao_social, pf.nome) AS razao_social, COALESCE(f.cnpj, f.cpf, pf.cpf) AS documento,
             (SELECT COUNT(*) FROM parcela_remessa_bancaria pr JOIN remessa_bancaria r ON r.id = pr.remessa_bancaria_id
               WHERE pr.parcela_pagar_id = p.id AND pr.situacao = 'pendente' AND pr.excluido_em IS NULL
                 AND r.excluido_em IS NULL AND r.situacao <> 'cancelada') AS em_remessa
        FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
        LEFT JOIN empresa_fornecedora f ON f.id = t.empresa_fornecedora_id
+       LEFT JOIN profissional pr ON pr.id = t.profissional_id
+       LEFT JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
       WHERE p.id IN (${unicas.map(() => '?').join(',')}) AND t.estabelecimento_id = ? AND p.excluido_em IS NULL
         AND t.excluido_em IS NULL AND t.situacao <> 'cancelado'
       ORDER BY p.id`,
@@ -535,21 +590,30 @@ export async function montarRemessaPix(
       'titulo-em-remessa',
       `Título já enviado numa remessa que aguarda o retorno do banco: ${presas.map((x) => numero(x['id'])).join(', ')}.`,
     );
-  const semCredor = linhas.filter((x) => x['razao_social'] === null);
+  const semCredor = linhas.filter(
+    (x) => x['empresa_fornecedora_id'] === null && x['profissional_id'] === null,
+  );
   if (semCredor.length > 0)
     throw recusa(
       'credor-sem-cadastro-bancario',
-      `A remessa por Pix paga fornecedores: o(s) título(s) ${semCredor.map((x) => numero(x['id'])).join(', ')} são de outro tipo de credor.`,
+      `A remessa por Pix paga fornecedores e profissionais: o(s) título(s) ${semCredor.map((x) => numero(x['id'])).join(', ')} são de outro tipo de credor.`,
     );
-  const titulos: TituloRemessaPix[] = linhas.map((x) => ({
-    titulo: numero(x['id']),
-    valor: numero(x['saldo']),
-    dataPagamento,
-    favorecido: texto(x['razao_social']),
-    documento: texto(x['cnpj'] ?? x['cpf']).replace(/\D/g, ''),
-    tipoChavePix: (x['tipo_chave'] as TipoChavePix | null) ?? null,
-    chavePix: x['chave'] === null ? null : texto(x['chave']),
-  }));
+  const chaves = await chavesDosCredores(l, est, linhas);
+  const titulos: TituloRemessaPix[] = linhas.map((x) => {
+    const escolhida = escolherChavePix(chaves.candidatas(x));
+    return {
+      titulo: numero(x['id']),
+      valor: numero(x['saldo']),
+      dataPagamento,
+      favorecido: texto(x['razao_social']),
+      documento: (escolhida ? (chaves.titular.get(escolhida.conta) ?? '') : texto(x['documento'])).replace(
+        /\D/g,
+        '',
+      ),
+      tipoChavePix: escolhida?.tipoChavePix ?? null,
+      chavePix: escolhida?.chavePix ?? null,
+    };
+  });
   const sequencial = numero(c['sequencia_remessa']) + 1;
   const arquivo = gerarCnab240Pix(
     numero(c['codigo_compensacao']),
@@ -567,6 +631,58 @@ export async function montarRemessaPix(
     sequencial,
     titulos,
     vencimentos: new Map(linhas.map((x) => [numero(x['id']), dataIso(x['vencimento']) ?? dataPagamento])),
+  };
+}
+
+/**
+ * As contas com chave Pix ativa dos credores das parcelas: a do próprio credor (fornecedor ou profissional) e a do
+ * prestador terceiro do estabelecimento ligado a ele. A escolha entre elas é do domínio.
+ */
+async function chavesDosCredores(l: Leitor, est: number, linhas: readonly Record<string, unknown>[]) {
+  const ids = (k: string) => [
+    ...new Set(
+      linhas
+        .map((x) => x[k])
+        .filter((v) => v !== null)
+        .map(numero),
+    ),
+  ];
+  const fs = ids('empresa_fornecedora_id');
+  const ps = ids('profissional_id');
+  const contas = await l.consultar(
+    `SELECT cc.id, cc.empresa_fornecedora_id, cc.profissional_id, pt.empresa_fornecedora_id AS pt_fornecedor,
+            pt.profissional_id AS pt_profissional, cc.preferencial, cc.tipo_chave_pix, cc.chave_pix, cc.titular_documento
+       FROM conta_bancaria_credor cc
+       LEFT JOIN prestador_terceiro pt ON pt.id = cc.prestador_terceiro_id AND pt.estabelecimento_id = ?
+                                      AND pt.excluido_em IS NULL AND pt.ativo = TRUE
+      WHERE cc.ativo = TRUE AND cc.chave_pix IS NOT NULL
+        AND (cc.empresa_fornecedora_id IN (${naLista(fs)}) OR cc.profissional_id IN (${naLista(ps)})
+             OR pt.empresa_fornecedora_id IN (${naLista(fs)}) OR pt.profissional_id IN (${naLista(ps)}))`,
+    [est, ...fs, ...ps, ...fs, ...ps],
+    { teto: 2000 },
+  );
+  const igual = (a: unknown, b: unknown) => a !== null && b !== null && numero(a) === numero(b);
+  return {
+    titular: new Map(contas.map((c) => [numero(c['id']), texto(c['titular_documento'])])),
+    candidatas: (x: Record<string, unknown>): ChaveCandidata[] =>
+      contas.flatMap((c) => {
+        const doCredor =
+          igual(c['empresa_fornecedora_id'], x['empresa_fornecedora_id']) ||
+          igual(c['profissional_id'], x['profissional_id']);
+        const doPrestador =
+          igual(c['pt_fornecedor'], x['empresa_fornecedora_id']) ||
+          igual(c['pt_profissional'], x['profissional_id']);
+        if (!doCredor && !doPrestador) return [];
+        return [
+          {
+            conta: numero(c['id']),
+            nivel: doCredor ? ('credor' as const) : ('prestador' as const),
+            preferencial: Boolean(c['preferencial']),
+            tipoChavePix: texto(c['tipo_chave_pix']) as TipoChavePix,
+            chavePix: texto(c['chave_pix']),
+          },
+        ];
+      }),
   };
 }
 
@@ -838,15 +954,16 @@ export async function credoresParaPagamento(l: Leitor, busca: string) {
 }
 
 /** As contas do credor (ativas primeiro). Agência, conta e chave saem mascaradas: a tela nunca recebe o dado inteiro. */
-export async function contasDoCredor(l: Leitor, fornecedor: number) {
+export async function contasDoCredor(l: Leitor, credor: CredorDaConta) {
+  const coluna = COLUNA_DO_CREDOR[credor.tipo];
   const linhas = await l.consultar(
     `SELECT cc.id, cc.versao, cc.banco_id, b.codigo_compensacao, b.descricao AS banco_nome, cc.tipo_conta,
             cc.numero_agencia, cc.numero_conta, cc.digito_conta, cc.tipo_chave_pix, cc.chave_pix, cc.titular_nome,
             cc.titular_documento, cc.preferencial, cc.ativo,
             (SELECT COUNT(*) FROM chave_pix_credor k WHERE k.conta_bancaria_credor_id = cc.id) AS chaves_historico
        FROM conta_bancaria_credor cc LEFT JOIN banco b ON b.id = cc.banco_id
-      WHERE cc.empresa_fornecedora_id = ? ORDER BY cc.ativo DESC, cc.preferencial DESC, cc.id DESC`,
-    [fornecedor],
+      WHERE cc.${coluna} = ? ORDER BY cc.ativo DESC, cc.preferencial DESC, cc.id DESC`,
+    [credor.id],
     { teto: 200 },
   );
   return linhas.map((c) => ({
@@ -882,18 +999,51 @@ export async function bancosParaConta(l: Leitor) {
   }));
 }
 
-/** Parcelas em aberto de fornecedores que ainda não estão numa remessa pendente, com a marca de quem tem chave Pix. */
+/** Prestadores terceiros do estabelecimento pelo nome, pelo código ou pelo documento (credor da conta bancária). */
+export async function prestadoresParaPagamento(l: Leitor, est: number, busca: string) {
+  const termo = busca.trim();
+  const digitos = termo.replace(/\D/g, '');
+  const linhas = await l.consultar(
+    `SELECT id, nome, cpf, cnpj FROM prestador_terceiro
+      WHERE estabelecimento_id = ? AND excluido_em IS NULL AND ativo = TRUE
+        AND (nome LIKE ? OR codigo = ? ${digitos.length >= 3 ? 'OR cnpj LIKE ? OR cpf LIKE ?' : ''})
+      ORDER BY nome LIMIT 20`,
+    [est, `%${termo}%`, termo, ...(digitos.length >= 3 ? [`${digitos}%`, `${digitos}%`] : [])],
+    { teto: 20 },
+  );
+  return linhas.map((p) => ({
+    id: numero(p['id']),
+    nome: texto(p['nome']),
+    // Do prestador pessoa física não sai o CPF (só o nome e o código), como do profissional.
+    documento: p['cnpj'] === null ? null : texto(p['cnpj']),
+  }));
+}
+
+/**
+ * Parcelas em aberto de fornecedores e de profissionais que ainda não estão numa remessa pendente, com a marca de quem
+ * tem chave Pix (a do credor ou a do prestador terceiro ligado a ele).
+ */
 export async function parcelasParaPix(l: Leitor, est: number) {
   const linhas = await l.consultar(
-    `SELECT p.id, p.numero_parcela, p.saldo, p.vencimento, t.numero_documento, f.id AS fornecedor, f.razao_social,
+    `SELECT p.id, p.sequencia AS numero_parcela, p.saldo, p.vencimento, t.numero_documento,
+            COALESCE(t.empresa_fornecedora_id, t.profissional_id) AS credor,
+            CASE WHEN t.empresa_fornecedora_id IS NULL THEN 'profissional' ELSE 'fornecedor' END AS credor_tipo,
+            COALESCE(f.razao_social, pf.nome) AS razao_social,
             (SELECT COUNT(*) FROM conta_bancaria_credor cc
-              WHERE cc.empresa_fornecedora_id = f.id AND cc.ativo = TRUE AND cc.chave_pix IS NOT NULL) AS chaves
+               LEFT JOIN prestador_terceiro pt ON pt.id = cc.prestador_terceiro_id AND pt.estabelecimento_id = t.estabelecimento_id
+                                              AND pt.excluido_em IS NULL AND pt.ativo = TRUE
+              WHERE cc.ativo = TRUE AND cc.chave_pix IS NOT NULL
+                AND (cc.empresa_fornecedora_id = t.empresa_fornecedora_id OR cc.profissional_id = t.profissional_id
+                     OR pt.empresa_fornecedora_id = t.empresa_fornecedora_id OR pt.profissional_id = t.profissional_id)) AS chaves
        FROM parcela_pagar p JOIN titulo_pagar t ON t.id = p.titulo_pagar_id
-       JOIN empresa_fornecedora f ON f.id = t.empresa_fornecedora_id
+       LEFT JOIN empresa_fornecedora f ON f.id = t.empresa_fornecedora_id
+       LEFT JOIN profissional pr ON pr.id = t.profissional_id
+       LEFT JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
       WHERE t.estabelecimento_id = ? AND p.excluido_em IS NULL AND t.excluido_em IS NULL
+        AND (t.empresa_fornecedora_id IS NOT NULL OR t.profissional_id IS NOT NULL)
         AND t.situacao NOT IN ('cancelado','renegociado') AND p.situacao IN ('aberta','parcial') AND p.saldo > 0
-        AND NOT EXISTS (SELECT 1 FROM parcela_remessa_bancaria pr JOIN remessa_bancaria r ON r.id = pr.remessa_bancaria_id
-                         WHERE pr.parcela_pagar_id = p.id AND pr.situacao = 'pendente' AND pr.excluido_em IS NULL
+        AND NOT EXISTS (SELECT 1 FROM parcela_remessa_bancaria pr2 JOIN remessa_bancaria r ON r.id = pr2.remessa_bancaria_id
+                         WHERE pr2.parcela_pagar_id = p.id AND pr2.situacao = 'pendente' AND pr2.excluido_em IS NULL
                            AND r.excluido_em IS NULL AND r.situacao <> 'cancelada')
       ORDER BY p.vencimento, p.id LIMIT 300`,
     [est],
@@ -903,7 +1053,8 @@ export async function parcelasParaPix(l: Leitor, est: number) {
     id: numero(p['id']),
     documento: texto(p['numero_documento']),
     parcela: numero(p['numero_parcela']),
-    credor: numero(p['fornecedor']),
+    credor: numero(p['credor']),
+    credorTipo: texto(p['credor_tipo']) as 'fornecedor' | 'profissional',
     credorNome: texto(p['razao_social']),
     vencimento: dataIso(p['vencimento']),
     valor: numero(p['saldo']),

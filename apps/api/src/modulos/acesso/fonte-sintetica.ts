@@ -3234,6 +3234,23 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     },
     perfisConcedidos: ['diretoria-clinica'],
   },
+  /**
+   * C1-026 (07-FIN linha 66, no fim da lista, pelo ID sintético das outras): o cadastro de credores do financeiro, que
+   * mantém os dados bancários e a chave Pix do credor (perfil `cadastro-credor`) e consulta os títulos, sem gerar
+   * remessa nem pagar (segregação de funções: o SINT.FIN.PAGA gera a remessa e não mantém a conta do credor).
+   */
+  'SINT.FIN.CREDOR': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'FINCREDOR',
+      opcoesGrupo: opcoesFinanceiro('financeiro.tituloPagar.ler'),
+    },
+    perfisConcedidos: ['cadastro-credor'],
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */

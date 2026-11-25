@@ -71,6 +71,19 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
 
     { criticidade: 'sensivel', ...CONTA },
   ),
+  p(
+    'financeiro.contaCredor.manter',
+    'Manter os dados bancários e a chave Pix do credor (fornecedor, profissional ou prestador terceiro)',
+
+    // C1-026: segregação de funções: quem mantém o destino do dinheiro não é quem gera a remessa. Recurso sem opção
+    // correspondente no menu de origem: concedido pelo perfil do cadastro de credores (e ao administrador do sistema).
+    {
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['cadastro-credor', 'administrador-sistema'],
+      escopos: [],
+    },
+  ),
   p('financeiro.adiantamento.ler', 'Consultar adiantamentos a fornecedores e médicos e as compensações'),
   p(
     'financeiro.adiantamento.conceder',

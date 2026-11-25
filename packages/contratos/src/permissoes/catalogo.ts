@@ -221,5 +221,10 @@ export const PERFIS_COMPLEMENTARES = [
    * cotas e os movimentos, sem a higienização. Só por concessão nominal da gestão de acessos ou pelo mapa aprovado.
    */
   'rouparia',
+  /**
+   * C1-026 (07-FIN linha 66): cadastro de credores do financeiro: mantém os dados bancários e a chave Pix do credor,
+   * separado de quem gera a remessa e de quem paga (segregação de funções). Só por concessão nominal ou pelo mapa aprovado.
+   */
+  'cadastro-credor',
 ] as const;
 export type PerfilComplementar = (typeof PERFIS_COMPLEMENTARES)[number];
