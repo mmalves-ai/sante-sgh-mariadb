@@ -61,6 +61,12 @@ import {
 import { ComercialOperadoraController } from './comercial.controller.js';
 import { METODOS_COMERCIAL, PORTA_COMERCIAL, PortaComercialPropria } from './comercial-propria.js';
 import { ProgramaSaudeOperadoraController } from './programa-saude.controller.js';
+import { RedeCadastroOperadoraController } from './rede-cadastro.controller.js';
+import {
+  METODOS_REDE_CADASTRO,
+  PORTA_REDE_CADASTRO,
+  PortaRedeCadastroPropria,
+} from './rede-cadastro-propria.js';
 import {
   METODOS_PROGRAMA_SAUDE,
   PORTA_PROGRAMA_SAUDE,
@@ -291,6 +297,7 @@ export async function moduloOperadora(
       RegrasCoparticipacaoController,
       ReajusteColetivoOperadoraController,
       ProgramaSaudeOperadoraController,
+      RedeCadastroOperadoraController,
       BeneficiarioSaudeOperadoraController,
       ComercialOperadoraController,
       ContaConferenciaOperadoraController,
@@ -362,6 +369,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaBeneficiarioSaudePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaBeneficiarioSaudePropria>(METODOS_BENEFICIARIO_SAUDE),
+      },
+      // 08-SGO L101 (C2-118): locais, especialidades, qualificação e suspensão do prestador só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_REDE_CADASTRO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaRedeCadastroPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaRedeCadastroPropria>(METODOS_REDE_CADASTRO),
       },
       // 08-SGO L115 (C2-102): promoção da saúde e gestão de crônicos só no banco (sem núcleo, 503).
       {
