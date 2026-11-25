@@ -5724,6 +5724,16 @@ export const EVENTOS_AUDITAVEIS = {
     descricao: 'Comparativo orçado × realizado consultado (por linha, centro de custo ou item)',
     legado: null,
   },
+  orcamentoPremissaGravada: {
+    codigo: 'financeiro.orcamento.premissaGravada',
+    descricao: 'Premissa da versão do orçamento incluída, alterada ou retirada (tipo, valor e justificativa)',
+    legado: null,
+  },
+  orcamentoCenarioGravado: {
+    codigo: 'financeiro.orcamento.cenarioGravado',
+    descricao: 'Cenário do orçamento cadastrado ou alterado, ou escolhido para uma versão',
+    legado: null,
+  },
   // M54 (etapa 5): custos — apuração do mês, custo por conta, resultado e exportação (só SGH_CUS_*; a conta pelo ID).
   custosApuracaoLida: {
     codigo: 'custos.apuracao.lida',
