@@ -57,7 +57,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha. Pede a leitura do NIR (internacao.solicitacaoLeito.ler); o serviço social e o prontuário chegam pelos
 // atalhos das telas do paciente.
 // C1-122 (06-FAT linha 24): o item "Guias do convênio" dos convênios entrou à mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":448,"M":198,"P":57,"N":193};
+// C1-137 (06-FAT linha 40): o item "Modelos de orçamento" do particular entrou à mão (mesmo motivo); a contagem
+// acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":449,"M":198,"P":57,"N":194};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -268,6 +270,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.contas-do-paciente.protocolo-de-documentos-entre-setores","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Protocolo de documentos entre setores"],"titulo":"Protocolo de documentos entre setores","selo":"N","fase":3,"rota":"/faturamento/protocolos","permissao":"faturamento.tramite.ler"},
   {"id":"faturamento.contas-do-paciente.pacotes-e-orcamentos-padrao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Pacotes e orçamentos-padrão"],"titulo":"Pacotes e orçamentos-padrão","selo":"M","fase":3,"rota":"/faturamento/pacotes","permissao":"faturamento.pacote.ler"},
   {"id":"faturamento.particular.orcamento-de-particular","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Orçamento de particular"],"titulo":"Orçamento de particular","selo":"P","fase":3,"rota":"/faturamento/particular/orcamentos","permissao":"faturamento.orcamento.ler"},
+  {"id":"faturamento.particular.modelos-de-orcamento","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Modelos de orçamento"],"titulo":"Modelos de orçamento","selo":"N","fase":3,"rota":"/faturamento/modelos-orcamento","permissao":"faturamento.orcamento.ler"},
   {"id":"faturamento.particular.recibos-e-caixa","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Recibos e caixa"],"titulo":"Recibos e caixa","selo":"P","fase":3,"rota":"/faturamento/particular/caixa","permissao":"faturamento.recibo.ler"},
   {"id":"faturamento.particular.pagamento-por-pix-e-cartao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Pagamento por Pix e cartão"],"titulo":"Pagamento por Pix e cartão","selo":"N","fase":3,"rota":"/faturamento/particular/pagamentos","permissao":"faturamento.pagamento.ler"},
   {"id":"faturamento.particular.conta-corrente-do-paciente","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Conta corrente do paciente"],"titulo":"Conta corrente do paciente","selo":"N","fase":7,"rota":"/faturamento/conta-corrente","permissao":"faturamento.pagamento.ler"},
