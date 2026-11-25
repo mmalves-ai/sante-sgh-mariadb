@@ -9,7 +9,10 @@ Grava:
 - termo_terminologia da CID-O: 1 grupo (M800), 2 morfologia (M8000/0);
 - capitulo_cid10 e agrupamento_cid10 (grupos aninhados viram 'subgrupo' com pai = faixa mais estreita);
 - correspondencia_cid_morfologia: coluna REFER da CID-O (C71.- vira C71; D16.4 vira D164).
-topografia_tumor não é carregada: o arquivo não traz a topografia da CID-O.
+- topografia_tumor (09-AREA L69): a topografia da CID-O-3 deriva das categorias C00-C80 da CID-10 (a CID-O-3 usa os
+  mesmos códigos, com ponto: C50.4), sem as que a CID-O-3 não tem como sítio (C43 melanoma e C46 Kaposi, que lá viram
+  pele e partes moles pela morfologia; C45 mesotelioma; C78-C79 secundárias; C81-C97 hematológicas) e com o sítio
+  hematopoético C42.0-C42.4 da própria CID-O-3. Categoria sem subcategoria vira o .9 (SOE), como na CID-O-3.
 """
 import io
 import json
@@ -237,6 +240,12 @@ def carregar(banco: str) -> dict:
             ["cid_termo_terminologia_id", "morfologia_termo_terminologia_id", "descricao", "vigencia_inicio",
              "versao_fonte"])
 
+    _upsert(banco, "topografia_tumor",
+            ["codigo_cid_o", "descricao", "categoria", "ativo", "vigencia_inicio", "versao_fonte", "criado_em",
+             "versao"],
+            [[c, d, cat, 1, VIGENCIA, f"CID-O-3 ({ver})"[:30], AGORA, 1] for c, d, cat in topografias(cats, subs4)],
+            ["descricao", "categoria", "vigencia_inicio", "versao_fonte"])
+
     cont = _consulta(banco, f"""
         SELECT 'terminologia', COUNT(*) FROM terminologia WHERE codigo IN ('cid10','cid_o')
         UNION ALL SELECT 'terminologia_edicao', COUNT(*) FROM terminologia_edicao WHERE terminologia_id IN ({tid},{oid})
@@ -246,6 +255,44 @@ def carregar(banco: str) -> dict:
         UNION ALL SELECT 'topografia_tumor', COUNT(*) FROM topografia_tumor
         UNION ALL SELECT 'correspondencia_cid_morfologia', COUNT(*) FROM correspondencia_cid_morfologia""")
     return {t: int(n) for t, n in cont}
+
+
+EXCLUIDAS_TOPOGRAFIA = {"C43", "C45", "C46", "C78", "C79"}
+# Sítio hematopoético e reticuloendotelial: só existe na CID-O-3 (a CID-10 o classifica pela morfologia, C81-C96).
+TOPOGRAFIA_HEMATOPOETICA = [
+    ("C42.0", "Sangue"),
+    ("C42.1", "Medula óssea"),
+    ("C42.2", "Baço"),
+    ("C42.3", "Sistema reticuloendotelial, SOE"),
+    ("C42.4", "Sistema hematopoético, SOE"),
+]
+_PREFIXO_NEOPLASIA = re.compile(
+    r"^Neoplasia(s)? maligna(s)?( secundária e não especificada| secundária)?( d[aoe]s?| de)?\s+", re.I)
+
+
+def topografias(cats, subs4):
+    """Linhas (codigo_cid_o, descricao, categoria) da topografia da CID-O-3 a partir das categorias e subcategorias da
+    CID-10 (puro: o teste usa amostra sintética)."""
+    def sitio(cod):
+        return re.fullmatch(r"C([0-7]\d|80)", cod) and cod not in EXCLUIDAS_TOPOGRAFIA
+
+    desc_cat = {c[0]: c[2] for c in cats if sitio(c[0])}
+    com_sub = set()
+    linhas = {}
+    for s in subs4:
+        cat = s[0][:3]
+        if not sitio(cat):
+            continue
+        com_sub.add(cat)
+        d = _PREFIXO_NEOPLASIA.sub("", s[4]).strip()
+        linhas[f"{cat}.{s[0][3]}"] = ((d[:1].upper() + d[1:])[:150], cat)
+    for cat, d in desc_cat.items():
+        if cat not in com_sub:
+            d = _PREFIXO_NEOPLASIA.sub("", d).strip()
+            linhas[f"{cat}.9"] = ((d[:1].upper() + d[1:])[:150], cat)
+    for cod, d in TOPOGRAFIA_HEMATOPOETICA:
+        linhas[cod] = (d, "C42")
+    return sorted((c, d, cat) for c, (d, cat) in linhas.items())
 
 
 def _largura(f):

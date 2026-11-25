@@ -100,3 +100,24 @@ class HierarquiaCid10(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TopografiaCidO(unittest.TestCase):
+    """09-AREA L69: a topografia da CID-O-3 derivada das categorias C00-C80 da CID-10."""
+
+    def test_deriva_sitios_com_ponto_e_sem_prefixo(self):
+        m = _cid10()
+        cats = [["C01", "", "Neoplasia maligna da base da língua"], ["C50", "", "Neoplasia maligna da mama"],
+                ["C43", "", "Melanoma maligno da pele"], ["C79", "", "Neoplasia maligna secundária de outras localizações"],
+                ["C91", "", "Leucemia linfóide"], ["C77", "", "Neoplasia maligna secundária e não especificada dos gânglios linfáticos"]]
+        subs4 = [["C504", "", "", "", "Neoplasia maligna do quadrante superior externo da mama"],
+                 ["C509", "", "", "", "Neoplasia maligna da mama, não especificada"],
+                 ["C430", "", "", "", "Melanoma maligno do lábio"],
+                 ["C910", "", "", "", "Leucemia linfoblástica aguda"]]
+        t = {c: (d, cat) for c, d, cat in m.topografias(cats, subs4)}
+        self.assertEqual(t["C50.4"], ("Quadrante superior externo da mama", "C50"))
+        self.assertEqual(t["C01.9"], ("Base da língua", "C01"))
+        self.assertEqual(t["C77.9"][1], "C77")
+        self.assertIn("C42.1", t)
+        for fora in ("C43.0", "C79.9", "C91.0", "C43.9"):
+            self.assertNotIn(fora, t)

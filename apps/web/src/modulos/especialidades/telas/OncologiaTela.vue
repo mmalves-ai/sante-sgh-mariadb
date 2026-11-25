@@ -28,6 +28,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import AbasFicha from '../../nutricao/componentes/AbasFicha.vue';
 import CartaoPerfil from '../../nutricao/componentes/CartaoPerfil.vue';
+import RegistroOncologicoPainel from '../componentes/RegistroOncologicoPainel.vue';
 import DialogoCorrecao from '../../nutricao/componentes/DialogoCorrecao.vue';
 import {
   ajustarCiclo,
@@ -271,6 +272,8 @@ const abas = computed(() => [
     n: dados.data.value?.ciclos.length ?? 0,
   },
   { id: 'novo', rotulo: t('especialidades.oncologia.abas.novo') },
+  // 09-AREA linha 69: o tumor (CID-O-3, TNM) e a radioterapia do mesmo paciente.
+  { id: 'registro', rotulo: t('especialidades.registroOnco.aba') },
 ]);
 const emAndamento = computed(
   () => (dados.data.value?.ciclos ?? []).filter((c) => c.andamento !== 'cancelado').length,
@@ -327,6 +330,15 @@ const emAndamento = computed(
         prefixo="onco"
         :rotulo="t('especialidades.oncologia.abasRotulo')"
       />
+      <div
+        v-if="aba === 'registro'"
+        id="onco-painel-registro"
+        class="painel-aba"
+        role="tabpanel"
+        aria-labelledby="onco-aba-registro"
+      >
+        <RegistroOncologicoPainel :reg="reg" :pode="pode" />
+      </div>
       <div
         v-show="aba === 'ciclos'"
         id="onco-painel-ciclos"

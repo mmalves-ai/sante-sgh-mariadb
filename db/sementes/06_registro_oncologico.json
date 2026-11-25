@@ -1,0 +1,205 @@
+{
+  "intencao_tratamento_oncologico": [
+    {
+      "codigo": "curativa",
+      "descricao": "Curativa",
+      "codigo_tiss": "1",
+      "ordem": 1
+    },
+    {
+      "codigo": "neoadjuvante",
+      "descricao": "Neoadjuvante",
+      "codigo_tiss": "2",
+      "ordem": 2
+    },
+    {
+      "codigo": "adjuvante",
+      "descricao": "Adjuvante",
+      "codigo_tiss": "3",
+      "ordem": 3
+    },
+    {
+      "codigo": "paliativa",
+      "descricao": "Paliativa",
+      "codigo_tiss": "4",
+      "ordem": 4
+    },
+    {
+      "codigo": "controle",
+      "descricao": "Controle",
+      "codigo_tiss": "5",
+      "ordem": 5
+    }
+  ],
+  "estadio_clinico": [
+    {
+      "codigo": "0",
+      "descricao": "Estádio 0",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 1
+    },
+    {
+      "codigo": "I",
+      "descricao": "Estádio I",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 2
+    },
+    {
+      "codigo": "IA",
+      "descricao": "Estádio IA",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 3
+    },
+    {
+      "codigo": "IB",
+      "descricao": "Estádio IB",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 4
+    },
+    {
+      "codigo": "IC",
+      "descricao": "Estádio IC",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 5
+    },
+    {
+      "codigo": "II",
+      "descricao": "Estádio II",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 6
+    },
+    {
+      "codigo": "IIA",
+      "descricao": "Estádio IIA",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 7
+    },
+    {
+      "codigo": "IIB",
+      "descricao": "Estádio IIB",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 8
+    },
+    {
+      "codigo": "IIC",
+      "descricao": "Estádio IIC",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 9
+    },
+    {
+      "codigo": "III",
+      "descricao": "Estádio III",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 10
+    },
+    {
+      "codigo": "IIIA",
+      "descricao": "Estádio IIIA",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 11
+    },
+    {
+      "codigo": "IIIB",
+      "descricao": "Estádio IIIB",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 12
+    },
+    {
+      "codigo": "IIIC",
+      "descricao": "Estádio IIIC",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 13
+    },
+    {
+      "codigo": "IV",
+      "descricao": "Estádio IV",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 14
+    },
+    {
+      "codigo": "IVA",
+      "descricao": "Estádio IVA",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 15
+    },
+    {
+      "codigo": "IVB",
+      "descricao": "Estádio IVB",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 16
+    },
+    {
+      "codigo": "IVC",
+      "descricao": "Estádio IVC",
+      "sistema": "tnm",
+      "tipo": "grupo",
+      "ordem": 17
+    }
+  ],
+  "regiao_irradiada": [
+    {
+      "codigo": "sistema_nervoso_central",
+      "descricao": "Sistema nervoso central"
+    },
+    {
+      "codigo": "cabeca_pescoco",
+      "descricao": "Cabeça e pescoço"
+    },
+    {
+      "codigo": "mama",
+      "descricao": "Mama"
+    },
+    {
+      "codigo": "torax",
+      "descricao": "Tórax"
+    },
+    {
+      "codigo": "abdome",
+      "descricao": "Abdome"
+    },
+    {
+      "codigo": "pelve",
+      "descricao": "Pelve"
+    },
+    {
+      "codigo": "prostata",
+      "descricao": "Próstata"
+    },
+    {
+      "codigo": "colo_utero",
+      "descricao": "Colo do útero (braquiterapia)"
+    },
+    {
+      "codigo": "pele",
+      "descricao": "Pele"
+    },
+    {
+      "codigo": "coluna_vertebral",
+      "descricao": "Coluna vertebral"
+    },
+    {
+      "codigo": "ossos_membros",
+      "descricao": "Ossos e membros"
+    },
+    {
+      "codigo": "corpo_inteiro",
+      "descricao": "Corpo inteiro"
+    }
+  ]
+}

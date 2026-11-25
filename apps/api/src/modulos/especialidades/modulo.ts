@@ -29,6 +29,12 @@ import {
   portaPrescricaoLenteIndisponivel,
   PortaPrescricaoLentePropria,
 } from './prescricao-lente.js';
+import { RegistroOncologicoController } from './registro-oncologico.controller.js';
+import {
+  PORTA_REGISTRO_ONCOLOGICO,
+  portaRegistroOncologicoIndisponivel,
+  PortaRegistroOncologicoPropria,
+} from './registro-oncologico.js';
 
 export interface OpcoesModuloEspecialidades {
   /** Testes: a porta já montada. */
@@ -79,13 +85,19 @@ export async function moduloEspecialidades(
       : porta.destino === 'memoria'
         ? new PortaPrescricaoLenteMemoria()
         : portaPrescricaoLenteIndisponivel();
+  // 09-AREA linha 69: o registro oncológico e a radioterapia só no banco (o E2E usa respostas simuladas).
+  const registroOnco =
+    porta.destino === 'banco' && ctx.nucleo
+      ? new PortaRegistroOncologicoPropria(ctx.nucleo)
+      : portaRegistroOncologicoIndisponivel();
   return {
     module: ModuloEspecialidades,
-    controllers: [EspecialidadesController],
+    controllers: [EspecialidadesController, RegistroOncologicoController],
     providers: [
       { provide: PORTA_ESPECIALIDADES, useValue: porta },
       { provide: ESTADO_PRONTUARIO, useValue: new EstadoProntuario() },
       { provide: PORTA_PRESCRICAO_LENTE, useValue: lentes },
+      { provide: PORTA_REGISTRO_ONCOLOGICO, useValue: registroOnco },
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
     ],
   };
