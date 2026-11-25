@@ -3,6 +3,7 @@
 // prévias que a tela mostra antes de gravar (pontuação GUT, conformidade do checklist, quórum) com as parcelas, e o
 // que cada situação permite. Funções puras, testadas em regras-gestao.spec.ts.
 import {
+  type EficaciaControleRisco,
   type EncaminharManifestacaoEntrada,
   esquemaEncaminharManifestacao,
   esquemaPublicarDocumento,
@@ -28,13 +29,18 @@ import {
   type RegistrarTransmissaoEnvioEntrada,
   type ResponderManifestacaoEntrada,
   type RetirarDocumentoEntrada,
+  type SituacaoRisco,
+  type TipoControleRisco,
 } from '@sgh/contratos';
 import {
   competenciaAnterior,
   contaGut,
+  eficaciaDosControles,
+  MENSAGENS_RECUSA_GESTAO,
   numeroBr,
   pontuacaoGut,
   prioridadeGut,
+  recusaControlesRisco,
   resultadoChecklist,
   temQuorum,
 } from '@sgh/dominio-qualidade';
@@ -431,6 +437,23 @@ export function classeDaPrioridade(p: RiscoTela['prioridade']): string {
   }[p];
 }
 
+/** Um controle do risco na tela: nome (liga ao catálogo do hospital), tipo e eficácia avaliada. */
+export interface ControleRiscoFormulario {
+  nome: string;
+  tipo: TipoControleRisco;
+  eficacia: EficaciaControleRisco;
+}
+
+export const novoControleRisco = (): ControleRiscoFormulario => ({
+  nome: '',
+  tipo: 'preventivo',
+  eficacia: 'naoAvaliado',
+});
+
+/** A eficácia do conjunto enquanto a pessoa preenche (a mesma conta da API), sem as linhas ainda sem nome. */
+export const previaEficaciaControles = (lista: readonly ControleRiscoFormulario[]) =>
+  eficaciaDosControles(lista.filter((c) => !vazio(c.nome)));
+
 export interface FormularioRisco {
   readonly titulo: string;
   readonly descricao: string;
@@ -440,6 +463,7 @@ export interface FormularioRisco {
   readonly urgencia: number;
   readonly tendencia: number;
   readonly controles: string;
+  readonly controlesLista: ControleRiscoFormulario[];
   readonly responsavel: string;
   readonly situacao: string;
   readonly reavaliarEm: string | null;
@@ -457,6 +481,7 @@ export function formularioDoRisco(r: RiscoTela | null): FormularioRisco {
         urgencia: r.urgencia,
         tendencia: r.tendencia,
         controles: r.controles ?? '',
+        controlesLista: r.controlesLista.map((c) => ({ nome: c.nome, tipo: c.tipo, eficacia: c.eficacia })),
         responsavel: r.responsavel,
         situacao: r.situacao,
         reavaliarEm: r.reavaliarEm,
@@ -471,6 +496,7 @@ export function formularioDoRisco(r: RiscoTela | null): FormularioRisco {
         urgencia: 0,
         tendencia: 0,
         controles: '',
+        controlesLista: [],
         responsavel: '',
         situacao: 'identificado',
         reavaliarEm: null,
@@ -490,6 +516,12 @@ export function montarRisco(
   if ((f.situacao === 'aceito' || f.situacao === 'encerrado') && vazio(f.justificativa))
     extras.justificativa = 'Risco aceito ou encerrado: registre a justificativa.';
   if (!f.reavaliarEm) extras.reavaliarEm = 'Informe a data da próxima reavaliação.';
+  if (f.controlesLista.some((c) => vazio(c.nome)))
+    extras.controlesLista = 'Dê nome a cada controle ou retire a linha.';
+  else {
+    const recusa = recusaControlesRisco(f.controlesLista, f.situacao as SituacaoRisco);
+    if (recusa) extras.controlesLista = MENSAGENS_RECUSA_GESTAO[recusa];
+  }
   return conferir(
     esquemaRegistrarRisco,
     {
@@ -503,6 +535,11 @@ export function montarRisco(
       urgencia: f.urgencia,
       tendencia: f.tendencia,
       controles: ouNulo(f.controles),
+      controlesLista: f.controlesLista.map((c) => ({
+        nome: c.nome.trim(),
+        tipo: c.tipo,
+        eficacia: c.eficacia,
+      })),
       responsavel: f.responsavel,
       situacao: f.situacao,
       reavaliarEm: f.reavaliarEm ?? '',

@@ -64,7 +64,12 @@ export async function limparQualidade(e: Escritor, ests: readonly number[]): Pro
   );
   await e.executar(`DELETE FROM analise_incidente WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM nao_conformidade_qualidade WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(
+    `DELETE v FROM risco_institucional_controle v JOIN risco_institucional r ON r.id = v.risco_institucional_id WHERE r.estabelecimento_id IN (${em})`,
+    ests,
+  );
   await e.executar(`DELETE FROM risco_institucional WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM controle_risco WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(
     `DELETE v FROM manifestacao_ouvidoria_evento v JOIN manifestacao_ouvidoria o ON o.id = v.manifestacao_ouvidoria_id WHERE o.estabelecimento_id IN (${em})`,
     ests,

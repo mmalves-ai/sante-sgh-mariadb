@@ -151,7 +151,7 @@ export function recusaRisco(
   e: Pick<
     RegistrarRiscoEntrada,
     'gravidade' | 'urgencia' | 'tendencia' | 'situacao' | 'controles' | 'justificativa' | 'reavaliarEm'
-  >,
+  > & { readonly controlesLista?: readonly unknown[] | undefined },
   existente: { readonly versao: number; readonly situacao: string } | null,
   versao: number | null,
   hoje: string,
@@ -166,7 +166,8 @@ export function recusaRisco(
   if (
     critico &&
     (e.situacao === 'emTratamento' || e.situacao === 'mitigado') &&
-    (e.controles?.trim().length ?? 0) < 10
+    (e.controles?.trim().length ?? 0) < 10 &&
+    (e.controlesLista?.length ?? 0) === 0
   )
     return 'controles-obrigatorios';
   if (e.situacao !== 'encerrado' && e.reavaliarEm < hoje) return 'reavaliacao-no-passado';

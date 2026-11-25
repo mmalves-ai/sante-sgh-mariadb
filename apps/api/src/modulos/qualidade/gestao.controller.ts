@@ -95,6 +95,7 @@ import {
   recusaResposta,
   recusaRetirada,
   recusaReuniao,
+  recusaControlesRisco,
   recusaRisco,
   recusaTransmissaoEnvio,
   resultadoChecklist,
@@ -921,6 +922,7 @@ export class GestaoQualidadeController {
     if (e.risco !== null && !existente) recusar('risco-inexistente');
     const agora = await this.agora(s);
     recusar(recusaRisco(e, existente, e.versao, agora.slice(0, 10)));
+    recusar(recusaControlesRisco(e.controlesLista, e.situacao));
     return this.apoio.sgh(
       s,
       E.qualidadeRiscoRegistrado.codigo,
@@ -938,6 +940,15 @@ export class GestaoQualidadeController {
           urgencia: e.urgencia,
           tendencia: e.tendencia,
           controles: e.controles?.trim() || null,
+          ...(e.controlesLista
+            ? {
+                controlesLista: e.controlesLista.map((c) => ({
+                  nome: c.nome.trim(),
+                  tipo: c.tipo,
+                  eficacia: c.eficacia,
+                })),
+              }
+            : {}),
           responsavel: e.responsavel.trim(),
           situacao: e.situacao,
           reavaliarEm: e.reavaliarEm,

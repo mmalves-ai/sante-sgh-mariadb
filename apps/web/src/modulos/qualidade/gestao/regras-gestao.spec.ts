@@ -26,7 +26,9 @@ import {
   montarReuniao,
   montarRisco,
   montarTransmissao,
+  novoControleRisco,
   previaChecklist,
+  previaEficaciaControles,
   previaGut,
   previaQuorum,
   textoDoResumo,
@@ -294,6 +296,39 @@ describe('riscos e não conformidades', () => {
     if (!aceito.ok) expect(aceito.erros.justificativa).toBeDefined();
     const ok = montarRisco({ ...f, gravidade: 5, urgencia: 4, tendencia: 3 }, { id: 8, versao: 2 });
     expect(ok.ok && [ok.entrada.risco, ok.entrada.versao, ok.entrada.controles]).toEqual([8, 2, null]);
+  });
+  it('C2-060: os controles estruturados vão com nome, tipo e eficácia; sem nome, repetido ou mitigado sem eficaz, não vão', () => {
+    const f = {
+      ...formularioDoRisco(null),
+      titulo: 'Risco sintético de queda',
+      descricao: 'Descrição sintética do risco.',
+      area: 'Internação',
+      categoria: 'assistencial',
+      responsavel: 'Coordenação',
+      reavaliarEm: '2027-01-31',
+      gravidade: 3,
+      urgencia: 3,
+      tendencia: 3,
+    };
+    const barra = { nome: 'Barra de apoio', tipo: 'preventivo' as const, eficacia: 'eficaz' as const };
+    const semNome = montarRisco({ ...f, controlesLista: [novoControleRisco()] }, null);
+    expect(!semNome.ok && semNome.erros.controlesLista).toBeTruthy();
+    const repetido = montarRisco(
+      { ...f, controlesLista: [barra, { ...barra, nome: ' barra de apóio' }] },
+      null,
+    );
+    expect(!repetido.ok && repetido.erros.controlesLista).toContain('duas vezes');
+    const mitigado = montarRisco(
+      { ...f, situacao: 'mitigado', controlesLista: [{ ...barra, eficacia: 'ineficaz' }] },
+      null,
+    );
+    expect(!mitigado.ok && mitigado.erros.controlesLista).toContain('eficaz');
+    const ok = montarRisco({ ...f, controlesLista: [{ ...barra, nome: ' Barra de apoio ' }] }, null);
+    expect(ok.ok && ok.entrada.controlesLista).toEqual([barra]);
+    expect(previaEficaciaControles([barra, { ...barra, nome: 'Ronda', eficacia: 'ineficaz' }])).toBe(
+      'parcialmenteEficaz',
+    );
+    expect(previaEficaciaControles([novoControleRisco()])).toBe('semControle');
   });
   it('a não conformidade aberta da auditoria leva o registro; em tratamento exige o plano; encerrada, a eficácia', () => {
     const f = {

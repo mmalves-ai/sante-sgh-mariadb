@@ -57,6 +57,7 @@ import {
   type NotificacaoParaEnvio,
   prazoNotivisaMensal,
   prazoNotivisaObito,
+  eficaciaDosControles,
   prioridadeGut,
   proximaReuniaoAte,
   reavaliacaoVencida,
@@ -354,6 +355,8 @@ export function riscoLido(r: RiscoRegistrado, hoje: string): RiscoLido {
   return {
     ...r,
     categoria: r.categoria as CategoriaRisco,
+    controlesLista: r.controlesLista as RiscoLido['controlesLista'],
+    eficaciaControles: eficaciaDosControles(r.controlesLista as RiscoLido['controlesLista']),
     prioridade: prioridadeGut(r.pontuacao),
     situacao: r.situacao as RiscoLido['situacao'],
     reavaliacaoVencida: reavaliacaoVencida(r, hoje),

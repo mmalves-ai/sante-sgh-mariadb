@@ -605,6 +605,8 @@ const RISCO = {
   pontuacao: 64,
   prioridade: 'critica',
   controles: null,
+  controlesLista: [],
+  eficaciaControles: 'semControle',
   responsavel: 'Coordenação',
   situacao: 'identificado',
   reavaliarEm: '2026-10-01',

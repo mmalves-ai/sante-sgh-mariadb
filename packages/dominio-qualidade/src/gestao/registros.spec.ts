@@ -147,6 +147,19 @@ describe('matriz GUT', () => {
     expect(
       recusaRisco({ ...critico, controles: 'Dupla checagem e alarme sonoro.' }, null, null, HOJE),
     ).toBeNull();
+    // C2-060: o controle estruturado (catálogo, tipo e eficácia) também cumpre a exigência do risco crítico.
+    expect(
+      recusaRisco(
+        {
+          ...critico,
+          controlesLista: [{ nome: 'Dupla checagem', tipo: 'preventivo', eficacia: 'naoAvaliado' }],
+        },
+        null,
+        null,
+        HOJE,
+      ),
+    ).toBeNull();
+    expect(recusaRisco({ ...critico, controlesLista: [] }, null, null, HOJE)).toBe('controles-obrigatorios');
     expect(recusaRisco({ ...risco, reavaliarEm: '2026-10-26' }, null, null, HOJE)).toBe(
       'reavaliacao-no-passado',
     );

@@ -13,6 +13,8 @@
 // auditoria com o referencial e os auditores em texto, comissões com os membros em texto, pesquisa de satisfação,
 // envios regulatórios, revisão de prontuários, versões anteriores e o cancelamento das não conformidades) segue falhando fechado: a leitura responde 503 `modelo-pendente` e a gravação recusa 409
 // `modelo-pendente` dentro da transação (nada é gravado pela metade). Pedidos em docs/obra/fatias/f24/saida/p-qualidade-gestao.json.
+import { createHash } from 'node:crypto';
+import { nomeControleNormalizado } from '@sgh/dominio-qualidade';
 import { type Executor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { type AnotacaoGravacao, gravacaoDireta } from '../enfermagem/gravacao-direta.js';
 import type { GravacaoFeita, TrilhaDaGravacao } from '../exames/public-api.js';
@@ -45,6 +47,8 @@ import type {
   PortaGestao,
 } from './porta-gestao.js';
 import {
+  type ControleRiscoGravado,
+  type ControleRiscoNovo,
   type DependentesRegistro,
   type EnvioRegulatorioRegistrado,
   type ManifestacaoRegistrada,
@@ -70,12 +74,13 @@ const PENDENTE = {
   revisao: `${RECURSO}: revisão de prontuários (checklist, sorteio, revisão e pendência)`,
   contagem: `${RECURSO}: painel de contagens (depende de documentos e ouvidoria)`,
   cancelamentoNc: `${RECURSO}: cancelamento da não conformidade (situação cancelada e a duplicada)`,
-  controlesRisco: `${RECURSO}: controles existentes do risco em texto`,
 } as const;
 
 /** As tabelas que as gravações da gestão tocam (a transação do Executor recusa as outras). */
 export const TABELAS_GESTAO = [
   'risco_institucional',
+  'controle_risco',
+  'risco_institucional_controle',
   'nao_conformidade_qualidade',
   'nao_conformidade_qualidade_evento',
   'plano_acao_qualidade',
@@ -129,9 +134,11 @@ const SQL_RISCO = `
   SELECT r.id, r.versao, r.titulo, r.descricao, sf.nome AS area, cr.codigo AS categoria, r.gravidade, r.urgencia,
          r.tendencia, r.pontuacao, ru.nome AS responsavel, r.situacao, r.reavaliar_em, r.justificativa,
          uc.login AS registrado_por, r.criado_em, ua.login AS atualizado_por, r.alterado_em,
-         (SELECT GROUP_CONCAT(COALESCE(NULLIF(co.descricao, ''), co.nome) ORDER BY co.nome SEPARATOR ', ')
+         r.controles_descricao AS controles,
+         (SELECT JSON_ARRAYAGG(JSON_OBJECT('nome', co.nome, 'tipo', co.tipo_controle, 'eficacia', rc.eficacia,
+                                           'avaliadoEm', rc.avaliado_em) ORDER BY co.nome)
             FROM risco_institucional_controle rc JOIN controle_risco co ON co.id = rc.controle_risco_id
-           WHERE rc.risco_institucional_id = r.id) AS controles
+           WHERE rc.risco_institucional_id = r.id AND rc.excluido_em IS NULL) AS controles_lista
     FROM risco_institucional r
     JOIN categoria_risco_institucional cr ON cr.id = r.categoria_risco_institucional_id
     LEFT JOIN setor_funcional sf ON sf.id = r.setor_funcional_id
@@ -139,6 +146,31 @@ const SQL_RISCO = `
     LEFT JOIN usuario uc ON uc.id = r.criado_por
     LEFT JOIN usuario ua ON ua.id = r.alterado_por
    WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL`;
+
+/** Eficácia do controle: contrato (camelCase) ↔ banco (snake_case). */
+const EFICACIA_CONTROLE_BANCO: Readonly<Record<string, string>> = {
+  naoAvaliado: 'nao_avaliado',
+  eficaz: 'eficaz',
+  parcialmenteEficaz: 'parcialmente_eficaz',
+  ineficaz: 'ineficaz',
+};
+
+/** Os controles vinculados ao risco, lidos do JSON agregado (vazio quando não há nenhum). */
+function controlesDoRisco(v: unknown): ControleRiscoGravado[] {
+  if (v === null || v === undefined) return [];
+  const lista = (typeof v === 'string' ? JSON.parse(v) : v) as Record<string, unknown>[];
+  return lista.map((c) => ({
+    nome: texto(c['nome']),
+    tipo: texto(c['tipo']),
+    eficacia: camelo(c['eficacia']),
+    avaliadoEm: c['avaliadoEm'] ? String(c['avaliadoEm']).slice(0, 10) : null,
+  }));
+}
+
+/** A chave estável do controle no catálogo do hospital, derivada do nome normalizado (cabe nos 30 caracteres). */
+export function codigoControleRisco(nome: string): string {
+  return `CTR-${createHash('sha256').update(nomeControleNormalizado(nome)).digest('hex').slice(0, 16).toUpperCase()}`;
+}
 
 function risco(r: Linha): RiscoRegistrado {
   return {
@@ -153,6 +185,7 @@ function risco(r: Linha): RiscoRegistrado {
     tendencia: n(r['tendencia']),
     pontuacao: n(r['pontuacao']),
     controles: textoN(r['controles']),
+    controlesLista: controlesDoRisco(r['controles_lista']),
     responsavel: texto(r['responsavel']),
     situacao: camelo(r['situacao']),
     reavaliarEm: dataIso(r['reavaliar_em']) ?? '',
@@ -417,6 +450,81 @@ async function travar(
   return r;
 }
 
+/**
+ * Os controles do risco passam a ser exatamente a lista (C2-060): cada nome liga ao catálogo do hospital
+ * (`controle_risco`, criado pela chave do nome quando falta; o tipo acompanha o informado), o vínculo guarda a eficácia
+ * e a data da avaliação (só quando a eficácia muda), e o vínculo que sai da lista recebe exclusão lógica (o histórico
+ * da avaliação fica). O vínculo excluído que volta é reativado.
+ */
+async function gravarControlesDoRisco(
+  tx: TxOperacao,
+  est: number,
+  riscoId: number,
+  lista: readonly ControleRiscoNovo[],
+  agora: string,
+): Promise<void> {
+  const hoje = agora.slice(0, 10);
+  const vinculos = await tx.consultarParaAtualizar(
+    `SELECT id, versao, controle_risco_id, eficacia, excluido_em FROM risco_institucional_controle
+      WHERE risco_institucional_id = ?`,
+    [riscoId],
+    { teto: 200 },
+  );
+  const porControle = new Map(vinculos.map((v) => [n(v['controle_risco_id']), v]));
+  const mantidos = new Set<number>();
+  for (const c of lista) {
+    const codigo = codigoControleRisco(c.nome);
+    const achado = await tx.uma<{ id: number; versao: number; tipo_controle: string; excluido_em: unknown }>(
+      'SELECT id, versao, tipo_controle, excluido_em FROM controle_risco WHERE estabelecimento_id = ? AND codigo = ?',
+      [est, codigo],
+    );
+    let controleId: number;
+    if (!achado) {
+      controleId = await tx.incluir('controle_risco', {
+        estabelecimento_id: est,
+        codigo,
+        nome: c.nome.trim().replace(/\s+/g, ' '),
+        tipo_controle: c.tipo,
+      });
+    } else {
+      controleId = n(achado.id);
+      if (achado.tipo_controle !== c.tipo || achado.excluido_em !== null)
+        await tx.alterar('controle_risco', controleId, n(achado.versao), {
+          tipo_controle: c.tipo,
+          ativo: true,
+          excluido_em: null,
+          excluido_por: null,
+        });
+    }
+    mantidos.add(controleId);
+    const eficacia = EFICACIA_CONTROLE_BANCO[c.eficacia] ?? 'nao_avaliado';
+    const avaliado = eficacia === 'nao_avaliado' ? null : hoje;
+    const v = porControle.get(controleId);
+    if (!v) {
+      await tx.incluir('risco_institucional_controle', {
+        risco_institucional_id: riscoId,
+        controle_risco_id: controleId,
+        eficacia,
+        avaliado_em: avaliado,
+      });
+    } else if (texto(v['eficacia']) !== eficacia || v['excluido_em'] !== null) {
+      await tx.alterar('risco_institucional_controle', n(v['id']), n(v['versao']), {
+        eficacia,
+        avaliado_em: avaliado,
+        excluido_em: null,
+        excluido_por: null,
+      });
+    }
+  }
+  for (const v of vinculos) {
+    if (mantidos.has(n(v['controle_risco_id'])) || v['excluido_em'] !== null) continue;
+    await tx.alterar('risco_institucional_controle', n(v['id']), n(v['versao']), {
+      excluido_em: new Date(),
+      excluido_por: tx.contexto.usuario,
+    });
+  }
+}
+
 export class PortaGestaoPropria implements PortaGestao {
   readonly destino = 'banco' as const;
   protected readonly executor: Executor;
@@ -501,8 +609,6 @@ export class PortaGestaoPropria implements PortaGestao {
     est: number,
     r: Omit<RiscoNovo, 'hospital'>,
   ): Promise<{ id: number; versao: number; criado: boolean }> {
-    // Os controles em texto não têm coluna no modelo (pedido de DDL): recusa antes de gravar qualquer parte.
-    if (r.controles !== null) throw modeloPendente(PENDENTE.controlesRisco);
     const categoria = await tx.uma<{ id: number }>(
       'SELECT id FROM categoria_risco_institucional WHERE codigo = ? AND ativo = TRUE',
       [cobra(r.categoria)],
@@ -538,6 +644,7 @@ export class PortaGestaoPropria implements PortaGestao {
       situacao,
       reavaliar_em: r.reavaliarEm,
       justificativa: r.justificativa,
+      controles_descricao: r.controles,
       encerrado_em: situacao === 'encerrado' ? r.agora.slice(0, 10) : null,
     };
     if (r.id === null) {
@@ -548,9 +655,11 @@ export class PortaGestaoPropria implements PortaGestao {
         identificado_em: r.agora.slice(0, 10),
         ...dados,
       });
+      if (r.controlesLista) await gravarControlesDoRisco(tx, est, id, r.controlesLista, r.agora);
       return { id, versao: 1, criado: true };
     }
     const versao = await tx.alterar('risco_institucional', r.id, r.versao ?? -1, dados);
+    if (r.controlesLista) await gravarControlesDoRisco(tx, est, r.id, r.controlesLista, r.agora);
     return { id: r.id, versao, criado: false };
   }
 

@@ -13,6 +13,7 @@ import {
   PRIORIDADES_RISCO,
   rotuloCategoriaRisco,
   rotuloClassificacaoNaoConformidade,
+  rotuloEficaciaControleRisco,
   rotuloOrigemNaoConformidade,
   rotuloPrioridadeRisco,
   rotuloSituacaoNaoConformidade,
@@ -206,6 +207,21 @@ const eixos: EixoGut[] = ['gravidade', 'urgencia', 'tendencia'];
                 <div class="secundario">
                   {{
                     t('gestaoQualidade.riscos.areaResponsavel', { area: r.area, responsavel: r.responsavel })
+                  }}
+                </div>
+                <div
+                  v-if="r.controlesLista.length"
+                  class="secundario"
+                  :data-testid="`risco-controles-${r.id}`"
+                >
+                  {{
+                    t('gestaoQualidade.riscos.controlesResumo', {
+                      quantos: r.controlesLista.length,
+                      eficacia:
+                        r.eficaciaControles === 'semControle'
+                          ? '—'
+                          : rotuloEficaciaControleRisco(r.eficaciaControles),
+                    })
                   }}
                 </div>
                 <div v-if="podeRegistrar" class="linha-ccih">

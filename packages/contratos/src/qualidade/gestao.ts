@@ -223,6 +223,39 @@ export type SituacaoRisco = (typeof SITUACOES_RISCO)[number]['codigo'];
 export const CODIGOS_SITUACAO_RISCO = codigos(SITUACOES_RISCO);
 export const rotuloSituacaoRisco = rotuloDe(SITUACOES_RISCO);
 
+/** Tipo do controle (barreira) do risco: evita, detecta, corrige ou reduz o efeito. */
+export const TIPOS_CONTROLE_RISCO = [
+  { codigo: 'preventivo', rotulo: 'Preventivo' },
+  { codigo: 'detectivo', rotulo: 'Detectivo' },
+  { codigo: 'corretivo', rotulo: 'Corretivo' },
+  { codigo: 'mitigatorio', rotulo: 'Mitigatório' },
+] as const;
+export type TipoControleRisco = (typeof TIPOS_CONTROLE_RISCO)[number]['codigo'];
+export const CODIGOS_TIPO_CONTROLE_RISCO = codigos(TIPOS_CONTROLE_RISCO);
+export const rotuloTipoControleRisco = rotuloDe(TIPOS_CONTROLE_RISCO);
+
+/** Eficácia avaliada de cada controle do risco (a avaliação data o controle). */
+export const EFICACIAS_CONTROLE_RISCO = [
+  { codigo: 'naoAvaliado', rotulo: 'Não avaliado' },
+  { codigo: 'eficaz', rotulo: 'Eficaz' },
+  { codigo: 'parcialmenteEficaz', rotulo: 'Parcialmente eficaz' },
+  { codigo: 'ineficaz', rotulo: 'Ineficaz' },
+] as const;
+export type EficaciaControleRisco = (typeof EFICACIAS_CONTROLE_RISCO)[number]['codigo'];
+export const CODIGOS_EFICACIA_CONTROLE_RISCO = codigos(EFICACIAS_CONTROLE_RISCO);
+export const rotuloEficaciaControleRisco = rotuloDe(EFICACIAS_CONTROLE_RISCO);
+
+/** A eficácia do conjunto de controles do risco (resumo da matriz; "semControle" quando não há nenhum). */
+export type EficaciaControlesRisco = EficaciaControleRisco | 'semControle';
+
+/** Um controle do risco lido: nome do catálogo do hospital, tipo, eficácia e a data da avaliação. */
+export interface ControleRiscoLido {
+  readonly nome: string;
+  readonly tipo: TipoControleRisco;
+  readonly eficacia: EficaciaControleRisco;
+  readonly avaliadoEm: string | null;
+}
+
 export const ORIGENS_NAO_CONFORMIDADE = [
   { codigo: 'auditoria', rotulo: 'Auditoria interna' },
   { codigo: 'externa', rotulo: 'Auditoria externa ou visita de acreditação' },
@@ -509,6 +542,14 @@ export type RegistrarReuniaoComissaoEntrada = z.infer<typeof esquemaRegistrarReu
 
 const pontoGut = z.number().int().min(1).max(5);
 
+/** Um controle do risco na gravação: o nome liga ao catálogo do hospital (cria quando não existe). */
+export const esquemaControleRisco = z.object({
+  nome: textoMin(150, 3),
+  tipo: z.enum(CODIGOS_TIPO_CONTROLE_RISCO),
+  eficacia: z.enum(CODIGOS_EFICACIA_CONTROLE_RISCO),
+});
+export type ControleRiscoEntrada = z.infer<typeof esquemaControleRisco>;
+
 /** `qualidade.registrarRisco`: o risco na matriz GUT (inclusão ou reavaliação com a versão). */
 export const esquemaRegistrarRisco = z.object({
   risco: id.nullable(),
@@ -521,6 +562,11 @@ export const esquemaRegistrarRisco = z.object({
   urgencia: pontoGut,
   tendencia: pontoGut,
   controles: textoOpcional(2000),
+  /**
+   * Os controles estruturados (catálogo do hospital, tipo e eficácia). Ausente: os vínculos gravados ficam como
+   * estão; lista (mesmo vazia): passa a ser exatamente esta.
+   */
+  controlesLista: z.array(esquemaControleRisco).max(20).optional(),
   responsavel: textoMin(80, 3),
   situacao: z.enum(CODIGOS_SITUACAO_RISCO),
   reavaliarEm: data,
@@ -860,6 +906,8 @@ export interface RiscoLido {
   readonly pontuacao: number;
   readonly prioridade: PrioridadeRisco;
   readonly controles: string | null;
+  readonly controlesLista: readonly ControleRiscoLido[];
+  readonly eficaciaControles: EficaciaControlesRisco;
   readonly responsavel: string;
   readonly situacao: SituacaoRisco;
   readonly reavaliarEm: string;

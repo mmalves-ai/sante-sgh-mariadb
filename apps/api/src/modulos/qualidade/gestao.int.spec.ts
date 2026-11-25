@@ -155,7 +155,7 @@ describe.skipIf(SEM_BANCO_QUA)(
       ).toBe('versao-desatualizada');
     });
 
-    it('o risco recusa área, responsável e controles em texto que o modelo não cobre, sem gravar nada', async () => {
+    it('o risco recusa área e responsável que o cliente não tem, sem gravar nada', async () => {
       const antes = (await porta.riscos(c, { pagina: 1, porPagina: 50 })).total;
       expect(
         await codigo(porta.gravarSgh(c, T, (g) => g.registrarRisco(risco({ area: 'SETOR QUE NAO EXISTE' })))),
@@ -165,9 +165,6 @@ describe.skipIf(SEM_BANCO_QUA)(
           porta.gravarSgh(c, T, (g) => g.registrarRisco(risco({ responsavel: 'NINGUEM SINTETICO' }))),
         ),
       ).toBe('responsavel-inexistente');
-      expect(
-        await codigo(porta.gravarSgh(c, T, (g) => g.registrarRisco(risco({ controles: 'Barra de apoio' })))),
-      ).toBe('modelo-pendente');
       expect((await porta.riscos(c, { pagina: 1, porPagina: 50 })).total).toBe(antes);
     });
 

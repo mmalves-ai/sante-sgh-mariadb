@@ -1044,6 +1044,21 @@ export interface ReuniaoComissaoRegistrada {
   readonly assinaturaAnteriorPor?: string | null;
 }
 
+/** Um controle do risco na gravação (C2-060): o nome liga ao catálogo de controles do hospital. */
+export interface ControleRiscoNovo {
+  readonly nome: string;
+  readonly tipo: string;
+  readonly eficacia: string;
+}
+
+/** Um controle do risco gravado: o do catálogo, com a eficácia e a data da avaliação. */
+export interface ControleRiscoGravado {
+  readonly nome: string;
+  readonly tipo: string;
+  readonly eficacia: string;
+  readonly avaliadoEm: string | null;
+}
+
 export interface RiscoNovo {
   readonly id: number | null;
   readonly versao: number | null;
@@ -1055,6 +1070,8 @@ export interface RiscoNovo {
   readonly urgencia: number;
   readonly tendencia: number;
   readonly controles: string | null;
+  /** Os controles estruturados; ausente: os vínculos gravados ficam como estão. */
+  readonly controlesLista?: readonly ControleRiscoNovo[];
   readonly responsavel: string;
   readonly situacao: string;
   readonly reavaliarEm: string;
@@ -1075,6 +1092,7 @@ export interface RiscoRegistrado {
   readonly tendencia: number;
   readonly pontuacao: number;
   readonly controles: string | null;
+  readonly controlesLista: readonly ControleRiscoGravado[];
   readonly responsavel: string;
   readonly situacao: string;
   readonly reavaliarEm: string;

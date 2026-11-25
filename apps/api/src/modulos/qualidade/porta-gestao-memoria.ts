@@ -3,6 +3,8 @@
 // os feriados nacionais fixos. As gravações seguem as travas do banco (versão, chaves únicas, a revisão vigente
 // substituída, a geração que substitui a anterior, a transmissão só com o mesmo resumo).
 import type {
+  ControleRiscoGravado,
+  ControleRiscoNovo,
   AnaliseIndicadorRegistrada,
   AuditoriaRegistrada,
   ComissaoRegistrada,
@@ -79,6 +81,24 @@ const pagina = <T>(xs: readonly T[], f: { pagina: number; porPagina: number }) =
   total: xs.length,
 });
 const segundos = (t: string) => (t.length === 16 ? `${t}:00` : t.slice(0, 19));
+
+/** Os controles do risco após a gravação: a data da avaliação muda só quando a eficácia muda (como no banco). */
+function controlesGravados(
+  lista: readonly ControleRiscoNovo[],
+  antes: readonly ControleRiscoGravado[],
+  agora: string,
+): ControleRiscoGravado[] {
+  return lista.map((c) => {
+    const ja = antes.find((a) => a.nome.toUpperCase() === c.nome.trim().toUpperCase());
+    const avaliadoEm =
+      ja && ja.eficacia === c.eficacia
+        ? ja.avaliadoEm
+        : c.eficacia === 'naoAvaliado'
+          ? null
+          : agora.slice(0, 10);
+    return { nome: c.nome.trim(), tipo: c.tipo, eficacia: c.eficacia, avaliadoEm };
+  });
+}
 
 export class PortaGestaoMemoria implements PortaGestao {
   readonly destino = 'memoria' as const;
@@ -1285,6 +1305,7 @@ export class PortaGestaoMemoria implements PortaGestao {
             id: novo,
             versao: 1,
             ...dados,
+            controlesLista: controlesGravados(r.controlesLista ?? [], [], r.agora),
             registradoPor: r.usuario,
             registradoEm: segundos(r.agora),
             atualizadoPor: null,
@@ -1297,6 +1318,9 @@ export class PortaGestaoMemoria implements PortaGestao {
         s.riscos = troca(s.riscos, {
           ...v,
           ...dados,
+          controlesLista: r.controlesLista
+            ? controlesGravados(r.controlesLista, v.controlesLista, r.agora)
+            : v.controlesLista,
           atualizadoPor: r.usuario,
           atualizadoEm: segundos(r.agora),
           versao: v.versao + 1,

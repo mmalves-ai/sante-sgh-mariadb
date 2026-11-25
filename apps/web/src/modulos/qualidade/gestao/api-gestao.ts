@@ -5,6 +5,7 @@
 import {
   CODIGOS_CANAL_MANIFESTACAO,
   CODIGOS_CATEGORIA_RISCO,
+  CODIGOS_EFICACIA_CONTROLE_RISCO,
   CODIGOS_CLASSIFICACAO_NAO_CONFORMIDADE,
   CODIGOS_EFICACIA_NAO_CONFORMIDADE,
   CODIGOS_ORIGEM_NAO_CONFORMIDADE,
@@ -16,6 +17,7 @@ import {
   CODIGOS_SITUACAO_NAO_CONFORMIDADE,
   CODIGOS_SITUACAO_RISCO,
   CODIGOS_TIPO_COMISSAO,
+  CODIGOS_TIPO_CONTROLE_RISCO,
   CODIGOS_TIPO_DOCUMENTO_QUALIDADE,
   CODIGOS_TIPO_ENVIO_REGULATORIO,
   CODIGOS_TIPO_MANIFESTACAO,
@@ -267,6 +269,17 @@ export const esquemaRisco = z.object({
   pontuacao: n,
   prioridade: z.enum(['critica', 'alta', 'moderada', 'baixa']),
   controles: sN,
+  controlesLista: z
+    .array(
+      z.object({
+        nome: s,
+        tipo: z.enum(CODIGOS_TIPO_CONTROLE_RISCO),
+        eficacia: z.enum(CODIGOS_EFICACIA_CONTROLE_RISCO),
+        avaliadoEm: sN,
+      }),
+    )
+    .default([]),
+  eficaciaControles: z.enum([...CODIGOS_EFICACIA_CONTROLE_RISCO, 'semControle']).default('semControle'),
   responsavel: s,
   situacao: z.enum(CODIGOS_SITUACAO_RISCO),
   reavaliarEm: s,

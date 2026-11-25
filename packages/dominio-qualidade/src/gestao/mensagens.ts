@@ -1,5 +1,6 @@
 // Os textos de toda recusa da gestão da qualidade (a API manda o código e o texto; a tela usa os mesmos). Sem nome de
 // sistema antigo (ADR 0023).
+import type { RecusaControlesRisco } from './controles-risco.js';
 import type { RecusaDocumento } from './documentos.js';
 import type { RecusaEnvio } from './envio.js';
 import type { RecusaAnaliseIndicador } from './ficha-indicador.js';
@@ -12,6 +13,7 @@ export type RecusaGestaoQualidade =
   | RecusaAuditoria
   | RecusaComissao
   | RecusaRisco
+  | RecusaControlesRisco
   | RecusaNaoConformidade
   | RecusaOuvidoria
   | RecusaEnvio
@@ -52,6 +54,9 @@ export const MENSAGENS_RECUSA_GESTAO: Readonly<Record<RecusaGestaoQualidade, str
   'membro-repetido': 'O mesmo membro aparece duas vezes na composição.',
   'justificativa-obrigatoria': 'Risco aceito ou encerrado leva a justificativa (pelo menos 10 caracteres).',
   'controles-obrigatorios': 'Risco crítico em tratamento ou mitigado leva os controles adotados.',
+  'controle-repetido': 'O mesmo controle aparece duas vezes na lista do risco: deixe um só.',
+  'controle-eficaz-obrigatorio':
+    'Risco mitigado precisa de ao menos um controle eficaz ou parcialmente eficaz; avalie os controles ou mantenha o risco em tratamento.',
   'reavaliacao-no-passado': 'A data da reavaliação tem de ser hoje ou depois.',
   'risco-inexistente': 'Risco não encontrado.',
   'risco-encerrado': 'O risco está encerrado: registre outro se ele voltou.',
