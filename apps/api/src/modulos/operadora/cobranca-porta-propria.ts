@@ -20,6 +20,7 @@
 // (notificacao_inadimplencia: meio, data, dias de atraso e a referência no aviso de recebimento). A cobrança notificada
 // é lida da notificação: vencida em aberto no dia do registro, desde o primeiro vencimento em aberto da ocorrência.
 // multa e juros da baixa ficam somados em valor_acrescimo até o modelo separar as duas colunas.
+import { escolherRegraCoparticipacao, type EventoCoparticipacao } from '@sgh/dominio-operadora';
 import { garantirSequencia, type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
 import {
   BasePortaOperadoraPropria,
@@ -280,7 +281,8 @@ const TIPO_DA_COPARTICIPACAO: Readonly<Record<string, number>> = { nenhuma: 1, p
 /**
  * A regra geral de coparticipação do contrato (08-SGO L98) vigente na competência do evento (sem competência: a de
  * hoje, para a exibição): a do próprio contrato prevalece sobre a do plano comercializado do produto no estabelecimento;
- * dentro da competência, a que começou por último; só a regra geral (sem grupo, procedimento, tipo de guia nem regime).
+ * vale a mais específica que casa com o evento (procedimento, grupo, tipo de guia, regime; C2-116) e, no mesmo grau, a do
+ * contrato e a que começou por último. Sem critério do evento, só a regra geral casa.
  * Sem regra: tipo 1 (nenhuma), e o lançamento recusa com produto-sem-coparticipacao.
  */
 async function coparticipacaoDoContrato(
@@ -288,22 +290,24 @@ async function coparticipacaoDoContrato(
   k: Linha,
   estabelecimento: number,
   competencia: string | null = null,
+  evento: EventoCoparticipacao = {},
 ): Promise<DadosContratoCobranca['coparticipacao']> {
   const desde = competencia ? primeiroDia(competencia) : null;
   const ate = competencia ? ultimoDiaDaCompetencia(competencia) : null;
-  const r = await l.uma(
-    `SELECT r.tipo_coparticipacao, r.percentual, r.valor, r.teto_por_evento, r.teto_mensal, r.teto_anual
+  // As candidatas da vigência (do contrato e do plano); a escolha da mais específica que casa com o evento é do domínio
+  // (C2-116: procedimento, grupo, tipo de guia e regime; no mesmo grau, a do contrato).
+  const rs = await l.consultar(
+    `SELECT r.id, r.contrato_plano_id, r.vigencia_inicio, r.item_faturavel_id, r.grupo_procedimento_operadora_id,
+            r.tipo_guia_plano_id, r.regime_atendimento_rede_id,
+            r.tipo_coparticipacao, r.percentual, r.valor, r.teto_por_evento, r.teto_mensal, r.teto_anual
        FROM regra_coparticipacao r
       WHERE r.operadora_saude_id = ? AND r.ativo = TRUE
-        AND r.grupo_procedimento_operadora_id IS NULL AND r.item_faturavel_id IS NULL
-        AND r.tipo_guia_plano_id IS NULL AND r.regime_atendimento_rede_id IS NULL
         AND r.vigencia_inicio <= COALESCE(?, CURRENT_DATE)
         AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= COALESCE(?, CURRENT_DATE))
         AND (r.contrato_plano_id = ?
              OR (r.contrato_plano_id IS NULL AND r.plano_comercializado_id IN (
                    SELECT pc.id FROM plano_comercializado pc WHERE pc.produto_plano_id = ? AND pc.estabelecimento_id = ?)))
-      ORDER BY (r.contrato_plano_id IS NULL), r.vigencia_inicio DESC, r.id DESC
-      LIMIT 1`,
+      ORDER BY r.id`,
     [
       num(k['operadora_saude_id']),
       ate,
@@ -312,7 +316,22 @@ async function coparticipacaoDoContrato(
       numOuNulo(k['produto_id']) ?? 0,
       estabelecimento,
     ],
+    { teto: 500 },
   );
+  const escolhida = escolherRegraCoparticipacao(
+    rs.map((x) => ({
+      linha: x,
+      id: num(x['id']),
+      doContrato: x['contrato_plano_id'] != null,
+      inicio: data(x['vigencia_inicio']) ?? '',
+      procedimento: numOuNulo(x['item_faturavel_id']),
+      grupo: numOuNulo(x['grupo_procedimento_operadora_id']),
+      tipoGuia: numOuNulo(x['tipo_guia_plano_id']),
+      regime: numOuNulo(x['regime_atendimento_rede_id']),
+    })),
+    evento,
+  );
+  const r = escolhida?.linha;
   const tipo = r ? (TIPO_DA_COPARTICIPACAO[txt(r['tipo_coparticipacao'])] ?? 1) : 1;
   return {
     tipo,
@@ -827,7 +846,7 @@ export class PortaCobrancaOperadoraPropria
         );
         if (!k) throw inexistente('O contrato');
         return {
-          regra: await coparticipacaoDoContrato(tx, k, est, x.competencia),
+          regra: await coparticipacaoDoContrato(tx, k, est, x.competencia, x.evento ?? {}),
           acumulado: await acumuladoCoparticipacao(tx, est, x.beneficiario, x.competencia, tx),
         };
       },

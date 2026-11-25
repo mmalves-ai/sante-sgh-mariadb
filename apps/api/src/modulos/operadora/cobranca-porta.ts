@@ -6,6 +6,7 @@
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
 // Melhoria: o contexto é o do @sgh/nucleo (cliente, estabelecimento e usuário por id) e o estabelecimento de cada
 // gravação vem da sessão, nunca da entrada.
+import type { EventoCoparticipacao } from '@sgh/dominio-operadora';
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import {
@@ -35,7 +36,13 @@ export interface GravadorCobranca {
    * lidos dentro da transação com o beneficiário travado: dois lançamentos simultâneos não passam juntos do teto, e o
    * evento de competência passada usa a regra que valia nela, não a de hoje (08-SGO L98).
    */
-  coparticipacaoTravada(x: { contrato: number; beneficiario: number; competencia: string }): Promise<{
+  coparticipacaoTravada(x: {
+    contrato: number;
+    beneficiario: number;
+    competencia: string;
+    /** O escopo do evento (procedimento, grupo, tipo de guia, regime) para a regra mais específica (C2-116). */
+    evento?: EventoCoparticipacao;
+  }): Promise<{
     regra: DadosContratoCobranca['coparticipacao'];
     acumulado: { mes: number; ano: number };
   }>;

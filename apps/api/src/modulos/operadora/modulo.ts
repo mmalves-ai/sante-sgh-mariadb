@@ -52,6 +52,12 @@ import {
   PortaBeneficiarioSaudePropria,
 } from './beneficiario-saude-propria.js';
 import { DeclaracoesAnsController } from './ans-declaracoes.controller.js';
+import { RegrasCoparticipacaoController } from './regras-coparticipacao.controller.js';
+import {
+  METODOS_REGRAS_COPARTICIPACAO,
+  PORTA_REGRAS_COPARTICIPACAO,
+  PortaRegrasCoparticipacaoPropria,
+} from './regras-coparticipacao-propria.js';
 import { ComercialOperadoraController } from './comercial.controller.js';
 import { METODOS_COMERCIAL, PORTA_COMERCIAL, PortaComercialPropria } from './comercial-propria.js';
 import { ProgramaSaudeOperadoraController } from './programa-saude.controller.js';
@@ -282,6 +288,7 @@ export async function moduloOperadora(
       PortalPrestadorController,
       CadastroComplementarOperadoraController,
       DeclaracoesAnsController,
+      RegrasCoparticipacaoController,
       ReajusteColetivoOperadoraController,
       ProgramaSaudeOperadoraController,
       BeneficiarioSaudeOperadoraController,
@@ -384,6 +391,14 @@ export async function moduloOperadora(
                 lerRaizArquivos(ctx.env) ? criarArmazemLocal(ctx.nucleo, { env: ctx.env }) : null,
               )
             : portaIndisponivel<PortaDeclaracoesAnsPropria>(METODOS_DECLARACOES_ANS),
+      },
+      // 08-SGO L98 (C2-116): regras de coparticipação por escopo com tetos, só no banco do cliente (sem núcleo, 503).
+      {
+        provide: PORTA_REGRAS_COPARTICIPACAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaRegrasCoparticipacaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaRegrasCoparticipacaoPropria>(METODOS_REGRAS_COPARTICIPACAO),
       },
       {
         provide: SERVICO_PORTAL_PRESTADOR,

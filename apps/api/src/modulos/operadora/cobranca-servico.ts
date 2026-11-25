@@ -550,6 +550,12 @@ export class ServicoCobrancaOperadora {
           contrato: k.id,
           beneficiario: b.id,
           competencia: e.competencia,
+          evento: {
+            procedimento: e.procedimento ?? null,
+            grupo: e.grupo ?? null,
+            tipoGuia: e.tipoGuia ?? null,
+            regime: e.regime ?? null,
+          },
         });
         const x = calcularCoparticipacao(regra, e.valorEvento, acumulado);
         const [problema] = problemasDaCoparticipacao(x);

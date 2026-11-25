@@ -20,6 +20,7 @@ export * from './cobranca.js';
 export * from './reajuste-coletivo.js';
 // F7 (08-SGO linha 98): coparticipação com tetos por evento, mês e ano.
 export * from './coparticipacao.js';
+export * from './regra-coparticipacao.js';
 export * from './autorizacao.js';
 // Etapa 6 (F5): as contas médicas recebidas (protocolo, críticas e glosa automática, revisão, recurso e pagamento).
 export * from './conta.js';

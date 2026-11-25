@@ -134,6 +134,11 @@ export const esquemaLancarCoparticipacao = z
     vencimento: data,
     valorEvento: dinheiro,
     descricao: textoMinimo(200, 5, 'Descreva o evento (5 caracteres ou mais).'),
+    // O escopo do evento (C2-116): o procedimento, o grupo, o tipo de guia e o regime escolhem a regra mais específica.
+    procedimento: id.nullable().optional(),
+    grupo: id.nullable().optional(),
+    tipoGuia: id.nullable().optional(),
+    regime: id.nullable().optional(),
   })
   .strict();
 export type LancarCoparticipacaoEntrada = z.infer<typeof esquemaLancarCoparticipacao>;
