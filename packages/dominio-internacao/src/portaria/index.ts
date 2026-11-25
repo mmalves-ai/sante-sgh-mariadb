@@ -6,3 +6,4 @@ export * from './visita.js';
 export * from './visitante.js';
 export * from './cracha.js';
 export * from './acompanhante.js';
+export * from './catraca-colaborador.js';
