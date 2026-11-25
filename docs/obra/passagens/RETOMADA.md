@@ -589,3 +589,13 @@ corrente de CronCreate morre com a sessão; ao retomar, recriar (formato na mem�
   segundo lote e ficha por marco.
 - **Depois:** triagem barata (leitura, ~0,3 M por função) das ~90 funções restantes da F3 e das 171 da F7/F8 antes de
   construir; só o que for fechável por agente vai para construção; o resto vira lista de decisões para o dono.
+
+## Passagem de 25/11 09h55 (Sessão de Construção)
+- Push feito: origin/main = 9208e894 (ci-sim VERDE). Main local = merge b941975a (feito por merge-tree + update-ref, porque os
+  pre-commits dos agentes seguram a index.lock por minutos) + 016c5937 (tools/obra/commit-e2e.py).
+- Achado: com construtores em paralelo o HEAD não compila (arquivo compartilhado commitado importa arquivo novo de outro
+  agente). E2E em lote passa a rodar no commit à parte `python3 -I tools/obra/commit-e2e.py` (ref refs/obra/e2e).
+- integrar-1 relançada como wf_02b3fa0a-45f (task w8aichp3a); construir-2 segue (wf_f80632d3-b87).
+- API do painel (3310, pid 1146506) segue no build de 24/11: rebuild na árvore principal só com a construir-2 parada
+  (o build da árvore com trabalho pela metade quebraria o dist que a API carrega sob demanda).
+- Segundo merge (conector-autor-registro): a Painel de Injeção junta 9208e894, roda ci-sim e avisa o commit.
