@@ -339,7 +339,8 @@ function aplicarM10(nome: string, e: Record<string, unknown>, operador: string):
         nome: String(e['nomeCompleto']),
         ativo: true,
         cpf,
-        senhaDefinida: false,
+        // A conta nasce com a credencial inicial quando o servidor mandou o resumo (01-ADM L57).
+        senhaDefinida: typeof e['resumoSenhaInicial'] === 'string',
       });
       acesso.contas.set(login, { id, grupo: g, papeis: new Map([[4, true]]), flags: [], conselho: false });
       return { idUsuario: id };

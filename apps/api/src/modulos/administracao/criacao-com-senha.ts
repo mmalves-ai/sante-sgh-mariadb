@@ -1,14 +1,21 @@
 // Criar a conta já com a senha inicial (01-ADM L57): quem cria o usuário recebe, na mesma resposta, a senha provisória
 // que entrega à pessoa; ela troca no primeiro acesso. Um passo para o gestor, em vez de criar e depois abrir a ficha
 // para "dar a senha".
-// São duas gravações, cada uma na sua transação com a sua trilha: a conta (com vínculo e perfil) e a credencial
-// provisória. Se a segunda falhar, a conta continua criada e sem credencial (ninguém entra com ela) e a resposta diz
-// que a senha ficou pendente e por quê; a ficha do usuário continua oferecendo "dar senha provisória". A senha nunca
-// vai a log nem a trilha: volta só nesta resposta.
+// Uma gravação só: a senha é gerada e cifrada ANTES, e a receita acesso.criar_usuario grava a conta, o vínculo, o perfil,
+// a credencial de troca obrigatória e o histórico na mesma transação, com a trilha (ou nasce tudo, ou nada). Só se a
+// senha nem puder ser gerada (política ilegível, serviço de senha ausente) a conta nasce sem credencial e a resposta
+// diz que a senha ficou pendente e por quê; a ficha continua oferecendo "Senha provisória". A senha nunca vai a log
+// nem a trilha: volta só nesta resposta.
 
 export interface SenhaInicial {
   readonly senhaProvisoria: string;
   readonly trocaObrigatoria: boolean;
+}
+
+/** A senha gerada para a conta nova: a clara volta ao gestor; o resumo argon2id vai à receita. */
+export interface SenhaPreparada {
+  readonly senha: string;
+  readonly resumo: string;
 }
 
 export type ResultadoSenhaInicial =
@@ -20,28 +27,37 @@ export const SENHA_INICIAL_PENDENTE =
 
 /** O detalhe legível de uma falha, sem nada além do texto de negócio. */
 function motivoDaFalha(e: unknown): string {
-  const d = (e as { detalhe?: unknown } | null)?.detalhe;
+  const d = (e as { detalhe?: unknown; message?: unknown } | null)?.detalhe;
   return typeof d === 'string' && d.trim() !== ''
     ? `${SENHA_INICIAL_PENDENTE} (${d.trim()})`
     : SENHA_INICIAL_PENDENTE;
 }
 
 /**
- * Cria a conta e, criada, emite a senha inicial. A recusa da criação sobe como está (nada de senha para conta que não
- * nasceu); a falha da senha não desfaz a conta: vira "pendente" com o motivo.
+ * Prepara a senha e cria a conta com ela numa gravação só. A recusa da criação sobe como está (nada gravado, nada de
+ * senha na resposta). Sem como preparar a senha, cria a conta sem credencial e devolve "pendente" com o motivo.
+ * `concluir` (opcional) roda depois da gravação (o serviço da identidade) e diz se a troca é obrigatória.
  */
 export async function criarContaComSenhaInicial<R>(
-  criar: () => Promise<R>,
-  darSenha: ((conta: R) => Promise<SenhaInicial>) | null,
+  preparar: (() => Promise<SenhaPreparada>) | null,
+  criar: (resumo: string | null) => Promise<R>,
+  concluir?: (conta: R, senha: string) => Promise<boolean>,
 ): Promise<{ readonly conta: R; readonly senhaInicial: ResultadoSenhaInicial }> {
-  const conta = await criar();
-  if (!darSenha) return { conta, senhaInicial: { emitida: false, motivo: SENHA_INICIAL_PENDENTE } };
-  try {
-    const senha = await darSenha(conta);
-    if (!senha.senhaProvisoria)
-      return { conta, senhaInicial: { emitida: false, motivo: SENHA_INICIAL_PENDENTE } };
-    return { conta, senhaInicial: { emitida: true, senha } };
-  } catch (e) {
-    return { conta, senhaInicial: { emitida: false, motivo: motivoDaFalha(e) } };
+  let preparada: SenhaPreparada | null = null;
+  let motivo = SENHA_INICIAL_PENDENTE;
+  if (preparar) {
+    try {
+      const p = await preparar();
+      if (p.senha && p.resumo) preparada = p;
+    } catch (e) {
+      motivo = motivoDaFalha(e);
+    }
   }
+  const conta = await criar(preparada ? preparada.resumo : null);
+  if (!preparada) return { conta, senhaInicial: { emitida: false, motivo } };
+  const trocaObrigatoria = concluir ? await concluir(conta, preparada.senha) : true;
+  return {
+    conta,
+    senhaInicial: { emitida: true, senha: { senhaProvisoria: preparada.senha, trocaObrigatoria } },
+  };
 }

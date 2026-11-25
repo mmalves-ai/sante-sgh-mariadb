@@ -16,7 +16,9 @@ import {
   conferirEscopo,
   contaNova,
   MENSAGEM_CADASTRO_USUARIO,
+  MENSAGEM_CREDENCIAL_INICIAL,
   planoAlteracaoUsuario,
+  planoCredencialInicial,
   planoTrocaGrupo,
   type RecusaCadastroUsuario,
 } from '@sgh/dominio-acesso';
@@ -74,11 +76,24 @@ async function grupoPeloCodigo(
   return g ? { id: num(g['id']), ativo: g['ativo'] === true || num(g['ativo']) === 1 } : null;
 }
 
+/**
+ * A entrada da criação aceita, além do contrato público, o resumo argon2id da senha inicial. Quem o põe é o servidor
+ * (usuarios.controller gera a senha provisória pela política e a cifra); o corpo do pedido passa antes pelo contrato
+ * estrito, que recusa o campo vindo de fora.
+ */
+const entradaCriarUsuario = esquemaCriarUsuario.extend({
+  resumoSenhaInicial: z.string().max(255).optional(),
+});
+
 const operacaoCriarUsuario = definirOperacao({
   nome: 'acesso.criar_usuario',
-  tabelas: ['usuario', 'usuario_estabelecimento', 'usuario_perfil'],
-  entrada: esquemaCriarUsuario,
+  // A credencial inicial e o histórico entram na MESMA transação da conta (01-ADM L57): ou nasce tudo, ou nada.
+  tabelas: ['usuario', 'usuario_estabelecimento', 'usuario_perfil', 'credencial_usuario', 'historico_senha'],
+  entrada: entradaCriarUsuario,
   async gravar(tx, e, ctx) {
+    const credencial = planoCredencialInicial(e.resumoSenhaInicial);
+    if (credencial && 'recusa' in credencial)
+      throw recusa(credencial.recusa, MENSAGEM_CREDENCIAL_INICIAL[credencial.recusa]);
     const conta = contaNova(e);
     const login = await tx.uma('SELECT id FROM usuario WHERE login = ?', [conta.login]);
     const cpf = conta.cpf ? await tx.uma('SELECT id FROM usuario WHERE cpf = ?', [conta.cpf]) : null;
@@ -103,11 +118,29 @@ const operacaoCriarUsuario = definirOperacao({
       estabelecimento_id: ctx.estabelecimento,
       vigencia_inicio: inicio,
     });
-    return { idUsuario, vinculo, perfil, dispensaCpf: conta.dispensa_cpf };
+    if (credencial) {
+      const agora = new Date();
+      await tx.incluir('credencial_usuario', {
+        usuario_id: idUsuario,
+        ...credencial.credencial,
+        senha_alterada_em: agora,
+        ultima_tentativa_invalida_em: null,
+      });
+      await tx.incluir('historico_senha', {
+        usuario_id: idUsuario,
+        ...credencial.historico,
+        ocorrido_em: agora,
+        responsavel_usuario_id: ctx.usuario,
+      });
+    }
+    return { idUsuario, vinculo, perfil, dispensaCpf: conta.dispensa_cpf, senhaInicial: credencial !== null };
   },
   alvo: (_e, r) => ({ tabela: 'usuario', id: r.idUsuario }),
   eventos: (_e, r) => [{ tipo: 'acesso.usuario.criado', carga: { idUsuario: r.idUsuario } }],
-  trilha: (_e, r) => ({ dados: { vinculo: r.vinculo, perfil: r.perfil, dispensaCpf: r.dispensaCpf } }),
+  // Nunca o resumo: só se a conta nasceu com a credencial inicial.
+  trilha: (_e, r) => ({
+    dados: { vinculo: r.vinculo, perfil: r.perfil, dispensaCpf: r.dispensaCpf, senhaInicial: r.senhaInicial },
+  }),
 });
 
 const operacaoAlterarUsuario = definirOperacao({

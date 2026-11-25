@@ -108,47 +108,65 @@ describe('redefinir a senha pela ficha (troca pelo novo ligada)', () => {
 });
 
 describe('criar a conta com a senha inicial (regra da composição)', () => {
-  it('a conta criada recebe a senha; a recusa da criação sobe sem pedir senha', async () => {
-    let pedidas = 0;
-    const dar = async () => {
-      pedidas += 1;
-      return { senhaProvisoria: 'sintetica-123', trocaObrigatoria: true };
-    };
-    const r = await criarContaComSenhaInicial(async () => ({ idUsuario: 7 }), dar);
+  const preparada = { senha: 'sintetica-123', resumo: '$argon2id$v=19$m=8,t=1,p=1$c2FsdA$aGFzaA' };
+
+  it('a conta nasce com o resumo na própria criação; a recusa da criação sobe sem senha na resposta', async () => {
+    const recebidos: (string | null)[] = [];
+    const r = await criarContaComSenhaInicial(
+      async () => preparada,
+      async (resumo) => {
+        recebidos.push(resumo);
+        return { idUsuario: 7 };
+      },
+    );
+    expect(recebidos).toEqual([preparada.resumo]);
     expect(r).toEqual({
       conta: { idUsuario: 7 },
       senhaInicial: { emitida: true, senha: { senhaProvisoria: 'sintetica-123', trocaObrigatoria: true } },
     });
     await expect(
-      criarContaComSenhaInicial(async () => {
-        throw new Error('login-em-uso');
-      }, dar),
+      criarContaComSenhaInicial(
+        async () => preparada,
+        async () => {
+          throw new Error('login-em-uso');
+        },
+      ),
     ).rejects.toThrow('login-em-uso');
-    expect(pedidas).toBe(1);
+    // O serviço da identidade decide a troca obrigatória depois da gravação.
+    const c = await criarContaComSenhaInicial(
+      async () => preparada,
+      async () => ({ idUsuario: 11 }),
+      async (conta, senha) => conta.idUsuario === 11 && senha === 'sintetica-123',
+    );
+    expect(c.senhaInicial).toEqual({
+      emitida: true,
+      senha: { senhaProvisoria: 'sintetica-123', trocaObrigatoria: true },
+    });
   });
 
-  it('a falha da senha não desfaz a conta: fica pendente, com o motivo', async () => {
-    const semPorta = await criarContaComSenhaInicial(async () => ({ idUsuario: 8 }), null);
+  it('sem como gerar a senha: a conta nasce sem credencial e a resposta diz pendente, com o motivo', async () => {
+    const semPorta = await criarContaComSenhaInicial(null, async (resumo) => ({ idUsuario: 8, resumo }));
     expect(semPorta).toEqual({
-      conta: { idUsuario: 8 },
+      conta: { idUsuario: 8, resumo: null },
       senhaInicial: { emitida: false, motivo: SENHA_INICIAL_PENDENTE },
     });
     const falhou = await criarContaComSenhaInicial(
-      async () => ({ idUsuario: 9 }),
       async () => {
         throw Object.assign(new Error('x'), { detalhe: 'Serviço de senha indisponível.' });
       },
+      async (resumo) => ({ idUsuario: 9, resumo }),
     );
-    expect(falhou.conta).toEqual({ idUsuario: 9 });
+    expect(falhou.conta).toEqual({ idUsuario: 9, resumo: null });
     expect(falhou.senhaInicial).toEqual({
       emitida: false,
       motivo: `${SENHA_INICIAL_PENDENTE} (Serviço de senha indisponível.)`,
     });
     const vazia = await criarContaComSenhaInicial(
-      async () => ({ idUsuario: 10 }),
-      async () => ({ senhaProvisoria: '', trocaObrigatoria: true }),
+      async () => ({ senha: '', resumo: '' }),
+      async (resumo) => ({ idUsuario: 10, resumo }),
     );
     expect(vazia.senhaInicial.emitida).toBe(false);
+    expect(vazia.conta.resumo).toBeNull();
   });
 });
 
@@ -185,7 +203,23 @@ describe('criar usuário pela HTTP: a senha inicial volta na resposta da criaç�
     expect(String(corpo['senhaProvisoria'])).toMatch(/^.{12,}$/);
     expect(JSON.stringify(trilha)).not.toContain(String(corpo['senhaProvisoria']));
 
-    expect(corpo['trocaObrigatoria']).toBeDefined();
+    expect(corpo['trocaObrigatoria']).toBe(true);
+    // A ficha já mostra a conta com senha definida: a credencial nasceu na própria criação.
+    const ficha = (await c.get(g, `${A}/usuarios/SINT.NOVA57`)).json() as {
+      usuario?: { senhaDefinida?: boolean };
+    };
+    expect(ficha.usuario?.senhaDefinida).toBe(true);
+    // O resumo da senha só o servidor põe: vindo de fora, recusa (nada criado).
+    const forjada = await c.post(g, `${A}/usuarios`, {
+      entrada: {
+        ...entrada,
+        login: 'SINT.NOVA58',
+        resumoSenhaInicial: '$argon2id$v=19$m=8,t=1,p=1$c2FsdA$aGFzaA',
+      },
+      senha: SENHA,
+    });
+    expect(forjada.statusCode).toBe(400);
+    expect((await c.get(g, `${A}/usuarios/SINT.NOVA58`)).statusCode).toBeGreaterThanOrEqual(400);
 
     // Login repetido: recusa da criação, sem senha na resposta.
     const repetido = await c.post(g, `${A}/usuarios`, { entrada, senha: SENHA });

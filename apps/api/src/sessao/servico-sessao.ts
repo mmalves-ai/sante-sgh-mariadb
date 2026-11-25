@@ -1634,6 +1634,61 @@ export class ServicoSessao {
     return this.gravarSenhaProvisoria({ rede, estabelecimento, login }, login, origem, this.agora());
   }
 
+  /**
+   * 01-ADM L57: a senha inicial da conta que o gestor está criando. Gera a provisória pela política efetiva do
+   * estabelecimento e devolve a senha (só para a resposta ao gestor) e o resumo argon2id, que a receita
+   * acesso.criar_usuario grava na MESMA transação da conta (credencial de troca obrigatória e histórico). A conta ainda
+   * não existe: não há atual nem histórico para o reuso.
+   */
+  async senhaInicialDaConta(
+    rede: string,
+    estabelecimento: string,
+    login: string,
+  ): Promise<{ readonly senha: string; readonly resumo: string }> {
+    if (!this.portaSenha)
+      throw new ErroSessao(
+        'troca-indisponivel',
+        'A senha inicial ainda não está disponível neste estabelecimento. Procure o administrador do sistema.',
+      );
+    const configPol = await this.politica(rede, estabelecimento);
+    const senha = gerarSenhaProvisoria(politicaEfetiva(configPol.senha, configPol.sante), login, (n) =>
+      randomInt(n),
+    );
+    return { senha, resumo: await cifrarSenha(senha) };
+  }
+
+  /**
+   * Depois de a conta nascer com a credencial inicial: regrava a credencial do serviço da identidade com origem
+   * `senha-provisoria` (troca obrigatória). Sem o serviço, vale o que a receita gravou (troca obrigatória). A falha aqui
+   * não desfaz a conta: a credencial do banco já obriga a troca.
+   */
+  async concluirSenhaInicial(
+    rede: string,
+    estabelecimento: string,
+    login: string,
+    idUsuario: number,
+    senha: string,
+    origem: OrigemPedido,
+  ): Promise<boolean> {
+    if (!this.identidade) return true;
+    try {
+      return await this.identidade.regravar(
+        {
+          rede,
+          hospital: estabelecimento,
+          login,
+          idUsuario,
+          estacao: origem.estacao,
+          correlacao: origem.correlacao,
+        },
+        senha,
+        'senha-provisoria',
+      );
+    } catch {
+      return true;
+    }
+  }
+
   private async gravarSenhaProvisoria(
     gestor: { readonly rede: string; readonly estabelecimento: string; readonly login: string },
     alvo: string,

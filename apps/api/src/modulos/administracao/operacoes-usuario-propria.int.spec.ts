@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ErroProblema } from '../../problema.filter.js';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { portaSenhaDoNucleo } from '../acesso/senha/porta-senha.js';
+import { FonteAcessoPropria } from '../../sessao/fonte-propria.js';
 import { criarContaComSenhaInicial } from './criacao-com-senha.js';
 import { FonteAdministracaoPropria } from './fonte-propria.js';
 import type { ContextoGestao, Ctx } from './tipos.js';
@@ -488,68 +489,105 @@ describe.skipIf(SEM_BANCO)('cadastro da conta no banco próprio (MariaDB, client
     ]);
   });
 
-  it('criar com a senha inicial num passo: conta, vínculo, perfil e credencial de troca obrigatória; a falha da senha deixa a conta sem credencial', async () => {
-    const porta = portaSenhaDoNucleo(nucleo, () => nucleo.criarExecutor({ log: () => undefined }), CLIENTE);
-    const quem = () => ({
-      rede: 'rede-sint',
-      estabelecimento: P,
-      autor: `${P}.GESTOR`,
-      correlacao: 'teste-l57u',
-      chaveIdempotencia: `tl57u-${randomUUID()}`,
-      estacao: 'teste',
-      reautenticadoEm: Date.now(),
-    });
+  it('criar com a senha inicial numa transação: conta, vínculo, perfil, credencial de troca obrigatória e histórico; a pessoa entra com a provisória; nada fica pela metade', async () => {
     const login = `${P}.NSENHA`;
     const clara = `P${randomUUID()}9`;
-    let pedidas = 0;
-    const criar = (l: string) => () =>
-      exec('acesso.criarUsuario', { login: l, nomeCompleto: 'USUARIA SINTETICA SENHA', grupo: `${P}-A` });
-    const dar = (l: string, resumo: Promise<string>) => async () => {
-      pedidas += 1;
-      await porta.gravar(P, l, await resumo, quem(), 'redefinicao');
-      return { senhaProvisoria: clara, trocaObrigatoria: true };
-    };
     const leve = { memoria: 8_192, passes: 1, paralelismo: 1 };
-    const r = await criarContaComSenhaInicial(criar(login), dar(login, cifrarSenha(clara, leve)));
+    let criadas = 0;
+    const criar = (l: string) => (resumo: string | null) => {
+      criadas += 1;
+      return exec('acesso.criarUsuario', {
+        login: l,
+        nomeCompleto: 'USUARIA SINTETICA SENHA',
+        grupo: `${P}-A`,
+        ...(resumo === null ? {} : { resumoSenhaInicial: resumo }),
+      });
+    };
+    const preparar = async () => ({ senha: clara, resumo: await cifrarSenha(clara, leve) });
+    const r = await criarContaComSenhaInicial(preparar, criar(login));
     expect(r.senhaInicial).toEqual({
       emitida: true,
       senha: { senhaProvisoria: clara, trocaObrigatoria: true },
     });
     const retrato = async (l: string) => {
-      const u = await um<Record<string, unknown>>(
+      const u = await um<Record<string, unknown> | null>(
         `SELECT u.id, u.exige_troca_senha AS exige,
                 (SELECT COUNT(*) FROM usuario_estabelecimento x WHERE x.usuario_id = u.id AND x.excluido_em IS NULL) AS vinculos,
                 (SELECT COUNT(*) FROM usuario_perfil x WHERE x.usuario_id = u.id AND x.excluido_em IS NULL) AS perfis,
                 (SELECT COUNT(*) FROM credencial_usuario x WHERE x.usuario_id = u.id AND x.excluido_em IS NULL) AS credenciais,
-                (SELECT COUNT(*) FROM historico_senha x WHERE x.usuario_id = u.id) AS historico
+                (SELECT COUNT(*) FROM historico_senha x WHERE x.usuario_id = u.id AND x.forma_troca = 'criacao'
+                    AND x.operacao = 'inclusao' AND x.responsavel_usuario_id = ?) AS historico
            FROM usuario u WHERE u.login = ?`,
-        [l],
+        [gestor, l],
       );
-      return ['exige', 'vinculos', 'perfis', 'credenciais', 'historico'].map((k) => Number(u[k]));
+      return u ? ['exige', 'vinculos', 'perfis', 'credenciais', 'historico'].map((k) => Number(u[k])) : null;
     };
     expect(await retrato(login)).toEqual([1, 1, 1, 1, 1]);
     const cr = await um<Record<string, unknown>>(
-      `SELECT c.resumo_senha, c.troca_obrigatoria FROM credencial_usuario c JOIN usuario u ON u.id = c.usuario_id
-        WHERE u.login = ? AND c.excluido_em IS NULL`,
+      `SELECT c.resumo_senha, c.troca_obrigatoria, c.algoritmo, c.tentativas_invalidas FROM credencial_usuario c
+         JOIN usuario u ON u.id = c.usuario_id WHERE u.login = ? AND c.excluido_em IS NULL`,
       [login],
     );
     // A senha entregue é a que a credencial gravada confere, e a troca é obrigatória.
     expect(Number(cr['troca_obrigatoria'])).toBe(1);
+    expect(cr['algoritmo']).toBe('argon2id');
+    expect(Number(cr['tentativas_invalidas'])).toBe(0);
     expect(await conferirSenha(clara, String(cr['resumo_senha']))).toBe(true);
     expect(await conferirSenha(`${clara}x`, String(cr['resumo_senha']))).toBe(false);
+    // A trilha da criação nunca leva o resumo nem a senha.
+    const t = await um<Record<string, unknown>>(
+      `SELECT COUNT(*) AS n, SUM(CONCAT_WS(' ', dados_antes, dados_depois, motivo) LIKE ? OR CONCAT_WS(' ', dados_antes, dados_depois, motivo) LIKE ?) AS vaza
+         FROM trilha_auditoria WHERE entidade = 'usuario' AND entidade_id = ?`,
+      [`%${String(cr['resumo_senha']).slice(-20)}%`, `%${clara}%`, r.conta['idUsuario']],
+    );
+    expect(Number(t['n'])).toBeGreaterThanOrEqual(1);
+    expect(Number(t['vaza'] ?? 0)).toBe(0);
 
-    // A senha falha (resumo sem cifra é recusado pela porta): a conta fica criada, sem credencial, e a resposta avisa.
+    // Primeiro acesso pelo caminho real do login: a provisória entra, com troca obrigatória; outra senha não.
+    // O login aceita só código de estabelecimento em minúsculas: a conta ganha também o vínculo a um sintético assim.
+    const LOGIN_EST = 'l57ux';
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-l57u' }, async (e) => {
+      const agora = new Date();
+      const x = await e.uma<{ id: number }>('SELECT id FROM estabelecimento WHERE codigo = ?', [LOGIN_EST]);
+      const idEst = x
+        ? Number(x.id)
+        : await e.inserir(
+            'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+            [LOGIN_EST, 'ESTAB L57UX SINTETICO', 'ESTAB L57UX SINTETICO', agora],
+          );
+      await e.inserir(
+        'INSERT INTO usuario_estabelecimento (usuario_id, estabelecimento_id, vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)',
+        [r.conta['idUsuario'], idEst, '2020-01-01', agora],
+      );
+    });
+    const acesso = new FonteAcessoPropria(nucleo, CLIENTE, 'rede-sint', () => undefined);
+    await acesso.carregar();
+    const ok = await acesso.autenticar(LOGIN_EST, login, clara);
+    expect(ok.desfecho).toBe('ok');
+    expect(ok.desfecho === 'ok' && ok.conta.trocaObrigatoria).toBe(true);
+    expect((await acesso.autenticar(LOGIN_EST, login, `${clara}x`)).desfecho).toBe('credencial-invalida');
+
+    // Resumo fora do argon2id: a criação inteira é recusada e nada fica gravado (nem conta sem senha).
+    const torto = `${P}.NTORTO`;
+    expect(
+      await codigo(
+        criarContaComSenhaInicial(async () => ({ senha: clara, resumo: 'sem-cifra' }), criar(torto)),
+      ),
+    ).toBe('senha-sem-cifra');
+    expect(await retrato(torto)).toBeNull();
+
+    // Sem como gerar a senha: a conta nasce sem credencial e a resposta diz pendente.
     const pend = `${P}.NPEND`;
-    const f = await criarContaComSenhaInicial(criar(pend), dar(pend, Promise.resolve('sem-cifra')));
+    const f = await criarContaComSenhaInicial(async () => {
+      throw new Error('política ilegível');
+    }, criar(pend));
     expect(f.senhaInicial.emitida).toBe(false);
     expect(await retrato(pend)).toEqual([1, 1, 1, 0, 0]);
 
-    // A criação recusada (login em uso) não chega a pedir senha.
-    const antes = pedidas;
-    expect(await codigo(criarContaComSenhaInicial(criar(login), dar(login, cifrarSenha(clara, leve))))).toBe(
-      'login-em-uso',
-    );
-    expect(pedidas).toBe(antes);
-    expect(await retrato(login)).toEqual([1, 1, 1, 1, 1]);
+    // A criação recusada (login em uso) não grava credencial nova nem histórico.
+    const antes = criadas;
+    expect(await codigo(criarContaComSenhaInicial(preparar, criar(login)))).toBe('login-em-uso');
+    expect(criadas).toBe(antes + 1);
+    expect(await retrato(login)).toEqual([1, 2, 1, 1, 1]);
   });
 });

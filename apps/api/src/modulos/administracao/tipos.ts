@@ -471,7 +471,8 @@ export const OPERACOES_GESTAO: Readonly<
   'acesso.criarUsuario': {
     evento: 'acesso.usuario.criado',
     recurso: 'acesso.usuario',
-    entrada: esquemaCriarUsuario,
+    // O resumo da senha inicial é posto pelo servidor (o controlador recusa o campo vindo de fora): 01-ADM L57.
+    entrada: esquemaCriarUsuario.extend({ resumoSenhaInicial: z.string().max(255).optional() }),
   },
   'acesso.alterarUsuario': {
     evento: 'acesso.usuario.alterado',

@@ -318,23 +318,40 @@ export class UsuariosController {
     const e = (p.entrada ?? {}) as { login?: unknown; grupo?: unknown };
     if (typeof e.grupo === 'string' && typeof e.login === 'string')
       await this.conferirLimiteAdministradores(req, e.login, e.grupo);
-    // Um passo só: a conta nasce e a senha inicial (provisória, de troca obrigatória) volta nesta resposta.
+    // O resumo da senha inicial só o servidor põe (a receita o aceita além do contrato público): de fora, recusa.
+    if (p.entrada !== null && typeof p.entrada === 'object' && 'resumoSenhaInicial' in p.entrada)
+      throw new ErroProblema(
+        'entrada-invalida',
+        400,
+        'Entrada inválida',
+        'Campo não aceito: resumoSenhaInicial.',
+      );
+    // Um passo só e uma gravação só: a senha inicial (provisória, de troca obrigatória) é gerada e cifrada antes, e a
+    // conta nasce com a credencial na mesma transação; a senha volta nesta resposta.
     const servico = this.servico;
     const login = typeof e.login === 'string' ? e.login.trim() : '';
     const s = sessaoDe(req);
     const reaut = await reautenticado(this.servico, this.resolvedor, req, p.senha);
     const c = contextoOperacao(req, 'acesso-usuarios', reaut);
+    const origem = { correlacao: c.correlacao || 'acesso-usuarios', estacao: c.estacao || '' };
     const { conta: r, senhaInicial } = await criarContaComSenhaInicial(
-      () => this.fonte.executar('acesso.criarUsuario', p.entrada, c).catch((x: unknown) => problema(x)),
       servico && servico.trocaSenhaDisponivel && login !== ''
-        ? () =>
-            servico.redefinirSenha(
-              { rede: s.rede, estabelecimento: s.hospital, login: s.login },
-              login,
-              { correlacao: c.correlacao || 'acesso-usuarios', estacao: c.estacao || '' },
-              reaut,
-            )
+        ? () => servico.senhaInicialDaConta(s.rede, s.hospital, login)
         : null,
+      (resumo) =>
+        this.fonte
+          .executar(
+            'acesso.criarUsuario',
+            resumo === null ? p.entrada : { ...(p.entrada as object), resumoSenhaInicial: resumo },
+            c,
+          )
+          .catch((x: unknown) => problema(x)),
+      servico
+        ? (conta, senha) =>
+            typeof conta['idUsuario'] === 'number'
+              ? servico.concluirSenhaInicial(s.rede, s.hospital, login, conta['idUsuario'], senha, origem)
+              : Promise.resolve(true)
+        : undefined,
     );
     return {
       operacao: 'acesso.criarUsuario',
