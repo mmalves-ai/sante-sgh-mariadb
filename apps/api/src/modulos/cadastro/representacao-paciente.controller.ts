@@ -130,18 +130,18 @@ export class RepresentacaoPacienteController {
     const alvo = txt(b['alvo']) as AlvoComprovante | null;
     if (!alvo || !ALVOS_COMPROVANTE.includes(alvo))
       throw new ErroProblema(
-        'requisicao-invalida',
-        400,
-        'Requisição inválida',
+        'entrada-invalida',
+        422,
+        'Comprovante inválido',
         'Informe a que o comprovante se refere: o vínculo do responsável ou a incapacidade.',
         { codigo: 'alvo-invalido', campos: ['alvo'] },
       );
     const base64 = typeof b['conteudo'] === 'string' ? b['conteudo'].replace(/^data:[^,]*,/, '') : '';
     if (!base64 || base64.length > BASE64_MAXIMO || !/^[A-Za-z0-9+/=\s]+$/.test(base64))
       throw new ErroProblema(
-        'requisicao-invalida',
-        400,
-        'Requisição inválida',
+        'entrada-invalida',
+        422,
+        'Comprovante inválido',
         'Envie o comprovante em PDF, PNG ou JPEG, com até 640 KB.',
         { codigo: 'arquivo-invalido', campos: ['conteudo'] },
       );
