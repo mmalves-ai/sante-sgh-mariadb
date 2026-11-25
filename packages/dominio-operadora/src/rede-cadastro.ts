@@ -299,7 +299,7 @@ export function problemasDaSuspensao(
   return r;
 }
 
-export function problemasDaReativacao(
+export function problemasDaReativacaoPrestador(
   suspensao: { readonly desde: string; readonly situacao: SituacaoSuspensao | 'cancelada' },
   reativadoEm: string,
   hoje: string,

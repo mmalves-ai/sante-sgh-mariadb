@@ -138,6 +138,17 @@ export const esquemaAlterarPrestador = z
   .strict();
 export type AlterarPrestadorEntrada = z.infer<typeof esquemaAlterarPrestador>;
 
+/** O tipo do motivo do descredenciamento (registro próprio da saída, com o aviso e o substituto). */
+export const TIPOS_MOTIVO_DESCREDENCIAMENTO = [
+  'pedido_prestador',
+  'iniciativa_operadora',
+  'qualidade',
+  'fraude',
+  'encerramento_atividade',
+  'outro',
+] as const;
+export type TipoMotivoDescredenciamento = (typeof TIPOS_MOTIVO_DESCREDENCIAMENTO)[number];
+
 export const esquemaDescredenciarPrestador = z
   .object({
     versao: z.number().int().min(1),
@@ -150,6 +161,8 @@ export const esquemaDescredenciarPrestador = z
     substituto: z.number().int().min(1).nullable(),
     /** Número do processo de autorização da ANS (redução da rede hospitalar sem substituto). */
     autorizacaoAns: livre(40).nullable(),
+    /** O tipo do motivo (C2-118); sem ele, a saída fica como iniciativa da operadora. */
+    tipoMotivo: z.enum(TIPOS_MOTIVO_DESCREDENCIAMENTO).optional(),
   })
   .strict();
 export type DescredenciarPrestadorEntrada = z.infer<typeof esquemaDescredenciarPrestador>;

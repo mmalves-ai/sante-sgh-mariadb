@@ -7,6 +7,7 @@
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
 // Os tipos são de negócio: os códigos numéricos são os do vocabulário do contrato (@sgh/contratos, operadora/rede.ts e
 // vocabulario.ts); datas AAAA-MM-DD; nenhuma sentinela.
+import type { TipoMotivoDescredenciamento } from '@sgh/contratos';
 import type { ContextoNucleo } from '@sgh/nucleo';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import { portaIndisponivel } from '../exames/public-api.js';
@@ -157,6 +158,8 @@ export interface Descredenciamento {
   readonly avisoBeneficiariosEm: string;
   readonly substituto: number | null;
   readonly autorizacaoAns: string | null;
+  /** O tipo do motivo (C2-118); sem ele, iniciativa da operadora. */
+  readonly tipoMotivo?: TipoMotivoDescredenciamento | undefined;
   readonly usuario: string;
 }
 export interface Reinclusao {

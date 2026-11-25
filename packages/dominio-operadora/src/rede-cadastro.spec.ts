@@ -5,7 +5,7 @@ import {
   type LocalAtendimentoEntrada,
   problemasDaEspecialidade,
   problemasDaQualificacao,
-  problemasDaReativacao,
+  problemasDaReativacaoPrestador,
   problemasDaSuspensao,
   problemasDoDesligamento,
   problemasDoLocal,
@@ -211,13 +211,23 @@ describe('suspensão', () => {
     expect(situacaoDaSuspensao('2026-11-01', null, '2026-11-25')).toBe('ativa');
     expect(situacaoDaSuspensao('2026-11-01', '2026-11-20', '2026-11-25')).toBe('encerrada');
     expect(
-      problemasDaReativacao({ desde: '2026-11-01', situacao: 'ativa' }, '2026-11-25', '2026-11-25'),
+      problemasDaReativacaoPrestador({ desde: '2026-11-01', situacao: 'ativa' }, '2026-11-25', '2026-11-25'),
     ).toEqual([]);
     expect(
-      problemasDaReativacao({ desde: '2026-12-10', situacao: 'programada' }, '2026-11-25', '2026-11-25'),
+      problemasDaReativacaoPrestador(
+        { desde: '2026-12-10', situacao: 'programada' },
+        '2026-11-25',
+        '2026-11-25',
+      ),
     ).toEqual([]);
     expect(
-      cods(problemasDaReativacao({ desde: '2026-11-01', situacao: 'encerrada' }, '2026-11-20', '2026-11-25')),
+      cods(
+        problemasDaReativacaoPrestador(
+          { desde: '2026-11-01', situacao: 'encerrada' },
+          '2026-11-20',
+          '2026-11-25',
+        ),
+      ),
     ).toEqual(['suspensao-encerrada', 'reativacao-no-passado']);
   });
   it('descredenciamento agendado ou efetivado pela data', () => {

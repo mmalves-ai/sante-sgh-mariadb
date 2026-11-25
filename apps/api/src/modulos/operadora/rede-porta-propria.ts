@@ -85,6 +85,8 @@ export const TABELAS_REDE = [
   'contrato_rede_prestador',
   'movimento_rede_ans',
   'sequencia_negocio',
+  'descredenciamento_prestador',
+  'suspensao_prestador_rede',
 ] as const;
 
 const RESTRICOES: MapaRestricoes = {
@@ -801,7 +803,11 @@ class GravadorRedeBanco implements GravadorRede {
     if (x.substituto !== null) {
       const s = await this.tx.uma(
         `SELECT id FROM prestador_rede p WHERE p.id = ? AND p.estabelecimento_id = ? AND p.excluido_em IS NULL
-            AND p.situacao IN ('credenciado','suspenso')`,
+            AND p.situacao IN ('credenciado','suspenso')
+            AND NOT EXISTS (SELECT 1 FROM suspensao_prestador_rede s
+                             WHERE s.prestador_rede_id = p.id AND s.excluido_em IS NULL
+                               AND s.local_atendimento_rede_id IS NULL AND s.situacao IN ('programada','ativa')
+                               AND (s.reativado_em IS NULL OR s.reativado_em > CURRENT_DATE))`,
         [x.substituto, this.est],
       );
       if (!s)
@@ -829,6 +835,21 @@ class GravadorRedeBanco implements GravadorRede {
       },
     );
     const movimento = await this.movimento(x.id, 3, [], x.motivo, hoje);
+    // C2-118: o registro próprio da saída (aviso, data efetiva, substituto ou autorização da ANS), consultável depois.
+    const efetivado = x.efetivoEm <= hoje;
+    await this.tx.incluir('descredenciamento_prestador', {
+      estabelecimento_id: this.est,
+      prestador_rede_id: x.id,
+      tipo_motivo: x.tipoMotivo ?? 'iniciativa_operadora',
+      motivo: x.motivo,
+      aviso_beneficiarios_em: x.avisoBeneficiariosEm,
+      efetivo_em: x.efetivoEm,
+      substituto_prestador_rede_id: x.substituto,
+      substituicao_em: x.substituto === null ? null : x.efetivoEm,
+      autorizacao_ans_processo: x.autorizacaoAns,
+      situacao: efetivado ? 'efetivado' : 'agendado',
+      executado_em: efetivado ? new Date() : null,
+    });
     return { id: x.id, versao, movimento };
   }
 
@@ -898,6 +919,30 @@ class GravadorRedeBanco implements GravadorRede {
       saidaAgendadaCancelada: agendada,
     });
     const movimento = await this.movimento(x.id, 4, [], x.motivo, hoje);
+    // C2-118: o registro da saída fica, marcado como cancelado (saída agendada) ou reincluído (já fora da rede).
+    const saidas = await this.tx.consultarParaAtualizar(
+      `SELECT id, versao FROM descredenciamento_prestador
+        WHERE prestador_rede_id = ? AND excluido_em IS NULL AND situacao IN ('agendado','efetivado')`,
+      [x.id],
+      { teto: 20 },
+    );
+    for (const d of saidas)
+      await this.tx.alterar(
+        'descredenciamento_prestador',
+        Number(d['id']),
+        Number(d['versao']),
+        agendada
+          ? {
+              situacao: 'cancelado',
+              cancelado_em: new Date(),
+              cancelado_por_usuario_id: this.tx.contexto.usuario,
+            }
+          : {
+              situacao: 'reincluido',
+              reincluido_em: new Date(),
+              reincluido_por_usuario_id: this.tx.contexto.usuario,
+            },
+      );
     return { id: x.id, versao, movimento };
   }
 }

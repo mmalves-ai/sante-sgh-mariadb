@@ -373,7 +373,18 @@ export async function limparMassa(nucleo: NucleoProprio, m: MassaBase): Promise<
   await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-02-10' }, async (e) => {
     const ests = [m.est, m.outroEst];
     const em = '(?, ?)';
-    // Rede credenciada.
+    // Rede credenciada (C2-118: as linhas filhas do prestador antes dele).
+    for (const t of [
+      'suspensao_prestador_rede',
+      'descredenciamento_prestador',
+      'especialidade_atendida_rede',
+      'qualificacao_prestador_rede',
+      'local_atendimento_rede',
+    ])
+      await e.executar(
+        `DELETE x FROM ${t} x JOIN prestador_rede p ON p.id = x.prestador_rede_id WHERE p.estabelecimento_id IN ${em}`,
+        ests,
+      );
     await e.executar(
       `DELETE m FROM movimento_rede_ans m JOIN prestador_rede p ON p.id = m.prestador_rede_id WHERE p.estabelecimento_id IN ${em}`,
       ests,
