@@ -7,22 +7,17 @@
   "fora_catalogo": 0,
   "arquivos_com_erro": 0,
   "erros_sql": 0,
-  "tabelas_com_erro": 1,
+  "tabelas_com_erro": 0,
   "colunas_id_sem_fk": 76,
   "fks": 14272,
   "gatilhos": 0,
   "plataforma_erros": 0,
-  "total_erros": 2
+  "total_erros": 0
  },
  "faltam": [],
  "plataforma": [],
  "erros_arquivo": {},
- "erros_tabela": {
-  "envio_notificacao_aviso": [
-   "coluna de auditoria ausente: alterado_em",
-   "coluna de auditoria ausente: alterado_por"
-  ]
- },
+ "erros_tabela": {},
  "avisos_tabela": {
   "correcao_registro_nutricao": [
    "registro_id sem FK",

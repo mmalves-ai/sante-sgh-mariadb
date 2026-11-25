@@ -9,12 +9,12 @@
 | fora_catalogo | 0 |
 | arquivos_com_erro | 0 |
 | erros_sql | 0 |
-| tabelas_com_erro | 1 |
+| tabelas_com_erro | 0 |
 | colunas_id_sem_fk | 76 |
 | fks | 14272 |
 | gatilhos | 0 |
 | plataforma_erros | 0 |
-| total_erros | 2 |
+| total_erros | 0 |
 
 ## Erros por arquivo (até 5 por arquivo)
 
