@@ -251,6 +251,27 @@ describe.skipIf(SEM_BANCO)('recebimento por nota fiscal: conferência física e 
       await contar('SELECT COUNT(*) AS n FROM nota_entrada WHERE estabelecimento_id = ?', [m.estA]),
     ).toBe(notasAntes);
 
+    // A conferência contou 8: a nota de 10 não dá entrada; nem a de lote diferente do conferido. Nada gravado.
+    const lote = (q: number, l = `${m.marca}C38`, validade = '2030-06-30') => ({
+      conferencia: validada,
+      itens: [
+        { item: m.insumo, quantidade: q, valorUnitario: 10, lotes: [{ lote: l, validade, quantidade: q }] },
+      ],
+    });
+    expect(await codigoDe(nota(lote(10)))).toBe('quantidade-acima-da-conferida');
+    expect(await codigoDe(nota(lote(8, `${m.marca}OUTRO`)))).toBe('lote-divergente-da-conferencia');
+    expect(await codigoDe(nota(lote(8, `${m.marca}C38`, '2031-01-31')))).toBe(
+      'lote-divergente-da-conferencia',
+    );
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM nota_entrada WHERE estabelecimento_id = ?', [m.estA]),
+    ).toBe(notasAntes);
+    expect(
+      (await um('SELECT nota_entrada_id FROM conferencia_recebimento WHERE id = ?', [validada]))?.[
+        'nota_entrada_id'
+      ],
+    ).toBeNull();
+
     const r = await nota({ conferencia: validada });
     const id = Number(r.resultado['id']);
     const cab = await um(
@@ -331,5 +352,59 @@ describe.skipIf(SEM_BANCO)('recebimento por nota fiscal: conferência física e 
     ).rejects.toMatchObject({
       tipo: 'nao-encontrado',
     });
+  });
+
+  it('com pedido: o esperado é o saldo do servidor, o item fora do pedido é produto errado e o que não veio é falta', async () => {
+    const p = await estoque.executar(
+      c as unknown as ContextoSuprimentos,
+      'suprimentos.criarPedido',
+      {
+        centroCusto: m.centroCusto,
+        fornecedores: [m.fornecedor],
+        itens: [{ item: m.insumoOpme, quantidade: 2 }],
+      },
+      { ...(c as unknown as ContextoSuprimentos), chaveIdempotencia: k() },
+    );
+    const pedido = { ano: Number(p.resultado['ano']), doc: Number(p.resultado['doc']) };
+    // A tela manda o item fora do pedido com esperada igual à conferida, e não manda o item do pedido.
+    const r = await conf.registrar(
+      c,
+      entrada({
+        pedido,
+        itens: [
+          { item: m.insumo, esperada: 5, conferida: 5, lote: `${m.marca}C38P`, validade: '2030-06-30' },
+        ],
+      }),
+      k(),
+    );
+    expect(r).toMatchObject({ situacao: 'divergente', divergentes: 2 });
+    const itens = await varios(
+      `SELECT insumo_id, quantidade_esperada, quantidade_conferida, divergencia, unidade_medida_id
+         FROM conferencia_recebimento_item WHERE conferencia_recebimento_id = ? ORDER BY sequencia`,
+      [r.id],
+    );
+    expect(
+      itens.map((i) => [
+        Number(i['insumo_id']),
+        Number(i['quantidade_esperada']),
+        Number(i['quantidade_conferida']),
+        i['divergencia'],
+      ]),
+    ).toEqual([
+      [m.insumo, 0, 5, 'produto_errado'],
+      [m.insumoOpme, 2, 0, 'falta'],
+    ]);
+    expect(Number(itens[1]!['unidade_medida_id'])).toBeGreaterThan(0);
+    expect(
+      Number(
+        (await um('SELECT pedido_compra_id FROM conferencia_recebimento WHERE id = ?', [r.id]))?.[
+          'pedido_compra_id'
+        ],
+      ),
+    ).toBeGreaterThan(0);
+    // Divergente: a validação sem justificativa é recusada.
+    expect(await codigoDe(conf.validar(c2, { id: r.id, justificativa: null }, k()))).toBe(
+      'divergencia-sem-justificativa',
+    );
   });
 });

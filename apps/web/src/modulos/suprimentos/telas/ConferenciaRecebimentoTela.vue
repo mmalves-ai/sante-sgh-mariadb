@@ -7,6 +7,7 @@
 import {
   APONTAMENTOS_RECEBIMENTO,
   classificarRecebimento,
+  completarComPedido,
   conferirItensRecebimento,
   podeCancelarRecebimento,
   podeValidarRecebimento,
@@ -111,6 +112,12 @@ async function trazerPedido(): Promise<void> {
   try {
     const r = await esperadosDoPedido(Number(pedidoAno.value), Number(pedidoDoc.value));
     if (!r.length) mensagem.value = k('pedidoSemSaldo');
+    pedidoTrazido.value = {
+      ano: pedidoAno.value,
+      doc: pedidoDoc.value,
+      saldos: new Map(r.map((e) => [e.item, e.esperada])),
+      nomes: new Map(r.map((e) => [e.item, e.nome])),
+    };
     linhas.value = r.map((e) =>
       novaLinha({ item: e.item, nome: e.nome, controlaLote: e.controlaLote, esperada: e.esperada }),
     );
@@ -137,7 +144,31 @@ const recusa = computed(() =>
     ? null
     : conferirItensRecebimento(paraConferir.value),
 );
-const classe = computed(() => classificarRecebimento(paraConferir.value, hoje));
+/**
+ * O pedido trazido: a mesma regra do servidor (o esperado é o saldo; item fora do pedido é produto errado; o item do
+ * pedido retirado da lista entra como falta). Vale só enquanto o ano e o número na tela são os do pedido trazido.
+ */
+const pedidoTrazido = ref<{
+  ano: string;
+  doc: string;
+  saldos: Map<number, number>;
+  nomes: Map<number, string>;
+} | null>(null);
+const saldosPedido = computed(() =>
+  pedidoTrazido.value &&
+  pedidoTrazido.value.ano === pedidoAno.value &&
+  pedidoTrazido.value.doc === pedidoDoc.value
+    ? pedidoTrazido.value.saldos
+    : null,
+);
+const completos = computed(() => completarComPedido(paraConferir.value, saldosPedido.value));
+const classe = computed(() => classificarRecebimento(completos.value, hoje));
+/** Os itens do pedido que não estão na lista: a API grava como falta. */
+const faltamDoPedido = computed(() =>
+  completos.value
+    .slice(linhas.value.length)
+    .map((i) => `${i.item} · ${pedidoTrazido.value?.nomes.get(i.item) ?? ''} (${qtd(i.esperada ?? 0)})`),
+);
 const divergenciaDe = (k2: number) => classe.value.itens[k2]?.divergencia ?? 'nenhuma';
 const completa = computed(
   () =>
@@ -329,7 +360,15 @@ async function cancelar(): Promise<void> {
               {{ l.item }} · {{ l.nome }}
               <SanteBotao variante="texto" :rotulo="k('retirar')" @acionar="linhas.splice(j, 1)" />
             </td>
-            <td>{{ l.esperada === null ? k('semEsperada') : qtd(l.esperada) }}</td>
+            <td>
+              {{
+                completos[j]?.foraDoPedido
+                  ? k('foraDoPedido')
+                  : (completos[j]?.esperada ?? null) === null
+                    ? k('semEsperada')
+                    : qtd(completos[j]!.esperada!)
+              }}
+            </td>
             <td>
               <label :for="`conf-q-${l.item}`" class="sgh-visualmente-oculto">{{ k('conferida') }}</label>
               <input
@@ -380,6 +419,9 @@ async function cancelar(): Promise<void> {
           </tr>
         </tbody>
       </table>
+      <p v-if="faltamDoPedido.length" role="status" data-testid="conf-faltam-pedido">
+        {{ k('faltamDoPedido', { itens: faltamDoPedido.join('; ') }) }}
+      </p>
       <span class="campo">
         <label for="conf-obs">{{ k('observacaoGeral') }}</label>
         <input id="conf-obs" v-model="observacaoGeral" />

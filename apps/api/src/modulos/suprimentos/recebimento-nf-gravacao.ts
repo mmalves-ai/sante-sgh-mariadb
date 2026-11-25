@@ -4,7 +4,9 @@
 // importação da porta do estoque (a porta importa este arquivo). Nada é apagado.
 import {
   conferirNotaComRecebimento,
+  type DivergenciaRecebimento,
   type ImpostoCalculado,
+  type ItemNotaParaConferencia,
   type SituacaoConferencia,
   type TributoNota,
 } from '@sgh/contratos/regras-suprimentos';
@@ -18,6 +20,12 @@ export const TABELAS_RECEBIMENTO_NF = [
 ] as const;
 
 const n = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
+const dia = (v: unknown): string | null =>
+  v === null || v === undefined
+    ? null
+    : v instanceof Date
+      ? v.toISOString().slice(0, 10)
+      : String(v).slice(0, 10);
 
 /** O catálogo do tributo da NF-e de compra (esfera e descrição pública), criado na primeira nota que o destaca. */
 const CATALOGO_TRIBUTO: Readonly<Record<TributoNota, { descricao: string; esfera: string }>> = {
@@ -68,12 +76,15 @@ export interface ConferenciaDaNota {
   readonly itens: Map<number, { id: number; versao: number }>;
 }
 
-/** A conferência validada desta entrega, travada, conferida pela regra do domínio contra a nota. */
+/**
+ * A conferência validada desta entrega, travada, conferida pela regra do domínio contra a nota: os itens, a quantidade
+ * de cada um (na unidade de estoque, até a conferida) e o lote e a validade conferidos.
+ */
 export async function conferenciaParaNota(
   tx: TxOperacao,
   est: number,
   id: number,
-  nota: { fornecedor: number; local: number; itens: readonly number[] },
+  nota: { fornecedor: number; local: number; itens: readonly ItemNotaParaConferencia[] },
 ): Promise<ConferenciaDaNota> {
   const c = (
     await tx.consultarParaAtualizar<Linha>(
@@ -87,7 +98,8 @@ export async function conferenciaParaNota(
       campos: ['conferencia'],
     });
   const itens = await tx.consultarParaAtualizar<Linha>(
-    `SELECT id, versao, insumo_id FROM conferencia_recebimento_item
+    `SELECT id, versao, insumo_id, quantidade_conferida, numero_lote, validade, divergencia
+       FROM conferencia_recebimento_item
       WHERE conferencia_recebimento_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
     [id],
   );
@@ -97,7 +109,13 @@ export async function conferenciaParaNota(
       fornecedor: n(c['empresa_fornecedora_id']),
       local: n(c['local_estoque_id']),
       notaLigada: c['nota_entrada_id'] !== null && c['nota_entrada_id'] !== undefined,
-      itens: itens.map((i) => n(i['insumo_id'])),
+      itens: itens.map((i) => ({
+        item: n(i['insumo_id']),
+        conferida: n(i['quantidade_conferida']),
+        lote: i['numero_lote'] === null || i['numero_lote'] === undefined ? null : String(i['numero_lote']),
+        validade: dia(i['validade']),
+        divergencia: String(i['divergencia']) as DivergenciaRecebimento,
+      })),
     },
     nota,
   );

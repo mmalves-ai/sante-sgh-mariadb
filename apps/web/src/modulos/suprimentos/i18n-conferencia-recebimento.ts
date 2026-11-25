@@ -31,6 +31,8 @@ export const mensagensConferenciaRecebimento = {
   divergencia: 'Divergência',
   retirar: 'Retirar',
   semEsperada: 'às cegas',
+  foraDoPedido: 'fora do pedido',
+  faltamDoPedido: 'Itens do pedido fora da lista, gravados como falta: {itens}.',
   registrar: 'Registrar a conferência',
   registrada: 'Conferência {id} registrada: {situacao} ({divergentes} item(ns) com divergência).',
   detalhe: 'Conferência {id}',

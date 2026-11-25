@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   classificarRecebimento,
+  completarComPedido,
   conferirImpostosItem,
   conferirItensRecebimento,
   conferirNotaComRecebimento,
@@ -188,15 +189,124 @@ describe('conferência física do recebimento', () => {
     ).toBeNull();
   });
 
+  it('com pedido: o esperado é o saldo do pedido, o item fora do pedido é produto errado e o que não veio é falta', () => {
+    const saldos = new Map([
+      [1, 10],
+      [2, 5],
+      [3, 4],
+      [4, 0],
+    ]);
+    const itens = completarComPedido(
+      [
+        { item: 1, esperada: 999, conferida: 10, controlaLote: false },
+        // Fora do pedido: a tela manda esperada igual à conferida, e o servidor não aceita.
+        { item: 9, esperada: 3, conferida: 3, controlaLote: false },
+        { item: 2, esperada: null, conferida: 5, controlaLote: false },
+        // Item do pedido já recebido por inteiro (saldo 0): também fora.
+        { item: 4, esperada: null, conferida: 1, controlaLote: false },
+      ],
+      saldos,
+    );
+    expect(itens.map((i) => [i.item, i.esperada, i.conferida])).toEqual([
+      [1, 10, 10],
+      [9, 0, 3],
+      [2, 5, 5],
+      [4, 0, 1],
+      // O item 3 do pedido não veio: falta inteira.
+      [3, 4, 0],
+    ]);
+    const c = classificarRecebimento(itens, hoje);
+    expect(c.itens.map((i) => i.divergencia)).toEqual([
+      'nenhuma',
+      'produto_errado',
+      'nenhuma',
+      'produto_errado',
+      'falta',
+    ]);
+    expect(c.itens[4]!.diferenca).toBe(-4);
+    expect(c.situacao).toBe('divergente');
+    // Pedido de 3 itens que chega com 2, conferidos certos: divergente pela falta, e a validação pede justificativa.
+    const parcial = classificarRecebimento(
+      completarComPedido(
+        [
+          { item: 1, esperada: 10, conferida: 10, controlaLote: false },
+          { item: 2, esperada: 5, conferida: 5, controlaLote: false },
+        ],
+        saldos,
+      ),
+      hoje,
+    );
+    expect(parcial.situacao).toBe('divergente');
+    expect(podeValidarRecebimento({ situacao: parcial.situacao, conferente: 1 }, 2, null)?.codigo).toBe(
+      'divergencia-sem-justificativa',
+    );
+    // Sem pedido, a lista fica como veio (conferência às cegas ou contra a nota).
+    const sem = [{ item: 1, esperada: null, conferida: 2, controlaLote: false }];
+    expect(completarComPedido(sem, null)).toEqual(sem);
+  });
+
+  it('a nota não dá entrada acima da quantidade conferida nem com lote ou validade diferente do conferido', () => {
+    const ci = {
+      item: 5,
+      conferida: 8,
+      lote: 'L1',
+      validade: '2030-06-30',
+      divergencia: 'falta' as const,
+    };
+    const c = { situacao: 'validada' as const, fornecedor: 1, local: 2, notaLigada: false, itens: [ci] };
+    const ni = (q: number, lote = 'l1', validade = '2030-06-30') => ({
+      item: 5,
+      quantidadeEstoque: q,
+      lotes: [{ lote, validade }],
+    });
+    const n = (...itens: ReturnType<typeof ni>[]) => ({ fornecedor: 1, local: 2, itens });
+    expect(conferirNotaComRecebimento(c, n(ni(8)))).toBeNull();
+    expect(conferirNotaComRecebimento(c, n(ni(6)))).toBeNull();
+    expect(conferirNotaComRecebimento(c, n(ni(10)))?.codigo).toBe('quantidade-acima-da-conferida');
+    // Duas linhas do mesmo item somam.
+    expect(conferirNotaComRecebimento(c, n(ni(5, 'L1'), ni(4, 'L1')))?.codigo).toBe(
+      'quantidade-acima-da-conferida',
+    );
+    // Conferida 0 (tudo avariado e recusado): nenhuma entrada.
+    expect(
+      conferirNotaComRecebimento(
+        { ...c, itens: [{ ...ci, conferida: 0, divergencia: 'avaria' as const }] },
+        n(ni(1)),
+      )?.codigo,
+    ).toBe('quantidade-acima-da-conferida');
+    expect(conferirNotaComRecebimento(c, n(ni(8, 'L2')))?.codigo).toBe('lote-divergente-da-conferencia');
+    expect(conferirNotaComRecebimento(c, n(ni(8, 'L1', '2031-01-01')))?.codigo).toBe(
+      'lote-divergente-da-conferencia',
+    );
+    // A divergência de lote aceita na validação libera o lote da nota.
+    expect(
+      conferirNotaComRecebimento({ ...c, itens: [{ ...ci, divergencia: 'lote' as const }] }, n(ni(8, 'L2'))),
+    ).toBeNull();
+  });
+
   it('a nota usa a conferência validada, da mesma entrega, uma vez, com todos os itens', () => {
-    const c = { situacao: 'validada' as const, fornecedor: 1, local: 2, notaLigada: false, itens: [5, 6] };
-    const n = { fornecedor: 1, local: 2, itens: [5] };
+    const item = (i: number) => ({
+      item: i,
+      conferida: 10,
+      lote: null,
+      validade: null,
+      divergencia: 'nenhuma' as const,
+    });
+    const c = {
+      situacao: 'validada' as const,
+      fornecedor: 1,
+      local: 2,
+      notaLigada: false,
+      itens: [item(5), item(6)],
+    };
+    const ni = (i: number) => ({ item: i, quantidadeEstoque: 1, lotes: [] });
+    const n = { fornecedor: 1, local: 2, itens: [ni(5)] };
     expect(conferirNotaComRecebimento(c, n)).toBeNull();
     expect(conferirNotaComRecebimento({ ...c, situacao: 'conferida' }, n)?.codigo).toBe(
       'conferencia-nao-validada',
     );
     expect(conferirNotaComRecebimento({ ...c, notaLigada: true }, n)?.codigo).toBe('conferencia-usada');
     expect(conferirNotaComRecebimento(c, { ...n, local: 3 })?.codigo).toBe('conferencia-de-outra-entrega');
-    expect(conferirNotaComRecebimento(c, { ...n, itens: [5, 9] })?.codigo).toBe('item-nao-conferido');
+    expect(conferirNotaComRecebimento(c, { ...n, itens: [ni(5), ni(9)] })?.codigo).toBe('item-nao-conferido');
   });
 });

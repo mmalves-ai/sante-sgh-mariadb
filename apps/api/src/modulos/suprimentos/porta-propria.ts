@@ -2764,7 +2764,11 @@ async function registrarEntradaNF(
     ? await conferenciaParaNota(tx, est, e.conferencia, {
         fornecedor: e.fornecedor,
         local: e.local,
-        itens: e.itens.map((i) => i.item),
+        itens: e.itens.map((i) => ({
+          item: i.item,
+          quantidadeEstoque: qtd(i.quantidade * (i.fator > 0 ? i.fator : 1)),
+          lotes: i.lotes.map((l) => ({ lote: l.lote, validade: l.validade })),
+        })),
       })
     : null;
   const numero = await tx.proximoNumero('nota_entrada');

@@ -37,6 +37,8 @@ export interface ItemParaConferir {
   readonly validade?: string | null | undefined;
   readonly apontamento?: ApontamentoRecebimento | null | undefined;
   readonly observacao?: string | null | undefined;
+  /** Na conferência com pedido: o item chegou sem saldo no pedido (a regra classifica como produto errado). */
+  readonly foraDoPedido?: boolean | undefined;
 }
 
 export interface ItemConferido {
@@ -86,6 +88,7 @@ export function classificarRecebimento(
   const r = itens.map((i): ItemConferido => {
     const diferenca = i.esperada === null ? 0 : qtd3(i.conferida - i.esperada);
     if (i.apontamento) return { item: i.item, divergencia: i.apontamento, diferenca };
+    if (i.foraDoPedido) return { item: i.item, divergencia: 'produto_errado', diferenca };
     if (i.validade && dias(hoje, i.validade) < validadeMinimaDias)
       return { item: i.item, divergencia: 'validade', diferenca };
     if (diferenca < 0) return { item: i.item, divergencia: 'falta', diferenca };
@@ -93,6 +96,29 @@ export function classificarRecebimento(
     return { item: i.item, divergencia: 'nenhuma', diferenca };
   });
   return { itens: r, situacao: r.every((x) => x.divergencia === 'nenhuma') ? 'conferida' : 'divergente' };
+}
+
+/**
+ * A conferência com pedido: o esperado de cada item é o saldo a receber do pedido (nunca o que a tela manda); o item
+ * sem saldo no pedido tem esperado 0 e fica marcado como fora do pedido; o item do pedido com saldo que não veio na
+ * lista entra com conferida 0 (falta), ao fim, na ordem do pedido. Sem pedido (saldos null), a lista fica como veio.
+ */
+export function completarComPedido(
+  itens: readonly ItemParaConferir[],
+  saldos: ReadonlyMap<number, number> | null,
+): ItemParaConferir[] {
+  if (saldos === null) return [...itens];
+  const r: ItemParaConferir[] = itens.map((i) => {
+    const s = saldos.get(i.item);
+    return s !== undefined && s > 0
+      ? { ...i, esperada: s, foraDoPedido: false }
+      : { ...i, esperada: 0, foraDoPedido: true };
+  });
+  const vistos = new Set(itens.map((i) => i.item));
+  for (const [item, saldo] of saldos)
+    if (saldo > 0 && !vistos.has(item))
+      r.push({ item, esperada: saldo, conferida: 0, controlaLote: false, foraDoPedido: false });
+  return r;
 }
 
 /** A validação: só a conferida ou a divergente; outra pessoa; a divergente com a justificativa. */
@@ -127,16 +153,39 @@ export function podeCancelarRecebimento(
   return null;
 }
 
-/** A nota usa a conferência validada, do mesmo fornecedor e local, ainda não usada, com os itens dela. */
+/** O item conferido como a nota o vê: quantidade e lote na unidade de estoque e a divergência aceita na validação. */
+export interface ItemConferidoParaNota {
+  readonly item: number;
+  readonly conferida: number;
+  readonly lote: string | null;
+  /** AAAA-MM-DD. */
+  readonly validade: string | null;
+  readonly divergencia: DivergenciaRecebimento;
+}
+
+/** O item da nota na unidade de estoque, com os lotes que dão entrada. */
+export interface ItemNotaParaConferencia {
+  readonly item: number;
+  readonly quantidadeEstoque: number;
+  readonly lotes: readonly { readonly lote: string; readonly validade: string }[];
+}
+
+const loteIgual = (a: string, b: string): boolean => a.trim().toUpperCase() === b.trim().toUpperCase();
+
+/**
+ * A nota usa a conferência validada, do mesmo fornecedor e local, ainda não usada, com os itens dela. A quantidade de
+ * cada item da nota (somadas as linhas do mesmo item, na unidade de estoque) não passa da conferida; o lote e a
+ * validade da nota são os conferidos, a não ser que a divergência de lote tenha sido aceita na validação.
+ */
 export function conferirNotaComRecebimento(
   c: {
     situacao: SituacaoConferencia;
     fornecedor: number;
     local: number;
     notaLigada: boolean;
-    itens: readonly number[];
+    itens: readonly ItemConferidoParaNota[];
   },
-  nota: { fornecedor: number; local: number; itens: readonly number[] },
+  nota: { fornecedor: number; local: number; itens: readonly ItemNotaParaConferencia[] },
 ): RecusaSuprimentos | null {
   if (c.situacao !== 'validada')
     return recusa('conferencia-nao-validada', 'A conferência física ainda não foi validada.', [
@@ -148,8 +197,30 @@ export function conferirNotaComRecebimento(
     return recusa('conferencia-de-outra-entrega', 'A conferência é de outro fornecedor ou de outro local.', [
       'conferencia',
     ]);
-  const fora = nota.itens.filter((i) => !c.itens.includes(i));
-  if (fora.length)
+  const conferidos = new Map(c.itens.map((i) => [i.item, i]));
+  if (nota.itens.some((i) => !conferidos.has(i.item)))
     return recusa('item-nao-conferido', 'Há item da nota que não passou pela conferência física.', ['itens']);
+  const somas = new Map<number, number>();
+  for (const i of nota.itens) somas.set(i.item, qtd3((somas.get(i.item) ?? 0) + i.quantidadeEstoque));
+  for (const [item, soma] of somas) {
+    const ci = conferidos.get(item)!;
+    if (soma > ci.conferida)
+      return recusa(
+        'quantidade-acima-da-conferida',
+        `Item ${item}: a nota dá entrada de ${soma}, e a conferência física contou ${ci.conferida}.`,
+        ['itens'],
+      );
+  }
+  for (const i of nota.itens) {
+    const ci = conferidos.get(i.item)!;
+    if (ci.divergencia === 'lote' || ci.lote === null) continue;
+    for (const l of i.lotes)
+      if (!loteIgual(l.lote, ci.lote) || (ci.validade !== null && l.validade !== ci.validade))
+        return recusa(
+          'lote-divergente-da-conferencia',
+          `Item ${i.item}: o lote ou a validade da nota não é o conferido no recebimento.`,
+          ['itens'],
+        );
+  }
   return null;
 }

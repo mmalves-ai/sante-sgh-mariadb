@@ -8,6 +8,7 @@
 import {
   APONTAMENTOS_RECEBIMENTO,
   classificarRecebimento,
+  completarComPedido,
   conferirItensRecebimento,
   type ItemParaConferir,
   podeCancelarRecebimento,
@@ -140,11 +141,12 @@ export interface EsperadoDoPedido {
   readonly controlaLote: boolean;
 }
 
-export interface ResultadoConferencia {
+// Alias (não interface): o Executor exige o resultado como registro de valores simples.
+export type ResultadoConferencia = {
   readonly id: number;
   readonly situacao: SituacaoConferencia;
   readonly divergentes: number;
-}
+};
 
 export interface PortaConferenciaRecebimento {
   readonly destino: 'banco' | 'indisponivel';
@@ -196,6 +198,16 @@ async function saldosDoPedido(l: Leitor | TxOperacao, pedido: number): Promise<M
   return new Map(r.map((x) => [n(x['insumo_id']), Math.max(0, n(x['saldo']))]));
 }
 
+/** A unidade de estoque do item do pedido que não veio na entrega (a falta é registrada mesmo com o item inativo). */
+async function unidadeDoInsumo(tx: TxOperacao, insumo: number): Promise<Linha> {
+  const r = await tx.uma<Linha>(
+    'SELECT id, estoque_unidade_medida_id, controla_lote FROM insumo WHERE id = ? AND excluido_em IS NULL',
+    [insumo],
+  );
+  if (!r) throw recusa('item-inexistente', `O item ${insumo} do pedido não existe no cadastro.`);
+  return r;
+}
+
 async function registrarConferencia(
   tx: TxOperacao,
   est: number,
@@ -212,7 +224,7 @@ async function registrarConferencia(
       campos: ['fornecedor'],
     });
   let pedido: number | null = null;
-  let saldos = new Map<number, number>();
+  let saldos: Map<number, number> | null = null;
   if (e.pedido) {
     const p = await tx.uma<Linha>(
       'SELECT id, empresa_fornecedora_id FROM pedido_compra WHERE estabelecimento_id = ? AND ano = ? AND numero = ? AND excluido_em IS NULL',
@@ -226,10 +238,11 @@ async function registrarConferencia(
   }
   const insumos = new Map<number, Linha>();
   for (const i of e.itens) insumos.set(i.item, await insumoAtivo(tx, i.item));
-  // O esperado do item do pedido é o saldo a receber (o servidor recalcula; a tela só mostra).
-  const paraConferir: ItemParaConferir[] = e.itens.map((i) => ({
+  // A lista da tela, conferida como veio; depois, com pedido, o esperado é o saldo do pedido (o servidor recalcula e
+  // ignora o que a tela manda), o item sem saldo vira produto errado e o item do pedido que não veio entra como falta.
+  const daTela: ItemParaConferir[] = e.itens.map((i) => ({
     item: i.item,
-    esperada: pedido !== null && saldos.has(i.item) ? saldos.get(i.item)! : i.esperada,
+    esperada: i.esperada,
     conferida: i.conferida,
     controlaLote: Boolean(n(insumos.get(i.item)!['controla_lote'])),
     lote: i.lote ?? null,
@@ -237,7 +250,10 @@ async function registrarConferencia(
     apontamento: i.apontamento ?? null,
     observacao: i.observacao ?? null,
   }));
-  recusar(conferirItensRecebimento(paraConferir));
+  recusar(conferirItensRecebimento(daTela));
+  const paraConferir = completarComPedido(daTela, saldos);
+  for (const i of paraConferir)
+    if (!insumos.has(i.item)) insumos.set(i.item, await unidadeDoInsumo(tx, i.item));
   const classe = classificarRecebimento(paraConferir, hoje);
   const agora = new Date();
   const conf = await tx.incluir('conferencia_recebimento', {
@@ -494,7 +510,7 @@ export class PortaConferenciaRecebimentoPropria implements PortaConferenciaReceb
       tabelas: [...TABELAS_CONFERENCIA_RECEBIMENTO],
       entrada,
       gravar: (tx: TxOperacao, x: E) => gravar(tx, ctxN.estabelecimento, x, hoje),
-      alvo: (_e, r: ResultadoConferencia) => ({ tabela: 'conferencia_recebimento', id: r.id }),
+      alvo: (_e, r) => ({ tabela: 'conferencia_recebimento', id: Number(r['id']) }),
       trilha,
     });
     const ctx: ContextoOperacao = { ...ctxN, chaveIdempotencia: chave };
