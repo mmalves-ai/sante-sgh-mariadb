@@ -41,7 +41,7 @@ import {
   ROTAS_OPERADORA_F5 as R,
   SITUACOES_RECURSO_CONTA,
 } from '@sgh/contratos';
-import { protocoloConta } from '@sgh/dominio-operadora';
+import { protocoloConta, valoresDaConta } from '@sgh/dominio-operadora';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
@@ -64,6 +64,7 @@ import {
 } from '../config/public-api.js';
 import { corpo } from '../exames/public-api.js';
 import { ServicoSituacaoOperadora, type SujeitoOperadora } from './aplicacao/situacao.js';
+import { PORTA_CONFERENCIA_CONTA, type PortaConferenciaContaPropria } from './conta-conferencia-propria.js';
 import { type GravadorContas, PORTA_CONTAS_OPERADORA, type PortaContasOperadora } from './contas-porta.js';
 import { pagamentoDe, resumoDaConta, ServicoContasOperadora } from './contas-servico.js';
 import { contextoGravacao } from './contexto-gravacao.js';
@@ -94,6 +95,9 @@ export class ContasOperadoraController {
     @Inject(REGISTRADOR_TRILHA) private readonly trilha: RegistradorTrilha,
     @Optional() @Inject(FONTE_CONFIGURACAO) fonte: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
+    @Optional()
+    @Inject(PORTA_CONFERENCIA_CONTA)
+    private readonly conferencia: PortaConferenciaContaPropria | null = null,
   ) {
     this.situacoes = new ServicoSituacaoOperadora(fonte, cache);
     this.servico = new ServicoContasOperadora(porta);
@@ -247,7 +251,42 @@ export class ContasOperadoraController {
     const n = idDaRota(id);
     const s = await this.exigirFatia(req);
     req.sghAlvo = { tabelaAlvo: TABELA, idAlvo: String(n) };
-    return this.servico.demonstrativo(s.porta, n);
+    const d = await this.servico.demonstrativo(s.porta, n);
+    // C1-100: o que foi entregue fica registrado (demonstrativo_analise_emitido), com os valores do momento.
+    if (this.porta.destino === 'banco' && this.conferencia?.destino === 'banco') {
+      const conta = await this.porta.conta(s.porta, n);
+      if (conta) {
+        const v = valoresDaConta(conta, conta.situacao);
+        await this.conferencia
+          .registrarDemonstrativo(
+            s.porta,
+            n,
+            {
+              numero: conta.protocolo,
+              protocolo: conta.protocolo,
+              hash: d.hash,
+              informado: v.apresentado,
+              liberado: v.liberado,
+              glosa: Math.max(0, Math.round((v.glosado - v.acatado) * 100) / 100),
+            },
+            (r) =>
+              linhaTrilha(
+                s,
+                E.operadoraContaDemonstrativo.codigo,
+                RECURSO,
+                'operadora.conta.demonstrativo.registrar',
+                {
+                  tabela: 'demonstrativo_analise_emitido',
+                  id: String(r.id),
+                },
+              ),
+          )
+          .catch((e: unknown) => {
+            throw problemaDoCadastro(e);
+          });
+      }
+    }
+    return d;
   }
 
   @Get(R.demonstrativoPagamento.caminho)

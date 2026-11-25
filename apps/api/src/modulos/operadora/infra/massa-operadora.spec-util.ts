@@ -345,6 +345,17 @@ export async function limparNegocio(nucleo: NucleoProprio, m: MassaOperadora): P
       est,
     );
     await e.executar('DELETE FROM pedido_autorizacao_plano WHERE estabelecimento_id IN (?, ?)', est);
+    // C1-100: críticas, pareceres da auditoria, demonstrativos emitidos e regras de crítica (filhos do lote e do auditor).
+    await e.executar(
+      'DELETE c FROM critica_conta_recebida c JOIN guia_conta_recebida x ON x.id = c.guia_conta_recebida_id WHERE x.estabelecimento_id IN (?, ?)',
+      est,
+    );
+    await e.executar(
+      'DELETE a FROM auditoria_conta_recebida a JOIN guia_conta_recebida x ON x.id = a.guia_conta_recebida_id WHERE x.estabelecimento_id IN (?, ?)',
+      est,
+    );
+    await e.executar('DELETE FROM demonstrativo_analise_emitido WHERE estabelecimento_id IN (?, ?)', est);
+    await e.executar('DELETE FROM regra_critica_conta WHERE operadora_saude_id = ?', [m.operadora]);
     await e.executar('DELETE FROM auditor_plano WHERE operadora_saude_id = ?', [m.operadora]);
     await e.executar(
       'DELETE i FROM recurso_glosa_recebido_item i JOIN recurso_glosa_recebido r ON r.id = i.recurso_glosa_recebido_id WHERE r.estabelecimento_id IN (?, ?)',

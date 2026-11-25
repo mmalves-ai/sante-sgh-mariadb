@@ -15,7 +15,12 @@
 // `recurso_glosa` do estabelecimento) com as linhas em recurso_glosa_recebido_item; a decisão é de outro usuário (quem
 // registrou não decide), grava a decisão de cada linha e o valor acatado na guia.
 import type { MotivoGlosaLido } from '@sgh/contratos';
-import { problemasDoParecerDoRecurso, rateioDoAcatado, situacaoDoRecurso } from '@sgh/dominio-operadora';
+import {
+  criticasDasRegras,
+  problemasDoParecerDoRecurso,
+  rateioDoAcatado,
+  situacaoDoRecurso,
+} from '@sgh/dominio-operadora';
 import { type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
 import {
   BasePortaOperadoraPropria,
@@ -32,6 +37,7 @@ import {
   txtOuNulo,
   versaoDe,
 } from './apoio-porta-propria.js';
+import { gravarCriticasDaGuia, regrasDaOperadora } from './conta-conferencia-propria.js';
 import type { ContextoContas, GravadorContas, PortaContasOperadora } from './contas-porta.js';
 import {
   type DadosAuditor,
@@ -62,6 +68,7 @@ export const TABELAS_CONTAS = [
   'glosa_conta_recebida',
   'recurso_glosa_recebido',
   'recurso_glosa_recebido_item',
+  'critica_conta_recebida',
 ] as const;
 
 /** Situação do recurso no banco → na tela (recebido e em análise: pendente). */
@@ -1014,7 +1021,32 @@ async function receberLote(
     situacao: 'recebida',
   });
   const carater = new Map<string, number>();
-  for (const g of r.guias) {
+  // C1-100: as regras de crítica cadastradas pela operadora entram junto com as padrão; a glosa automática da regra
+  // soma-se à do item (nunca passa do apresentado) e cada crítica fica gravada em critica_conta_recebida.
+  const regras = await regrasDaOperadora(tx, r.operadora);
+  for (const g0 of r.guias) {
+    const deRegras = criticasDasRegras(
+      {
+        data: g0.inicio,
+        itens: g0.itens.map((i, k) => ({ indice: k, codigo: i.codigo, apresentado: i.apresentado })),
+      },
+      r.prestador,
+      regras,
+      new Map(g0.itens.map((i, k) => [k, i.glosado])),
+    );
+    const g = {
+      ...g0,
+      itens: g0.itens.map((i, k) => {
+        const x = deRegras.find((c) => c.indice === k && c.glosado > 0);
+        return x
+          ? {
+              ...i,
+              glosado: Math.round((i.glosado + x.glosado) * 100) / 100,
+              justificativa: i.justificativa ?? x.descricao,
+            }
+          : i;
+      }),
+    };
     let car: number | null = null;
     if (g.carater) {
       if (!carater.has(g.carater)) {
@@ -1041,9 +1073,10 @@ async function receberLote(
       fim_atendimento: g.fim,
       valor_apresentado: g.apresentado,
       valor_glosado: Math.min(glosado, g.apresentado),
-      situacao: g.criticas.length ? 'criticada' : 'recebida',
+      situacao: g.criticas.length || deRegras.length ? 'criticada' : 'recebida',
       observacao: g.criticas.length ? g.criticas.join('\n').slice(0, 2000) : null,
     });
+    const itensGravados: number[] = [];
     for (const i of g.itens) {
       const termo = await tx.uma(
         `SELECT t.id FROM termo_terminologia t WHERE t.codigo_termo = ? AND t.ativo = TRUE
@@ -1055,25 +1088,28 @@ async function receberLote(
           'item-nao-cadastrado',
           `O código ${i.codigo} da guia ${g.numeroGuiaPrestador} não está na terminologia.`,
         );
-      await tx.incluir('guia_conta_recebida_item', {
-        guia_conta_recebida_id: guia,
-        sequencia: i.sequencial,
-        grupo: i.grupo,
-        tipo_despesa: i.grupo === 'despesa' ? despesa(i.codigoDespesa) : null,
-        procedimento_termo_terminologia_id: num(termo['id']),
-        codigo_tabela_tiss: i.tabela.slice(0, 2),
-        descricao: i.descricao.slice(0, 255),
-        data_execucao: i.data,
-        quantidade_apresentada: i.quantidade,
-        percentual_reducao_acrescimo: Math.round((i.fator - 1) * 10000) / 100,
-        valor_unitario_apresentado: i.valorUnitario,
-        valor_apresentado: i.apresentado,
-        valor_glosado: i.glosado,
-        valor_liberado: i.apresentado - i.glosado,
-        situacao: i.critica ? 'criticado' : i.glosado > 0 ? 'glosado_parcial' : 'apresentado',
-        justificativa: (i.critica ?? i.justificativa)?.slice(0, 500) ?? null,
-      });
+      itensGravados.push(
+        await tx.incluir('guia_conta_recebida_item', {
+          guia_conta_recebida_id: guia,
+          sequencia: i.sequencial,
+          grupo: i.grupo,
+          tipo_despesa: i.grupo === 'despesa' ? despesa(i.codigoDespesa) : null,
+          procedimento_termo_terminologia_id: num(termo['id']),
+          codigo_tabela_tiss: i.tabela.slice(0, 2),
+          descricao: i.descricao.slice(0, 255),
+          data_execucao: i.data,
+          quantidade_apresentada: i.quantidade,
+          percentual_reducao_acrescimo: Math.round((i.fator - 1) * 10000) / 100,
+          valor_unitario_apresentado: i.valorUnitario,
+          valor_apresentado: i.apresentado,
+          valor_glosado: i.glosado,
+          valor_liberado: i.apresentado - i.glosado,
+          situacao: i.critica ? 'criticado' : i.glosado > 0 ? 'glosado_parcial' : 'apresentado',
+          justificativa: (i.critica ?? i.justificativa)?.slice(0, 500) ?? null,
+        }),
+      );
     }
+    await gravarCriticasDaGuia(tx, guia, itensGravados, g.criticas, deRegras);
   }
   return { id, versao: 1 };
 }

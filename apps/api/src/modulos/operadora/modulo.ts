@@ -71,6 +71,12 @@ import {
 } from './cobranca-porta.js';
 import { PortaCobrancaOperadoraMemoria } from './cobranca-porta-memoria.js';
 import { PortaCobrancaOperadoraPropria } from './cobranca-porta-propria.js';
+import { ContaConferenciaOperadoraController } from './conta-conferencia.controller.js';
+import {
+  METODOS_CONFERENCIA_CONTA,
+  PORTA_CONFERENCIA_CONTA,
+  PortaConferenciaContaPropria,
+} from './conta-conferencia-propria.js';
 import { ContasOperadoraController } from './contas.controller.js';
 import { METODOS_PORTA_CONTAS, PORTA_CONTAS_OPERADORA, type PortaContasOperadora } from './contas-porta.js';
 import { PortaContasOperadoraMemoria } from './contas-porta-memoria.js';
@@ -253,6 +259,7 @@ export async function moduloOperadora(
       CadastroComplementarOperadoraController,
       DeclaracoesAnsController,
       ReajusteColetivoOperadoraController,
+      ContaConferenciaOperadoraController,
     ],
     providers: [
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
@@ -270,6 +277,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaCadastroComplementarPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaCadastroComplementarPropria>(METODOS_CADASTRO_COMPLEMENTAR),
+      },
+      // 08-SGO L105 (C1-100): regras de crítica, críticas gravadas, auditoria e demonstrativos só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_CONFERENCIA_CONTA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaConferenciaContaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaConferenciaContaPropria>(METODOS_CONFERENCIA_CONTA),
       },
       // 08-SGO L96 (C1-086): índice, regra por sinistralidade e agrupamento do coletivo pequeno só no banco (sem núcleo, 503).
       {
