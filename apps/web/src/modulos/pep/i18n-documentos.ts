@@ -279,6 +279,11 @@ export const mensagensDocumentos = {
     emitir: 'Emitir',
     emitida: 'Receita emitida.',
     assinarMao: 'Receita de controle especial e de antimicrobiano: imprimir e assinar à mão.',
+    buscarCatalogo: 'Digite 3 letras para buscar no catálogo',
+    controlado: 'Controlado (Portaria 344/98)',
+    antimicrobiano: 'Antimicrobiano (RDC 471/2021)',
+    tipoPedido: 'O medicamento escolhido pede a {tipo}.',
+    usarTipo: 'Usar este receituário',
   },
   atestados: {
     titulo: 'Atestados, declarações e requerimentos',
