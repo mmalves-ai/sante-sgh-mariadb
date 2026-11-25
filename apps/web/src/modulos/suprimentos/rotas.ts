@@ -58,6 +58,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     component: () => import('./telas/HomologacaoFornecedoresTela.vue'),
     meta: { permissao: 'suprimentos.contrato.ler' },
   },
+  // C2-015 (05-SUP linha 22): devolução de compra ao fornecedor, com a saída do estoque e o crédito no contas a pagar.
+  {
+    path: '/suprimentos/devolucoes-fornecedor',
+    name: 'suprimentos.devolucoes-fornecedor',
+    component: () => import('./telas/DevolucaoFornecedorTela.vue'),
+    meta: { permissao: 'suprimentos.devolucao.ler' },
+  },
   // M55 (etapa 4): licitação e pregão (o painel por etapa, o termo, a pesquisa, a sessão, o julgamento e a homologação).
   {
     path: '/suprimentos/licitacao',

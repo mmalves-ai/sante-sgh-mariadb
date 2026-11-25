@@ -6,7 +6,7 @@ import { ITENS_CONSULTA_PROVISORIA } from '../consultas/catalogo.js';
 import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
-  it('452 itens: M 198, P 57, N 197, iguais ao cabeçalho do arquivo', () => {
+  it('450 itens: M 198, P 57, N 195, iguais ao cabeçalho do arquivo', () => {
     expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 452, M: 198, P: 57, N: 197 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
@@ -238,7 +238,6 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/suprimentos/cotacao', // M28
         '/suprimentos/aprovacoes', // M28
         '/suprimentos/historico-compras', // M28
-        '/suprimentos/atas-registro-preco', // C2-030 (05-SUP linha 26)
         '/suprimentos/notas-fiscais', // M28
         '/suprimentos/requisicoes', // M28
         '/suprimentos/movimento-direto', // M28
@@ -257,7 +256,9 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/suprimentos/consignados', // M46 (etapa 4)
         '/suprimentos/contratos', // M55 (etapa 3: contratos com fornecedores)
         '/suprimentos/homologacao-fornecedores', // F8 (09-AREA linha 66)
+        '/suprimentos/devolucoes-fornecedor', // C2-015 (05-SUP linha 22)
         '/suprimentos/licitacao', // M55 (etapa 4: licitação e pregão)
+        '/suprimentos/atas-registro-preco', // C2-030 (05-SUP linha 26)
         '/farmacia/manipulacao', // M46 (etapa 4)
         '/farmacia/dispensacao', // M29
         '/farmacia/entregas', // M29
@@ -289,7 +290,6 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/cirurgia/mapa', // M18
         '/cirurgia/notas-sala', // M30
         '/cirurgia/procedimentos-cirurgicos', // F3.4 (04-CC linha 91)
-        '/cirurgia/profilaxia', // C2-012 (04-CC linha 106)
         '/cirurgia/registro',
         '/cirurgia/salas',
         '/consultorio/fila',

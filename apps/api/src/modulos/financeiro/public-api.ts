@@ -33,3 +33,5 @@ export {
   TABELAS_RECEBIVEL_CARTAO,
   type VendaCartao,
 } from './cartao-propria.js';
+// C2-015 (05-SUP linha 22): a devolução ao fornecedor emite e aplica a nota de crédito na mesma transação.
+export { type EmitirNotaEntrada, OPERACOES_NOTA_CESSAO } from './nota-cessao-propria.js';

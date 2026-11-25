@@ -54,6 +54,8 @@ import { VinculoReferenciaPrecoController } from './vinculo-referencia-preco.con
 import { PORTA_VINCULO_REFERENCIA, portaVinculoReferenciaIndisponivel } from './vinculo-referencia-preco.js';
 import { EnderecamentoController } from './enderecamento.controller.js';
 import { PORTA_ENDERECAMENTO, portaEnderecamentoIndisponivel } from './enderecamento.js';
+import { DevolucaoFornecedorController } from './devolucao-fornecedor.controller.js';
+import { PORTA_DEVOLUCAO_FORNECEDOR, portaDevolucaoFornecedorIndisponivel } from './devolucao-fornecedor.js';
 import { AtaEmpenhoController } from './ata-empenho.controller.js';
 import { PORTA_ATA_EMPENHO, portaAtaEmpenhoIndisponivel } from './ata-empenho.js';
 import { EntradaDoacaoController } from './entrada-doacao.controller.js';
@@ -161,6 +163,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./entrada-doacao.js')).PortaEntradaDoacaoPropria(ctx.nucleo)
       : portaEntradaDoacaoIndisponivel();
+  // C2-015 (05-SUP linha 22): a devolução de compra ao fornecedor grava só no banco próprio (503 sem o núcleo).
+  const devolucaoFornecedor =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./devolucao-fornecedor.js')).PortaDevolucaoFornecedorPropria(ctx.nucleo)
+      : portaDevolucaoFornecedorIndisponivel();
   // 05-SUP linha 24: o consignado grava no banco próprio; sem o núcleo, a memória só em dev/ci com as fontes sintéticas;
   // fora disso, 503 em tudo. A taxa por faixa de valor grava só no banco próprio.
   const consignado =
@@ -232,6 +239,7 @@ export async function modulo(
       EnderecamentoController,
       EntradaDoacaoController,
       ConferenciaRecebimentoController,
+      DevolucaoFornecedorController,
       ConsignadoController,
       TaxaConsignacaoController,
       SlaContratoController,
@@ -253,6 +261,7 @@ export async function modulo(
       { provide: PORTA_ENDERECAMENTO, useValue: enderecamento },
       { provide: PORTA_ENTRADA_DOACAO, useValue: entradaDoacao },
       { provide: PORTA_CONFERENCIA_RECEBIMENTO, useValue: conferenciaRecebimento },
+      { provide: PORTA_DEVOLUCAO_FORNECEDOR, useValue: devolucaoFornecedor },
       { provide: PORTA_CONSIGNADO, useValue: consignado },
       { provide: PORTA_TAXA_CONSIGNACAO, useValue: taxaConsignacao },
       { provide: PORTA_SLA_CONTRATO, useValue: slaContrato },

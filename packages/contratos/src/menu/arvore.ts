@@ -61,10 +61,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha.
 // C1-128 (04-CC linha 104): o item "Documentos exigidos" do centro cirúrgico entrou à mão (mesmo motivo); a contagem
 // acompanha.
-// C2-012 (04-CC linha 106): o item "Profilaxia antimicrobiana" do centro cirúrgico entrou à mão (mesmo motivo); a
-// contagem acompanha.
-// C2-030 (05-SUP linha 26): o item "Ata de registro de preços e empenho" das compras entrou à mão (mesmo motivo); a
-// contagem acompanha.
+// C2-030 (05-SUP linha 26) e C2-015 (05-SUP linha 22): os itens "Ata de registro de preços e empenho" e "Devolução ao
+// fornecedor" de compras entraram à mão (mesmo motivo); a contagem acompanha.
 export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":452,"M":198,"P":57,"N":197};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
@@ -152,7 +150,6 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"centro-cirurgico.salas-cirurgicas-e-usuarios-permitidos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Salas cirúrgicas e usuários permitidos"],"titulo":"Salas cirúrgicas e usuários permitidos","selo":"M","fase":2,"rota":"/cirurgia/salas","permissao":"cirurgia.sala.ler"},
   {"id":"centro-cirurgico.procedimentos-cirurgicos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Procedimentos cirúrgicos"],"titulo":"Procedimentos cirúrgicos","selo":"N","fase":3,"rota":"/cirurgia/procedimentos-cirurgicos","permissao":"cirurgia.sala.ler"},
   {"id":"centro-cirurgico.documentos-exigidos","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Documentos exigidos"],"titulo":"Documentos exigidos","selo":"N","fase":5,"rota":"/cirurgia/documentos-exigidos","permissao":"cirurgia.sala.ler"},
-  {"id":"centro-cirurgico.profilaxia-antimicrobiana","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Profilaxia antimicrobiana"],"titulo":"Profilaxia antimicrobiana","selo":"N","fase":5,"rota":"/cirurgia/profilaxia","permissao":"qualidade.ccih.ler"},
   {"id":"centro-cirurgico.nota-de-sala-e-consumo-para-a-conta","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Nota de sala e consumo para a conta"],"titulo":"Nota de sala e consumo para a conta","selo":"M","fase":3,"rota":"/cirurgia/notas-sala","permissao":"cirurgia.nota.ler"},
   {"id":"centro-cirurgico.avaliacao-pre-anestesica-apa","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Avaliação pré-anestésica"],"titulo":"Avaliação pré-anestésica","selo":"N","fase":5,"rota":"/bloco/apa","permissao":"cirurgia.apa.ler"},
   {"id":"centro-cirurgico.checklist-de-cirurgia-segura-oms","area":"ATENDIMENTO AO PACIENTE","grupo":"Centro cirúrgico","caminho":["Centro cirúrgico","Checklist de cirurgia segura"],"titulo":"Checklist de cirurgia segura","selo":"N","fase":5,"rota":"/bloco/checklist","permissao":"cirurgia.checklist.ler"},
@@ -249,6 +246,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"suprimentos.compras.historico-de-compras-por-item","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Compras","Histórico de compras por item"],"titulo":"Histórico de compras por item","selo":"M","fase":3,"rota":"/suprimentos/historico-compras","permissao":"suprimentos.compra.ler"},
   {"id":"suprimentos.compras.contratos-com-fornecedores","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Compras","Contratos com fornecedores"],"titulo":"Contratos com fornecedores","selo":"N","fase":6,"rota":"/suprimentos/contratos","permissao":"suprimentos.contrato.ler"},
   {"id":"suprimentos.compras.homologacao-de-fornecedores","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Compras","Homologação de fornecedores"],"titulo":"Homologação de fornecedores","selo":"N","fase":7,"rota":"/suprimentos/homologacao-fornecedores","permissao":"suprimentos.contrato.ler"},
+  {"id":"suprimentos.compras.devolucao-ao-fornecedor","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Compras","Devolução ao fornecedor"],"titulo":"Devolução ao fornecedor","selo":"N","fase":7,"rota":"/suprimentos/devolucoes-fornecedor","permissao":"suprimentos.devolucao.ler"},
   {"id":"suprimentos.compras.licitacao-e-pregao","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Compras","Licitação e pregão"],"titulo":"Licitação e pregão","selo":"N","fase":6,"rota":"/suprimentos/licitacao","permissao":"suprimentos.licitacao.ler"},
   {"id":"suprimentos.compras.ata-de-registro-de-precos-e-empenho","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Compras","Ata de registro de preços e empenho"],"titulo":"Ata de registro de preços e empenho","selo":"N","fase":7,"rota":"/suprimentos/atas-registro-preco","permissao":"suprimentos.licitacao.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.entrada-por-nota-fiscal-nf-e","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Entrada por nota fiscal"],"titulo":"Entrada por nota fiscal","selo":"M","fase":3,"rota":"/suprimentos/notas-fiscais","permissao":"suprimentos.nota.ler"},
