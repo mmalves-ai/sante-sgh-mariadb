@@ -308,6 +308,11 @@ export const esquemaImpressoGerado = z.object({
   nomeArquivo: txt,
   /** O trabalho na fila de impressão da estação (ZPL): o mesmo pedido repetido não imprime duas vezes. */
   fila: nul(z.object({ id: txt, novo: z.boolean() })),
+  /** Pulseira e etiqueta (01-ADM L79): a via que saiu, se foi reimpressão e a impressora resolvida pela estação. */
+  identificacao: z
+    .object({ via: n, reimpressao: z.boolean(), impressora: nul(txt) })
+    .nullable()
+    .optional(),
 });
 export type ImpressoGerado = z.infer<typeof esquemaImpressoGerado>;
 

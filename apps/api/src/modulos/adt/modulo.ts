@@ -10,6 +10,8 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { AVISOS_ATENDIMENTO, AvisosAtendimento } from '../atendimento/public-api.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { IMPRESSAO_IDENTIFICACAO } from '../administracao/impressao-identificacao-emissao.js';
+import { ImpressaoIdentificacaoPropria } from '../administracao/impressao-identificacao-propria.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import {
   CACHE_CONFIG,
@@ -130,6 +132,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloAdt = {}):
     providers: [
       { provide: PORTA_ADT, useValue: adt },
       { provide: PORTA_NIR, useValue: nir },
+      // Pulseira e etiqueta com a 1ª impressão registrada e a reimpressão por motivo (01-ADM L79): só no banco próprio.
+      {
+        provide: IMPRESSAO_IDENTIFICACAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ImpressaoIdentificacaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       // F3.4 (04-INT linha 82): gases medicinais por tempo de uso no banco do cliente; sem núcleo, 503.
       {
         provide: PORTA_GAS_MEDICINAL,

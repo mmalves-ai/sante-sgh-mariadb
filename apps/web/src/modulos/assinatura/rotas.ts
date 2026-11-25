@@ -3,6 +3,14 @@
 import type { RouteRecordRaw } from 'vue-router';
 
 export const rotasAssinatura: RouteRecordRaw[] = [
+  // 01-ADM L79: impressoras por estação (vínculo da estação e padrão do estabelecimento e da unidade). Fica aqui com
+  // os demais cadastros do documento (a mesma permissão `documento.cadastro.ler`).
+  {
+    path: '/administracao/impressao/estacoes',
+    name: 'documento.impressaoEstacoes',
+    component: () => import('../administracao/telas/ImpressaoEstacoesTela.vue'),
+    meta: { permissao: 'documento.cadastro.ler' },
+  },
   // Etapa 2: assinar os documentos emitidos, um a um ou em lote (prévia exata, provedor ou agente local), pendências,
   // reprocessamento, avisos e o PDF assinado.
   {

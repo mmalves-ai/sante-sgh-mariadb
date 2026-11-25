@@ -49,6 +49,11 @@ import {
   preencherMarcadores,
 } from '@sgh/dominio-internacao';
 import { enfileirarZpl, ErroZpl, zplEtiquetaProntuario, zplPulseira } from '@sgh/dominio-documento';
+import {
+  emitirComIdentificacao,
+  IMPRESSAO_IDENTIFICACAO,
+} from '../administracao/impressao-identificacao-emissao.js';
+import type { ImpressaoIdentificacaoPropria } from '../administracao/impressao-identificacao-propria.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -131,6 +136,9 @@ export class InternacaoController {
     @Optional()
     @Inject(AVISOS_ATENDIMENTO)
     private readonly avisosAtendimento: AvisosAtendimento | null = null,
+    @Optional()
+    @Inject(IMPRESSAO_IDENTIFICACAO)
+    private readonly identificacao: ImpressaoIdentificacaoPropria | null = null,
   ) {
     this.apoios = new ApoiosAdt(porta, trilha, configuracao, cache);
     this.servico = new ServicoAdt(porta, janelaOutroSistema(configuracao));
@@ -615,8 +623,10 @@ export class InternacaoController {
       // As cópias do documento são as da regra (ou do modelo sob demanda), não as digitadas.
       copias = f.copias;
     }
-    const gerado =
-      e.formato === 'pdf' ? await this.pdf(s, d, modelo) : await this.zpl(s, d, e.impresso, e.copias);
+    // Pulseira e etiqueta: a 1ª impressão fica registrada e a reimpressão só sai com o motivo (01-ADM L79).
+    const gerado = await emitirComIdentificacao(this.identificacao, s, { internacao: d.reg }, e, () =>
+      e.formato === 'pdf' ? this.pdf(s, d, modelo) : this.zpl(s, d, e.impresso, e.copias),
+    );
     await this.trilha.registrar({
       evento: EVENTOS_AUDITAVEIS.internacaoImpressoEmitido.codigo,
       rede: s.rede,

@@ -59,7 +59,7 @@ export const esquemaRegistrarReimpressao = z
   })
   .strict();
 
-async function estacaoDoEstabelecimento(
+export async function estacaoDoEstabelecimento(
   tx: TxOperacao,
   estacao: number,
 ): Promise<{ estabelecimento: number; unidade: number | null } | null> {
@@ -133,10 +133,11 @@ const operacaoVincularEstacao = definirOperacao({
 });
 
 /** Candidatas da estação e do estabelecimento para a finalidade (só impressoras ativas contam no domínio). */
-async function candidatas(
-  tx: TxOperacao,
+export async function candidatasDeImpressora(
+  tx: { consultar(sql: string, parametros: unknown[]): Promise<Record<string, unknown>[]> },
   estacao: number | null,
   finalidade: number,
+  estabelecimento: number | null,
 ): Promise<CandidatoImpressora[]> {
   const c: CandidatoImpressora[] = [];
   if (estacao !== null)
@@ -157,7 +158,7 @@ async function candidatas(
     `SELECT f.impressora_id, f.unidade_assistencial_id, f.ativo AND i.ativo AS ativo
        FROM impressora_finalidade_estabelecimento f JOIN impressora i ON i.id = f.impressora_id
       WHERE f.estabelecimento_id = ? AND f.finalidade_impressao_id = ?`,
-    [tx.contexto.estabelecimento, finalidade],
+    [estabelecimento, finalidade],
   ))
     c.push({
       impressora: num(l['impressora_id']),
@@ -228,8 +229,10 @@ const operacaoRegistrarReimpressao = definirOperacao({
       if (!bool(imp['ativo'])) throw recusar('impressora-inativa');
     } else if (e.destino === 'impressora' && e.finalidade !== undefined) {
       impressora =
-        escolherImpressora(await candidatas(tx, estacao, e.finalidade), { usuario: ctx.usuario, unidade })
-          ?.impressora ?? null;
+        escolherImpressora(await candidatasDeImpressora(tx, estacao, e.finalidade, ctx.estabelecimento), {
+          usuario: ctx.usuario,
+          unidade,
+        })?.impressora ?? null;
     }
     const agora = new Date();
     const idRegistro = await tx.incluir('registro_reimpressao', {

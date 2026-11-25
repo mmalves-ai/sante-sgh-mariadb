@@ -15,3 +15,4 @@ export * from './pdf/modelos-pep.js';
 export * from './assinatura/index.js';
 // 01-ADM L79: impressora por estação e finalidade, e a reimpressão com motivo e via.
 export * from './impressao/estacao.js';
+export * from './impressao/identificacao.js';
