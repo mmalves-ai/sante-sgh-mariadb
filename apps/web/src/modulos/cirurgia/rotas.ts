@@ -77,6 +77,13 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     meta: { permissao: 'qualidade.ccih.ler', menu: `${M} > Profilaxia antimicrobiana` },
   },
   {
+    // F7, 04-CME L115: cadastro da CME (produtos reprocessáveis, caixas e kits com composição, fases e foto).
+    path: '/cirurgia/cme/cadastro',
+    name: 'cirurgia.cme.cadastro',
+    component: () => import('./telas/CmeCadastroTela.vue'),
+    meta: { permissao: 'cirurgia.cme.ler', menu: `${M} > CME: cadastro de caixas e instrumentais` },
+  },
+  {
     // F8, 04-CC L108: projetos e mutirões cirúrgicos do SUS (metas SIGTAP, AIH e APAC marcadas, meta x produção).
     path: '/cirurgia/mutiroes',
     name: 'cirurgia.mutiroes',

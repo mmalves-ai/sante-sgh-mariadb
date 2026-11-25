@@ -47,6 +47,8 @@ import { PORTA_GASTO_SALA, PortaGastoSalaPropria } from './gasto-sala-propria.js
 import { KitAgendamentoController } from './kit-agendamento.controller.js';
 import { CmeController } from './cme.controller.js';
 import { PORTA_CME, PortaCmePropria } from './cme-propria.js';
+import { CmeCadastroController } from './cme-cadastro.controller.js';
+import { PORTA_CME_CADASTRO, PortaCmeCadastroPropria } from './cme-cadastro-propria.js';
 import { ReservaCirurgiaController } from './reserva-cirurgia.controller.js';
 import { DocumentosCirurgiaController } from './documentos-cirurgia.controller.js';
 import { ProfilaxiaCirurgicaController } from './profilaxia-cirurgica.controller.js';
@@ -145,6 +147,7 @@ export async function moduloCirurgia(
       GradeSalaController,
       KitAgendamentoController,
       CmeController,
+      CmeCadastroController,
       EquipeRealizadaController,
       ReservaCirurgiaController,
       DocumentosCirurgiaController,
@@ -207,6 +210,14 @@ export async function moduloCirurgia(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaCmePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F7 (04-CME linha 115): cadastro da CME (produtos reprocessáveis, caixas e kits, fases e foto); sem núcleo, 503.
+      {
+        provide: PORTA_CME_CADASTRO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCmeCadastroPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F3.6 (05-SUP linha 13): kit padrão sugerido e aplicado no agendamento cirúrgico; sem núcleo, 503.
