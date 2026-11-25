@@ -6,13 +6,17 @@
 //   - abrir: o exame pedido com o paciente, o registro (se houver) com os achados vigentes, as opções da tela e os
 //     alertas; o número de achados corrigidos (histórico) também vem;
 //   - iniciar: cria o registro em andamento a partir do item (paciente e atendimento do pedido), validado pela regra
-//     do domínio (a mesma da tela); um registro por item; item cancelado, recusado ou de outro setor é recusado;
+//     do domínio (a mesma da tela); um registro vigente por item (o cancelado é histórico e libera refazer o
+//     procedimento com um novo registro); item cancelado, recusado ou de outro setor é recusado;
+//   - salvar e concluir: só com o item ainda em execução (lido com trava junto ao registro): pedido cancelado ou
+//     recusado depois do início recusa sem escrita;
 //   - salvar: altera o registro em andamento pela versão lida; os achados sem mudança ficam, o achado mudado ou
 //     retirado recebe a marca de exclusão (histórico preservado, nunca apagado) e o novo entra com a sequência seguinte;
 //   - concluir: confere a regra da conclusão (fim, hemostasia, conclusão, conduta, achado e os indicadores de dose da
 //     RDC Anvisa 611/2022), encerra o registro e marca o item como realizado, com o primeiro operador como executante
 //     (se o item ainda não tinha);
-//   - cancelar: o procedimento interrompido fica cancelado, com o motivo na conclusão; nada é apagado.
+//   - cancelar: o procedimento interrompido fica cancelado, com o motivo na conclusão; nada é apagado; o exame pedido
+//     continua solicitado e aceita um novo registro (encerrar o pedido é o cancelamento do exame pelo fluxo do pedido).
 // Registro concluído ou cancelado não muda mais. A trilha vai na mesma transação (executor).
 import {
   type AchadoHemodinamica,
@@ -25,7 +29,10 @@ import {
   conferirRegistroHemodinamica,
   DOMINANCIAS_CORONARIAS,
   HEMOSTASIAS_HEMODINAMICA,
+  itemEmExecucaoHemodinamica,
+  podeRefazerHemodinamica,
   type RegistroHemodinamica,
+  registroOcupaExame,
   TIPOS_ACHADO_HEMODINAMICA,
   vasosComLesaoSignificativa,
   VIAS_ACESSO_HEMODINAMICA,
@@ -242,10 +249,11 @@ const SQL_ITENS = `
     JOIN exame ex ON ex.id = ei.exame_id
     JOIN paciente pa ON pa.id = re.paciente_id
     JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
-    LEFT JOIN registro_hemodinamica rh ON rh.exame_item_id = ei.id AND rh.excluido_em IS NULL
+    LEFT JOIN registro_hemodinamica rh ON rh.id = (
+          SELECT x.id FROM registro_hemodinamica x
+           WHERE x.exame_item_id = ei.id AND x.excluido_em IS NULL
+           ORDER BY x.situacao <> 'cancelado' DESC, x.id DESC LIMIT 1)
    WHERE re.estabelecimento_id = ? AND sd.tipo = 'hemodinamica' AND ei.excluido_em IS NULL`;
-
-const ITEM_FORA = ['cancelado', 'recusado'];
 
 const opcoes = (lista: readonly string[]) => lista.map((v) => ({ id: v, rotulo: v }));
 
@@ -300,7 +308,7 @@ export class PortaHemodinamicaPropria extends PortaEstabelecimentoPropria {
       return {
         de: p.de,
         ate: p.ate,
-        exames: exames.filter((x) => x.registro !== null || !ITEM_FORA.includes(x.situacaoItem)),
+        exames: exames.filter((x) => x.registro !== null || itemEmExecucaoHemodinamica(x.situacaoItem)),
       };
     });
   }
@@ -324,6 +332,15 @@ export class PortaHemodinamicaPropria extends PortaEstabelecimentoPropria {
             )
           ).map(achadoLido)
         : [];
+      const cancelados = num(
+        (
+          await l.uma(
+            `SELECT COUNT(*) AS n FROM registro_hemodinamica
+              WHERE exame_item_id = ? AND situacao = 'cancelado' AND excluido_em IS NULL`,
+            [num(i['item'])],
+          )
+        )?.['n'],
+      );
       const corrigidos = registro
         ? num(
             (
@@ -356,6 +373,9 @@ export class PortaHemodinamicaPropria extends PortaEstabelecimentoPropria {
         registro,
         achados,
         achadosCorrigidos: corrigidos,
+        registrosCancelados: cancelados,
+        emExecucao: itemEmExecucaoHemodinamica(String(i['situacao_item'])),
+        podeRefazer: podeRefazerHemodinamica(String(i['situacao_item']), registro?.situacao ?? null),
         alertas: registro ? alertasHemodinamica({ ...registro, achados }) : [],
         vasosComLesao: vasosComLesaoSignificativa(achados),
         opcoes: {
@@ -373,7 +393,7 @@ export class PortaHemodinamicaPropria extends PortaEstabelecimentoPropria {
     });
   }
 
-  /** Cria o registro em andamento do exame pedido (um por item), validado pela regra do domínio. */
+  /** Cria o registro em andamento do exame pedido (um vigente por item), validado pela regra do domínio. */
   async iniciar(c: ContextoPortaPropria, item: number, entrada: unknown) {
     const e = entradaValida(esquemaIniciar, entrada);
     const problemas = conferirRegistroHemodinamica(paraDominio(e, []), 'rascunho');
@@ -388,12 +408,15 @@ export class PortaHemodinamicaPropria extends PortaEstabelecimentoPropria {
         [item, est.id],
       );
       if (!i || i['tipo'] !== 'hemodinamica') throw naoEncontrado('Exame de hemodinâmica');
-      if (ITEM_FORA.includes(String(i['situacao'])))
+      if (!itemEmExecucaoHemodinamica(String(i['situacao'])))
         throw recusaRegra('Exame fora de execução', [
           { campo: 'item', mensagem: 'O exame foi cancelado ou recusado: não recebe registro.' },
         ]);
-      const existe = await tx.uma('SELECT id FROM registro_hemodinamica WHERE exame_item_id = ?', [item]);
-      if (existe)
+      const doItem = await tx.consultar<Linha>(
+        'SELECT situacao FROM registro_hemodinamica WHERE exame_item_id = ? AND excluido_em IS NULL',
+        [item],
+      );
+      if (doItem.some((x) => registroOcupaExame(String(x['situacao']))))
         throw new ErroOperacao(
           409,
           'registro-existente',
@@ -420,7 +443,7 @@ export class PortaHemodinamicaPropria extends PortaEstabelecimentoPropria {
     const problemas = conferirRegistroHemodinamica(paraDominio(e, achados), 'rascunho');
     if (problemas.length) throw recusaRegra('Registro de hemodinâmica recusado', problemas);
     return this.gravar(c, 'sadt.hemodinamica.salvar', [REGISTRO, ACHADO], async (tx, est, usuario) => {
-      await this.emAndamento(tx, registro, est.id);
+      await this.emAndamento(tx, registro, est.id, true);
       await this.profissionaisExistem(tx, e);
       const versao = await tx.alterar(REGISTRO, registro, e.versao, colunasRegistro(e));
       const r = await this.gravarAchados(tx, registro, e.achados, usuario);
@@ -432,7 +455,7 @@ export class PortaHemodinamicaPropria extends PortaEstabelecimentoPropria {
   async concluir(c: ContextoPortaPropria, registro: number, entrada: unknown) {
     const e = entradaValida(esquemaVersao, entrada);
     return this.gravar(c, 'sadt.hemodinamica.concluir', [REGISTRO, ITEM], async (tx, est, usuario) => {
-      const atual = await this.emAndamento(tx, registro, est.id);
+      const atual = await this.emAndamento(tx, registro, est.id, true);
       const r = registroLido(atual);
       const achados = (
         await tx.consultar<Linha>(
@@ -462,7 +485,7 @@ export class PortaHemodinamicaPropria extends PortaEstabelecimentoPropria {
   async cancelar(c: ContextoPortaPropria, registro: number, entrada: unknown) {
     const e = entradaValida(esquemaCancelar, entrada);
     return this.gravar(c, 'sadt.hemodinamica.cancelar', [REGISTRO], async (tx, est) => {
-      const atual = await this.emAndamento(tx, registro, est.id);
+      const atual = await this.emAndamento(tx, registro, est.id, false);
       const anterior = txtOuNull(atual['conclusao']);
       const versao = await tx.alterar(REGISTRO, registro, e.versao, {
         situacao: 'cancelado',
@@ -472,9 +495,21 @@ export class PortaHemodinamicaPropria extends PortaEstabelecimentoPropria {
     });
   }
 
-  private async emAndamento(tx: TxOperacao, registro: number, estabelecimento: number): Promise<Linha> {
+  /**
+   * O registro em andamento, lido com trava junto ao exame pedido. `exigirItemEmExecucao`: o pedido cancelado ou
+   * recusado depois do início recusa a gravação (salvar e concluir); o cancelamento do procedimento continua aceito.
+   */
+  private async emAndamento(
+    tx: TxOperacao,
+    registro: number,
+    estabelecimento: number,
+    exigirItemEmExecucao: boolean,
+  ): Promise<Linha> {
     const [r] = await tx.consultarParaAtualizar<Linha>(
-      'SELECT * FROM registro_hemodinamica WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      `SELECT rh.*, ei.situacao AS situacao_item
+         FROM registro_hemodinamica rh
+         JOIN exame_item ei ON ei.id = rh.exame_item_id
+        WHERE rh.id = ? AND rh.estabelecimento_id = ? AND rh.excluido_em IS NULL`,
       [registro, estabelecimento],
     );
     if (!r) throw naoEncontrado('Registro de hemodinâmica');
@@ -485,6 +520,13 @@ export class PortaHemodinamicaPropria extends PortaEstabelecimentoPropria {
         'Registro encerrado',
         'O registro já foi concluído ou cancelado e não muda mais.',
       );
+    if (exigirItemEmExecucao && !itemEmExecucaoHemodinamica(String(r['situacao_item'])))
+      throw recusaRegra('Exame fora de execução', [
+        {
+          campo: 'item',
+          mensagem: 'O exame pedido foi cancelado ou recusado: o registro só pode ser cancelado.',
+        },
+      ]);
     return r;
   }
 

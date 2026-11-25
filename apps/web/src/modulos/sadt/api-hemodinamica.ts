@@ -93,6 +93,9 @@ const esquemaAberto = z.object({
   registro: registro.nullable(),
   achados: z.array(achado),
   achadosCorrigidos: z.number(),
+  registrosCancelados: z.number(),
+  emExecucao: z.boolean(),
+  podeRefazer: z.boolean(),
   alertas: z.array(z.string()),
   vasosComLesao: z.number(),
   opcoes: z.object({

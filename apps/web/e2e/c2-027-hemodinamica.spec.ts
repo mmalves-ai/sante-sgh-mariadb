@@ -5,8 +5,9 @@
 // apps/api/src/modulos/sadt/hemodinamica-propria.int.spec.ts. Aqui se prova o fluxo: o atalho na tela de métodos
 // gráficos, a fila do setor por paciente, abrir o registro com a validação na hora (segundo operador igual ao
 // primeiro é recusado), os achados por vaso com a regra do grau, "Salvar e concluir" travado até os indicadores de
-// dose (RDC Anvisa 611/2022) e o alerta de dose substancial; concluído, a tela fica só leitura. Axe na tela. Massa
-// SINTÉTICA.
+// dose (RDC Anvisa 611/2022) e o alerta de dose substancial; concluído, a tela fica só leitura. O procedimento
+// interrompido é cancelado com o motivo, fica como tentativa no histórico e "Refazer o procedimento" abre um novo
+// registro do mesmo exame, já com a equipe e o acesso. Axe na tela. Massa SINTÉTICA.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -56,6 +57,7 @@ function simular(page: Page) {
   };
   let registro: Record<string, unknown> | null = null;
   let achados: Record<string, unknown>[] = [];
+  let cancelados = 0;
   const alertas = () =>
     registro && Number(registro['kermaReferenciaMgy'] ?? 0) >= 5000 ? ['dose-substancial'] : [];
   return {
@@ -86,15 +88,22 @@ function simular(page: Page) {
             registro,
             achados,
             achadosCorrigidos: 0,
+            registrosCancelados: cancelados,
+            emExecucao: true,
+            podeRefazer: registro?.['situacao'] === 'cancelado',
             alertas: alertas(),
             vasosComLesao: 0,
             opcoes: OPCOES,
           });
         const corpo = (req.postDataJSON() ?? {}) as Record<string, unknown>;
         corpos.push(corpo);
+        const rid = registro ? `/registros/${String(registro['id'])}` : null;
         if (caminho === '/itens/71/iniciar') {
+          if (registro && registro['situacao'] !== 'cancelado')
+            return json(rota, { status: 409, codigo: 'registro-existente' }, 409);
+          achados = [];
           registro = {
-            id: 501,
+            id: 501 + cancelados,
             versao: 1,
             situacao: 'em_andamento',
             fimEm: null,
@@ -117,9 +126,9 @@ function simular(page: Page) {
             anestesista: null,
             ...corpo,
           };
-          return json(rota, { id: 501 });
+          return json(rota, { id: registro['id'] });
         }
-        if (caminho === '/registros/501' && registro) {
+        if (caminho === rid && registro) {
           if (corpo['versao'] !== registro['versao'])
             return json(rota, { status: 409, codigo: 'conflito-versao' }, 409);
           const { achados: novos, ...resto } = corpo;
@@ -139,11 +148,21 @@ function simular(page: Page) {
             observacao: null,
             ...a,
           }));
-          return json(rota, { id: 501, versao: registro['versao'] });
+          return json(rota, { id: registro['id'], versao: registro['versao'] });
         }
-        if (caminho === '/registros/501/concluir' && registro) {
+        if (caminho === `${rid}/concluir` && registro) {
           registro = { ...registro, situacao: 'concluido', versao: Number(registro['versao']) + 1 };
-          return json(rota, { id: 501, versao: registro['versao'], alertas: alertas() });
+          return json(rota, { id: registro['id'], versao: registro['versao'], alertas: alertas() });
+        }
+        if (caminho === `${rid}/cancelar` && registro) {
+          registro = {
+            ...registro,
+            situacao: 'cancelado',
+            conclusao: `Procedimento interrompido: ${String(corpo['motivo'])}`,
+            versao: Number(registro['versao']) + 1,
+          };
+          cancelados++;
+          return json(rota, { id: registro['id'], versao: registro['versao'] });
         }
         return json(rota, { status: 404 }, 404);
       });
@@ -227,6 +246,45 @@ test.describe('@C2-027 registro de hemodinâmica', () => {
     await expect(page.getByTestId('hemodinamica-encerrado')).toBeVisible();
     await expect(page.getByTestId('hemo-salvar')).toHaveCount(0);
     await expect(page.getByTestId('hemodinamica-item-71')).toHaveAttribute('data-situacao', 'concluido');
+    await semViolacaoAxe(page, '/sadt/hemodinamica');
+    expect(externas).toEqual([]);
+  });
+
+  test('o procedimento interrompido fica no histórico e é refeito com um novo registro do mesmo exame', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const api = simular(page);
+    await api.ligar();
+    await entrar(page, 'SINT.LAUDADOR');
+    await page.goto('/sadt/hemodinamica');
+    await page.getByTestId('hemodinamica-abrir-71').click();
+    await page.getByTestId('hemo-inicio').locator('input').fill('10:00');
+    await escolher(page.getByTestId('hemo-via'), 'femoral_direita');
+    await escolher(page.getByTestId('hemo-op1'), '11');
+    await page.getByTestId('hemo-iniciar').click();
+    await expect(page.getByTestId('hemodinamica-situacao')).toHaveAttribute('data-situacao', 'em_andamento');
+
+    // Cancelar pede o motivo (ao menos 3 caracteres).
+    await expect(page.getByTestId('hemo-cancelar')).toBeDisabled();
+    await page.getByTestId('hemo-motivo').locator('input, textarea').first().fill('Instabilidade na sala');
+    await page.getByTestId('hemo-cancelar').click();
+    await expect(page.getByTestId('hemodinamica-situacao')).toHaveAttribute('data-situacao', 'cancelado');
+    expect(api.corpos[1]).toEqual({ versao: 1, motivo: 'Instabilidade na sala' });
+    await expect(page.getByTestId('hemodinamica-encerrado')).toBeVisible();
+    await expect(page.getByTestId('hemodinamica-tentativas')).toContainText('1 tentativa');
+    await expect(page.getByTestId('hemo-cancelar')).toHaveCount(0);
+
+    // Refazer: novo registro do mesmo exame, com a equipe e o acesso da tentativa anterior.
+    await page.getByTestId('hemo-refazer').click();
+    await expect(page.getByTestId('hemodinamica-encerrado')).toHaveCount(0);
+    await page.getByTestId('hemo-inicio').locator('input').fill('11:30');
+    await page.getByTestId('hemo-iniciar').click();
+    await expect(page.getByTestId('hemodinamica-situacao')).toHaveAttribute('data-situacao', 'em_andamento');
+    expect(api.corpos[2]).toMatchObject({ viaAcesso: 'femoral_direita', primeiroOperador: 11 });
+    expect(api.corpos[2]!['conclusao'] ?? null).toBeNull();
+    await expect(page.getByTestId('hemo-refazer')).toHaveCount(0);
+    await expect(page.getByTestId('hemo-salvar')).toBeVisible();
     await semViolacaoAxe(page, '/sadt/hemodinamica');
     expect(externas).toEqual([]);
   });

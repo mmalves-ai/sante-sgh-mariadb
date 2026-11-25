@@ -296,3 +296,29 @@ export function achadoMudou(a: AchadoHemodinamica, b: AchadoHemodinamica): boole
     n(a.observacao) !== n(b.observacao)
   );
 }
+
+// Desfecho do exame pedido. O registro só existe para o exame em execução: pedido cancelado ou recusado não recebe
+// registro, e o registro em andamento de um pedido que foi cancelado ou recusado depois do início não muda mais (só
+// pode ser cancelado, para fechar o histórico). O procedimento interrompido (registro cancelado) fica como histórico e
+// não ocupa o exame pedido: a equipe refaz o procedimento com um novo registro do mesmo pedido; encerrar o pedido é o
+// cancelamento do exame pelo fluxo do pedido.
+export const SITUACOES_ITEM_SEM_EXECUCAO = ['cancelado', 'recusado'] as const;
+
+/** O exame pedido está em execução (aceita e mantém o registro de hemodinâmica). */
+export function itemEmExecucaoHemodinamica(situacaoItem: string): boolean {
+  return !(SITUACOES_ITEM_SEM_EXECUCAO as readonly string[]).includes(situacaoItem);
+}
+
+/** O registro ocupa o exame pedido (um vigente por exame); o cancelado é histórico e libera um novo registro. */
+export function registroOcupaExame(situacaoRegistro: string): boolean {
+  return situacaoRegistro !== 'cancelado';
+}
+
+/** O procedimento pode ser refeito: o último registro foi cancelado e o exame pedido continua em execução. */
+export function podeRefazerHemodinamica(situacaoItem: string, situacaoRegistro: string | null): boolean {
+  return (
+    situacaoRegistro !== null &&
+    !registroOcupaExame(situacaoRegistro) &&
+    itemEmExecucaoHemodinamica(situacaoItem)
+  );
+}

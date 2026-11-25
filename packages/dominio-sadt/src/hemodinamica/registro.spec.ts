@@ -4,8 +4,11 @@ import {
   achadoMudou,
   alertasHemodinamica,
   conferirRegistroHemodinamica,
+  itemEmExecucaoHemodinamica,
   lesaoSignificativa,
+  podeRefazerHemodinamica,
   type RegistroHemodinamica,
+  registroOcupaExame,
   vasosComLesaoSignificativa,
 } from './registro.js';
 
@@ -214,5 +217,26 @@ describe('alertasHemodinamica e lesões', () => {
     expect(achadoMudou(achado(), achado({ vaso: ' Descendente anterior ' }))).toBe(false);
     expect(achadoMudou(achado(), achado({ grauPercentual: 90 }))).toBe(true);
     expect(achadoMudou(achado(), achado({ stentImplantado: false }))).toBe(true);
+  });
+});
+
+describe('desfecho do exame pedido', () => {
+  it('pedido cancelado ou recusado não está em execução', () => {
+    expect(itemEmExecucaoHemodinamica('solicitado')).toBe(true);
+    expect(itemEmExecucaoHemodinamica('agendado')).toBe(true);
+    expect(itemEmExecucaoHemodinamica('cancelado')).toBe(false);
+    expect(itemEmExecucaoHemodinamica('recusado')).toBe(false);
+  });
+  it('o registro cancelado é histórico e não ocupa o exame; o em andamento e o concluído ocupam', () => {
+    expect(registroOcupaExame('em_andamento')).toBe(true);
+    expect(registroOcupaExame('concluido')).toBe(true);
+    expect(registroOcupaExame('cancelado')).toBe(false);
+  });
+  it('refazer só depois do procedimento interrompido e com o pedido em execução', () => {
+    expect(podeRefazerHemodinamica('solicitado', 'cancelado')).toBe(true);
+    expect(podeRefazerHemodinamica('cancelado', 'cancelado')).toBe(false);
+    expect(podeRefazerHemodinamica('solicitado', 'concluido')).toBe(false);
+    expect(podeRefazerHemodinamica('solicitado', 'em_andamento')).toBe(false);
+    expect(podeRefazerHemodinamica('solicitado', null)).toBe(false);
   });
 });

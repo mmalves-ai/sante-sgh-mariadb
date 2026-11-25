@@ -5,7 +5,9 @@
 // radiação (tempo de fluoroscopia, kerma no ponto de referência e produto dose-área, RDC Anvisa 611/2022), função
 // ventricular e os achados por vaso. A regra do domínio roda na hora (a mesma do servidor): o rascunho grava o que
 // estiver coerente; "Salvar e concluir" grava e conclui num clique só quando o laudo está completo. Achado corrigido
-// fica no histórico; registro concluído não muda mais; o procedimento interrompido é cancelado com o motivo.
+// fica no histórico; registro concluído não muda mais; o procedimento interrompido é cancelado com o motivo e fica
+// como histórico: "Refazer o procedimento" abre um novo registro do mesmo exame pedido, já com a equipe e o acesso da
+// tentativa anterior. Pedido cancelado ou recusado deixa o registro só para leitura (o cancelamento continua aceito).
 import {
   type AchadoHemodinamica,
   alertasHemodinamica,
@@ -106,6 +108,9 @@ const M = {
   nenhumOp: 'Nenhum',
   semValor: '—',
   encerrado: 'Registro encerrado: não muda mais.',
+  foraExecucao: 'O exame pedido foi cancelado ou recusado: o registro só pode ser cancelado.',
+  refazer: 'Refazer o procedimento',
+  tentativas: '{n} tentativa(s) interrompida(s) no histórico.',
 };
 const ROTULOS: Record<string, string> = {
   radial_direita: 'Radial direita',
@@ -177,7 +182,18 @@ const aberto = useQuery({
 });
 const x = computed(() => aberto.data.value);
 const reg = computed(() => x.value?.registro ?? null);
-const editavel = computed(() => podeRegistrar.value && (!reg.value || reg.value.situacao === 'em_andamento'));
+const refazendo = ref(false);
+const emExecucao = computed(() => x.value?.emExecucao ?? true);
+const editavel = computed(
+  () =>
+    podeRegistrar.value &&
+    emExecucao.value &&
+    (!reg.value || reg.value.situacao === 'em_andamento' || refazendo.value),
+);
+/** O registro em andamento ainda pode ser cancelado mesmo com o pedido fora de execução. */
+const cancelavel = computed(
+  () => podeRegistrar.value && !refazendo.value && reg.value?.situacao === 'em_andamento',
+);
 
 // ── Formulário (texto na tela; número e instante na hora de gravar) ──
 interface LinhaAchado {
@@ -410,12 +426,36 @@ async function rodar(fn: () => Promise<unknown>): Promise<void> {
 const abrir = (item: number) => {
   mensagem.value = null;
   erro.value = null;
+  refazendo.value = false;
   itemAberto.value = item;
+};
+/** Novo registro do mesmo exame depois do procedimento interrompido: mantém a equipe e o acesso, zera o resto. */
+const refazer = () => {
+  mensagem.value = null;
+  erro.value = null;
+  refazendo.value = true;
+  Object.assign(f, {
+    data: iso(new Date()),
+    inicio: null,
+    fim: null,
+    volume: '',
+    heparina: '',
+    fluoro: '',
+    kerma: '',
+    pda: '',
+    hemostasia: '',
+    complicacoes: '',
+    conclusao: '',
+    conduta: '',
+    motivo: '',
+    achados: [],
+  });
 };
 const corpo = () => pedido.value as RegistroPedido;
 const iniciar = () =>
   rodar(async () => {
     await iniciarRegistroHemodinamica(itemAberto.value!, corpo());
+    refazendo.value = false;
     mensagem.value = M.gravado;
   });
 const salvar = () =>
@@ -499,6 +539,9 @@ const quando = (s: string | null) =>
           <span v-if="x.achadosCorrigidos">
             · {{ M.corrigidos.replace('{n}', String(x.achadosCorrigidos)) }}</span
           >
+          <span v-if="x.registrosCancelados" data-testid="hemodinamica-tentativas">
+            · {{ M.tentativas.replace('{n}', String(x.registrosCancelados)) }}</span
+          >
         </p>
         <SanteAlerta
           v-for="a in alertas"
@@ -507,9 +550,18 @@ const quando = (s: string | null) =>
           variante="alerta"
           data-testid="hemodinamica-alerta"
         />
-        <p v-if="reg && reg.situacao !== 'em_andamento'" data-testid="hemodinamica-encerrado">
+        <p v-if="!emExecucao" data-testid="hemodinamica-fora-execucao">{{ M.foraExecucao }}</p>
+        <p v-if="reg && reg.situacao !== 'em_andamento' && !refazendo" data-testid="hemodinamica-encerrado">
           {{ M.encerrado }}
         </p>
+        <div v-if="podeRegistrar && x.podeRefazer && !refazendo" class="linha">
+          <SanteBotao
+            :rotulo="M.refazer"
+            :desabilitado="ocupado"
+            data-testid="hemo-refazer"
+            @acionar="refazer"
+          />
+        </div>
         <fieldset :disabled="!editavel" class="grade">
           <legend>{{ M.procedimento }}</legend>
           <SanteData v-model="f.data" :rotulo="M.data" editavel data-testid="hemo-data" />
@@ -703,7 +755,7 @@ const quando = (s: string | null) =>
         </ul>
         <div v-if="editavel" class="linha">
           <SanteBotao
-            v-if="!reg"
+            v-if="!reg || refazendo"
             :rotulo="M.iniciar"
             :desabilitado="ocupado || problemas.length > 0"
             data-testid="hemo-iniciar"
@@ -726,7 +778,7 @@ const quando = (s: string | null) =>
             />
           </template>
         </div>
-        <div v-if="editavel && reg && faltaConcluir.length" data-testid="hemo-falta-concluir">
+        <div v-if="editavel && reg && !refazendo && faltaConcluir.length" data-testid="hemo-falta-concluir">
           <strong>{{ M.falta }}</strong>
           <ul>
             <li v-for="p in faltaConcluir" :key="p.campo + p.mensagem" class="erro-campo">
@@ -734,7 +786,7 @@ const quando = (s: string | null) =>
             </li>
           </ul>
         </div>
-        <div v-if="editavel && reg" class="linha">
+        <div v-if="cancelavel" class="linha">
           <SanteCampoTexto v-model="f.motivo" :rotulo="M.motivo" :max-bytes="500" data-testid="hemo-motivo" />
           <SanteBotao
             variante="texto"

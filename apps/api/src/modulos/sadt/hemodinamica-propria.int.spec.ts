@@ -7,7 +7,9 @@
 // sem escrita; os achados gravados pela sequência, o achado mudado ou retirado com a marca de exclusão e o novo com a
 // sequência seguinte (nada apagado); versão vencida (409) sem escrita; conclusão recusada sem os indicadores de dose
 // (RDC 611/2022) e aceita com eles, com o exame pedido marcado como realizado pelo primeiro operador e o alerta de
-// dose substancial; registro concluído não muda mais; o cancelamento com o motivo; outro estabelecimento recebe 404.
+// dose substancial; registro concluído não muda mais; o cancelamento com o motivo; o procedimento interrompido refeito
+// com um novo registro do mesmo exame (o cancelado fica como histórico; um vigente por exame); o pedido recusado depois
+// do início recusa salvar e concluir sem escrita (só o cancelamento passa); outro estabelecimento recebe 404.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -66,7 +68,7 @@ describe.skipIf(SEM_BANCO)('PortaHemodinamicaPropria contra o MariaDB (contrato 
       await ler(
         `SELECT id, situacao, paciente_id, atendimento_id, criado_por, versao, via_acesso, conclusao,
                 kerma_referencia_mgy, primeiro_operador_profissional_id AS op1
-           FROM registro_hemodinamica WHERE exame_item_id = ?`,
+           FROM registro_hemodinamica WHERE exame_item_id = ? ORDER BY id DESC`,
         [item],
       )
     )[0];
@@ -333,5 +335,84 @@ describe.skipIf(SEM_BANCO)('PortaHemodinamicaPropria contra o MariaDB (contrato 
     });
     const [item] = await ler('SELECT realizado_em FROM exame_item WHERE id = ?', [m.itemB]);
     expect(item!['realizado_em']).toBeNull();
+  });
+
+  it('refazer: o cancelado fica como histórico e o mesmo exame recebe um novo registro; um vigente por exame', async () => {
+    const [cancelado] = await ler(
+      `SELECT id FROM registro_hemodinamica WHERE exame_item_id = ? AND situacao = 'cancelado'`,
+      [m.itemB],
+    );
+    const r = await porta.iniciar(ctx(), m.itemB, { ...base(), viaAcesso: 'radial_esquerda' });
+    expect(Number(r.id)).not.toBe(Number(cancelado!['id']));
+    const doItem = await ler(
+      'SELECT id, situacao, via_acesso FROM registro_hemodinamica WHERE exame_item_id = ? ORDER BY id',
+      [m.itemB],
+    );
+    expect(doItem.map((x) => [x['situacao'], x['via_acesso']])).toEqual([
+      ['cancelado', 'femoral_direita'],
+      ['em_andamento', 'radial_esquerda'],
+    ]);
+    await expect(porta.iniciar(ctx(), m.itemB, base())).rejects.toMatchObject({ problema: { status: 409 } });
+    expect(await ler('SELECT id FROM registro_hemodinamica WHERE exame_item_id = ?', [m.itemB])).toHaveLength(
+      2,
+    );
+    const aberto = await porta.abrir(ctx(), m.itemB);
+    expect(aberto).toMatchObject({ registrosCancelados: 1, emExecucao: true, podeRefazer: false });
+    expect(aberto.registro).toMatchObject({ id: Number(r.id), situacao: 'em_andamento' });
+    const f = await porta.fila(ctx(), { de: '2030-03-10', ate: '2030-03-10' });
+    expect(f.exames.find((x) => x.item === m.itemB)).toMatchObject({
+      registro: Number(r.id),
+      situacao: 'em_andamento',
+    });
+  });
+
+  it('pedido recusado depois do início: salvar e concluir recusados sem escrita; só o cancelamento passa', async () => {
+    const reg = Number((await registroDe(m.itemB))!['id']);
+    const completo = {
+      ...base(),
+      fimEm: '2030-03-10T14:10:00.000Z',
+      hemostasia: 'pulseira_compressiva',
+      conclusao: 'Coronárias sem lesão.',
+      condutaIndicada: 'tratamento_clinico',
+      tempoFluoroscopiaSegundos: 300,
+      kermaReferenciaMgy: 400,
+      achados: [{ vaso: 'Coronária direita', tipo: 'normal' }],
+    };
+    await porta.salvar(ctx(), reg, { ...completo, versao: 1 });
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `recusa-${P}` }, (e) =>
+      e.executar("UPDATE exame_item SET situacao = 'recusado', versao = versao + 1 WHERE id = ?", [m.itemB]),
+    );
+    await expect(
+      porta.salvar(ctx(), reg, { ...completo, versao: 2, conclusao: 'depois da recusa' }),
+    ).rejects.toMatchObject({ problema: { status: 422, campos: ['item'] } });
+    await expect(porta.concluir(ctx(), reg, { versao: 2 })).rejects.toMatchObject({
+      problema: { status: 422, campos: ['item'] },
+    });
+    expect(await registroDe(m.itemB)).toMatchObject({
+      id: reg,
+      situacao: 'em_andamento',
+      versao: 2,
+      conclusao: 'Coronárias sem lesão.',
+    });
+    expect(await achados(reg)).toHaveLength(1);
+    const [item] = await ler(
+      `SELECT realizado_em, realizado_por_usuario_id AS por, executante_profissional_id AS exec
+         FROM exame_item WHERE id = ?`,
+      [m.itemB],
+    );
+    expect(item).toMatchObject({ realizado_em: null, por: null, exec: null });
+    await porta.cancelar(ctx(), reg, { versao: 2, motivo: 'Pedido recusado pelo convênio' });
+    expect(await registroDe(m.itemB)).toMatchObject({ situacao: 'cancelado', versao: 3 });
+    expect(await porta.abrir(ctx(), m.itemB)).toMatchObject({
+      registrosCancelados: 2,
+      emExecucao: false,
+      podeRefazer: false,
+    });
+    await expect(porta.iniciar(ctx(), m.itemB, base())).rejects.toMatchObject({
+      problema: { status: 422, campos: ['item'] },
+    });
+    expect(await ler('SELECT id FROM registro_hemodinamica WHERE exame_item_id = ?', [m.itemB])).toHaveLength(
+      2,
+    );
   });
 });
