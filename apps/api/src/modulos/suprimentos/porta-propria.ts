@@ -77,6 +77,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { createHash, randomUUID } from 'node:crypto';
+import { baixarReservasDoItem } from './enderecamento.js';
 import { z } from 'zod';
 import {
   cnpjValido,
@@ -2064,6 +2065,8 @@ export async function registrarSaida(
         quantidade_atendida: atendida,
         situacao: atendida >= pedida ? 'atendido' : 'atendido_parcial',
       });
+      // F8 (05-SUP linha 4): o atendido baixa a reserva da separação; o item fechado devolve o resto ao livre.
+      await baixarReservasDoItem(tx, n(ri['id']), it.quantidade, atendida >= pedida);
       ri['quantidade_atendida'] = atendida;
       ri['versao'] = n(ri['versao']) + 1;
     }
@@ -3441,6 +3444,9 @@ export const TABELAS_OPERACOES_SUPRIMENTOS = [
   'lote_insumo',
   'requisicao_material',
   'requisicao_material_item',
+  // A baixa da reserva da separação no atendimento (enderecamento.ts).
+  'reserva_estoque',
+  'reserva_endereco',
   'nota_entrada',
   'nota_entrada_item',
   'pedido_compra',

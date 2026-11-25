@@ -36,6 +36,8 @@ import {
   portaHomologacaoFornecedorIndisponivel,
 } from './homologacao-fornecedor.js';
 import { PORTA_SLA_CONTRATO, portaSlaContratoIndisponivel } from './sla-contrato.js';
+import { RomaneioEntregaController } from './romaneio-entrega.controller.js';
+import { PORTA_ROMANEIO_ENTREGA, portaRomaneioEntregaIndisponivel } from './romaneio-entrega.js';
 import { ManipulacaoController } from './manipulacao.controller.js';
 import { PORTA_MANIPULACAO, type PortaManipulacao } from './manipulacao-porta.js';
 import { PortaManipulacaoMemoria } from './manipulacao-porta-memoria.js';
@@ -48,6 +50,8 @@ import { type ContratosDoPedidoMemoria, PortaSuprimentosMemoria } from './porta-
 import { SuprimentosController } from './suprimentos.controller.js';
 import { VinculoReferenciaPrecoController } from './vinculo-referencia-preco.controller.js';
 import { PORTA_VINCULO_REFERENCIA, portaVinculoReferenciaIndisponivel } from './vinculo-referencia-preco.js';
+import { EnderecamentoController } from './enderecamento.controller.js';
+import { PORTA_ENDERECAMENTO, portaEnderecamentoIndisponivel } from './enderecamento.js';
 
 export interface OpcoesModuloSuprimentos {
   /** Testes: as portas já montadas. */
@@ -131,6 +135,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./vinculo-referencia-preco.js')).PortaVinculoReferenciaPropria(ctx.nucleo)
       : portaVinculoReferenciaIndisponivel();
+  // F8 (05-SUP linha 4): o endereçamento do armazém e a reserva para a separação gravam só no banco próprio (503 sem o núcleo).
+  const enderecamento =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./enderecamento.js')).PortaEnderecamentoPropria(ctx.nucleo)
+      : portaEnderecamentoIndisponivel();
   // 05-SUP linha 24: o consignado grava no banco próprio; sem o núcleo, a memória só em dev/ci com as fontes sintéticas;
   // fora disso, 503 em tudo. A taxa por faixa de valor grava só no banco próprio.
   const consignado =
@@ -145,6 +154,11 @@ export async function modulo(
     ctx.nucleo && ctx.configuracao.clientePadrao
       ? new (await import('./sla-contrato.js')).PortaSlaContratoPropria(ctx.nucleo)
       : portaSlaContratoIndisponivel();
+  // 09-AREA linha 77 (C1-120): o romaneio de entrega entre unidades grava só no banco próprio (503 sem o núcleo).
+  const romaneioEntrega =
+    ctx.nucleo && ctx.configuracao.clientePadrao
+      ? new (await import('./romaneio-entrega.js')).PortaRomaneioEntregaPropria(ctx.nucleo)
+      : portaRomaneioEntregaIndisponivel();
   // 09-AREA linha 66: a homologação do fornecedor por questionário grava só no banco próprio (503 sem o núcleo).
   const homologacaoFornecedor =
     ctx.nucleo && ctx.configuracao.clientePadrao
@@ -184,9 +198,11 @@ export async function modulo(
       // F3.6 (05-SUP linha 20): a gestão do pedido emitido.
       PedidoGestaoController,
       VinculoReferenciaPrecoController,
+      EnderecamentoController,
       ConsignadoController,
       TaxaConsignacaoController,
       SlaContratoController,
+      RomaneioEntregaController,
       HomologacaoFornecedorController,
       ContratoController,
       ...(comCirurgia ? [OpmeController, ManipulacaoController] : []),
@@ -198,9 +214,11 @@ export async function modulo(
       { provide: PORTA_MANIPULACAO, useValue: manipulacao },
       { provide: PORTA_CADASTRO_ESTOQUE, useValue: cadastroEstoque },
       { provide: PORTA_VINCULO_REFERENCIA, useValue: vinculoReferencia },
+      { provide: PORTA_ENDERECAMENTO, useValue: enderecamento },
       { provide: PORTA_CONSIGNADO, useValue: consignado },
       { provide: PORTA_TAXA_CONSIGNACAO, useValue: taxaConsignacao },
       { provide: PORTA_SLA_CONTRATO, useValue: slaContrato },
+      { provide: PORTA_ROMANEIO_ENTREGA, useValue: romaneioEntrega },
       { provide: PORTA_HOMOLOGACAO_FORNECEDOR, useValue: homologacaoFornecedor },
       { provide: PORTA_CONTRATO, useValue: contrato },
     ],
