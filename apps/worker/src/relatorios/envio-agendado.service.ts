@@ -23,13 +23,14 @@ import { RegistradorRotinas, ROTINAS_WORKER } from '../rotinas-worker.js';
 import { conexaoValkey, PREFIXO_FILAS } from '../relay-outbox.js';
 import { leitorDoCofre } from '../cofre-leitura.js';
 import { entregarComRegistro } from '../email-entrega.js';
-import { type AmbienteDoEnvio, prepararSaida } from '../email-saida-cadastro.js';
+import { type AmbienteDoEnvio, prepararSaida, type SaidaPreparada } from '../email-saida-cadastro.js';
 import { type SaidaDoCadastro, saidaDoCliente } from '../email-saida-propria.js';
 import { RegistroEnvioProprio, type RegistroEnvio } from '../registro-envio-proprio.js';
 import type { NucleoWorker } from '../servico-worker.js';
-import { conexaoDoUrl, enviarSmtp } from '../smtp.js';
+import { conexaoDoUrl, enviarSmtp, type MensagemEmail } from '../smtp.js';
 import {
   type ConclusaoEnvio,
+  type ContextoEnvio,
   type DependenciasEnvio,
   processarEnvio,
   smtpPermitido,
@@ -77,6 +78,29 @@ export function saidaDoRelatorio(
   };
 }
 
+/** A entrega de uma mensagem pela saída preparada, com o registro de envio (a recusa da saída fica nele como falha). */
+async function entregarPela(
+  s: SaidaDoRelatorio,
+  saida: SaidaPreparada,
+  m: MensagemEmail,
+  c: ContextoEnvio,
+  valores: Readonly<Record<string, string>> | null,
+): Promise<void> {
+  const mensagem = saida.montar(m, valores);
+  const falhas = await entregarComRegistro({
+    chave: c.chave,
+    dominio: redeDaFila(s.cliente),
+    estabelecimento: c.hospital,
+    destinos: [m.para],
+    montar: () => mensagem,
+    enviar: (x) => saida.enviar(x),
+    registro: s.registro,
+    origem: saida.origem,
+  });
+  if (falhas.length > 0)
+    logger.warn({ cliente: s.cliente, erros: falhas }, 'envio de relatório sem registro');
+}
+
 /** Uma mensagem pelo cadastro: servidor e modelo da finalidade RELATORIO_AGENDADO, com o registro de envio. */
 function enviarPeloCadastro(s: SaidaDoRelatorio, agora: () => Date): DependenciasEnvio['enviar'] {
   return async (m, c) => {
@@ -96,20 +120,27 @@ function enviarPeloCadastro(s: SaidaDoRelatorio, agora: () => Date): Dependencia
         'envio de relatório: cadastro de saída indisponível',
       );
     }
-    const saida = await prepararSaida(cadastro, s.cliente, s.ambiente);
-    const mensagem = saida.montar(m, c.valores ?? null);
-    const falhas = await entregarComRegistro({
-      chave: c.chave,
-      dominio: redeDaFila(s.cliente),
-      estabelecimento: c.hospital,
-      destinos: [m.para],
-      montar: () => mensagem,
-      enviar: (x) => saida.enviar(x),
-      registro: s.registro,
-      origem: saida.origem,
-    });
-    if (falhas.length > 0)
-      logger.warn({ cliente: s.cliente, erros: falhas }, 'envio de relatório sem registro');
+    await entregarPela(s, await prepararSaida(cadastro, s.cliente, s.ambiente), m, c, c.valores ?? null);
+  };
+}
+
+/**
+ * O alerta ao dono pela saída do ambiente (o servidor do ambiente; fora de produção, a captura local), sem a finalidade
+ * nem o modelo: não depende do cadastro que pode ter causado a falha (senha fora do cofre, servidor fora do ar). Vai
+ * ao registro de envio como as demais; a falha do alerta fica no log (só o nome do erro) e é relançada.
+ */
+function alertarPeloAmbiente(s: SaidaDoRelatorio): NonNullable<DependenciasEnvio['alertar']> {
+  return async (m, c) => {
+    if (!c) throw new Error('Alerta sem o estabelecimento.');
+    try {
+      await entregarPela(s, await prepararSaida(null, s.cliente, s.ambiente), m, c, null);
+    } catch (e) {
+      logger.warn(
+        { cliente: s.cliente, erro: e instanceof Error ? e.name : 'erro' },
+        'envio de relatório: alerta ao dono não saiu',
+      );
+      throw e;
+    }
   };
 }
 
@@ -128,7 +159,7 @@ export function dependenciasDoEnvio(
     nomeEstabelecimento: async (h) =>
       (porta ? await porta.nomeEstabelecimento(h).catch(() => null) : null) ?? h,
     enviar: saida ? enviarPeloCadastro(saida, agora) : (m) => enviarSmtp(env['SMTP_URL']!.trim(), m),
-    ...(saida ? { peloCadastro: true } : {}),
+    ...(saida ? { peloCadastro: true, alertar: alertarPeloAmbiente(saida) } : {}),
     emails: (h, agendamento) =>
       porta
         ? porta.destinatarios(h, Number(agendamento))

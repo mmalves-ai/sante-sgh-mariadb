@@ -2,9 +2,18 @@
 // aviso do sistema): com a saída lida (email-saida-propria.ts), monta a conexão pela regra do domínio (conexaoDaSaida:
 // fora de produção sempre a captura local, sem senha; em produção o servidor cadastrado), lê a senha no cofre pela
 // chave presa ao cliente (chaveCofreEmail) e põe o texto pelo modelo vigente (textoPeloModelo). O marcador sem valor
-// devolve o texto padrão; a recusa da saída (sem servidor, senha fora do cofre, autenticação sem cifra) é um erro com
-// a mensagem do domínio, nunca com a senha. A origem (finalidade, modelo, servidor) vai ao registro de envio.
-import { chaveCofreEmail, conexaoDaSaida, MENSAGEM_SAIDA, textoPeloModelo } from '@sgh/dominio-acesso';
+// devolve o texto padrão; a recusa da saída (sem servidor, senha fora do cofre, autenticação sem cifra) não é lançada na
+// preparação: o enviar da saída preparada é que a lança (erroDaRecusa: mensagem do domínio, motivo no nome, nunca a
+// senha), para que a tentativa recusada passe pelo entregarComRegistro e fique no envio_email como falha, com a
+// finalidade e o servidor do cadastro. A origem (finalidade, modelo, servidor) vai ao registro de envio.
+// A saída do ambiente (prepararSaida sem cadastro) é o caminho que não depende do cadastro: o alerta ao dono da falha.
+import {
+  chaveCofreEmail,
+  conexaoDaSaida,
+  erroDaRecusa,
+  type RecusaSaida,
+  textoPeloModelo,
+} from '@sgh/dominio-acesso';
 import type { LerSegredo } from './cofre-leitura.js';
 import type { SaidaDoCadastro } from './email-saida-propria.js';
 import type { OrigemDoEnvio } from './registro-envio-proprio.js';
@@ -22,6 +31,8 @@ export interface AmbienteDoEnvio {
 
 export interface SaidaPreparada {
   readonly origem: OrigemDoEnvio;
+  /** A recusa da saída (nula: pronta); com ela, o enviar lança o erro da recusa sem conectar. */
+  readonly recusa: RecusaSaida | null;
   /**
    * A mensagem pelo modelo vigente (com os valores dos marcadores) ou, sem modelo, sem valores (null) ou com marcador
    * sem valor, a padrão com o remetente do cadastro.
@@ -40,12 +51,12 @@ export async function prepararSaida(
     local: amb.local,
     remetentePadrao: amb.remetentePadrao,
   });
-  if ('recusa' in conexao) throw new Error(MENSAGEM_SAIDA[conexao.recusa]);
+  if ('recusa' in conexao) return saidaRecusada(cadastro, amb, conexao.recusa);
   let senha: string | null = null;
   if (conexao.usuario) {
     const chave = chaveCofreEmail(cliente, conexao.referenciaCofre);
     senha = chave && amb.lerSegredo ? await amb.lerSegredo(chave) : null;
-    if (!senha) throw new Error(MENSAGEM_SAIDA['senha-indisponivel']);
+    if (!senha) return saidaRecusada(cadastro, amb, 'senha-indisponivel');
   }
   let modeloUsado: number | null = null;
   const conectar = amb.conectar ?? enviarPelaConexao;
@@ -57,6 +68,7 @@ export async function prepararSaida(
       },
       servidor: conexao.servidor,
     },
+    recusa: null,
     montar(padrao, valores) {
       const doCadastro: MensagemEmail = {
         ...padrao,
@@ -89,5 +101,28 @@ export async function prepararSaida(
         },
         m,
       ),
+  };
+}
+
+/**
+ * A saída recusada: nada é conectado; a mensagem leva o texto padrão com o remetente do cadastro, a origem leva a
+ * finalidade e o servidor do cadastro (o que falhou), e o enviar lança o erro da recusa, que o registro guarda.
+ */
+function saidaRecusada(
+  cadastro: SaidaDoCadastro | null,
+  amb: AmbienteDoEnvio,
+  recusa: RecusaSaida,
+): SaidaPreparada {
+  const servidor = cadastro?.servidor ?? null;
+  return {
+    origem: { finalidade: cadastro?.finalidade ?? null, modelo: null, servidor: servidor?.id ?? null },
+    recusa,
+    montar: (padrao) => ({
+      ...padrao,
+      de: servidor?.remetenteEmail ?? amb.remetentePadrao,
+      deNome: servidor?.remetenteNome ?? null,
+      responderPara: servidor?.responderPara ?? null,
+    }),
+    enviar: () => Promise.reject(erroDaRecusa(recusa)),
   };
 }

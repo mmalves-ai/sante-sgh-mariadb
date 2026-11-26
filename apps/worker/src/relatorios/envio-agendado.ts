@@ -16,7 +16,9 @@
 // finalidade RELATORIO_AGENDADO, senha pelo cofre; fora de produção a captura local), e cada mensagem vai também ao
 // registro geral de envio (envio_email) com a finalidade, o modelo e o servidor usados. O enviar recebe o
 // estabelecimento, a chave estável da mensagem e os valores dos marcadores (relatorio.<campo>); o alerta ao dono vai
-// sem valores: nunca pelo modelo do relatório.
+// sem valores: nunca pelo modelo do relatório. O alerta ao dono sai pelo alertar (o servidor do ambiente, sem a
+// finalidade), que não depende do cadastro que pode ter sido a causa da falha; sem ele, pelo enviar. Se o alerta também
+// falha, o motivo fica no resultado (falhaAlerta), para o log.
 import { esquemaJobEnvioRelatorio, type JobEnvioRelatorio } from '@sgh/contratos';
 import { valoresDoEnvio } from '@sgh/dominio-acesso';
 import { depoisDoEnvio, mensagemDeFalha, mensagemDoEnvio } from '@sgh/dominio-relatorio';
@@ -44,6 +46,8 @@ export interface DependenciasEnvio {
   readonly enviar: (m: MensagemEmail, c?: ContextoEnvio) => Promise<void>;
   /** A saída vem do cadastro do cliente (a conexão e a trava fora de produção ficam com ela, não com o SMTP_URL). */
   readonly peloCadastro?: boolean;
+  /** O alerta ao dono por um caminho que não depende do cadastro da finalidade (padrão: o enviar). */
+  readonly alertar?: (m: MensagemEmail, c?: ContextoEnvio) => Promise<void>;
   /** Os e-mails dos destinatários do agendamento e o do dono (cadastro); vazio sem o banco. */
   readonly emails: (hospital: string, agendamento: string) => Promise<DestinatariosEnvio>;
   /** Endereço de alerta quando o dono não tem e-mail (ALERTA_RELATORIO_EMAIL; senão, o do sistema). */
@@ -88,6 +92,8 @@ export interface ResultadoEnvio {
   readonly situacao: 'enviado' | 'falhou';
   readonly falha: string | null;
   readonly alertouDono: boolean;
+  /** O alerta ao dono era devido e não saiu: o motivo (resumo, sem endereço nem senha). */
+  readonly falhaAlerta?: string;
 }
 
 /** Processa um job de envio: valida, resolve os destinatários, envia o link e registra; a falha alerta o dono. */
@@ -163,6 +169,7 @@ export async function processarEnvio(
   const antes = (await d.falhasAntes?.(job.hospital, job.agendamento).catch(() => 0)) ?? 0;
   const depois = depoisDoEnvio(antes, falha === null);
   let alertouDono = false;
+  let falhaAlerta: string | undefined;
   if (depois.alertarDono && avisarFalha) {
     const para = dono ?? d.alertaPadrao;
     if (para && saidaPronta) {
@@ -172,14 +179,15 @@ export async function processarEnvio(
         motivo: falha ?? 'falha',
         estabelecimento,
       });
-      await d
-        .enviar(
-          { de: d.remetente, para, assunto: a.assunto, texto: a.texto },
-          { hospital: job.hospital, chave: `${chaveBase}.dono` },
-        )
+      await (d.alertar ?? d.enviar)(
+        { de: d.remetente, para, assunto: a.assunto, texto: a.texto },
+        { hospital: job.hospital, chave: `${chaveBase}.dono` },
+      )
         .then(() => (alertouDono = true))
-        .catch(() => undefined);
-    }
+        .catch((e: unknown) => {
+          falhaAlerta = `alerta recusado (${e instanceof Error ? e.message.slice(0, 120) : 'erro'})`;
+        });
+    } else falhaAlerta = para ? 'saída de e-mail indisponível' : 'dono sem e-mail e sem alerta padrão';
   }
   if (reserva)
     await d.registrar?.(job.hospital, job.agendamento, {
@@ -198,5 +206,6 @@ export async function processarEnvio(
     situacao: depois.situacao,
     falha,
     alertouDono,
+    ...(falhaAlerta ? { falhaAlerta } : {}),
   };
 }

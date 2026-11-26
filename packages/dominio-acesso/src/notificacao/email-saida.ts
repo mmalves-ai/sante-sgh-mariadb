@@ -143,6 +143,23 @@ export const MENSAGEM_SAIDA: Readonly<Record<RecusaSaida, string>> = {
   'senha-indisponivel': 'A senha do servidor de e-mail não está no cofre.',
 };
 
+/**
+ * O nome do erro de cada recusa da saída: o registro de envio guarda só o resumo do erro (nome e código, nunca o texto
+ * livre), então o motivo da recusa vai no nome, legível na tela de Notificações.
+ */
+export const NOME_RECUSA_SAIDA: Readonly<Record<RecusaSaida, string>> = {
+  'autenticacao-sem-tls': 'SaidaRecusadaAutenticacaoSemCifra',
+  'sem-servidor': 'SaidaRecusadaSemServidor',
+  'senha-indisponivel': 'SaidaRecusadaSenhaForaDoCofre',
+};
+
+/** O erro de uma recusa da saída: a mensagem do domínio e o nome com o motivo; nunca a senha nem o endereço. */
+export function erroDaRecusa(recusa: RecusaSaida): Error {
+  const e = new Error(MENSAGEM_SAIDA[recusa]);
+  e.name = NOME_RECUSA_SAIDA[recusa];
+  return e;
+}
+
 export interface AmbienteDeSaida {
   readonly producao: boolean;
   /** O servidor do ambiente (fora de produção, a captura local). */

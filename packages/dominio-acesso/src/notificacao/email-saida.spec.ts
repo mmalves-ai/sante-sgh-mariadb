@@ -1,6 +1,6 @@
 // 01-ADM L77: por onde e com que texto sai o e-mail do sistema (servidor cadastrado, captura fora de produção, modelo).
 import { describe, expect, it } from 'vitest';
-import { validarServidorEmail } from './email-configuracao.js';
+import { resumoDoErro, validarServidorEmail } from './email-configuracao.js';
 import {
   autenticacaoSemCifra,
   chaveCofreEmail,
@@ -8,6 +8,7 @@ import {
   senhaServidorEmailValida,
   conexaoDaSaida,
   codigoDaFinalidade,
+  erroDaRecusa,
   FINALIDADE_DO_ALERTA,
   valoresDoEnvio,
   servidorDaSaida,
@@ -208,5 +209,14 @@ describe('finalidade e valores das outras saídas (relatório agendado, aviso do
       'relatorio.titulo': 'Censo diário',
       'relatorio.nome_estabelecimento': 'Hospital',
     });
+  });
+});
+
+describe('recusa da saída no registro de envio', () => {
+  it('o resumo guardado traz o motivo da recusa, sem texto livre nem senha', () => {
+    expect(resumoDoErro(erroDaRecusa('senha-indisponivel'))).toBe('SaidaRecusadaSenhaForaDoCofre');
+    expect(resumoDoErro(erroDaRecusa('sem-servidor'))).toBe('SaidaRecusadaSemServidor');
+    expect(resumoDoErro(erroDaRecusa('autenticacao-sem-tls'))).toBe('SaidaRecusadaAutenticacaoSemCifra');
+    expect(erroDaRecusa('senha-indisponivel').message).toContain('cofre');
   });
 });

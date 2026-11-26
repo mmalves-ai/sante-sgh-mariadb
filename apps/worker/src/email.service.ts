@@ -23,7 +23,8 @@ import { type AlertaSuporteJob, conferirAlertaSuporte } from '@sgh/contratos';
 import {
   chaveCofreEmail,
   conexaoDaSaida,
-  MENSAGEM_SAIDA,
+  erroDaRecusa,
+  type RecusaSaida,
   textoPeloModelo,
   valoresDoAlerta,
 } from '@sgh/dominio-acesso';
@@ -354,19 +355,42 @@ export class EmailService implements OnApplicationBootstrap, OnApplicationShutdo
                 'e-mail: cadastro de saída indisponível',
               );
             }
-          const conexao = conexaoDaSaida(cadastro?.servidor ?? null, {
+          const saida = conexaoDaSaida(cadastro?.servidor ?? null, {
             producao,
             local,
             remetentePadrao: de,
           });
-          if ('recusa' in conexao) throw new Error(MENSAGEM_SAIDA[conexao.recusa]);
+          let recusa: RecusaSaida | null = 'recusa' in saida ? saida.recusa : null;
           let senha: string | null = null;
-          if (conexao.usuario) {
+          if (!('recusa' in saida) && saida.usuario) {
             // A chave é presa ao cliente da fila: a referência cadastrada sozinha nunca abre o cofre.
-            const chave = chaveCofreEmail(cliente, conexao.referenciaCofre);
+            const chave = chaveCofreEmail(cliente, saida.referenciaCofre);
             senha = chave && lerSegredo ? await lerSegredo(chave) : null;
-            if (!senha) throw new Error(MENSAGEM_SAIDA['senha-indisponivel']);
+            if (!senha) recusa = 'senha-indisponivel';
           }
+          if (recusa || 'recusa' in saida) {
+            // A recusa da saída também é tentativa: vai ao registro como falha, com a finalidade e o servidor do
+            // cadastro (sem conectar e sem a senha), e é relançada para a fila.
+            const erro = erroDaRecusa(recusa ?? 'sem-servidor');
+            const srv = cadastro?.servidor ?? null;
+            await entregarComRegistro({
+              chave: `${job.name}.${job.id ?? 'sem-numero'}`,
+              dominio,
+              estabelecimento: codigoEstab,
+              destinos,
+              montar: (para) => ({
+                ...m(para),
+                de: srv?.remetenteEmail ?? de,
+                deNome: srv?.remetenteNome ?? null,
+                responderPara: srv?.responderPara ?? null,
+              }),
+              enviar: () => Promise.reject(erro),
+              registro,
+              origem: { finalidade: cadastro?.finalidade ?? null, modelo: null, servidor: srv?.id ?? null },
+            });
+            throw erro;
+          }
+          const conexao = saida;
           let modeloUsado: number | null = null;
           const montar = (para: string): MensagemEmail => {
             const padrao = m(para);

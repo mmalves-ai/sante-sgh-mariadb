@@ -89,7 +89,7 @@ describe.skipIf(SEM_BANCO)('relatório agendado e aviso pelo cadastro do cliente
   const envioDo = async (destino: string) =>
     (
       await ler<Record<string, unknown>[]>(
-        `SELECT e.finalidade_email_id, e.modelo_email_id, e.servidor_email_id, e.situacao, e.assunto
+        `SELECT e.finalidade_email_id, e.modelo_email_id, e.servidor_email_id, e.situacao, e.assunto, e.erro
            FROM envio_email e JOIN envio_email_destinatario d ON d.envio_email_id = e.id
           WHERE d.email = ? ORDER BY e.id DESC LIMIT 1`,
         [destino],
@@ -201,17 +201,73 @@ describe.skipIf(SEM_BANCO)('relatório agendado e aviso pelo cadastro do cliente
     expect(Number(vazou[0]?.['n'])).toBe(0);
   });
 
-  it('em produção sem a senha no cofre: falha fechada, nada conectado, a falha no resultado', async () => {
+  it('em produção sem a senha no cofre: falha fechada no envio_email, e o dono é alertado pelo servidor do ambiente', async () => {
     conexoes.length = 0;
+    const destino = `semsenha.${P.toLowerCase()}@sintetico.invalid`;
+    const dono = `dono.${P.toLowerCase()}@sintetico.invalid`;
     const s = saida(true);
-    const d = dependenciasDoEnvio(null, { AMBIENTE: 'producao' }, () => AGORA, {
+    const d = dependenciasDoEnvio(null, { AMBIENTE: 'producao', ALERTA_RELATORIO_EMAIL: dono }, () => AGORA, {
       ...s,
       ambiente: { ...s.ambiente, lerSegredo: async () => null },
     });
-    const r = await processarEnvio(job(`semsenha.${P.toLowerCase()}@sintetico.invalid`), d);
+    const r = await processarEnvio(job(destino), d);
     expect(r.situacao).toBe('falhou');
     expect(r.falha).toContain('cofre');
+    // A tentativa recusada fica no registro, com a finalidade e o servidor do cadastro e o motivo; nada conectado.
+    expect(await envioDo(destino)).toMatchObject({
+      finalidade_email_id: fin['RELATORIO_AGENDADO'],
+      servidor_email_id: servidores[`${P}REL`],
+      modelo_email_id: null,
+      situacao: 'falhou',
+      erro: 'SaidaRecusadaSenhaForaDoCofre',
+    });
+    // O alerta ao dono não depende do cadastro que falhou: sai pelo servidor do ambiente, sem a finalidade.
+    expect(r).toMatchObject({ alertouDono: true });
+    expect(r.falhaAlerta).toBeUndefined();
+    expect(conexoes).toHaveLength(1);
+    expect(conexoes[0]!.c).toMatchObject({ host: '127.0.0.1', porta: 1025, usuario: null, senha: null });
+    expect(conexoes[0]!.m.para).toBe(dono);
+    expect(await envioDo(dono)).toMatchObject({
+      finalidade_email_id: null,
+      servidor_email_id: null,
+      modelo_email_id: null,
+      situacao: 'enviado',
+    });
+  });
+
+  it('o alerta ao dono que também falha fica no resultado com o motivo', async () => {
+    conexoes.length = 0;
+    const s = saida(true);
+    const d = dependenciasDoEnvio(
+      null,
+      { AMBIENTE: 'producao', ALERTA_RELATORIO_EMAIL: `dono2.${P.toLowerCase()}@sintetico.invalid` },
+      () => AGORA,
+      { ...s, ambiente: { ...s.ambiente, local: null, lerSegredo: async () => null } },
+    );
+    const r = await processarEnvio(job(`semsenha2.${P.toLowerCase()}@sintetico.invalid`), d);
+    expect(r).toMatchObject({ situacao: 'falhou', alertouDono: false });
+    expect(r.falhaAlerta).toContain('Nenhum servidor');
     expect(conexoes).toHaveLength(0);
+  });
+
+  it('aviso do sistema em produção sem a senha no cofre: a recusa fica no envio_email e volta à fila', async () => {
+    conexoes.length = 0;
+    const destino = `avisosemsenha.${P.toLowerCase()}@sintetico.invalid`;
+    const entregar = entregadorPeloCadastro(nucleo, { ...ambiente(true), lerSegredo: async () => null });
+    await expect(
+      entregar(destino, `${P} Você tem 1 aviso no sistema`, 'Abra o sistema.', {
+        estabelecimento: { cliente: CLIENTE, id: est, codigo: 'l77r', fuso: 'America/Sao_Paulo' },
+        chave: `aviso.l77r.${P}.semsenha`,
+        quantidade: 1,
+      }),
+    ).rejects.toThrow(/cofre/);
+    expect(conexoes).toHaveLength(0);
+    expect(await envioDo(destino)).toMatchObject({
+      finalidade_email_id: fin['AVISO_SISTEMA'],
+      servidor_email_id: servidores[`${P}AVI`],
+      situacao: 'falhou',
+      erro: 'SaidaRecusadaSenhaForaDoCofre',
+    });
   });
 
   it('aviso do sistema pela finalidade AVISO_SISTEMA: servidor dela, texto padrão sem modelo', async () => {
