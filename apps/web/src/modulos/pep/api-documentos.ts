@@ -174,8 +174,8 @@ export const exportarProntuario = (p: number, justificativa: string, senha?: str
 
 // ── Alergias e problemas ───────────────────────────────────────────────────────────────────────────
 
-export const lerAlergias = (p: number, b: typeof fetch = fetch) =>
-  ler<AlergiasPaciente>(`${pac(p)}/alergias`, b);
+export const lerAlergias = (p: number, b: typeof fetch = fetch, atendimento?: number | null) =>
+  ler<AlergiasPaciente>(`${pac(p)}/alergias${atendimento ? `?atendimento=${atendimento}` : ''}`, b);
 export const registrarAlergia = (p: number, e: RegistrarAlergia) =>
   enviar<{ alergia: number; documento: number }>(`${pac(p)}/alergias`, e, novaChave('alergia'));
 export const lerHistoricoAlergia = (p: number, id: number, b: typeof fetch = fetch) =>

@@ -72,6 +72,8 @@ const SECOES = [
   }),
   secao('plano', 'Plano terapêutico', 'plano_terapeutico', 2, { obrigatorio: true }),
   secao('orientacoes_alta', 'Orientações ao paciente', 'orientacoes', 3, { obrigatorio: true }),
+  // Seção estruturada opcional: o campo da condição na alta só aparece quando o estabelecimento a configura.
+  secao('condicao', 'Condição na alta', 'condicao_alta', 4),
 ];
 
 test.describe('sumário de alta com seções configuráveis (03-PEP L124) @F33 @C1-041', () => {

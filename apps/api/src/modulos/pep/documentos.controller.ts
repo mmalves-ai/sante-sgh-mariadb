@@ -744,14 +744,26 @@ export class DocumentosPepController {
   @Get('paciente/:p/alergias')
   @Permissao('pep.alergia.ler')
   @Auditar('pep.cabecalho.lido')
-  async alergias(@Param('p') p: string, @Req() req: RequisicaoAutorizada): Promise<AlergiasPaciente> {
+  async alergias(
+    @Param('p') p: string,
+    @Req() req: RequisicaoAutorizada,
+    @Query('atendimento') atendimento?: string,
+  ): Promise<AlergiasPaciente> {
     const s = sessaoDe(req);
     const paciente = await this.paciente(s, p, 'pep.alergia.ler', true);
     const [criar, inativar] = await Promise.all([
       this.acao(s, 'pep.alergia.criar', RECURSOS_M23.alergia, 'pep.registrarAlergia'),
       this.acao(s, 'pep.alergia.inativar', RECURSOS_M23.alergia, 'pep.inativarAlergia'),
     ]);
-    const r = await this.servico.alergias(this.c(s), paciente, await this.prof(s), { criar, inativar });
+    // D-ALE-2: dentro do formulário clínico, a tela informa o atendimento do registro; a alergia é ligada a ele.
+    const noFormulario = atendimento && /^\d+$/.test(atendimento) ? Number(atendimento) : null;
+    const r = await this.servico.alergias(
+      this.c(s),
+      paciente,
+      await this.prof(s),
+      { criar, inativar },
+      noFormulario,
+    );
     req.sghAlvo = {
       paciente,
       tabelaAlvo: 'alergia_paciente',

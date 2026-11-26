@@ -31,7 +31,8 @@ async function novaPrescricao(page: Page): Promise<void> {
 }
 
 const combo = (area: Locator, nome: string) => area.getByRole('combobox', { name: nome });
-const itens = (page: Page) => page.locator('[data-testid^="item-"]');
+// As linhas da tabela de itens do editor (o aviso 'item-incompleto' do ItemEditor também começa por "item-").
+const itens = (page: Page) => page.locator('tr[data-testid^="item-"]');
 
 test.describe('Prescrição: itens da gravação própria @C2-087', () => {
   test.setTimeout(90_000);

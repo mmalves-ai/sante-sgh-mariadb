@@ -28,12 +28,26 @@ async function entrar(page: Page, login: string): Promise<void> {
 const json = (r: Route, corpo: unknown, status = 200) =>
   r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
 
+const produtoSintetico = (produto: number, nome: string, unidade: string) => ({
+  produto,
+  nome,
+  unidade,
+  padronizado: true,
+  principiosAtivos: [],
+  altoAlerta: false,
+  controlado: false,
+  antimicrobiano: false,
+  doseMinima: null,
+  doseMaxima: null,
+});
+
 function simularPadroes(page: Page) {
   const corpos: { url: string; corpo: Record<string, unknown> }[] = [];
   void page.route(PRODUTOS, (r) =>
+    // O corpo segue o contrato da busca de produtos (esquemaItemBuscado): resposta fora dele é descartada pela tela.
     json(r, [
-      { produto: 701, nome: 'Soro fisiológico sintético 0,9%' },
-      { produto: 702, nome: 'Dipirona sintética 1 g' },
+      produtoSintetico(701, 'Soro fisiológico sintético 0,9%', 'mL'),
+      produtoSintetico(702, 'Dipirona sintética 1 g', 'cp'),
     ]),
   );
   void page.route(PADROES, async (r) => {

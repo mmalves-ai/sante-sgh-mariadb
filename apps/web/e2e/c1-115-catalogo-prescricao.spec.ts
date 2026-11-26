@@ -82,7 +82,7 @@ test.describe('@C1-115 cadastro editável do catálogo da prescrição', () => {
     await expect(page.getByTestId('fr-falta')).toContainText('intervalo');
     await expect(page.getByTestId('fr-salvar')).toBeDisabled();
     await fr.getByTestId('fr-intervalo').getByRole('textbox').fill('6');
-    await escolher(fr.getByTestId('fr-escopo'), 'Só nos setores marcados');
+    await escolher(fr.getByTestId('fr-escopo'), { rotulo: 'Só nos setores marcados' });
     await expect(page.getByTestId('fr-falta')).toContainText('setor');
     await page.getByTestId('fr-setores').getByLabel('UTI sintética').check();
     await expect(page.getByTestId('fr-falta')).toHaveCount(0);
@@ -93,7 +93,7 @@ test.describe('@C1-115 cadastro editável do catálogo da prescrição', () => {
     const cd = page.getByTestId('form-condicao');
     await cd.getByTestId('cd-codigo').getByRole('textbox').fill('febre sint');
     await cd.getByTestId('cd-descricao').getByRole('textbox').fill('Febre sintética');
-    await escolher(cd.getByTestId('cd-parametro'), 'Temperatura sintética');
+    await escolher(cd.getByTestId('cd-parametro'), { rotulo: 'Temperatura sintética' });
     await expect(page.getByTestId('cd-falta')).toBeVisible();
     await cd.getByTestId('cd-limiar').getByRole('textbox').fill('37,8');
     await page.getByTestId('cd-salvar').click();
@@ -103,10 +103,10 @@ test.describe('@C1-115 cadastro editável do catálogo da prescrição', () => {
     await page.goto('/cadastros/prescricao/itens-nao-padronizados');
     const np = page.getByTestId('form-nao-padronizado');
     await np.getByTestId('np-descricao').getByRole('textbox').fill('Colírio sintético de casa');
-    await escolher(np.getByTestId('np-tipo'), 'Medicamento sintético');
-    await escolher(np.getByTestId('np-unidade'), 'cp · Comprimido sintético');
+    await escolher(np.getByTestId('np-tipo'), { rotulo: 'Medicamento sintético' });
+    await escolher(np.getByTestId('np-unidade'), { rotulo: 'cp · Comprimido sintético' });
     await expect(page.getByTestId('np-falta')).toContainText('via');
-    await escolher(np.getByTestId('np-via'), 'Oral sintética');
+    await escolher(np.getByTestId('np-via'), { rotulo: 'Oral sintética' });
     await page.getByTestId('np-somar-via').click();
     await np.getByTestId('np-justificativa').getByRole('textbox').fill('Paciente em uso domiciliar contínuo');
     await page.getByTestId('np-salvar').click();
@@ -118,7 +118,7 @@ test.describe('@C1-115 cadastro editável do catálogo da prescrição', () => {
     await page.getByTestId('cp-abrir').click();
     const painel = page.getByTestId('complementos-item');
     await expect(painel).toContainText('Item sintético 71');
-    await escolher(painel.getByTestId('cp-frequencia'), 'De 8 em 8 horas sintética');
+    await escolher(painel.getByTestId('cp-frequencia'), { rotulo: 'De 8 em 8 horas sintética' });
     await page.getByTestId('cp-incluir-frequencia').click();
     await expect(painel).toContainText('De 8 em 8 horas sintética');
     await painel.getByTestId('cp-termo').getByRole('textbox').fill('APELIDO SINTÉTICO');
