@@ -28,6 +28,7 @@ interface Massa {
   setor: number;
   unidade: number;
   agendamento: number;
+  atendimento: number;
   paciente: number;
   terceiro: number;
 }
@@ -39,6 +40,7 @@ async function limpar(e: Escritor): Promise<void> {
         ON m.id = mi.movimento_material_esteril_id WHERE m.estabelecimento_id = ${est}`,
     [P],
   );
+  await e.executar(`DELETE FROM uso_pacote_esteril WHERE estabelecimento_id = ${est}`, [P]);
   await e.executar(`DELETE FROM movimento_material_esteril WHERE estabelecimento_id = ${est}`, [P]);
   await e.executar(
     `DELETE i FROM solicitacao_material_esteril_item i JOIN solicitacao_material_esteril s
@@ -67,6 +69,7 @@ async function limpar(e: Escritor): Promise<void> {
   );
   await e.executar(`DELETE FROM caixa_instrumental WHERE estabelecimento_id = ${est}`, [P]);
   await e.executar(`DELETE FROM agendamento_cirurgico WHERE estabelecimento_id = ${est}`, [P]);
+  await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id = ${est}`, [P]);
   await e.executar(`DELETE FROM sequencia_negocio WHERE estabelecimento_id = ${est}`, [P]);
   await e.executar('DELETE FROM metodo_esterilizacao WHERE codigo = ?', [`${P}-VAP`]);
   await limparTrilhaDaMassa(e, { codigos: [P, P2] });
@@ -144,11 +147,27 @@ describe.skipIf(SEM_BANCO)('PortaCmePropria contra o MariaDB (contrato de efeito
         "INSERT INTO metodo_esterilizacao (codigo, descricao, categoria, criado_em) VALUES (?, ?, 'esterilizacao', ?)",
         [`${P}-VAP`, `VAPOR SINTETICO ${P}`, agora],
       );
+      // O atendimento do paciente da cirurgia (a baixa do uso do pacote se liga a ele; 04-CME linha 118).
+      const minimo = async (t: string) =>
+        Number((await e.uma(`SELECT MIN(id) AS id FROM ${t}`))?.['id'] ?? 0);
+      const [categoria, caraterTiss, pagadora] = [
+        await minimo('categoria_atendimento'),
+        await minimo('carater_atendimento_tiss'),
+        await minimo('fonte_pagadora'),
+      ];
+      if (!categoria || !caraterTiss || !pagadora)
+        throw new Error('O cliente de teste precisa de categoria, caráter TISS e fonte pagadora.');
+      const atendimento = await e.inserir(
+        `INSERT INTO atendimento (estabelecimento_id, numero, paciente_id, categoria_atendimento_id, carater_atendimento_tiss_id,
+           fonte_pagadora_id, profissional_id, entrada_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [est, `${P}-AT`, paciente, categoria, caraterTiss, pagadora, cirurgiao['id'], agora, agora],
+      );
       const agendamento = await e.inserir(
         `INSERT INTO agendamento_cirurgico (estabelecimento_id, numero, paciente_id, cirurgiao_profissional_id,
-                                            carater_cirurgia_id, tipo_cobertura, solicitado_em, situacao, criado_em)
-         VALUES (?, ?, ?, ?, ?, 'particular', ?, 'solicitado', ?)`,
-        [est, `${P}-1`, paciente, cirurgiao['id'], carater, agora, agora],
+                                            carater_cirurgia_id, tipo_cobertura, solicitado_em, situacao, atendimento_id,
+                                            criado_em)
+         VALUES (?, ?, ?, ?, ?, 'particular', ?, 'solicitado', ?, ?)`,
+        [est, `${P}-1`, paciente, cirurgiao['id'], carater, agora, atendimento, agora],
       );
       const terceiro = await e.inserir(
         `INSERT INTO material_terceiro_reprocessamento (estabelecimento_id, descricao, tipo_proprietario, criado_em)
@@ -163,6 +182,7 @@ describe.skipIf(SEM_BANCO)('PortaCmePropria contra o MariaDB (contrato de efeito
         setor: Number(setor['id']),
         unidade: Number(unidade['id']),
         agendamento,
+        atendimento,
         paciente,
         terceiro,
       };
@@ -371,8 +391,43 @@ describe.skipIf(SEM_BANCO)('PortaCmePropria contra o MariaDB (contrato de efeito
         )
       ).status,
     ).toBe(422);
-    expect((await erro(porta.usar(ctx(), pacote, { agendamento: m.agendamento + 999999 }))).status).toBe(422);
-    await porta.usar(ctx(), pacote, { agendamento: m.agendamento });
+    const usar = (o: object) => porta.usar(ctx(), pacote, { agendamento: m.agendamento, ...o });
+    expect(
+      (await erro(usar({ agendamento: m.agendamento + 999999, integridadeConferida: true }))).status,
+    ).toBe(422);
+    // A abertura sem a embalagem conferida, ou com o indicador externo que não virou: 422, sem baixa.
+    expect((await erro(usar({ integridadeConferida: false }))).status).toBe(422);
+    expect((await erro(usar({ integridadeConferida: true, indicadorExternoOk: false }))).status).toBe(422);
+    const contaUsos = async () =>
+      Number(
+        (await um('SELECT COUNT(*) AS n FROM uso_pacote_esteril WHERE pacote_esteril_id = ?', [pacote]))['n'],
+      );
+    expect(await contaUsos()).toBe(0);
+    const { uso } = await usar({
+      integridadeConferida: true,
+      indicadorExternoOk: true,
+      observacao: 'aberto na sala',
+    });
+    const u = await um(
+      `SELECT estabelecimento_id AS est, paciente_id, atendimento_id, ato_cirurgico_id, integridade_conferida,
+              indicador_externo_ok, registrado_usuario_id, quantidade, observacao FROM uso_pacote_esteril WHERE id = ?`,
+      [uso],
+    );
+    expect([
+      Number(u['est']),
+      Number(u['paciente_id']),
+      Number(u['atendimento_id']),
+      u['ato_cirurgico_id'],
+      Number(u['integridade_conferida']),
+      Number(u['indicador_externo_ok']),
+      Number(u['registrado_usuario_id']) > 0,
+      Number(u['quantidade']),
+      u['observacao'],
+    ]).toEqual([m.est, m.paciente, m.atendimento, null, 1, 1, true, 1, 'aberto na sala']);
+    expect(await contaUsos()).toBe(1);
+    // Usar de novo: o pacote já foi aberto (422, sem segunda baixa).
+    expect((await erro(usar({ integridadeConferida: true }))).status).toBe(422);
+    expect(await contaUsos()).toBe(1);
     expect((await um('SELECT situacao FROM pacote_esteril WHERE id = ?', [pacote]))['situacao']).toBe(
       'usado',
     );
@@ -382,6 +437,9 @@ describe.skipIf(SEM_BANCO)('PortaCmePropria contra o MariaDB (contrato de efeito
     const rt = await porta.pacotesDaCirurgia(ctx(), m.agendamento);
     expect(rt).toHaveLength(1);
     expect(rt[0]!.cirurgias.map((c) => [c.paciente, c.usado])).toEqual([[m.paciente, true]]);
+    expect(
+      rt[0]!.usos.map((x) => [x.paciente, x.atendimento, x.integridadeConferida, x.indicadorExternoOk]),
+    ).toEqual([[m.paciente, m.atendimento, true, true]]);
     expect(
       Number(
         (

@@ -135,6 +135,7 @@ function rastreio(e: Estado) {
         usado: e.usado,
       },
     ],
+    usos: [],
   };
 }
 
@@ -260,9 +261,14 @@ test.describe('@C2-044 central de material esterilizado (05-SUP linha 29)', () =
     await page.getByTestId('cme-rastrear').click();
     await expect(page.getByTestId('cme-rastreio-situacao')).toHaveText('Entregue');
     await expect(page.getByTestId('cme-rastreio-cirurgias')).toContainText('PACIENTE SINTETICO');
+    await page.getByTestId('cme-integridade').check();
     await page.getByTestId('cme-usar').click();
     await expect(page.getByTestId('cme-rastreio-situacao')).toHaveText('Usado');
     await expect(page.getByTestId('cme-usar')).toHaveCount(0);
-    expect(e.corpos['usar']).toEqual({ agendamento: 81 });
+    expect(e.corpos['usar']).toEqual({
+      agendamento: 81,
+      integridadeConferida: true,
+      indicadorExternoOk: true,
+    });
   });
 });

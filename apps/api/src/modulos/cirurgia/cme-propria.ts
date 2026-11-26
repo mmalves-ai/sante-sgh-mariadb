@@ -21,6 +21,7 @@
 import {
   caixaReprocessavel,
   codigoEtiqueta,
+  conferirAbertura,
   conferirCaixa,
   conferirCarga,
   conferirEntrega,
@@ -62,6 +63,7 @@ export const TABELAS_CME = [
   'ciclo_esterilizacao_item',
   'movimento_material_esteril',
   'movimento_material_esteril_item',
+  'uso_pacote_esteril',
   'sequencia_negocio',
 ] as const;
 
@@ -141,7 +143,15 @@ const esquemaConcluir = z
   .strict();
 const esquemaLiberar = z.object({ versao: id, biologico: indicador }).strict();
 const esquemaEntregar = z.object({ agendamento: id, cme: id, setor: id }).strict();
-const esquemaUsar = z.object({ agendamento: id }).strict();
+// F7 (04-CME linha 118): a baixa do uso no paciente confere a embalagem e o indicador externo na abertura.
+const esquemaUsar = z
+  .object({
+    agendamento: id,
+    integridadeConferida: z.boolean(),
+    indicadorExternoOk: z.boolean().nullable().optional(),
+    observacao: z.string().trim().max(500).optional(),
+  })
+  .strict();
 
 const recusa = (titulo: string, p: readonly ProblemaCme[]) => {
   if (p.length) throw recusaRegra(titulo, p);
@@ -227,6 +237,16 @@ export interface RastreioPacote {
     readonly pacienteNome: string | null;
     readonly entregueEm: string | null;
     readonly usado: boolean;
+  }[];
+  /** A baixa do uso no paciente (uso_pacote_esteril): paciente, atendimento, ato cirúrgico e a conferência. */
+  readonly usos: {
+    readonly id: number;
+    readonly usadoEm: string | null;
+    readonly paciente: number;
+    readonly atendimento: number;
+    readonly atoCirurgico: number | null;
+    readonly integridadeConferida: boolean;
+    readonly indicadorExternoOk: boolean | null;
   }[];
 }
 
@@ -465,6 +485,12 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
         ORDER BY m.ocorrido_em`,
       [p['id']],
     );
+    const usos = await l.consultar(
+      `SELECT id, usado_em, paciente_id, atendimento_id, ato_cirurgico_id, integridade_conferida, indicador_externo_ok
+         FROM uso_pacote_esteril WHERE pacote_esteril_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+        ORDER BY usado_em`,
+      [p['id'], est],
+    );
     const base = pacoteLido(p);
     const etiqueta = {
       codigo: base.etiqueta,
@@ -487,6 +513,15 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
         pacienteNome: txtOuNull(m['paciente_nome']),
         entregueEm: instante(m['ocorrido_em']),
         usado: base.situacao === 'usado' && String(m['situacao']) === 'conferido',
+      })),
+      usos: usos.map((u) => ({
+        id: num(u['id']),
+        usadoEm: instante(u['usado_em']),
+        paciente: num(u['paciente_id']),
+        atendimento: num(u['atendimento_id']),
+        atoCirurgico: numOuNull(u['ato_cirurgico_id']),
+        integridadeConferida: bool(u['integridade_conferida']),
+        indicadorExternoOk: u['indicador_externo_ok'] === null ? null : bool(u['indicador_externo_ok']),
       })),
     };
   }
@@ -948,7 +983,9 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
           versao: num(p['cx_versao']),
           contador: num(p['quantidade_reprocessamentos']),
         };
-        await tx.alterar('caixa_instrumental', cx, atual.versao, { quantidade_reprocessamentos: atual.contador + 1 });
+        await tx.alterar('caixa_instrumental', cx, atual.versao, {
+          quantidade_reprocessamentos: atual.contador + 1,
+        });
         caixas.set(cx, { versao: atual.versao + 1, contador: atual.contador + 1 });
       }
       const it = await tx.uma(
@@ -1041,7 +1078,12 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
     return this.gravar(
       c,
       'cirurgia.cme.pacote.usar',
-      ['pacote_esteril', 'movimento_material_esteril', 'movimento_material_esteril_item'],
+      [
+        'pacote_esteril',
+        'movimento_material_esteril',
+        'movimento_material_esteril_item',
+        'uso_pacote_esteril',
+      ],
       async (tx, est, usuario) => {
         const p = await this.pacoteTravado(tx, est.id, pacote);
         const mov =
@@ -1063,8 +1105,40 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
             hojeNo(est.fuso),
           ),
         );
+        // A baixa no paciente: o atendimento da entrega (ou o da cirurgia) e o ato cirúrgico registrado, se houver.
+        const alvo = await tx.uma(
+          `SELECT COALESCE(m.atendimento_id, a.atendimento_id) AS atendimento_id, a.paciente_id,
+                  (SELECT MAX(at.id) FROM ato_cirurgico at
+                    WHERE at.agendamento_cirurgico_id = a.id AND at.estabelecimento_id = a.estabelecimento_id
+                      AND at.excluido_em IS NULL) AS ato_id
+             FROM movimento_material_esteril m JOIN agendamento_cirurgico a ON a.id = m.agendamento_cirurgico_id
+            WHERE m.id = ?`,
+          [mov!['id']],
+        );
+        const atendimento = numOuNull(alvo?.['atendimento_id']);
+        recusa(
+          'Uso recusado',
+          conferirAbertura({
+            integridadeConferida: e.integridadeConferida,
+            indicadorExternoOk: e.indicadorExternoOk ?? null,
+            atendimento,
+          }),
+        );
         const agora = new Date();
         await tx.alterar('pacote_esteril', pacote, num(p['versao']), { situacao: 'usado' });
+        const uso = await tx.incluir('uso_pacote_esteril', {
+          estabelecimento_id: est.id,
+          pacote_esteril_id: pacote,
+          paciente_id: num(alvo!['paciente_id']),
+          atendimento_id: atendimento,
+          ato_cirurgico_id: numOuNull(alvo!['ato_id']),
+          usado_em: agora,
+          registrado_usuario_id: usuario,
+          quantidade: 1,
+          integridade_conferida: true,
+          indicador_externo_ok: e.indicadorExternoOk ?? null,
+          observacao: e.observacao || null,
+        });
         await tx.alterar('movimento_material_esteril_item', num(mov!['item']), num(mov!['item_versao']), {
           conferido: true,
           conferido_em: agora,
@@ -1074,7 +1148,7 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
           conferido_em: agora,
           conferido_por_usuario_id: usuario,
         });
-        return { tabela: 'pacote_esteril', id: pacote, pacote };
+        return { tabela: 'pacote_esteril', id: pacote, pacote, uso };
       },
     );
   }

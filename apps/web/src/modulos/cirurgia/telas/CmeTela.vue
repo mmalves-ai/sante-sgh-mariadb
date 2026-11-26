@@ -14,6 +14,7 @@ import {
   concluirCicloCme,
   criarEquipamentoCme,
   entregarPacoteCme,
+  etiquetaPacoteCme,
   type Indicador,
   lerPainelCme,
   liberarCicloCme,
@@ -91,11 +92,31 @@ const rastreio = ref<RastreioCme | null>(null);
 const rastrear = () =>
   fazer(async () => {
     rastreio.value = await rastrearPacote(etiqueta.value.trim());
+    zpl.value = '';
     return '';
   });
+// F7 (04-CME linha 118): a etiqueta do pacote em ZPL e a abertura conferida no paciente (embalagem e indicador).
+const zpl = ref('');
+const gerarEtiqueta = () =>
+  fazer(async () => {
+    const e = await etiquetaPacoteCme(rastreio.value!.pacote.etiqueta);
+    zpl.value = e.zpl;
+    await globalThis.navigator?.clipboard?.writeText(e.zpl).catch(() => undefined);
+    return t('cirurgia.cme.etiquetaCopiada');
+  });
+const abertura = reactive({ integridade: false, indicador: 'sim' as 'sim' | 'nao' | 'sem' });
+const opcoesIndicadorExterno = computed(() => [
+  { valor: 'sim', rotulo: t('cirurgia.cme.indicadorVirou') },
+  { valor: 'nao', rotulo: t('cirurgia.cme.indicadorNaoVirou') },
+  { valor: 'sem', rotulo: t('cirurgia.cme.indicadorSem') },
+]);
 const usar = (agendamento: number) =>
   fazer(async () => {
-    await usarPacoteCme(rastreio.value!.pacote.id, { agendamento });
+    await usarPacoteCme(rastreio.value!.pacote.id, {
+      agendamento,
+      integridadeConferida: abertura.integridade,
+      indicadorExternoOk: abertura.indicador === 'sem' ? null : abertura.indicador === 'sim',
+    });
     rastreio.value = await rastrearPacote(rastreio.value!.pacote.etiqueta);
     return t('cirurgia.cme.gravado');
   });
@@ -234,7 +255,34 @@ const salvarEquipamento = () =>
             ? t('cirurgia.cme.faltasEtiqueta', { faltas: rastreio.pacote.faltasEtiqueta.join(', ') })
             : t('cirurgia.cme.etiquetaCompleta')
         }}
+        <button
+          v-if="!rastreio.pacote.faltasEtiqueta.length"
+          type="button"
+          data-testid="cme-etiqueta-zpl"
+          @click="gerarEtiqueta"
+        >
+          {{ t('cirurgia.cme.imprimirEtiqueta') }}
+        </button>
       </p>
+      <pre
+        v-if="zpl"
+        class="zpl"
+        tabindex="0"
+        :aria-label="t('cirurgia.cme.zplEtiqueta')"
+        data-testid="cme-zpl"
+        >{{ zpl }}</pre>
+      <div v-if="rastreio.pacote.situacao === 'distribuido'" class="filtros" data-testid="cme-abertura">
+        <label>
+          <input v-model="abertura.integridade" type="checkbox" data-testid="cme-integridade" />
+          {{ t('cirurgia.cme.integridadeConferida') }}
+        </label>
+        <SanteSelecao
+          v-model="abertura.indicador"
+          :rotulo="t('cirurgia.cme.indicadorExterno')"
+          :opcoes="opcoesIndicadorExterno"
+          data-testid="cme-indicador"
+        />
+      </div>
       <p v-if="rastreio.ciclo">
         {{ rastreio.ciclo.numero }} · {{ rastreio.ciclo.equipamento }} · {{ sit(rastreio.ciclo.situacao) }}
       </p>
@@ -257,6 +305,7 @@ const salvarEquipamento = () =>
               <button
                 v-else-if="rastreio.pacote.situacao === 'distribuido' && c.agendamento"
                 type="button"
+                :disabled="!abertura.integridade"
                 data-testid="cme-usar"
                 @click="usar(c.agendamento)"
               >
@@ -266,6 +315,21 @@ const salvarEquipamento = () =>
           </tr>
         </tbody>
       </table>
+      <template v-if="rastreio.usos.length">
+        <h3>{{ t('cirurgia.cme.usosNoPaciente') }}</h3>
+        <ul data-testid="cme-usos">
+          <li v-for="u in rastreio.usos" :key="u.id">
+            {{
+              t('cirurgia.cme.usadoEmPaciente', {
+                quando: u.usadoEm?.replace('T', ' ').slice(0, 16) ?? '—',
+                atendimento: u.atendimento,
+              })
+            }}
+            · {{ t('cirurgia.cme.aberturaConferida') }}
+            <template v-if="u.indicadorExternoOk"> · {{ t('cirurgia.cme.indicadorOk') }}</template>
+          </li>
+        </ul>
+      </template>
     </div>
 
     <p v-if="!p" role="status">{{ t('cirurgia.carregando') }}</p>

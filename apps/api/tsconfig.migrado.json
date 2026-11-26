@@ -1242,6 +1242,8 @@
     "src/modulos/cirurgia/cirurgia.spec.ts",
     "src/modulos/cirurgia/descricao-cirurgica.controller.spec.ts",
     "src/modulos/cirurgia/cme-cadastro.controller.spec.ts",
+    "src/modulos/cirurgia/cme-etiqueta.ts",
+    "src/modulos/cirurgia/cme-etiqueta.spec.ts",
     "src/modulos/cirurgia/esquemas.ts",
     "src/modulos/cirurgia/modulo.ts",
     "src/modulos/cirurgia/operacoes.ts",

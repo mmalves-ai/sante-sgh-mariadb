@@ -100,6 +100,18 @@ export const esquemaRastreio = z.object({
       usado: z.boolean(),
     }),
   ),
+  // F7 (04-CME linha 118): a baixa do uso no paciente, com a conferência da abertura.
+  usos: z.array(
+    z.object({
+      id: z.number(),
+      usadoEm: nulo(z.string()),
+      paciente: z.number(),
+      atendimento: z.number(),
+      atoCirurgico: nulo(z.number()),
+      integridadeConferida: z.boolean(),
+      indicadorExternoOk: nulo(z.boolean()),
+    }),
+  ),
 });
 export type RastreioCme = z.infer<typeof esquemaRastreio>;
 
@@ -158,5 +170,13 @@ export const liberarCicloCme = (id: number, corpo: { versao: number; biologico: 
   );
 export const entregarPacoteCme = (id: number, corpo: { agendamento: number; cme: number; setor: number }) =>
   enviar(`${C}/pacotes/${id}/entregar`, corpo, qualquer, novaChave('cme.entregar'));
-export const usarPacoteCme = (id: number, corpo: { agendamento: number }) =>
-  enviar(`${C}/pacotes/${id}/usar`, corpo, qualquer, novaChave('cme.usar'));
+/** O ZPL da etiqueta do pacote estéril (RDC 15/2012, art. 83); a reimpressão confere pelo SHA-256. */
+export const etiquetaPacoteCme = (etiqueta: string) =>
+  ler(
+    `${C}/pacotes/etiqueta?${new URLSearchParams({ etiqueta }).toString()}`,
+    z.object({ codigo: z.string(), zpl: z.string(), sha256: z.string() }),
+  );
+export const usarPacoteCme = (
+  id: number,
+  corpo: { agendamento: number; integridadeConferida: boolean; indicadorExternoOk: boolean | null },
+) => enviar(`${C}/pacotes/${id}/usar`, corpo, qualquer, novaChave('cme.usar'));
