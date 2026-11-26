@@ -125,3 +125,16 @@ cada uma com construir, revisão adversarial e correção.
   (sem autorização); a correção fez o commit de `porta-propria.ts` e `i18n.ts` só com os próprios trechos (índice
   temporário sobre o HEAD).
 - **Provas não rodadas:** testes de unidade, `.int.spec` e tsc derrubados pela espera de memória (livre de 5 GB).
+
+## 26/11, 10h30 a 15h: integrar-4 (E2E das 133 funções Parciais; medido com relatorio-50.py)
+
+| Rodada | Estimativa | Teto | Gasto | Agentes |
+|---|---|---|---|---|
+| integrar-4 (lotes por script + correção) | 17 M | 22 M | cerca de 24 M | 15 corretores (~1,6 M cada, 83% abaixo da base de 9,51 M) + 1 de fichas |
+
+- **Passou do teto em cerca de 10%.** Causa: grupos de até 6 arquivos com 2 provas de E2E cada; 4 agentes chegaram ao
+  teto de ferramentas (45 a 60), e a 1ª prova de vários rodou sem a correção (o commit-e2e monta do HEAD e o commit ainda
+  não tinha sido feito). Otimização para as próximas: no máximo 3 arquivos por agente, commit antes da prova, uma prova
+  só; a confirmação final fica por script.
+- Resultado: lote 1 (1b196ec7) 38 de 109 arquivos verdes; confirmação (c1eec038) 38 de 71 corrigidos verdes; 76 de 109 no
+  total. Os 33 vermelhos restantes vão às pendências sem 3ª tentativa (regra 5 do plano de redução).
