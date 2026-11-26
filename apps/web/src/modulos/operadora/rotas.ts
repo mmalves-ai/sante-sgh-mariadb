@@ -24,6 +24,13 @@ export const rotasOperadora: RouteRecordRaw[] = [
     component: () => import('./telas/CobrancaOperadoraTela.vue'),
     meta: { permissao: 'operadora.cobranca.ler' },
   },
+  // 08-SGO L96 (C1-086): índice com vigência, agrupamento do coletivo pequeno e reajuste por sinistralidade.
+  {
+    path: '/operadora/reajustes-coletivos',
+    name: 'operadora.reajustes-coletivos',
+    component: () => import('./telas/ReajusteColetivoTela.vue'),
+    meta: { permissao: 'operadora.cobranca.ler' },
+  },
   // 08-SGO L98 (C2-116): regras de coparticipação do plano e do contrato (escopo por guia, grupo, procedimento; tetos).
   {
     path: '/operadora/coparticipacao-regras',
