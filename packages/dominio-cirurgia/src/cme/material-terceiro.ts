@@ -204,6 +204,12 @@ export function conferirDevolucao(d: {
     if (i.utilizada + i.devolvida !== i.recebida)
       p.push({ campo, mensagem: 'Utilizado mais devolvido tem de somar o recebido.' });
     if (!i.conferido) p.push({ campo, mensagem: 'Confira o item na devolução.' });
+    // Só o material já reprocessado chega ao paciente: o conferido ou divergente volta ao dono sem uso.
+    if (i.utilizada > 0 && (d.situacao === 'conferido' || d.situacao === 'divergente'))
+      p.push({
+        campo,
+        mensagem: 'O material não reprocessado pela CME não pode constar como utilizado: devolva-o inteiro.',
+      });
     if (i.utilizada > 0 && !d.temPaciente)
       p.push({
         campo,

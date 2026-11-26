@@ -149,5 +149,10 @@ describe('material de terceiro: reprocessamento e devolução', () => {
       ),
     ).toEqual(['situacao', 'recebedor', 'itens.1', 'itens.1']);
     expect(campos(conferirDevolucao({ ...ok, itens: [] }))).toEqual(['itens.1']);
+    // Sem reprocessamento, nada chega ao paciente: o conferido volta inteiro ao dono.
+    expect(conferirDevolucao({ ...ok, situacao: 'conferido' })[0]?.mensagem).toMatch(/não reprocessado/);
+    expect(
+      conferirDevolucao({ ...ok, situacao: 'divergente', itens: [{ ...it1, utilizada: 0, devolvida: 3 }] }),
+    ).toEqual([]);
   });
 });
