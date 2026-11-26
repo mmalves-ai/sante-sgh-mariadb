@@ -358,7 +358,8 @@ def linhas(r, ins):
           DATA_HORA_INCLUSAO=H(2026, 2, 1, 9, 31) if reg == 1 else None)
     # pré-internações: 1 completa, internada (mesmo prontuário e entrada da internação 7001: 'internado'), com CID,
     # senha, validade, cirurgia prevista, categoria, leito reservado, telefone, regime e acompanhante; 2 hora inválida
-    # (hora_invalida, 1048), sem caráter (eletiva presumida); 3 prontuário nunca visto (pai_inexistente, 1048); 4 sem a
+    # (hora_invalida; grava com a data prevista nula, recusas-fase2), sem caráter (eletiva presumida); 3 prontuário
+    # nunca visto (pai_inexistente, 1048); 4 sem a
     # inscrição do médico, achado pelo CPF (gravada). Sem internação correspondente: 'nao_compareceu' presumida
     for pr, tp, hora, med, ent in ((8001, "I", "0900", 1, d), (8002, "I", "2575", 1, D(2026, 3, 1)),
                                    (8099, "I", "0900", 1, D(2026, 3, 1)), (8003, "E", "0900", None, D(2026, 3, 1))):
@@ -446,11 +447,13 @@ def linhas(r, ins):
         "RICADINT": {"gravados": 5, "pendencias": {"catalogo_codigo_inexistente": 1, "pai_inexistente": 4,
                                                    "restricao_destino_1048": 3, "restricao_destino_1062": 1,
                                                    "valor_fora_do_dominio": 2, "valor_presumido": 11}},
-        # 2 gravadas (8001 internada, 8003 médico pelo CPF); pai_inexistente: internação correspondente ausente
-        # (internacao_id e situação: 2 x 3 linhas), leito reservado de chave parcial (3) e o prontuário nunca visto;
-        # valor_presumido: solicitado_em e nao_compareceu em cada linha (2 x 4); eletiva só quando gravada (resíduo r4: 0)
-        "RIPREINT": {"gravados": 2, "pendencias": {"hora_invalida": 1, "pai_inexistente": 10,
-                                                   "restricao_destino_1048": 2, "valor_presumido": 8}},
+        # 3 gravadas (8001 internada, 8003 médico pelo CPF e 8002: a data prevista é anulável desde a 07_INT/25, F3.4,
+        # e o CHECK aceita a nula em nao_compareceu; a hora inválida fica visível em hora_invalida); só o prontuário
+        # nunca visto recusa (1048); pai_inexistente: internação correspondente ausente (internacao_id e situação:
+        # 2 x 3 linhas), leito reservado de chave parcial (3) e o prontuário nunca visto; valor_presumido 8:
+        # solicitado_em em cada linha (4), nao_compareceu nas três sem internação e a eletiva da 8002 (sem caráter)
+        "RIPREINT": {"gravados": 3, "pendencias": {"hora_invalida": 1, "pai_inexistente": 10,
+                                                   "restricao_destino_1048": 1, "valor_presumido": 8}},
         # recusas fase 2 (C1, R9): a alta desfeita da internação recusada (3) grava sem a ligação; pai_pendente fica
         # aberta e a ligação é refeita quando o pai for corrigido
         # (M15, _readiar_anulaveis; test_motor_recusas_ref m15)

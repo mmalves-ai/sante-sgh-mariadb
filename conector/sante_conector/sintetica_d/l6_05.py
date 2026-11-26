@@ -134,11 +134,12 @@ DADOS = [
      {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1}}),
     ("PRCAB_IDENTIFIC_PAC", [[1, "Dados atuais do paciente", "S"], [2, "Dados da emissão", "S"], [3, None, "N"]],
      {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}}),
-    # chave do atributo do produto pelo nome (valores.d): 4 sem par recusa (nunca grava o id); 6 é a mesma chave da 3
+    # chave do atributo do produto pelo nome (valores.d): 4 sem par entra com chave própria derivada do id, presumida
+    # (recusas-fase2 P3a; não é situação nem papel clínico); 6 é a mesma chave da 3
     # (alergias) e recusa pela chave única
     ("PRCAMPOSLOCALIZACAOPACIENTE", [[1, "Leito"], [2, "Dias de internação"], [3, "Alergia"], [4, "Coluna exemplo"],
                                      [5, "MÉDICO"], [6, "Alergias"]],
-     {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1,
+     {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 1, "valor_presumido": 1,
                                     "restricao_destino_1062": 1}}),
     ("PRFA_UTILIZACAO", [[1, "Medicamento", "S"], [2, "Uso em bomba de infusão", "S"], [3, "Material", "N"]],
      {"gravados": 3, "pendencias": {}}),
@@ -162,9 +163,10 @@ DADOS = [
     ("PRASSINANTE", [[1, "Profissional", "S"], [2, "Paciente", "S"], [3, "Testemunha", "N"],
                      [4, "Papel exemplo", "S"], [5, None, "S"]],
      {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 2}}),
-    # 'Parcial' não diz a duração: recusa em vez de presumir 24 horas (parcial tem par: sem pendência nele)
+    # 'Parcial' não diz a duração: nunca presume 24 horas; tipo migrado entra sem período (recusas-fase2 P3a: CHECK
+    # relaxado só no migrado), com valor_fora_do_dominio visível (parcial tem par: sem pendência nele)
     ("PRBHTIPOFECHAMENTO", [[1, "24 HORAS"], [2, "12 horas"], [3, "Parcial"]],
-     {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}}),
+     {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1}}),
     # 3 e 4 sem número de doses (nulo, 0): a critério médico; 5 acima de 48 recusa; 6 S/N fora do domínio (padrão)
     ("PRFREQUENCIA", [[1, "De 6 em 6 horas", 4, "M", "S", "S", 1], [2, "Uma vez ao dia", 1, "M", "S", "N", 2],
                       [3, "A critério médico", None, "M", "N", "S", 3], [4, "Se necessário", 0, "M", "S", "S", None],

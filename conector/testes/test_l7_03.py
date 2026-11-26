@@ -282,7 +282,7 @@ class Sintetica(unittest.TestCase):
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(recusam))
             if t == "SISTATUS_AMOSTRA":  # pai_pendente da autorreferência sai na fase 2: a linha fica gravada
                 recusas -= e["pendencias"]["pai_pendente"]
-            if t == "SIWEBPARPERFIL":  # complemento sem pai: recusa (pai_inexistente)
+            if t in ("SIWEBPARPERFIL", "SIVARFORMULA"):  # complemento / por_pai sem pai: recusa (pai_inexistente)
                 recusas += e["pendencias"].get("pai_inexistente", 0)
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
 

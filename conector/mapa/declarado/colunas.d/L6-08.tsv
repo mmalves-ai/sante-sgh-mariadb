@@ -25,7 +25,8 @@ PRTPRECMED	NOME	tipo_receita.descricao	texto_nome			L6-08
 PRTPRECMED	PADRAO	tipo_receita.padrao	booleano_sn			L6-08
 PRTPTCLE	ID	situacao_termo_consentimento.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 PRTPTCLE	NOME	situacao_termo_consentimento.descricao	texto_nome			L6-08
-PRTPTCLE	=~pendente	situacao_termo_consentimento.etapa				L6-08: a origem não guarda a etapa do termo; 'pendente' presumido com pendência valor_presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	texto_nome	valores		recusas-fase2 (pedido 67): etapa pelo nome da situação (valores.d/L6-08.tsv, os mesmos rótulos do cadastro de situações do termo da L5-02); nome sem par cai na linha seguinte
+PRTPTCLE	=~cancelado	situacao_termo_consentimento.etapa				recusas-fase2 (pedido 67, decisão do orquestrador, 26/11): a origem que não informa a situação nunca presume estado que gera trabalho ou muda a conduta; sem valor neutro no CHECK, nome sem par entra como cancelado presumido (terminal e não acionável; não libera procedimento, autoriza_procedimento fica no padrão falso), com valor_presumido; nunca 'pendente', que geraria coleta de assinatura de termo antigo
 PRUNIDINFUSAO	ID	unidade_infusao.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 PRUNIDINFUSAO	NOME	unidade_infusao.descricao	texto_nome			L6-08
 PRUNIDINFUSAO	NOME	unidade_infusao.sigla	texto_resumo:20			L6-08: a origem só tem o nome curto da unidade (ex.: ml/h), que serve de sigla; nome maior que 20 é resumido na fronteira de palavra (pendência baixa texto_resumido), sem recusar a unidade nem os kits dela; o nome inteiro fica na descrição

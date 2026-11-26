@@ -171,6 +171,11 @@ def _valor(forma, i, k):
     return "S"  # CHAR/VARCHAR: cabe em qualquer tamanho da fatia
 
 
+# recusas fase 2 (C1, R9): por tabela, quantas linhas têm pai_pendente em coluna ANULÁVEL (a linha grava sem o pai e
+# a pendência fica aberta para a religação; não é recusa). Derivado das próprias linhas em `linhas()`.
+PAI_PENDENTE_ANULAVEL = {}
+
+
 def linhas(r, ins):
     # --- fora da carga: duas linhas por tabela (só presença)
     for t, formas in FORMAS_BLOQUEADAS.items():
@@ -205,27 +210,34 @@ def linhas(r, ins):
     # --- locais de estoque (tipo presumido em toda linha lida): 3 sem nome (1048); 4 com origem no local 3
     # (recusado: gravado, pai_pendente na fase 2); 5 com origem nunca vista (NULL, pai_inexistente); 6 com 0/1 fora
     # do domínio; 7 com origem no 8 (vem depois: fase 2)
-    for x in [(1, "Almoxarifado  central", None, None, None, 1, 1, 1, None),
+    locais = [(1, "Almoxarifado  central", None, None, None, 1, 1, 1, None),
               (2, "Farmácia central", 1, 1, 1, 1, 1, 0, 1),
               (3, "  ", None, None, None, 1, 1, 0, None),
               (4, "Farmácia satélite", None, None, None, 1, 2, 1, 3),
               (5, "Posto exemplo", None, None, None, 2, 2, None, 99),
               (6, "Carrinho exemplo", None, None, None, 1, 1, 7, 1),
               (7, "Farmácia  cirúrgica", None, None, None, 1, 1, 1, 8),
-              (8, "Depósito exemplo", None, None, None, 1, 1, 0, None)]:
+              (8, "Depósito exemplo", None, None, None, 1, 1, 0, None)]
+    for x in locais:
         ins("GELOCARM", list(x))
+    locais_recusados = {x[0] for x in locais if not (x[1] or "").strip()}  # nome em branco: 1048
 
     # --- kits rastreáveis: 3 local recusado (pai_pendente), 4 local nunca visto (pai_inexistente + 1048), 5 kit
     # padrão recusado (pai_pendente), 6 login sem usuário (NULL + pai_inexistente), 7 S/N fora do domínio
     dh = datetime.datetime(2025, 3, 10, 14, 5)
-    for x in [(1, 1, "Carrinho de  emergência 1", "S", dh, 1, "almox.exemplo", "farm.exemplo", "N"),
-              (2, 2, "Kit parada", "N", None, None, None, None, "S"),
-              (3, 3, "Kit do local recusado", "N", dh, 1, "almox.exemplo", None, "N"),
-              (4, 9, "Kit de local inexistente", "N", dh, 1, "almox.exemplo", None, "N"),
-              (5, 1, "Kit de padrão recusado", "N", dh, 3, "farm.exemplo", None, "N"),
-              (6, 1, "Kit de usuário desconhecido", "S", dh, 2, "usuario.inexistente", None, "N"),
-              (7, 2, "Kit uso total inválido", "N", dh, 2, "farm.exemplo", None, "Z")]:
+    kits = [(1, 1, "Carrinho de  emergência 1", "S", dh, 1, "almox.exemplo", "farm.exemplo", "N"),
+            (2, 2, "Kit parada", "N", None, None, None, None, "S"),
+            (3, 3, "Kit do local recusado", "N", dh, 1, "almox.exemplo", None, "N"),
+            (4, 9, "Kit de local inexistente", "N", dh, 1, "almox.exemplo", None, "N"),
+            (5, 1, "Kit de padrão recusado", "N", dh, 3, "farm.exemplo", None, "N"),
+            (6, 1, "Kit de usuário desconhecido", "S", dh, 2, "usuario.inexistente", None, "N"),
+            (7, 2, "Kit uso total inválido", "N", dh, 2, "farm.exemplo", None, "Z")]
+    for x in kits:
         ins("GEKITRAS", list(x))
+    # o local do kit é NOT NULL (o kit de local recusado é recusado); o kit padrão (coluna 6) é anulável
+    kits_recusados = {x[0] for x in kits if x[1] in locais_recusados}
+    PAI_PENDENTE_ANULAVEL.clear()
+    PAI_PENDENTE_ANULAVEL["GEKITRAS"] = sum(1 for x in kits if x[5] in kits_recusados)
 
     # --- destinos de entrega: 2 UF fora do catálogo, 3 sem nome (1048), 4 número 0 (NULL)
     # CEP inteiro volta a 8 dígitos (1: zero à esquerda; 2: 9 dígitos, valor_fora_do_dominio); CNPJ fictício com
@@ -254,13 +266,14 @@ def linhas(r, ins):
     # 12 sem data (1048), 13 origem = destino (4025), 14 destino recusado (pai_pendente), 15 destino nunca visto
     # (pai_inexistente + 4025), 16 consolidado fora do domínio e login sem usuário (gravado)
     d0, dh = datetime.date(2025, 5, 2), datetime.datetime(2025, 5, 2, 9, 0)
-    for (i, data, ori, des, cons, obs, usu) in [(10, d0, 1, 2, "S", "Reposição  semanal", "almox.exemplo"),
-                                                 (11, d0, 2, 1, "N", "  Devolução ", None),
-                                                 (12, None, 1, 2, "S", None, "almox.exemplo"),
-                                                 (13, d0, 1, 1, "S", None, "almox.exemplo"),
-                                                 (14, d0, 1, 3, "S", None, "almox.exemplo"),
-                                                 (15, d0, 1, 99, "S", None, "almox.exemplo"),
-                                                 (16, d0, 2, 4, "X", None, "usuario.inexistente")]:
+    docs = [(10, d0, 1, 2, "S", "Reposição  semanal", "almox.exemplo"),
+            (11, d0, 2, 1, "N", "  Devolução ", None),
+            (12, None, 1, 2, "S", None, "almox.exemplo"),
+            (13, d0, 1, 1, "S", None, "almox.exemplo"),
+            (14, d0, 1, 3, "S", None, "almox.exemplo"),
+            (15, d0, 1, 99, "S", None, "almox.exemplo"),
+            (16, d0, 2, 4, "X", None, "usuario.inexistente")]
+    for (i, data, ori, des, cons, obs, usu) in docs:
         ins("GECADTRA", [i, 2025, 5, i - 9, data, None, obs, cons, ori, des, "N", "S", d0, "0900", "0900", usu,
                          None, None, dh, dh, "T"])
     # --- itens do documento: a unidade vem do insumo (encadeada) e o insumo é de outra fatia (GEITENS não está
@@ -347,6 +360,8 @@ def linhas(r, ins):
                                                    "pai_inexistente": 1, "restricao_destino_1048": 1}},
     }
     if loc_doc:
+        # o destino do documento é anulável (a origem é NOT NULL): destino recusado grava sem ele
+        PAI_PENDENTE_ANULAVEL["GECADTRA"] = sum(1 for x in docs if x[3] in locais_recusados)
         # recusas fase 2 (C1, R9): o destino recusado (14) é coluna anulável: pai_pendente não recusa mais, a linha vai
         # à gravação sem o destino e cai no CHECK de origem e destino (4025)
         esp["GECADTRA"] = {"gravados": 3, "pendencias": {"restricao_destino_1048": 1,

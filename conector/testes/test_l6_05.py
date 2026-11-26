@@ -53,11 +53,10 @@ def _raiz_ddl():
 
 
 
-# PENDENTE DE DECISÃO (pedido 67 de pedidos-do-mapa.md, recusas-fase2 P3a): o orquestrador ou o dono clínico
-# decidem antes do reprocessamento se estas presumidas clínicas valem. Até lá, a lista abaixo é a única exceção
-# aceita à regra "nome sem par não é presumido". Se a decisão for contrária: esvaziar a lista (volta a exigir só o
-# de-para) e tirar as concorrentes do mapa. Nenhuma outra presumida clínica entra sem decisão registrada.
-PRESUMIDAS_PEDIDO_67 = {("PRASSINANTE", "papel"): ["=~responsavel_legal"]}
+# Pedido 67 DECIDIDO (orquestrador, 26/11, T2-brief): quando a origem não informa uma situação ou papel clínico,
+# nunca se presume estado que gere trabalho ou mude a conduta; vale o neutro do CHECK, senão o terminal não acionável
+# (valor_presumido visível), senão a recusa visível. O papel de quem assina não tem neutro no CHECK e
+# nenhum papel é inventado: o nome sem par volta à recusa visível (nenhuma presumida nas colunas por de-para).
 
 class Plano(unittest.TestCase):
     def setUp(self):
@@ -217,13 +216,11 @@ class Plano(unittest.TestCase):
 
     def test_sem_presumido_que_muda_o_sentido_clinico(self):
         """Lado do balanço, papel de quem assina, período do fechamento e tipo da frequência vêm do de-para de valores:
-        valor sem par vira NULL com valor_fora_do_dominio e a linha é recusada pelo NOT NULL (nada presumido), com
-        uma única exceção ainda PENDENTE DE DECISÃO (pedido 67): PRESUMIDAS_PEDIDO_67, concorrente depois do
-        de-para."""
+        valor sem par vira NULL com valor_fora_do_dominio e a linha é recusada pelo NOT NULL (nada presumido; o pedido
+        67 tirou a presumida do papel de quem assina): a coluna tem uma só declaração, a do de-para."""
         for t, d in POR_VALORES:
             c = self._col(t, d)
-            self.assertEqual([x["coluna"] for x in c[1:]], PRESUMIDAS_PEDIDO_67.get((t, d), []), (t, d))
-            c = c[:1]
+            self.assertEqual(len(c), 1, (t, d))
             self.assertIsNotNone(c[0]["valores"], (t, d))
             self.assertFalse(c[0]["coluna"].startswith("="), (t, d))
         tipo = self._col("PRFREQUENCIA", "tipo")[0]["valores"]

@@ -16,9 +16,9 @@ TABELAS = set(l7_05.CARREGADAS)
 FASE2 = {"GELOCARM"}
 # complementa: sem a linha do pai a recusa é pai_inexistente (UPDATE sem alvo)
 COMPLEMENTA = {"GECONITL", "GEDESPDS"}
-# recusas fase 2 (C1, R9): pai_pendente em coluna anulável não recusa a linha (GEKITRAS 5: kit padrão; GECADTRA 14:
-# destino, que depois cai no CHECK 4025 e já conta como restrição)
-PAI_PENDENTE_ANULAVEL = {"GEKITRAS": 1, "GECADTRA": 1}
+# recusas fase 2 (C1, R9): pai_pendente em coluna anulável não recusa a linha; a contagem vem da própria sintética
+# (l7_05.PAI_PENDENTE_ANULAVEL, preenchida por linhas(): GEKITRAS pelo kit padrão; GECADTRA pelo destino, que depois
+# cai no CHECK 4025 e já conta como restrição)
 
 
 class Plano(unittest.TestCase):
@@ -261,7 +261,7 @@ class Sintetica(unittest.TestCase):
             pref = ("restricao_destino_",) if t in FASE2 else ("restricao_destino_", "pai_pendente")
             pref += ("pai_inexistente",) if t in COMPLEMENTA else ()
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(pref))
-            recusas -= PAI_PENDENTE_ANULAVEL.get(t, 0) if "pai_pendente" in pref else 0
+            recusas -= l7_05.PAI_PENDENTE_ANULAVEL.get(t, 0) if "pai_pendente" in pref else 0
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
         for t in l7_05.BLOQUEADAS:  # presença na imagem, nada esperado no destino
             self.assertEqual(cont[t], 2, t)

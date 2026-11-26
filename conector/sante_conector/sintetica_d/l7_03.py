@@ -231,8 +231,8 @@ def linhas(r, ins):
               [2, 1, "GL", "GLU2", "SR", "S"], [1, 2, "XX", "ZZZ", "SG", None], [1, 1, "HB", "GLU", "SR", "N"]]:
         linha("SITBEXEQ", **dict(zip(COLUNAS["SITBEXEQ"], x)))
     # configuração do apoio por exame: 1 grava (apoio 7 da interface 1; exame HB pela equivalência 1/HGB; exige peso);
-    # 2 interface sem apoio e exame sem equivalência (pai_inexistente nas duas, 1048); 3 código 1/GLU em duas
-    # equivalências (pai_ambiguo, 1048)
+    # 2 interface sem apoio e exame sem equivalência (pai_inexistente nas três referências, 1048 pelo apoio); 3 código
+    # 1/GLU em duas equivalências (pai_ambiguo no exame e no ativo): grava inativa, sem exame próprio (P4, K1)
     linha("SITBEXHP", COD=1, TIPO=1, COD_EXAME="HGB", EXAME_NOME="Exame do apoio", NECESSITA_PESO="S")
     linha("SITBEXHP", COD=2, TIPO=2, COD_EXAME="APX2", EXAME_NOME="Exame sem apoio")
     linha("SITBEXHP", COD=3, TIPO=1, COD_EXAME="GLU", EXAME_NOME="Exame ambíguo")
@@ -241,7 +241,7 @@ def linhas(r, ins):
     for x in [(1, 1, "URI", "(A+B)/2"), (1, 4, "HMG", "A*2"), (2, 9, "URI", None)]:
         linha("SIFORMUL", ATO=x[0], CODELE=x[1], EXAME=x[2], FORMULA=None if x[3] is None else x[3].encode("cp1252"))
     # variáveis: 1 e 4 completas; 2 sem descrição (o identificador vira a descrição); 3 sem identificador (1048);
-    # 5 exame sem fórmula no ato 2 (pai_inexistente e 1048); fonte 'digitado' presumida em toda linha avaliada
+    # 5 exame sem fórmula no ato 2 (recusa pai_inexistente, por_pai); fonte 'digitado' presumida em toda linha avaliada
     for cod, ato, exa, ide, desc in [(1, 1, "URI", "A", "Glicemia  basal"), (2, 1, "URI", "B", None),
                                      (3, 1, "URI", None, "Sem identificador"), (4, 1, "HMG", "CR", "Creatinina"),
                                      (5, 2, "GLI", "Z", "Outro ato")]:
@@ -258,12 +258,18 @@ def linhas(r, ins):
         "SITABELE": {"gravados": 8, "pendencias": {"restricao_destino_1048": 2, "restricao_destino_1062": 1,
                                                    "restricao_destino_4025": 2, "pai_inexistente": 3,
                                                    "pai_ambiguo": 1, "valor_fora_do_dominio": 1,
-                                                   "adotado_existente": 1}},
+                                                   "adotado_existente": 1,
+                                                   # faixa_referencia (pedido 103): só URI/3 tem referência (texto);
+                                                   # as demais não gravam faixa (opcional) nem a pendência da vigência
+                                                   "vigencia_sem_fonte": 1}},
         "SITABPRO": {"gravados": 10, "pendencias": {"valor_presumido": 24, "restricao_destino_1062": 1,
                                                    "restricao_destino_1048": 1, "codigo_colisao_caixa": 2,
                                                    "valor_fora_do_dominio": 2}},
-        "SIRESPAD": {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 5, "restricao_destino_1048": 2,
-                                                   "pai_pendente": 1, "pai_inexistente": 1}},
+        # P4: ZZZ (exame excluído na origem) grava com o exame inativo de migração criado (5 presumidas; as 6
+        # referências ao exame real dão pai_inexistente); os 3 de exame real ADOTAM o exame
+        "SIRESPAD": {"gravados": 4, "pendencias": {"vigencia_sem_fonte": 5, "restricao_destino_1048": 1,
+                                                   "pai_pendente": 1, "pai_inexistente": 6, "adotado_existente": 3,
+                                                   "valor_presumido": 5}},
         "SITPEQVMODELO": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1}},
         "SIWEBCADPERFIL": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "SIWEBCADPERFIL_SIPACSMODALID": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
@@ -286,11 +292,13 @@ def linhas(r, ins):
         "SITPEQV": {"gravados": 4, "pendencias": {"valor_presumido": 15, "segredo_aguarda_cofre": 2,
                                                   "adotado_existente": 1, "valor_fora_do_dominio": 2,
                                                   "restricao_destino_1048": 1}},
-        # 1 grava (apoio e exame pela equivalência); 2 sem apoio e sem equivalência; 3 equivalência ambígua
-        "SITBEXHP": {"gravados": 1, "pendencias": {"pai_inexistente": 2, "pai_ambiguo": 1,
-                                                   "restricao_destino_1048": 2}},
+        # 1 grava (apoio e exame pela equivalência); 2 sem apoio (1048) e sem equivalência; 3 equivalência ambígua:
+        # P4 (K1) grava INATIVA e sem exame próprio (ativo 0 presumido), para o hospital ligar no painel
+        "SITBEXHP": {"gravados": 2, "pendencias": {"pai_inexistente": 3, "pai_ambiguo": 2,
+                                                   "restricao_destino_1048": 1, "valor_presumido": 2}},
         "SIFORMUL": {"gravados": 2, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1,
                                                    "vigencia_sem_fonte": 3}},
-        "SIVARFORMULA": {"gravados": 3, "pendencias": {"valor_presumido": 5, "restricao_destino_1048": 2,
+        # P4 (por_pai): a 5, sem fórmula no exame, é recusada pela referência (pai_inexistente) antes da fonte
+        "SIVARFORMULA": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1,
                                                        "pai_inexistente": 1}},
     }

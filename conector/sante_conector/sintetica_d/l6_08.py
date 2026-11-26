@@ -101,7 +101,8 @@ def linhas(r, ins):
     for v in [(1, "Aviso"), (2, " Lembrete ")]:
         ins("PRTPNOTALEMB", list(v))
     for i in range(1, 6):
-        # 1 e 2 pelo nome; 3 sem nome (1048); 4 com espaços (colapsados antes do par); 5 sem par (recusa, 1048)
+        # 1 e 2 pelo nome; 3 sem nome (1048; a presumida conta antes); 4 com espaços (colapsados antes do par); 5 sem
+        # par: texto presumido (recusas-fase2 P3a: tipo neutro, mantido pelo pedido 67), com valor_presumido
         nome = {1: "Texto", 2: "DATA", 3: None, 4: "  Número  "}.get(i, "Pergunta exemplo %d" % i)
         ins("PRTPPERGUNTA", [i, nome, "componente_exemplo_%d" % i if i % 2 else None, GUID % i])
     # protocolos: 2 com inteiro 0/1 fora do domínio; 4 sem nome (1048)
@@ -130,7 +131,8 @@ def linhas(r, ins):
     # em saida/L6-08.json; volta à imagem quando o motor atender
     for v in [(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 9, 4), (5, 1, 7), (6, 4, 5), (7, 9, 1)]:
         ins("PRTPRESPOSTA", list(v))
-    for v in [(1, "Pendente exemplo"), (2, "Assinado exemplo"), (3, "Recusado exemplo")]:
+    # etapa do termo pelo nome (pedido 67): 3 sem par entra cancelado presumido (valor_fora_do_dominio + valor_presumido)
+    for v in [(1, "Pendente"), (2, "ASSINADO"), (3, "Termo exemplo")]:
         ins("PRTPTCLE", list(v))
     # unidades: 3 com nome maior que a sigla (resumida, texto_resumido; o kit 3 entra); 4 com tipo nunca carregado
     for v in [(1, 1, "ml/h"), (2, None, "gotas/min"), (3, 2, "unidade exemplo longa demais"), (4, 7, "mcg/kg/min")]:
@@ -198,10 +200,11 @@ def linhas(r, ins):
                                                                "restricao_destino_1048": 2}},
         "PRTPLAN_PRTPINFUSAO": {"gravados": 3, "pendencias": {}},
         "PRTPNOTALEMB": {"gravados": 2, "pendencias": {}},
-        "PRTPPERGUNTA": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 2}},
+        "PRTPPERGUNTA": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1,
+                                                       "valor_presumido": 2}},
         "PRTPPROT": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 2, "restricao_destino_1048": 1}},
         "PRTPRECMED": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1}},
-        "PRTPTCLE": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
+        "PRTPTCLE": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "valor_presumido": 1}},
         "PRUNIDINFUSAO": {"gravados": 4, "pendencias": {"texto_resumido": 1, "pai_inexistente": 1,
                                                         "valor_presumido": 4}},
         "PRKITSOL": {"gravados": 5, "pendencias": {"pai_inexistente": 1, "valor_fora_do_dominio": 2,

@@ -208,7 +208,9 @@ def linhas(r, ins):
               (2, "0a1b2c3d-0000-4000-8000-000000000002", None, "USR_NAO_EXISTE", dt(2025, 6, 2, 9, 0, 0), None,
                502.0),                                                              # login: pai_inexistente
               (3, None, None, "USR_L7_B", None, None, 503.0),                       # sem data: 1048
-              (4, None, None, None, dt(2025, 6, 4, 9, 0, 0), None, None)]:
+              (4, None, None, None, dt(2025, 6, 4, 9, 0, 0), None, None),
+              # recusas fase 2 (P4): impressão sem data, com a geração: o instante é a geração (valor_presumido)
+              (5, "0a1b2c3d-0000-4000-8000-000000000005", dt(2025, 6, 5, 8, 0, 0), "USR_L7_A", None, None, 505.0)]:
         ins("SIASSLAUDO_IMPRESSAO", list(v))
     return {
         "PRHEMOTLAN": {"gravados": 3, "pendencias": {"valor_presumido": 8, "restricao_destino_1048": 1}},
@@ -218,22 +220,31 @@ def linhas(r, ins):
         "SHPARAM": {"gravados": 10, "pendencias": {"segredo_aguarda_cofre": 1, "vigencia_sem_fonte": 1}},
         # fornecedor sem dependência de ordem declarada (pedido em saida/L7-01.json): pai_inexistente nas 3 linhas
         # até a aresta SHREQUISICAO -> SHCLIENT; depois, só a do fornecedor 77
-        "SHREQUISICAO": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "vigencia_sem_fonte": 1}},
+        "SHREQUISICAO": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "vigencia_sem_fonte": 1}},
         "SHINTER": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
         "SHDOACAO": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "valor_fora_do_dominio": 4,
                                                   "restricao_destino_1048": 2, "restricao_destino_4025": 1}},
         "SHLOCAL": {"gravados": 2, "pendencias": {"valor_presumido": 9, "restricao_destino_1048": 1}},
         "SHRESPOSTA": {"gravados": 3, "pendencias": {"adotado_existente": 1, "pai_inexistente": 1,
                                                     "restricao_destino_1048": 2}},
+        # R9 (recusas fase 2): a 7 (doação recusada) não recusa antes pelo pai pendente (coluna anulável): chega ao
+        # CHECK do destino (4025), com o aviso pai_pendente, e é religada no reprocessamento
         "SHBOLSA": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
-                                                 "valor_fora_do_dominio": 4, "restricao_destino_1048": 3}},
-        "SIASSLAUDO_IMPRESSAO": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}},
+                                                 "valor_fora_do_dominio": 4, "restricao_destino_1048": 3,
+                                                 "restricao_destino_4025": 1}},
+        # recusas fase 2 (P4): a 5 (sem impressão, com geração) grava pela geração, presumida; a 3 (sem as duas) recusa
+        "SIASSLAUDO_IMPRESSAO": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1,
+                                                                "valor_presumido": 1}},
         "SHCONDUTA": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},
         "SHESTFINAL": {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 2}},
         "SHEXAME": {"gravados": 4, "pendencias": {"restricao_destino_4025": 1, "valor_fora_do_dominio": 2}},
         "SHREACAO": {"gravados": 3, "pendencias": {"valor_presumido": 8, "restricao_destino_1048": 1}},
         "SHMOTDEV": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
-        "SHMOV": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 3, "restricao_destino_1048": 2}},
+        # recusas fase 2 (P4): nome sem par (4) grava com a natureza presumida 'correcao' (senao apaga o
+        # valor_fora_do_dominio da natureza; ficam o S/N 'Q' e a baixa do estoque sem par); a 5 sem nome também recebe
+        # a presumida, mas a descrição NOT NULL recusa (1048)
+        "SHMOV": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 2, "restricao_destino_1048": 1,
+                                               "valor_presumido": 2}},
         "SHPERGUN": {"gravados": 3, "pendencias": {"valor_presumido": 4, "valor_fora_do_dominio": 1,
                                                    "restricao_destino_1048": 1}},
         "SHTPTRANSF": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},

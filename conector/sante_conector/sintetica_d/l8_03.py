@@ -146,7 +146,8 @@ def linhas(r, ins):
     q("TBCREMED", ID_TBCBOPRO=2, CRM=222, CON=9, CONTAS="I")
     q("TBCREMED", ID_TBCBOPRO=3, CRM=333, CON=2, CONTAS="U")
     # credenciamento do prestador: 1 e 3 prestador ainda não carregado (ordem), 2 prestador ambíguo e ato inexistente;
-    # sem profissional nem prestador o CHECK do destino recusa (4025)
+    # sem profissional nem prestador o CHECK do destino recusa (4025); R9 (recusas fase 2): o prestador pendente (1 e 3)
+    # deixa a coluna anulável nula com aviso pai_pendente e a linha chega ao mesmo CHECK (4025, religada no reprocessamento)
     q("TBCREPRS", ATO=1, PS=10, CON=1, CONTAS="A")
     q("TBCREPRS", ATO=2, PS=20, CON=1)
     q("TBCREPRS", ATO=1, PS=10, CON=2)
@@ -193,7 +194,8 @@ def linhas(r, ins):
         q("TBIRREGCTRCTA", ID=i, NOME=n)
     for i, n in ((1, "Percentual exemplo"), (2, "Sem percentual")):
         q("TBCONVPERCTAPAC", ID=i, NOME=n)
-    # tipo de atendimento: o COD 1 repete na tabela 2 (1062); 2|3 sem nome (1048); r4: tabela 3 inexistente
+    # tipo de atendimento: recusas fase 2 (P6, A04): código pela tabela e pelo código (TAB+COD), o COD 1 da tabela 2
+    # grava como atendimento_2_1 (antes 1062); 2|3 sem nome (1048); r4: tabela 3 inexistente
     # (pai_inexistente, padrão próprio presumido)
     for tab, cod, n in ((1, 1, "Consulta exemplo"), (1, 2, "Exame  exemplo"), (2, 1, "Consulta exemplo SUS"),
                         (2, 3, None), (3, 5, "Tipo exemplo sem tabela")):
@@ -213,7 +215,8 @@ def linhas(r, ins):
                                      (9, d(2025, 1, 1), "4A", D("50.00")), (1, d(2025, 1, 1), "   ", D("10.00"))):
         q("TBPORMED", CONV=conv, DATA=data, PORTE=porte, VALOR=valor)
     # rodada 3: procedimento de cada tabela de honorários -> item faturável; um grupo de migração por tabela (1 e 2);
-    # 4 sem nome (1048, o grupo 1 já existe e fica); 5 tabela 9 inexistente (grupo sem descrição: 1048)
+    # 4 sem nome: recusas fase 2 (P6, A08) descrição presumida pelo código ("Procedimento 40301010", valor_presumido),
+    # gravada; 5 tabela 9 inexistente (grupo sem descrição: 1048)
     for i, tab, cod, n, mod in ((1, 1, 10101012, "Consulta exemplo em consultório", "A"),
                                 (2, 1, 30602076, "Procedimento  exemplo   cirúrgico", "I"), (3, 2, 10101012, "Consulta exemplo", None),
                                 (4, 1, 40301010, None, None), (5, 9, 10101039, "Procedimento exemplo sem tabela", None)):
@@ -251,7 +254,9 @@ def linhas(r, ins):
     # r4 (revisão): procedimento pelo código na tabela (TAB, PROCTO) -> TBPROCTO (ID_TBCTRTHM, COD_PROCEDIMENTO): 10101012
     # r4: percentual por componente (desdobrado): 1 dois componentes; 2 procedimento sem preço na tabela (RECUSADA:
     # item NULL valeria para a tabela inteira); 3 tipo de paciente fora do domínio (RECUSADA, nunca 'todos'); 4 sem
-    # percentual (sem_item_a_gravar); 5 fonte inexistente (1048); 6 internado, horário especial
+    # percentual (sem_item_a_gravar); 5 fonte inexistente (1048); 6 internado, horário especial: recusas fase 2 (R8)
+    # FILME, N_CRED e APOS_HORARIO não geram regra (0 em todas na origem), então a 6 fica sem_item_a_gravar e só a 1
+    # grava (dois componentes, 100 + x)
     for conv, tab, procto, data, tp, kw in ((1, 1, 10101012, d(2025, 1, 1), "T", dict(PERC_CH=D("100.00"), PERC_COPE=D("80.00"))),
                                             (2, 1, 99, d(2025, 1, 1), "I", dict(PERC_ANEST=D("50.00"), CH_VALOR_CRED="S")),
                                             (1, 1, 10101012, d(2025, 2, 1), "X", dict(PERC_FILME=D("10.00"))),
@@ -302,19 +307,26 @@ def linhas(r, ins):
                                                    "restricao_destino_1048": 2, "vigencia_sem_fonte": 5}},
         # conta-itens-2 (conferidor): a 3 (tabela licenciada) grava a equivalência no item ligado ao espelho (9601);
         # a busca do código na tabela concorrente e a vigência pela data da carga somam 1 cada (antes: licença)
-        "TBREFMEMTUSS": {"gravados": 3, "pendencias": {"catalogo_codigo_inexistente": 6,
+        # recusas fase 2 (P6, A03): concorrente cod: pelo item de referência próprio (TAB+COD+CLASSIF, fonte outra);
+        # a 3 (ligada ao espelho, achada pela primeira) e a 4 (item inexistente) não têm item próprio com o código:
+        # codigo_inexistente_destino nas duas (a concorrente é avaliada mesmo quando a primeira já deu o valor)
+        "TBREFMEMTUSS": {"gravados": 3, "pendencias": {"catalogo_codigo_inexistente": 6, "codigo_inexistente_destino": 2,
                                                        "pai_inexistente": 1, "restricao_destino_1048": 2,
                                                        # rodada 5 (ADR 0007, 16): a linha com data própria de
                                                        # evidência não é mais "sem fonte"
                                                        "vigencia_sem_fonte": 4}},
         # r4 (revisão): 2 recusada (procedimento ausente: item e tabela pai_inexistente, tabela NOT NULL 1048); 3 recusada
         # (tipo de paciente fora do domínio); 5 fonte inexistente (pai_inexistente, 1048)
-        "TBPERTHM": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 2,
-                                                   "sem_item_a_gravar": 1, "valor_fora_do_dominio": 1}},
+        # recusas fase 2 (R8): gravados conta os componentes; só a 1 grava (CH e COPE), a 6 (só APOS_HORARIO) e a 4
+        # ficam sem_item_a_gravar
+        "TBPERTHM": {"gravados": 2, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 2,
+                                                   "sem_item_a_gravar": 2, "valor_fora_do_dominio": 1}},
         "TBTIPPRO": {"gravados": 3, "pendencias": {"valor_presumido": 3, "adotado_existente": 1}},
         "TBPORMED": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2,
                                                    "restricao_destino_4025": 1}},
-        "TBPROCTO": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
+        # recusas fase 2 (P6, A08): a 4 sem nome grava com a descrição presumida pelo código (valor_presumido)
+        "TBPROCTO": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1,
+                                                   "valor_presumido": 1}},
         "TBCOSPPROF": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 4}},
         "TBCRECOO": {"gravados": 1, "pendencias": {"vigencia_sem_fonte": 3, "pai_inexistente": 2,
                                                    "restricao_destino_1048": 2}},
@@ -324,8 +336,10 @@ def linhas(r, ins):
                                                    "restricao_destino_1048": 1, "restricao_destino_4025": 1}},
         # rodada 2: com as arestas pedidas (TBCREPRS -> TBPRESER/TBTABATO, TBDTHCDC -> TBCENCUS) os pais carregam antes;
         # pai recusado agora recusa a linha com pai_pendente antes das outras regras
-        "TBCREPRS": {"gravados": 0, "pendencias": {"vigencia_sem_fonte": 1, "pai_ambiguo": 1, "pai_inexistente": 1,
-                                                   "pai_pendente": 2, "restricao_destino_4025": 1}},
+        # R9 (recusas fase 2): o prestador pendente não recusa a linha antes (coluna anulável): as 3 chegam ao CHECK
+        # (4025) e à vigência da carga (vigencia_sem_fonte), com o aviso pai_pendente nas 2 de prestador pendente
+        "TBCREPRS": {"gravados": 0, "pendencias": {"vigencia_sem_fonte": 3, "pai_ambiguo": 1, "pai_inexistente": 1,
+                                                   "pai_pendente": 2, "restricao_destino_4025": 3}},
         "TBCTRDTH": {"gravados": 2, "pendencias": {"valor_presumido": 3, "valor_fora_do_dominio": 2,
                                                    "restricao_destino_1048": 1}},
         "TBCTRMEM": {"gravados": 2, "pendencias": {"valor_presumido": 4}},
@@ -342,7 +356,8 @@ def linhas(r, ins):
                                                         "valor_presumido": 12}},
         "TBIRREGULARID_TBMODULO": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                                  "restricao_destino_1048": 1}},
-        "TBITEATE": {"gravados": 3, "pendencias": {"valor_presumido": 1, "pai_inexistente": 1, "restricao_destino_1062": 1,
+        # recusas fase 2 (P6, A04): código TAB+COD, sem colisão: o COD 1 da tabela 2 grava (antes 1062)
+        "TBITEATE": {"gravados": 4, "pendencias": {"valor_presumido": 1, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 1}},
         "TBLOCCON": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_fora_do_dominio": 1,
                                                    "valor_presumido": 5, "pai_inexistente": 1}},

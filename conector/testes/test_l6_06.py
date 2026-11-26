@@ -32,12 +32,15 @@ R5 = {"PROFTGABARITO", "PROFTGRADUACAO", "PROFTTPARQUIV", "PRPARAM_CHECAGEM", "P
 
 
 
-# PENDENTE DE DECISÃO (pedido 67 de pedidos-do-mapa.md, recusas-fase2 P3a): o orquestrador ou o dono clínico
-# decidem antes do reprocessamento se estas presumidas clínicas valem. Até lá, a lista abaixo é a única exceção
-# aceita à regra "nome sem par não é presumido". Se a decisão for contrária: esvaziar a lista (volta a exigir só o
-# de-para) e tirar as concorrentes do mapa. Nenhuma outra presumida clínica entra sem decisão registrada.
+# Pedido 67 DECIDIDO (orquestrador, 26/11, T2-brief): quando a origem não informa uma situação ou papel clínico,
+# nunca se presume estado que gere trabalho ou mude a conduta; vale o neutro do CHECK, senão o terminal não acionável
+# (valor_presumido visível), senão a recusa visível. Aqui: a situação do aprazamento sem par vira 'suspenso'
+# (nunca 'pendente': não há neutro no CHECK); o período sem par segue atendimento inteiro (o 1 é verdadeiro na janela
+# de busca do sumário de alta: não é situação nem papel, não gera trabalho e não omite nada).
 PRESUMIDAS_PEDIDO_67 = {("PROPCAOPERIODO", "periodo_consulta_sumario_alta.atendimento_inteiro"): "=~1",
-                        ("PRSITAPRAZAM", "situacao_aprazamento.categoria"): "=~pendente"}
+                        ("PRSITAPRAZAM", "situacao_aprazamento.categoria"): "=~suspenso"}
+# linhas da sintética que caem na presumida (nome sem par; a de nome nulo também, recusada depois pelo 1048)
+PRESUMIDAS_NA_SINTETICA = {"PROPCAOPERIODO": 1, "PRSITAPRAZAM": 2}
 
 class L6_06(unittest.TestCase):
     @classmethod
@@ -81,12 +84,12 @@ class L6_06(unittest.TestCase):
 
     def test_sem_literal_presumido_e_fixos(self):
         lit = {(c["tabela"], c["destino"]): c["coluna"] for c in self.decl if c["coluna"].startswith("=")}
-        # nenhuma presumida além das PENDENTES DE DECISÃO do pedido 67 (concorrentes do nome sem par)
+        # nenhuma presumida além das do pedido 67 (concorrentes do nome sem par, decididas)
         self.assertEqual({k: v for k, v in lit.items() if v.startswith("=~")}, PRESUMIDAS_PEDIDO_67)
         self.assertEqual(lit[("PRPADRECEITA", "modelo_receita.formato")], "=livre")
         self.assertEqual(lit[("PRSAE_LIKERT", "escala_resultado_enfermagem.tipo_escala")], "=likert_1_a_5")
         for t in self.esp:
-            self.assertNotIn("valor_presumido", self.esp[t]["pendencias"], t)
+            self.assertEqual(self.esp[t]["pendencias"].get("valor_presumido", 0), PRESUMIDAS_NA_SINTETICA.get(t, 0), t)
 
     def test_de_para_de_valores_declarado(self):
         dv = {(c["tabela"], c["coluna"], c["destino"]) for c in self.decl if c["depara"] == "valores"}
@@ -210,7 +213,8 @@ class L6_06(unittest.TestCase):
         self.assertEqual(set(self.esp), set(l6_06.CARREGADAS))
         self.assertEqual(self.esp["PROFTEXAME"]["pendencias"],
                          {"pai_pendente": 1, "pai_inexistente": 1, "restricao_destino_1048": 2})
-        self.assertEqual(self.esp["PRPADRECEITA"]["gravados"], 5)
+        # 6: a receita de vigência sentinela entra pela vigência da carga (recusas-fase2 P3a, @vigencia_carga)
+        self.assertEqual(self.esp["PRPADRECEITA"]["gravados"], 6)
         self.assertEqual(self.esp["PRPADRECEITA"]["pendencias"]["pai_ambiguo"], 1)
 
 

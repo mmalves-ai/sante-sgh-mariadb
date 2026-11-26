@@ -415,9 +415,10 @@ def linhas(r, ins):
               OBSERVACAO="Reação leve %d" % i, **acao)
     # respostas do registro: 1 e 2 no registro 1 (sequência 1 e 2) criam a opção do campo (modelo_campo_opcao, uma
     # por campo x código, rótulo do catálogo de respostas), 3 no registro 2 (autopreenchida) adota a opção da 1; 4
-    # registro recusado (pai_pendente; a opção já existe e é adotada); 5 opção de pergunta em dois modelos: o campo
-    # sai pai_ambiguo (na opção e na resposta) e a linha recusa (NOT NULL); 6 opção nunca vista (pai_inexistente nas
-    # cinco colunas lidas por ela e NOT NULL); 7 adota a opção da 2;
+    # registro recusado (pai_pendente; a opção já existe e é adotada); 5 opção de pergunta em dois modelos: recusas-fase2
+    # (lote R, R1) o campo sai da trinca (modelo do registro, pergunta, ORDEM) e grava no campo do modelo 1 (antes
+    # pai_ambiguo); 6 opção nunca vista (pai_inexistente nas colunas lidas por ela e NOT NULL); 7 adota a opção da 2;
+    # a ORDEM de cada resposta é a do campo respondido no modelo (PRPADEVOL), como na origem;
     # 7 hora inválida (NULL com hora_invalida, gravada). A hora '0830' da 2 também sai hora_invalida: a origem entrega
     # VARCHAR em bytes; desde a rodada 2 a regra hora_hhmm decodifica o texto cru: só 2575 fica hora_invalida
     for i, cab, resp, extra in [(1, 1, 1, {"RESPALFA": "Texto livre", "RESPVALOR": D("37.500"), "UNIDRESP": "C"}),
@@ -425,7 +426,7 @@ def linhas(r, ins):
                                            "RESPSNAO": "S"}),
                                 (3, 2, 1, {"RESPALFA": "Repetido", "AUTOPREENCHIDO": "S"}), (4, 3, 1, {}),
                                 (5, 1, 3, {"RESPALFA": "Ambígua"}), (6, 1, 99, {}), (7, 2, 2, {"RESPHORA": "2575"})]:
-        linha("PREVOLPAC", ID=i, ID_CABEVOL=cab, SEQ=1, ID_RESPOSTA=resp, ORDEM="%02d" % i,
+        linha("PREVOLPAC", ID=i, ID_CABEVOL=cab, SEQ=1, ID_RESPOSTA=resp, ORDEM={1: "01", 2: "02", 3: "03"}.get(resp, "01"),
               CONTEVOL=b"Texto longo falso" if i == 1 else None, **extra)
     # documentos emitidos: 1 válido; 2 suspenso com justificativa (suspenso); 3 inválido sem suspensão (válido: a
     # situação vem da suspensão); 4 sem texto (NOT NULL); 5 correção do 1 (fase 2); 6 suspenso sem justificativa (CHECK)
@@ -559,26 +560,39 @@ ESPERADO = {
     # r5: as respostas em edição ficam na trilha do rascunho (agrupadas); no próprio rascunho só no contrato do produto
     # (pedido em saida/L6-12.json); a do rascunho nunca visto (999) grava sem a ligação; gravados contam as LINHAS
     # da origem (101 tem duas no mesmo grupo), como o agrupar principal do exemplo_r4 (r6)
-    "PREVOLPACTMP": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1}},
-    "PRALERGIAPACTMP": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1, "restricao_destino_4025": 1,
-                                                    "retirada_proposta_aguarda_modelo": 1}},
-    "PRALERGIAPACTMP_TBPRINC": {"gravados": 1, "pendencias": {"codigo_inexistente_destino": 1, "pai_pendente": 1, "restricao_destino_4025": 1}},
+    # recusas-fase2 (R9): a do rascunho recusado (104) também grava sem a ligação (pai_pendente, religada depois)
+    "PREVOLPACTMP": {"gravados": 5, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1}},
+    # recusas-fase2 (R9): a 3 (rascunho recusado) segue sem a ligação (pai_pendente no registro e no evento), o autor
+    # nunca visto sai pai_inexistente e rascunho_sem_autor, e o CHECK do autor do rascunho recusa (4025)
+    "PRALERGIAPACTMP": {"gravados": 2, "pendencias": {"pai_inexistente": 2, "pai_pendente": 2, "rascunho_sem_autor": 1,
+                                                    "restricao_destino_4025": 2, "retirada_proposta_aguarda_modelo": 1}},
+    # recusas-fase2 P3b (A06): o princípio vai ao cadastro próprio do hospital pela chave da origem; o código ausente
+    # no catálogo oficial (3) grava (o oficial fica só como ligação do cadastro próprio)
+    "PRALERGIAPACTMP_TBPRINC": {"gravados": 2, "pendencias": {"pai_pendente": 1}},
     "PRCABEC_MONITORIZACAO": {"gravados": 1, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_4025": 1}},
     "PRPLANPRESC": {"gravados": 2, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1, "restricao_destino_4025": 1}},
     "PRASS_DOC_PREXAMEASS": {"gravados": 1, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1}},
     "PRCONTEVOL": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
-    "PREVOLPAC": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 5, "pai_ambiguo": 2,
-                                                "adotado_existente": 4, "restricao_destino_1048": 2,
+    # recusas-fase2 (R1): o campo pela trinca; 1, 2, 3, 5 e 7 gravam e adotam a opção já carregada pela L6-11
+    # (adotado_existente 5); 4 registro recusado (pai_pendente); 6 opção nunca vista: pai_inexistente nas 7 colunas lidas
+    # por ela (as duas vias do campo, na resposta e na opção, rótulo, sequência e ativo), rótulo presumido e NOT NULL
+    "PREVOLPAC": {"gravados": 5, "pendencias": {"pai_pendente": 1, "pai_inexistente": 7, "adotado_existente": 5,
+                                                "restricao_destino_1048": 1, "valor_presumido": 1,
                                                 "hora_invalida": 1}},
-    "PRALERGIAPAC": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
-                                                   "restricao_destino_4025": 2}},
-    "PRALERGIAPAC_TBPRINC": {"gravados": 2, "pendencias": {"pai_pendente": 1, "codigo_inexistente_destino": 1,
-                                                           "pai_inexistente": 1, "restricao_destino_4025": 3,
+    # recusas-fase2: a 3 (registro recusado) grava sem a ligação ao registro (R9: pai_pendente no alerta e no evento;
+    # o autor nunca visto, pai_inexistente nos dois); a 5 (retirada sem data da ação) grava inativada no momento do
+    # registro, presumido (P3b A06: valor_presumido); só a 4 (alérgeno nunca visto) recusa pelo CHECK
+    "PRALERGIAPAC": {"gravados": 4, "pendencias": {"pai_pendente": 2, "pai_inexistente": 3,
+                                                   "restricao_destino_4025": 1, "valor_presumido": 1}},
+    # recusas-fase2: a 3 grava (a alergia 3 grava pelo R9); 4 e 5 gravam no cadastro próprio do hospital (P3b A06);
+    # 6 princípio nunca visto (pai_inexistente e o CHECK do princípio); 7 repete o par da 1 (UNIQUE: falta a chave
+    # única pelo princípio do cadastro próprio no destino, pedido do modelo)
+    "PRALERGIAPAC_TBPRINC": {"gravados": 5, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 1,
                                                            "restricao_destino_1062": 1}},
     # rodada 4 (11_SUP/08): princípio da alergia agora anulável com o do cliente; sem nenhum dos dois o CHECK
     # ck_alergia_paciente_principio_principio (4025) recusa a linha, no lugar do NOT NULL (1048)
-    "PRATESTREQIMP": {"gravados": 4, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1,
-                                                    "restricao_destino_4025": 1}},
+    # recusas-fase2 K1 (06_PEP/99z): o documento migrado sem texto (4) grava com o texto nulo
+    "PRATESTREQIMP": {"gravados": 5, "pendencias": {"valor_presumido": 6, "restricao_destino_4025": 1}},
     # rodada 4: o documento é do cabeçalho (ref:PRASSINATURA_CAB): 3 cabeçalho nunca visto (pai_inexistente + 1048)
     "PRASSINATURA_DOC": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
 }

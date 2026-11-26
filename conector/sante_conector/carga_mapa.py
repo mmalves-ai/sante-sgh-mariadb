@@ -1505,6 +1505,7 @@ class CargaMapa(carga.Carga):
                 vals[dt], campos[dt] = [], []
                 continue
             modelo, algum = [], False          # [(coluna destino, valor ou marca)] na ordem declarada
+            pend_vig = []                      # pendências da vigência deste destino (saem se ele não grava)
             fora, apagar, pp_itens = {}, set(), None  # `senao`: pendências fora do domínio por coluna; `por_pai`
             pos = {}                           # coluna destino -> posição no modelo (colunas concorrentes)
             marcas = {}                        # marca de item -> declaração (`cod:` no #item/#rotulo)
@@ -1538,8 +1539,12 @@ class CargaMapa(carga.Carga):
                 elif nome.startswith("="):
                     x = nome[1:]
                 elif c.get("vigencia", False) is not False and "vigencia" in c:
-                    x = self._vigencia(p, linha, chave, c["vigencia"], pend)
-                    algum = algum or x is not None
+                    # recusas-fase2 (U2): a vigência é derivada (evidência ou data estimada), não valor da origem: não
+                    # conta para o `opcional`; se o secundário não grava, as pendências dela saem com ele
+                    pv = []
+                    x = self._vigencia(p, linha, chave, c["vigencia"], pv)
+                    pend.extend(pv)
+                    pend_vig.extend(pv)
                 elif nome == "@estabelecimento":
                     x = self._estabelecimento()
                     if x is None:
@@ -1703,6 +1708,8 @@ class CargaMapa(carga.Carga):
                         itens.append((rot, xs))
             elif op.get("opcional") and not algum:
                 itens = []
+                for y in pend_vig:  # a última ocorrência de cada uma (a desta vigência)
+                    del pend[len(pend) - 1 - pend[::-1].index(y)]
             vals[dt], campos[dt] = [], []
             for rot, item in itens:
                 v, cs, nomes = {}, [], []

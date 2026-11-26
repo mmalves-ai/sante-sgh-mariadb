@@ -113,3 +113,27 @@ PRTPRESPOSTA	ID_PRTPPERGUNTA	informacao_clinica_operadora.tipo_dado	Lista múlti
 PRTPRESPOSTA	ID_PRTPPERGUNTA	informacao_clinica_operadora.tipo_dado	LISTA MÚLTIPLA	lista	L6-08 r5: tipo do dado enviado à operadora pelo NOME do tipo de pergunta (mesma evidência do tipo de campo; hora vira texto, data e hora vira data)
 PRTPRESPOSTA	ID_PRTPPERGUNTA	informacao_clinica_operadora.tipo_dado	Múltipla escolha	lista	L6-08 r5: tipo do dado enviado à operadora pelo NOME do tipo de pergunta (mesma evidência do tipo de campo; hora vira texto, data e hora vira data)
 PRTPRESPOSTA	ID_PRTPPERGUNTA	informacao_clinica_operadora.tipo_dado	MÚLTIPLA ESCOLHA	lista	L6-08 r5: tipo do dado enviado à operadora pelo NOME do tipo de pergunta (mesma evidência do tipo de campo; hora vira texto, data e hora vira data)
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	PENDENTE	pendente	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Pendente	pendente	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	EMITIDO	emitido	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Emitido	emitido	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	EMITIDA	emitido	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Emitida	emitido	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	IMPRESSO	emitido	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Impresso	emitido	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	AUTORIZADO	assinado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Autorizado	assinado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	ASSINADO	assinado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Assinado	assinado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	CONSENTIDO	assinado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Consentido	assinado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	ACEITO	assinado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Aceito	assinado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	RECUSADO	recusado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Recusado	recusado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	NEGADO	recusado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Negado	recusado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	REVOGADO	revogado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Revogado	revogado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	CANCELADO	cancelado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido
+PRTPTCLE	NOME	situacao_termo_consentimento.etapa	Cancelado	cancelado	recusas-fase2 (pedido 67): etapa pelo nome da situação do termo (rótulos da L5-02); sem par: cancelado presumido

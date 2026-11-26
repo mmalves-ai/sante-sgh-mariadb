@@ -235,7 +235,8 @@ def linhas(r, ins):
     for x in [(1, "PDF"), (2, "JPG"), (3, "PNG"), (4, "  ")]:
         ins("PROFTTPARQUIV", list(x))
 
-    # --- períodos do sumário: janela pelo nome; 4 sem par no nome (recusa 4025) e com situação fora do domínio
+    # --- períodos do sumário: janela pelo nome; 4 sem par no nome entra atendimento inteiro presumido (pedido 67; a
+    # presumida apaga o fora do domínio da janela, `senao`; fica o das horas) e com situação fora do domínio
     for x in [(1, "Atendimento inteiro", "A"), (2, "Últimas 24 horas", "A"), (3, "Últimas  48 horas", "I"),
               (4, "Período exemplo", "Z"), (5, "ULTIMAS 12 HORAS", "A")]:
         ins("PROPCAOPERIODO", list(x))
@@ -251,7 +252,7 @@ def linhas(r, ins):
             (2, "Receita dor", "Paracetamol € “dose”", "N", "usuario.inexistente", ini, fim),  # pai_inexistente + 4025
             (3, None, txt, "S", "medico.exemplo", ini, None),                              # nome NULL: 1048
             (4, "Receita sem texto", None, "N", "enf.exemplo", ini, None),                 # CHECK texto: 4025
-            (5, "Receita vigência sentinela", txt, "S", "enf.exemplo", TS(1899, 12, 30), None),  # data_sentinela + 1048
+            (5, "Receita vigência sentinela", txt, "S", "enf.exemplo", TS(1899, 12, 30), None),  # data_sentinela; gravada (P3a: @vigencia_carga)
             (6, "Receita fim antes", txt, "N", "enf.exemplo", fim, ini),                   # CHECK vigência: 4025
             (7, "Receita vigente", txt.encode("cp1252"), "N", "enf.exemplo", ini, fim),    # gravada, pessoal
             (8, "Receita ambígua", txt, "N", "dup.exemplo", ini, None),                    # pai_ambiguo + 4025 (dono)
@@ -289,6 +290,8 @@ def linhas(r, ins):
     for x in [(1, "Dor", None), (2, "Febre", "0f0f0f0f-0000-4000-8000-000000000002"), (3, "Náusea", None),
               (4, "   ", None)]:
         ins("PRSENECESSARIO", list(x))
+    # situação do aprazamento: 4 sem nome (1048, a presumida conta antes da recusa); 6 sem par entra suspensa presumida
+    # (pedido 67: nunca pendente)
     for x in [(1, "Pendente"), (2, "Aprazado"), (3, "REAPRAZADO"), (4, None), (5, "Suspensa"), (6, "Situação exemplo")]:
         ins("PRSITAPRAZAM", list(x))
     for i in range(1, 9):
@@ -301,10 +304,10 @@ def linhas(r, ins):
         "PROFTEXAME": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                      "restricao_destino_1048": 2}},
         "PROFTTPACUID": {"gravados": 4, "pendencias": {}},
-        "PROPCAOPERIODO": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 3, "restricao_destino_4025": 1}},
+        "PROPCAOPERIODO": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 2, "valor_presumido": 1}},
         "PROXIGENOTERAPIA": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},
-        "PRPADRECEITA": {"gravados": 5, "pendencias": {"pai_inexistente": 3, "pai_ambiguo": 1,
-                                                       "restricao_destino_1048": 2, "restricao_destino_4025": 4,
+        "PRPADRECEITA": {"gravados": 6, "pendencias": {"pai_inexistente": 3, "pai_ambiguo": 1,
+                                                       "restricao_destino_1048": 1, "restricao_destino_4025": 4,
                                                        "data_sentinela": 1, "valor_fora_do_dominio": 1}},
         "PRPROTGERAL": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_4025": 1,
                                                       "restricao_destino_1264": 1, "valor_fora_do_dominio": 2}},
@@ -313,7 +316,8 @@ def linhas(r, ins):
         "PRSAE_LIKERT": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 2, "restricao_destino_1048": 1,
                                                        "restricao_destino_1062": 1}},
         "PRSENECESSARIO": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},
-        "PRSITAPRAZAM": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 2}},
+        "PRSITAPRAZAM": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1,
+                                                       "valor_presumido": 2}},
         # rodada 5: gabarito (5 posições em 2 formas); opções de lista (extensão e situação só com espaços: rótulo
         # NULL, 1048); parâmetros de valor (um item por coluna com valor, o N também; vigência estimada pela origem, uma
         # pendência por linha da origem)

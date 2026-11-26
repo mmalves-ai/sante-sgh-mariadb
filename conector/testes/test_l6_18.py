@@ -148,6 +148,8 @@ class Plano(unittest.TestCase):
         # a senha mestra nunca vira valor de parâmetro: só o cofre (ADR 0007, 17)
         self.assertNotIn("SENHA_MASTER_LIB_VISITA", c["parametro_valor.valor"]["via"])
         self.assertEqual(c["credencial_integracao.referencia_cofre"]["coluna"], "#cofre:SENHA_MASTER_LIB_VISITA")
+        # o literal da descrição da credencial é o texto exato (já esteve estragado: "=S (origem)enha ...")
+        self.assertEqual(c["credencial_integracao.descricao"]["coluna"], "=Senha mestra de liberação de visita")
 
     def test_referencias(self):
         refs = {("TBDIETAS", "modalidade_dieta", "local_estoque_id"): "GELOCARM",

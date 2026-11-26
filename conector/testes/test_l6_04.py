@@ -205,7 +205,9 @@ class L604(unittest.TestCase):
                          [("COD", "valores"), ("=~nao_informada", "")])
         c = self.todas("TBSITAGE", "significado")[0]
         v = c["valores"]
-        self.assertEqual(len(v), 15)   # as 16 situações menos a de código vazio (recusada pela chave)
+        # 15 pares: as 16 situações menos a de COD em branco, que não tem par no de-para; ela não é recusada: entra
+        # pela concorrente '=~nao_informada' (significado) e pelo código fixo 'exame_sem_codigo' (ver abaixo)
+        self.assertEqual(len(v), 15)
         self.assertTrue(set(v.values()) <= SIGNIFICADOS)
         self.assertEqual((v["C"], v["X"], v["F"], v["S"], v["A"], v["HR"]),
                          ("confirmada", "cancelada", "falta", "realizada", "chegou", "bloqueada"))

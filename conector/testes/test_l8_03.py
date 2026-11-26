@@ -361,6 +361,11 @@ class Pacote(unittest.TestCase):
         self.assertEqual({x["coluna"] for x in self.l if x["destino"].endswith(".vigencia_inicio")}, {"#vigencia"})
 
 
+# R9: coluna anulável com pai pendente grava com a coluna nula (aviso pai_pendente, religada no reprocessamento);
+# nestas tabelas a pendência é aviso, não recusa (as 3 linhas da TBCREPRS são recusadas pelo 4025)
+PAI_PENDENTE_AVISO = {"TBCREPRS"}
+
+
 class Sintetica(unittest.TestCase):
     def test_so_tabelas_carregaveis_e_pais_lidos_no_ddl(self):
         # R5: TBCTRTAT carrega e continua lida pelo TBITEATE (criada uma vez, entre os pais lidos)
@@ -375,7 +380,8 @@ class Sintetica(unittest.TestCase):
             if t == "TBPERTHM":  # desdobrado: "gravados" conta itens, não linhas
                 continue
             recusas = sum(n for rg, n in e["pendencias"].items()
-                          if rg.startswith("restricao_destino_") or rg in ("pai_pendente", "licenca_nao_comprovada"))
+                          if rg.startswith("restricao_destino_") or rg == "licenca_nao_comprovada"
+                          or (rg == "pai_pendente" and t not in PAI_PENDENTE_AVISO))
             if t == "TBMATMED":  # conferidor F4: pai do filtro inexistente RECUSA a linha (tabela 9 sem TBCTRMEM)
                 recusas += e["pendencias"].get("pai_inexistente", 0)
             self.assertEqual(e["gravados"] + recusas, ins.count(t), t)
@@ -487,7 +493,10 @@ class ValoresNoDestino(unittest.TestCase):
              "honorario"),
             ("proc_2", "Procedimento exemplo cirúrgico", "procedimento", "tabela_honorario_1",
              "Tabela exemplo honorários", "honorario"),
-            ("proc_3", "Consulta exemplo", "procedimento", "tabela_honorario_2", "Tabela exemplo inativa", "honorario")])
+            ("proc_3", "Consulta exemplo", "procedimento", "tabela_honorario_2", "Tabela exemplo inativa", "honorario"),
+            # recusas fase 2 (P6, A08): sem nome, descrição presumida pelo código do procedimento
+            ("proc_4", "Procedimento 40301010", "procedimento", "tabela_honorario_1", "Tabela exemplo honorários",
+             "honorario")])
         self.assertEqual(self.lido["grupos"], [(2,)])  # o grupo da tabela inexistente foi desfeito com a linha
 
     def test_valor_do_porte_por_fonte_e_vigencia(self):
@@ -542,9 +551,12 @@ class ValoresNoDestino(unittest.TestCase):
 
     def test_tipo_de_atendimento(self):
         self.assertEqual(self.lido["tipo_atendimento_tabela"],
-                         [("atendimento_1", "Consulta exemplo", "tuss", "1"),
-                          ("atendimento_2", "Exame exemplo", "tuss", "2"),
-                          ("atendimento_5", "Tipo exemplo sem tabela", "proprio", "5")])
+                         # recusas fase 2 (P6, A04): código pela tabela e pelo código (TAB+COD); o COD 1 da tabela 2
+                         # (SUS) grava sem colisão
+                         [("atendimento_1_1", "Consulta exemplo", "tuss", "1"),
+                          ("atendimento_1_2", "Exame exemplo", "tuss", "2"),
+                          ("atendimento_2_1", "Consulta exemplo SUS", "sus", "1"),
+                          ("atendimento_3_5", "Tipo exemplo sem tabela", "proprio", "5")])
 
     def test_numeracao_fiscal_inativa_para_conferir(self):
         self.assertEqual(self.lido["sequencias"], [

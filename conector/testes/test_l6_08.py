@@ -85,11 +85,20 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.cols("PRTPLAN_PRFREQUENCIA")["visivel"]["regra"], "booleano_sn")
         self.assertEqual(self.cols("PRTPPROT")["separa_documento_gerado"]["regra"], "booleano_01")
         self.assertEqual(self.cols("PRKITSOL")["tipo_kit"]["coluna"], "=solucao")
-        presumidos = {"PRTPTCLE": "etapa",
-                      "PRVALIDARMEDDUPLICPRESC": "criterio", "TBCBARAAGENTE": "natureza",
+        presumidos = {"PRVALIDARMEDDUPLICPRESC": "criterio", "TBCBARAAGENTE": "natureza",
                       "TBCBARACLASSIFREACAO": "classificacao", "PRUNIDINFUSAO": "por_peso"}
         for t, dc in presumidos.items():
             self.assertTrue(self.cols(t)[dc]["coluna"].startswith("=~"), t)
+
+    def test_etapa_do_termo_pelo_nome_e_nunca_pendente_presumida(self):
+        # pedido 67: a etapa vem do nome (de-para); sem par, 'cancelado' presumido (terminal, não acionável, sem neutro
+        # no CHECK), nunca 'pendente' (geraria coleta de assinatura de termo antigo)
+        self.assertEqual([(c["coluna"], c["depara"]) for c in self.plano["PRTPTCLE"]["colunas"]["situacao_termo_consentimento"]
+                          if c["destino"] == "etapa"], [("NOME", "valores"), ("=~cancelado", "")])
+        v = self.valores("PRTPTCLE", "NOME", "situacao_termo_consentimento.etapa")
+        self.assertEqual((v["Pendente"], v["ASSINADO"], v["Recusado"], v["Cancelado"]),
+                         ("pendente", "assinado", "recusado", "cancelado"))
+        self.assertEqual(set(v.values()), {"pendente", "emitido", "assinado", "recusado", "revogado", "cancelado"})
 
     def valores(self, t, col, dest):
         return {v["valor_origem"]: v["valor_destino"] for v in mapa.ler_valores(mapa.DIR_PACOTE)

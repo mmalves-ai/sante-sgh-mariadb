@@ -16,13 +16,13 @@ FATIA = ["TBGRAUGRAVINT", "TBHORMED", "TBHORMED_TBUNIDAD", "TBLANC_DIAG_MANTER",
          "TBSITUACAOMP", "TBSTATUSPROCEDIMENTO", "TBTABELA_CAMPO"]
 
 
-# PENDENTE DE DECISÃO (pedido 67 de pedidos-do-mapa.md, recusas-fase2 P3a): o orquestrador ou o dono clínico
-# decidem antes do reprocessamento se estas presumidas clínicas valem. Até lá, a lista abaixo é a única exceção
-# aceita à regra "nome sem par não é presumido". Se a decisão for contrária: esvaziar a lista (volta a exigir só o
-# de-para) e tirar as concorrentes do mapa. Nenhuma outra presumida clínica entra sem decisão registrada.
-PRESUMIDAS_PEDIDO_67 = {("TBLISTADIAGNOSTICOSITUACAO", "categoria"): ["=~ativo"],
+# Pedido 67 DECIDIDO (orquestrador, 26/11, T2-brief): quando a origem não informa uma situação ou papel clínico,
+# nunca se presume estado que gere trabalho ou mude a conduta; vale o neutro do CHECK, senão o terminal não acionável
+# (valor_presumido visível), senão a recusa visível. Nenhum CHECK destas listas tem o neutro: problema sem
+# par vira 'inativo' (nunca 'ativo'), procedimento 'suspenso' (nunca 'pedido') e prescrição 'suspensa' (mantida).
+PRESUMIDAS_PEDIDO_67 = {("TBLISTADIAGNOSTICOSITUACAO", "categoria"): ["=~inativo"],
                         ("TBSITUACAOMP", "categoria"): ["=~suspensa"],
-                ("TBSTATUSPROCEDIMENTO", "etapa"): ["=~pedido"]}
+                        ("TBSTATUSPROCEDIMENTO", "etapa"): ["=~suspenso"]}
 
 
 class L609(unittest.TestCase):
@@ -75,7 +75,7 @@ class L609(unittest.TestCase):
                            ("TBSTATUSPROCEDIMENTO", "situacao_procedimento_prescrito", ["etapa", "final"])]:
             for dc in dcs:
                 c = [(x["coluna"], x["depara"]) for x in self.plano[t]["colunas"][dt] if x["destino"] == dc]
-                # pedido 67 (PENDENTE DE DECISÃO): o nome sem par cai na presumida, sempre depois do de-para
+                # pedido 67 (decidido): o nome sem par cai na presumida não acionável, sempre depois do de-para
                 esperado = [("NOME", "valores")] + [(x, "") for x in PRESUMIDAS_PEDIDO_67.get((t, dc), [])]
                 self.assertEqual(c, esperado, (t, dc))
         presumidas = [d for d in self.decl if d["coluna"].startswith("=~")]

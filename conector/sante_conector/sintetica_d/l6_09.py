@@ -113,7 +113,8 @@ def linhas(r, ins):
     for s in [(1, "Ativo"), (2, "Em acompanhamento"), (3, "Aguardando exame"), (4, "Excluído"), (5, "Revisado"),
               (6, "Pendente de alta"), (7, "Arquivado")]:
         ins("TBLANC_DIAG_STATUS", list(s))
-    # categoria e clinicamente ativo pelo NOME: 3 colapsa espaços; 4 S/N fora (padrão); 5 nome sem par (1048)
+    # categoria e clinicamente ativo pelo NOME: 3 colapsa espaços; 4 S/N fora (padrão); 5 nome sem par: inativo
+    # presumido (pedido 67: nunca ativo), clinicamente ativo no padrão (verdadeiro)
     for s in [(1, "Ativo", "S"), (2, "Resolvido", "N"), (3, "  Em   remissão ", "S"), (4, "Descartado", "X"),
               (5, "Situação sem par", "S")]:
         ins("TBLISTADIAGNOSTICOSITUACAO", list(s))
@@ -167,10 +168,12 @@ def linhas(r, ins):
     # referência da dose (base e unidade pelo NOME): 4 nome sem par (1048)
     for t in [(1, "Por quilo", "S"), (2, "Por metro quadrado", "N"), (3, "Dose fixa", None), (4, "Referência sem par", "S")]:
         ins("TBREFERENCIA", list(t))
+    # 6 nome sem par: suspensa presumida (pedido 67, não acionável; a 4 sem nome também a recebe antes do 1048)
     for s in [(1, "Liberada", b"\x89PNG\r\n\x1a\n\x00\xff", 1, "S"), (2, "Suspensa", None, 2, "S"),
               (3, "  Cancelada  ", None, 3, "N"), (4, None, None, 4, "S"), (5, "Encerrada", None, -2, "S"),
               (6, "Situação sem par", None, 6, "S")]:
         ins("TBSITUACAOMP", list(s) + ["N", None, None])
+    # 5 nome sem par: suspenso presumido (pedido 67: nunca pedido, que geraria coleta ou execução)
     for s in [(1, "Pedido", "S"), (2, "Coletado", "S"), (3, "Realizado", None), (4, "pedido", "S"),
               (5, "Situação sem par", "S")]:
         ins("TBSTATUSPROCEDIMENTO", list(s))
@@ -189,8 +192,8 @@ def linhas(r, ins):
         "TBLANC_DIAG_STATUS": {"gravados": 7, "pendencias": {"adotado_existente": 13}},
         "TBLANC_DIAG_MANTER": {"gravados": 3, "pendencias": {"adotado_existente": 5}},
 
-        "TBLISTADIAGNOSTICOSITUACAO": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 3,
-                                                                     "restricao_destino_1048": 1}},
+        "TBLISTADIAGNOSTICOSITUACAO": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 3,
+                                                                     "valor_presumido": 1}},
         "TBLANC_DIAG_SUJ_CUID": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
         "TBLISTADIAGNOSTICOESTADO": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 2,
                                                                    "restricao_destino_1048": 1}},
@@ -208,8 +211,9 @@ def linhas(r, ins):
         "PRSINAIS": {"gravados": 2, "pendencias": {"valor_presumido": 3, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 1}},
         "TBREFERENCIA": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 2, "restricao_destino_1048": 1}},
-        "TBSITUACAOMP": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 3, "restricao_destino_1048": 2,
+        "TBSITUACAOMP": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 3, "restricao_destino_1048": 1,
+                                                       "valor_presumido": 2,
                                                        "restricao_destino_1264": 1}},
-        "TBSTATUSPROCEDIMENTO": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 2, "restricao_destino_1048": 1,
+        "TBSTATUSPROCEDIMENTO": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 2, "valor_presumido": 1,
                                                                "restricao_destino_1062": 1}},
     }

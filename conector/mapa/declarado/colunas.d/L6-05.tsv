@@ -58,7 +58,6 @@ PRAGRUPBALANCO	ID	grupo_balanco_hidrico.ordem	inteiro			ordem de exibição pela
 PRASSINANTE	ID	tipo_assinante.codigo	texto			a origem só tem o id: vira o código de negócio
 PRASSINANTE	NOME	tipo_assinante.descricao	texto_nome			descrição; vazia recusa a linha (NOT NULL)
 PRASSINANTE	NOME	tipo_assinante.papel	texto_nome	valores		papel de quem assina pelo nome (valores.d/L6-05.tsv); nome sem par recusa a linha (valor_fora_do_dominio + NOT NULL) em vez de presumir o papel; o cliente acrescenta o par no painel
-PRASSINANTE	=~responsavel_legal	tipo_assinante.papel				recusas-fase2 (P3a): tipo de assinante sem par no de-para (os nomes sem par citam paciente e responsável) entra como responsável legal presumido (valor_presumido)
 PRASSINANTE	ATIVO	tipo_assinante.ativo	booleano_sn			S/N; vazio fica com o padrão (ativo)
 PRBHTIPOFECHAMENTO	ID	tipo_fechamento_balanco.codigo	texto			a origem só tem o id: vira o código de negócio
 PRBHTIPOFECHAMENTO	NOME	tipo_fechamento_balanco.descricao	texto_nome			descrição; vazia recusa a linha

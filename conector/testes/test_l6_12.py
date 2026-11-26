@@ -230,6 +230,8 @@ class FatiaL612(unittest.TestCase):
 
 
 class ConferenciaL612(unittest.TestCase):
+    maxDiff = None
+
     def test_carga_pela_cadeia_concilia_e_grava_os_avos(self):
         from sante_conector import conferencia, controle
         ctl = controle.nome_ctl("cfl6_12")
@@ -257,7 +259,8 @@ class ConferenciaL612(unittest.TestCase):
                                   " o.tabela_origem='PRCABEVOL' AND o.chave_original=%%s" % ctl, k) for k in ("1", "2")]
                 lido["reg1"] = ids("PRCABEVOL", "1")
                 lido["alergia"] = um("SELECT ativa, paciente_id, registrado_em FROM alergia_paciente ORDER BY id LIMIT 1")
-                lido["inativa"] = um("SELECT inativado_em, inativado_por_usuario_id FROM alergia_paciente WHERE NOT ativa")
+                c.execute("SELECT inativado_em, inativado_por_usuario_id FROM alergia_paciente WHERE NOT ativa ORDER BY id")
+                lido["inativa"] = [tuple(x) for x in c.fetchall()]
                 c.execute("SELECT situacao FROM documento_emitido ORDER BY situacao")
                 lido["doc"] = [x[0] for x in c.fetchall()]
                 lido["hemo"] = um("SELECT quantidade, CHAR_LENGTH(indicacao_clinica), hemocomponente_id IS NOT NULL,"
@@ -276,9 +279,10 @@ class ConferenciaL612(unittest.TestCase):
                           " ORDER BY d.entidade_origem_id")
                 lido["docpront"] = c.fetchall()
                 lido["opcao"] = um("SELECT COUNT(*), COUNT(DISTINCT modelo_campo_id), MIN(rotulo) FROM modelo_campo_opcao")
-                c.execute("SELECT p.codigo_dcb FROM alergia_paciente_principio a JOIN principio_ativo p"
-                          " ON p.id=a.principio_ativo_id ORDER BY p.codigo_dcb")
-                lido["princ"] = [x[0] for x in c.fetchall()]
+                c.execute("SELECT pc.nome, p.codigo_dcb, a.principio_ativo_id IS NULL FROM alergia_paciente_principio a"
+                          " JOIN principio_ativo_cliente pc ON pc.id=a.principio_ativo_cliente_id LEFT JOIN"
+                          " principio_ativo p ON p.id=pc.principio_ativo_id ORDER BY pc.nome, a.id")
+                lido["princ"] = [tuple(x) for x in c.fetchall()]
         r = conferencia.conferir("L6-12", depois_da_primeira=ler)
         self.assertEqual(r["erros"], [])
         ext = lido["ext"]
@@ -290,13 +294,18 @@ class ConferenciaL612(unittest.TestCase):
         self.assertEqual(lido["reg"][1], (ext[("TBUSERS", "USR2")], ext[("TBUSERS", "USR2")], "suspenso", None, 1,
                                           "Evolução 11", lido["reg1"]))
         self.assertEqual(lido["alergia"], (1, ext[("RICADPAC", "1")], datetime.datetime(2026, 3, 2, 9, 30)))
-        self.assertEqual(lido["inativa"], (datetime.datetime(2026, 3, 2, 15, 30), ext[("TBUSERS", "USR2")]))
-        self.assertEqual(lido["doc"], ["suspenso", "valido", "valido", "valido"])
+        # a 2 retirada com data e usuário da ação; a 5 retirada sem data da ação: inativada no momento clínico do
+        # registro, presumido e sem usuário (recusas-fase2 P3b A06)
+        self.assertEqual(lido["inativa"], [(datetime.datetime(2026, 3, 2, 15, 30), ext[("TBUSERS", "USR2")]),
+                                           (datetime.datetime(2026, 3, 2, 9, 30), None)])
+        # recusas-fase2 K1: o documento migrado sem texto (4) grava, válido
+        self.assertEqual(lido["doc"], ["suspenso", "valido", "valido", "valido", "valido"])
         self.assertEqual(lido["hemo"], (2, 2280, 1, 1, 1))  # indicação inteira (TEXT), hemocomponente e unidade
         self.assertEqual(lido["med"], (30, 1, 500))
         self.assertEqual(lido["mat"], [1, 2])
-        # hora '0830' em bytes ainda sai hora_invalida (pedido: hora_hhmm decodificar bytes): nenhuma hora gravada
-        self.assertEqual(list(lido["resp"]), [("opcao", 4, 4, 1)])
+        # a hora '0830' grava (hora_hhmm decodifica o texto cru); só a '2575' sai hora_invalida. recusas-fase2 (R1): a
+        # resposta 5 (pergunta em dois modelos) grava no campo do modelo do registro: 5 respostas, todas com opção
+        self.assertEqual(list(lido["resp"]), [("opcao", 5, 5, 1)])
         # documento do prontuário pelo primeiro evento de cada cabeçalho (agrupado): o documento 1 tem dois eventos
         # gravados (o terceiro, sem momento, recusa); o cabeçalho nunca visto não cria documento
         T0 = datetime.datetime(2026, 3, 2, 8, 30)
@@ -308,9 +317,13 @@ class ConferenciaL612(unittest.TestCase):
         # rodada 4: as opções da origem (PRRESPOSTA) carregam pela L6-11 (por_pai: uma por campo de cada modelo da
         # pergunta), antes das respostas; a resposta adota a opção do campo x código
         self.assertEqual(tuple(lido["opcao"]), (4, 4, "Resposta falsa 1"))
-        # princípio pelo código DCB no catálogo oficial (zeros à esquerda normalizados)
-        # rodada 5: mais o princípio da alergia em RASCUNHO (PRALERGIAPACTMP_TBPRINC 1 -> 01234)
-        self.assertEqual(lido["princ"], ["00777", "01234", "01234"])
+        # recusas-fase2 P3b (A06): o princípio da alergia vai ao cadastro próprio do hospital (nunca direto ao oficial),
+        # e o cadastro próprio liga ao oficial pelo código DCB (zeros à esquerda normalizados); sem DCB (3) ou com código
+        # que o oficial não tem (4) o cadastro próprio fica sem a ligação. Alergias 1, 2 e 3 (gravada pelo R9), 4 e 5
+        # na alergia 1, e no RASCUNHO 1 (princípio 1) e 3 (princípio 4); a 7 repete o par da 1 e nunca grava
+        um, dois, tres, quatro = ("Principio falso %d" % i for i in (1, 2, 3, 4))
+        self.assertEqual(lido["princ"], [(um, "01234", 1)] * 3 + [(dois, "00777", 1), (tres, None, 1)] +
+                         [(quatro, None, 1)] * 2)
 
 
 if __name__ == "__main__":
