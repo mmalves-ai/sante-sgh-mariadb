@@ -189,10 +189,10 @@ test.describe('Pesquisa clínica: triagem que só sugere, inclusão com TCLE e v
     await expect(page.getByTestId('pesquisa-candidatos')).toContainText('Identificado');
 
     // Inclusão com o TCLE anexado ao prontuário do próprio paciente.
-    await page.getByTestId('pesquisa-candidato').click();
+    await page.getByTestId('pesquisa-candidato').getByRole('combobox').click();
     await page.getByRole('option', { name: 'PACIENTE SINTETICO A' }).click();
     await page.getByTestId('pesquisa-tcle-em').fill('2026-11-26T09:00');
-    await page.getByTestId('pesquisa-tcle').click();
+    await page.getByTestId('pesquisa-tcle').getByRole('combobox').click();
     await page.getByRole('option', { name: /TCLE assinado/ }).click();
     await page.getByTestId('pesquisa-avaliar').click();
     expect(posts.at(-1)).toMatchObject({
