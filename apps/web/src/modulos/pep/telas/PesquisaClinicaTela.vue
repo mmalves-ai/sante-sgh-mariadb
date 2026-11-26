@@ -267,7 +267,6 @@ const opcParticipantes = computed(() => [
           <button
             type="button"
             class="ligacao"
-            :aria-label="t('pep.pesquisa.abrir', { codigo: s.codigo })"
             :data-testid="`pesquisa-abrir-${s.id}`"
             @click="aberto = s.id"
           >

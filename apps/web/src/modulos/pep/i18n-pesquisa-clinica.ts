@@ -7,7 +7,6 @@ export const mensagensPesquisaClinica = {
   nenhumEstudo: 'Nenhum estudo cadastrado neste estabelecimento.',
   linhaEstudo:
     '{codigo} · {titulo} · {situacao} · {participantes} participante(s) · {candidatos} candidato(s)',
-  abrir: 'Abrir o estudo {codigo}',
   novo: 'Novo estudo',
   codigo: 'Código',
   tituloEstudo: 'Título',
