@@ -217,6 +217,9 @@ test.describe('@C1-053 SLA do contrato com fornecedor', () => {
     await escolher(page.getByTestId('ctr-sla-modelo'), 'tempo_atendimento');
     await escolher(page.getByTestId('ctr-sla-unidade'), 'hora');
     await page.getByTestId('ctr-sla-meta').fill('4');
+    // A vigência do SLA começa com o contrato (o padrão é hoje): a medição e a apuração abaixo são de dias anteriores,
+    // e a tela recusa apurar período antes da vigência (o início da apuração tem a vigência como mínimo).
+    await page.getByTestId('ctr-sla-vigencia-inicio').fill(dia(-30));
     await page.getByTestId('ctr-sla-faixa-0-ate').fill('90');
     await escolher(page.getByTestId('ctr-sla-faixa-0-penalidade'), 'glosa');
     await page.getByTestId('ctr-sla-faixa-0-glosa').fill('10');
@@ -230,6 +233,7 @@ test.describe('@C1-053 SLA do contrato com fornecedor', () => {
     const sla = sim.estado.posts.sla[0]!;
     expect(sla.tipoRegra).toBe('tempo_atendimento');
     expect(sla.meta).toBe(4);
+    expect(sla.vigenciaInicio).toBe(dia(-30));
     expect(sla.faixas).toHaveLength(2);
     expect(sla.faixas[0]).toMatchObject({
       desempenhoInicio: 0,
