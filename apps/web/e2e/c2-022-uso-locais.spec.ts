@@ -61,10 +61,14 @@ test.describe('C2-022 fila do consultório com a configuração dos locais @C2-0
 
     await page.goto('/consultorio/fila?local=3');
     await expect(page.getByTestId('tela-fila-consultorio')).toBeVisible();
-    // O combo traz só os locais que o usuário vê.
+    // O combo traz só os locais que o usuário vê, depois da opção vazia "Escolha…" (sem local escolhido).
     const combo = page.getByTestId('fila-local');
     const lista = await abrirCombo(combo);
-    await expect(lista.getByRole('option')).toHaveText([/CONSULTORIO SINTETICO 01/, /OBSERVACAO SINTETICA/]);
+    await expect(lista.getByRole('option')).toHaveText([
+      /^Escolha…$/,
+      /CONSULTORIO SINTETICO 01/,
+      /OBSERVACAO SINTETICA/,
+    ]);
     await fecharCombo(combo, lista);
     // Fora do horário: aviso com a hora em que abre; a fila continua utilizável (aviso, não trava).
     await expect(page.getByTestId('fila-local-fechado')).toContainText('abre às 13:00');
