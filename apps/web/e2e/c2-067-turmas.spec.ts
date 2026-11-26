@@ -181,7 +181,7 @@ test.describe('@C2-067 agenda de grupos e turmas', () => {
   }) => {
     const externas = vigiarExternas(page);
     const st = simular(page);
-    await entrar(page, 'sint.gestor.agenda');
+    await entrar(page, 'SINT.AGENDA');
     await page.goto('/agenda/turmas');
     await expect(page.getByTestId('turmas-vazio')).toBeVisible();
 

@@ -161,7 +161,7 @@ test.describe('@C2-040 contato ativo antes da consulta', () => {
   }) => {
     const externas = vigiarExternas(page);
     const st = simular(page);
-    await entrar(page, 'sint.gestor.agenda');
+    await entrar(page, 'SINT.AGENDA');
     await page.goto('/agenda/consultas/contato-ativo');
     const linhas = page.getByTestId('contato-fila').locator('tbody tr');
     await expect(linhas.first()).toHaveAttribute('data-testid', 'contato-item-2');
@@ -207,7 +207,7 @@ test.describe('@C2-040 contato ativo antes da consulta', () => {
   test('programados fora da fila são feitos na lista e a programação valida na hora', async ({ page }) => {
     const externas = vigiarExternas(page);
     const st = simular(page);
-    await entrar(page, 'sint.gestor.agenda');
+    await entrar(page, 'SINT.AGENDA');
     await page.goto('/agenda/consultas/contato-ativo');
 
     // O pendente de consulta já encerrada aparece marcado (a central cancela).
