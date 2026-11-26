@@ -114,7 +114,8 @@ test.describe('Áreas e escala da atenção domiciliar @C2-105 @fase8', () => {
       return json(r, {});
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // A recepção da internação lê e grava (internacao.internacao.ler e .criar); o administrador do sistema não tem.
+    await entrar(page, 'SINT.INTERNACAO');
     await page.goto('/internacao/domiciliar');
     await page.getByTestId('domiciliar-ir-areas').click();
     await expect(page).toHaveURL(/\/internacao\/domiciliar\/areas/);

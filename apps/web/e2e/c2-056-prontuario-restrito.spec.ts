@@ -107,7 +107,9 @@ test.describe('Prontuário de acesso restrito @C2-056 @fase8', () => {
     const externas = vigiarExternas(page);
     const estado = { aprovado: false, aberturas: 0 };
     const posts: { url: string; corpo: Record<string, unknown> }[] = [];
-    await entrar(page, 'SINT.ADMIN');
+    // O médico com conselho (perfil assistencial-com-conselho) lê, pede e autoriza; o administrador do sistema só
+    // configura (pep.prontuarioRestrito.configurar) e não abre a fila nem o pedido.
+    await entrar(page, 'SINT.MEDICO');
     await page.route('**/api/pep/prontuario-restrito**', async (route: Route) => {
       const req = route.request();
       const url = req.url();

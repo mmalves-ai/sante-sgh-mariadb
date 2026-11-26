@@ -67,6 +67,38 @@ test.describe('@C2-090 oncologia: abertura do tratamento, acompanhamento do tumo
     await page.route(`${E}/internacoes/${REG}/registro`, (r) =>
       json(r, { hoje: HOJE, tumores: [TUMOR], planos: [] }),
     );
+    // O novo ciclo só abre com um protocolo publicado: a leitura real da internação na fonte sintética recebe um
+    // protocolo SINTÉTICO ofertável, para o spec não depender de outro que tenha publicado antes.
+    await page.route(`${E}/internacoes/${REG}`, async (r) => {
+      const real = (await (await r.fetch()).json()) as { protocolos: unknown[] };
+      return json(r, {
+        ...real,
+        protocolos: [
+          ...real.protocolos,
+          {
+            id: 9031,
+            codigo: 'C2090-ONC',
+            versao: 1,
+            nome: 'Protocolo SINTETICO C2-090',
+            tipo: { codigo: 3, nome: 'Quimioterapia' },
+            intervaloDias: 21,
+            ciclos: 6,
+            farmacos: [],
+            indicacao: null,
+            referencia: 'Protocolo institucional SINTETICO',
+            hash: 'c2090',
+            vigente: true,
+            integro: true,
+            por: 'SINT.ESPECIALISTA',
+            em: `${HOJE}T07:00`,
+            revogada: false,
+            inativo: false,
+            ofertavel: true,
+            eventos: [],
+          },
+        ],
+      });
+    });
     await page.route(`${E}/registro/cadastros`, (r) =>
       json(r, {
         intencoes: [
