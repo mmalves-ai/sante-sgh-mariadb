@@ -121,6 +121,11 @@ import {
   PortaWorklistMemoria,
 } from './worklist-porta.js';
 import { PortaWorklistPropria } from './worklist-porta-propria.js';
+import { PrescricaoRestricoesController } from './prescricao-restricoes.controller.js';
+import {
+  CADASTRO_RESTRICOES_PRESCRICAO,
+  CadastroRestricoesPrescricaoPropria,
+} from './prescricao-propria-restricoes.js';
 
 export interface OpcoesModuloPep {
   /** Testes: portas já montadas. */
@@ -242,6 +247,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       CurvasCrescimentoController,
       ExameFisicoController,
       PesquisaClinicaController,
+      PrescricaoRestricoesController,
       TransplanteClinicoController,
       NotaSoapController,
       ProntuarioRestritoController,
