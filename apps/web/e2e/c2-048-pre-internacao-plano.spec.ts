@@ -202,7 +202,7 @@ test.describe('internação: plano da pré-internação e fila de espera @C2-048
     await page.getByTestId('pre-plano-abrir-9101').click();
     const plano = page.getByTestId('pre-plano');
     await expect(plano).toContainText('PI-0701');
-    await page.getByTestId('pre-plano-termo-item').fill('colecist');
+    await page.getByTestId('pre-plano-termo-item').locator('input').fill('colecist');
     await page.getByTestId('pre-plano-buscar-item').click();
     await escolher(page.getByTestId('pre-plano-item'), { rotulo: '31009999 · Colecistectomia sintética' });
     await page.getByTestId('pre-plano-adicionar-item').click();
@@ -213,18 +213,18 @@ test.describe('internação: plano da pré-internação e fila de espera @C2-048
     await expect(page.getByTestId('pre-plano-aviso')).toContainText('Já está no plano');
     await expect(page.getByTestId('pre-plano-procedimentos').locator('li')).toHaveCount(1);
 
-    await page.getByTestId('pre-plano-termo-insumo').fill('grampe');
+    await page.getByTestId('pre-plano-termo-insumo').locator('input').fill('grampe');
     await page.getByTestId('pre-plano-buscar-insumo').click();
     await escolher(page.getByTestId('pre-plano-insumo'), { rotulo: 'MAT-1 · Grampeador sintético (UN)' });
     await page.getByTestId('pre-plano-adicionar-insumo').click();
     await expect(page.getByTestId('pre-plano-mat-401')).toBeVisible();
     // O fornecedor previsto do material (consignado ou OPME): busca e escolhe na linha do material.
-    await page.getByTestId('pre-plano-termo-fornecedor').fill('opme');
+    await page.getByTestId('pre-plano-termo-fornecedor').locator('input').fill('opme');
     await page.getByTestId('pre-plano-buscar-fornecedor').click();
     await expect(page.getByTestId('pre-plano-fornecedores-achados')).toContainText('1 fornecedor');
     await escolher(page.getByTestId('pre-plano-mat-fornecedor-401'), { rotulo: 'OPME Sintética · OPME' });
 
-    await page.getByTestId('pre-plano-termo-prof').fill('cirurg');
+    await page.getByTestId('pre-plano-termo-prof').locator('input').fill('cirurg');
     await page.getByTestId('pre-plano-buscar-prof').click();
     await escolher(page.getByTestId('pre-plano-prof'), { rotulo: 'Cirurgiã Sintética' });
     await escolher(page.getByTestId('pre-plano-funcao'), { rotulo: 'Cirurgião' });
@@ -232,7 +232,7 @@ test.describe('internação: plano da pré-internação e fila de espera @C2-048
     await expect(page.getByTestId('pre-plano-equipe')).toContainText('Cirurgiã Sintética · Cirurgião');
 
     // Quantidade inválida trava a gravação; corrigida, grava a lista inteira com a versão lida.
-    const qtd = page.getByTestId('pre-plano-proc-qtd-301');
+    const qtd = page.getByTestId('pre-plano-proc-qtd-301').locator('input');
     await qtd.fill('0');
     await expect(page.getByTestId('pre-plano-gravar')).toBeDisabled();
     await qtd.fill('1');
@@ -252,9 +252,12 @@ test.describe('internação: plano da pré-internação e fila de espera @C2-048
     await page.getByTestId('pre-fila-mudar-701').click();
     await escolher(filaTela.getByTestId('pre-fila-nova-prioridade'), { rotulo: 'Urgente' });
     const confirmar = page.getByTestId('pre-fila-confirmar');
-    await page.getByTestId('pre-fila-justificativa').fill('piora');
+    await page.getByTestId('pre-fila-justificativa').locator('input').fill('piora');
     await expect(confirmar).toBeDisabled();
-    await page.getByTestId('pre-fila-justificativa').fill('Piora clínica relatada pelo cirurgião');
+    await page
+      .getByTestId('pre-fila-justificativa')
+      .locator('input')
+      .fill('Piora clínica relatada pelo cirurgião');
     await confirmar.click();
     await expect(page.getByTestId('pre-fila-mensagem')).toContainText('Prioridade alterada');
     expect(st.corpos.at(-1)?.corpo).toEqual({

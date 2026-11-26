@@ -256,7 +256,7 @@ export const mensagensCirurgia = {
     semAgendamento: 'Confirmar sem agendamento',
     gastoSala: 'Gasto de sala',
     lancarGasto: 'Lançar o gasto',
-    gastoSalaDo: 'Gasto de sala da cirurgia de {data} na sala {sala}',
+    gastoSalaDo: 'Lançar o gasto de sala da cirurgia de {data} na sala {sala}',
   },
   salas: {
     titulo: 'Salas cirúrgicas e usuários permitidos',

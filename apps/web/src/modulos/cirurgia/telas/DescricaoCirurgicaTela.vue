@@ -75,7 +75,7 @@ const vazioForm = () => ({
   acidentes: '',
   orteseProtese: '',
   atoAnestesico: '',
-  sangramento: '',
+  sangramento: '' as string | number,
   envioAnatomopatologico: false,
   descricaoPecas: '',
   achados: {} as Record<number, { marcado: boolean; complemento: string }>,
@@ -104,7 +104,11 @@ watch(
 );
 const achado = (id: number) => f.achados[id]!;
 const nulo = (v: string) => (v.trim() ? v.trim() : null);
-const sangramentoMl = computed(() => (f.sangramento.trim() === '' ? null : Number(f.sangramento)));
+// O v-model do campo numérico entrega número, não texto: normaliza antes de conferir o vazio.
+const sangramentoMl = computed(() => {
+  const v = String(f.sangramento).trim();
+  return v === '' ? null : Number(v);
+});
 const achadosEscolhidos = computed(() =>
   Object.entries(f.achados)
     .filter(([, a]) => a.marcado)
