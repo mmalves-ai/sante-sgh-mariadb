@@ -180,14 +180,13 @@ test.describe('@C2-078 simulação de cenários de receita (01-ADM L120)', () =>
     await expect(page.getByTestId('tela-simulacao-receita')).toBeVisible();
     await expect(page.getByTestId('sr-sem-cenarios')).toBeVisible();
 
-    // Sem o que muda: o salvar mostra o erro na hora e não envia nada.
+    // Sem o que muda: deixado o nome, o cenário é conferido na hora; o erro aparece, o salvar trava e nada é enviado.
     await page.getByTestId('sr-nome').fill('CENARIO SINTETICO');
     // Pela competência, o dia no meio do mês vale pelo mês inteiro: a tela mostra as competências enquanto se digita.
     await page.getByTestId('sr-inicio').fill('2026-01-15');
     await page.getByTestId('sr-fim').fill('2026-01-31');
     await expect(page.getByTestId('sr-competencias')).toContainText('01/2026 a 01/2026');
     await escolher(page.getByTestId('sr-regra-0-convenio'), { rotulo: 'CONVENIO SINTETICO A' });
-    await page.getByTestId('sr-salvar').click();
     await expect(page.getByTestId('sr-regra-0-erro-destino')).toBeVisible();
     await expect(page.getByTestId('sr-salvar')).toBeDisabled();
     expect(enviados).toHaveLength(0);
