@@ -147,7 +147,7 @@ async function inativar(id: number): Promise<void> {
           </p>
           <HistoricoDaAlergia :paciente="paciente" :alergia="a.id" />
           <AlterarAlergia
-            v-if="dados.data.value.criar.pode"
+            v-if="dados.data.value.alterar.pode"
             :paciente="paciente"
             :alergia="a"
             :versao="versao"

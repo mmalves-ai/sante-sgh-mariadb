@@ -976,6 +976,8 @@ export class ServicoDocumentos {
               motivo: 'Faça antes o registro clínico do atendimento: a alergia é informada dentro dele.',
             }
           : acoes.criar,
+      // A alteração vale sobre a alergia já registrada: pede a permissão de registrar, não o registro clínico.
+      alterar: acoes.criar,
       inativar: acoes.inativar,
     };
   }

@@ -349,6 +349,9 @@ export interface AlergiasPaciente {
   /** Catálogo de manifestações (urticária, broncoespasmo...) para a escolha ao registrar (03-PEP L100). */
   readonly manifestacoes: readonly ManifestacaoAlergica[];
   readonly criar: AcaoLiberada;
+  /** Alterar a alergia ativa (gravidade, reação, manifestações): só a permissão de registrar, sem exigir o registro
+   *  clínico do atendimento que a criação fora do formulário exige (03-PEP L100). */
+  readonly alterar: AcaoLiberada;
   readonly inativar: AcaoLiberada;
 }
 
