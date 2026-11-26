@@ -121,7 +121,9 @@ test.describe('auditoria das checagens de enfermagem (09-AREA L86) @C1-035', () 
       );
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // A permissão é clínica: o administrador sem perfil assistencial não a recebe (segregação de funções). Quem audita
+    // aqui é a enfermeira com conselho (perfil assistencial-com-conselho).
+    await entrar(page, 'SINT.ENF.PLANTAO');
     await page.goto('/enfermagem/auditoria-checagem');
     await expect(page.getByTestId('tela-auditoria-checagem')).toBeVisible();
     await expect(page.getByTestId('ac-vazio')).toBeVisible();
