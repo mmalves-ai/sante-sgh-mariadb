@@ -31,6 +31,7 @@ import { CHAVE_SESSAO } from '../../../casca/sessao/sessao.js';
 import { entrarPlataforma } from '../../suporte/api-suporte.js';
 import { ErroApi, mensagemDoErro } from '../../../casca/erros/problem-details.js';
 import { codigoDoErro } from '../api-identidade.js';
+import { assinarComDispositivo, dispositivoSuportado } from '../api-acesso-email.js';
 import BotoesProvedorEntrada from '../componentes/BotoesProvedorEntrada.vue';
 import { codigoLimpo, destinoDepoisDoLogin, textoRecusaSegundoFator } from '../identidade-tela.js';
 
@@ -80,6 +81,44 @@ onMounted(async () => {
     carregou.value = true;
   }
 });
+
+/**
+ * 01-ADM L62: a conta escolheu a chave do dispositivo; a recusa traz o desafio (opcoesDispositivo). O navegador pede a
+ * biometria ou o PIN do aparelho e a entrada é refeita com a assinatura (a senha continua conferida de novo).
+ */
+async function entrarComDispositivo(e: unknown): Promise<void> {
+  const estabelecimento = escolhido.value;
+  if (!estabelecimento) return;
+  if (!dispositivoSuportado()) {
+    erro.value = t('acessoEmail.dispositivo.entradaSemSuporte');
+    return;
+  }
+  erro.value = t('acessoEmail.dispositivo.entrada');
+  let respostaDispositivo;
+  try {
+    respostaDispositivo = await assinarComDispositivo(
+      e instanceof ErroApi ? (e.problema as Record<string, unknown> | null)?.['opcoesDispositivo'] : null,
+    );
+  } catch {
+    erro.value = t('acessoEmail.dispositivo.cancelado');
+    return;
+  }
+  const sessao = await entrar({
+    estabelecimento,
+    login: login.value,
+    senha: senha.value,
+    respostaDispositivo,
+  });
+  erro.value = '';
+  lembrarEscolha(estabelecimento);
+  senha.value = '';
+  if ((sessao.unidades?.length ?? 0) > 1 && sessao.unidadeAtiva == null) {
+    aguardandoUnidade.value = sessao;
+    unidade.value = String(sessao.unidades?.[0]?.codigo ?? '');
+    return;
+  }
+  await seguir(sessao);
+}
 
 async function enviar(): Promise<void> {
   if (entrando.value || !escolhido.value) return;
@@ -132,6 +171,15 @@ async function enviar(): Promise<void> {
     await seguir(sessao);
   } catch (e) {
     const tipo = mensagemDoErro(e).tipo;
+    if (codigoDoErro(e) === 'segundo-fator-dispositivo') {
+      try {
+        await entrarComDispositivo(e);
+      } catch (e2) {
+        const t2 = textoRecusaSegundoFator(codigoDoErro(e2));
+        erro.value = t(t2 ?? 'entrar.erroGenerico');
+      }
+      return;
+    }
     // M59-F2: a recusa por causa do segundo fator diz qual (pedir o código, código errado, cadastro obrigatório).
     const doFator = textoRecusaSegundoFator(codigoDoErro(e));
     if (doFator) {

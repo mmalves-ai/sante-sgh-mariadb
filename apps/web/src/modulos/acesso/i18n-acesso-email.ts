@@ -25,6 +25,8 @@ export const mensagensAcessoEmail = {
     titulo: 'Segundo fator da entrada',
     aplicativo: 'Código do aplicativo autenticador',
     email: 'Código enviado ao meu e-mail',
+    dispositivo: 'Chave deste dispositivo (biometria ou PIN do aparelho)',
+    dispositivoAjuda: 'Para escolher a chave do dispositivo, cadastre antes um aparelho logo abaixo.',
     ajuda: 'O código por e-mail chega a cada entrada e vale por 5 minutos.',
     emailIndisponivel: 'O envio de e-mail não está disponível neste endereço.',
     salvo: 'Escolha gravada.',
@@ -52,5 +54,9 @@ export const mensagensAcessoEmail = {
     cancelado: 'A operação foi cancelada no dispositivo.',
     confirmeSenha: 'Confirme a senha (botão "Confirmar senha" da sessão) e tente de novo.',
     erro: 'Não foi possível concluir a operação com o dispositivo.',
+    entrada: 'Confirme a entrada no seu dispositivo (biometria ou PIN do aparelho).',
+    entradaRecusada: 'O dispositivo não confirmou a entrada. Tente de novo.',
+    entradaSemSuporte:
+      'Este navegador não oferece a chave do dispositivo. Entre por um aparelho cadastrado ou peça ao gestor de acessos para trocar o método.',
   },
 };

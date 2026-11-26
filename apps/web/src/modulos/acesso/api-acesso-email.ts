@@ -9,7 +9,7 @@ const JSON_ACEITO = { accept: 'application/json' };
 const COM_CORPO = { ...JSON_ACEITO, 'content-type': 'application/json' };
 
 export const esquemaMetodoSegundoFator = z.object({
-  metodo: z.enum(['aplicativo', 'email']),
+  metodo: z.enum(['aplicativo', 'email', 'dispositivo']),
   emailDisponivel: z.boolean(),
 });
 export type MetodoSegundoFatorTela = z.infer<typeof esquemaMetodoSegundoFator>;
@@ -167,9 +167,26 @@ export async function cadastrarDispositivo(nome: string, buscar: typeof fetch = 
   );
 }
 
+/** A assinatura do desafio pelo aparelho (biometria ou PIN local), pronta para o servidor conferir. */
+export interface RespostaDispositivo {
+  readonly idCredencial: string;
+  readonly dadosCliente: string;
+  readonly dadosAutenticador: string;
+  readonly assinatura: string;
+}
+
+/** 01-ADM L62: assina o desafio da entrada (vem na recusa 401, extensão opcoesDispositivo). */
+export async function assinarComDispositivo(opcoes: unknown): Promise<RespostaDispositivo> {
+  return assinar(esquemaOpcoesValidacao.parse(opcoes));
+}
+
 /** Confere o aparelho (assinatura do desafio com a biometria local). */
 export async function validarDispositivo(buscar: typeof fetch = fetch): Promise<void> {
   const o = esquemaOpcoesValidacao.parse(await postar('/opcoes-validacao', {}, buscar));
+  await postar('/validar', { resposta: await assinar(o) }, buscar);
+}
+
+async function assinar(o: z.infer<typeof esquemaOpcoesValidacao>): Promise<RespostaDispositivo> {
   const cred = (await navigator.credentials.get({
     publicKey: {
       ...o,
@@ -179,18 +196,12 @@ export async function validarDispositivo(buscar: typeof fetch = fetch): Promise<
   })) as PublicKeyCredential | null;
   if (!cred) throw new DOMException('cancelado', 'NotAllowedError');
   const resp = cred.response as AuthenticatorAssertionResponse;
-  await postar(
-    '/validar',
-    {
-      resposta: {
-        idCredencial: paraB64(cred.rawId),
-        dadosCliente: paraB64(resp.clientDataJSON),
-        dadosAutenticador: paraB64(resp.authenticatorData),
-        assinatura: paraB64(resp.signature),
-      },
-    },
-    buscar,
-  );
+  return {
+    idCredencial: paraB64(cred.rawId),
+    dadosCliente: paraB64(resp.clientDataJSON),
+    dadosAutenticador: paraB64(resp.authenticatorData),
+    assinatura: paraB64(resp.signature),
+  };
 }
 
 export async function revogarDispositivo(

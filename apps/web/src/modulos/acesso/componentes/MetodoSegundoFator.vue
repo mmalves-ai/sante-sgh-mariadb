@@ -67,7 +67,19 @@ async function escolher(metodo: MetodoSegundoFatorTela['metodo']): Promise<void>
         />
         {{ t('acessoEmail.metodo.email') }}
       </label>
+      <label>
+        <input
+          type="radio"
+          name="metodo-segundo-fator"
+          value="dispositivo"
+          :checked="estado.metodo === 'dispositivo'"
+          data-testid="metodo-dispositivo"
+          @change="escolher('dispositivo')"
+        />
+        {{ t('acessoEmail.metodo.dispositivo') }}
+      </label>
     </fieldset>
+    <small>{{ t('acessoEmail.metodo.dispositivoAjuda') }}</small>
     <small>{{
       estado.emailDisponivel ? t('acessoEmail.metodo.ajuda') : t('acessoEmail.metodo.emailIndisponivel')
     }}</small>

@@ -375,6 +375,9 @@ export function opcoesValidacaoCredencial(p: {
   };
 }
 
+/** O desafio que o navegador recebe para assinar com o dispositivo. */
+export type OpcoesValidacaoCredencial = ReturnType<typeof opcoesValidacaoCredencial>;
+
 /** Servidor (domínio) e origem a partir da URL pública do sistema. */
 export function servidorDaUrlPublica(url: string): { servidor: string; origem: string } {
   const u = new URL(url);

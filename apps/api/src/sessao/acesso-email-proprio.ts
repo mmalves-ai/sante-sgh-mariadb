@@ -156,6 +156,18 @@ export class PreferenciaSegundoFatorPropria {
           if (!ENDERECO_EMAIL.test(String(e?.['email'] ?? '').trim()))
             throw recusa('sem-email', 'Cadastre um e-mail na conta antes de escolher o código por e-mail.');
         }
+        if (metodo === 'dispositivo') {
+          // 01-ADM L62: só com ao menos um aparelho ativo (sem ele a entrada não teria o que conferir).
+          const d = await tx.uma(
+            'SELECT COUNT(*) AS n FROM credencial_dispositivo WHERE usuario_id = ? AND revogada_em IS NULL',
+            [Number(u['id'])],
+          );
+          if (Number(d?.['n'] ?? 0) < 1)
+            throw recusa(
+              'sem-dispositivo',
+              'Cadastre um dispositivo antes de escolher a chave do dispositivo.',
+            );
+        }
         const [atual] = await tx.consultarParaAtualizar(
           'SELECT id, metodo, versao FROM preferencia_segundo_fator WHERE usuario_id = ?',
           [Number(u['id'])],

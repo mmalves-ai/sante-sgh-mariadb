@@ -5,7 +5,8 @@
 //   - A partir do início da linha, o usuário sem segundo fator ativo tem `prazoAdesaoDias` para cadastrar: dentro
 //     do prazo, entra e é levado ao cadastro ("adesao"); depois, não entra sem ele ("obrigatorio").
 //   - Usuário com segundo fator ativo confere o código no login sempre (opcional ou não: M05, regra 10).
-//   - TOTP é o único fator por ora (DP-45: WebAuthn com biometria no dispositivo, depois da decisão do DPO).
+//   - Além do TOTP, a conta pode escolher o código no e-mail ou a chave do dispositivo (WebAuthn com biometria local,
+//     DP-45 decidida em 26/11); os dois substituem o aplicativo só onde esta política não o exige.
 // Linha encerrada (recolher, ficha seção 12) não conta; duas linhas que alcançam o mesmo usuário: vale a que exige
 // mais (a de início mais antigo).
 import type { Exigencia2fa, SituacaoSegundoFator } from '@sgh/contratos';

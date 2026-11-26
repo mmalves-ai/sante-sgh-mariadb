@@ -137,4 +137,94 @@ test.describe('@C3-009 chave do dispositivo como segundo fator', () => {
     await page.getByTestId('dispositivo-remover').click();
     await expect(page.getByTestId('dispositivos-nenhum')).toBeVisible();
   });
+
+  test('entra com a chave do dispositivo quando a conta a escolheu (passo da entrada)', async ({ page }) => {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('WebAuthn.enable');
+    await cdp.send('WebAuthn.addVirtualAuthenticator', {
+      options: {
+        protocol: 'ctap2',
+        transport: 'internal',
+        hasResidentKey: false,
+        hasUserVerification: true,
+        isUserVerified: true,
+        automaticPresenceSimulation: true,
+      },
+    });
+    await page.context().clearCookies();
+    await page.goto('/entrar');
+    const servidor = new URL(page.url()).hostname;
+    // O aparelho já cadastrado (massa SINTÉTICA): a credencial nasce no autenticador virtual para este servidor.
+    const idCredencial = await page.evaluate(async (rpId) => {
+      const c = (await navigator.credentials.create({
+        publicKey: {
+          challenge: new TextEncoder().encode('desafio-sintetico-cadastro-entrada'),
+          rp: { id: rpId, name: 'Sistema hospitalar' },
+          user: {
+            id: new TextEncoder().encode('conta-sintetica'),
+            name: 'SINT.GUICHE',
+            displayName: 'Conta',
+          },
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+          authenticatorSelection: { userVerification: 'required' },
+        },
+      })) as PublicKeyCredential;
+      let t = '';
+      for (const x of new Uint8Array(c.rawId)) t += String.fromCharCode(x);
+      return btoa(t).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }, servidor);
+
+    const corpos: Record<string, unknown>[] = [];
+    await page.route('**/api/sessao', async (rota) => {
+      if (rota.request().method() !== 'POST') return rota.continue();
+      const corpo = (rota.request().postDataJSON() ?? {}) as Record<string, unknown>;
+      corpos.push(corpo);
+      if (!corpo['respostaDispositivo'])
+        return json(
+          rota,
+          {
+            type: 'about:blank',
+            title: 'Segundo fator necessário',
+            status: 401,
+            detail: 'Confirme a entrada no seu dispositivo (biometria ou PIN do aparelho).',
+            codigo: 'segundo-fator-dispositivo',
+            opcoesDispositivo: {
+              challenge: b64('desafio-sintetico-da-entrada-0001'),
+              rpId: servidor,
+              timeout: 120000,
+              userVerification: 'required',
+              allowCredentials: [{ type: 'public-key', id: idCredencial }],
+            },
+          },
+          401,
+        );
+      // Com a assinatura, segue para a fonte sintética (a conta sintética entra pela senha).
+      return rota.continue();
+    });
+
+    await page.getByTestId('campo-login').fill('SINT.GUICHE');
+    await page.getByTestId('campo-senha').fill(SENHA);
+    await semViolacaoAxe(page);
+    await page.getByTestId('botao-entrar').click();
+    await expect(page).toHaveURL(/\/inicio/);
+
+    expect(corpos).toHaveLength(2);
+    expect(corpos[0]).not.toHaveProperty('respostaDispositivo');
+    const r = corpos[1]!['respostaDispositivo'] as Record<string, string>;
+    expect(r.idCredencial).toBe(idCredencial);
+    for (const v of Object.values(r)) expect(v).toMatch(B64URL);
+    const cliente = JSON.parse(Buffer.from(r.dadosCliente!, 'base64url').toString('utf8')) as Record<
+      string,
+      string
+    >;
+    expect(cliente['type']).toBe('webauthn.get');
+    expect(cliente['challenge']).toBe(b64('desafio-sintetico-da-entrada-0001'));
+    // Nada de biometria vai ao servidor: só a assinatura do desafio.
+    expect(Object.keys(r).sort()).toEqual([
+      'assinatura',
+      'dadosAutenticador',
+      'dadosCliente',
+      'idCredencial',
+    ]);
+  });
 });

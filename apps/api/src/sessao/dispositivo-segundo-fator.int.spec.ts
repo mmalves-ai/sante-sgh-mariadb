@@ -9,6 +9,7 @@ import { resolve } from 'node:path';
 import { AutenticadorWebAuthnSimulado } from '@sgh/dominio-acesso';
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PreferenciaSegundoFatorPropria } from './acesso-email-proprio.js';
 import { ArmazemMemoria } from './armazem.js';
 import { CredencialDispositivoPropria, ServicoDispositivoSegundoFator } from './dispositivo-segundo-fator.js';
 
@@ -48,7 +49,13 @@ describe.skipIf(SEM_BANCO)('chave do dispositivo (WebAuthn) no banco próprio', 
     );
 
   beforeAll(async () => {
-    for (const arq of ['99w_credencial_dispositivo_tabelas.sql', '99w_credencial_dispositivo_chaves.sql'])
+    for (const arq of [
+      '99w_credencial_dispositivo_tabelas.sql',
+      '99w_credencial_dispositivo_chaves.sql',
+      // 01-ADM L62 (passo da entrada): o método 'dispositivo' na preferência; aplicada 2x (idempotente).
+      '99x_preferencia_segundo_fator_dispositivo_tabelas.sql',
+      '99x_preferencia_segundo_fator_dispositivo_tabelas.sql',
+    ])
       sql(readFileSync(resolve(RAIZ, 'db/migracoes/02_ADM', arq), 'utf8'));
     sql(`INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em)
            SELECT '${HOSPITAL}', 'Hospital fictício wan', 'Hospital fictício wan (teste)', NOW(3)
@@ -131,5 +138,41 @@ describe.skipIf(SEM_BANCO)('chave do dispositivo (WebAuthn) no banco próprio', 
     await expect(servico.revogar(ator, id)).rejects.toMatchObject({
       problema: { codigo: 'dispositivo-inexistente' },
     });
+  }, 60_000);
+
+  it('escolhe a chave do dispositivo como método da entrada só com aparelho ativo (trilha e CHECK)', async () => {
+    sql(`DELETE p FROM preferencia_segundo_fator p JOIN usuario u ON u.id = p.usuario_id WHERE u.login = '${LOGIN}';
+         UPDATE credencial_dispositivo d JOIN usuario u ON u.id = d.usuario_id
+            SET d.revogada_em = NOW(3) WHERE u.login = '${LOGIN}' AND d.revogada_em IS NULL;`);
+    const pref = new PreferenciaSegundoFatorPropria(nucleo, () => ({
+      cliente: CLIENTE,
+      estabelecimento: idEst,
+    }));
+    const metodoGravado = () =>
+      sql(`SELECT p.metodo FROM preferencia_segundo_fator p JOIN usuario u ON u.id = p.usuario_id
+            WHERE u.login = '${LOGIN}'`).trim();
+    await expect(pref.escolher(ator, 'dispositivo')).rejects.toMatchObject({
+      problema: { codigo: 'sem-dispositivo' },
+    });
+    expect(metodoGravado()).toBe('');
+
+    const disp = new AutenticadorWebAuthnSimulado(-7, 0);
+    const op = await servico.iniciarCadastro('sessao-2', ator, 'Conta fictícia wan');
+    await servico.concluirCadastro(
+      'sessao-2',
+      ator,
+      disp.cadastrar(op.challenge, ORIGEM, SERVIDOR),
+      'Tablet',
+    );
+    await expect(pref.escolher(ator, 'dispositivo')).resolves.toEqual({ anterior: 'aplicativo' });
+    expect(metodoGravado()).toBe('dispositivo');
+    expect(await pref.metodo(ator.rede, HOSPITAL, LOGIN)).toBe('dispositivo');
+    // O banco recusa método fora do vocabulário (CHECK refeito pela 99x).
+    expect(() =>
+      sql(`UPDATE preferencia_segundo_fator p JOIN usuario u ON u.id = p.usuario_id
+              SET p.metodo = 'biometria' WHERE u.login = '${LOGIN}'`),
+    ).toThrow();
+    await expect(pref.escolher(ator, 'aplicativo')).resolves.toEqual({ anterior: 'dispositivo' });
+    expect(metodoGravado()).toBe('aplicativo');
   }, 60_000);
 });

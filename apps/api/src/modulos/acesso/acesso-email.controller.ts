@@ -58,13 +58,16 @@ const AMBIENTES_SEM_PREFIXO = new Set(['dev', 'ci']);
  * substitui o aplicativo já cadastrado (nunca se troca por um fator mais fraco). A entrada aplica a mesma regra
  * (ServicoSessao: o e-mail vale só onde a política deixa entrar sem o código do aplicativo). null: pode escolher.
  */
-export function recusaEmailPelaPolitica(reg: Pick<Registro, 'segundoFator'>): string | null {
+export function recusaEmailPelaPolitica(
+  reg: Pick<Registro, 'segundoFator'>,
+  substituto = 'o código no e-mail',
+): string | null {
   const sf = reg.segundoFator;
   if (!sf) return null;
   if (sf.exigencia !== 'opcional')
-    return 'O seu perfil exige o código do aplicativo autenticador; o código no e-mail não o substitui.';
+    return `O seu perfil exige o código do aplicativo autenticador; ${substituto} não o substitui.`;
   if (sf.cadastrado)
-    return 'Você já usa o aplicativo autenticador; o código no e-mail não o substitui. Remova o aplicativo antes.';
+    return `Você já usa o aplicativo autenticador; ${substituto} não o substitui. Remova o aplicativo antes.`;
   return null;
 }
 
@@ -241,17 +244,41 @@ export class AcessoEmailController {
     const { id, rede } = await this.sessaoDoPedido(req, true);
     const r = esquemaEscolherMetodo.safeParse(corpo);
     if (!r.success)
-      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Escolha aplicativo ou e-mail.');
+      throw new ErroProblema(
+        'entrada-invalida',
+        400,
+        'Dados inválidos',
+        'Escolha aplicativo, e-mail ou dispositivo.',
+      );
     if (!this.servicos) throw new ErroProblema('indisponivel', 503, 'Serviço indisponível');
     try {
       const reg = await this.sessao!.exigirReautenticacaoRecente(id, rede);
       if (r.data.metodo === 'email' && !this.emailDisponivel(reg))
         throw new ErroProblema('indisponivel', 503, 'Envio de e-mail indisponível');
-      const recusa = r.data.metodo === 'email' ? recusaEmailPelaPolitica(reg) : null;
+      // 01-ADM L62: a chave do dispositivo é da conta do cliente (a conta da plataforma usa aplicativo ou e-mail).
+      if (r.data.metodo === 'dispositivo' && reg.plataforma)
+        throw new ErroProblema(
+          'recusa-de-negocio',
+          409,
+          'Chave do dispositivo indisponível',
+          'A conta da plataforma usa o aplicativo autenticador ou o código no e-mail.',
+          { codigo: 'dispositivo-so-cliente' },
+        );
+      // Como o e-mail, o dispositivo substitui o aplicativo só onde a política não o exige.
+      const recusa =
+        r.data.metodo === 'email'
+          ? recusaEmailPelaPolitica(reg)
+          : r.data.metodo === 'dispositivo'
+            ? recusaEmailPelaPolitica(reg, 'a chave do dispositivo')
+            : null;
       if (recusa)
-        throw new ErroProblema('recusa-de-negocio', 409, 'Código no e-mail não permitido', recusa, {
-          codigo: 'politica-exige-aplicativo',
-        });
+        throw new ErroProblema(
+          'recusa-de-negocio',
+          409,
+          r.data.metodo === 'email' ? 'Código no e-mail não permitido' : 'Chave do dispositivo não permitida',
+          recusa,
+          { codigo: 'politica-exige-aplicativo' },
+        );
       const correlacao = correlacaoDaRequisicao(req, 'segundo-fator');
       if (reg.plataforma)
         await this.plataforma().escolherMetodoSegundoFator(

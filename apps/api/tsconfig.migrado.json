@@ -1666,6 +1666,7 @@
     "src/modulos/pessoas/folha/folha-porta-propria-obrigacoes.int.spec.ts",
     "src/sessao/acesso-email-tardio.ts",
     "src/sessao/acesso-email-ligacao.spec.ts",
+    "src/sessao/dispositivo-entrada.spec.ts",
     "src/sessao/acesso-email-ligacao.int.spec.ts",
     "src/modulos/acesso/acesso-email.controller.ts",
     "src/modulos/acesso/acesso-email-erros.ts",
