@@ -184,6 +184,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     component: () => import('./telas/ConferenciaRecebimentoTela.vue'),
     meta: { permissao: 'suprimentos.nota.ler' },
   },
+  // C1-126 (09-AREA linha 79): entrada de produtos recebidos em doação (aberta pela tela da nota fiscal).
+  {
+    path: '/suprimentos/doacoes',
+    name: 'suprimentos.doacoes',
+    component: () => import('./telas/DoacoesTela.vue'),
+    meta: { permissao: 'suprimentos.nota.ler' },
+  },
   {
     // F3.6 (05-SUP linhas 1, 3 e 6): cadastro do item e do local, escopo do usuário e lista de separação.
     path: '/suprimentos/itens/cadastro/:id(\\d+)?',

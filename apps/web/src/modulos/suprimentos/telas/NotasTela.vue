@@ -21,6 +21,7 @@ import {
 } from '../api-conferencia-recebimento.js';
 import { novaChave, registrarNota } from '../api-suprimentos.js';
 import { TRIBUTOS_ROTULO, textoConferencia as kc } from '../i18n-conferencia-recebimento.js';
+import { mensagensEntradaDoacao as kd } from '../i18n-entrada-doacao.js';
 import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
 import type { LeituraCodigo as Leitura } from '../api-etiqueta.js';
 import BuscaItem from '../componentes/BuscaItem.vue';
@@ -245,6 +246,7 @@ const { filtro, pagina, lista, haSeguinte } = usarListaDocumentos('nota');
     <RouterLink to="/suprimentos/notas-fiscais/conferencias" data-testid="nf-conferencias">{{
       kc('atalho')
     }}</RouterLink>
+    · <RouterLink to="/suprimentos/doacoes" data-testid="nf-doacoes">{{ kd.atalho }}</RouterLink>
     <AvisoSuprimentos
       :motivo="pode('suprimentos.registrarEntradaNF') ? null : motivo('suprimentos.registrarEntradaNF')"
     />
