@@ -102,6 +102,13 @@ export const rotasSadt: RouteRecordRaw[] = [
     meta: { permissao: 'sadt.catalogo.ler' },
   },
   {
+    // F8 (05-SADT linha 22): consumo padrão de insumos por exame (cadastro e realização).
+    path: '/sadt/consumo-padrao',
+    name: 'sadt.consumo-padrao',
+    component: () => import('./telas/ConsumoPadraoExameTela.vue'),
+    meta: { permissao: 'sadt.catalogo.ler' },
+  },
+  {
     path: '/sadt/autoliberacao',
     name: 'sadt.autoliberacao',
     component: () => import('./telas/AutoliberacaoTela.vue'),
