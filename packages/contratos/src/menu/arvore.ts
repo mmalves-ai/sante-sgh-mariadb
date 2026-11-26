@@ -162,7 +162,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // sadt.lancamento.ler) entrou junto.
 // C1-135 (06-FAT linha 38, F3): o item "Preferências do faturista" das contas do paciente entrou à mão (mesmo motivo); a
 // contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":518,"M":198,"P":57,"N":263};
+// C3-020 (03-PEP L144): o item "Pesquisa clínica" do PEP entrou à mão (mesmo motivo; F8); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":519,"M":198,"P":57,"N":264};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -305,6 +306,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"pep.administracao-do-pep.secoes-do-sumario-de-alta","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Seções do sumário de alta"],"titulo":"Seções do sumário de alta","selo":"N","fase":3,"rota":"/pep/sumario-alta/secoes","permissao":"pep.admin.ler"},
   {"id":"pep.administracao-do-pep.regras-do-prontuario-por-setor","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Regras do prontuário por setor"],"titulo":"Regras do prontuário por setor","selo":"N","fase":3,"rota":"/pep/prontuario-setor","permissao":"pep.admin.ler"},
   {"id":"pep.administracao-do-pep.regras-de-aviso-clinico","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Regras de aviso clínico"],"titulo":"Regras de aviso clínico","selo":"N","fase":3,"rota":"/pep/avisos-clinicos/regras","permissao":"pep.admin.ler"},
+  {"id":"pep.pesquisa-clinica.estudos-e-participantes","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Pesquisa clínica","Estudos e participantes"],"titulo":"Estudos e participantes","selo":"N","fase":8,"rota":"/pep/pesquisa","permissao":"pep.pesquisa.ler"},
   {"id":"pep.administracao-do-pep.configuracao-da-nota-soap","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Configuração da nota S.O.A.P."],"titulo":"Configuração da nota S.O.A.P.","selo":"N","fase":7,"rota":"/pep/admin/nota-soap","permissao":"pep.admin.ler"},
   {"id":"enfermagem.aprazamento-e-checagem-de-medicamentos-em-tela","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Aprazamento e checagem de medicamentos"],"titulo":"Aprazamento e checagem de medicamentos","selo":"P","fase":2,"rota":"/enfermagem/aprazamento","permissao":"enfermagem.horario.ler"},
   {"id":"enfermagem.checagem-por-codigo-de-barras-pulseira-e-dose","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Checagem por código de barras"],"titulo":"Checagem por código de barras","selo":"N","fase":2,"rota":"/beira-leito/checagem","permissao":"enfermagem.administracao.ler"},

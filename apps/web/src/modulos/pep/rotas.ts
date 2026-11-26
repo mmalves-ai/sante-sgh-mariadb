@@ -611,4 +611,11 @@ export const rotasPep: RouteRecordRaw[] = [
     props: true,
     meta: { publica: true },
   },
+  {
+    // 03-PEP L144: pesquisa clínica (estudos, critérios, triagem que só sugere e acompanhamento dos incluídos).
+    path: '/pep/pesquisa',
+    name: 'pep.pesquisa',
+    component: () => import('./telas/PesquisaClinicaTela.vue'),
+    meta: { permissao: 'pep.pesquisa.ler' },
+  },
 ];

@@ -18,6 +18,7 @@ import { mensagensNotaSoap } from './i18n-nota-soap.js';
 import { mensagensProntuarioRestrito } from './i18n-prontuario-restrito.js';
 import { mensagensPedidoVaga } from './i18n-pedido-vaga.js';
 import { mensagensAnotacoesAdministrativas } from './i18n-anotacoes-administrativas.js';
+import { mensagensPesquisaClinica } from './i18n-pesquisa-clinica.js';
 import { mensagensCopiasProntuario } from './i18n-copias-prontuario.js';
 import { mensagensPadroesPrescricao } from './i18n-padroes-prescricao.js';
 import { mensagensCatalogoPrescricao } from './i18n-catalogo-prescricao.js';
@@ -62,6 +63,8 @@ export const mensagensPep = {
   pedidoVaga: mensagensPedidoVaga,
   // 03-PEP L147: anotação administrativa do caso.
   anotAdm: mensagensAnotacoesAdministrativas,
+  // 03-PEP L144: pesquisa clínica.
+  pesquisa: mensagensPesquisaClinica,
   // 03-PEP L131: cópia do prontuário no balcão e cabeçalho por tipo de documento.
   copias: mensagensCopiasProntuario,
   carregando: 'Carregando…',
