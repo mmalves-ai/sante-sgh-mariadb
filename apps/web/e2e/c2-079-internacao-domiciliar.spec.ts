@@ -71,6 +71,8 @@ test.describe('internação domiciliar: orçamento, transferência para casa, ch
           },
         ],
         sugestoes: [],
+        truncado: false,
+        duracaoMs: 3,
       }),
     );
     await page.route(/\/api\/internacao\/domiciliar\/.*/, async (r) => {
