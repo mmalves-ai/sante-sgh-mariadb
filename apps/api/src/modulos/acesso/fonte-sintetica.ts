@@ -3286,10 +3286,12 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: {
       grupo: 'FINGESTOR',
       // F3.8, 07-FIN linha 108: abre a escrituração das entradas (classificar e gerar a EFD vêm do perfil).
-      // F8, 07-FIN linha 79 (C1-069): cadastra o portador do desconto e da cessão (parâmetro financeiro).
+      // F8, 07-FIN linha 79 (C1-069): cadastra o portador do desconto e da cessão (parâmetro financeiro) e confere na
+      // ficha do título a receber com quem cada parcela está (leitura do título).
       opcoesGrupo: opcoesFinanceiro(
         'financeiro.tituloPagar.ler',
         'financeiro.tituloPagar.criar',
+        'financeiro.tituloReceber.ler',
         'financeiro.escrituracao.ler',
         'financeiro.parametro.editar',
       ),
