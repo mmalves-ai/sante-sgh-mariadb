@@ -4,9 +4,10 @@
 // de conta, no setor e em horário especial), explicado passo a passo, e o impacto de um reajuste por alvo (índice,
 // porte, porte anestésico, tabela). Somente leitura: nada é gravado.
 import { SanteSelecao } from '@sgh/ui';
+import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { simular } from '../api-faturamento.js';
+import { lerOpcoesSimulador, simular } from '../api-faturamento.js';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
 import { data, num, reais, usarFaturamento } from '../usar-faturamento.js';
 
@@ -27,6 +28,11 @@ const reajuste = ref<Record<(typeof ALVOS)[number], string>>({
   porteAnestesico: '',
   tabela: '',
 });
+const opcoes = useQuery({ queryKey: ['faturamento', 'simulador', 'opcoes'], queryFn: lerOpcoesSimulador });
+const opcoesSetor = computed(() => [
+  { valor: '', rotulo: t('faturamento.simulador.semSetor') },
+  ...(opcoes.data.value?.setores ?? []).map((x) => ({ valor: String(x.id), rotulo: x.nome })),
+]);
 const opcoesTipoConta = computed(() => [
   { valor: 'E', rotulo: t('faturamento.externa') },
   { valor: 'I', rotulo: t('faturamento.internacao') },
@@ -87,10 +93,14 @@ async function rodar() {
         ><label for="sim-data">{{ t('faturamento.data') }}</label
         ><input id="sim-data" v-model="f.data" type="date"
       /></span>
-      <span class="campo"
-        ><label for="sim-setor">{{ t('faturamento.simulador.setor') }}</label
-        ><input id="sim-setor" v-model="f.setor" inputmode="numeric" size="6" data-testid="sim-setor"
-      /></span>
+      <span class="campo">
+        <SanteSelecao
+          v-model="f.setor"
+          :rotulo="t('faturamento.simulador.setor')"
+          :opcoes="opcoesSetor"
+          data-testid="sim-setor"
+        />
+      </span>
       <span class="campo"
         ><input id="sim-especial" v-model="especial" type="checkbox" data-testid="sim-especial" /><label
           for="sim-especial"

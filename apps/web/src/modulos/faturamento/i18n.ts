@@ -253,6 +253,7 @@ export const mensagensFaturamento = {
     modelo: 'Modelo do preço',
     vigencia: 'Vigência',
     setor: 'Setor do lançamento (opcional)',
+    semSetor: 'Sem setor',
     horarioEspecial: 'Horário especial',
     reajusteTitulo: 'Reajuste a medir (%)',
     reajusteTexto:

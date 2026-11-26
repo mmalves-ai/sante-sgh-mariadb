@@ -40,6 +40,9 @@ test.describe('Simulador: explicar o valor e medir o reajuste @C3-001 @fase3', (
     const corpo = (await sonda.json()) as { encontrado: boolean; preco: unknown };
     test.skip(!corpo.encontrado || !corpo.preco, 'O item sintético não tem preço no convênio 305 nesta data');
 
+    // O setor é escolhido pela lista dos setores do estabelecimento (nunca digitado pelo id).
+    await expect(page.getByTestId('sim-setor')).toBeVisible();
+    await expect(page.locator('input#sim-setor')).toHaveCount(0);
     await page.getByTestId('sim-conv').fill(CONVENIO);
     await page.getByTestId('sim-cod').fill(CODIGO);
     await page.getByLabel('Quantidade').fill('2');

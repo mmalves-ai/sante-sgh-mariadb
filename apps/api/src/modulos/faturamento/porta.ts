@@ -106,6 +106,8 @@ export interface PortaFaturamento extends PortaGravacaoM18<GravadorSghFaturament
   hoje(c: ContextoFaturamento): Promise<string>;
   /** Os convênios do estabelecimento (código e nome), para o filtro da lista de contas. */
   convenios(c: ContextoFaturamento): Promise<{ codigo: number; nome: string }[]>;
+  /** Os setores ativos do estabelecimento (id e nome), para a escolha do setor no simulador (06-FAT linha 11). */
+  setoresDoSimulador(c: ContextoFaturamento): Promise<{ id: number; nome: string }[]>;
   contas(c: ContextoFaturamento, f: FiltroContasPorta, hoje: string): Promise<ListaContas>;
   conta(c: ContextoFaturamento, id: number, hoje: string): Promise<ContaDetalhe | null>;
   itens(

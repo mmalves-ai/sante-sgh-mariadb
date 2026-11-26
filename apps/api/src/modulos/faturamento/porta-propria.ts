@@ -469,6 +469,17 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
   }
 
   /** Fontes pagadoras ativas (cadastro da rede inteira, sem estabelecimento). */
+  setoresDoSimulador(c: ContextoFaturamento): Promise<{ id: number; nome: string }[]> {
+    return this.ler(c, async (l, est) => {
+      const r = await l.consultar<Linha>(
+        'SELECT id, nome FROM setor_funcional WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY nome',
+        [est],
+        { teto: 5_000 },
+      );
+      return r.map((x) => ({ id: n(x['id']), nome: texto(x['nome']) }));
+    });
+  }
+
   convenios(c: ContextoFaturamento): Promise<{ codigo: number; nome: string }[]> {
     return this.ler(c, async (l) => {
       const r = await l.consultar<Linha>(

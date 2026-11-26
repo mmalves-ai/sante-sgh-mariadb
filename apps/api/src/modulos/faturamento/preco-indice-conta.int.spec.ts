@@ -411,6 +411,16 @@ describe.skipIf(SEM_BANCO)('preço pelo índice do acordo no lançamento da cont
     expect(await contagem()).toEqual(antes);
   });
 
+  it('simulador: os setores oferecidos são só os do estabelecimento da sessão', async () => {
+    const setores = await porta.setoresDoSimulador(c);
+    expect(setores.map((x) => x.id)).toContain(ids['setor']);
+    const [x] = await linhas(
+      'SELECT COUNT(*) AS n FROM setor_funcional WHERE estabelecimento_id = ? AND excluido_em IS NULL',
+      [ids['est']],
+    );
+    expect(setores).toHaveLength(Number(x!['n']));
+  });
+
   it('simulador: porte sem valor no acordo diz a falta (o lançamento recusaria)', async () => {
     const r = await simular(COD.semPorte, 1);
     expect(r.preco).toBeNull();

@@ -142,6 +142,8 @@ export const lerPacotes = () =>
     }),
   );
 export const editarPacote = (e: unknown, chave: string) => gravar(`${F}/pacotes`, e, chave);
+export const lerOpcoesSimulador = () =>
+  ler(`${F}/simulador/opcoes`, z.object({ setores: z.array(z.object({ id: z.number(), nome: z.string() })) }));
 export const simular = (f: {
   convenio: string;
   tipoConta: string;
