@@ -9,7 +9,10 @@
 import { type Escritor, type Leitor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type ApoioMontagemSus, MontagensSusPropria } from './porta-propria-montagens.js';
-import { LeituraSusPropria } from './porta-propria.js';
+import { LeituraSusPropria, PortaSusPropria } from './porta-propria.js';
+import { armazemSusMemoria } from './armazem.js';
+import { SeloSolicitanteApac } from './selo-solicitante.js';
+import { ServicoSus, type SessaoSus } from './servico.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -574,5 +577,109 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
     ]);
     expect(await ler(ids.estB, (m) => m.lotesSaida(ids.internacao))).toEqual([]);
     expect(await ler(ids.estB, (m) => m.internacaoAih(ids.internacao, [ids.sus]))).toBeNull();
+  });
+
+  it('C1-051: o setor do atendimento sai na leitura do laudo e a permissão por setor recusa a digitação sem gravar', async () => {
+    const setores = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-setor` }, async (e) => {
+      const setor = (codigo: string) =>
+        garantir(
+          e,
+          'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
+          [ids.est, codigo],
+          "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, ?, 'assistencial', ?)",
+          [ids.est, codigo, `Setor sintético ${codigo}`, new Date()],
+        );
+      const a = await setor(`${P}-S1`);
+      const b = await setor(`${P}-S2`);
+      await e.executar('UPDATE atendimento SET setor_funcional_id = ? WHERE id = ?', [a, ids.atSus]);
+      return { a, b };
+    });
+    const apacs = () =>
+      nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conta`, estabelecimento: ids.est }, async (l) =>
+        Number(
+          (await l.uma<{ n: number }>('SELECT COUNT(*) AS n FROM apac WHERE atendimento_id = ?', [ids.atSus]))
+            ?.n ?? 0,
+        ),
+      );
+    try {
+      expect(await ler(ids.est, (m) => m.atendimentoLaudoApac(ids.atSus, [ids.sus]))).toMatchObject({
+        setor: setores.a,
+      });
+      const selo = new SeloSolicitanteApac();
+      const sv = new ServicoSus(new PortaSusPropria(nucleo, CLIENTE), armazemSusMemoria(), undefined, selo);
+      const sessao = (permissoesSetor: SessaoSus['permissoesSetor'], usuario: number | null): SessaoSus => ({
+        rede: 'rede-teste',
+        hospital: 'f22',
+        login: 'FATURISTA.SINT',
+        estabelecimento: ids.est,
+        usuario,
+        ...(permissoesSetor ? { permissoesSetor } : {}),
+        correlacao: `${P}-c1051`,
+        hoje: '2026-03-20',
+        convenios: null,
+        parametros: {
+          cnes: '9999991',
+          conveniosSus: [ids.sus],
+          conveniosParticular: [],
+          fontePadrao: null,
+          fontePorConvenio: new Map(),
+          habilitacoes: new Set<string>(),
+          apac: { uf: '33' },
+        },
+        pode: () => true,
+        trilha: () => {
+          throw new Error('A recusa não grava trilha.');
+        },
+      });
+      const outroSetor = [
+        { setor: setores.b, tipo: 'digitacao' as const, vigenciaInicio: '2026-01-01', vigenciaFim: null },
+      ];
+      const antes = await apacs();
+      const laudo = {
+        acao: 'laudo' as const,
+        laudo: {
+          registro: ids.atSus,
+          procedimento: SIG,
+          cidPrincipal: 'N18.0',
+          cidSecundario: null,
+          cidAssociado: null,
+          solicitante: selo.selar(CPF_MED),
+          dataSolicitacao: '2026-03-15',
+          justificativa: 'Justificativa sintética do laudo.',
+          laudoEspecifico: null,
+          nefrologia: null,
+        },
+      };
+      const recusa = (codigo: string) =>
+        expect.objectContaining({ extras: expect.objectContaining({ codigo }) });
+      // Permissão vigente só noutro setor: a leitura do laudo e a digitação são recusadas, e nada é gravado.
+      await expect(sv.atendimentoLaudoApac(sessao(outroSetor, 7), ids.atSus)).rejects.toEqual(
+        recusa('sus-setor-sem-permissao'),
+      );
+      await expect(
+        sv.registrarApac(sessao(outroSetor, 7), laudo as Parameters<ServicoSus['registrarApac']>[1]),
+      ).rejects.toEqual(recusa('sus-setor-sem-permissao'));
+      expect(await apacs()).toBe(antes);
+      // A permissão no setor do atendimento libera; sem permissão vigente (vencida) vale o cargo; o administrador passa.
+      const noSetor = [{ ...outroSetor[0]!, setor: setores.a }];
+      const vencida = [{ ...outroSetor[0]!, vigenciaFim: '2026-02-28' }];
+      for (const [p, u] of [
+        [noSetor, 7],
+        [vencida, 7],
+        [outroSetor, null],
+      ] as const)
+        expect(await sv.atendimentoLaudoApac(sessao(p, u), ids.atSus)).toMatchObject({ registro: ids.atSus });
+      // Sem setor no atendimento, com permissão por setor vigente, a digitação é recusada.
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-setor0` }, (e) =>
+        e.executar('UPDATE atendimento SET setor_funcional_id = NULL WHERE id = ?', [ids.atSus]),
+      );
+      await expect(sv.atendimentoLaudoApac(sessao(noSetor, 7), ids.atSus)).rejects.toEqual(
+        recusa('sus-setor-nao-informado'),
+      );
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-setor-fim` }, (e) =>
+        e.executar('UPDATE atendimento SET setor_funcional_id = NULL WHERE id = ?', [ids.atSus]),
+      );
+    }
   });
 });

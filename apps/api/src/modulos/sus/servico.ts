@@ -77,8 +77,12 @@ import {
   recusaFecharCompetencia,
   recusaReabrirCompetencia,
   resumoCriticas,
+  type AcaoSetorSus,
+  decidirSetorSus,
+  type PermissaoSetorSusVigencia,
 } from '@sgh/dominio-faturamento';
 import { ErroProblema } from '../../problema.filter.js';
+import { recusaConfiguracaoSus } from './servico-configuracao.js';
 import {
   apacParaMontar,
   montarApacDaCompetencia,
@@ -122,6 +126,11 @@ export interface SessaoSus {
   readonly parametros: ParametrosSus;
   /** Se a sessão tem a ação do catálogo (as mesmas regras da rota); ausente, nega (falha fechada). */
   pode?(acao: string): boolean;
+  /**
+   * C1-051: as permissões do usuário por setor no faturamento SUS (todas, vigentes ou não). Sem nenhuma vigente, vale só
+   * o cargo; com elas, só os setores e o tipo listados. Ausente: nenhuma cadastrada (vale o cargo).
+   */
+  readonly permissoesSetor?: readonly PermissaoSetorSusVigencia[];
   /** A linha da trilha de uma gravação (o banco é o da sessão). */
   trilha(
     evento: string,
@@ -1108,12 +1117,27 @@ export class ServicoSus {
    * atendimento com conta do SUS: o de outro financiador é recusado sem devolver o CID, o prontuário nem a data
    * (D-ATEND-513; a rota é auditada).
    */
+  /**
+   * C1-051: a permissão por usuário e setor além do cargo (a regra é do domínio, decidirSetorSus). O administrador da
+   * plataforma (usuário sem id) passa sempre; sem permissão vigente cadastrada, vale o cargo.
+   */
+  private exigirSetorSus(s: SessaoSus, setor: number | null, acao: AcaoSetorSus): void {
+    const r = decidirSetorSus(s.permissoesSetor ?? [], {
+      usuario: s.usuario ?? null,
+      setor,
+      acao,
+      hoje: s.hoje,
+    });
+    if (r) throw recusaConfiguracaoSus(r);
+  }
+
   async atendimentoLaudoApac(s: SessaoSus, registro: number): Promise<AtendimentoLaudoApac> {
     this.exigirEscopoSus(s);
     const sus = s.parametros.conveniosSus;
     const a = await this.porta.ler(this.ctx(s), (l) => l.atendimentoLaudoApac(registro, sus));
     if (!a) throw recusa('apac-atendimento-nao-encontrado');
     if (a.convenio === null || !sus.includes(a.convenio)) throw recusa('apac-atendimento-nao-sus');
+    this.exigirSetorSus(s, a.setor, 'digitacao');
     return {
       registro: a.registro,
       atendimento: a.atendimento,
@@ -1201,6 +1225,7 @@ export class ServicoSus {
         if (!at || at.pacienteId === null) throw recusa('apac-atendimento-nao-encontrado');
         if (at.convenio === null || !s.parametros.conveniosSus.includes(at.convenio))
           throw recusa('apac-atendimento-nao-sus');
+        this.exigirSetorSus(s, at.setor, 'digitacao');
         const sigtap = await g.sigtapPorCodigo(l.procedimento);
         if (!sigtap) throw recusa('apac-procedimento-desconhecido');
         const sol = await this.solicitanteDaChave(g, l.solicitante);

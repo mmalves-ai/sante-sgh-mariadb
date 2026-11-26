@@ -503,7 +503,7 @@ export class MontagensSusPropria {
               (SELECT c.fonte_pagadora_id FROM conta_hospitalar c
                 WHERE c.atendimento_id = at.id AND c.excluido_em IS NULL AND c.situacao <> 'cancelada'
                 ORDER BY ${sus} DESC, c.id LIMIT 1) AS fonte_conta,
-              pa.id AS paciente_id, pa.numero_prontuario, pf.cns
+              pa.id AS paciente_id, pa.numero_prontuario, pf.cns, at.setor_funcional_id
          FROM atendimento at
          JOIN paciente pa ON pa.id = at.paciente_id
          JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
@@ -521,6 +521,7 @@ export class MontagensSusPropria {
       convenio: numOuNulo(x['fonte_conta']) ?? numOuNulo(x['fonte_pagadora_id']),
       cns: txtOuNulo(x['cns']),
       cidPrincipal: txtOuNulo(x['cid_principal']),
+      setor: numOuNulo(x['setor_funcional_id']),
     };
   }
 

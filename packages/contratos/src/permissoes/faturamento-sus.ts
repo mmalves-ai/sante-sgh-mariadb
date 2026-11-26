@@ -94,6 +94,12 @@ export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
     'Criar e encerrar as regras por tipo de prestador SUS que valem para todos os estabelecimentos do cliente',
     { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'], criticidade: 'sensivel' },
   ),
+  // C1-051 (06-SUS linha 53): a permissão por usuário e setor do faturamento SUS e os parâmetros por instrumento.
+  p(
+    'faturamento.susConfiguracao.editar',
+    'Dar e encerrar a permissão por usuário e setor do faturamento SUS e gravar os parâmetros de cada instrumento',
+    { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'], criticidade: 'sensivel' },
+  ),
   // Os médicos solicitantes SUS vão pelo CRUD genérico (M51, etapa 2): as permissões
   // `faturamento.susSolicitante.{ler,criar,editar,exportar}` são geradas do domínio (dominios-m51.ts), com as opções
   // 920 e 1100 do módulo A.P.A.C.

@@ -61,6 +61,9 @@ interface EstadoSus {
 const agora = () => new Date().toISOString().slice(0, 23);
 
 /** Catálogo SIGTAP sintético (códigos de forma válida; nomes inventados). */
+/** O setor sintético do atendimento da APAC (C1-051): o registro par é do setor 1 (Ambulatório); o ímpar, do 2. */
+export const setorSinteticoApac = (registro: number): number => (registro % 2 === 0 ? 1 : 2);
+
 export const SIGTAP_SINTETICO = [
   { id: 9001, codigo: '0301010072', nome: 'PROCEDIMENTO SINTETICO DE CONSULTA', registro: '02' },
   { id: 9002, codigo: '0202010295', nome: 'PROCEDIMENTO SINTETICO DE EXAME', registro: '01' },
@@ -580,6 +583,7 @@ export class PortaSusMemoria implements PortaSus {
           convenio: a.conta.convenio,
           cns: a.conta.paciente.cns,
           cidPrincipal: a.conta.cidPrincipal,
+          setor: setorSinteticoApac(registro),
         };
       },
       dominiosApac: async () => DOMINIOS_APAC_SINTETICOS,

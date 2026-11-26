@@ -95,6 +95,8 @@ import {
   type ProcedimentoHospitalSus,
   type ResultadoCriticaSus,
   type SigtapAchado,
+  type CamposParametroSus,
+  type InstrumentoParametroSus,
 } from '@sgh/contratos';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
 import type { z } from 'zod';
@@ -120,10 +122,12 @@ import { escopoConvenios } from '../faturamento/servico.js';
 import { LiberacaoPep } from '../pep/liberacao-pep.js';
 import { armazemSusMemoria } from './armazem.js';
 import type { ParametrosSus } from './montagem.js';
-import { PORTA_SUS, type PortaSus } from './porta.js';
+import { type ContextoSus, PORTA_SUS, type PortaSus } from './porta.js';
 import { PortaSusMemoria } from './porta-memoria.js';
 import { chaveMestraDoAmbiente, SeloSolicitanteApac } from './selo-solicitante.js';
 import { type ArmazemArquivoSus, ServicoSus, type SessaoSus } from './servico.js';
+import { PORTA_CONFIGURACAO_SUS, type PortaConfiguracaoSus } from './porta-configuracao.js';
+import { ServicoConfiguracaoSus } from './servico-configuracao.js';
 import { PARAMETROS_AIH_VAZIOS } from './montagem-aih.js';
 import { ServicoSusAih } from './servico-aih.js';
 
@@ -158,7 +162,7 @@ const instrumentoDe = (v: string | undefined): InstrumentoSus | null =>
   (INSTRUMENTOS_SUS as readonly string[]).includes(v ?? '') ? (v as InstrumentoSus) : null;
 
 /** O dia de hoje no fuso do hospital (a competência futura é recusada pelo dia local). */
-function hojeLocal(agora = new Date()): string {
+export function hojeLocal(agora = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(agora);
 }
 
@@ -168,6 +172,7 @@ export class SusController {
   /** Etapa 4: a AIH e o retorno do gestor (as rotas em sus-aih.controller.ts; a crítica da AIH entra aqui). */
   readonly aih: ServicoSusAih;
   private readonly liberacao: LiberacaoPep;
+  private readonly configuracaoSus: ServicoConfiguracaoSus | null;
 
   constructor(
     @Inject(PORTA_SUS) porta: PortaSus,
@@ -182,7 +187,12 @@ export class SusController {
     @Optional()
     @Inject(PORTA_ESTABELECIMENTO_SUS)
     private readonly estabelecimentoSus: PortaEstabelecimentoSusPropria | null = null,
+    // C1-051: a permissão por usuário e setor e os parâmetros cadastrados por instrumento.
+    @Optional()
+    @Inject(PORTA_CONFIGURACAO_SUS)
+    portaConfiguracao: PortaConfiguracaoSus | null = null,
   ) {
+    this.configuracaoSus = portaConfiguracao ? new ServicoConfiguracaoSus(portaConfiguracao) : null;
     this.liberacao = new LiberacaoPep(configuracao, cache);
     const log = new Logger('SusController');
     // A chave opaca do solicitante da APAC deriva da chave mestra da plataforma (estável entre reinícios e instâncias);
@@ -275,7 +285,13 @@ export class SusController {
       );
       return typeof v === 'string' ? v : String(v ?? '');
     };
-    const fonte = texto('faturamento.sus.ciha.fontePadrao');
+    // C1-051: o parâmetro cadastrado no instrumento vale no lugar do texto geral (faturamento.sus.*) campo a campo.
+    const cadastrados = this.configuracaoSus
+      ? await this.configuracaoSus.parametrosCadastrados(this.contextoSus(s))
+      : [];
+    const campo = (instrumento: InstrumentoParametroSus, nome: keyof CamposParametroSus, chave: string) =>
+      cadastrados.find((p) => p.instrumento === instrumento)?.campos[nome] ?? texto(chave);
+    const fonte = campo('ciha', 'fontePadrao', 'faturamento.sus.ciha.fontePadrao');
     return {
       cnes: texto('faturamento.sus.cnes').trim(),
       conveniosSus: conveniosDoParametro(texto('faturamento.sus.conveniosSus')),
@@ -286,18 +302,29 @@ export class SusController {
       fontePorConvenio: fontesDoParametro(texto('faturamento.sus.ciha.fontePorConvenio')),
       habilitacoes: habilitacoesDoParametro(texto('faturamento.sus.habilitacoes')),
       ...(await this.cadastroSusDoEstabelecimento(s, texto('faturamento.sus.tipoPrestador'))),
-      apac: { uf: texto('faturamento.sus.apac.uf').trim() },
+      apac: { uf: campo('apac', 'uf', 'faturamento.sus.apac.uf').trim() },
       bpa: {
-        orgaoOrigem: texto('faturamento.sus.bpa.orgaoOrigem').trim(),
-        siglaOrigem: texto('faturamento.sus.bpa.siglaOrigem').trim(),
-        cnpj: texto('faturamento.sus.bpa.cnpjPrestador').trim(),
-        orgaoDestino: texto('faturamento.sus.bpa.orgaoDestino').trim(),
-        indicadorDestino: texto('faturamento.sus.bpa.indicadorDestino').trim() === 'E' ? 'E' : 'M',
+        orgaoOrigem: campo('bpa', 'orgaoOrigem', 'faturamento.sus.bpa.orgaoOrigem').trim(),
+        siglaOrigem: campo('bpa', 'siglaOrigem', 'faturamento.sus.bpa.siglaOrigem').trim(),
+        cnpj: campo('bpa', 'cnpjPrestador', 'faturamento.sus.bpa.cnpjPrestador').trim(),
+        orgaoDestino: campo('bpa', 'orgaoDestino', 'faturamento.sus.bpa.orgaoDestino').trim(),
+        indicadorDestino:
+          campo('bpa', 'indicadorDestino', 'faturamento.sus.bpa.indicadorDestino').trim() === 'E' ? 'E' : 'M',
       },
       aih: {
-        utiPorAcomodacao: texto('faturamento.sus.aih.utiPorAcomodacao').trim(),
-        diretorClinicoCns: texto('faturamento.sus.aih.diretorClinicoCns').trim(),
+        utiPorAcomodacao: campo('aih', 'utiPorAcomodacao', 'faturamento.sus.aih.utiPorAcomodacao').trim(),
+        diretorClinicoCns: campo('aih', 'diretorClinicoCns', 'faturamento.sus.aih.diretorClinicoCns').trim(),
       },
+    };
+  }
+
+  private contextoSus(s: SessaoCadastro): ContextoSus {
+    return {
+      rede: s.rede,
+      hospital: s.hospital,
+      estabelecimento: s.porta.estabelecimento,
+      usuario: s.porta.usuario,
+      correlacao: s.porta.correlacao,
     };
   }
 
@@ -305,7 +332,13 @@ export class SusController {
   async sessao(req: RequisicaoAutorizada): Promise<SessaoSus> {
     const s = sessaoDe(req);
     const escopo = escopoConvenios(s);
+    // C1-051: as permissões do usuário por setor (o administrador da plataforma, sem id, passa sempre).
+    const permissoesSetor =
+      this.configuracaoSus && s.porta.usuario != null
+        ? await this.configuracaoSus.permissoesDoUsuario(this.contextoSus(s), s.porta.usuario)
+        : [];
     return {
+      permissoesSetor,
       rede: s.rede,
       hospital: s.hospital,
       login: s.login,

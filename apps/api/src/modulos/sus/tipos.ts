@@ -217,6 +217,8 @@ export interface AtendimentoLaudoApacDados {
   /** Só para a conferência do dígito no servidor. */
   readonly cns: string | null;
   readonly cidPrincipal: string | null;
+  /** O setor do atendimento (C1-051: a permissão por usuário e setor da digitação SUS); null quando não informado. */
+  readonly setor: number | null;
 }
 
 export interface ValorDominioApac {

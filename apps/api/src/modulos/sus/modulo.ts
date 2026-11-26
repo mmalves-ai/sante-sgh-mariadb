@@ -22,6 +22,9 @@ import {
   PortaLaudoInternacaoSusPropria,
 } from './laudo-internacao-sus-propria.js';
 import { PORTA_LEITOS_UTI, PortaLeitosUtiPropria } from './leitos-uti-propria.js';
+import { PORTA_CONFIGURACAO_SUS, PortaConfiguracaoSusMemoria } from './porta-configuracao.js';
+import { PortaConfiguracaoSusPropria } from './porta-configuracao-propria.js';
+import { ConfiguracaoSusController } from './sus-configuracao.controller.js';
 import { armazemSusLocal, armazemSusMemoria } from './armazem.js';
 import { PORTA_SUS, type PortaSus, portaSusIndisponivel } from './porta.js';
 import { PortaSusMemoria } from './porta-memoria.js';
@@ -80,6 +83,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
       ProgramacaoSusController,
       ApacComplementosController,
       RaasSusController,
+      ConfiguracaoSusController,
     ],
     providers: [
       { provide: PORTA_SUS, useValue: porta },
@@ -142,6 +146,16 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaApacComplementosPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
+      },
+      // C1-051 (06-SUS linha 53): permissão por usuário e setor e parâmetros por instrumento (a memória só em dev/ci).
+      {
+        provide: PORTA_CONFIGURACAO_SUS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaConfiguracaoSusPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : porta.destino === 'memoria'
+              ? new PortaConfiguracaoSusMemoria()
+              : null,
       },
       // F8 (06-SUS linha 64): RAAS da atenção psicossocial e domiciliar (registro, crítica e remessa).
       {
