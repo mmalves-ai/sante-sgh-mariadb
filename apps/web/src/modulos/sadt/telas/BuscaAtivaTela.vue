@@ -175,9 +175,11 @@ async function recarregarCaso(texto: string): Promise<void> {
   fila.value = (await lerFilaBuscaAtiva(todos.value, codigoPaciente())).itens;
   mensagem.value = texto;
 }
-const registrarContato = () =>
-  executar(async () => {
-    if (!caso.value || !podeContato.value) return;
+// A conferência vem antes do executar: dentro dele o carregando já está ligado e o podeContato daria sempre falso.
+const registrarContato = () => {
+  if (!caso.value || !podeContato.value) return Promise.resolve();
+  return executar(async () => {
+    if (!caso.value) return;
     const c = contato.value;
     await registrarContatoBuscaAtiva(
       caso.value.id,
@@ -193,9 +195,12 @@ const registrarContato = () =>
     );
     await recarregarCaso(t('sadt.buscaAtiva.contatoRegistrado'));
   });
-const concluir = () =>
-  executar(async () => {
-    if (!caso.value || !podeConcluir.value) return;
+};
+// A conferência vem antes do executar: dentro dele o carregando já está ligado e o podeConcluir daria sempre falso.
+const concluir = () => {
+  if (!caso.value || !podeConcluir.value) return Promise.resolve();
+  return executar(async () => {
+    if (!caso.value) return;
     await concluirBuscaAtiva(
       caso.value.id,
       {
@@ -207,9 +212,12 @@ const concluir = () =>
     );
     await recarregarCaso(t('sadt.buscaAtiva.concluido'));
   });
-const cancelar = () =>
-  executar(async () => {
-    if (!caso.value || !podeCancelar.value) return;
+};
+// A conferência vem antes do executar: dentro dele o carregando já está ligado e o podeCancelar daria sempre falso.
+const cancelar = () => {
+  if (!caso.value || !podeCancelar.value) return Promise.resolve();
+  return executar(async () => {
+    if (!caso.value) return;
     await cancelarBuscaAtiva(
       caso.value.id,
       { versao: caso.value.versao, observacao: motivoCancelamento.value.trim() },
@@ -217,6 +225,7 @@ const cancelar = () =>
     );
     await recarregarCaso(t('sadt.buscaAtiva.cancelado'));
   });
+};
 
 onMounted(() =>
   executar(async () => {

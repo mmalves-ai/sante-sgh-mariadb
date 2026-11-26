@@ -729,7 +729,16 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     ativo: true,
     bloqueado: false,
     senhaAlteradaEm: new Date(),
-    concessoes: { grupo: 'LABORATORIO', opcoesGrupo: opcoesDaArea('sadt') },
+    concessoes: {
+      grupo: 'LABORATORIO',
+      opcoesGrupo: [
+        ...new Set([
+          ...opcoesDaArea('sadt'),
+          // C1-097: o laboratório lança e baixa o consumo dos exames do setor executante (sadt.lancamento.*).
+          ...opcoesDasPermissoes('sadt.lancamento.ler', 'sadt.lancamento.lancar'),
+        ]),
+      ],
+    },
   },
   /**
    * M14: departamento pessoal (RH): domínios de RH e a consulta provisória das telas da Fase 6. M52.1: Funcionário

@@ -188,7 +188,7 @@ test.describe('@C2-015 Devolução de compra ao fornecedor', () => {
     await tela.getByTestId('devf-nf-chave').fill(chaveSintetica());
     await expect(tela.getByTestId('devf-chave-invalida')).toHaveCount(0);
     await tela.getByTestId('devf-nf-numero').fill('123');
-    await escolher(tela.getByTestId('devf-motivo'), 'Avaria sintética');
+    await escolher(tela.getByTestId('devf-motivo'), { rotulo: 'Avaria sintética' });
     // 8 × 5 + 4 × 2,50 = 50,00: abate tudo no saldo a pagar de 50,00.
     await expect(tela.getByTestId('devf-resumo')).toContainText('50,00');
     await expect(tela.getByTestId('devf-resumo')).toContainText('fica pendente: R$ 0,00');
