@@ -13,7 +13,7 @@
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
-import { PortaCmePropria } from './cme-propria.js';
+import { hojeNo, PortaCmePropria } from './cme-propria.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
@@ -361,6 +361,8 @@ describe.skipIf(SEM_BANCO)('PortaCmePropria contra o MariaDB (contrato de efeito
     ).toBe('pronto');
     const rt = await porta.rastreio(ctx(), etiqueta);
     expect(rt.pacote.faltasEtiqueta).toEqual([]);
+    // O dia impresso na etiqueta é o do fuso do estabelecimento (o banco guarda o instante em UTC).
+    expect(rt.pacote.esterilizadoNoDia).toBe(hojeNo('America/Sao_Paulo'));
     expect(rt.ciclo?.situacao).toBe('liberado');
   });
 

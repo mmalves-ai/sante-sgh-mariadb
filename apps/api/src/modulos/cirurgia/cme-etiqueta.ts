@@ -28,7 +28,7 @@ export function etiquetaDoPacote(r: RastreioPacote): EtiquetaPacoteEsteril {
     codigo: p.etiqueta,
     produto: p.produto,
     lote: p.lote!,
-    esterilizadoEm: diaBr(p.esterilizadoEm!),
+    esterilizadoEm: diaBr(p.esterilizadoNoDia ?? p.esterilizadoEm!),
     validade: diaBr(p.validade!),
     metodo: p.metodo!,
     preparadoPor: p.preparadoPor!,

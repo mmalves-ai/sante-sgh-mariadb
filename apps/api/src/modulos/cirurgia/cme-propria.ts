@@ -159,6 +159,12 @@ const recusa = (titulo: string, p: readonly ProblemaCme[]) => {
 const instante = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString().slice(0, 19) : v ? String(v).replace(' ', 'T').slice(0, 19) : null;
 const dia = (v: unknown): string | null => (v ? (instante(v) ?? '').slice(0, 10) || null : null);
+// O instante gravado (UTC) visto como dia civil no fuso do estabelecimento.
+const diaNoFuso = (v: unknown, fuso: string): string | null => {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(`${String(v).replace(' ', 'T').slice(0, 19)}Z`);
+  return Number.isNaN(d.getTime()) ? null : new Intl.DateTimeFormat('en-CA', { timeZone: fuso }).format(d);
+};
 export const hojeNo = (fuso: string): string =>
   new Intl.DateTimeFormat('en-CA', { timeZone: fuso }).format(new Date());
 
@@ -223,6 +229,8 @@ export interface PainelCme {
 export interface RastreioPacote {
   readonly pacote: PacoteLido & {
     readonly esterilizadoEm: string | null;
+    /** O dia da esterilização no fuso do estabelecimento (o que a etiqueta imprime; o banco guarda em UTC). */
+    readonly esterilizadoNoDia: string | null;
     readonly preparadoPor: string | null;
     readonly metodo: string | null;
     readonly faltasEtiqueta: string[];
@@ -447,7 +455,7 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
     return this.ler(c, 'rastreio', async (l, est) => {
       const p = await l.uma(`${SQL_PACOTES} AND p.codigo_etiqueta = ?`, [est.id, etiqueta.trim()]);
       if (!p) throw naoEncontrado('Pacote');
-      return this.montarRastreio(l, est.id, p);
+      return this.montarRastreio(l, est.id, p, est.fuso);
     });
   }
 
@@ -464,12 +472,12 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
         [est.id, agendamento],
       );
       const r: RastreioPacote[] = [];
-      for (const p of ps) r.push(await this.montarRastreio(l, est.id, p));
+      for (const p of ps) r.push(await this.montarRastreio(l, est.id, p, est.fuso));
       return r;
     });
   }
 
-  private async montarRastreio(l: Fonte, est: number, p: Linha): Promise<RastreioPacote> {
+  private async montarRastreio(l: Fonte, est: number, p: Linha, fuso: string): Promise<RastreioPacote> {
     const ciclo = p['ciclo_esterilizacao_id']
       ? await l.uma(`${SQL_CICLOS} AND c.id = ?`, [est, p['ciclo_esterilizacao_id']])
       : null;
@@ -502,7 +510,12 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
       preparadoPor: txtOuNull(p['preparado_por']),
     };
     return {
-      pacote: { ...base, ...etiqueta, faltasEtiqueta: faltasDaEtiqueta(etiqueta) },
+      pacote: {
+        ...base,
+        ...etiqueta,
+        esterilizadoNoDia: diaNoFuso(p['esterilizado_em'], fuso),
+        faltasEtiqueta: faltasDaEtiqueta(etiqueta),
+      },
       ciclo: ciclo ? cicloLido(ciclo) : null,
       cirurgias: movs.map((m) => ({
         movimento: num(m['id']),
