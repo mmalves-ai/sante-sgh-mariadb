@@ -36,6 +36,10 @@ test.describe('Senha e elegibilidade da operadora na recepção @C3-012 @fase7',
     await page.getByTestId('rp-exigeSenhaAutorizacao').click();
     await page.getByTestId('rp-campo-vigenciaInicio').fill(dataFutura());
     await semViolacaoAxe(page, 'regras do plano com setor');
+    // A prévia confere a abertura também por especialidade, serviço e setor.
+    await expect(page.getByTestId('rp-previa-especialidade')).toBeVisible();
+    await expect(page.getByTestId('rp-previa-servico')).toBeVisible();
+    await expect(page.getByTestId('rp-previa-setor')).toBeVisible();
     await page.getByTestId('rp-gravar').click();
     await expect(tela.getByRole('columnheader', { name: 'Especialidade, serviço e setor' })).toBeVisible();
     await expect(
@@ -82,11 +86,23 @@ test.describe('Senha e elegibilidade da operadora na recepção @C3-012 @fase7',
       }),
     );
     await entrar(page, 'SINT.GUICHE');
+    // 02-REC linha 37: os serviços da abertura (fonte sintética), para a regra que vale só num serviço.
+    await page.route('**/api/atendimento/regras-plano/servicos', (rota) =>
+      rota.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          { id: 901, rotulo: 'SERVICO SINTETICO A' },
+          { id: 902, rotulo: 'SERVICO SINTETICO B' },
+        ]),
+      }),
+    );
     await page.goto('/recepcao/atendimento/novo');
     const bloco = page.getByTestId('elegibilidade-abertura');
     await expect(bloco).toBeVisible();
     await expect(page.getByTestId('abrir-senha-convenio')).toBeVisible();
     await expect(page.getByTestId('abrir-validade-senha')).toBeVisible();
+    await escolher(page.getByTestId('abrir-servico'), { rotulo: /SERVICO SINTETICO A/ });
     await semViolacaoAxe(page, 'abertura com elegibilidade');
     expect(externas).toEqual([]);
   });

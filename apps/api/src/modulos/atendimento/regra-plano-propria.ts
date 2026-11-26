@@ -491,6 +491,19 @@ export class RegraPlanoPropria {
     );
   }
 
+  /** 02-REC linha 37: os serviços ativos, para a recepção escolher o da abertura (a regra pode valer só nele). */
+  servicos(): Promise<Opcao[]> {
+    return this.ler(async (l) =>
+      (
+        await l.consultar<Linha>(
+          'SELECT id, descricao FROM servico_atendimento WHERE ativo ORDER BY descricao',
+          [],
+          { teto: 2000 },
+        )
+      ).map((x) => ({ id: num(x['id']), rotulo: String(x['descricao']) })),
+    );
+  }
+
   /** As regras da fonte, com os planos e as categorias para os combos. */
   regras(c: ContextoRegraPlano, fonte: number): Promise<RegrasPlanoDaFonte> {
     return this.ler(async (l) => {

@@ -352,6 +352,9 @@ const pv = ref({
   guia: '',
   senhaAutorizacao: '',
   validadeSenha: '',
+  especialidade: '',
+  servico: '',
+  setor: '',
 });
 const critica = ref<CriticaPlanoTela | null>(null);
 const erroPrevia = ref<unknown>(null);
@@ -374,6 +377,10 @@ async function conferir(): Promise<void> {
       guia: ouNulo(pv.value.guia),
       senhaAutorizacao: ouNulo(pv.value.senhaAutorizacao),
       validadeSenha: ouNulo(pv.value.validadeSenha),
+      // 02-REC linha 37: a prévia confere a regra da especialidade, do serviço e do setor da abertura.
+      especialidadeId: pv.value.especialidade === '' ? null : Number(pv.value.especialidade),
+      servicoId: pv.value.servico === '' ? null : Number(pv.value.servico),
+      setorId: pv.value.setor === '' ? null : Number(pv.value.setor),
     });
   } catch (x) {
     erroPrevia.value = x;
@@ -631,6 +638,24 @@ async function conferir(): Promise<void> {
             :rotulo="t('categoria')"
             :opcoes="opcoesCategoria"
             data-testid="rp-previa-categoria"
+          />
+          <SanteSelecao
+            v-model="pv.especialidade"
+            :rotulo="t('especialidade')"
+            :opcoes="opcoesEspecialidade"
+            data-testid="rp-previa-especialidade"
+          />
+          <SanteSelecao
+            v-model="pv.servico"
+            :rotulo="t('servico')"
+            :opcoes="opcoesServico"
+            data-testid="rp-previa-servico"
+          />
+          <SanteSelecao
+            v-model="pv.setor"
+            :rotulo="t('setor')"
+            :opcoes="opcoesSetor"
+            data-testid="rp-previa-setor"
           />
           <div v-for="k in ['carteira', 'guia', 'senhaAutorizacao'] as const" :key="k" class="campo">
             <label :for="`rp-previa-${k}`">{{ t(k) }}</label>

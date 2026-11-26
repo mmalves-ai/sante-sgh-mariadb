@@ -22,6 +22,9 @@ export const mensagensAtendimento = {
   profissional: 'Profissional',
   especialidade: 'Especialidade',
   unidade: 'Unidade',
+  /** 02-REC linha 37: o serviço do atendimento (a regra do plano pode valer só nele). */
+  servico: 'Serviço',
+  servicoNenhum: 'Sem serviço',
   centroCusto: 'Centro de custo',
   procedimento: 'Procedimento',
   carater: 'Caráter do atendimento',

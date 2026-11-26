@@ -95,6 +95,8 @@ const postar = (corpo: unknown, chave?: string): RequestInit => ({
 });
 
 export const lerFontesRegraPlano = async () => json(await fetch(`${P}/fontes`, ler), z.array(opcao));
+/** 02-REC linha 37: os serviços para a abertura (a regra do plano pode valer só num serviço). */
+export const lerServicosAbertura = async () => json(await fetch(`${P}/servicos`, ler), z.array(opcao));
 
 export const lerRegrasPlano = async (fonte: number) =>
   json(await fetch(`${P}?fonte=${encodeURIComponent(String(fonte))}`, ler), esquemaRegrasPlanoDaFonte);

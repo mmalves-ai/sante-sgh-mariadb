@@ -44,6 +44,13 @@ export class RegraPlanoController {
     return this.exigirBanco().fontes();
   }
 
+  /** 02-REC linha 37: os serviços para a abertura do atendimento (a regra do plano pode valer só num serviço). */
+  @Get('servicos')
+  @Permissao('atendimento.atendimento.abrir')
+  servicos(): Promise<Opcao[]> {
+    return this.exigirBanco().servicos();
+  }
+
   @Get()
   @Permissao('convenio.contrato.ler')
   regrasDaFonte(

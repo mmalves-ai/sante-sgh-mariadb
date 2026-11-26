@@ -62,6 +62,8 @@ export const esquemaAbrirAtendimento = z
     /** Especialidade (0 só na requisição de laboratório). */
     especialidade: smallint,
     unidade: smallint.refine((u) => u > 0, 'Informe a unidade.'),
+    /** 02-REC linha 37: o serviço do atendimento; a regra do plano (e a senha que ela exige) pode valer só nele. */
+    servico: id.optional(),
     centroCusto: z.number().int().positive(),
     clinica: z.enum(['M', 'C', 'O']).default('M'),
     procedimento: z.number().int().min(0).max(999_999_999),

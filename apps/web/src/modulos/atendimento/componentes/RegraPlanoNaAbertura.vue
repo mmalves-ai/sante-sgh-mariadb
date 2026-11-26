@@ -19,6 +19,7 @@ const props = defineProps<{
   senha?: string;
   validadeSenha?: string;
   especialidade?: number | null;
+  servico?: number | null;
   setor?: number | null;
   /** Avisos que o servidor devolveu na abertura (alertaPlanoMotivo e orientacaoPlano). */
   aberto?: { alerta: string | null; orientacao: string | null } | null;
@@ -58,6 +59,7 @@ async function conferir(): Promise<void> {
       senhaAutorizacao: nulo(props.senha ?? ''),
       validadeSenha: nulo(props.validadeSenha ?? ''),
       especialidadeId: props.especialidade ?? null,
+      servicoId: props.servico ?? null,
       setorId: props.setor ?? null,
     });
     if (n === pedido) critica.value = r.regraId === null ? null : r;
@@ -77,6 +79,7 @@ watch(
     props.senha,
     props.validadeSenha,
     props.especialidade,
+    props.servico,
     props.setor,
   ],
   () => {
