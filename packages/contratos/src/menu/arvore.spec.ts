@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 517, M: 198, P: 57, N: 262 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 518, M: 198, P: 57, N: 263 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(517);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(518);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -412,6 +412,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/manutencao/oficinas', // C2-089 (04-HOT L135)
         '/mensagens', // M27
         '/nutricao/cardapio', // C2-098 (04-HOT L141)
+        '/nutricao/composicao', // C3-018 (04-HOT L142)
         '/nutricao/mapa', // M45 (etapa 5)
         '/nutricao/mapa?aba=etiquetas', // M45 (etapa 5): a etiqueta e o acompanhante na tela do mapa
         '/nutricao/terapia', // M45 (etapa 5)

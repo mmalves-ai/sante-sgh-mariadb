@@ -114,7 +114,7 @@ async function limpar(e: Escritor): Promise<void> {
   for (const t of CATALOGOS) await e.executar(`DELETE FROM ${t} WHERE codigo LIKE ?`, [`${P}%`]);
   await e.executar('DELETE FROM cuidado_enfermagem WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM hemocomponente WHERE codigo LIKE ?', [`${P}%`]);
-  await e.executar('DELETE FROM alimento_referencia WHERE codigo_tbca LIKE ?', [`${P}%`]);
+  await e.executar('DELETE FROM alimento_referencia WHERE codigo_fonte LIKE ?', [`${P}%`]);
   await e.executar('DELETE FROM refeicao_do_dia WHERE codigo LIKE ?', [`${P}%`]);
 }
 
@@ -231,7 +231,7 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
       );
       for (const a of ['a1', 'a2'])
         cat[a] = await ins(
-          `INSERT INTO alimento_referencia (codigo_tbca, descricao, versao_fonte, vigencia_inicio, criado_em) VALUES (?, ?, 'sintetica', '2026-01-01', ?)`,
+          `INSERT INTO alimento_referencia (fonte_composicao, codigo_fonte, descricao, versao_fonte, vigencia_inicio, criado_em) VALUES ('propria', ?, ?, 'sintetica', '2026-01-01', ?)`,
           [`${P}${a}`, `Alimento sintético ${a}`],
         );
       // Medida caseira do alimento a2 (não vale para o a1) e a refeição de OUTRO estabelecimento (fora da prescrição).
