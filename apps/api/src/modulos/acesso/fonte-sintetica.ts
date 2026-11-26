@@ -51,6 +51,7 @@ import {
 } from '@sgh/contratos';
 import type { ConcessoesLegado } from '@sgh/dominio-acesso';
 import type { DadosAutorizacaoLegado } from '../../autorizacao/servico-autorizacao.js';
+import { conferirSenha } from '@sgh/dominio-acesso';
 import { CATALOGO_COMPLETO, mapaDeOrigem, opcoesDasPermissoes } from '../../autorizacao/catalogo.js';
 
 // Opções do menu de origem das permissões do prontuário usadas pelos usuários sintéticos (mapa do conector).
@@ -3471,6 +3472,7 @@ export class FonteAcessoSintetica implements FonteAcesso {
   autenticar(codigo: string, login: string, senha: string): Promise<Autenticacao> {
     const conta = CONTAS_SINTETICAS[login];
     const existe = this.lista.some((e) => e.codigo === codigo && e.disponivel);
+    if (existe && !conta) return this.autenticarContaCriada(login, senha);
     if (!existe || !conta) return Promise.resolve({ desfecho: 'credencial-invalida' });
     const semCifra = !conta.criptografada && conta.senha === null;
     // M10: o bloqueio pela tela de usuários (em memória) vale no login.
@@ -3491,6 +3493,31 @@ export class FonteAcessoSintetica implements FonteAcesso {
     if (semCifra) return Promise.resolve({ desfecho: 'sem-cifra', conta: base });
     if (senha !== conta.senha) return Promise.resolve({ desfecho: 'credencial-invalida' });
     return Promise.resolve({ desfecho: 'ok', conta: base });
+  }
+
+  /**
+   * 01-ADM L57: a conta criada pela tela de usuários em memória entra com a senha inicial (resumo argon2id gravado na
+   * criação) e vai à troca obrigatória, como a credencial de troca obrigatória da receita no banco próprio.
+   */
+  private async autenticarContaCriada(login: string, senha: string): Promise<Autenticacao> {
+    const e = estadoAcessoSintetico();
+    const resumo = e.credenciaisIniciais.get(login);
+    const id = e.contas.get(login)?.id;
+    if (!resumo || id === undefined) return { desfecho: 'credencial-invalida' };
+    const bloqueado = e.bloqueio.get(login) ?? false;
+    const base: ContaAcesso = {
+      login,
+      id,
+      nomeExibicao: 'Usuário sintético (desenvolvimento)',
+      ativo: true,
+      bloqueado,
+      senhaAlteradaEm: null,
+      semCifra: false,
+      trocaObrigatoria: true,
+    };
+    if (bloqueado) return { desfecho: 'conta-impedida', conta: base };
+    if (!(await conferirSenha(senha, resumo))) return { desfecho: 'credencial-invalida' };
+    return { desfecho: 'ok', conta: base };
   }
 
   /**

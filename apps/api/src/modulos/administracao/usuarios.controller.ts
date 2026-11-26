@@ -349,7 +349,13 @@ export class UsuariosController {
       servico
         ? (conta, senha) =>
             typeof conta['idUsuario'] === 'number'
-              ? servico.concluirSenhaInicial(s.rede, s.hospital, login, conta['idUsuario'], senha, origem)
+              ? servico.concluirSenhaInicial(
+                  { rede: s.rede, estabelecimento: s.hospital, login: s.login, idUsuario: s.usuario },
+                  login,
+                  conta['idUsuario'],
+                  senha,
+                  origem,
+                )
               : Promise.resolve(true)
         : undefined,
     );

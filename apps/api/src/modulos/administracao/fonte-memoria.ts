@@ -343,6 +343,8 @@ function aplicarM10(nome: string, e: Record<string, unknown>, operador: string):
         senhaDefinida: typeof e['resumoSenhaInicial'] === 'string',
       });
       acesso.contas.set(login, { id, grupo: g, papeis: new Map([[4, true]]), flags: [], conselho: false });
+      if (typeof e['resumoSenhaInicial'] === 'string')
+        acesso.credenciaisIniciais.set(login, e['resumoSenhaInicial']);
       return { idUsuario: id };
     }
     case 'acesso.alterarUsuario': {

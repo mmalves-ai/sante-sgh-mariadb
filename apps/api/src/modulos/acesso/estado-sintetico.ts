@@ -107,6 +107,11 @@ export class EstadoAcessoSintetico {
   readonly decisoesMapa: (DecisaoMapaLida & { readonly idMapa: string })[] = [];
   /** M10: bloqueio feito pela tela de usuários (sobrepõe o da conta sintética). */
   readonly bloqueio = new Map<string, boolean>();
+  /**
+   * 01-ADM L57: a credencial inicial (resumo argon2id, troca obrigatória) da conta criada pela tela de usuários em
+   * memória: a sessão sintética a reconhece no primeiro acesso, como a receita no banco próprio.
+   */
+  readonly credenciaisIniciais = new Map<string, string>();
   /** M10: quem aceitou o termo vigente pela tela (a sessão sintética passa a não ter o termo pendente). */
   readonly aceitesTermo = new Set<string>();
   /** W1-01 (parte 6b): versão nova do termo publicada pela tela: o aceite implícito das contas sintéticas deixa de valer. */

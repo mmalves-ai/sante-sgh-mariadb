@@ -36,12 +36,13 @@ function motivoDaFalha(e: unknown): string {
 /**
  * Prepara a senha e cria a conta com ela numa gravação só. A recusa da criação sobe como está (nada gravado, nada de
  * senha na resposta). Sem como preparar a senha, cria a conta sem credencial e devolve "pendente" com o motivo.
- * `concluir` (opcional) roda depois da gravação (o serviço da identidade) e diz se a troca é obrigatória.
+ * `concluir` (opcional) roda depois da gravação (o serviço da identidade). A troca obrigatória vem da credencial que a
+ * receita gravou (planoCredencialInicial: sempre de troca obrigatória); o desfecho de `concluir` nunca a rebaixa.
  */
 export async function criarContaComSenhaInicial<R>(
   preparar: (() => Promise<SenhaPreparada>) | null,
   criar: (resumo: string | null) => Promise<R>,
-  concluir?: (conta: R, senha: string) => Promise<boolean>,
+  concluir?: (conta: R, senha: string) => Promise<unknown>,
 ): Promise<{ readonly conta: R; readonly senhaInicial: ResultadoSenhaInicial }> {
   let preparada: SenhaPreparada | null = null;
   let motivo = SENHA_INICIAL_PENDENTE;
@@ -55,9 +56,9 @@ export async function criarContaComSenhaInicial<R>(
   }
   const conta = await criar(preparada ? preparada.resumo : null);
   if (!preparada) return { conta, senhaInicial: { emitida: false, motivo } };
-  const trocaObrigatoria = concluir ? await concluir(conta, preparada.senha) : true;
+  if (concluir) await concluir(conta, preparada.senha).catch(() => undefined);
   return {
     conta,
-    senhaInicial: { emitida: true, senha: { senhaProvisoria: preparada.senha, trocaObrigatoria } },
+    senhaInicial: { emitida: true, senha: { senhaProvisoria: preparada.senha, trocaObrigatoria: true } },
   };
 }

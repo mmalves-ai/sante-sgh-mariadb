@@ -22,6 +22,7 @@
     "src/sessao/reautenticacao.spec.ts",
     "src/sessao/rede.spec.ts",
     "src/sessao/redefinir-senha.spec.ts",
+    "src/sessao/senha-inicial-conta.spec.ts",
     "src/sessao/sessao-hospital.spec.ts",
     "src/sessao/sessao-identidade.spec.ts",
     "src/sessao/sessao.spec.ts",

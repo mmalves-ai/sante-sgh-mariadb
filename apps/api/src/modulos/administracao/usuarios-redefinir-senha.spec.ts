@@ -132,16 +132,27 @@ describe('criar a conta com a senha inicial (regra da composição)', () => {
         },
       ),
     ).rejects.toThrow('login-em-uso');
-    // O serviço da identidade decide a troca obrigatória depois da gravação.
-    const c = await criarContaComSenhaInicial(
-      async () => preparada,
-      async () => ({ idUsuario: 11 }),
-      async (conta, senha) => conta.idUsuario === 11 && senha === 'sintetica-123',
-    );
-    expect(c.senhaInicial).toEqual({
-      emitida: true,
-      senha: { senhaProvisoria: 'sintetica-123', trocaObrigatoria: true },
-    });
+    // A troca obrigatória é a da credencial gravada pela receita: a conclusão (serviço da identidade) roda com a conta
+    // e a senha, mas o desfecho dela (regravação recusada ou com falha) nunca rebaixa a troca obrigatória.
+    const concluidas: [number, string][] = [];
+    for (const desfecho of [async () => false, async () => Promise.reject(new Error('identidade-fora'))]) {
+      const c = await criarContaComSenhaInicial(
+        async () => preparada,
+        async () => ({ idUsuario: 11 }),
+        async (conta, senha) => {
+          concluidas.push([conta.idUsuario, senha]);
+          return desfecho();
+        },
+      );
+      expect(c.senhaInicial).toEqual({
+        emitida: true,
+        senha: { senhaProvisoria: 'sintetica-123', trocaObrigatoria: true },
+      });
+    }
+    expect(concluidas).toEqual([
+      [11, 'sintetica-123'],
+      [11, 'sintetica-123'],
+    ]);
   });
 
   it('sem como gerar a senha: a conta nasce sem credencial e a resposta diz pendente, com o motivo', async () => {

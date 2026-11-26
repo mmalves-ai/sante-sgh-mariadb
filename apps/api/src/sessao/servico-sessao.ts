@@ -115,7 +115,13 @@ export type OrigemCredencialSessao = 'primeiro-login' | 'troca-senha' | 'senha-p
  */
 export interface GanchoIdentidade {
   autenticar(estabelecimento: string, login: string, senha: string): Promise<DesfechoIdentidade>;
-  regravar(a: AtorIdentidadeSessao, senha: string, origem?: OrigemCredencialSessao): Promise<boolean>;
+  /** `autor`: quem age, quando não é o dono da conta (o gestor que cria a conta): vai à trilha como usuário. */
+  regravar(
+    a: AtorIdentidadeSessao,
+    senha: string,
+    origem?: OrigemCredencialSessao,
+    autor?: AtorIdentidadeSessao,
+  ): Promise<boolean>;
   segundoFatorNoLogin(
     estabelecimento: string,
     conta: { readonly login: string; readonly id: number },
@@ -1689,33 +1695,53 @@ export class ServicoSessao {
 
   /**
    * Depois de a conta nascer com a credencial inicial: regrava a credencial do serviço da identidade com origem
-   * `senha-provisoria` (troca obrigatória). Sem o serviço, vale o que a receita gravou (troca obrigatória). A falha aqui
-   * não desfaz a conta: a credencial do banco já obriga a troca.
+   * `senha-provisoria`, com o gestor que criou a conta como autor da trilha. A troca obrigatória é a da credencial que a
+   * receita gravou e não depende daqui: a regravação não feita ou com falha não desfaz a conta nem rebaixa a troca; só
+   * vai ao aviso (sem a senha). Devolve se a regravação foi feita.
    */
   async concluirSenhaInicial(
-    rede: string,
-    estabelecimento: string,
+    gestor: {
+      readonly rede: string;
+      readonly estabelecimento: string;
+      readonly login: string;
+      readonly idUsuario: number | null;
+    },
     login: string,
     idUsuario: number,
     senha: string,
     origem: OrigemPedido,
   ): Promise<boolean> {
-    if (!this.identidade) return true;
+    if (!this.identidade) return false;
+    const { rede, estabelecimento } = gestor;
+    const ator = (l: string, id: number): AtorIdentidadeSessao => ({
+      rede,
+      hospital: estabelecimento,
+      login: l,
+      idUsuario: id,
+      estacao: origem.estacao,
+      correlacao: origem.correlacao,
+    });
     try {
-      return await this.identidade.regravar(
-        {
-          rede,
-          hospital: estabelecimento,
-          login,
-          idUsuario,
-          estacao: origem.estacao,
-          correlacao: origem.correlacao,
-        },
+      const feita = await this.identidade.regravar(
+        ator(login, idUsuario),
         senha,
         'senha-provisoria',
+        // Sem o usuario.id do gestor (conta sintética), nada de autor inventado: a porta usa o da conta.
+        gestor.idUsuario === null ? undefined : ator(gestor.login, gestor.idUsuario),
       );
-    } catch {
-      return true;
+      if (!feita)
+        this.aviso('senha inicial: credencial forte não regravada', {
+          estabelecimento,
+          correlacao: origem.correlacao,
+        });
+      return feita;
+    } catch (e) {
+      this.aviso('senha inicial: falha ao regravar a credencial forte', {
+        estabelecimento,
+        correlacao: origem.correlacao,
+        erro: e instanceof Error ? e.name : 'desconhecido',
+      });
+      return false;
     }
   }
 
