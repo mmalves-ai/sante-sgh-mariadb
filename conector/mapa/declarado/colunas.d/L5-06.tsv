@@ -56,7 +56,7 @@ TBMEDESP	ID_TBCBOPRO	profissional_especialidade.profissional_id			ref:TBCBOPRO>I
 TBMEDESP	ID_TBCBOPRO	profissional_especialidade.inscricao_conselho_id	chave_origem			inscrição em que a especialidade foi registrada (L5 ordem 63)
 TBMEDESP	ESP	profissional_especialidade.especialidade_medica_id			ref:TBESPEC;adotar:profissional_id,especialidade_medica_id	especialidade pela chave de TBESPEC (mesma fatia); recusas-fase2 P1b: o profissional com duas inscrições e a mesma especialidade grava o par uma vez (adotar; a segunda inscrição fica pendência baixa adotado_existente)
 TBMEDESP	ATIVO	profissional_especialidade.ativo	booleano_sn			S/N; fora do domínio fica com o padrão (ativo) e pendência
-RICADPAC_TBCONVEN	ID_RICADPAC	cobertura_paciente.paciente_id	chave_origem			paciente (L3); nunca visto recusa (NOT NULL)
+RICADPAC_TBCONVEN	ID_RICADPAC	cobertura_paciente.paciente_id	chave_origem		adotar:paciente_id,fonte_pagadora_id	paciente (L3); nunca visto recusa (NOT NULL); recusas-fase2 C1c (M14): adota a cobertura do par criada pela ficha do atendimento (L3), sem duplicar
 RICADPAC_TBCONVEN	ID_TBCONVEN	cobertura_paciente.fonte_pagadora_id	chave_origem			fonte pagadora (mesma fatia)
 RICADPAC_TBCONVEN	@vigencia_carga	cobertura_paciente.vigencia_inicio				a origem não data a cobertura: vigente desde a carga, com vigencia_sem_fonte
 HTCONVEN	ID_TBCONVEN	fonte_pagadora_versao.fonte_pagadora_id	chave_origem			fonte pagadora do retrato (mesma fatia); recusas-fase2 P1b: retrato com ID_TBCONVEN=0 (convênio sentinela) é dado inválido e fica a pendência, sem zero_e_chave

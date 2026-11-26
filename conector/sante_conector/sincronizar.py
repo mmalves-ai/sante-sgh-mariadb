@@ -23,6 +23,7 @@ Nunca grava valor de linha em log nem no resumo: só contagens, nomes de colunas
 """
 import hashlib
 import json
+import re
 
 from .carga import AGORA
 from .leitor import hash_bloco
@@ -304,6 +305,24 @@ def blocos(cm, t, por_bloco):
     cm.sinc_res["blocos"][t] = {k: v + ant[k] for k, v in r.items()} if ant else r
 
 
+MAXIMO = "#max:"
+_ALVO_MAXIMO = re.compile(r"([a-z][a-z0-9_]*)\.([a-z][a-z0-9_]*)")
+
+
+def proximo_pelo_maximo(cm, alvo):
+    """`<tabela>.<coluna>` (numérica) do destino: MAX(coluna) + 1 (tabela vazia: 1). None se o alvo não é uma
+    coluna inteira existente."""
+    m = _ALVO_MAXIMO.fullmatch(alvo or "")
+    if not m:
+        return None
+    t, c = m.groups()
+    ok = cm._todas("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s"
+                   " AND COLUMN_NAME=%s AND DATA_TYPE IN ('tinyint','smallint','mediumint','int','bigint')", (t, c))
+    if not ok[0][0]:
+        return None
+    return int(cm._todas("SELECT COALESCE(MAX(`%s`), 0) FROM `%s`" % (c, t))[0][0]) + 1
+
+
 def sequencias(cm):
     """F4.7: guarda o valor de todos os generators; avança a sequência própria declarada (nunca recua)."""
     try:
@@ -325,10 +344,18 @@ def sequencias(cm):
                     " TABLE_NAME='sequencia_negocio'")[0][0]
     for d in decl:
         g, tipo = d["generator"], d["tipo"]
-        if g not in gens or not tem:
+        if g.startswith(MAXIMO) and tem:
+            # recusas fase 2 (A05, substitui o M9): sem generator na origem, o mínimo é o maior número já gravado no
+            # destino (o migrado), mais um; nunca recua
+            prox = proximo_pelo_maximo(cm, g[len(MAXIMO):])
+            if prox is None:
+                cm._pendencia(g, None, "sequencia_maximo_invalido", "media")
+                continue
+        elif g not in gens or not tem:
             cm._pendencia(g, None, "sequencia_sem_generator" if tem else "sequencia_sem_tabela", "media")
             continue
-        prox = int(gens[g] or 0) + 1
+        else:
+            prox = int(gens[g] or 0) + 1
         # o generator da origem é único para o hospital: TODA sequência do tipo (global, por estabelecimento ou por
         # prefixo) avança até o próximo número (nunca recua); sem nenhuma, nasce a global
         rs = cm._todas("SELECT id FROM sequencia_negocio WHERE tipo=%s", (tipo,))

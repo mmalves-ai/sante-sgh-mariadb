@@ -611,3 +611,38 @@ CONFERIR_DESTINO = [
      "SELECT fonte_pagadora_id = " + _O % ("TBCONVEN", "1", "externo") + " FROM plano_fonte_pagadora WHERE id = "
      + _O % ("TBTIPPLANO", "1", "plano_fonte_pagadora")),
 ]
+
+
+# M13 (recusas fase 2, R16; ADR 0011): origem do ESPELHO DO CLIENTE para a semente (`semente_espelho.semear` no banco
+# do cliente), com dados 100% falsos e a forma das tabelas da origem. Fica FORA da imagem desta fatia (TBMATMED é da
+# L8-03 e a TBVLRMEM daqui é a do preço próprio): o teste lê por um leitor em memória. Tabelas de mat/med: 3 só
+# Brasíndice, 6 só Simpro, 7 com as duas marcas (o preço vai ao Simpro: sem preço Brasíndice), 1 própria (fora das duas
+# sementes de licenciado só pelo preço Brasíndice vazio). Versão 0 da publicação = a sentinela que hoje junta o Simpro
+# na edição '0' do Brasíndice.
+ORIGEM_ESPELHO_CLIENTE = {
+    "TBCTRMEM": (["COD"], ["COD", "NOME", "REF_BRA", "REF_SIMP"], [
+        (1, "Tabela exemplo propria", "F", "F"), (3, "Tabela exemplo referencia", "T", "F"),
+        (6, "Tabela exemplo so simpro", "F", "T"), (7, "Tabela exemplo duas marcas", "T", "T")]),
+    "TBVERSAOBRASIN": (["ID"], ["ID", "VERSAO"], [(1, 0), (2, 101)]),
+    "TBMATMED": (["ID"], ["ID", "NOME"], [(1, "Item exemplo um"), (2, "Item exemplo dois"),
+                                          (3, "Item exemplo tres"), (4, "Item exemplo quatro")]),
+    "TBVLRMEM": (["TAB", "COD", "DATA"], ["TAB", "COD", "DATA", "VALOR", "PFB", "ID_TBVERSAOBRASIN", "ID_TBMATMED",
+                                          "VALOR_PFB_BRASINDICE", "VALOR_PMC_BRASINDICE"], [
+        # Brasíndice: edição 101 (dois itens) e edição 0 (um item; hoje ela leva também as linhas do Simpro)
+        (3, 77, datetime.date(2025, 1, 1), 0.0, "F", 2, 1, 5.0, 7.0),
+        (3, 78, datetime.date(2025, 1, 1), 0.0, "F", 2, 2, 6.0, 8.0),
+        (3, 79, datetime.date(2025, 1, 1), 0.0, "F", 1, 2, 4.0, 4.5),
+        # Simpro, tabela 6: PFB T (preço de fábrica), F e vazio (preço ao consumidor); 501 em duas datas
+        (6, 501, datetime.date(2025, 3, 1), 10.0, "T", 1, 3, 0.0, 0.0),
+        (6, 502, datetime.date(2025, 3, 1), 11.0, "F", 1, 4, 0.0, 0.0),
+        (6, 503, datetime.date(2025, 3, 1), 12.0, None, 1, 1, 0.0, 0.0),
+        (6, 501, datetime.date(2025, 4, 1), 10.5, "T", 1, 3, 0.0, 0.0),
+        # tabela 7 (duas marcas): 501 repete o código na mesma data (codigo_repetido); 504 entra
+        (7, 501, datetime.date(2025, 3, 1), 9.0, "F", 1, 3, 0.0, 0.0),
+        (7, 504, datetime.date(2025, 4, 1), 8.0, "F", 1, 2, 0.0, 0.0)]),
+}
+# por catálogo e edição: (linhas da origem, válidas, recusadas por motivo)
+ESPERADO_ESPELHO_CLIENTE = {
+    "brasindice": {"0": (1, 1, {}), "101": (2, 2, {})},
+    "simpro": {"2025-03-01": (4, 3, {"codigo_repetido": 1}), "2025-04-01": (2, 2, {})},
+}

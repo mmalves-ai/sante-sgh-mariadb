@@ -56,13 +56,19 @@ MAPA = {
                              "COMPL", "BAIRRO", "CEP", "IBGE", "FONE", "CELULAR", "IDENT", "ATIVO", "DTOBITO"]},
     "REALTA": {"entidade": "atendimento", "chave": "ID_RECADATE", "colunas": ["ID_RECADATE", "DATA_HORA"],
                "pre": True},
-    "RECADATE": {"entidade": "atendimento", "chave": "REG", "colunas": ["REG", "ID_ATCABECATEND"], "pre": True},
+    # M14 (recusas fase 2, R18): `extras` são lidas para a cobertura do par (paciente, fonte pagadora) e ficam FORA do
+    # hash da linha: nenhuma ficha já carregada vira "alterada" por elas
+    "RECADATE": {"entidade": "atendimento", "chave": "REG", "colunas": ["REG", "ID_ATCABECATEND"], "pre": True,
+                 "extras": ["CONV", "MATRICULA", "DT_ATE"]},
     "ATCABECATEND": {"entidade": "atendimento", "chave": "ID",
                      "colunas": ["ID", "COD_ATENDIMENTO", "ID_RICADPAC", "DATA_HORA_ENTRADA", "DATA_HORA_SAIDA_EFETIVA",
                                  "DATA_HORA_ALTA_MEDICA", "TP_ATENDIMENTO", "CARATER_ATEND", "ID_TBCONVEN",
                                  "ID_TBCBOPRO_ATENDIMENTO", "ATIVO"]},
 }
 ORDEM = ["TBTPEMP", "TBHOSPIT", "TBUSERS", "RICADPAC", "REALTA", "RECADATE", "ATCABECATEND"]
+# M14 (R18, contrato do P0): a cobertura cujo último atendimento passou deste número de dias (contado da data da carga)
+# nasce 'vencida', para a recepção não sugerir convênio sem uso; configurável por CONECTOR_COBERTURA_ANTIGA_DIAS
+COBERTURA_ANTIGA_DIAS = 730
 # de-para de valores declarado no mapa (catálogos próprios do cliente)
 SEXOS = {"M": ("masculino", "Masculino"), "F": ("feminino", "Feminino"), "I": ("indeterminado", "Indeterminado")}
 CATEGORIAS = {"A": ("ambulatorio", "Ambulatório"), "I": ("internacao", "Internação"),
@@ -197,6 +203,19 @@ def resumo_pendencias(pend, repetidas, entidade):
         total += n
         criticas += n if grav == "critica" else 0
     return {"total": total, "criticas": criticas, "por_regra": por_regra, "por_restricao": restr}
+
+
+def ligar_titular_cobertura(cur):
+    """M14 (R18): liga cada cobertura do atendimento ainda sem titular ao titular da sua cobertura (titular_cobertura é
+    um por cobertura). Roda no fim das fichas e deve rodar de novo depois da carga do titular (L5). Devolve as ligadas."""
+    cur.execute("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN"
+                " ('cobertura_atendimento','titular_cobertura')")
+    if int(cur.fetchone()[0]) < 2:
+        return 0
+    cur.execute("UPDATE cobertura_atendimento ca JOIN titular_cobertura t ON t.cobertura_paciente_id=ca.cobertura_paciente_id"
+                " SET ca.titular_cobertura_id=t.id, ca.alterado_em=UTC_TIMESTAMP(3), ca.versao=ca.versao+1"
+                " WHERE ca.titular_cobertura_id IS NULL")
+    return int(cur.rowcount or 0)
 
 
 def detalhe_erro(e):
@@ -770,16 +789,18 @@ class Carga:
         faltam = [c for c in m["colunas"] if c not in disponiveis]
         if faltam:
             raise ErroCarga("tabela %s sem as colunas do mapa: %s" % (tab, ", ".join(faltam)))
+        # extras (M14): lidas quando a origem as tem, fora do hash (o hash é sempre o de m["colunas"])
+        cols = list(m["colunas"]) + [c for c in m.get("extras", ()) if c in disponiveis and c not in m["colunas"]]
         pk = self.lt.chave_primaria(tab)
         inteira = pk == [m["chave"]] and next(c for c in self.lt.colunas(tab) if c["nome"] == m["chave"])[
             "codigo_tipo"] in (7, 8, 16)
         if inteira:
             for ini, fim in self.lt.faixas(tab, m["chave"]):
-                nomes, it = self.lt.ler_faixa(tab, m["chave"], ini, fim, colunas=m["colunas"])
+                nomes, it = self.lt.ler_faixa(tab, m["chave"], ini, fim, colunas=cols)
                 for t in it:
                     yield dict(zip(nomes, t))
         else:
-            nomes, it = self.lt.ler_tudo(tab, colunas=m["colunas"])
+            nomes, it = self.lt.ler_tudo(tab, colunas=cols)
             i = nomes.index(m["chave"])  # sem chave inteira: ordem fixa pela chave (decisões de duplicidade estáveis)
             for t in sorted(it, key=lambda t: bytes(t[i]) if isinstance(t[i], (bytes, bytearray)) else str(t[i]).encode()):
                 yield dict(zip(nomes, t))
@@ -1407,6 +1428,7 @@ class Carga:
                 categoria.clear(); categoria.update(cat_antes)
         self._commit()
         # fichas (RECADATE) e altas (REALTA) ligadas ao atendimento de destino
+        com_atend = []  # M14: fichas com atendimento gravado (novas e iguais): a cobertura do par vem delas
         for tab, pai_de in (("RECADATE", lambda k, l: str(l["ID_ATCABECATEND"])),
                             ("REALTA", lambda k, l: str(ficha_atend.get(k)) if k in ficha_atend else None)):
             ent = ENT_FILHA[tab]
@@ -1415,6 +1437,8 @@ class Carga:
                 if sit != "nova":
                     if ant[0] is not None:
                         self._ja_carregada(ent, k, sit, ant)
+                        if tab == "RECADATE" and sit == "igual":
+                            com_atend.append((k, l, h, ant[0]))
                     continue
                 pai = pai_de(k, l)
                 aid, existe = self._de_para("ATCABECATEND", pai) if pai else (None, False)
@@ -1430,7 +1454,182 @@ class Carga:
                 hd = resumo((pai,))
                 self._registrar(tab, k, "atendimento", aid, h, hd)
                 self.origem.setdefault(ent, {})[k] = hd.hex()
+                if tab == "RECADATE":
+                    com_atend.append((k, l, h, aid))
         self._commit()
+        self._coberturas(com_atend)
+        self._commit()
+
+    # ----- M14 (recusas fase 2, R18): cobertura do par (paciente, fonte pagadora) pela ficha do atendimento -----
+    def _cobertura_por_fazer(self):
+        """Ficha já carregada sem o registro `<REG>/cobertura_paciente` (carga anterior ao M14): o grupo do atendimento
+        não pode ser pulado na continuação, senão a cobertura nunca nasce."""
+        ex = self.existente.get("RECADATE", {})
+        feitas = {k.split("/", 1)[0] for k in ex if k.endswith("/cobertura_paciente")}
+        return any(v[0] is not None and "/" not in k and k not in feitas for k, v in ex.items())
+
+    def _coberturas(self, fichas):
+        """M14 (R18; contrato do P0). Cada ficha (RECADATE) com atendimento gravado garante a cobertura do par
+        (paciente do atendimento, fonte pagadora do convênio da ficha) e liga o atendimento a ela:
+        - cobertura_paciente: ADOTA a existente do par (a do vínculo paciente-convênio ou a de outra ficha), nunca pela
+          carteira; sem nenhuma, cria com origem 'migracao', titular (o titular da origem completa depois),
+          vigencia_inicio = o menor atendimento do par (sem data válida: a data da carga, com `valor_presumido`),
+          ultimo_uso_em = o maior, numero_carteira = a matrícula da ficha mais recente e situação 'vencida' quando o
+          último atendimento passou de COBERTURA_ANTIGA_DIAS. A adotada sem carteira recebe a do par; carteira da ficha
+          diferente da cobertura fica na cobertura do atendimento, com `carteira_divergente` (baixa);
+        - cobertura_atendimento: uma por (atendimento, fonte), com a carteira da PRÓPRIA ficha (nenhuma carteira se
+          perde) e o titular da cobertura quando já houver (`ligar_titular_cobertura`);
+        - registro `<REG>/cobertura_paciente` e `<REG>/cobertura_atendimento` no conector_origem da ficha, com o hash
+          dela: é o pai de `ref:RECADATE/cobertura_paciente`. Ficha sem convênio ou sem paciente: recusa visível.
+        Só contagens saem daqui."""
+        if not fichas:
+            return
+        if int(self._um("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME"
+                        " IN ('cobertura_paciente','cobertura_atendimento')") or 0) < 2:
+            return
+        ex = self.existente.setdefault("RECADATE", {})
+
+        def por_fazer(k):
+            out = []
+            for dt in ("cobertura_paciente", "cobertura_atendimento"):
+                e = ex.get("%s/%s" % (k, dt))
+                if e is None or (e[0] is None and self.reprocessar and e[3]):
+                    out.append(dt)
+            return out
+        if not any(por_fazer(f[0]) for f in fichas):
+            return
+        for c in ("coberturas_criadas", "coberturas_adotadas", "coberturas_vencidas", "carteiras_divergentes",
+                  "cobertura_atendimento_criadas", "cobertura_atendimento_adotadas"):
+            self.cont.setdefault(c, 0)
+        pac, aids = {}, sorted({f[3] for f in fichas})
+        for i in range(0, len(aids), 5000):
+            b = aids[i:i + 5000]
+            pac.update({a: p for a, p in self._todas("SELECT id, paciente_id FROM atendimento WHERE id IN (%s)"
+                                                      % ",".join(["%s"] * len(b)), b)})
+        grupos, par_da = {}, {}
+        for k, l, _h, aid in fichas:  # o grupo do par usa TODAS as fichas (novas e já carregadas)
+            conv, p = l.get("CONV"), pac.get(aid)
+            conv = None if conv is None else (chave_txt(conv).strip() or None)
+            if conv is None or p is None:
+                continue
+            par_da[k] = (p, conv)
+            d, _s = data(l.get("DT_ATE"))
+            g = grupos.setdefault((p, conv), {"min": None, "max": None, "cart": None, "ordem": None})
+            if d is not None:
+                g["min"] = d if g["min"] is None else min(g["min"], d)
+                g["max"] = d if g["max"] is None else max(g["max"], d)
+            cart = txt(l.get("MATRICULA"), 30)
+            o = (d or datetime.date.min, int(k) if k.isdigit() else 0, k)
+            if cart and (g["ordem"] is None or o > g["ordem"]):
+                g["cart"], g["ordem"] = cart, o
+        cobs = {}  # (paciente, fonte) -> [[id, carteira]]: adoção pelo par
+        for i, p, f, cart in self._todas("SELECT id, paciente_id, fonte_pagadora_id, numero_carteira FROM"
+                                         " cobertura_paciente WHERE excluido_em IS NULL ORDER BY id"):
+            cobs.setdefault((p, f), []).append([i, cart])
+        cat, ordem_at = {}, {}
+        for i, a, f, o in self._todas("SELECT id, atendimento_id, fonte_pagadora_id, ordem FROM cobertura_atendimento"):
+            cat[(a, f)] = i
+            ordem_at[a] = max(ordem_at.get(a, 0), int(o))
+        hoje = datetime.date.today()
+        try:
+            antiga = int(os.environ.get("CONECTOR_COBERTURA_ANTIGA_DIAS") or COBERTURA_ANTIGA_DIAS)
+        except ValueError:
+            antiga = COBERTURA_ANTIGA_DIAS
+        titular = self._titular_da_cobertura()
+        ids_par, n = {}, 0
+        for k, l, h, aid in fichas:
+            faltam = por_fazer(k)
+            if not faltam:
+                continue
+            n += 1
+            if n % 1000 == 0:
+                self._commit()
+            kc, ka = k + "/cobertura_paciente", k + "/cobertura_atendimento"
+            par = par_da.get(k)
+            if par is None:
+                regra = "cobertura_sem_convenio" if pac.get(aid) is not None else "cobertura_sem_paciente"
+                for kk, dt in ((kc, "cobertura_paciente"), (ka, "cobertura_atendimento")):
+                    if dt in faltam:
+                        self._recusar("RECADATE", kk, dt, h, regra, "media")
+                continue
+            g, fonte = grupos[par], self._fonte(par[1])
+            pf = (par[0], fonte)
+            cid = ids_par.get(pf)
+            if cid is None:
+                cid = self._linha_nova("RECADATE", kc, "cobertura_paciente", h,
+                                       lambda: self._cobertura_do_par(kc, pf, g, cobs, hoje, antiga))
+                if cid is None:  # recusada pelo destino (regra no registro de kc): o atendimento fica sem cobertura
+                    if "cobertura_atendimento" in faltam:
+                        self._recusar("RECADATE", ka, "cobertura_atendimento", h, "pai_pendente", "alta")
+                    continue
+                ids_par[pf] = cid
+            if "cobertura_paciente" in faltam or ex.get(kc, (None,))[0] != cid:
+                self._registrar("RECADATE", kc, "cobertura_paciente", cid, h)
+            cart = txt(l.get("MATRICULA"), 30)
+            cc = next((x[1] for x in cobs.get(pf, ()) if x[0] == cid), None)
+            if cart and cc and cart != cc:
+                self.cont["carteiras_divergentes"] += 1
+                self._pendencia("RECADATE", kc, "carteira_divergente", "baixa")
+            if "cobertura_atendimento" not in faltam:
+                continue
+
+            def gravar_ca(aid=aid, fonte=fonte, cid=cid, cart=cart, ka=ka, h=h):
+                ida = cat.get((aid, fonte))
+                if ida is not None:  # a mesma fonte já está no atendimento: adota e completa o que falta
+                    with self._c() as c:
+                        c.execute("UPDATE cobertura_atendimento SET cobertura_paciente_id=COALESCE(cobertura_paciente_id,"
+                                  " %%s), numero_carteira=COALESCE(numero_carteira, %%s), alterado_em=%s,"
+                                  " versao=versao+1 WHERE id=%%s AND (cobertura_paciente_id IS NULL OR"
+                                  " (numero_carteira IS NULL AND %%s IS NOT NULL))" % AGORA, (cid, cart, ida, cart))
+                    self.cont["cobertura_atendimento_adotadas"] += 1
+                else:
+                    o = ordem_at.get(aid, 0) + 1
+                    ida = self._inserir("cobertura_atendimento", dict(
+                        atendimento_id=aid, ordem=o, fonte_pagadora_id=fonte, cobertura_paciente_id=cid,
+                        numero_carteira=cart, titular_cobertura_id=titular(cid)))
+                    cat[(aid, fonte)], ordem_at[aid] = ida, o
+                    self.cont["cobertura_atendimento_criadas"] += 1
+                self._registrar("RECADATE", ka, "cobertura_atendimento", ida, h)
+                return ida
+            self._linha_nova("RECADATE", ka, "cobertura_atendimento", h, gravar_ca)
+        self._commit()
+        with self._c() as c:
+            self.cont["cobertura_atendimento_titular_ligado"] = ligar_titular_cobertura(c)
+
+    def _titular_da_cobertura(self):
+        """id do titular (titular_cobertura é um por cobertura) ou None; sem a tabela, sempre None."""
+        if not int(self._um("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND"
+                            " TABLE_NAME='titular_cobertura'") or 0):
+            return lambda cid: None
+        return lambda cid: self._um("SELECT MIN(id) FROM titular_cobertura WHERE cobertura_paciente_id=%s", (cid,))
+
+    def _cobertura_do_par(self, kc, pf, g, cobs, hoje, antiga):
+        """A cobertura do par `pf` = (paciente, fonte): adotada (a da carteira do par, se houver mais de uma) ou criada
+        pelo contrato do M14. Devolve o id."""
+        lst = cobs.get(pf)
+        if lst:
+            esc = next((x for x in lst if g["cart"] and x[1] == g["cart"]), lst[0])
+            if esc[1] is None and g["cart"]:
+                with self._c() as c:
+                    c.execute("UPDATE cobertura_paciente SET numero_carteira=%%s, alterado_em=%s, versao=versao+1"
+                              " WHERE id=%%s AND numero_carteira IS NULL" % AGORA, (g["cart"], esc[0]))
+                esc[1] = g["cart"]
+            self.cont["coberturas_adotadas"] += 1
+            return esc[0]
+        vig = g["min"]
+        if vig is None:  # sem atendimento datado: vigente desde a carga, à vista
+            vig = hoje
+            self._pendencia("RECADATE", kc, "valor_presumido", "baixa", "vigencia_inicio")
+        vencida = g["max"] is not None and (hoje - g["max"]).days > antiga
+        idc = self._inserir("cobertura_paciente", dict(
+            paciente_id=pf[0], fonte_pagadora_id=pf[1], numero_carteira=g["cart"], vigencia_inicio=vig, titular=True,
+            situacao="vencida" if vencida else "ativa", origem="migracao",
+            ultimo_uso_em=datetime.datetime.combine(g["max"], datetime.time()) if g["max"] else None))
+        cobs.setdefault(pf, []).append([idc, g["cart"]])
+        self.cont["coberturas_criadas"] += 1
+        if vencida:
+            self.cont["coberturas_vencidas"] += 1
+        return idc
 
     # ----- execução -----
     def executar(self, presentes, contagens):
@@ -1451,6 +1650,8 @@ class Carga:
         from . import continuar
         grupo = {t for t in continuar.GRUPO_PROPRIA if t in self.tabelas}
         pulados = grupo if grupo and grupo <= set(getattr(self, "pular", None) or {}) and not self.reprocessar else set()
+        if pulados and "RECADATE" in pulados and self._cobertura_por_fazer():
+            pulados = set()  # M14: fichas carregadas sem a cobertura do par: o grupo do atendimento é refeito
         if pulados:  # continuação: pendências antes da marca (sem a marca, a próxima herda da anterior pela cadeia)
             self.cont["pendencias_repetidas"] = continuar.repetir_pendencias(
                 self, {t: self.pular[t] for t in pulados},
@@ -1491,6 +1692,8 @@ class Carga:
         ent = "atendimento" if t == "ATCABECATEND" else ENT_FILHA[t]
         vistas = self.vistas.setdefault(t, set())
         for k, ant in self.existente.get(t, {}).items():
+            if t == "RECADATE" and "/" in k:  # M14: registro da cobertura da ficha, não é linha da origem
+                continue
             vistas.add(k)
             if ant[0] is not None:
                 self._ja_carregada(ent, k, "igual", ant)
@@ -1527,7 +1730,8 @@ class Carga:
                               "SELECT co.chave_original, ca.chave_original, {ed} FROM {ctl}.conector_origem co"
                               " JOIN atendimento d ON d.id=co.id_destino LEFT JOIN {ctl}.conector_origem ca"
                               " ON ca.entidade_destino='atendimento' AND ca.id_destino=d.id"
-                              " AND ca.tabela_origem='ATCABECATEND' WHERE co.tabela_origem='RECADATE'"),
+                              " AND ca.tabela_origem='ATCABECATEND' WHERE co.tabela_origem='RECADATE'"
+                              " AND co.entidade_destino='atendimento'"),  # M14: sem os registros da cobertura
         "atendimento_alta": ("REALTA",
                              "SELECT co.chave_original, ca.chave_original, {ed} FROM {ctl}.conector_origem co"
                              " JOIN atendimento d ON d.id=co.id_destino LEFT JOIN {ctl}.conector_origem ca"

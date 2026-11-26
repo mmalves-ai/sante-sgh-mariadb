@@ -94,3 +94,19 @@ SHDOACAO	INAPTO	doacao_sangue.motivo_inaptidao	1	Inapto na triagem (motivo não 
 SHDOACAO	INAPTO	doacao_sangue.motivo_inaptidao	0		L7-01: apto: sem motivo
 SHBOLSA	PESQHEMOGLOBINA	bolsa_hemocomponente.pesquisa_hemoglobina_s			L7-01: só o nulo; código sem par vira pendência até o de-para revisado pelo cliente
 SHBOLSA	SOROLOGIA	bolsa_hemocomponente.sorologia_aprovada			L7-01: só o nulo; código sem par vira pendência (fica FALSE) até o de-para revisado pelo cliente
+SHPARAM	#item@DIGITACAO_OBR_CPF	parametro_valor.valor	S	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@DIGITACAO_OBR_CPF	parametro_valor.valor	s	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@DIGITACAO_OBR_CPF	parametro_valor.valor	N	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@DIGITACAO_OBR_CPF	parametro_valor.valor	n	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@GRAVARIMGBANCO	parametro_valor.valor	S	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@GRAVARIMGBANCO	parametro_valor.valor	s	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@GRAVARIMGBANCO	parametro_valor.valor	N	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@GRAVARIMGBANCO	parametro_valor.valor	n	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@LANCAR_TRANSFUSAO_APOS24H	parametro_valor.valor	S	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@LANCAR_TRANSFUSAO_APOS24H	parametro_valor.valor	s	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@LANCAR_TRANSFUSAO_APOS24H	parametro_valor.valor	N	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@LANCAR_TRANSFUSAO_APOS24H	parametro_valor.valor	n	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@LANCTRANSPRETRANS	parametro_valor.valor	S	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@LANCTRANSPRETRANS	parametro_valor.valor	s	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@LANCTRANSPRETRANS	parametro_valor.valor	N	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+SHPARAM	#item@LANCTRANSPRETRANS	parametro_valor.valor	n	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato

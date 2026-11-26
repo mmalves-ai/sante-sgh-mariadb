@@ -423,10 +423,12 @@ PROPCAOPERIODO	NOME	periodo_consulta_sumario_alta.atendimento_inteiro	168 HORAS	
 PROPCAOPERIODO	NOME	periodo_consulta_sumario_alta.horas_retroativas	168 HORAS	168	L6-06: janela do sumário de alta pelo nome do período; nome sem par recusa a linha (revisão do cliente no painel)
 PROPCAOPERIODO	NOME	periodo_consulta_sumario_alta.atendimento_inteiro	Últimas 168 Horas	0	L6-06: janela do sumário de alta pelo nome do período; nome sem par recusa a linha (revisão do cliente no painel)
 PROPCAOPERIODO	NOME	periodo_consulta_sumario_alta.horas_retroativas	Últimas 168 Horas	168	L6-06: janela do sumário de alta pelo nome do período; nome sem par recusa a linha (revisão do cliente no painel)
-PRPARAM_CHECAGEM	#item	parametro_valor.valor	S	sim	L6-06 r5 (revisão): S/N da origem -> formato canônico do parâmetro booleano do produto (sim/nao)
-PRPARAM_CHECAGEM	#item	parametro_valor.valor	N	nao	L6-06 r5 (revisão): S/N da origem -> formato canônico do parâmetro booleano do produto (sim/nao)
+PRPARAM_CHECAGEM	#item	parametro_valor.valor	S	true	L6-06 r5 (revisão): S/N da origem -> formato canônico do parâmetro booleano do produto ('true'/'false', contrato K2)
+PRPARAM_CHECAGEM	#item	parametro_valor.valor	N	false	L6-06 r5 (revisão): S/N da origem -> formato canônico do parâmetro booleano do produto ('true'/'false', contrato K2)
 PROPCAOPERIODO	NOME	periodo_consulta_sumario_alta.atendimento_inteiro	Todos	1	recusas-fase2 (P3a): todo o atendimento
 PROPCAOPERIODO	NOME	periodo_consulta_sumario_alta.horas_retroativas	Todos		recusas-fase2 (P3a): todo o atendimento: sem janela em horas
 PRPADRECEITA	GERAL	modelo_receita.abrangencia	T	geral	recusas-fase2 (P3a): T/F da origem: T -> geral
 PRPADRECEITA	GERAL	modelo_receita.abrangencia	F	profissional	recusas-fase2 (P3a, correção): T/F da origem: F (pessoal) -> profissional, como o N; receita pessoal sem profissional ligado ao login recusa pelo CHECK de dono, visível (604 F na origem, 0 com profissional pelo login hoje); a geral presumida só na falta do profissional espera condição sobre o resultado da referência (pedido ao C1)
 PRSITAPRAZAM	NOME	situacao_aprazamento.categoria	Aprazamento pendente	pendente	recusas-fase2 (P3a): aprazamento ainda não feito
+PRPAROFTALMO	#item@LANCAR_ADICAO	parametro_valor.valor	1	true	recusas-fase2 C1c (pedido 2 do K2): 1/0 -> booleano do contrato
+PRPAROFTALMO	#item@LANCAR_ADICAO	parametro_valor.valor	0	false	recusas-fase2 C1c (pedido 2 do K2): 1/0 -> booleano do contrato

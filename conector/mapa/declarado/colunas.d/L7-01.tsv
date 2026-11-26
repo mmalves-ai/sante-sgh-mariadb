@@ -168,3 +168,7 @@ SHBOLSA	USUARIO	trilha_auditoria.usuario_id			ref:TBUSERS;trilha_auditoria	L7-01
 SHBOLSA	=recebimento da bolsa do serviço fornecedor (origem)	trilha_auditoria.motivo			trilha_auditoria	L7-01: r5 (achado): texto fixo do evento
 SHBOLSA	ID_SHREQUISICAO	trilha_auditoria.correlacao			ref:SHREQUISICAO@correlacao;trilha_auditoria	L7-01: r5 (achado): pedido ao fornecedor da bolsa: copia o número do pedido gravado na trilha do pedido (referência validada: pedido recusado = pai_pendente, nunca visto = pai_inexistente); o modelo ainda não tem pedido ao fornecedor (pedido em saida/L7-01.json)
 SHBOLSA	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L7-01: r5 (achado): retrato completo da linha da bolsa (inclui o pedido, o técnico, a hora e a sequência)
+SHPARAM	#item@DIGITACAO_OBR_CPF	parametro_valor.valor	texto_char	valores		recusas-fase2 C1c (pedido 2 do K2): marcação S/N -> booleano do contrato (true/false); outro valor: valor_fora_do_dominio
+SHPARAM	#item@GRAVARIMGBANCO	parametro_valor.valor	texto_char	valores		recusas-fase2 C1c (pedido 2 do K2): marcação S/N -> booleano do contrato (true/false); outro valor: valor_fora_do_dominio
+SHPARAM	#item@LANCAR_TRANSFUSAO_APOS24H	parametro_valor.valor	texto_char	valores		recusas-fase2 C1c (pedido 2 do K2): marcação S/N -> booleano do contrato (true/false); outro valor: valor_fora_do_dominio
+SHPARAM	#item@LANCTRANSPRETRANS	parametro_valor.valor	texto_char	valores		recusas-fase2 C1c (pedido 2 do K2): marcação S/N -> booleano do contrato (true/false); outro valor: valor_fora_do_dominio

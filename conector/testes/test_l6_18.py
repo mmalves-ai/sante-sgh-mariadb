@@ -231,7 +231,8 @@ class Sintetica(unittest.TestCase):
         # sem par continua visível (valor_fora_do_dominio), nunca presumido
         pl = {p["tabela"]: p for p in carga_mapa.planejar(mapa.carregar_execucao(), TABELAS | BLOQUEADAS | DESCARTADAS)}
         for t, dt, dc in [("PRVIAADMIN", "via_dieta", "modalidade"), ("TBDIETAS", "modalidade_dieta", "classe")]:
-            v = {c["destino"]: c for c in pl[t]["colunas"][dt]}[dc]["valores"]
+            # a primeira declarada do destino (pelo tipo de dieta); a concorrente da PRVIAADMIN (pelo NOME, P2b) vem depois
+            v = [c for c in pl[t]["colunas"][dt] if c["destino"] == dc][0]["valores"]
             for o, d in [("SNE", "enteral"), ("NPT", "parenteral"), ("VO", "oral"), ("Dieta zero", "jejum")]:
                 self.assertEqual(v.get(o), d, (t, o))
             self.assertNotIn("Especial exemplo", v)

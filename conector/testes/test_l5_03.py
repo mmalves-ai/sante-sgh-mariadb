@@ -146,14 +146,14 @@ class ContinuidadeR5(unittest.TestCase):
     def test_historico_senha_e_tipo_oid(self):
         m = mapa.carregar_execucao()
         d = {c["coluna"]: c for c in m["colunas_decl"] if c["tabela"] == "TBHISTSENHA" and c["destino"]}
-        self.assertEqual(d["#senha_hash:SENHA:sha256"]["destino"], "historico_senha.hash_senha")
+        self.assertEqual(d["#senha_hash:SENHA:sha1"]["destino"], "historico_senha.hash_senha")
         todas = [c for c in m["colunas_decl"] if c["tabela"] == "TBHISTSENHA"]
         senha = [c for c in todas if c["coluna"] == "SENHA"]
         self.assertEqual([c["destino"] for c in senha], [""])  # lida, nunca numa coluna comum (não vacuo)
         retr = [c["coluna"] for c in todas if c["coluna"].startswith("#retrato")]
         self.assertTrue(retr and all("SENHA" not in r.split(":", 1)[1].split(",") and "*" not in r for r in retr))
         alg = [c for c in todas if c["destino"] == "historico_senha.algoritmo"]
-        self.assertEqual([c["coluna"] for c in alg], ["=sha256_sal_externo", "=sha256"])
+        self.assertEqual([c["coluna"] for c in alg], ["=sha1_sal_externo", "=sha1"])
         self.assertIn("se:SALT", alg[0]["via"])
         o = [c for c in m["colunas_decl"] if c["tabela"] == "TBOID" and c["destino"] == "oid_icp.tipo_oid"]
         self.assertEqual([c["coluna"] for c in o], ["ID_TBTIPOOID", "=~outro"])

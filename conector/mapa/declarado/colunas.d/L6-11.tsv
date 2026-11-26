@@ -435,3 +435,4 @@ PRPARAM	ID_PREVOLUCAO_RAC		chave_origem			L6-11 r5 (ADR 0006, achado alto): no r
 PRPARAM	REST_ACESS_PACI_NAO_ESTE_ATEND		codigo_char			L6-11 r5 (ADR 0006, achado alto): -> parâmetro pep.prontuario.restringeAcessoForaDoAtendimento (parametro_valor); também no retrato
 PRPARAM	CHECAGEM_ANTECIPADA		hora			L6-11 r5 (ADR 0006, achado alto): -> parâmetro pep.checagem.antecedenciaPermitida (parametro_valor); também no retrato
 PRPARAM	CONSISTIR_FREQ_UNICA_MEDIC		codigo_char			L6-11 r5 (ADR 0006, achado alto): -> parâmetro pep.prescricao.consisteFrequenciaUnica (parametro_valor); também no retrato
+PRPARAM	#item@CHECKPEND	parametro_valor.valor	data			recusas-fase2 C1c (pedido 2 do K2): data -> AAAA-MM-DD (data do contrato)

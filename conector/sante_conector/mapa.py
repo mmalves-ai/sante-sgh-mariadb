@@ -90,6 +90,70 @@ _REF_TAB = re.compile(r"([A-Z0-9_$]+)(?:\.([A-Z0-9_$]+)|\((%s)\)|\.\((%s)\)=\((%
                       r"(?:@([a-z][a-z0-9_]*))?" % (_LISTA_C, _LISTA, _LISTA_V))
 
 
+def _dividir_topo(s, sep):
+    """Partes de `s` separadas por `sep` fora dos parênteses."""
+    out, nivel, atual = [], 0, ""
+    for ch in s:
+        if ch == "(":
+            nivel += 1
+        elif ch == ")":
+            nivel -= 1
+        if ch == sep and nivel == 0:
+            out.append(atual)
+            atual = ""
+        else:
+            atual += ch
+    return out + [atual]
+
+
+# recusas-fase2 (C1, M2 e M12): `T.(K1,K2,K3)=(C1,C2>U>X,C3>V.(A,B)=(A,B)>Y)`: componente da chave alternativa
+# composta ENCADEADO (a coluna C2 desta linha leva a U pela chave e o componente é a coluna X de U), também por uma
+# chave alternativa composta aninhada (as colunas A, B são desta linha)
+_ALT_CAB = re.compile(r"([A-Z0-9_$]+)\.\((%s)\)=\(" % _LISTA)
+_ALT_FIM = re.compile(r"(?:/([a-z][a-z0-9_]*))?(?:@([a-z][a-z0-9_]*))?")
+
+
+def _alt_composta_encadeada(p, ultimo):
+    """Passo `T.(K..)=(comp..)` com algum componente encadeado; None se não for essa forma ou se mal formado."""
+    m = _ALT_CAB.match(p)
+    if not m:
+        return None
+    nivel, fim = 1, None
+    for j in range(m.end(), len(p)):
+        nivel += {"(": 1, ")": -1}.get(p[j], 0)
+        if nivel == 0:
+            fim = j
+            break
+    if fim is None:
+        return None
+    comps, mf = _dividir_topo(p[m.end():fim], ","), _ALT_FIM.fullmatch(p[fim + 1:])
+    ks = m.group(2).split(",")
+    if not mf or not any(">" in c for c in comps) or len(comps) != len(ks) or ((mf.group(1) or mf.group(2))
+                                                                               and not ultimo):
+        return None
+    x = {"tabela": m.group(1), "modo": "alt_composta", "arg": ks, "cols": [], "cadeias": {}}
+    for j, comp in enumerate(comps):
+        if ">" in comp:
+            base, resto = comp.split(">", 1)
+            sub = passos_ref(resto)
+            if not _COL_ORIGEM.fullmatch(base) or not sub or "coluna" not in sub[-1] \
+                    or any(y.get("cadeias") for y in sub):
+                return None
+            x["cols"].append(base)
+            x["cadeias"][j] = sub
+        elif comp.startswith("=") and not any(ch in ",()>;=" for ch in comp[1:]):
+            x["cols"].append(comp)
+        elif _COL_ORIGEM.fullmatch(comp):
+            x["cols"].append(comp)
+        else:
+            return None
+    if mf.group(1):
+        x["destino"] = mf.group(1)
+    if mf.group(2):
+        x["coluna_destino"] = mf.group(2)
+    return x
+
+
 def _partes_ref(spec):
     """Passos separados por '>' fora dos parênteses (o componente encadeado da chave composta fica inteiro)."""
     out, nivel, atual = [], 0, ""
@@ -143,6 +207,10 @@ def passos_ref(spec):
             continue
         if tabela_agora:
             tabela_agora = False
+            ae = _alt_composta_encadeada(p, ultimo) if not out and ">" in p else None
+            if ae is not None:
+                out.append(ae)
+                continue
             m = _REF_TAB.fullmatch(p)
             if not m or ((m.group(3) or m.group(4)) and out) or ((m.group(6) or m.group(7)) and not ultimo):
                 return None
@@ -193,9 +261,32 @@ def tabelas_dos_passos(passos):
 
 
 def colunas_da_linha(passo):
-    """Colunas DESTA linha lidas pelo primeiro passo composto (sem os literais `=x`)."""
-    return [x for x in (passo.get("cols") or passo.get("arg") or []) if not x.startswith("=")] \
-        if passo.get("modo") in ("composta", "alt_composta") else []
+    """Colunas DESTA linha lidas pelo primeiro passo composto (sem os literais `=x`), também as da chave composta
+    aninhada num componente encadeado (recusas-fase2, M12)."""
+    if passo.get("modo") not in ("composta", "alt_composta"):
+        return []
+    out = [x for x in (passo.get("cols") or passo.get("arg") or []) if not x.startswith("=")]
+    for sub in (passo.get("cadeias") or {}).values():
+        out += [x for x in colunas_da_linha(sub[0]) if x not in out]
+    return out
+
+
+def ordem_gravacao(dts, colunas_por_destino, opcoes):
+    """(índices de `dts` na ordem de gravação, erro ou None) (recusas-fase2, M4): primeiro os secundários `antes`,
+    ordenados pela dependência de `@id:<destino>` entre eles (estável pela ordem dos destinos; ciclo é erro); depois os
+    outros na ordem dos destinos (o principal primeiro). `colunas_por_destino`: {destino: [colunas da origem]}."""
+    antes = [i for i, dt in enumerate(dts) if (opcoes.get(dt) or {}).get("antes")]
+    deps = {i: {dts.index(n[4:]) for n in colunas_por_destino.get(dts[i]) or () if n.startswith("@id:")
+                and n[4:] in dts and dts.index(n[4:]) in antes and n[4:] != dts[i]} for i in antes}
+    ordem, feitos = [], set()
+    while len(ordem) < len(antes):
+        prontos = [i for i in antes if i not in feitos and deps[i] <= feitos]
+        if not prontos:
+            return None, "ciclo de @id: entre os secundários gravados antes: %s" % ", ".join(
+                dts[i] for i in antes if i not in feitos)
+        ordem.append(prontos[0])
+        feitos.add(prontos[0])
+    return ordem + [i for i in range(len(dts)) if i not in feitos], None
 
 
 _COND = re.compile(r"([A-Z0-9_$]+)((?:>[^=!@]+)?)(?:=([^!@]*))?(?:@cod:([a-z][a-z0-9_]*)\.([a-z][a-z0-9_]*))?"
@@ -262,7 +353,9 @@ _ESPECIAIS = re.compile(r"@id|@id:[a-z][a-z0-9_]*|@estabelecimento|@unico:[a-z][
                         r"|#dif:[A-Z0-9_$]+,[A-Z0-9_$]+|#soma:[A-Z0-9_$]+(?:,[A-Z0-9_$]+)+"
                         # rodada 5 (ADR 0007): vigência pela evidência e senha de login
                         r"|#vigencia(?::[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*)?|#senha:[A-Z0-9_$]+"
-                        r"|#senha_hash:[A-Z0-9_$]+:(?:md5|sha1|sha256|sha512|bcrypt|scrypt|argon2id)")
+                        r"|#senha_hash:[A-Z0-9_$]+:(?:md5|sha1|sha256|sha512|bcrypt|scrypt|argon2id)"
+                        # recusas-fase2 (C1, M3 e R10): número livre no grupo e número em faixa própria por chave
+                        r"|#seq_livre:[A-Z0-9_$]+(?:\+[A-Z0-9_$]+)*:[A-Z0-9_$]+|#seq_faixa:[A-Z0-9_$]+(?:\+[A-Z0-9_$]+)*")
 # colunas que um retrato de TODAS as colunas (`#retrato:*`) nunca leva, mesmo sem `#cofre` declarado (segredo)
 SEGREDO_NOME = re.compile(r"SENHA|PASSW|TOKEN|SECRET|SEGREDO|CHAVE_PRIVADA|PRIVATE_KEY")
 
@@ -298,7 +391,11 @@ OPCOES_DESTINO = ("opcional", "adotar:", "adotar_maior:", "adotar_ativo:", "iden
 # `senao` (concorrente que, ao preencher, apaga a pendência valor_fora_do_dominio das anteriores), `marca` (num `=~x`
 # concorrente: a pendência valor_presumido em TODA linha, mesmo quando outra declaração deu o valor)
 # `presumida` (concorrente não literal que, quando é a gravada, deixa a pendência valor_presumido: valor estimado)
-OPCOES_COLUNA = ("exige_dominio", "senao", "marca", "autor", "presumida")
+# recusas-fase2 (C1): `zero_e_chave` (M5: o valor 0 liga ao pai de chave 0 quando ele existe na origem; sem a opção o
+# 0 é vazio), `sufixo_colisao` (M11: o texto que colide numa chave única do destino ganha ' (<chave da origem>)', com a
+# pendência baixa `sufixo_na_colisao`) e `pendencia_se_nulo:<regra>` (valor final NULL deixa a pendência <regra>)
+OPCOES_COLUNA = ("exige_dominio", "senao", "marca", "autor", "presumida", "zero_e_chave", "sufixo_colisao")
+_PENDENCIA_SE_NULO = re.compile(r"pendencia_se_nulo:[a-z][a-z0-9_]{0,59}")
 # rodada 5 (ADR 0006, item 3): ligação ao ESPELHO PADRÃO DA BASE pelo código (e pela edição): `espelho:<catalogo>`
 # ou `espelho:<catalogo>@<COLUNA>` / `espelho:<catalogo>@=<edição>` na via. Catálogo -> tabela que a ligação acha.
 ESPELHO_CATALOGOS = {"brasindice": "item_referencia_matmed", "simpro": "item_referencia_matmed",
@@ -426,6 +523,11 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
                     if cd is None or (cd["regra"] and pre != "so_se:"):
                         erros.append("condição mal formada (%s): %s.%s" % (pre, c["tabela"], n))
         via = (c.get("via") or "").split(";")
+        for x in via:
+            if x.startswith("pendencia_se_nulo") and not _PENDENCIA_SE_NULO.fullmatch(x):
+                erros.append("pendencia_se_nulo mal formada: %s.%s" % (c["tabela"], n))
+        if "zero_e_chave" in via and not referencia_declarada(c) and not (c.get("referencia") or ""):
+            erros.append("zero_e_chave sem ref: %s.%s" % (c["tabela"], n))
         if "autor" in via and not (referencia_declarada(c) or any(x.startswith("cod:") for x in via)):
             erros.append("autor sem ref: nem cod: (o autor do rascunho é achado pelo login ou pela chave): %s.%s"
                          % (c["tabela"], n))
@@ -444,11 +546,17 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
             continue
         dts = principal_e_destinos(por[t]["tabelas_destino"], cols)
         ops = opcoes_destino(cols)
+        ordem, erro_ordem = ordem_gravacao(dts, {dt: [c["coluna"] for c in cols if c["destino"].split(".")[0] == dt]
+                                                for dt in dts}, ops)
+        if erro_ordem:
+            erros.append("%s em %s" % (erro_ordem, t))
         for c in cols:
             if c["coluna"].startswith("@id:"):
-                alvo = c["coluna"][4:]
-                if alvo not in dts or not ops.get(alvo, {}).get("antes") or alvo == c["destino"].split(".")[0]:
-                    erros.append("@id:%s sem destino secundário gravado antes (via antes) em %s" % (alvo, t))
+                alvo, dono = c["coluna"][4:], c["destino"].split(".")[0]
+                if alvo not in dts or alvo == dono or not ordem or ordem.index(dts.index(alvo)) > ordem.index(
+                        dts.index(dono)):
+                    erros.append("@id:%s sem destino secundário gravado antes (via antes, ou antes na ordem dos "
+                                 "destinos) em %s" % (alvo, t))
         for dt, o in opcoes_destino(cols).items():
             if o.get("por_pai") and (not dts or dt != dts[0] or o["desdobrar"] or o["agrupar"] or o["complementa"]):
                 erros.append("por_pai só no destino principal, sem desdobrar, agrupar nem complementa: %s -> %s"

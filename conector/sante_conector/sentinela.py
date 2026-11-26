@@ -63,6 +63,9 @@ REGRAS = {
                     "valor_fora_do_dominio",
     "email": "endereço de e-mail (local@dominio.tld, pontas aparadas); sem esse formato: NULL com valor_fora_do_dominio",
     # rodada 4 de cobertura (pedidos das fatias L8-04, L8-05)
+    # recusas-fase2 (R8): ajuste percentual guardado como DELTA sobre o preço; o destino guarda o multiplicador
+    "percentual_delta": "ajuste percentual guardado como delta (x) vira o percentual aplicado 100 + x, também para "
+                        "x = 0 (regra explícita de 100%%); vazio vira NULL; não numérico: NULL com valor_fora_do_dominio",
     "inteiro_mais_um": "contador que guarda o ÚLTIMO número usado (inteiro ou texto de dígitos) vira o PRÓXIMO (+1), "
                        "para o destino que guarda o próximo; vazio vira NULL; não numérico ou negativo: NULL com "
                        "valor_fora_do_dominio",
@@ -407,6 +410,17 @@ def aplicar(regra, v):
         if _data(v):
             return None, "data_sentinela"
         return (None if v.year >= par[1][0] else v), None
+    if regra == "percentual_delta":
+        t = _str(v).strip().replace(",", ".") if isinstance(v, (str, bytes, bytearray)) else v
+        if t == "":
+            return None, None
+        try:
+            x = t if isinstance(t, decimal.Decimal) else decimal.Decimal(str(t))
+        except decimal.InvalidOperation:
+            return None, "valor_fora_do_dominio"
+        if isinstance(t, bool) or not x.is_finite():
+            return None, "valor_fora_do_dominio"
+        return decimal.Decimal(100) + x, None
     if regra == "inteiro_mais_um":
         t = _str(v).strip() if isinstance(v, (str, bytes, bytearray)) else v
         if t == "":

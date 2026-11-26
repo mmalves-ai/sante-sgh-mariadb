@@ -20,8 +20,10 @@ COM_VALORES = {("PROPCAOPERIODO", "NOME", "periodo_consulta_sumario_alta.atendim
                ("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.ponto"),
                ("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.descricao"),
                ("PRSITAPRAZAM", "NOME", "situacao_aprazamento.categoria"),
-               # r6: S/N da checagem -> 'sim'/'nao' do parâmetro booleano do produto (formato canônico)
-               ("PRPARAM_CHECAGEM", "#item", "parametro_valor.valor")}
+               # r6: S/N da checagem -> 'true'/'false' do parâmetro booleano do produto (formato canônico)
+               ("PRPARAM_CHECAGEM", "#item", "parametro_valor.valor"),
+               # recusas-fase2 C1c (K2): 1/0 -> 'true'/'false' do booleano do contrato
+               ("PRPAROFTALMO", "#item@LANCAR_ADICAO", "parametro_valor.valor")}
 
 
 # rodada 5 (ADR 0006): as antes descartadas, que carregam por parâmetro do produto e pelo agrupamento

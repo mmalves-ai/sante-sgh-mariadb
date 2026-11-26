@@ -94,3 +94,17 @@ PRVIAADMIN	NOME	via_dieta.modalidade	NPT	parenteral	L6-18 r4 (P2b, recusas da ca
 PRVIAADMIN	NOME	via_dieta.modalidade	Jejum	jejum	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> jejum
 PRVIAADMIN	NOME	via_dieta.modalidade	JEJUM	jejum	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> jejum
 PRVIAADMIN	NOME	via_dieta.modalidade	jejum	jejum	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> jejum
+CVPARAM	#item@GRAVAR_FOTO_BANCO	parametro_valor.valor	S	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+CVPARAM	#item@GRAVAR_FOTO_BANCO	parametro_valor.valor	s	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+CVPARAM	#item@GRAVAR_FOTO_BANCO	parametro_valor.valor	N	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+CVPARAM	#item@GRAVAR_FOTO_BANCO	parametro_valor.valor	n	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+CVPARAM	#item@IMPRIME_ETIQ_SEM_PRE_VIZUALIZAR	parametro_valor.valor	S	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+CVPARAM	#item@IMPRIME_ETIQ_SEM_PRE_VIZUALIZAR	parametro_valor.valor	s	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+CVPARAM	#item@IMPRIME_ETIQ_SEM_PRE_VIZUALIZAR	parametro_valor.valor	N	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+CVPARAM	#item@IMPRIME_ETIQ_SEM_PRE_VIZUALIZAR	parametro_valor.valor	n	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+CVPARAM	#item@DIGITAR_DATA_NASCIMENTO	parametro_valor.valor	1	true	recusas-fase2 C1c (pedido 2 do K2): 1/0 -> booleano do contrato
+CVPARAM	#item@DIGITAR_DATA_NASCIMENTO	parametro_valor.valor	0	false	recusas-fase2 C1c (pedido 2 do K2): 1/0 -> booleano do contrato
+CVPARAM	#item@DIGITAR_CELULAR	parametro_valor.valor	1	true	recusas-fase2 C1c (pedido 2 do K2): 1/0 -> booleano do contrato
+CVPARAM	#item@DIGITAR_CELULAR	parametro_valor.valor	0	false	recusas-fase2 C1c (pedido 2 do K2): 1/0 -> booleano do contrato
+CVPARAM	#item@DIGITAR_DOCUMENTO	parametro_valor.valor	1	true	recusas-fase2 C1c (pedido 2 do K2): 1/0 -> booleano do contrato
+CVPARAM	#item@DIGITAR_DOCUMENTO	parametro_valor.valor	0	false	recusas-fase2 C1c (pedido 2 do K2): 1/0 -> booleano do contrato

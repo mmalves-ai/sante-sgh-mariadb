@@ -50,3 +50,19 @@ SIPACAGI	SITUACAO	motivo_bloqueio_agenda.descricao	P	Manutenção	L6-04 r4: hor�
 AGCADEIRA	TIPO	recurso_agendavel.tipo	0	cadeira	L6-04 r5 (revisão, ADR 0007 18): tipo da cadeira estimado pelo rótulo da tela de origem (cadeiras e poltronas)
 AGCADEIRA	TIPO	recurso_agendavel.tipo	1	cadeira	L6-04 r5 (revisão, ADR 0007 18): tipo da cadeira estimado pelo rótulo da tela de origem (cadeiras e poltronas)
 AGCADEIRA	TIPO	recurso_agendavel.tipo	2	poltrona	L6-04 r5 (revisão, ADR 0007 18): tipo da cadeira estimado pelo rótulo da tela de origem (cadeiras e poltronas)
+AGPARAM	#item@AGEND_AUTOM_PLANEJ_QT_PEP	parametro_valor.valor	S	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@AGEND_AUTOM_PLANEJ_QT_PEP	parametro_valor.valor	s	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@AGEND_AUTOM_PLANEJ_QT_PEP	parametro_valor.valor	N	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@AGEND_AUTOM_PLANEJ_QT_PEP	parametro_valor.valor	n	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@DIGITAR_ENFERMEIRO_RESP	parametro_valor.valor	S	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@DIGITAR_ENFERMEIRO_RESP	parametro_valor.valor	s	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@DIGITAR_ENFERMEIRO_RESP	parametro_valor.valor	N	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@DIGITAR_ENFERMEIRO_RESP	parametro_valor.valor	n	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@EXIBIR_ESPECIALIDADE_CBO	parametro_valor.valor	S	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@EXIBIR_ESPECIALIDADE_CBO	parametro_valor.valor	s	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@EXIBIR_ESPECIALIDADE_CBO	parametro_valor.valor	N	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@EXIBIR_ESPECIALIDADE_CBO	parametro_valor.valor	n	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@PREFERENCIA_AGENDA_CADEIRA	parametro_valor.valor	S	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@PREFERENCIA_AGENDA_CADEIRA	parametro_valor.valor	s	true	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@PREFERENCIA_AGENDA_CADEIRA	parametro_valor.valor	N	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato
+AGPARAM	#item@PREFERENCIA_AGENDA_CADEIRA	parametro_valor.valor	n	false	recusas-fase2 C1c (pedido 2 do K2): S/N -> booleano do contrato

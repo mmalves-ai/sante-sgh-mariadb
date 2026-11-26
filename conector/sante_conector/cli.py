@@ -128,6 +128,7 @@ def main(argv=None):
     p = sub.add_parser("conta-motor"); p.add_argument("--rede", required=True)
     # rodada 5 (ADR 0006, item 3): semente do espelho padrão da base a partir da cópia da origem (uma vez)
     p = sub.add_parser("semear-espelho"); p.add_argument("relativo"); p.add_argument("--espelho", default="espelho")
+    p.add_argument("--ressemear", action="append", default=[])  # M13: `catalogo` ou `catalogo:edicao` a semear de novo
     p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["worker-separado"]:
@@ -287,7 +288,7 @@ def main(argv=None):
         with abridor.abrir(origem["absoluto"], modo=a.modo) as ab, Leitor(ab.dispositivo) as lt:
             cx = banco.conectar(banco.nome_seguro(a.espelho), autocommit=False, multi=True)
             try:
-                return _json(semente_espelho.semear(lt, cx))
+                return _json(semente_espelho.semear(lt, cx, ressemear=a.ressemear))
             finally:
                 cx.close()
     if a.cmd == "medir-carga":

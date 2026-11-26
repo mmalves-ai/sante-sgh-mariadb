@@ -779,7 +779,7 @@ SPDATA	REAGENDA	TABELA	agenda_servico	N	AGE	F3
 SPDATA	REAGENDA_TBCONVEN	TABELA	agenda_fonte_pagadora	N	AGE	F3	
 SPDATA	REAGENDA_TBESPEC	TABELA	agenda_especialidade	N	AGE	F3	
 SPDATA	REALTA	TABELA	atendimento;atendimento_situacao_historico	N	REC	F3	
-SPDATA	RECADATE	TABELA	atendimento;atendimento_procedimento;cobertura_atendimento	N	REC	F3	
+SPDATA	RECADATE	TABELA	atendimento;atendimento_procedimento;cobertura_atendimento;cobertura_paciente	N	REC	F3	
 SPDATA	RECANAGE	TABELA	cancelamento_marcacao	N	AGE	F3	
 SPDATA	RECONFIC	TABELA	regra_impressao_ficha	N	REC	F3	
 SPDATA	RECONTAS	TABELA	conta_hospitalar	N	FAT	F3	
