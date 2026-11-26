@@ -120,6 +120,12 @@ import {
 import { ContasOperadoraController } from './contas.controller.js';
 import { METODOS_TROCA_TISS, PORTA_TROCA_TISS, PortaTrocaTissPropria } from './troca-tiss-propria.js';
 import { TrocaTissOperadoraController } from './troca-tiss.controller.js';
+import { PortaisOperadoraController } from './portais-operadora.controller.js';
+import {
+  METODOS_PORTAIS_OPERADORA,
+  PORTA_PORTAIS_OPERADORA,
+  PortaPortaisOperadoraPropria,
+} from './portais-operadora-propria.js';
 import { PortalPrestadorPedidosController } from './portal-prestador-pedidos.controller.js';
 import {
   METODOS_PORTAL_PRESTADOR_PEDIDOS,
@@ -318,6 +324,7 @@ export async function moduloOperadora(
       ReembolsoOperadoraController,
       TrocaTissOperadoraController,
       PortalPrestadorPedidosController,
+      PortaisOperadoraController,
     ],
     providers: [
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
@@ -359,6 +366,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaPortalPrestadorPedidosPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaPortalPrestadorPedidosPropria>(METODOS_PORTAL_PRESTADOR_PEDIDOS),
+      },
+      // 08-SGO L114 (C3-027): portais do beneficiário, da contratante e do corretor só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_PORTAIS_OPERADORA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaPortaisOperadoraPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaPortaisOperadoraPropria>(METODOS_PORTAIS_OPERADORA),
       },
       // 08-SGO L106 (C2-047): reembolso ao beneficiário só no banco (sem núcleo, 503); comprovantes pela porta de arquivos.
       {

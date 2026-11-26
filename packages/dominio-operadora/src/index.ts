@@ -63,3 +63,5 @@ export * from './rede-cadastro.js';
 export * from './remuneracao-rede.js';
 // 08-SGO L111 (C3-026): plano de contas padrão da ANS, mapa das contas, balancete ANS e provisões técnicas.
 export * from './provisao-tecnica.js';
+// 08-SGO L114 (C3-027): portais do beneficiário, da contratante e do corretor (conta, solicitação, exclusão em lote).
+export * from './portais-operadora.js';
