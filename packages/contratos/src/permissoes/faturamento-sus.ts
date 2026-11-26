@@ -163,7 +163,7 @@ export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
       categoria: 'clinica',
       criticidade: 'sensivel',
       concessaoPorPerfil: 'por-perfil',
-      perfis: ['administrador-sistema'],
+      perfis: ['administrador-sistema', 'coordenador-medico', 'coordenador-enfermagem'],
     },
   ),
   p(
@@ -173,7 +173,7 @@ export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
       categoria: 'clinica',
       criticidade: 'sensivel',
       concessaoPorPerfil: 'por-perfil',
-      perfis: ['administrador-sistema'],
+      perfis: ['administrador-sistema', 'coordenador-medico', 'coordenador-enfermagem'],
     },
   ),
 ];

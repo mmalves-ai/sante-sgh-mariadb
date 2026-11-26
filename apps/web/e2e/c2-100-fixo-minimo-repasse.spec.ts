@@ -45,6 +45,35 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
+// A regra de plantão grava pelo recurso do plantão realizado, que nasce desligado (POL-3): o administrador registra o
+// pré-requisito e liga a chave pela tela de liberação, como no E2E W0-06, e recolhe no fim.
+const RECURSO_PLANTAO = 'pessoas.plantaoRealizado';
+async function abrirLiberacao(page: Page): Promise<void> {
+  await entrar(page, 'SINT.ADMIN');
+  await page.goto('/administracao/liberacao');
+  await expect(page.getByTestId(`recurso-${RECURSO_PLANTAO}`)).toBeVisible({ timeout: 30_000 });
+}
+async function chavePlantao(page: Page, ligar: boolean, motivo: string): Promise<void> {
+  await page.getByTestId(`abrir-${RECURSO_PLANTAO}`).click();
+  const form = page.getByTestId('form-liberacao');
+  await form.getByTestId(ligar ? 'opcao-ligar' : 'opcao-desligar').check();
+  await form.getByLabel('Justificativa').fill(motivo);
+  await form.getByTestId('liberacao-senha').fill(SENHA);
+  await form.getByTestId('liberacao-aplicar').click();
+  await expect(page.getByTestId('mensagem-liberacao')).toContainText('chave(s) alterada(s)');
+}
+async function ligarPlantao(page: Page, evidencia: string): Promise<void> {
+  await abrirLiberacao(page);
+  if ((await page.getByTestId(`recurso-${RECURSO_PLANTAO}`).innerText()).includes('Ligada')) return;
+  await page.getByTestId(`abrir-${RECURSO_PLANTAO}`).click();
+  const pre = page.getByTestId('form-prerequisito');
+  await pre.getByLabel('Evidência (protocolo ou número; nunca o certificado ou a senha)').fill(evidencia);
+  await pre.locator('#prereq-senha').fill(SENHA);
+  await pre.getByRole('button', { name: 'Registrar pré-requisito' }).click();
+  await expect(page.getByTestId('mensagem-liberacao')).toBeVisible();
+  await chavePlantao(page, true, evidencia);
+}
+
 const ultimoDia = (comp: string): string => {
   const [a, m] = comp.split('-').map(Number) as [number, number];
   return `${comp.slice(0, 7)}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`;
@@ -179,6 +208,7 @@ test.describe('valor fixo mensal e mínimo garantido do repasse @C2-100', () => 
   // (nada apagado). Isolamento: descrição única por execução e vigência num ano futuro, encerrada no próprio dia.
   test('regra de plantão: recusa na hora → exemplo calculado → incluir → encerrar; axe', async ({ page }) => {
     const externas = vigiarExternas(page);
+    await ligarPlantao(page, 'Conferência sintética da coordenação médica (E2E C2-100)');
     await entrar(page, 'SINT.REP.ANALISTA');
     const P = '/api/pessoas/realizado';
     const sonda = await page.request.get(`${P}/regras-plantao`);
@@ -244,5 +274,9 @@ test.describe('valor fixo mensal e mínimo garantido do repasse @C2-100', () => 
       .itens;
     expect(depois.filter((r) => r.id === regra!.id && r.fim === inicio)).toHaveLength(1);
     expect(externas).toEqual([]);
+
+    // Recolher: a chave volta a desligada.
+    await abrirLiberacao(page);
+    await chavePlantao(page, false, 'Recolher o E2E C2-100');
   });
 });
