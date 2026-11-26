@@ -47,7 +47,9 @@ export const esquemaPainelRepasseSus = z.object({
       ...vig,
     }),
   ),
-  apuracoes: z.array(z.object({ id: z.number(), numero: z.string(), competencia: z.string(), versao: z.number() })),
+  apuracoes: z.array(
+    z.object({ id: z.number(), numero: z.string(), competencia: z.string(), versao: z.number() }),
+  ),
 });
 export type PainelRepasseSus = z.infer<typeof esquemaPainelRepasseSus>;
 
@@ -127,4 +129,9 @@ export const incluirRateioSadt = (corpo: EntradaRateioSadt) =>
 export const encerrarRepasseSus = (tipo: 'regras' | 'rateios', id: number, versao: number, fim: string) =>
   enviar(`${B}/${tipo}/${id}/encerrar`, { versao, fim }, comId, novaChave('sus-repasse-encerrar'));
 export const apurarRepasseSus = (apuracao: number, versao: number) =>
-  enviar(`${B}/apuracoes/${apuracao}/apurar`, { versao }, esquemaResumoApuracaoSus, novaChave('sus-repasse-apurar'));
+  enviar(
+    `${B}/apuracoes/${apuracao}/apurar`,
+    { versao },
+    esquemaResumoApuracaoSus,
+    novaChave('sus-repasse-apurar'),
+  );

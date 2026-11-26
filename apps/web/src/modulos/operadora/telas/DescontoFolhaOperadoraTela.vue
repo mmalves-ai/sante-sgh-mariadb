@@ -46,7 +46,10 @@ watch(
   { immediate: true },
 );
 const opOperadoras = computed(() =>
-  (tela.data.value?.operadoras ?? []).map((o) => ({ valor: o.id, rotulo: `${o.razaoSocial} (${o.registroAns})` })),
+  (tela.data.value?.operadoras ?? []).map((o) => ({
+    valor: o.id,
+    rotulo: `${o.razaoSocial} (${o.registroAns})`,
+  })),
 );
 
 // Contratante por busca remota: as opções são as da última busca, mais a escolhida.
@@ -154,7 +157,11 @@ async function lerArquivoRetorno(ev: Event) {
 </script>
 
 <template>
-  <section class="tela-operadora" aria-labelledby="ope-desconto-folha-titulo" data-testid="tela-desconto-folha">
+  <section
+    class="tela-operadora"
+    aria-labelledby="ope-desconto-folha-titulo"
+    data-testid="tela-desconto-folha"
+  >
     <h1 id="ope-desconto-folha-titulo">{{ t('titulo') }}</h1>
     <p>{{ t('texto') }}</p>
     <MensagemErro v-if="tela.isError.value" :erro="tela.error.value" />
@@ -179,14 +186,24 @@ async function lerArquivoRetorno(ev: Event) {
         >{{ t('competencia') }}
         <input v-model="f.competencia" type="month" required data-testid="desconto-folha-competencia"
       /></label>
-      <SanteSelecao v-model="f.tipo" :rotulo="t('tipo')" :opcoes="opTipos" data-testid="desconto-folha-tipo" />
+      <SanteSelecao
+        v-model="f.tipo"
+        :rotulo="t('tipo')"
+        :opcoes="opTipos"
+        data-testid="desconto-folha-tipo"
+      />
       <label
         >{{ t('observacao') }}
         <input v-model="f.observacao" maxlength="1000" data-testid="desconto-folha-observacao"
       /></label>
     </div>
     <div class="acoes">
-      <button type="button" :disabled="!entrada || ocupado" data-testid="desconto-folha-previa" @click="verPrevia">
+      <button
+        type="button"
+        :disabled="!entrada || ocupado"
+        data-testid="desconto-folha-previa"
+        @click="verPrevia"
+      >
         {{ t('previa') }}
       </button>
       <button
@@ -224,7 +241,9 @@ async function lerArquivoRetorno(ev: Event) {
       <template v-if="previa.criticas.length">
         <h2>{{ t('criticas') }}</h2>
         <ul data-testid="desconto-folha-criticas">
-          <li v-for="c in previa.criticas" :key="`${c.fatura}-${c.codigo}`">{{ c.numero }}: {{ c.mensagem }}</li>
+          <li v-for="c in previa.criticas" :key="`${c.fatura}-${c.codigo}`">
+            {{ c.numero }}: {{ c.mensagem }}
+          </li>
         </ul>
       </template>
     </template>
@@ -242,7 +261,9 @@ async function lerArquivoRetorno(ev: Event) {
           <th scope="col">{{ t('colunas.enviado') }}</th>
           <th scope="col">{{ t('colunas.descontado') }}</th>
           <th scope="col">{{ t('colunas.itens') }}</th>
-          <th scope="col"><span class="sr-only">{{ t('abrir') }}</span></th>
+          <th scope="col">
+            <span class="sr-only">{{ t('abrir') }}</span>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -317,11 +338,15 @@ async function lerArquivoRetorno(ev: Event) {
       <div v-if="podeGerar && ficha.data.value.situacao === 'enviada'" class="campos">
         <label
           >{{ t('retorno') }}
-          <textarea v-model="r.texto" rows="5" data-testid="desconto-folha-retorno-texto"></textarea
-        ></label>
+          <textarea v-model="r.texto" rows="5" data-testid="desconto-folha-retorno-texto"></textarea>
+        </label>
         <label
           >{{ t('arquivoRetorno') }}
-          <input type="file" accept=".csv,.txt,text/plain" data-testid="desconto-folha-retorno-arquivo" @change="lerArquivoRetorno"
+          <input
+            type="file"
+            accept=".csv,.txt,text/plain"
+            data-testid="desconto-folha-retorno-arquivo"
+            @change="lerArquivoRetorno"
         /></label>
         <label
           >{{ t('creditoEm') }}
@@ -336,10 +361,7 @@ async function lerArquivoRetorno(ev: Event) {
           {{ t('lerRetorno') }}
         </button>
       </div>
-      <div
-        v-if="podeGerar && ['gerada', 'enviada'].includes(ficha.data.value.situacao)"
-        class="campos"
-      >
+      <div v-if="podeGerar && ['gerada', 'enviada'].includes(ficha.data.value.situacao)" class="campos">
         <label
           >{{ t('motivo') }} <input v-model="r.motivo" maxlength="500" data-testid="desconto-folha-motivo"
         /></label>

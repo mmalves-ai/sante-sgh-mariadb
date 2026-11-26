@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.aplicar (alcance 006a6dad6c7c). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.aplicar (alcance d82cd74a4a17). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -4518,6 +4518,7 @@ GRANT SELECT ON conta_hospitalar TO sgh_mod_sus;
 GRANT SELECT ON conta_hospitalar_item TO sgh_mod_sus;
 GRANT SELECT ON contrato_gestor_sus TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON cota_procedimento_sus TO sgh_mod_sus;
+GRANT SELECT, INSERT, UPDATE ON critica_cnes TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON critica_sus TO sgh_mod_sus;
 GRANT SELECT ON declaracao_obito TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON diaria_uti_sus TO sgh_mod_sus;
@@ -4594,6 +4595,7 @@ GRANT SELECT, INSERT, UPDATE ON regra_servico_classificacao_sus TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON remessa_apac TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON remessa_bpa TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON remessa_ciha TO sgh_mod_sus;
+GRANT SELECT, INSERT, UPDATE ON remessa_cnes TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON remessa_raas TO sgh_mod_sus;
 GRANT SELECT, INSERT, UPDATE ON remessa_sisaih TO sgh_mod_sus;
 GRANT SELECT ON requisicao_exame TO sgh_mod_sus;

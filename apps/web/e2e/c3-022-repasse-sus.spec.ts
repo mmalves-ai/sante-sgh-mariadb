@@ -25,7 +25,9 @@ const json = (rota: Route, corpo: unknown, status = 200) =>
   rota.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
 
 test.describe('C3-022 repasse da produção SUS @C3-022', () => {
-  test('regra conferida na hora, incluída e encerrada; rateio do SADT; apuração com totais e linhas', async ({ page }) => {
+  test('regra conferida na hora, incluída e encerrada; rateio do SADT; apuração com totais e linhas', async ({
+    page,
+  }) => {
     const pedidos: { caminho: string; corpo: Record<string, unknown> }[] = [];
     const painel = {
       regras: [] as Record<string, unknown>[],
@@ -178,7 +180,12 @@ test.describe('C3-022 repasse da produção SUS @C3-022', () => {
     await page.getByTestId('repasse-sus-rateio-inicio').fill('2026-09');
     await page.getByTestId('repasse-sus-rateio-incluir').click();
     await expect(page.getByTestId('repasse-sus-rateio-951')).toBeVisible();
-    expect(pedidos[2]?.corpo).toMatchObject({ grupo: '99', procedimento: null, tetoPercentual: 50, usaPeso: false });
+    expect(pedidos[2]?.corpo).toMatchObject({
+      grupo: '99',
+      procedimento: null,
+      tetoPercentual: 50,
+      usaPeso: false,
+    });
 
     // Apuração: com a versão lida; totais, pendências e linhas.
     await page.getByTestId('repasse-sus-aba-apuracao').click();
@@ -188,7 +195,10 @@ test.describe('C3-022 repasse da produção SUS @C3-022', () => {
     await expect(page.getByTestId('repasse-sus-resumo')).toContainText('1 linhas');
     await expect(page.getByTestId('repasse-sus-pendencias')).toContainText('BPA 77');
     await expect(page.getByTestId('repasse-sus-linha-6')).toBeVisible();
-    expect(pedidos[3]).toMatchObject({ caminho: '/api/sus/repasse/apuracoes/501/apurar', corpo: { versao: 3 } });
+    expect(pedidos[3]).toMatchObject({
+      caminho: '/api/sus/repasse/apuracoes/501/apurar',
+      corpo: { versao: 3 },
+    });
 
     await semViolacaoAxe(page, 'repasse da produção SUS');
   });

@@ -497,8 +497,7 @@ describe('usuários: senhas e segundo fator', () => {
         return { status: 200, corpo: pagina };
       if (p.url.endsWith('/SINT.FORTE/segundo-fator/revogar'))
         return { status: 200, corpo: { revogado: true } };
-      if (p.url.endsWith('/SINT.FORTE/dispositivos/revogar'))
-        return { status: 200, corpo: { revogados: 1 } };
+      if (p.url.endsWith('/SINT.FORTE/dispositivos/revogar')) return { status: 200, corpo: { revogados: 1 } };
       return undefined;
     });
     const w = await montar(IdentidadeUsuarios);

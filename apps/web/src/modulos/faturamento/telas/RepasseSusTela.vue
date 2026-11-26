@@ -52,7 +52,9 @@ const reais = (v: number) => moeda.format(v);
 const numOuNull = (v: string) => (v.trim() === '' ? null : Number(v.replace(',', '.')));
 const txtOuNull = (v: string) => (v.trim() === '' ? null : v.trim());
 
-const opModalidades = computed(() => MODALIDADES_REPASSE_SUS.map((m) => ({ valor: m, rotulo: t(`modalidades.${m}`) })));
+const opModalidades = computed(() =>
+  MODALIDADES_REPASSE_SUS.map((m) => ({ valor: m, rotulo: t(`modalidades.${m}`) })),
+);
 const opPapeis = computed(() => PAPEIS_REGRA_SUS.map((p) => ({ valor: p, rotulo: t(`papeis.${p}`) })));
 const opBases = computed(() => BASES_REPASSE_SUS.map((b) => ({ valor: b, rotulo: t(`bases.${b}`) })));
 
@@ -181,7 +183,13 @@ const incluirRateio = () => {
   acao.mutate(async () => {
     await incluirRateioSadt(entradaRateio.value);
     aviso.value = t('salvo');
-    Object.assign(s, { procedimento: '', grupo: '', profissional: null, pesoPercentual: '', tetoPercentual: '' });
+    Object.assign(s, {
+      procedimento: '',
+      grupo: '',
+      profissional: null,
+      pesoPercentual: '',
+      tetoPercentual: '',
+    });
   });
 };
 
@@ -204,7 +212,9 @@ const opApuracoes = computed(() => [
     rotulo: `${a.numero} — ${a.competencia.slice(0, 7)}`,
   })),
 ]);
-const apuracaoEscolhida = computed(() => painel.data.value?.apuracoes.find((a) => a.id === apuracaoId.value) ?? null);
+const apuracaoEscolhida = computed(
+  () => painel.data.value?.apuracoes.find((a) => a.id === apuracaoId.value) ?? null,
+);
 const linhas = useQuery({
   queryKey: computed(() => ['sus', 'repasse', 'linhas', apuracaoId.value]),
   queryFn: () => lerLinhasRepasseSus(apuracaoId.value as number),
@@ -229,7 +239,8 @@ const textoResumo = computed(() =>
       })
     : '',
 );
-const alvo = (p: string | null, g: string | null) => p ?? (g ? `${t('campos.grupo')}: ${g}` : t('campos.todos'));
+const alvo = (p: string | null, g: string | null) =>
+  p ?? (g ? `${t('campos.grupo')}: ${g}` : t('campos.todos'));
 </script>
 
 <template>
@@ -256,9 +267,15 @@ const alvo = (p: string | null, g: string | null) => p ?? (g ? `${t('campos.grup
     <p v-if="painel.isLoading.value">{{ t('carregando') }}</p>
 
     <div v-if="aba === 'regras'" data-testid="repasse-sus-regras">
-      <form v-if="podeEditar" class="formulario" data-testid="repasse-sus-regra-form" @submit.prevent="incluirRegra">
+      <form
+        v-if="podeEditar"
+        class="formulario"
+        data-testid="repasse-sus-regra-form"
+        @submit.prevent="incluirRegra"
+      >
         <label
-          >{{ t('campos.codigo') }} <input v-model="r.codigo" maxlength="30" data-testid="repasse-sus-regra-codigo"
+          >{{ t('campos.codigo') }}
+          <input v-model="r.codigo" maxlength="30" data-testid="repasse-sus-regra-codigo"
         /></label>
         <label class="largo"
           >{{ t('campos.descricao') }}
@@ -270,17 +287,29 @@ const alvo = (p: string | null, g: string | null) => p ?? (g ? `${t('campos.grup
           :opcoes="opModalidades"
           data-testid="repasse-sus-regra-modalidade"
         />
-        <SanteSelecao v-model="r.papel" :rotulo="t('campos.papel')" :opcoes="opPapeis" data-testid="repasse-sus-regra-papel" />
-        <SanteSelecao v-model="r.base" :rotulo="t('campos.base')" :opcoes="opBases" data-testid="repasse-sus-regra-base" />
+        <SanteSelecao
+          v-model="r.papel"
+          :rotulo="t('campos.papel')"
+          :opcoes="opPapeis"
+          data-testid="repasse-sus-regra-papel"
+        />
+        <SanteSelecao
+          v-model="r.base"
+          :rotulo="t('campos.base')"
+          :opcoes="opBases"
+          data-testid="repasse-sus-regra-base"
+        />
         <label
           >{{ t('campos.procedimento') }}
           <input v-model="r.procedimento" maxlength="20" data-testid="repasse-sus-regra-procedimento"
         /></label>
         <label
-          >{{ t('campos.grupo') }} <input v-model="r.grupo" maxlength="20" data-testid="repasse-sus-regra-grupo"
+          >{{ t('campos.grupo') }}
+          <input v-model="r.grupo" maxlength="20" data-testid="repasse-sus-regra-grupo"
         /></label>
         <label
-          >{{ t('campos.ocupacao') }} <input v-model="r.ocupacao" maxlength="20" data-testid="repasse-sus-regra-ocupacao"
+          >{{ t('campos.ocupacao') }}
+          <input v-model="r.ocupacao" maxlength="20" data-testid="repasse-sus-regra-ocupacao"
         /></label>
         <label
           >{{ t('campos.percentualPago') }}
@@ -316,11 +345,17 @@ const alvo = (p: string | null, g: string | null) => p ?? (g ? `${t('campos.grup
         <ul v-if="problemasRegra.length" class="problemas" data-testid="repasse-sus-regra-problemas">
           <li v-for="p in problemasRegra" :key="p">{{ t(`problemas.${p}`) }}</li>
         </ul>
-        <button type="submit" :disabled="!regraPronta || acao.isPending.value" data-testid="repasse-sus-regra-incluir">
+        <button
+          type="submit"
+          :disabled="!regraPronta || acao.isPending.value"
+          data-testid="repasse-sus-regra-incluir"
+        >
           {{ t('acoes.incluir') }}
         </button>
       </form>
-      <p v-if="painel.data.value?.regras.length === 0" data-testid="repasse-sus-regras-vazio">{{ t('regrasVazias') }}</p>
+      <p v-if="painel.data.value?.regras.length === 0" data-testid="repasse-sus-regras-vazio">
+        {{ t('regrasVazias') }}
+      </p>
       <table v-else-if="painel.data.value" data-testid="repasse-sus-regras-tabela">
         <thead>
           <tr>
@@ -339,7 +374,8 @@ const alvo = (p: string | null, g: string | null) => p ?? (g ? `${t('campos.grup
             <td>{{ x.codigo }} — {{ x.descricao }}</td>
             <td>{{ t(`modalidades.${x.modalidade}`) }}</td>
             <td>
-              {{ alvo(x.procedimentoCodigo, x.grupoCodigo) }}{{ x.ocupacaoCodigo ? ` · ${x.ocupacaoCodigo}` : '' }}
+              {{ alvo(x.procedimentoCodigo, x.grupoCodigo)
+              }}{{ x.ocupacaoCodigo ? ` · ${x.ocupacaoCodigo}` : '' }}
             </td>
             <td>{{ t(`papeis.${x.papel}`) }}</td>
             <td>{{ t(`bases.${x.base}`) }}</td>
@@ -356,7 +392,11 @@ const alvo = (p: string | null, g: string | null) => p ?? (g ? `${t('campos.grup
                     >{{ t('acoes.encerrarEm') }}
                     <input v-model="mesFim" type="month" data-testid="repasse-sus-encerrar-mes"
                   /></label>
-                  <button type="button" data-testid="repasse-sus-encerrar-confirmar" @click="encerrar('regras', x.id, x.versao)">
+                  <button
+                    type="button"
+                    data-testid="repasse-sus-encerrar-confirmar"
+                    @click="encerrar('regras', x.id, x.versao)"
+                  >
                     {{ t('acoes.confirmar') }}
                   </button>
                   <button type="button" @click="encerrando = null">{{ t('acoes.cancelar') }}</button>
@@ -377,13 +417,19 @@ const alvo = (p: string | null, g: string | null) => p ?? (g ? `${t('campos.grup
     </div>
 
     <div v-if="aba === 'rateios'" data-testid="repasse-sus-rateios">
-      <form v-if="podeEditar" class="formulario" data-testid="repasse-sus-rateio-form" @submit.prevent="incluirRateio">
+      <form
+        v-if="podeEditar"
+        class="formulario"
+        data-testid="repasse-sus-rateio-form"
+        @submit.prevent="incluirRateio"
+      >
         <label
           >{{ t('campos.procedimento') }}
           <input v-model="s.procedimento" maxlength="20" data-testid="repasse-sus-rateio-procedimento"
         /></label>
         <label
-          >{{ t('campos.grupo') }} <input v-model="s.grupo" maxlength="20" data-testid="repasse-sus-rateio-grupo"
+          >{{ t('campos.grupo') }}
+          <input v-model="s.grupo" maxlength="20" data-testid="repasse-sus-rateio-grupo"
         /></label>
         <SanteSelecao
           v-model="s.profissional"
@@ -518,7 +564,10 @@ const alvo = (p: string | null, g: string | null) => p ?? (g ? `${t('campos.grup
         </ul>
       </template>
       <MensagemErro v-if="linhas.isError.value" :erro="linhas.error.value" />
-      <p v-if="apuracaoId !== null && linhas.data.value?.length === 0" data-testid="repasse-sus-linhas-vazias">
+      <p
+        v-if="apuracaoId !== null && linhas.data.value?.length === 0"
+        data-testid="repasse-sus-linhas-vazias"
+      >
         {{ t('apuracao.linhasVazias') }}
       </p>
       <table v-else-if="linhas.data.value?.length" data-testid="repasse-sus-linhas">
@@ -536,7 +585,11 @@ const alvo = (p: string | null, g: string | null) => p ?? (g ? `${t('campos.grup
           </tr>
         </thead>
         <tbody>
-          <tr v-for="l in linhas.data.value" :key="l.sequencia" :data-testid="`repasse-sus-linha-${l.sequencia}`">
+          <tr
+            v-for="l in linhas.data.value"
+            :key="l.sequencia"
+            :data-testid="`repasse-sus-linha-${l.sequencia}`"
+          >
             <td>{{ l.sequencia }}</td>
             <td>{{ l.instrumento.toUpperCase() }}</td>
             <td>{{ l.executanteNome }}</td>

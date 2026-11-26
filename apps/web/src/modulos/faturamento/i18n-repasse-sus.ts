@@ -80,7 +80,8 @@ export const mensagensRepasseSus = {
   },
   apuracao: {
     vazia: 'Nenhuma apuração do repasse em apuração. Abra a apuração da competência no repasse médico.',
-    resumo: '{linhas} linhas, repasse de {repasse} e glosa de {glosa}; {excluidas} linhas anteriores excluídas.',
+    resumo:
+      '{linhas} linhas, repasse de {repasse} e glosa de {glosa}; {excluidas} linhas anteriores excluídas.',
     pendencias: 'Pendências (sem linha)',
     semPendencia: 'Sem pendências.',
     pendencia: '{instrumento} {origem}: {motivo}',

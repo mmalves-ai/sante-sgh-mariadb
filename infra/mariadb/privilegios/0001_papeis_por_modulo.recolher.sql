@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.recolher (alcance 006a6dad6c7c). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.recolher (alcance d82cd74a4a17). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -4468,6 +4468,7 @@ REVOKE SELECT ON conta_hospitalar FROM sgh_mod_sus;
 REVOKE SELECT ON conta_hospitalar_item FROM sgh_mod_sus;
 REVOKE SELECT ON contrato_gestor_sus FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON cota_procedimento_sus FROM sgh_mod_sus;
+REVOKE SELECT, INSERT, UPDATE ON critica_cnes FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON critica_sus FROM sgh_mod_sus;
 REVOKE SELECT ON declaracao_obito FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON diaria_uti_sus FROM sgh_mod_sus;
@@ -4544,6 +4545,7 @@ REVOKE SELECT, INSERT, UPDATE ON regra_servico_classificacao_sus FROM sgh_mod_su
 REVOKE SELECT, INSERT, UPDATE ON remessa_apac FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON remessa_bpa FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON remessa_ciha FROM sgh_mod_sus;
+REVOKE SELECT, INSERT, UPDATE ON remessa_cnes FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON remessa_raas FROM sgh_mod_sus;
 REVOKE SELECT, INSERT, UPDATE ON remessa_sisaih FROM sgh_mod_sus;
 REVOKE SELECT ON requisicao_exame FROM sgh_mod_sus;

@@ -187,7 +187,12 @@ describe.skipIf(SEM_BANCO)('chave do dispositivo (WebAuthn) no banco próprio', 
     for (const n of ['sessao-3', 'sessao-4']) {
       const disp = new AutenticadorWebAuthnSimulado(-7, 0);
       const op = await servico.iniciarCadastro(n, ator, 'Conta fictícia wan');
-      await servico.concluirCadastro(n, ator, disp.cadastrar(op.challenge, ORIGEM, SERVIDOR), `Aparelho ${n}`);
+      await servico.concluirCadastro(
+        n,
+        ator,
+        disp.cadastrar(op.challenge, ORIGEM, SERVIDOR),
+        `Aparelho ${n}`,
+      );
     }
     expect(contar('AND d.revogada_em IS NULL')).toBe(2);
     const trilhaDispositivos = () =>
