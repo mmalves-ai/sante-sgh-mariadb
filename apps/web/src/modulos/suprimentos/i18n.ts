@@ -190,6 +190,10 @@ export const mensagensSuprimentos = {
     rateio: 'rateio',
     portal: 'Portal de cotação',
     semPortal: 'Pedido sem envio a portal.',
+    trocaArquivo:
+      'Troca por arquivo: baixe o mapa em planilha, envie ao portal ou ao fornecedor e importe o arquivo devolvido com o preço e a marca de cada linha.',
+    baixarMapa: 'Baixar o mapa (CSV)',
+    importarArquivo: 'Importar o mapa devolvido',
   },
   aprovacoes: {
     titulo: 'Aprovação de pedidos por alçada',

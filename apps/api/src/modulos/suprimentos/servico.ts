@@ -54,6 +54,7 @@ const MENSAGENS: Readonly<Record<string, string>> = {
   'suprimentos.corrigirValidadeLote': 'Validade do lote corrigida.',
   'suprimentos.gravarKitPadrao': 'Kit padrão gravado.',
   'suprimentos.programarEntregasPedido': 'Entregas programadas.',
+  'suprimentos.importarRespostasCotacao': 'Respostas da cotação importadas.',
   'suprimentos.acompanharPedido': 'Contato com o fornecedor registrado.',
   'suprimentos.cancelarCompra': 'Cancelamento registrado.',
   'suprimentos.gravarMotivoCancelamentoCompra': 'Motivo de cancelamento gravado.',

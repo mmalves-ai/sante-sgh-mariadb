@@ -10,6 +10,7 @@ export * from './saida.js';
 export * from './lote.js';
 export * from './competencia.js';
 export * from './cotacao.js';
+export * from './cotacao-arquivo.js';
 export * from './conferencia-nf.js';
 export * from './escopo.js';
 export * from './politica-local.js';

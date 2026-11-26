@@ -71,6 +71,8 @@ import {
   faixaDoValor,
   conferirVencedoraDoContrato,
   planejarVencedor,
+  lerArquivoRespostas,
+  recusaDaLeitura,
   podeConsolidarNota,
   proximoAFechar,
   qtd3,
@@ -910,6 +912,18 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
         x.valorUnitario = e.valorUnitario;
         if (e.marca !== undefined) x.marca = e.marca;
         return { id: x.id };
+      }
+      case 'suprimentos.importarRespostasCotacao': {
+        // C3-008: o mapa devolvido (troca por arquivo), pela mesma regra de leitura da porta própria.
+        const p = this.pedidoM(s, e.pedido.ano, e.pedido.doc);
+        const leitura = lerArquivoRespostas(e.conteudo, p.propostas);
+        recusar(recusaDaLeitura(leitura));
+        for (const r of leitura.respostas) {
+          const x = p.propostas.find((y) => y.id === r.proposta)!;
+          x.valorUnitario = r.valorUnitario;
+          if (r.marca !== undefined) x.marca = r.marca;
+        }
+        return { id: p.id, respostas: leitura.respostas.length, semPreco: leitura.semPreco };
       }
       case 'suprimentos.definirVencedorCotacao': {
         const p = this.pedidoM(s, e.pedido.ano, e.pedido.doc);

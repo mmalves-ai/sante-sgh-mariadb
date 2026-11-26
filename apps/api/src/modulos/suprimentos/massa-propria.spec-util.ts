@@ -530,6 +530,8 @@ export async function limparMassa(nucleo: NucleoProprio, _m: MassaSuprimentos | 
       `DELETE FROM pedido_compra_acompanhamento WHERE pedido_compra_id IN (${peds}) ORDER BY id DESC`,
       [like],
     );
+    // C3-008: a ligação do pedido ao portal de cotação (mapa-cotacao.ts).
+    await e.executar(`DELETE FROM vinculo_pedido_compra_portal WHERE pedido_compra_id IN (${peds})`, [like]);
     await e.executar(
       `DELETE FROM pedido_compra_item WHERE pedido_compra_id IN (SELECT id FROM pedido_compra WHERE estabelecimento_id IN (${ests}))`,
       [like],

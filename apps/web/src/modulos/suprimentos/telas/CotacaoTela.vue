@@ -8,7 +8,14 @@ import { SanteBotao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { definirVencedor, lerPedido, novaChave, registrarProposta } from '../api-suprimentos.js';
+import { montarArquivoCotacao } from '@sgh/dominio-suprimentos';
+import {
+  definirVencedor,
+  importarRespostasCotacao,
+  lerPedido,
+  novaChave,
+  registrarProposta,
+} from '../api-suprimentos.js';
 import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
 import { numero, qtd, quando, reais, usarSuprimentos } from '../usar-suprimentos.js';
@@ -55,6 +62,41 @@ async function gravarProposta(p: PropostaLida): Promise<void> {
     await recarregar();
   } catch (x) {
     erro.value = x;
+  }
+}
+/** C3-008: o mapa em planilha (CSV com BOM, para a planilha abrir os acentos), gerado pela regra do domínio. */
+function baixarMapa(): void {
+  const p = pedido.data.value;
+  if (!p) return;
+  const texto = montarArquivoCotacao(
+    p.itensDetalhe.map((i) => ({ item: i.item, seq: i.seq, nome: i.nome })),
+    p.propostas,
+  );
+  const url = URL.createObjectURL(new Blob(['\uFEFF', texto], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mapa-cotacao-${props.doc}-${props.ano}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function importarArquivo(ev: Event): Promise<void> {
+  const campo = ev.target as HTMLInputElement;
+  const arquivo = campo.files?.[0];
+  if (!arquivo) return;
+  erro.value = null;
+  mensagem.value = null;
+  try {
+    const r = await importarRespostasCotacao(
+      chave.value,
+      { arquivo: arquivo.name.slice(0, 60), conteudo: await arquivo.text() },
+      novaChave('mapa'),
+    );
+    mensagem.value = r.mensagem;
+    await recarregar();
+  } catch (x) {
+    erro.value = x;
+  } finally {
+    campo.value = '';
   }
 }
 async function escolher(item: number, seq: number): Promise<void> {
@@ -202,6 +244,24 @@ async function escolher(item: number, seq: number): Promise<void> {
         </li>
       </ul>
       <p v-else>{{ t('suprimentos.cotacao.semPortal') }}</p>
+      <p>{{ t('suprimentos.cotacao.trocaArquivo') }}</p>
+      <SanteBotao
+        variante="secundario"
+        :rotulo="t('suprimentos.cotacao.baixarMapa')"
+        data-testid="cot-baixar-mapa"
+        @acionar="baixarMapa"
+      />
+      <span v-if="pode('suprimentos.importarRespostasCotacao')">
+        <label for="cot-arquivo">{{ t('suprimentos.cotacao.importarArquivo') }}</label>
+        <input
+          id="cot-arquivo"
+          type="file"
+          accept=".csv,text/csv"
+          data-testid="cot-arquivo"
+          @change="importarArquivo"
+        />
+      </span>
+      <AvisoSuprimentos v-else :motivo="motivo('suprimentos.importarRespostasCotacao')" />
     </template>
     <p v-if="mensagem" role="status" data-testid="cot-mensagem">{{ mensagem }}</p>
     <ErroSuprimentos v-if="erro" :erro="erro" />

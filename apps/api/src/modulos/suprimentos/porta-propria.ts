@@ -137,6 +137,12 @@ import {
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 import { lancadorContaEstoque, TABELAS_CONTA_ESTOQUE } from './conta-estoque.js';
+import {
+  importarRespostasCotacao,
+  OPERACAO_IMPORTAR_RESPOSTAS_COTACAO,
+  portaisDoPedido,
+  TABELAS_MAPA_COTACAO,
+} from './mapa-cotacao.js';
 import { TABELAS_VINCULO_PEDIDO_CONTRATO, vincularPedidoNaCompra } from './contrato-porta-propria.js';
 import {
   controlarOrcamentoDoDocumento,
@@ -3551,6 +3557,12 @@ const OPERACOES: Readonly<Record<string, Manipulador>> = {
   [OPERACAO_CANCELAR_COMPRA]: cancelarCompra as Manipulador,
   [OPERACAO_MOTIVO_CANCELAMENTO]: gravarMotivoCancelamentoCompra as Manipulador,
   [OPERACAO_RECALCULO_SALDO]: recalcularSaldos as Manipulador,
+  // C3-008 (05-SUP linha 19): as respostas do mapa devolvido pelo portal (primeiro adaptador: troca por arquivo).
+  [OPERACAO_IMPORTAR_RESPOSTAS_COTACAO]: importarRespostasCotacao({
+    pedidoTravado,
+    propostasDoPedido,
+    registrarProposta,
+  }) as Manipulador,
 };
 
 /** As tabelas que as operações do estoque gravam. */
@@ -3577,6 +3589,8 @@ export const TABELAS_OPERACOES_SUPRIMENTOS = [
   'cotacao_fornecedor',
   'cotacao_item',
   'cotacao_resposta_item',
+  // C3-008: a ligação do pedido ao portal de cotação (mapa-cotacao.ts).
+  ...TABELAS_MAPA_COTACAO,
   'inventario_estoque',
   'fechamento_estoque',
   'saldo_estoque_mensal',
@@ -4642,7 +4656,7 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
           justificativa: texto(r['motivo_escolha']),
           rateio: n(r['vencedoras']) > 1,
         })),
-        portal: [],
+        portal: await portaisDoPedido(l, cab.id),
       };
     });
   }

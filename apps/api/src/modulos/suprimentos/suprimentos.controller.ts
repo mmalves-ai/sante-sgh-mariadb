@@ -164,6 +164,9 @@ const esquemaAtender = z
 const esquemaProposta = z
   .object({ valorUnitario: z.number().min(0).max(999_999_999), marca: z.string().max(25).optional() })
   .strict();
+const esquemaArquivoCotacao = z
+  .object({ arquivo: z.string().min(1).max(60), conteudo: z.string().min(1).max(1_000_000) })
+  .strict();
 const esquemaVencedor = z
   .object({
     item: z.number().int().positive(),
@@ -668,6 +671,24 @@ export class SuprimentosController {
       proposta: idDaRota(id),
       valorUnitario: p.valorUnitario,
       ...(p.marca ? { marca: p.marca } : {}),
+    });
+  }
+
+  /** C3-008 (05-SUP linha 19): o mapa devolvido pelo portal ou pelo fornecedor (troca por arquivo), numa transação. */
+  @Post('pedidos/:ano/:doc/respostas-portal')
+  @HttpCode(200)
+  @Permissao('suprimentos.cotacao.escolher')
+  @AuditadoNoHandler('suprimentos.importarRespostasCotacao pelo executor (trilha na mesma transação)')
+  respostasPortal(
+    @Param('ano') ano: string,
+    @Param('doc') doc: string,
+    @Body() b: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<ResultadoSuprimentos> {
+    const a = corpo(esquemaArquivoCotacao, b);
+    return this.servico.executar(sessaoDe(req), 'suprimentos.importarRespostasCotacao', {
+      pedido: { ano: idDaRota(ano), doc: idDaRota(doc) },
+      ...a,
     });
   }
 
