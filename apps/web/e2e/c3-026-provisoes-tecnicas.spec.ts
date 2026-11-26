@@ -168,7 +168,9 @@ test.describe('C3-026 contabilidade regulatória da operadora @C3-026', () => {
       return json(r, { type: 'about:blank', title: 'Não simulado', status: 404 }, 404);
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // A contabilidade regulatória exige operadora.provisaoTecnica.* (perfil operadora-ans), que o SINT.ADMIN não tem;
+    // o SINT.OPERADORA tem os perfis da operadora concedidos nominalmente (lê, edita o plano e o mapa, calcula).
+    await entrar(page, 'SINT.OPERADORA');
     await page.goto('/operadora/ans/provisoes-tecnicas');
     await expect(page.getByTestId('tela-provisoes-tecnicas')).toBeVisible();
 
