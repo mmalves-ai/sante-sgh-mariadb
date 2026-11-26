@@ -88,7 +88,7 @@ test.describe('@C1-051 Faturamento SUS: permissão por setor e parâmetros por i
       siglaOrigem: 'HSINT',
     });
 
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, 'Configuração do faturamento SUS');
     expect(externas).toEqual([]);
   });
 
