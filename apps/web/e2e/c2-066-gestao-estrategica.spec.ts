@@ -346,7 +346,7 @@ test.describe('@C2-066 gestão estratégica', () => {
     const externas = vigiarExternas(page);
     const api = simular(page);
     await api.ligar();
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.QUALIDADE');
 
     // Mapa: o objetivo O1 com o farol pela última apuração.
     await page.goto(TELA);
