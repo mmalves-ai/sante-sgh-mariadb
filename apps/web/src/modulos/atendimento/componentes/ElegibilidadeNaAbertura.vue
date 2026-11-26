@@ -47,7 +47,7 @@ const dados = ref<ElegibilidadePaciente | null>(null);
 const aviso = ref<string | null>(null);
 const falha = ref(false);
 const ocupado = ref(false);
-const podeConsultar = computed(() => pode('atendimento.segurado.editar').value);
+const podeConsultar = computed(() => pode('atendimento.segurado.editar'));
 
 async function carregar(): Promise<void> {
   falha.value = false;

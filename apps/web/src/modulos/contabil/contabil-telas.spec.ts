@@ -308,6 +308,7 @@ describe('comuns da contabilidade', () => {
       ['/contabil/demonstracoes', 'contabil.demonstracao.ler'],
       ['/contabil/sped', 'contabil.sped.ler'],
       ['/contabil/consolidacao', 'contabil.consolidacao.ler'],
+      ['/contabil/lalur', 'contabil.lalur.ler'],
     ]);
   });
 });

@@ -132,7 +132,10 @@ function quadro(e: Estado) {
 async function simularCentral(page: Page, e: Estado): Promise<void> {
   await page.route('**/api/enfermagem/central-comando/**', (rota) => {
     const req = rota.request();
-    const caminho = new URL(req.url()).pathname.replace(/^\/api\/enfermagem\/central-comando\//, '');
+    const caminho = new globalThis.URL(req.url()).pathname.replace(
+      /^\/api\/enfermagem\/central-comando\//,
+      '',
+    );
     if (req.method() === 'GET') {
       if (caminho === 'quadro') return json(rota, quadro(e));
       if (caminho === `atendimentos/${ATENDIMENTO}`)

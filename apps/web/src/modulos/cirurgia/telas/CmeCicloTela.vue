@@ -144,7 +144,9 @@ const salvarRejeicao = () => {
 const recolherPacote = (rejeicao: number, pacote: number) => acao.mutate(() => recolher(rejeicao, pacote));
 const doCiclo = (r: { ciclo: number | null; pacote: number | null }) =>
   r.ciclo === cicloId.value || (ciclo.data.value?.pacotes ?? []).some((p) => p.id === r.pacote);
-const distribuidos = computed(() => (ciclo.data.value?.pacotes ?? []).filter((p) => p.situacao === 'distribuido'));
+const distribuidos = computed(() =>
+  (ciclo.data.value?.pacotes ?? []).filter((p) => p.situacao === 'distribuido'),
+);
 const podeTestar = computed(() => ['em_andamento', 'concluido'].includes(ciclo.data.value?.situacao ?? ''));
 </script>
 
@@ -184,7 +186,11 @@ const podeTestar = computed(() => ['em_andamento', 'concluido'].includes(ciclo.d
 
         <h2>{{ t('cirurgia.cmeCiclo.indicadores') }}</h2>
         <ul data-testid="cme-ciclo-indicadores">
-          <li v-for="k in ['fisico', 'quimico', 'biologico'] as const" :key="k" :data-testid="`cme-indicador-${k}`">
+          <li
+            v-for="k in ['fisico', 'quimico', 'biologico'] as const"
+            :key="k"
+            :data-testid="`cme-indicador-${k}`"
+          >
             {{ t(`cirurgia.cmeCiclo.categorias.${k}`) }}:
             {{ t(`cirurgia.cmeCiclo.indicador.${ciclo.data.value.indicadores[k]}`) }}
           </li>

@@ -129,10 +129,7 @@ test.describe('C3-017 material de terceiro na CME', () => {
     });
 
     await escolher(page.getByTestId('cme-terceiro-cme'), { rotulo: 'CME SINTETICA' });
-    await escolher(page.getByTestId('cme-terceiro-rec-fornecedor'), {
-      busca: 'FORN',
-      rotulo: 'FORNECEDOR SINTETICO',
-    });
+    await escolher(page.getByTestId('cme-terceiro-rec-fornecedor'), { rotulo: 'FORNECEDOR SINTETICO' });
     await escolher(page.getByTestId('cme-terceiro-rec-cirurgia'), { rotulo: 'AG-SINT-1' });
     await page.getByTestId('cme-terceiro-entregador').fill('REPRESENTANTE SINTETICO');
     await escolher(page.getByTestId('cme-terceiro-rec-material'), { rotulo: /CAIXA DE COLUNA SINTETICA/ });

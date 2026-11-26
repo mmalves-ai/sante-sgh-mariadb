@@ -38,10 +38,26 @@ const rejeicaoAberta = {
   rejeitadoEm: '2026-11-26T11:00',
 };
 const painel = (rejeicoes: unknown[]) => ({
-  ciclos: [{ id: 9, numero: 'CE-000009', lote: 'L000009', situacao: 'concluido', inicio: '2026-11-26T08:00' }],
+  ciclos: [
+    { id: 9, numero: 'CE-000009', lote: 'L000009', situacao: 'concluido', inicio: '2026-11-26T08:00' },
+  ],
   tipos: [
-    { id: 1, descricao: 'FISICO SINTETICO', categoria: 'fisico', exigeLote: false, exigeControle: false, liberacaoDepende: true },
-    { id: 3, descricao: 'BIOLOGICO SINTETICO', categoria: 'biologico', exigeLote: true, exigeControle: true, liberacaoDepende: true },
+    {
+      id: 1,
+      descricao: 'FISICO SINTETICO',
+      categoria: 'fisico',
+      exigeLote: false,
+      exigeControle: false,
+      liberacaoDepende: true,
+    },
+    {
+      id: 3,
+      descricao: 'BIOLOGICO SINTETICO',
+      categoria: 'biologico',
+      exigeLote: true,
+      exigeControle: true,
+      liberacaoDepende: true,
+    },
   ],
   motivos: [{ id: 5, descricao: 'MOTIVO SINTETICO', fase: null, exigeRecolhimento: true }],
   fases: [

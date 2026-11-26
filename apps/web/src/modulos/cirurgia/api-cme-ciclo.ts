@@ -11,7 +11,13 @@ const indicador = z.enum(['conforme', 'nao_conforme', 'pendente']);
 
 export const esquemaPainelCiclos = z.object({
   ciclos: z.array(
-    z.object({ id: z.number(), numero: z.string(), lote: z.string(), situacao: z.string(), inicio: z.string().nullable() }),
+    z.object({
+      id: z.number(),
+      numero: z.string(),
+      lote: z.string(),
+      situacao: z.string(),
+      inicio: z.string().nullable(),
+    }),
   ),
   tipos: z.array(
     z.object({
@@ -24,7 +30,12 @@ export const esquemaPainelCiclos = z.object({
     }),
   ),
   motivos: z.array(
-    z.object({ id: z.number(), descricao: z.string(), fase: z.number().nullable(), exigeRecolhimento: z.boolean() }),
+    z.object({
+      id: z.number(),
+      descricao: z.string(),
+      fase: z.number().nullable(),
+      exigeRecolhimento: z.boolean(),
+    }),
   ),
   fases: z.array(z.object({ id: z.number(), descricao: z.string(), ordem: z.number() })),
   rejeicoes: z.array(
@@ -106,6 +117,7 @@ export const registrarTeste = (ciclo: number, e: TesteEntrada) =>
   enviar(`${C}/ciclos/${ciclo}/testes`, e, esquemaGravado, novaChave('cme-teste'));
 export const encerrarCiclo = (ciclo: number, versao: number, observacao: string | null) =>
   enviar(`${C}/ciclos/${ciclo}/encerrar`, { versao, observacao }, esquemaGravado, novaChave('cme-encerrar'));
-export const rejeitar = (e: RejeicaoEntrada) => enviar(`${C}/rejeicoes`, e, esquemaGravado, novaChave('cme-rejeitar'));
+export const rejeitar = (e: RejeicaoEntrada) =>
+  enviar(`${C}/rejeicoes`, e, esquemaGravado, novaChave('cme-rejeitar'));
 export const recolher = (rejeicao: number, pacote: number) =>
   enviar(`${C}/rejeicoes/${rejeicao}/recolher`, { pacote }, esquemaGravado, novaChave('cme-recolher'));

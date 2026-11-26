@@ -1,4 +1,4 @@
-// Textos do desconto em folha da mensalidade (08-SGO L97, C3-028). Sem nome de sistema antigo nem de tabela.
+// Textos do desconto em folha da mensalidade (08-SGO L97, C3-028). Sem nome de sistema de origem nem de tabela.
 export const mensagensDescontoFolhaOperadora = {
   titulo: 'Desconto em folha',
   texto:

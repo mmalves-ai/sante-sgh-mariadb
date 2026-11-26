@@ -287,7 +287,10 @@ test.describe('@F3.5-09 laudo de imagem: lista de trabalho, redação, retifica�
       'Aguardando assinatura com certificado ICP-Brasil',
     );
     await expect(page.getByTestId('laudo-versao-assinar-icp-1')).toHaveCount(0);
-    await expect(page.getByTestId('laudo-versao-assinar-icp-2')).toHaveAttribute('href', /\/pep\/assinaturas$/);
+    await expect(page.getByTestId('laudo-versao-assinar-icp-2')).toHaveAttribute(
+      'href',
+      /\/pep\/assinaturas$/,
+    );
 
     // O texto inteiro da versão anterior a um clique.
     await page.getByTestId('laudo-versao-ver-1').click();

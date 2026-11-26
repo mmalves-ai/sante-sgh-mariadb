@@ -29,22 +29,18 @@ export const MARCAS_PERMISSAO = [
   'terceirizacao',
 ] as const;
 export type MarcaPermissao = (typeof MARCAS_PERMISSAO)[number];
+const marcasPermissao = Object.fromEntries(MARCAS_PERMISSAO.map((k) => [k, z.boolean()])) as Record<
+  MarcaPermissao,
+  z.ZodBoolean
+>;
 const esquemaPermissao = z.object({
   id: z.number(),
   usuario: z.number(),
   usuarioNome: nulo(z.string()),
   setor: z.number(),
   setorNome: nulo(z.string()),
-  ...Object.fromEntries(MARCAS_PERMISSAO.map((k) => [k, z.boolean()])),
-}) as z.ZodType<
-  {
-    id: number;
-    usuario: number;
-    usuarioNome: string | null;
-    setor: number;
-    setorNome: string | null;
-  } & Record<MarcaPermissao, boolean>
->;
+  ...marcasPermissao,
+});
 const esquemaPainel = z.object({
   solicitacoes: z.array(
     z.object({

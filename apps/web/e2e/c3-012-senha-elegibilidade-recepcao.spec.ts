@@ -43,7 +43,7 @@ test.describe('Senha e elegibilidade da operadora na recepção @C3-012 @fase7',
         .getByRole('cell', { name: /Todas as especialidades · Todos os serviços · (?!Todos os setores)/ })
         .first(),
     ).toBeVisible();
-    expect(externas()).toEqual([]);
+    expect(externas).toEqual([]);
   });
 
   test('abertura mostra a elegibilidade e colhe a senha; axe', async ({ page }) => {
@@ -88,6 +88,6 @@ test.describe('Senha e elegibilidade da operadora na recepção @C3-012 @fase7',
     await expect(page.getByTestId('abrir-senha-convenio')).toBeVisible();
     await expect(page.getByTestId('abrir-validade-senha')).toBeVisible();
     await semViolacaoAxe(page, 'abertura com elegibilidade');
-    expect(externas()).toEqual([]);
+    expect(externas).toEqual([]);
   });
 });

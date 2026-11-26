@@ -59,6 +59,6 @@ test.describe('@C3-008 cotação por arquivo', () => {
       buffer: Buffer.from(invalido, 'utf-8'),
     });
     await expect(page.getByText(/Linha 2: O valor unitário/)).toBeVisible();
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, 'cotação por arquivo com linha inválida');
   });
 });

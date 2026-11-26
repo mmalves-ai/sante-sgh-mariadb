@@ -39,7 +39,14 @@ export type RemessaFolhaDetalhe = z.infer<typeof detalhe>;
 
 const previa = z.object({
   itens: z.array(
-    z.object({ sequencia: n, numero: z.string(), matriculaFuncional: z.string(), competencia: z.string(), valorEnviado: n, valorAtrasado: n }),
+    z.object({
+      sequencia: n,
+      numero: z.string(),
+      matriculaFuncional: z.string(),
+      competencia: z.string(),
+      valorEnviado: n,
+      valorAtrasado: n,
+    }),
   ),
   criticas: z.array(z.object({ fatura: n, numero: z.string(), codigo: z.string(), mensagem: z.string() })),
   valorTotal: n,
@@ -59,8 +66,12 @@ export const listarRemessasFolha = (operadora: number | null) =>
   ler(`${A}/remessas${qs({ operadora })}`, z.array(remessa));
 export const lerRemessaFolha = (id: number) => ler(`${A}/remessas/${id}`, detalhe);
 export const arquivoRemessaFolha = (id: number) =>
-  ler(`${A}/remessas/${id}/arquivo`, z.object({ nome: z.string(), tipoMime: z.string(), conteudo: z.string() }));
-export const previaRemessaFolha = (e: EntradaRemessa) => enviar(`${A}/previa`, e, previa, novaChave('df-previa'));
+  ler(
+    `${A}/remessas/${id}/arquivo`,
+    z.object({ nome: z.string(), tipoMime: z.string(), conteudo: z.string() }),
+  );
+export const previaRemessaFolha = (e: EntradaRemessa) =>
+  enviar(`${A}/previa`, e, previa, novaChave('df-previa'));
 export const gerarRemessaFolha = (e: EntradaRemessa & { tipo: string; observacao: string | null }) =>
   enviar(`${A}/remessas`, e, gravado, novaChave('df-gerar'));
 export const enviarRemessaFolha = (id: number, versao: number) =>

@@ -639,7 +639,8 @@ const APOIO_SPED: ApoioSped = {
   cifraDisponivel: true,
   leiautes: { ecd: '9.00', ecf: '0011' },
   formasTributacao: [
-    { codigo: '1', rotulo: 'Lucro real', gerada: false },
+    { codigo: '1', rotulo: 'Lucro real', gerada: true },
+    { codigo: '5', rotulo: 'Lucro presumido', gerada: false },
     { codigo: '9', rotulo: 'Isenta do IRPJ', gerada: true },
   ],
   qualificacoes: [
@@ -814,7 +815,7 @@ describe('tela do SPED', () => {
     await flushPromises();
     await escolher(w, 'sped-tipo', 'ecf');
     await clicar(w, 'sped-ver-previa');
-    await escolher(w, 'sped-forma', '1');
+    await escolher(w, 'sped-forma', '5');
     expect(w.find('[data-testid="sped-forma-nao-gerada"]').text()).toContain('imunes e isentas');
     await clicar(w, 'sped-gerar-confirmar');
     expect(pedidos.some((p) => p.metodo === 'POST')).toBe(false);

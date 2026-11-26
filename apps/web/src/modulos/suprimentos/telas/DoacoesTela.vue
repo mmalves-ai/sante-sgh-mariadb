@@ -416,7 +416,9 @@ const gravacao = useMutation({
 
       <div v-if="recusas.length || lotesIncompletos.length" role="alert" data-testid="doa-recusas">
         <ul>
-          <li v-for="r in recusas" :key="r.codigo" :data-testid="`doa-recusa-${r.codigo}`">{{ r.mensagem }}</li>
+          <li v-for="r in recusas" :key="r.codigo" :data-testid="`doa-recusa-${r.codigo}`">
+            {{ r.mensagem }}
+          </li>
           <li v-if="lotesIncompletos.length" data-testid="doa-recusa-lotes">{{ M.itens.loteObrigatorio }}</li>
         </ul>
       </div>

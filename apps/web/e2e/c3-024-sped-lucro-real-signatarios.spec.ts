@@ -29,7 +29,9 @@ async function chave(page: Page, recurso: string, motivo: string): Promise<void>
   await form.getByLabel('Justificativa').fill(motivo);
   await form.getByTestId('liberacao-senha').fill(SENHA);
   await form.getByTestId('liberacao-aplicar').click();
-  await expect(page.getByTestId('mensagem-liberacao')).toContainText('chave(s) alterada(s)', { timeout: 30_000 });
+  await expect(page.getByTestId('mensagem-liberacao')).toContainText('chave(s) alterada(s)', {
+    timeout: 30_000,
+  });
 }
 /** Registra a conferência e liga o recurso (se outro cenário já o ligou, segue). */
 async function ligar(page: Page, recurso: string, evidencia: string): Promise<void> {

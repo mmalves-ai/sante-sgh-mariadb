@@ -48,7 +48,12 @@ export const mensagensCmeCiclo = {
   recolher: 'Recolher',
   quando: 'Quando',
   categorias: { fisico: 'Físico', quimico: 'Químico', biologico: 'Biológico', bowie_dick: 'Bowie-Dick' },
-  resultados: { pendente: 'Pendente', aprovado: 'Aprovado', reprovado: 'Reprovado', inconclusivo: 'Inconclusivo' },
+  resultados: {
+    pendente: 'Pendente',
+    aprovado: 'Aprovado',
+    reprovado: 'Reprovado',
+    inconclusivo: 'Inconclusivo',
+  },
   indicador: { conforme: 'Aprovado', nao_conforme: 'Reprovado', pendente: 'Pendente' },
   situacoes: {
     em_andamento: 'Em andamento',
