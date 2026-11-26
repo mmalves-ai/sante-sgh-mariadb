@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import GrupoDominiosTela from '../../config/telas/GrupoDominiosTela.vue';
 import ConsultaCadastro from '../componentes/prescricao/ConsultaCadastro.vue';
+import EdicaoCatalogo from '../componentes/prescricao/EdicaoCatalogo.vue';
 import {
   itensDoProtocolo,
   lerDominiosPrescricao,
@@ -211,6 +212,11 @@ const simulado = computed(() => {
         </section>
       </template>
     </template>
+    <!-- 03-PEP L106: frequências, condições, não padronizados e complementos do item editáveis. -->
+    <EdicaoCatalogo
+      v-if="secao === 'frequencias' || secao === 'naoPadronizados' || secao === 'parametrosItem'"
+      :secao="secao"
+    />
     <section class="bloco" data-testid="edicao-cadastro" :aria-label="t('pep.presc.cadastros.edicao')">
       <GrupoDominiosTela :subitem="SUBITEM[secao] ?? ''" embutida />
     </section>

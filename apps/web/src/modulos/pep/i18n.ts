@@ -19,6 +19,7 @@ import { mensagensPedidoVaga } from './i18n-pedido-vaga.js';
 import { mensagensAnotacoesAdministrativas } from './i18n-anotacoes-administrativas.js';
 import { mensagensCopiasProntuario } from './i18n-copias-prontuario.js';
 import { mensagensPadroesPrescricao } from './i18n-padroes-prescricao.js';
+import { mensagensCatalogoPrescricao } from './i18n-catalogo-prescricao.js';
 
 export const mensagensPep = {
   // M22: registros clínicos e administração do PEP.
@@ -27,6 +28,8 @@ export const mensagensPep = {
   presc: mensagensPrescricao,
   // 03-PEP L107: protocolos, kits e receitas padrão editáveis e favoritos do prescritor.
   padroes: mensagensPadroesPrescricao,
+  // 03-PEP L106: cadastro editável de frequências, condições, não padronizados e complementos do item.
+  catalogo: mensagensCatalogoPrescricao,
   // M23: prontuário de uso diário.
   doc: mensagensDocumentos,
   // M45, etapa 1: construtor de formulários novos.
