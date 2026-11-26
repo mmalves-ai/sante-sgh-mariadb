@@ -7,7 +7,7 @@
 // e a regra tirada de uso sem apagar. Trilha de cada gravação. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PortaConferenciaContaPropria } from './conta-conferencia-propria.js';
+import { numeroDemonstrativo, PortaConferenciaContaPropria } from './conta-conferencia-propria.js';
 import { PortaContasOperadoraPropria } from './contas-porta-propria.js';
 import {
   CLIENTE,
@@ -253,6 +253,62 @@ describe.skipIf(SEM_BANCO)('conferência das contas recebidas (MariaDB, cliente 
     ]).toEqual([190, 10, 'enviado']);
     expect(Number(linhas[0]!['prestador_rede_id'])).toBe(m.prestador);
     expect((await porta.conferencia(contexto(m), lote)).demonstrativos).toHaveLength(1);
+  });
+
+  it('o mesmo protocolo em dois estabelecimentos da operadora não se cruza; o número de outra conta é recusado', async () => {
+    const tr = T('demonstrativo_analise_emitido', 'operadora.contas.demonstrativo');
+    const e = { numero: 'L0209K2', protocolo: 'L0209K2', hash: 'h', informado: 50, liberado: 50, glosa: 0 };
+    const agora = new Date();
+    // O estabelecimento B (mesma operadora) já entregou o demonstrativo do seu protocolo L0209K2.
+    const doB = await nucleo.escrever({ cliente: CLIENTE, correlacao: 't0209d' }, (x) =>
+      x.inserir(
+        `INSERT INTO demonstrativo_analise_emitido (estabelecimento_id, operadora_saude_id, prestador_rede_id,
+          numero_demonstrativo, numero_protocolo, emitido_em, valor_informado, valor_processado, valor_liberado,
+          valor_glosa, situacao, criado_em) VALUES (?, ?, ?, ?, ?, ?, 70, 70, 60, 10, 'enviado', ?)`,
+        [
+          m.outroEst,
+          m.operadora,
+          m.prestador,
+          numeroDemonstrativo(m.outroEst, 'L0209K2'),
+          'L0209K2',
+          agora,
+          agora,
+        ],
+      ),
+    );
+    const r = await porta.registrarDemonstrativo(contexto(m), lote, e, tr);
+    expect(r.id).not.toBe(doB);
+    const linhas = await ler(
+      `SELECT id, estabelecimento_id, numero_demonstrativo, versao, valor_liberado FROM demonstrativo_analise_emitido
+        WHERE operadora_saude_id = ? AND numero_protocolo = 'L0209K2' ORDER BY id`,
+      [m.operadora],
+    );
+    expect(
+      linhas.map((x) => [
+        Number(x['estabelecimento_id']),
+        x['numero_demonstrativo'],
+        Number(x['versao']),
+        Number(x['valor_liberado']),
+      ]),
+    ).toEqual([
+      [m.outroEst, `${m.outroEst}-L0209K2`, 1, 60],
+      [m.est, `${m.est}-L0209K2`, 1, 50],
+    ]);
+    // Um registro com o número desta conta, mas de outro lote, é recusado e fica intacto.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't0209d' }, (x) =>
+      x.executar('UPDATE demonstrativo_analise_emitido SET lote_conta_recebida_id = NULL WHERE id = ?', [
+        r.id,
+      ]),
+    );
+    await expect(porta.registrarDemonstrativo(contexto(m), lote, e, tr)).rejects.toMatchObject({
+      problema: { codigo: 'demonstrativo-de-outra-conta' },
+    });
+    const [depois] = await ler(
+      'SELECT versao, lote_conta_recebida_id FROM demonstrativo_analise_emitido WHERE id = ?',
+      [r.id],
+    );
+    expect([Number(depois!['versao']), depois!['lote_conta_recebida_id']]).toEqual([1, null]);
+    expect(() => numeroDemonstrativo(m.est, ' ')).toThrow();
   });
 
   it('tira a regra de uso sem apagar (as críticas continuam ligadas) e o próximo lote não é mais criticado por ela', async () => {

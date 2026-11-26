@@ -94,6 +94,20 @@ const naoEncontrado = (o = 'O registro') =>
     `${o} não existe neste estabelecimento.`,
   );
 
+/**
+ * O número do demonstrativo é único na operadora (UNIQUE operadora + número), mas o protocolo da conta é sequencial por
+ * estabelecimento: dois estabelecimentos da mesma operadora emitem o mesmo protocolo. O número leva o estabelecimento
+ * à frente para que a reemissão de um nunca alcance o registro do outro.
+ */
+export function numeroDemonstrativo(est: number, protocolo: string): string {
+  const n = `${est}-${protocolo.trim()}`;
+  if (!protocolo.trim() || n.length > 20)
+    throw recusa('numero-demonstrativo-invalido', 'O número do demonstrativo é inválido.', {
+      campos: ['numero'],
+    });
+  return n;
+}
+
 // ── tipos lidos ─────────────────────────────────────────────────────────────────────────────────
 
 export interface RegraCriticaLida {
@@ -657,8 +671,9 @@ export class PortaConferenciaContaPropria {
   }
 
   /**
-   * O demonstrativo de análise entregue: a primeira emissão inclui o registro; a reemissão (o mesmo número na operadora)
-   * atualiza os valores e o instante com a versão (a trilha guarda o que saiu antes). Nada é apagado.
+   * O demonstrativo de análise entregue: a primeira emissão inclui o registro; a reemissão (o mesmo número, do mesmo
+   * estabelecimento e da mesma conta) atualiza os valores e o instante com a versão (a trilha guarda o que saiu antes).
+   * O número achado em outra conta é recusado, nunca sobrescrito. Nada é apagado.
    */
   registrarDemonstrativo(
     c: ContextoPorta,
@@ -681,10 +696,21 @@ export class PortaConferenciaContaPropria {
           valor_glosa: e.glosa,
           situacao: 'enviado',
         };
+        const numero = numeroDemonstrativo(est, e.numero);
         const ja = await tx.uma(
-          'SELECT id, versao FROM demonstrativo_analise_emitido WHERE operadora_saude_id = ? AND numero_demonstrativo = ?',
-          [conta.operadora, e.numero],
+          `SELECT id, versao, estabelecimento_id, lote_conta_recebida_id FROM demonstrativo_analise_emitido
+            WHERE operadora_saude_id = ? AND numero_demonstrativo = ?`,
+          [conta.operadora, numero],
         );
+        if (
+          ja &&
+          (inteiro(ja['estabelecimento_id']) !== est || inteiro(ja['lote_conta_recebida_id']) !== lote)
+        )
+          throw recusa(
+            'demonstrativo-de-outra-conta',
+            'O número do demonstrativo já pertence a outra conta desta operadora.',
+            { campos: ['numero'] },
+          );
         if (ja) {
           const id = inteiro(ja['id'])!;
           return {
@@ -696,7 +722,7 @@ export class PortaConferenciaContaPropria {
           estabelecimento_id: est,
           operadora_saude_id: conta.operadora,
           prestador_rede_id: conta.prestador,
-          numero_demonstrativo: e.numero,
+          numero_demonstrativo: numero,
           lote_conta_recebida_id: lote,
           numero_protocolo: e.protocolo,
           ...valores,
