@@ -23,6 +23,17 @@ async function entrar(page: Page, login: string): Promise<void> {
 const json = (rota: Route, corpo: unknown, status = 200) =>
   rota.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
 
+// A gravação no formato do contrato (GravacaoAgenda): ligada, motivo e a permissão por operação.
+const gravacao = {
+  ligada: true,
+  motivo: null,
+  operacoes: {
+    solicitar: { pode: true, motivo: null },
+    autorizar: { pode: true, motivo: null },
+    avancar: { pode: true, motivo: null },
+  },
+};
+
 const vazia = {
   quantidade: null,
   fornecedor: null,
@@ -92,7 +103,7 @@ test.describe('@C3-021 OPME: pedido, esterilização e nota fiscal ligados aos d
         cirurgias: [],
         locais: [],
         localSugerido: null,
-        gravacao: { pode: true },
+        gravacao,
       }),
     );
     await page.route('**/api/suprimentos/opme/31/etapas', async (r) => {
@@ -133,7 +144,7 @@ test.describe('@C3-021 OPME: pedido, esterilização e nota fiscal ligados aos d
             ate: '2026-11-30',
             solicitacoes: [solicitacao()],
             cortada: false,
-            gravacao: { pode: true },
+            gravacao,
           })
         : r.fallback(),
     );
