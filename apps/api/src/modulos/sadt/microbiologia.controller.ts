@@ -2,6 +2,7 @@
 // antibiograma interpretado pelo ponto de corte vigente, o laudo da cultura e a ligação do isolado ao caso da CCIH
 // (comissão de controle de infecção hospitalar). Sem o banco do cliente, 503.
 //   GET  /api/sadt/microbiologia/cadastro                         materiais, microrganismos, antimicrobianos e painéis
+//   GET  /api/sadt/microbiologia/paineis                          o cadastro com os painéis inativos (tela do catálogo)
 //   GET  /api/sadt/microbiologia/culturas/:resultado              a cultura do resultado, com o texto do laudo
 //   GET  /api/sadt/microbiologia/exames/:item/cultura             a cultura pelo exame pedido (tela da digitação)
 //   POST /api/sadt/microbiologia/exames/:item/cultura             grava a cultura pelo exame pedido (abre o resultado)
@@ -31,6 +32,13 @@ export class MicrobiologiaController {
   @Permissao('sadt.resultado.ler')
   cadastro(@Req() req: RequisicaoAutorizada) {
     return this.s.cadastro(sessaoDe(req).porta);
+  }
+
+  /** A leitura da tela dos painéis e pontos de corte: quem cuida do catálogo (CCIH, administrador) não lê resultados. */
+  @Get('paineis')
+  @Permissao('sadt.catalogo.ler')
+  cadastroDosPaineis(@Req() req: RequisicaoAutorizada) {
+    return this.s.cadastro(sessaoDe(req).porta, { inativos: true });
   }
 
   @Get('culturas/:resultado')

@@ -92,6 +92,12 @@ export const mensagensMicrobiologia = {
     },
     norma: 'Norma',
     padrao: 'Tornar o padrão do microrganismo',
+    situacao: 'Situação',
+    ativo: 'Ativo',
+    inativo: 'Inativo',
+    painelAtivo: 'Painel ativo (a cultura oferece)',
+    avisoInativo:
+      'Inativo, o painel sai da cultura e deixa de ser o padrão do microrganismo; o histórico das culturas fica.',
     itens: 'Antimicrobianos (na ordem do laudo)',
     incluirItem: 'Incluir antimicrobiano',
     subir: 'Subir',

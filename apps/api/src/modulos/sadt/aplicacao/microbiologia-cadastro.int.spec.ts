@@ -293,4 +293,63 @@ describe.skipIf(SEM_BANCO)('cadastro do antibiograma e cultura pela digitação 
     const c = await um('SELECT sensivel_ate FROM ponto_corte_antimicrobiano WHERE id = ?', [ids.ponto1]);
     expect(Number(c?.['sensivel_ate'])).toBe(2);
   });
+
+  it('desativa o painel padrão: limpa o padrão do germe, some da cultura, fica no cadastro e volta a valer', async () => {
+    const base = {
+      codigo: marca,
+      descricao: `PAINEL SINTETICO ${marca}`,
+      microrganismo: ids.germe,
+      metodo: 'concentracao_inibitoria',
+      norma: 'BrCAST',
+      itens: [{ antimicrobiano: ids.am1 }, { antimicrobiano: ids.am3 }],
+    };
+    const versaoAtual = async () =>
+      Number((await um('SELECT versao FROM painel_antibiograma WHERE id = ?', [ids.painel]))?.['versao']);
+    const padraoDoGerme = async () =>
+      (await um('SELECT painel_antibiograma_id AS p FROM microrganismo WHERE id = ?', [ids.germe]))?.['p'] ??
+      null;
+    expect(Number(await padraoDoGerme())).toBe(ids.painel);
+    // O inativo não pode virar padrão.
+    expect(
+      await codigoDe(
+        cad.gravarPainel(contexto(m!), ids.painel, {
+          ...base,
+          ativo: false,
+          padraoDoMicrorganismo: true,
+          versao: await versaoAtual(),
+        }),
+      ),
+    ).toBe('painel-inativo-padrao');
+    const r = await cad.gravarPainel(contexto(m!), ids.painel, {
+      ...base,
+      ativo: false,
+      versao: await versaoAtual(),
+    });
+    expect(r.padroesLimpos).toBe(1);
+    expect(await padraoDoGerme()).toBeNull();
+    const p = await um('SELECT ativo FROM painel_antibiograma WHERE id = ?', [ids.painel]);
+    expect(Number(p?.['ativo'])).toBe(0);
+    // A cultura não oferece o inativo; o cadastro dos painéis o mostra com a situação, para consulta e reativação.
+    const daCultura = await micro.cadastro(contexto(m!));
+    expect(daCultura.paineis.some((x) => x.id === ids.painel)).toBe(false);
+    const doCadastro = await micro.cadastro(contexto(m!), { inativos: true });
+    const lido = doCadastro.paineis.find((x) => x.id === ids.painel);
+    expect([lido?.ativo, lido?.itens.length]).toEqual([false, 2]);
+    expect(daCultura.paineis.every((x) => x.ativo)).toBe(true);
+    // Reativa e volta a ser o padrão do germe.
+    const de = await cad.gravarPainel(contexto(m!), ids.painel, {
+      ...base,
+      ativo: true,
+      padraoDoMicrorganismo: true,
+      versao: lido!.versao,
+    });
+    expect([de.padrao, de.padroesLimpos]).toEqual([true, 0]);
+    expect(Number(await padraoDoGerme())).toBe(ids.painel);
+    expect((await micro.cadastro(contexto(m!))).paineis.some((x) => x.id === ids.painel)).toBe(true);
+    const t = await um(
+      "SELECT COUNT(*) AS q FROM trilha_auditoria WHERE entidade = 'painel_antibiograma' AND entidade_id = ?",
+      [ids.painel],
+    );
+    expect(Number(t?.['q'])).toBeGreaterThanOrEqual(5);
+  });
 });

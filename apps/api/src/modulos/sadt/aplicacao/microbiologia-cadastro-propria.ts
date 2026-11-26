@@ -191,6 +191,8 @@ export class ServicoCadastroMicrobiologia {
     const itens = daRegra(() => conferirPainel(e.itens));
     if (e.padraoDoMicrorganismo && e.microrganismo === null)
       throw recusa('painel-sem-microrganismo', 'Só o painel de um microrganismo vira o padrão dele.');
+    if (e.padraoDoMicrorganismo && !e.ativo)
+      throw recusa('painel-inativo-padrao', 'O painel inativo não pode ser o padrão do microrganismo.');
     return this.gravar(
       c,
       painelId === null ? 'sadt.microbiologia.painel.criado' : 'sadt.microbiologia.painel.alterado',
@@ -273,7 +275,17 @@ export class ServicoCadastroMicrobiologia {
           if (!mo) throw recusa('microrganismo-inexistente', 'Microrganismo não cadastrado.');
           await tx.alterar('microrganismo', n(mo['id']), n(mo['versao']), { painel_antibiograma_id: pid });
         }
-        return { id: pid, itens: itens.length, retirados, padrao: e.padraoDoMicrorganismo };
+        // O painel desativado deixa de ser o padrão dos microrganismos: a cultura não acharia um painel inativo.
+        let padroesLimpos = 0;
+        if (!e.ativo)
+          for (const mo of await tx.consultar(
+            'SELECT id, versao FROM microrganismo WHERE painel_antibiograma_id = ? ORDER BY id',
+            [pid],
+          )) {
+            await tx.alterar('microrganismo', n(mo['id']), n(mo['versao']), { painel_antibiograma_id: null });
+            padroesLimpos++;
+          }
+        return { id: pid, itens: itens.length, retirados, padrao: e.padraoDoMicrorganismo, padroesLimpos };
       },
     );
   }

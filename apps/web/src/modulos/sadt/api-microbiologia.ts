@@ -38,6 +38,8 @@ const esquemaCadastro = z.object({
       material: nul(n),
       metodo: txt,
       norma: txt,
+      /** Situação do painel: a cultura recebe só os ativos; o cadastro dos painéis, também os inativos. */
+      ativo: z.boolean().default(true),
       itens: z.array(esquemaItemPainel),
     }),
   ),
@@ -120,6 +122,8 @@ const esquemaPonto = z.object({
 export type PontoCorteLido = z.infer<typeof esquemaPonto>;
 
 export const lerCadastroMicrobiologia = () => ler(`${B}/cadastro`, esquemaCadastro);
+/** O cadastro da tela dos painéis (sadt.catalogo.ler), com os painéis inativos. */
+export const lerCadastroDosPaineis = () => ler(`${B}/paineis`, esquemaCadastro);
 export const lerCulturaDoExame = (exame: number) =>
   ler(`${B}/exames/${exame}/cultura`, esquemaCulturaDoExame);
 export const gravarCulturaDoExame = (exame: number, c: Record<string, unknown>, chave: string) =>

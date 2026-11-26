@@ -15,7 +15,7 @@ import {
   criarPontoCorte,
   encerrarPontoCorte,
   gravarPainelAntibiograma,
-  lerCadastroMicrobiologia,
+  lerCadastroDosPaineis,
   listarPontosCorte,
 } from '../api-microbiologia.js';
 import { hojeLocal } from '../usar-sadt.js';
@@ -27,8 +27,8 @@ const cliente = useQueryClient();
 const podeEditar = podePermissao('sadt.catalogo.editar');
 const NORMAS = ['BrCAST', 'EUCAST', 'CLSI'] as const;
 const cadastro = useQuery({
-  queryKey: ['sadt', 'microbiologia', 'cadastro'],
-  queryFn: lerCadastroMicrobiologia,
+  queryKey: ['sadt', 'microbiologia', 'cadastro', 'paineis'],
+  queryFn: lerCadastroDosPaineis,
 });
 const recusaDe = (f: () => unknown): string | null => {
   try {
@@ -79,6 +79,7 @@ const pMetodo = ref<'disco_difusao' | 'concentracao_inibitoria' | 'gradiente' | 
 );
 const pNorma = ref<string>('BrCAST');
 const pPadrao = ref(false);
+const pAtivo = ref(true);
 const pItens = ref<ItemForm[]>([]);
 const pNovoAm = ref<number | ''>('');
 const opcoesMetodoPainel = computed(() =>
@@ -103,6 +104,7 @@ function novoPainel(): void {
   pMetodo.value = 'disco_difusao';
   pNorma.value = 'BrCAST';
   pPadrao.value = false;
+  pAtivo.value = true;
   pItens.value = [];
   editandoPainel.value = true;
 }
@@ -118,6 +120,7 @@ function editarPainel(id: number): void {
   pMetodo.value = p.metodo as typeof pMetodo.value;
   pNorma.value = p.norma;
   pPadrao.value = cadastro.data.value?.microrganismos.find((m) => m.id === p.microrganismo)?.painel === p.id;
+  pAtivo.value = p.ativo;
   pItens.value = [...p.itens]
     .sort((a, b) => a.sequencia - b.sequencia)
     .map((i) => ({
@@ -164,7 +167,8 @@ async function gravarPainel(): Promise<void> {
         material: pMaterial.value || null,
         metodo: pMetodo.value,
         norma: pNorma.value,
-        padraoDoMicrorganismo: pPadrao.value && !!pGerme.value,
+        ativo: pAtivo.value,
+        padraoDoMicrorganismo: pAtivo.value && pPadrao.value && !!pGerme.value,
         versao: painelVersao.value,
         itens: pItens.value,
       },
@@ -305,6 +309,7 @@ const limites = (p: {
               <th scope="col">{{ t('sadt.microbiologia.cadastro.descricao') }}</th>
               <th scope="col">{{ t('sadt.microbiologia.cadastro.norma') }}</th>
               <th scope="col">{{ t('sadt.microbiologia.cadastro.itens') }}</th>
+              <th scope="col">{{ t('sadt.microbiologia.cadastro.situacao') }}</th>
               <th scope="col">{{ t('sadt.acoes') }}</th>
             </tr>
           </thead>
@@ -318,6 +323,9 @@ const limites = (p: {
               <td>{{ p.nome }}</td>
               <td>{{ p.norma }}</td>
               <td>{{ p.itens.length }}</td>
+              <td :data-testid="`antibiograma-situacao-${p.id}`">
+                {{ t(p.ativo ? 'sadt.microbiologia.cadastro.ativo' : 'sadt.microbiologia.cadastro.inativo') }}
+              </td>
               <td>
                 <SanteBotao
                   v-if="podeEditar"
@@ -381,7 +389,17 @@ const limites = (p: {
               :opcoes="opcoesNorma"
             />
           </div>
-          <label v-if="pGerme"
+          <label
+            ><input v-model="pAtivo" type="checkbox" data-testid="painel-ativo" />
+            {{ t('sadt.microbiologia.cadastro.painelAtivo') }}</label
+          >
+          <SanteAlerta
+            v-if="!pAtivo"
+            variante="aviso"
+            :texto="t('sadt.microbiologia.cadastro.avisoInativo')"
+            data-testid="painel-inativo-aviso"
+          />
+          <label v-if="pGerme && pAtivo"
             ><input v-model="pPadrao" type="checkbox" data-testid="painel-padrao" />
             {{ t('sadt.microbiologia.cadastro.padrao') }}</label
           >

@@ -192,8 +192,13 @@ export class ServicoMicrobiologia {
     return feito!;
   }
 
-  /** O cadastro que a tela usa: materiais, microrganismos (com o painel padrão), antimicrobianos e painéis com itens. */
-  cadastro(c: ContextoSadt) {
+  /**
+   * O cadastro que a tela usa: materiais, microrganismos (com o painel padrão), antimicrobianos e painéis com itens. A
+   * cultura lê só os painéis ativos; o cadastro dos painéis (`inativos`) lê também os desativados, com a situação, para
+   * consultá-los e reativá-los.
+   */
+  cadastro(c: ContextoSadt, opcoes: { inativos?: boolean } = {}) {
+    const inativos = opcoes.inativos === true;
     this.est(c);
     return this.nucleo.lerSomente(this.ctxNucleo(c), async (l) => {
       const op = (rs: Linha[]) => rs.map((r) => ({ id: n(r['id']), nome: String(r['descricao'] ?? '') }));
@@ -220,8 +225,8 @@ export class ServicoMicrobiologia {
         ),
       );
       const ps = await l.consultar(
-        'SELECT id, codigo, descricao, microrganismo_id, material_biologico_id, metodo, norma_referencia, versao FROM painel_antibiograma WHERE ativo = TRUE ORDER BY descricao LIMIT 500',
-        [],
+        'SELECT id, codigo, descricao, microrganismo_id, material_biologico_id, metodo, norma_referencia, versao, ativo FROM painel_antibiograma WHERE (? OR ativo = TRUE) ORDER BY ativo DESC, descricao LIMIT 500',
+        [inativos],
       );
       const its = ps.length
         ? await l.consultar(
@@ -238,6 +243,7 @@ export class ServicoMicrobiologia {
         material: nn(p['material_biologico_id']),
         metodo: String(p['metodo']),
         norma: String(p['norma_referencia']),
+        ativo: sim(p['ativo']),
         itens: its.filter((i) => n(i['painel_antibiograma_id']) === n(p['id'])).map(itemDe),
       }));
       return { materiais, microrganismos, antimicrobianos, paineis };

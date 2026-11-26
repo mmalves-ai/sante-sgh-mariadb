@@ -6,7 +6,9 @@
 // entram sozinhos na ordem do laudo; a cultura final sem conclusão é recusada na hora; gravar manda o corpo pelo exame
 // pedido; a interpretação lida volta na tabela; axe. 2) no cadastro, o painel novo leva os itens na ordem escolhida
 // (descer troca a ordem), o painel só de restritos é recusado na hora, o ponto de corte com limites invertidos é
-// recusado na hora e o válido grava e avisa o encerramento da versão anterior; axe.
+// recusado na hora e o válido grava e avisa o encerramento da versão anterior; o cadastro lê GET /paineis
+// (sadt.catalogo.ler), nunca o cadastro da cultura, e mostra o painel inativo com a situação; desativar o painel padrão
+// avisa na hora e esconde a escolha do padrão; o inativo volta a valer; axe.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -58,6 +60,34 @@ const cadastro = {
           liberacaoRestrita: true,
           indicaMultirresistencia: true,
           sequencia: 2,
+        },
+      ],
+    },
+  ],
+};
+
+// O cadastro dos painéis (GET /paineis, sadt.catalogo.ler) traz também o painel inativo, com a situação.
+const cadastroDosPaineis = {
+  ...cadastro,
+  paineis: [
+    ...cadastro.paineis.map((p) => ({ ...p, ativo: true })),
+    {
+      id: 23,
+      codigo: 'PS0',
+      versao: 4,
+      nome: 'PAINEL SINTETICO ANTIGO',
+      microrganismo: 11,
+      material: null,
+      metodo: 'disco_difusao',
+      norma: 'BrCAST',
+      ativo: false,
+      itens: [
+        {
+          antimicrobiano: 33,
+          exibeNoLaudo: true,
+          liberacaoRestrita: false,
+          indicaMultirresistencia: false,
+          sequencia: 1,
         },
       ],
     },
@@ -247,7 +277,12 @@ test.describe('@C1-083 cultura e antibiograma', () => {
     const externas = vigiarExternas(page);
     const paineis: unknown[] = [];
     const pontos: unknown[] = [];
-    await page.route(/\/api\/sadt\/microbiologia\/cadastro$/, (r) => json(r, cadastro));
+    // A tela do catálogo não lê o cadastro da cultura (sadt.resultado.ler): quem só cuida do catálogo abre a tela.
+    let leiturasDaCultura = 0;
+    await page.route(/\/api\/sadt\/microbiologia\/cadastro$/, (r) => {
+      leiturasDaCultura++;
+      return json(r, cadastro);
+    });
     await page.route(/\/api\/sadt\/microbiologia\/pontos-corte(\?.*)?$/, async (r) => {
       if (r.request().method() === 'POST') {
         pontos.push(r.request().postDataJSON());
@@ -256,8 +291,13 @@ test.describe('@C1-083 cultura e antibiograma', () => {
       return json(r, []);
     });
     await page.route(/\/api\/sadt\/microbiologia\/paineis$/, async (r) => {
+      if (r.request().method() === 'GET') return json(r, cadastroDosPaineis);
       paineis.push(r.request().postDataJSON());
-      return json(r, { id: 22, itens: 2, retirados: 0, padrao: false });
+      return json(r, { id: 22, itens: 2, retirados: 0, padrao: false, padroesLimpos: 0 });
+    });
+    await page.route(/\/api\/sadt\/microbiologia\/paineis\/\d+$/, async (r) => {
+      paineis.push(r.request().postDataJSON());
+      return json(r, { id: 21, itens: 2, retirados: 0, padrao: false, padroesLimpos: 1 });
     });
 
     // O cadastro dos painéis pede sadt.catalogo.editar, que o SINT.BIOMEDICO não tem; SINT.LABORATORIO tem toda a área.
@@ -265,6 +305,35 @@ test.describe('@C1-083 cultura e antibiograma', () => {
     await page.goto('/sadt/microbiologia/cadastro');
     await expect(page.getByTestId('tela-antibiograma-cadastro')).toBeVisible();
     await expect(page.getByTestId('antibiograma-painel-21')).toContainText('PAINEL SINTETICO');
+    await expect(page.getByTestId('antibiograma-situacao-21')).toContainText('Ativo');
+    await expect(page.getByTestId('antibiograma-painel-23')).toContainText('PAINEL SINTETICO ANTIGO');
+    await expect(page.getByTestId('antibiograma-situacao-23')).toContainText('Inativo');
+
+    // Desativar o painel padrão: o aviso aparece na hora e a escolha do padrão some.
+    await page.getByTestId('antibiograma-editar-21').click();
+    await expect(page.getByTestId('painel-ativo')).toBeChecked();
+    await expect(page.getByTestId('painel-padrao')).toBeChecked();
+    await page.getByTestId('painel-ativo').uncheck();
+    await expect(page.getByTestId('painel-inativo-aviso')).toBeVisible();
+    await expect(page.getByTestId('painel-padrao')).toHaveCount(0);
+    await page.getByTestId('painel-gravar').click();
+    await expect(page.getByTestId('antibiograma-mensagem')).toContainText('Painel gravado.');
+    await expect.poll(() => paineis.length).toBe(1);
+    expect(paineis.shift()).toMatchObject({
+      codigo: 'PS1',
+      versao: 1,
+      ativo: false,
+      padraoDoMicrorganismo: false,
+    });
+
+    // O inativo continua no cadastro e volta a valer.
+    await page.getByTestId('antibiograma-editar-23').click();
+    await expect(page.getByTestId('painel-ativo')).not.toBeChecked();
+    await page.getByTestId('painel-ativo').check();
+    await page.getByTestId('painel-gravar').click();
+    await expect(page.getByTestId('antibiograma-mensagem')).toContainText('Painel gravado.');
+    await expect.poll(() => paineis.length).toBe(1);
+    expect(paineis.shift()).toMatchObject({ codigo: 'PS0', versao: 4, ativo: true });
 
     await page.getByTestId('antibiograma-novo-painel').click();
     await page.getByTestId('painel-codigo').fill('PS2');
@@ -280,8 +349,10 @@ test.describe('@C1-083 cultura e antibiograma', () => {
     await semViolacaoAxe(page, '/sadt/microbiologia/cadastro (painel)');
     await page.getByTestId('painel-gravar').click();
     await expect(page.getByTestId('antibiograma-mensagem')).toContainText('Painel gravado.');
+    await expect.poll(() => paineis.length).toBe(1);
     expect(paineis[0]).toMatchObject({
       codigo: 'PS2',
+      ativo: true,
       norma: 'BrCAST',
       itens: [
         { antimicrobiano: 33, liberacaoRestrita: false },
@@ -311,6 +382,7 @@ test.describe('@C1-083 cultura e antibiograma', () => {
       vigenciaInicio: '2027-01-01',
     });
     await semViolacaoAxe(page, '/sadt/microbiologia/cadastro (ponto)');
+    expect(leiturasDaCultura).toBe(0);
     expect(externas).toEqual([]);
   });
 });
