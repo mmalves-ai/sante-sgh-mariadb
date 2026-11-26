@@ -1666,6 +1666,9 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
         'financeiro.tituloReceber.baixar',
         'financeiro.tituloReceber.baixarManual',
         'financeiro.dado.mostrar',
+        // C2-031/C2-045: a tesouraria acompanha a cobrança (boleto e Pix) para processar o retorno e baixar; não
+        // configura nem emite (isso é de quem cobra).
+        'financeiro.cobrancaBancaria.ler',
       ),
     },
   },
