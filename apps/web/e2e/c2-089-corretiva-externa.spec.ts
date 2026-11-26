@@ -100,7 +100,7 @@ async function simularCorretiva(page: Page): Promise<void> {
   });
 
   await page.route(
-    /\/api\/manutencao\/(oficinas|os\/\d+\/(corretiva-externa|orcamentos|remessas)|orcamentos\/\d+\/decisao|remessas\/(\d+\/retorno|abertas))(\?.*)?$/,
+    /\/api\/manutencao\/(oficinas(\/(opcoes|\d+))?|os\/\d+\/(corretiva-externa|orcamentos|remessas)|orcamentos\/\d+\/decisao|remessas\/(\d+\/retorno|abertas))(\?.*)?$/,
     async (rota) => {
       const req = rota.request();
       const caminho = new URL(req.url()).pathname.replace('/api/manutencao/', '');
