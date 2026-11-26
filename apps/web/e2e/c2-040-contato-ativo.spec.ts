@@ -175,7 +175,9 @@ test.describe('@C2-040 contato ativo antes da consulta', () => {
     await expect(page.getByTestId('contato-previsao')).toContainText('cancelada pela desistência');
     await page.getByTestId('contato-descricao').locator('input, textarea').first().fill('Viaja na data.');
     await page.getByTestId('contato-gravar').click();
-    await expect(page.getByTestId('contato-mensagem')).toHaveText('Contato registrado.');
+    await expect(page.getByTestId('contato-mensagem')).toHaveText(
+      'Contato registrado. 1 contato programado da consulta encerrado.',
+    );
     expect(st.corpos[0]).toMatchObject({
       paciente: 9402,
       marcacao: 2,
