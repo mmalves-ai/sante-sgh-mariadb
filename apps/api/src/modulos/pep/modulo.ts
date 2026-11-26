@@ -332,6 +332,8 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
             ? new PesquisaClinicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
+      // F78.03-1 (03-PEP L103 e L104): reação adversa no paciente e lista de uso contínuo; sem núcleo, 503.
+      {
         provide: FARMACOVIGILANCIA,
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
