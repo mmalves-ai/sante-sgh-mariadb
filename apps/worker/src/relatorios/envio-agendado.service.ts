@@ -13,15 +13,27 @@ import { randomUUID } from 'node:crypto';
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { filaEnvioRelatorio, relatorioDoCatalogo } from '@sgh/contratos';
 import { linkDoRelatorio } from '@sgh/dominio-relatorio';
-import { lerInteiroAmbiente, NucleoProprio } from '@sgh/nucleo';
+import { FINALIDADE_RELATORIO_AGENDADO } from '@sgh/dominio-acesso';
+import { envioExternoPermitido, lerInteiroAmbiente, NucleoProprio } from '@sgh/nucleo';
 import { Worker } from 'bullmq';
 import { clientesDaLista, clientesDoWorker } from '../clientes-worker.js';
 import { logger } from '../logger.js';
 import { RegistroRotinasProprio } from '../rotinas-registro-proprio.js';
 import { RegistradorRotinas, ROTINAS_WORKER } from '../rotinas-worker.js';
 import { conexaoValkey, PREFIXO_FILAS } from '../relay-outbox.js';
-import { enviarSmtp } from '../smtp.js';
-import { type ConclusaoEnvio, type DependenciasEnvio, processarEnvio } from './envio-agendado.js';
+import { leitorDoCofre } from '../cofre-leitura.js';
+import { entregarComRegistro } from '../email-entrega.js';
+import { type AmbienteDoEnvio, prepararSaida } from '../email-saida-cadastro.js';
+import { type SaidaDoCadastro, saidaDoCliente } from '../email-saida-propria.js';
+import { RegistroEnvioProprio, type RegistroEnvio } from '../registro-envio-proprio.js';
+import type { NucleoWorker } from '../servico-worker.js';
+import { conexaoDoUrl, enviarSmtp } from '../smtp.js';
+import {
+  type ConclusaoEnvio,
+  type DependenciasEnvio,
+  processarEnvio,
+  smtpPermitido,
+} from './envio-agendado.js';
 import {
   agoraParede,
   type OrigemEnvio,
@@ -34,11 +46,79 @@ export function redeDaFila(cliente: string): string {
   return cliente.replace(/_/g, '-');
 }
 
-/** As dependências do envio de um cliente (sem porta: só a fila, sem banco). */
+/** O envio pelo cadastro do cliente (01-ADM L77): o banco do cliente, o registro de envio e o ambiente da saída. */
+export interface SaidaDoRelatorio {
+  readonly nucleo: NucleoWorker;
+  readonly cliente: string;
+  readonly registro: RegistroEnvio | null;
+  readonly ambiente: AmbienteDoEnvio;
+}
+
+/** A saída do relatório de um cliente pelo ambiente do processo (fora de produção, só a captura em loopback). */
+export function saidaDoRelatorio(
+  nucleo: NucleoWorker,
+  cliente: string,
+  env: NodeJS.ProcessEnv = process.env,
+): SaidaDoRelatorio {
+  const producao = envioExternoPermitido(env);
+  const smtp = env['SMTP_URL']?.trim() || null;
+  const ambiente = env['AMBIENTE']?.trim() ?? 'dev';
+  const c = smtp && smtpPermitido(ambiente, smtp) ? conexaoDoUrl(smtp) : null;
+  return {
+    nucleo,
+    cliente,
+    registro: new RegistroEnvioProprio(nucleo, cliente, producao),
+    ambiente: {
+      producao,
+      local: c ? { host: c.host, porta: c.porta } : null,
+      remetentePadrao: env['EMAIL_REMETENTE']?.trim() || 'relatorios@sgh.invalid',
+      lerSegredo: leitorDoCofre(env),
+    },
+  };
+}
+
+/** Uma mensagem pelo cadastro: servidor e modelo da finalidade RELATORIO_AGENDADO, com o registro de envio. */
+function enviarPeloCadastro(s: SaidaDoRelatorio, agora: () => Date): DependenciasEnvio['enviar'] {
+  return async (m, c) => {
+    if (!c) throw new Error('Envio pelo cadastro sem o estabelecimento.');
+    let cadastro: SaidaDoCadastro | null = null;
+    try {
+      cadastro = await saidaDoCliente(
+        s.nucleo,
+        s.cliente,
+        FINALIDADE_RELATORIO_AGENDADO,
+        c.hospital,
+        agora(),
+      );
+    } catch (e) {
+      logger.warn(
+        { cliente: s.cliente, erro: e instanceof Error ? e.name : 'erro' },
+        'envio de relatório: cadastro de saída indisponível',
+      );
+    }
+    const saida = await prepararSaida(cadastro, s.cliente, s.ambiente);
+    const mensagem = saida.montar(m, c.valores ?? null);
+    const falhas = await entregarComRegistro({
+      chave: c.chave,
+      dominio: redeDaFila(s.cliente),
+      estabelecimento: c.hospital,
+      destinos: [m.para],
+      montar: () => mensagem,
+      enviar: (x) => saida.enviar(x),
+      registro: s.registro,
+      origem: saida.origem,
+    });
+    if (falhas.length > 0)
+      logger.warn({ cliente: s.cliente, erros: falhas }, 'envio de relatório sem registro');
+  };
+}
+
+/** As dependências do envio de um cliente (sem porta: só a fila, sem banco; com a saída: pelo cadastro). */
 export function dependenciasDoEnvio(
   porta: PortaEnvioRelatorio | null,
   env: NodeJS.ProcessEnv = process.env,
   agora: () => Date = () => new Date(),
+  saida: SaidaDoRelatorio | null = null,
 ): DependenciasEnvio {
   return {
     ambiente: env['AMBIENTE']?.trim() ?? 'dev',
@@ -47,7 +127,8 @@ export function dependenciasDoEnvio(
     produto: env['PRODUTO_NOME']?.trim() || 'SGH',
     nomeEstabelecimento: async (h) =>
       (porta ? await porta.nomeEstabelecimento(h).catch(() => null) : null) ?? h,
-    enviar: (m) => enviarSmtp(env['SMTP_URL']!.trim(), m),
+    enviar: saida ? enviarPeloCadastro(saida, agora) : (m) => enviarSmtp(env['SMTP_URL']!.trim(), m),
+    ...(saida ? { peloCadastro: true } : {}),
     emails: (h, agendamento) =>
       porta
         ? porta.destinatarios(h, Number(agendamento))
@@ -145,6 +226,8 @@ export class EnvioRelatorioService implements OnApplicationBootstrap, OnApplicat
   private rodando = false;
   /** 01-SIS L95: a volta dos vencidos registrada como rotina na Administração. */
   private registrador: RegistradorRotinas | null = null;
+  /** 01-ADM L77: o envio pelo cadastro do cliente (servidor, modelo, cofre); sem o banco, o SMTP_URL. */
+  private saida: ((cliente: string) => SaidaDoRelatorio) | null = null;
 
   /** Teste: o núcleo e a porta sem subir o banco. */
   usar(nucleo: NucleoEnvio, fabrica: FabricaPortaEnvio): void {
@@ -157,6 +240,7 @@ export class EnvioRelatorioService implements OnApplicationBootstrap, OnApplicat
     try {
       const nucleo = new NucleoProprio({ env: process.env });
       this.usar(nucleo, (cliente) => new PortaEnvioRelatorioPropria(nucleo, cliente));
+      this.saida = (cliente) => saidaDoRelatorio(nucleo, cliente);
       this.registrador = new RegistradorRotinas((cliente) => new RegistroRotinasProprio(nucleo, cliente));
     } catch (e) {
       logger.warn({ erro: e instanceof Error ? e.name : 'erro' }, 'envio agendado: sem o banco, só a fila');
@@ -193,10 +277,14 @@ export class EnvioRelatorioService implements OnApplicationBootstrap, OnApplicat
           const dados = job.data as { registrar?: boolean };
           const porta = dados.registrar === true && this.fabrica ? this.fabrica(cliente) : null;
           // A chave da reserva é o id do job: a nova tentativa (attempts da fila) não manda o e-mail de novo.
-          const r = await processarEnvio(job.data, dependenciasDoEnvio(porta), {
-            tipo: 'fila',
-            job: `${filaEnvioRelatorio(redeDaFila(cliente))}:${job.id ?? randomUUID()}`,
-          });
+          const r = await processarEnvio(
+            job.data,
+            dependenciasDoEnvio(porta, process.env, undefined, this.saida?.(cliente) ?? null),
+            {
+              tipo: 'fila',
+              job: `${filaEnvioRelatorio(redeDaFila(cliente))}:${job.id ?? randomUUID()}`,
+            },
+          );
           logger.info(
             {
               cliente,
@@ -228,7 +316,8 @@ export class EnvioRelatorioService implements OnApplicationBootstrap, OnApplicat
         try {
           const volta = () => {
             const porta = fabrica(cliente);
-            return enviarVencidos(porta, cliente, dependenciasDoEnvio(porta), { agora, baseWeb: base });
+            const d = dependenciasDoEnvio(porta, process.env, undefined, this.saida?.(cliente) ?? null);
+            return enviarVencidos(porta, cliente, d, { agora, baseWeb: base });
           };
           const x = this.registrador
             ? await this.registrador.rodar(

@@ -12,7 +12,13 @@
 // reserva (outra instância, o ciclo seguinte ou a nova tentativa do job já a fizeram) nada é enviado: no máximo um
 // e-mail por vencimento ou por job, mesmo com falha ao gravar o resultado.
 // Melhoria: o alerta ao dono respeita o avisar_falha do agendamento.
+// 01-ADM L77 (C1-063): com o banco, o envio sai pelo cadastro do cliente (servidor_email e modelo_email vigente da
+// finalidade RELATORIO_AGENDADO, senha pelo cofre; fora de produção a captura local), e cada mensagem vai também ao
+// registro geral de envio (envio_email) com a finalidade, o modelo e o servidor usados. O enviar recebe o
+// estabelecimento, a chave estável da mensagem e os valores dos marcadores (relatorio.<campo>); o alerta ao dono vai
+// sem valores: nunca pelo modelo do relatório.
 import { esquemaJobEnvioRelatorio, type JobEnvioRelatorio } from '@sgh/contratos';
+import { valoresDoEnvio } from '@sgh/dominio-acesso';
 import { depoisDoEnvio, mensagemDeFalha, mensagemDoEnvio } from '@sgh/dominio-relatorio';
 import type { MensagemEmail } from '../smtp.js';
 import type { DestinatariosEnvio, FormaEnvio, OrigemEnvio } from './envio-agendado-proprio.js';
@@ -35,7 +41,9 @@ export interface DependenciasEnvio {
   readonly remetente: string;
   readonly produto: string;
   readonly nomeEstabelecimento: (hospital: string) => string | Promise<string>;
-  readonly enviar: (m: MensagemEmail) => Promise<void>;
+  readonly enviar: (m: MensagemEmail, c?: ContextoEnvio) => Promise<void>;
+  /** A saída vem do cadastro do cliente (a conexão e a trava fora de produção ficam com ela, não com o SMTP_URL). */
+  readonly peloCadastro?: boolean;
   /** Os e-mails dos destinatários do agendamento e o do dono (cadastro); vazio sem o banco. */
   readonly emails: (hospital: string, agendamento: string) => Promise<DestinatariosEnvio>;
   /** Endereço de alerta quando o dono não tem e-mail (ALERTA_RELATORIO_EMAIL; senão, o do sistema). */
@@ -50,6 +58,16 @@ export interface DependenciasEnvio {
   readonly registrar?: (hospital: string, agendamento: string, r: ConclusaoEnvio) => Promise<void>;
   /** As falhas seguidas antes deste envio (do agendamento; 0 sem o banco). */
   readonly falhasAntes?: (hospital: string, agendamento: string) => Promise<number>;
+}
+
+/** O que o envio pelo cadastro precisa além da mensagem. */
+export interface ContextoEnvio {
+  /** Código do estabelecimento do agendamento (servidor e modelo do estabelecimento antes do geral). */
+  readonly hospital: string;
+  /** Chave estável da mensagem (o mesmo envio e destinatário, a mesma chave entre as tentativas). */
+  readonly chave: string;
+  /** Valores dos marcadores do modelo; sem eles, a mensagem vai com o texto padrão. */
+  readonly valores?: Readonly<Record<string, string>>;
 }
 
 export interface ConclusaoEnvio {
@@ -100,9 +118,16 @@ export async function processarEnvio(
   let dono: string | null = null;
   let avisarFalha = true;
   let formas: Readonly<Record<FormaEnvio, number>> | undefined;
-  if (!d.smtpUrl) falha = 'SMTP não configurado';
-  else if (!smtpPermitido(d.ambiente, d.smtpUrl))
-    falha = 'destino de e-mail fora do coletor local (fora de produção)';
+  const saidaPronta = d.peloCadastro === true || (!!d.smtpUrl && smtpPermitido(d.ambiente, d.smtpUrl));
+  const chaveBase = `relatorio.${job.hospital}.${job.agendamento}.${
+    reserva ? reserva.envio : origem?.tipo === 'fila' ? origem.job : 'avulso'
+  }`;
+  // Pelo cadastro, a conexão e a trava fora de produção ficam com a saída do cadastro (conexaoDaSaida).
+  if (!d.peloCadastro) {
+    if (!d.smtpUrl) falha = 'SMTP não configurado';
+    else if (!smtpPermitido(d.ambiente, d.smtpUrl))
+      falha = 'destino de e-mail fora do coletor local (fora de produção)';
+  }
   if (!falha) {
     const r = await d
       .emails(job.hospital, job.agendamento)
@@ -114,16 +139,21 @@ export async function processarEnvio(
     if (destinatarios.length === 0) falha = 'nenhum destinatário com e-mail';
   }
   if (!falha) {
-    const m = mensagemDoEnvio({
+    const campos = {
       titulo: job.titulo,
       relatorio: job.relatorio,
       link: job.link,
       produto: d.produto,
       estabelecimento,
-    });
-    for (const para of destinatarios) {
+    };
+    const m = mensagemDoEnvio(campos);
+    const valores = valoresDoEnvio('relatorio', campos, m);
+    for (const [i, para] of destinatarios.entries()) {
       try {
-        await d.enviar({ de: d.remetente, para, assunto: m.assunto, texto: m.texto });
+        await d.enviar(
+          { de: d.remetente, para, assunto: m.assunto, texto: m.texto },
+          { hospital: job.hospital, chave: `${chaveBase}.${i + 1}`, valores },
+        );
         enviados++;
       } catch (e) {
         falha = `envio recusado (${e instanceof Error ? e.message.slice(0, 120) : 'erro'})`;
@@ -135,7 +165,7 @@ export async function processarEnvio(
   let alertouDono = false;
   if (depois.alertarDono && avisarFalha) {
     const para = dono ?? d.alertaPadrao;
-    if (para && d.smtpUrl && smtpPermitido(d.ambiente, d.smtpUrl)) {
+    if (para && saidaPronta) {
       const a = mensagemDeFalha({
         titulo: job.titulo,
         falhasSeguidas: depois.falhasSeguidas,
@@ -143,7 +173,10 @@ export async function processarEnvio(
         estabelecimento,
       });
       await d
-        .enviar({ de: d.remetente, para, assunto: a.assunto, texto: a.texto })
+        .enviar(
+          { de: d.remetente, para, assunto: a.assunto, texto: a.texto },
+          { hospital: job.hospital, chave: `${chaveBase}.dono` },
+        )
         .then(() => (alertouDono = true))
         .catch(() => undefined);
     }

@@ -7,7 +7,9 @@ import {
   chaveCofreEmailValida,
   senhaServidorEmailValida,
   conexaoDaSaida,
+  codigoDaFinalidade,
   FINALIDADE_DO_ALERTA,
+  valoresDoEnvio,
   servidorDaSaida,
   type ServidorDeSaida,
   textoDoHtml,
@@ -183,5 +185,28 @@ describe('senha do servidor digitada pelo administrador', () => {
     expect(senhaServidorEmailValida('a'.repeat(501))).toBe(false);
     expect(senhaServidorEmailValida('linha\r\nRCPT')).toBe(false);
     expect(senhaServidorEmailValida(123)).toBe(false);
+  });
+});
+
+describe('finalidade e valores das outras saídas (relatório agendado, aviso do sistema)', () => {
+  it('o tipo de alerta vai pelo mapa; o código da finalidade vale por si; o resto fica sem finalidade', () => {
+    expect(codigoDaFinalidade('alerta-chamado')).toBe('ALERTA_CHAMADO');
+    expect(codigoDaFinalidade('RELATORIO_AGENDADO')).toBe('RELATORIO_AGENDADO');
+    expect(codigoDaFinalidade('AVISO_SISTEMA')).toBe('AVISO_SISTEMA');
+    expect(codigoDaFinalidade('relatorio')).toBeNull();
+    expect(codigoDaFinalidade("X' OR 1")).toBeNull();
+  });
+  it('os campos simples vão ao grupo da saída, com o texto padrão', () => {
+    const v = valoresDoEnvio(
+      'relatorio',
+      { titulo: 'Censo diário', nomeEstabelecimento: 'Hospital', lista: ['x'], vazio: null },
+      { assunto: 'A', texto: 'T' },
+    );
+    expect(v).toEqual({
+      'relatorio.assunto': 'A',
+      'relatorio.texto': 'T',
+      'relatorio.titulo': 'Censo diário',
+      'relatorio.nome_estabelecimento': 'Hospital',
+    });
   });
 });

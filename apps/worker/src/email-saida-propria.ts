@@ -1,10 +1,10 @@
 // Saída do e-mail do sistema pelo cadastro do cliente (01-ADM L77): para cada alerta da fila `email-<cliente>`, lê no
-// banco do cliente a finalidade do alerta (finalidade_email, carga inicial da migração 02_ADM/99), os servidores de
+// banco do cliente a finalidade do alerta, ou a da saída pelo código (relatório agendado, aviso do sistema) (finalidade_email, carga inicial da migração 02_ADM/99), os servidores de
 // saída ativos (servidor_email) e o modelo vigente da finalidade (modelo_email); a escolha é a regra do domínio
 // (servidorDaSaida, modeloVigente). Só leitura: nada é gravado aqui (o registro de envio fica com
 // registro-envio-proprio.ts).
 import {
-  FINALIDADE_DO_ALERTA,
+  codigoDaFinalidade,
   type ModeloDeSaida,
   type ModeloEmailVigente,
   modeloVigente,
@@ -39,7 +39,7 @@ export async function lerSaidaDoCadastro(
   codigoEstabelecimento: string | null,
   agora: Date,
 ): Promise<SaidaDoCadastro> {
-  const codigoFinalidade = FINALIDADE_DO_ALERTA[tipoAlerta] ?? null;
+  const codigoFinalidade = codigoDaFinalidade(tipoAlerta);
   const f = codigoFinalidade
     ? await l.uma('SELECT id FROM finalidade_email WHERE codigo = ? AND ativo = TRUE', [codigoFinalidade])
     : null;

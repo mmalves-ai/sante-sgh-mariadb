@@ -64,6 +64,20 @@ export const FINALIDADE_DO_ALERTA: Readonly<Record<string, string>> = {
   'alerta-chamado': 'ALERTA_CHAMADO',
 };
 
+/** As outras saídas do produto com finalidade própria (carga inicial das migrações 02_ADM/99). */
+export const FINALIDADE_RELATORIO_AGENDADO = 'RELATORIO_AGENDADO';
+export const FINALIDADE_AVISO_SISTEMA = 'AVISO_SISTEMA';
+
+const CODIGO_FINALIDADE = /^[A-Z][A-Z0-9_]{2,59}$/;
+
+/**
+ * O código da finalidade de uma saída: o tipo de alerta da fila pelo mapa, ou o próprio código da finalidade
+ * (RELATORIO_AGENDADO, AVISO_SISTEMA); qualquer outro texto não tem finalidade (servidor geral, texto padrão).
+ */
+export function codigoDaFinalidade(tipoOuCodigo: string): string | null {
+  return FINALIDADE_DO_ALERTA[tipoOuCodigo] ?? (CODIGO_FINALIDADE.test(tipoOuCodigo) ? tipoOuCodigo : null);
+}
+
 export interface ServidorDeSaida {
   readonly id: number;
   /** Nulo: vale para todos os estabelecimentos. */
@@ -239,10 +253,25 @@ export function valoresDoAlerta(
   dados: unknown,
   padrao: { readonly assunto: string; readonly texto: string },
 ): Record<string, string> {
-  const r: Record<string, string> = { 'alerta.assunto': padrao.assunto, 'alerta.texto': padrao.texto };
+  return valoresDoEnvio('alerta', dados, padrao);
+}
+
+/**
+ * Os valores dos marcadores de qualquer saída com o grupo dela (`relatorio.titulo`, `aviso.quantidade`): cada campo
+ * simples dos dados em minúsculas com sublinhado e o texto padrão como `<grupo>.assunto` e `<grupo>.texto`.
+ */
+export function valoresDoEnvio(
+  grupo: string,
+  dados: unknown,
+  padrao: { readonly assunto: string; readonly texto: string },
+): Record<string, string> {
+  const r: Record<string, string> = {
+    [`${grupo}.assunto`]: padrao.assunto,
+    [`${grupo}.texto`]: padrao.texto,
+  };
   if (typeof dados === 'object' && dados !== null)
     for (const [k, v] of Object.entries(dados))
       if (/^[A-Za-z][A-Za-z0-9]{0,40}$/.test(k) && (typeof v === 'string' || typeof v === 'number'))
-        r[`alerta.${k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)}`] = String(v);
+        r[`${grupo}.${k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)}`] = String(v);
   return r;
 }
