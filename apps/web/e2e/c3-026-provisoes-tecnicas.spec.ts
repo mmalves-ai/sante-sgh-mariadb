@@ -184,10 +184,10 @@ test.describe('C3-026 contabilidade regulatória da operadora @C3-026', () => {
     const inclusao = pedidos.find((p) => p.metodo === 'POST' && p.caminho === '/plano-ans');
     expect(inclusao?.corpo).toMatchObject({ codigo: '811', tipo: 'analitica', versaoFonte: 'RN 528/2022' });
 
-    // Mapa: conta própria achada pela busca remota, ligada à 811.
+    // Mapa: conta própria achada pela busca remota, ligada à 811 (a opção mostra a classificação e a descrição).
     await page.getByTestId('aba-mapa').click();
     await expect(page.getByTestId('painel-mapa')).toBeVisible();
-    await escolher(page.getByTestId('mapa-propria'), { rotulo: '2.9.26.001' });
+    await escolher(page.getByTestId('mapa-propria'), { rotulo: '2.9.26.001 PEONA SINTETICA' });
     expect(pedidos.some((p) => p.caminho.startsWith('/contas-contabeis?busca='))).toBe(true);
     await escolher(page.getByTestId('mapa-ans'), '811');
     await page.getByTestId('mapa-inicio').locator('input').fill('2031-01-01');
@@ -202,8 +202,8 @@ test.describe('C3-026 contabilidade regulatória da operadora @C3-026', () => {
     // Provisões: metodologia da ANS com a base informada; depois contabiliza a variação.
     await page.getByTestId('aba-provisoes').click();
     await page.getByTestId('prov-competencia').locator('input').fill('2031-02');
-    await escolher(page.getByTestId('prov-conta-peona'), { rotulo: '2.9.26.001' });
-    await escolher(page.getByTestId('prov-conta-pesl'), { rotulo: '2.9.26.002' });
+    await escolher(page.getByTestId('prov-conta-peona'), { rotulo: '2.9.26.001 PEONA SINTETICA' });
+    await escolher(page.getByTestId('prov-conta-pesl'), { rotulo: '2.9.26.002 PESL SINTETICA' });
     await escolher(page.getByTestId('prov-origem'), 'informada');
     await page.getByTestId('prov-contraprestacoes').locator('input').fill('200000');
     await page.getByTestId('prov-eventos').locator('input').fill('170000');
@@ -217,7 +217,7 @@ test.describe('C3-026 contabilidade regulatória da operadora @C3-026', () => {
       base: { contraprestacoes: 200000, eventos: 170000, avisadosNaoPagos: 0 },
       versao: null,
     });
-    await escolher(page.getByTestId('prov-conta-despesa'), { rotulo: '4.9.26.001' });
+    await escolher(page.getByTestId('prov-conta-despesa'), { rotulo: '4.9.26.001 DESPESA SINTETICA' });
     await page.getByTestId('prov-contabilizar-51').click();
     await expect(page.getByTestId('prov-situacao-51')).toHaveText('Contabilizada');
     expect(pedidos.find((p) => p.caminho === '/51/contabilizacao')?.corpo).toEqual({
