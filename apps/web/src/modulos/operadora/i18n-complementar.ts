@@ -1,5 +1,5 @@
 // Textos do cadastro complementar da operadora (F7, 08-SGO linha 93; C1-071): responsáveis perante a ANS, setores
-// internos e parâmetros gerais por operadora. Sem nome de sistema antigo nem de tabela; nenhum texto usa a barra vertical
+// internos e parâmetros gerais por operadora. Só texto do produto, sem nome de tabela; nenhum texto usa a barra vertical
 // (separador de plural do vue-i18n). As recusas do servidor chegam com o texto do domínio.
 export const mensagensComplementarOperadora = {
   titulo: 'Responsáveis, setores e parâmetros',

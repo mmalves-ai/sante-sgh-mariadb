@@ -1,6 +1,6 @@
 // Textos da tela das declarações periódicas da operadora (08-SGO L110, C1-036): a taxa de saúde suplementar apurada
 // (Lei 9.961/2000), a conferência cadastral da base devolvida pela ANS e a declaração anual de serviços médicos à
-// Receita (DMED, IN RFB 985/2009). Sem nome de sistema antigo nem de tabela; nenhum texto usa a barra vertical
+// Receita (DMED, IN RFB 985/2009). Só texto do produto, sem nome de tabela; nenhum texto usa a barra vertical
 // (separador de plural do vue-i18n) nem a arroba (mensagem ligada).
 export const mensagensDeclaracoesAns = {
   titulo: 'Declarações periódicas da operadora',

@@ -1,5 +1,5 @@
 // Textos da tela do envio mensal da notificação de IRAS ao órgão sanitário e do cadastro das condutas da análise das
-// culturas (F7, 09-AREA linha 68). Sem nome de sistema antigo. Sem "|" nem "@".
+// culturas (F7, 09-AREA linha 68). Só texto do produto. Sem "|" nem "@".
 export const mensagensNotificacaoIras = {
   titulo: 'Notificação mensal ao órgão sanitário',
   explicacao:

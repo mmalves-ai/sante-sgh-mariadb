@@ -1,5 +1,5 @@
 // Textos da tela da auditoria da prescrição de antimicrobiano pela comissão de controle de infecção (F7, 03-PEP linha
-// 110). Os textos das recusas vêm de @sgh/dominio-qualidade (os mesmos da API). Sem nome de sistema antigo. Sem "|"
+// 110). Os textos das recusas vêm de @sgh/dominio-qualidade (os mesmos da API). Só texto do produto. Sem "|"
 // nem "@".
 export const mensagensAuditoriaAntimicrobiano = {
   titulo: 'Auditoria das fichas de antimicrobiano',
