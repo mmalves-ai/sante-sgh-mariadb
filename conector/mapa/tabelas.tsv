@@ -1094,7 +1094,7 @@ TBLANTRALERTA	TABELA	evento_auditoria_alerta	evento_auditoria_alerta		ADM	L5	109
 HTPROFIS	TABELA	profissional_versao	profissional_versao		CAD	L5	1093	1502	ID	S		hash_linha	TBGENERO_SOCIAL,TBMUIBGE,TBPROFIS,TBUSERS	TBCOR,TBETNIA,TBNACION,TBTIPLGR	
 HTLEITO	MECANISMO	historico_entidade:leito_hospitalar	trilha_auditoria;leito_hospitalar		INT	L6	1094	226	ID	S		hash_linha	RILEITOS,TBLEITO,TBTIPOACOMOD		
 SIHISTVLREF	TABELA	faixa_referencia_versao	faixa_referencia_versao		SADT	L7	1095	659	ID	S		hash_linha			
-SIHISTVLREFELEMENTO	TABELA	faixa_referencia_versao	faixa_referencia_versao		SADT	L7	1096	354	ID	S		hash_linha	SITABELE		
+SIHISTVLREFELEMENTO	TABELA	faixa_referencia_versao	faixa_referencia_versao		SADT	L7	1096	354	ID	S		hash_linha			
 SIHISTVLREFEXAME	TABELA	faixa_referencia_versao	faixa_referencia_versao		SADT	L7	1097	1515	ID	S		hash_linha			
 SIRES01_DELETE	MECANISMO	historico_entidade:resultado_exame	trilha_auditoria;resultado_exame		SADT	L7	1098	8216	ID	N		hash_linha	SIHISTVLREF,SIHISTVLREFELEMENTO,SIHISTVLREFEXAME	SIHISTVLREFIDADE	cópia de exclusão vira histórico do resultado
 HTPROCTO	MECANISMO	historico_entidade:item_faturavel	trilha_auditoria;item_faturavel		FAT	L8	1099	301980	ID	S		faixa_id_hash_bloco	TBPROCTO		
