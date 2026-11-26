@@ -103,16 +103,16 @@ test.describe('Declarações periódicas da operadora @C1-036 @fase7', () => {
     await expect(page.getByTestId('tela-declaracoes-ans')).toBeVisible();
 
     // TPS: o botão só libera com o trimestre; a conta de cada plano aparece.
-    await expect(page.getByTestId('tps-apurar').locator('button')).toBeDisabled();
+    await expect(page.getByTestId('tps-apurar')).toBeDisabled();
     await page.getByTestId('tps-ano').locator('input, textarea').first().fill('2026');
     await escolher(page.getByTestId('tps-trimestre'), '2º trimestre');
-    await page.getByTestId('tps-apurar').locator('button').click();
+    await page.getByTestId('tps-apurar').click();
     await expect(page.getByTestId('tps-conta')).toContainText('PLANO SINTETICO');
     await expect(page.getByTestId('tps-conta')).toContainText('10/06/2026');
     expect(pedidos.find((p) => p.caminho === '/7/tps')?.corpo).toEqual({ ano: 2026, trimestre: 2 });
 
     // Conferência: importa o arquivo sintético e encaminha a divergência para corrigir o cadastro.
-    await page.getByTestId('aba-conferencia').locator('button').click();
+    await page.getByTestId('aba-conferencia').click();
     await page.getByTestId('conf-competencia').locator('input').fill('2026-10');
     await page.getByTestId('conf-arquivo').setInputFiles({
       name: 'conferencia-sintetica.csv',
@@ -121,23 +121,23 @@ test.describe('Declarações periódicas da operadora @C1-036 @fase7', () => {
         'cco;nome;nascimento;cpf;cns;registro_plano;situacao\n000000103611;SINTETICA;11/05/1980;;;410361;ATIVO\n',
       ),
     });
-    await page.getByTestId('conf-importar').locator('button').click();
+    await page.getByTestId('conf-importar').click();
     await expect(page.getByTestId('div-1')).toContainText('Campo diferente');
     await escolher(page.getByTestId('div-tratamento-1'), 'Corrigir o cadastro');
-    await page.getByTestId('div-aplicar-1').locator('button').click();
+    await page.getByTestId('div-aplicar-1').click();
     expect(pedidos.find((p) => p.caminho === '/divergencias/9/tratar')?.corpo).toMatchObject({
       versao: 1,
       para: 'corrigir_cadastro',
     });
 
     // DMED: o CPF inválido aparece na hora e segura o botão.
-    await page.getByTestId('aba-dmed').locator('button').click();
+    await page.getByTestId('aba-dmed').click();
     await page.getByTestId('dmed-cpf').locator('input').fill('12345678900');
     await expect(page.getByTestId('dmed-cpf-invalido')).toBeVisible();
     await page.getByTestId('dmed-nome').locator('input').fill('Responsável Sintético');
-    await expect(page.getByTestId('dmed-gerar').locator('button')).toBeDisabled();
+    await expect(page.getByTestId('dmed-gerar')).toBeDisabled();
     await page.getByTestId('dmed-cpf').locator('input').fill('529.982.247-25');
-    await page.getByTestId('dmed-gerar').locator('button').click();
+    await page.getByTestId('dmed-gerar').click();
     expect(pedidos.find((p) => p.caminho === '/7/dmed')?.corpo).toMatchObject({
       responsavelCpf: '52998224725',
       retifica: null,

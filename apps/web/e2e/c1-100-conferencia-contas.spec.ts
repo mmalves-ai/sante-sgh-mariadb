@@ -101,7 +101,7 @@ test.describe('regras de crítica das contas recebidas @C1-100', () => {
         }),
       });
     });
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.OPE.AUDITOR');
     await page.goto('/operadora/contas');
     await page.getByTestId('link-regras-critica-conta').click();
     await expect(page).toHaveURL(/\/operadora\/regras-critica-conta$/);
@@ -164,7 +164,7 @@ test.describe('regras de crítica das contas recebidas @C1-100', () => {
     const externas = vigiarExternas(page);
     const est = estadoConta('recebida');
     await simularConta(page, est, true);
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.OPE.AUDITOR');
     await abrirFicha(page);
 
     // As críticas gravadas no recebimento e o demonstrativo entregue (com as emissões).
@@ -219,7 +219,7 @@ test.describe('regras de crítica das contas recebidas @C1-100', () => {
   test('fora da análise ou sem operadora.conta.analisar, a conferência só se lê', async ({ page }) => {
     const liberada = estadoConta('analisada');
     await simularConta(page, liberada, true);
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.OPE.AUDITOR');
     await abrirFicha(page);
     await expect(page.getByTestId('conferencia-critica-1')).toBeVisible();
     await expect(page.getByTestId('conferencia-parecer')).toHaveCount(0);
