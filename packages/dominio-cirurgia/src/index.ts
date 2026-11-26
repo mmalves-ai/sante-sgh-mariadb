@@ -49,3 +49,5 @@ export * from './cme/cadastro.js';
 export * from './cme/ciclo-testes.js';
 // F7, 04-CME L117: solicitação, entrega ao setor, recolhimento e permissões da CME por setor.
 export * from './cme/fluxo-material.js';
+// F7 (04-CME linha 119): material de terceiro e consignado processado pela CME.
+export * from './cme/material-terceiro.js';

@@ -960,11 +960,14 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
   ): Promise<void> {
     if (d.situacao !== 'liberado' && d.situacao !== 'reprovado') return;
     const ps = await tx.consultarParaAtualizar<Linha>(
-      `SELECT p.id, p.versao, p.caixa_instrumental_id, cx.validade_esterilizacao_dias, te.validade_dias, cx.versao AS cx_versao,
-              cx.quantidade_reprocessamentos
+      `SELECT p.id, p.versao, p.caixa_instrumental_id,
+              COALESCE(cx.validade_esterilizacao_dias, mt.validade_esterilizacao_dias) AS validade_esterilizacao_dias,
+              te.validade_dias, cx.versao AS cx_versao, cx.quantidade_reprocessamentos
          FROM ciclo_esterilizacao_item i
          JOIN pacote_esteril p ON p.id = i.pacote_esteril_id
          LEFT JOIN caixa_instrumental cx ON cx.id = p.caixa_instrumental_id
+         -- F7 (04-CME linha 119): o pacote do material de terceiro leva a validade do cadastro do material.
+         LEFT JOIN material_terceiro_reprocessamento mt ON mt.id = p.material_terceiro_reprocessamento_id
          LEFT JOIN tipo_embalagem_esteril te ON te.id = p.tipo_embalagem_esteril_id
         WHERE i.ciclo_esterilizacao_id = ? AND i.excluido_em IS NULL AND p.situacao = 'aguardando_esterilizacao'`,
       [ciclo],
