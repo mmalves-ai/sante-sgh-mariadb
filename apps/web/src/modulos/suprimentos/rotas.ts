@@ -240,6 +240,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     component: () => import('./telas/TransferenciasTela.vue'),
     meta: { permissao: 'suprimentos.transferencia.ler' },
   },
+  // C1-120 (09-AREA linha 77): romaneio de entrega entre unidades (montagem, expedição, conferência, motorista e veículo).
+  {
+    path: '/suprimentos/romaneios',
+    name: 'suprimentos.romaneios',
+    component: () => import('./telas/RomaneiosTela.vue'),
+    meta: { permissao: 'suprimentos.transferencia.ler' },
+  },
   {
     path: '/suprimentos/devolucoes',
     name: 'suprimentos.devolucoes',

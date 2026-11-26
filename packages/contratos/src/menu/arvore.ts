@@ -158,7 +158,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C1-097 (05-SADT linha 22, F8): o item "Consumo padrão do exame" do diagnóstico entrou à mão (mesmo motivo); a
 // contagem acompanha. A "Baixa do consumo do exame" (o mesmo, na aba de realização, para quem só lança no setor com
 // sadt.lancamento.ler) entrou junto.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":515,"M":198,"P":57,"N":260};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":516,"M":198,"P":57,"N":261};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -372,6 +372,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"suprimentos.estoque-e-almoxarifado.requisicoes-e-saidas-setor-e-paciente","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Requisições e saídas"],"titulo":"Requisições e saídas","selo":"M","fase":3,"rota":"/suprimentos/requisicoes","permissao":"suprimentos.requisicao.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.movimento-direto-paciente-centro-de-custo","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Movimento direto paciente/centro de custo"],"titulo":"Movimento direto paciente/centro de custo","selo":"M","fase":3,"rota":"/suprimentos/movimento-direto","permissao":"suprimentos.saida.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.transferencias-entre-locais","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Transferências entre locais"],"titulo":"Transferências entre locais","selo":"M","fase":3,"rota":"/suprimentos/transferencias","permissao":"suprimentos.transferencia.ler"},
+  {"id":"suprimentos.estoque-e-almoxarifado.romaneios-de-entrega","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Romaneios de entrega"],"titulo":"Romaneios de entrega","selo":"N","fase":7,"rota":"/suprimentos/romaneios","permissao":"suprimentos.transferencia.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.devolucoes","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Devoluções"],"titulo":"Devoluções","selo":"M","fase":3,"rota":"/suprimentos/devolucoes","permissao":"suprimentos.devolucao.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.padronizacao-e-unificacao-de-itens","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Padronização e unificação de itens"],"titulo":"Padronização e unificação de itens","selo":"N","fase":7,"rota":"/suprimentos/governanca-cadastro","permissao":"suprimentos.item.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.saldos-lotes-validades-e-rastreabilidade","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Saldos, lotes, validades e rastreabilidade"],"titulo":"Saldos, lotes, validades e rastreabilidade","selo":"M","fase":3,"rota":"/suprimentos/saldos","permissao":"suprimentos.saldo.ler"},
