@@ -37,6 +37,21 @@ async function chave(page: Page, nome: string): Promise<void> {
   });
   expect(r.status(), await r.text()).toBe(200);
 }
+// Ligar a operadora exige o registro na ANS cumprido (pré-requisito do recurso); o E2E não depende da ordem dos specs.
+async function prerequisito(page: Page): Promise<void> {
+  const r = await page.request.put('/api/administracao/liberacao/prerequisitos', {
+    headers: { 'x-csrf': await csrf(page), 'idempotency-key': `e2e-c2-118-pre-${Date.now()}` },
+    data: {
+      recurso: 'operadora',
+      tipo: 'credenciamento',
+      situacao: 'cumprido',
+      validade: '2099-12-31',
+      evidencia: 'pré-requisito sintético do E2E',
+      senha: SENHA,
+    },
+  });
+  expect(r.status(), await r.text()).toBe(200);
+}
 const json = (rota: Route, corpo: unknown, status = 200) =>
   rota.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
 
@@ -180,6 +195,7 @@ test.describe('Cadastro complementar do prestador da rede @C2-118 @fase7', () =>
     );
 
     await entrar(page, 'SINT.ADMIN');
+    await prerequisito(page);
     await chave(page, 'operadora');
     await chave(page, 'operadora.rede');
     await entrar(page, 'SINT.CREDENCIAMENTO');
