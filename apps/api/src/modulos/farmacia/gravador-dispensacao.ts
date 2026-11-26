@@ -422,7 +422,8 @@ export function gravadorDispensacao(
       insumo_id: insumo.id,
       unidade_medida_id: insumo.unidade,
       lote_insumo_id: lote?.id ?? null,
-      data_validade: lote?.validade ?? null,
+      // O lote migrado sem validade chega com validade vazia: grava nula, nunca a data vazia.
+      data_validade: lote?.validade || null,
       quantidade,
       custo_unitario: mov.custo,
       valor_total: Math.round(quantidade * mov.custo * 100) / 100,
@@ -678,7 +679,7 @@ export function gravadorDispensacao(
           insumo_id: x.insumo.id,
           unidade_medida_id: x.insumo.unidade,
           lote_insumo_id: p.lote?.id ?? null,
-          data_validade: p.lote?.validade ?? null,
+          data_validade: p.lote?.validade || null,
           quantidade: p.q,
           situacao: 'dispensado',
         });
@@ -1406,7 +1407,7 @@ export function gravadorDispensacao(
       insumo_id: insumo.id,
       unidade_medida_id: insumo.unidade,
       lote_insumo_id: lote.id,
-      data_validade: lote.validade,
+      data_validade: lote.validade || null,
       quantidade: q4(d.quantidade),
       justificativa_nao_prescrito: 'Dispensação ambulatorial com a receita retida.',
       situacao: 'dispensado',

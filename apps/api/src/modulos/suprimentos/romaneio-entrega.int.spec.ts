@@ -95,6 +95,8 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
         [],
       );
       await e.executar(`DELETE FROM documento_estoque WHERE estabelecimento_id IN (${ests})`, []);
+      await e.executar(`DELETE FROM saldo_lote WHERE estabelecimento_id IN (${ests})`, []);
+      await e.executar(`DELETE FROM lote_insumo WHERE estabelecimento_id IN (${ests})`, []);
       await e.executar(`DELETE FROM insumo WHERE codigo LIKE '${MARCA}%'`, []);
       await e.executar(`DELETE FROM condicao_armazenamento WHERE codigo LIKE '${MARCA}%'`, []);
       await e.executar(`DELETE FROM local_estoque WHERE estabelecimento_id IN (${ests})`, []);
@@ -609,5 +611,157 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
       [OPERACOES_ROMANEIO_ENTREGA.enviar]: 3,
       [OPERACOES_ROMANEIO_ENTREGA.cancelarEnvio]: 1,
     });
+  });
+
+  // D1 (recusas da carga): o envio entre unidades é movimento entre locais, não uso; o lote migrado sem validade sai
+  // por último no FEFO e vai ao item do envio pelo id, com a validade nula (nunca inventada).
+  it('envio entre unidades com o lote migrado sem validade: o datado primeiro, o sem validade completa e segue sem validade', async () => {
+    let comLote = 0;
+    let loteCom = 0;
+    let loteSem = 0;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'c1120-lote-sv' }, async (e) => {
+      const [base] = await e.consultar<Record<string, unknown>>(
+        'SELECT grupo_insumo_id AS g, estoque_unidade_medida_id AS u FROM insumo WHERE id = ?',
+        [comum],
+      );
+      comLote = await inserirMinimo(
+        e,
+        'insumo',
+        {
+          codigo: `${MARCA}I3`,
+          nome: `Item fictício ${MARCA}I3`,
+          tipo: 'material',
+          grupo_insumo_id: base?.['g'],
+          estoque_unidade_medida_id: base?.['u'],
+          controlado: false,
+          controla_lote: true,
+          controla_validade: true,
+        },
+        MARCA,
+      );
+      await inserirMinimo(
+        e,
+        'saldo_estoque',
+        {
+          estabelecimento_id: estA,
+          local_estoque_id: localA,
+          insumo_id: comLote,
+          quantidade: 4,
+          custo_medio: 2,
+        },
+        MARCA,
+      );
+      const lote = (numero: string, validade: string | null, origem: string) =>
+        inserirMinimo(
+          e,
+          'lote_insumo',
+          {
+            estabelecimento_id: estA,
+            insumo_id: comLote,
+            numero_lote: numero,
+            validade,
+            situacao: 'liberado',
+            origem,
+          },
+          MARCA,
+        );
+      loteSem = await lote(`${MARCA}SV`, null, 'migracao');
+      loteCom = await lote(`${MARCA}CV`, '2027-06-30', 'sistema');
+      for (const [id, q] of [
+        [loteCom, 1],
+        [loteSem, 3],
+      ] as const)
+        await inserirMinimo(
+          e,
+          'saldo_lote',
+          {
+            estabelecimento_id: estA,
+            local_estoque_id: localA,
+            lote_insumo_id: id,
+            quantidade: q,
+            competencia: '2026-11-01',
+          },
+          MARCA,
+        );
+    });
+    const { id } = await porta.enviar(
+      ctx,
+      { origem: localA, destino: localB, itens: [{ item: comLote, quantidade: 2 }], observacao: null },
+      chave('envio-sv'),
+    );
+    const itens = await ler<Record<string, unknown>>(
+      `SELECT lote_insumo_id AS lote, quantidade AS q, data_validade AS v FROM documento_estoque_item
+        WHERE documento_estoque_id = ? ORDER BY sequencia`,
+      [id],
+    );
+    expect(itens.map((i) => [Number(i['lote']), Number(i['q']), i['v'] === null])).toEqual([
+      [loteCom, 1, false],
+      [loteSem, 1, true],
+    ]);
+    expect(await saldoDe(localA, comLote)).toBe(4);
+    // O envio não mexe no saldo dos lotes (só o recebimento move).
+    const saldoLote = async (local: number, lote: number) =>
+      Number(
+        (
+          await ler<Record<string, unknown>>(
+            'SELECT quantidade FROM saldo_lote WHERE local_estoque_id = ? AND lote_insumo_id = ? AND excluido_em IS NULL',
+            [local, lote],
+          )
+        )[0]?.['quantidade'] ?? 0,
+      );
+    expect([await saldoLote(localA, loteCom), await saldoLote(localA, loteSem)]).toEqual([1, 3]);
+    // O recebimento na unidade B (romaneio montado, expedido e conferido como entregue): os dois lotes saem da A e
+    // entram na B, o sem validade com a validade ainda nula.
+    const rom = await porta.montar(
+      ctx,
+      {
+        documentos: [id],
+        descricao: null,
+        saidaPrevista: null,
+        observacao: null,
+        veiculo,
+        motorista,
+        transportadora: null,
+        valorFrete: 0,
+      },
+      chave('montar-sv'),
+    );
+    const dA = await porta.detalhe(ctx, rom.id);
+    await porta.expedir(
+      ctx,
+      rom.id,
+      {
+        versao: dA.versao,
+        quilometragemSaida: 2000,
+        veiculo,
+        motorista,
+        transportadora: null,
+        valorFrete: 0,
+      },
+      chave('exp-sv'),
+    );
+    const dB = await porta.detalhe(ctxB, rom.id);
+    const conf = await porta.conferir(
+      ctxB,
+      rom.id,
+      {
+        versao: dB.versao,
+        quilometragemChegada: null,
+        desfechos: [{ item: dB.lista[0]!.id, desfecho: 'entregue', motivo: null }],
+      },
+      chave('conf-sv'),
+    );
+    expect(conf.situacao).toBe('entregue');
+    const [env] = await ler<Record<string, unknown>>('SELECT situacao FROM documento_estoque WHERE id = ?', [
+      id,
+    ]);
+    expect(env).toMatchObject({ situacao: 'concluido' });
+    expect([await saldoLote(localA, loteCom), await saldoLote(localA, loteSem)]).toEqual([0, 2]);
+    expect([await saldoLote(localB, loteCom), await saldoLote(localB, loteSem)]).toEqual([1, 1]);
+    expect([await saldoDe(localA, comLote), await saldoDe(localB, comLote)]).toEqual([2, 2]);
+    const [l] = await ler<Record<string, unknown>>('SELECT validade FROM lote_insumo WHERE id = ?', [
+      loteSem,
+    ]);
+    expect(l?.['validade']).toBeNull();
   });
 });
