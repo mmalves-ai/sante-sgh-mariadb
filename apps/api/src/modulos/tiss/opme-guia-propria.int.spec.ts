@@ -42,6 +42,10 @@ async function limpar(e: Escritor): Promise<void> {
   await e.executar(`DELETE FROM solicitacao_autorizacao_item WHERE solicitacao_autorizacao_id IN ${sol}`, [
     P,
   ]);
+  await e.executar(
+    `DELETE FROM solicitacao_autorizacao_diagnostico WHERE solicitacao_autorizacao_id IN ${sol}`,
+    [P],
+  );
   await e.executar(`DELETE FROM solicitacao_autorizacao WHERE estabelecimento_id IN ${est}`, [P]);
   await e.executar(
     `DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id IN (SELECT id FROM conta_hospitalar WHERE estabelecimento_id IN ${est})`,
@@ -73,6 +77,7 @@ describe.skipIf(SEM_BANCO)('OPME na guia contra o MariaDB (contrato de efeito)',
     est: number;
     fonte: number;
     paciente: number;
+    cid: string;
   };
   const ctx = (usuario = m.usuario) => ({ cliente: CLIENTE, hospital: P, usuario, correlacao: P });
   const um = async (sql: string, p: unknown[] = []) =>
@@ -98,6 +103,7 @@ describe.skipIf(SEM_BANCO)('OPME na guia contra o MariaDB (contrato de efeito)',
     diarias: 3,
     dataAdmissao: '2026-11-26',
     indicacaoClinica: 'Indicação sintética',
+    diagnosticos: [{ cid: m.cid }],
     justificativaLimite,
     itens: [
       {
@@ -187,7 +193,30 @@ describe.skipIf(SEM_BANCO)('OPME na guia contra o MariaDB (contrato de efeito)',
          VALUES (?, ?, ?, 1000, '2026-01-01', ?)`,
         [est, fonte, faturavel, agora],
       );
-      return { usuario, outro, cobertura, externo, conta, faturavel, opme, opmeCodigo, est, fonte, paciente };
+      // A internação pede a hipótese diagnóstica principal (CID-10 do catálogo oficial do cliente).
+      const cid = String(
+        (
+          await e.uma(
+            `SELECT t.codigo_termo FROM termo_terminologia t JOIN terminologia g ON g.id = t.terminologia_id
+              WHERE g.codigo = 'cid10' AND t.nivel = 4 AND t.ativo = TRUE ORDER BY t.id LIMIT 1`,
+          )
+        )?.['codigo_termo'] ?? '',
+      );
+      if (!cid) throw new Error('O cliente de teste precisa do catálogo da CID-10 carregado.');
+      return {
+        usuario,
+        outro,
+        cobertura,
+        externo,
+        conta,
+        faturavel,
+        opme,
+        opmeCodigo,
+        est,
+        fonte,
+        paciente,
+        cid,
+      };
     });
     autorizacao = new PortaAutorizacaoPreviaPropria(nucleo, CLIENTE);
     liberacao = new PortaLiberacaoOpmePropria(nucleo, CLIENTE);
