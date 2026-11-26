@@ -318,7 +318,12 @@ test.describe('internação domiciliar: orçamento, transferência para casa, ch
     await expect(linhaInt.getByTestId('domiciliar-internacao-iniciar')).toBeDisabled();
     await escolher(page.getByTestId('domiciliar-acao-profissional'), '31');
     await linhaInt.getByTestId('domiciliar-internacao-iniciar').click();
+    // Ativa: iniciar sai de cena e suspender só se habilita com o motivo na barra de ação (regra do domínio).
+    await expect(linhaInt.getByTestId('domiciliar-internacao-iniciar')).toBeDisabled();
+    await expect(linhaInt.getByTestId('domiciliar-internacao-suspender')).toBeDisabled();
+    await page.getByTestId('domiciliar-acao-motivo').fill('Motivo sintético da suspensão');
     await expect(linhaInt.getByTestId('domiciliar-internacao-suspender')).toBeEnabled();
+    await page.getByTestId('domiciliar-acao-motivo').fill('');
     expect(corpos.at(-1)).toMatchObject({ url: '/internacoes/61/iniciar', corpo: { versao: 1, medico: 31 } });
 
     // Chamado: abrir, triar e atribuir (agenda a visita extra).
