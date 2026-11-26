@@ -154,7 +154,7 @@ test.describe('regulação: pedidos recebidos da central @C1-080', () => {
       .locator('input, textarea')
       .fill('Quadro sintético estável, aguarda leito clínico.');
     await expect(page.getByTestId('rec-erro-resumo')).toHaveCount(0);
-    await page.getByTestId('rec-busca').fill('sintetico');
+    await page.getByTestId('rec-busca').locator('input').fill('sintetico');
     await page.getByTestId('rec-buscar').click();
     await page.getByTestId('rec-paciente-77').click();
     await expect(page.getByTestId('rec-paciente-escolhido')).toContainText('9077');
