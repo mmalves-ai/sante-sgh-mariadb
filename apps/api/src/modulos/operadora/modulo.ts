@@ -102,6 +102,12 @@ import {
   PortaCadastroComplementarPropria,
 } from './cadastro-complementar-porta-propria.js';
 import { CobrancaOperadoraController } from './cobranca.controller.js';
+import { DescontoFolhaOperadoraController } from './desconto-folha.controller.js';
+import {
+  METODOS_DESCONTO_FOLHA,
+  PORTA_DESCONTO_FOLHA,
+  PortaDescontoFolhaPropria,
+} from './desconto-folha-propria.js';
 import {
   METODOS_PORTA_COBRANCA,
   PORTA_COBRANCA_OPERADORA,
@@ -322,6 +328,7 @@ export async function moduloOperadora(
       ComercialOperadoraController,
       ContaConferenciaOperadoraController,
       ReembolsoOperadoraController,
+      DescontoFolhaOperadoraController,
       TrocaTissOperadoraController,
       PortalPrestadorPedidosController,
       PortaisOperadoraController,
@@ -374,6 +381,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaPortaisOperadoraPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaPortaisOperadoraPropria>(METODOS_PORTAIS_OPERADORA),
+      },
+      // 08-SGO L97 (C3-028): desconto em folha da mensalidade só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_DESCONTO_FOLHA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaDescontoFolhaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaDescontoFolhaPropria>(METODOS_DESCONTO_FOLHA),
       },
       // 08-SGO L106 (C2-047): reembolso ao beneficiário só no banco (sem núcleo, 503); comprovantes pela porta de arquivos.
       {
