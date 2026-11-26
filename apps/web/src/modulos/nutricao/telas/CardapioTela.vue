@@ -988,6 +988,7 @@ const desfazer = (id: number, versao: number) =>
             v-if="podePlanejar && plano.situacao !== 'cancelado'"
             variante="destrutivo"
             :rotulo="t('nutricao.cardapio.cancelarPlano')"
+            :confirmacao="t('nutricao.cardapio.confirmarCancelarPlano')"
             :desabilitado="ocupado || motivoCurto"
             data-testid="plano-cancelar"
             @acionar="agir('cancelar')"
