@@ -424,8 +424,7 @@ export function analisarTexto(
     const x = /^([A-Z][A-Z0-9_]*)\s*\[[^\]]+\]$/.exec(expr);
     if (!x) return undefined;
     const nomes: string[] = [];
-    for (const [k, v] of constantes)
-      if (k.startsWith(`${x[1]}.`) && typeof v === 'string') nomes.push(v);
+    for (const [k, v] of constantes) if (k.startsWith(`${x[1]}.`) && typeof v === 'string') nomes.push(v);
     return nomes.length > 0 ? nomes : undefined;
   };
   for (const [re, acao] of DIN)

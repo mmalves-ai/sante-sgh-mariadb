@@ -12,13 +12,27 @@
 // Ler com operadora.provisao-tecnica.ler; plano e mapa com .editar; cálculo, contabilização e cancelamento com
 // .calcular. Cada gravação vai pela porta própria (Executor do núcleo), com a trilha_auditoria na mesma transação.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
-import { METODOS_PROVISAO_TECNICA, MODALIDADES_OPERADORA, TIPOS_PROVISAO_TECNICA } from '@sgh/dominio-operadora';
+import {
+  METODOS_PROVISAO_TECNICA,
+  MODALIDADES_OPERADORA,
+  TIPOS_PROVISAO_TECNICA,
+} from '@sgh/dominio-operadora';
 import { z } from 'zod';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
-import { idDaRota, linhaTrilha, problemaDoCadastro, type SessaoCadastro, sessaoDe } from '../cadastro/comum.js';
+import {
+  idDaRota,
+  linhaTrilha,
+  problemaDoCadastro,
+  type SessaoCadastro,
+  sessaoDe,
+} from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
-import { type Gravado, PORTA_PROVISAO_TECNICA, type PortaProvisaoTecnicaPropria } from './provisao-tecnica-propria.js';
+import {
+  type Gravado,
+  PORTA_PROVISAO_TECNICA,
+  type PortaProvisaoTecnicaPropria,
+} from './provisao-tecnica-propria.js';
 
 const LER = 'operadora.provisao-tecnica.ler';
 const EDITAR = 'operadora.provisao-tecnica.editar';
@@ -56,7 +70,9 @@ const esquemaCalculo = z.object({
   contas: z.partialRecord(z.enum(TIPOS_PROVISAO_TECNICA), id),
   base: z.object({ contraprestacoes: valor, eventos: valor, avisadosNaoPagos: valor }).nullable(),
   informados: z
-    .array(z.object({ tipo: z.enum(TIPOS_PROVISAO_TECNICA), valor, observacao: z.string().max(500).nullable() }))
+    .array(
+      z.object({ tipo: z.enum(TIPOS_PROVISAO_TECNICA), valor, observacao: z.string().max(500).nullable() }),
+    )
     .max(20),
   notaTecnica: z.string().max(200).nullable(),
   versao: versao.nullable(),
@@ -70,7 +86,8 @@ export class ProvisaoTecnicaOperadoraController {
   constructor(@Inject(PORTA_PROVISAO_TECNICA) private readonly porta: PortaProvisaoTecnicaPropria) {}
 
   private trilha(s: SessaoCadastro, evento: string, tabela: string) {
-    return (r: Gravado) => linhaTrilha(s, evento, 'operadora.provisao-tecnica', evento, { tabela, id: String(r.id) });
+    return (r: Gravado) =>
+      linhaTrilha(s, evento, 'operadora.provisao-tecnica', evento, { tabela, id: String(r.id) });
   }
   private async ok<T>(p: Promise<T>): Promise<T> {
     return p.catch((e: unknown) => {
@@ -139,7 +156,11 @@ export class ProvisaoTecnicaOperadoraController {
 
   @Get('operadora/provisoes-tecnicas/:op/balancete')
   @Permissao(LER)
-  balancete(@Param('op') op: string, @Query('data') dia: string | undefined, @Req() req: RequisicaoAutorizada) {
+  balancete(
+    @Param('op') op: string,
+    @Query('data') dia: string | undefined,
+    @Req() req: RequisicaoAutorizada,
+  ) {
     const d = corpo(z.object({ data }), { data: dia });
     return this.ok(this.porta.balancete(sessaoDe(req).porta, idDaRota(op), d.data));
   }

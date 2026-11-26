@@ -69,7 +69,12 @@ export type Gravado = { readonly id: number; readonly versao: number } & Readonl
 type Trilha = (r: Gravado) => RegistroTrilhaTela;
 
 const naoEncontrado = () =>
-  new ErroOperacao(404, 'nao-encontrado', 'Registro não encontrado', 'O registro não existe neste estabelecimento.');
+  new ErroOperacao(
+    404,
+    'nao-encontrado',
+    'Registro não encontrado',
+    'O registro não existe neste estabelecimento.',
+  );
 function exigir(problemas: readonly ProblemaProvisaoTecnica[]): void {
   const p = problemas[0];
   if (p) throw recusa(p.codigo, p.detalhe, { campos: [...new Set(problemas.map((x) => x.campo))] });
@@ -147,7 +152,12 @@ export interface EntradaCalculo {
 
 const contaDe = (r: Record<string, unknown>): ContaPadraoLida => {
   const mods = r['modalidades_aplicaveis'];
-  const lista = typeof mods === 'string' ? (JSON.parse(mods) as string[]) : Array.isArray(mods) ? (mods as string[]) : null;
+  const lista =
+    typeof mods === 'string'
+      ? (JSON.parse(mods) as string[])
+      : Array.isArray(mods)
+        ? (mods as string[])
+        : null;
   return {
     id: Number(r['id']),
     versao: Number(r['versao']),
@@ -253,35 +263,47 @@ export class PortaProvisaoTecnicaPropria {
   // ------------------------------------------------------------ plano padrão ---------------------------------------
   contasPadrao(c: ContextoPorta): Promise<ContaPadraoLida[]> {
     return this.ler(c, async (l) =>
-      (await l.consultar(`${SQL_CONTAS} ORDER BY codigo_conta_ans, vigencia_inicio`, [], { teto: 5000 })).map(contaDe),
+      (await l.consultar(`${SQL_CONTAS} ORDER BY codigo_conta_ans, vigencia_inicio`, [], { teto: 5000 })).map(
+        contaDe,
+      ),
     );
   }
 
   gravarContaPadrao(c: ContextoPorta, e: EntradaContaPadrao, trilha: Trilha): Promise<Gravado> {
-    return this.gravar(c, 'operadora.ans.conta-padrao.incluir', 'plano_contas_padrao_ans', trilha, async (tx) => {
-      const codigo = e.codigo.trim();
-      const prefixos = Array.from({ length: codigo.length }, (_, i) => codigo.slice(0, i + 1));
-      const ex = (
-        await tx.consultarParaAtualizar(`${SQL_CONTAS} WHERE codigo_conta_ans IN (${prefixos.map(() => '?').join(', ')})`, prefixos, {
-          teto: 500,
-        })
-      ).map(contaDe);
-      exigir(problemasDaContaPadraoAns({ ...e, codigo }, ex));
-      const sup = superiorDaContaAns(codigo, ex, e.vigenciaInicio);
-      const id = await tx.incluir('plano_contas_padrao_ans', {
-        codigo_conta_ans: codigo,
-        descricao: e.descricao.trim(),
-        tipo_conta: e.tipo,
-        grau: grauDaContaAns(codigo),
-        superior_plano_contas_padrao_ans_id: sup?.id ?? null,
-        natureza: e.natureza,
-        modalidades_aplicaveis: e.modalidades?.length ? JSON.stringify(e.modalidades) : null,
-        vigencia_inicio: e.vigenciaInicio,
-        vigencia_fim: e.vigenciaFim,
-        versao_fonte: e.versaoFonte.trim(),
-      });
-      return { id, versao: 1 };
-    });
+    return this.gravar(
+      c,
+      'operadora.ans.conta-padrao.incluir',
+      'plano_contas_padrao_ans',
+      trilha,
+      async (tx) => {
+        const codigo = e.codigo.trim();
+        const prefixos = Array.from({ length: codigo.length }, (_, i) => codigo.slice(0, i + 1));
+        const ex = (
+          await tx.consultarParaAtualizar(
+            `${SQL_CONTAS} WHERE codigo_conta_ans IN (${prefixos.map(() => '?').join(', ')})`,
+            prefixos,
+            {
+              teto: 500,
+            },
+          )
+        ).map(contaDe);
+        exigir(problemasDaContaPadraoAns({ ...e, codigo }, ex));
+        const sup = superiorDaContaAns(codigo, ex, e.vigenciaInicio);
+        const id = await tx.incluir('plano_contas_padrao_ans', {
+          codigo_conta_ans: codigo,
+          descricao: e.descricao.trim(),
+          tipo_conta: e.tipo,
+          grau: grauDaContaAns(codigo),
+          superior_plano_contas_padrao_ans_id: sup?.id ?? null,
+          natureza: e.natureza,
+          modalidades_aplicaveis: e.modalidades?.length ? JSON.stringify(e.modalidades) : null,
+          vigencia_inicio: e.vigenciaInicio,
+          vigencia_fim: e.vigenciaFim,
+          versao_fonte: e.versaoFonte.trim(),
+        });
+        return { id, versao: 1 };
+      },
+    );
   }
 
   // ------------------------------------------------------------ mapa -----------------------------------------------
@@ -289,62 +311,91 @@ export class PortaProvisaoTecnicaPropria {
     return this.ler(c, async (l, est) => {
       await PortaProvisaoTecnicaPropria.operadora(l, est, op);
       return (
-        await l.consultar(`${SQL_MAPAS} WHERE m.operadora_saude_id = ? ORDER BY a.codigo_conta_ans, c.classificacao`, [op], {
-          teto: 5000,
-        })
+        await l.consultar(
+          `${SQL_MAPAS} WHERE m.operadora_saude_id = ? ORDER BY a.codigo_conta_ans, c.classificacao`,
+          [op],
+          {
+            teto: 5000,
+          },
+        )
       ).map(mapaDe);
     });
   }
 
   gravarMapa(c: ContextoPorta, op: number, e: EntradaMapa, trilha: Trilha): Promise<Gravado> {
-    return this.gravar(c, 'operadora.ans.mapa-conta.incluir', 'mapa_conta_balancete_ans', trilha, async (tx, est) => {
-      const modalidade = await PortaProvisaoTecnicaPropria.operadora(tx, est, op);
-      const contas = (
-        await tx.consultar(`${SQL_CONTAS} WHERE codigo_conta_ans = ?`, [e.contaAns.trim()], { teto: 50 })
-      ).map(contaDe);
-      const contaAns =
-        contas.find((x) => x.vigenciaInicio <= e.vigenciaInicio && (x.vigenciaFim === null || x.vigenciaFim >= e.vigenciaInicio)) ??
-        null;
-      const pr = await tx.uma('SELECT id, tipo, ativo FROM conta_contabil WHERE id = ? AND excluido_em IS NULL', [e.contaContabil]);
-      const propria = pr ? { id: Number(pr['id']), tipo: textoObrigatorio(pr['tipo']), ativo: booleano(pr['ativo']) } : null;
-      const ex = (
-        await tx.consultarParaAtualizar(
-          `${SQL_MAPAS} WHERE m.operadora_saude_id = ? AND m.conta_contabil_id = ? AND m.ativo = TRUE`,
-          [op, e.contaContabil],
-          { teto: 200 },
-        )
-      ).map(mapaDe);
-      exigir(problemasDoMapaAns({ ...e, contaAns: e.contaAns.trim() }, contaAns, propria, modalidade, ex));
-      const id = await tx.incluir('mapa_conta_balancete_ans', {
-        operadora_saude_id: op,
-        conta_contabil_id: e.contaContabil,
-        plano_contas_padrao_ans_id: contaAns?.id ?? 0,
-        grupo: e.grupo?.trim() || null,
-        subgrupo: e.subgrupo?.trim() || null,
-        pagina_diops: e.paginaDiops,
-        linha_diops: e.linhaDiops,
-        duplica_valor: e.duplicaValor,
-        vigencia_inicio: e.vigenciaInicio,
-        vigencia_fim: e.vigenciaFim,
-      });
-      return { id, versao: 1 };
-    });
+    return this.gravar(
+      c,
+      'operadora.ans.mapa-conta.incluir',
+      'mapa_conta_balancete_ans',
+      trilha,
+      async (tx, est) => {
+        const modalidade = await PortaProvisaoTecnicaPropria.operadora(tx, est, op);
+        const contas = (
+          await tx.consultar(`${SQL_CONTAS} WHERE codigo_conta_ans = ?`, [e.contaAns.trim()], { teto: 50 })
+        ).map(contaDe);
+        const contaAns =
+          contas.find(
+            (x) =>
+              x.vigenciaInicio <= e.vigenciaInicio &&
+              (x.vigenciaFim === null || x.vigenciaFim >= e.vigenciaInicio),
+          ) ?? null;
+        const pr = await tx.uma(
+          'SELECT id, tipo, ativo FROM conta_contabil WHERE id = ? AND excluido_em IS NULL',
+          [e.contaContabil],
+        );
+        const propria = pr
+          ? { id: Number(pr['id']), tipo: textoObrigatorio(pr['tipo']), ativo: booleano(pr['ativo']) }
+          : null;
+        const ex = (
+          await tx.consultarParaAtualizar(
+            `${SQL_MAPAS} WHERE m.operadora_saude_id = ? AND m.conta_contabil_id = ? AND m.ativo = TRUE`,
+            [op, e.contaContabil],
+            { teto: 200 },
+          )
+        ).map(mapaDe);
+        exigir(problemasDoMapaAns({ ...e, contaAns: e.contaAns.trim() }, contaAns, propria, modalidade, ex));
+        const id = await tx.incluir('mapa_conta_balancete_ans', {
+          operadora_saude_id: op,
+          conta_contabil_id: e.contaContabil,
+          plano_contas_padrao_ans_id: contaAns?.id ?? 0,
+          grupo: e.grupo?.trim() || null,
+          subgrupo: e.subgrupo?.trim() || null,
+          pagina_diops: e.paginaDiops,
+          linha_diops: e.linhaDiops,
+          duplica_valor: e.duplicaValor,
+          vigencia_inicio: e.vigenciaInicio,
+          vigencia_fim: e.vigenciaFim,
+        });
+        return { id, versao: 1 };
+      },
+    );
   }
 
   /** Encerra a vigência do mapa (nunca apaga): o fim não pode ser anterior ao início. */
-  encerrarMapa(c: ContextoPorta, id: number, e: { versao: number; fim: string }, trilha: Trilha): Promise<Gravado> {
-    return this.gravar(c, 'operadora.ans.mapa-conta.encerrar', 'mapa_conta_balancete_ans', trilha, async (tx, est) => {
-      const r = await tx.uma(
-        `SELECT m.id, m.vigencia_inicio FROM mapa_conta_balancete_ans m JOIN operadora_saude_estabelecimento x
+  encerrarMapa(
+    c: ContextoPorta,
+    id: number,
+    e: { versao: number; fim: string },
+    trilha: Trilha,
+  ): Promise<Gravado> {
+    return this.gravar(
+      c,
+      'operadora.ans.mapa-conta.encerrar',
+      'mapa_conta_balancete_ans',
+      trilha,
+      async (tx, est) => {
+        const r = await tx.uma(
+          `SELECT m.id, m.vigencia_inicio FROM mapa_conta_balancete_ans m JOIN operadora_saude_estabelecimento x
             ON x.operadora_saude_id = m.operadora_saude_id AND x.estabelecimento_id = ? AND x.excluido_em IS NULL WHERE m.id = ?`,
-        [est, id],
-      );
-      if (!r) throw naoEncontrado();
-      if (e.fim < (dataIso(r['vigencia_inicio']) ?? ''))
-        throw recusa('vigencia-invalida', 'O fim da vigência é anterior ao início.', { campos: ['fim'] });
-      const versao = await tx.alterar('mapa_conta_balancete_ans', id, e.versao, { vigencia_fim: e.fim });
-      return { id, versao };
-    });
+          [est, id],
+        );
+        if (!r) throw naoEncontrado();
+        if (e.fim < (dataIso(r['vigencia_inicio']) ?? ''))
+          throw recusa('vigencia-invalida', 'O fim da vigência é anterior ao início.', { campos: ['fim'] });
+        const versao = await tx.alterar('mapa_conta_balancete_ans', id, e.versao, { vigencia_fim: e.fim });
+        return { id, versao };
+      },
+    );
   }
 
   // ------------------------------------------------------------ balancete ANS --------------------------------------
@@ -362,9 +413,15 @@ export class PortaProvisaoTecnicaPropria {
           [est, dia],
           { teto: 20000 },
         )
-      ).map((r) => ({ contaContabil: Number(r['id']), classificacao: textoObrigatorio(r['classificacao']), saldoCentavos: centavos(r['saldo']) }));
+      ).map((r) => ({
+        contaContabil: Number(r['id']),
+        classificacao: textoObrigatorio(r['classificacao']),
+        saldoCentavos: centavos(r['saldo']),
+      }));
       const mapas = (
-        await l.consultar(`${SQL_MAPAS} WHERE m.operadora_saude_id = ? AND m.ativo = TRUE`, [op], { teto: 5000 })
+        await l.consultar(`${SQL_MAPAS} WHERE m.operadora_saude_id = ? AND m.ativo = TRUE`, [op], {
+          teto: 5000,
+        })
       ).map(mapaDe);
       const plano = (await l.consultar(SQL_CONTAS, [], { teto: 5000 })).map(contaDe);
       return { data: dia, ...balanceteNoPadraoAns(saldos, mapas, plano, dia) };
@@ -453,112 +510,134 @@ export class PortaProvisaoTecnicaPropria {
   }
 
   calcular(c: ContextoPorta, e: EntradaCalculo, trilha: Trilha): Promise<Gravado> {
-    return this.gravar(c, 'operadora.provisao-tecnica.calcular', 'provisao_tecnica_competencia', trilha, async (tx, est) => {
-      const ex = (
-        await tx.consultarParaAtualizar(
-          `SELECT id, versao, situacao FROM provisao_tecnica_competencia
+    return this.gravar(
+      c,
+      'operadora.provisao-tecnica.calcular',
+      'provisao_tecnica_competencia',
+      trilha,
+      async (tx, est) => {
+        const ex = (
+          await tx.consultarParaAtualizar(
+            `SELECT id, versao, situacao FROM provisao_tecnica_competencia
             WHERE estabelecimento_id = ? AND competencia = ? AND metodo = ? AND excluido_em IS NULL`,
-          [est, e.competencia, e.metodo],
-          { teto: 1 },
-        )
-      )[0];
-      if (ex) {
-        exigir(conferirAcaoProvisao(textoObrigatorio(ex['situacao']) as SituacaoProvisaoTecnica, 'calcular'));
-        if (e.versao !== Number(ex['versao']))
-          throw new ErroOperacao(409, 'versao-desatualizada', 'Versão desatualizada', 'A provisão foi alterada por outra pessoa.');
-      }
-      // Contas informadas: analíticas e ativas.
-      const contas = [...new Set(Object.values(e.contas).filter((x): x is number => typeof x === 'number'))];
-      if (contas.length) {
-        const ok = await tx.consultar(
-          `SELECT id FROM conta_contabil WHERE id IN (${contas.map(() => '?').join(', ')}) AND tipo = 'analitica' AND ativo = TRUE AND excluido_em IS NULL`,
-          contas,
-          { teto: 50 },
-        );
-        if (ok.length !== contas.length)
-          throw recusa('conta-invalida', 'Use contas contábeis analíticas e ativas.', { campos: ['contas'] });
-      }
-      const base: BaseMetodologiaAns = e.base
-        ? {
-            contraprestacoesCentavos: Math.round(e.base.contraprestacoes * 100),
-            eventosCentavos: Math.round(e.base.eventos * 100),
-            avisadosNaoPagosCentavos: Math.round(e.base.avisadosNaoPagos * 100),
-          }
-        : await PortaProvisaoTecnicaPropria.baseDoSistema(tx, est, e.competencia);
-      // Anteriores: a última competência calculada ou contabilizada antes desta, do mesmo método.
-      const ant = await tx.consultar(
-        `SELECT i.tipo_provisao, SUM(i.valor) AS v FROM provisao_tecnica_item i
+            [est, e.competencia, e.metodo],
+            { teto: 1 },
+          )
+        )[0];
+        if (ex) {
+          exigir(
+            conferirAcaoProvisao(textoObrigatorio(ex['situacao']) as SituacaoProvisaoTecnica, 'calcular'),
+          );
+          if (e.versao !== Number(ex['versao']))
+            throw new ErroOperacao(
+              409,
+              'versao-desatualizada',
+              'Versão desatualizada',
+              'A provisão foi alterada por outra pessoa.',
+            );
+        }
+        // Contas informadas: analíticas e ativas.
+        const contas = [
+          ...new Set(Object.values(e.contas).filter((x): x is number => typeof x === 'number')),
+        ];
+        if (contas.length) {
+          const ok = await tx.consultar(
+            `SELECT id FROM conta_contabil WHERE id IN (${contas.map(() => '?').join(', ')}) AND tipo = 'analitica' AND ativo = TRUE AND excluido_em IS NULL`,
+            contas,
+            { teto: 50 },
+          );
+          if (ok.length !== contas.length)
+            throw recusa('conta-invalida', 'Use contas contábeis analíticas e ativas.', {
+              campos: ['contas'],
+            });
+        }
+        const base: BaseMetodologiaAns = e.base
+          ? {
+              contraprestacoesCentavos: Math.round(e.base.contraprestacoes * 100),
+              eventosCentavos: Math.round(e.base.eventos * 100),
+              avisadosNaoPagosCentavos: Math.round(e.base.avisadosNaoPagos * 100),
+            }
+          : await PortaProvisaoTecnicaPropria.baseDoSistema(tx, est, e.competencia);
+        // Anteriores: a última competência calculada ou contabilizada antes desta, do mesmo método.
+        const ant = await tx.consultar(
+          `SELECT i.tipo_provisao, SUM(i.valor) AS v FROM provisao_tecnica_item i
            JOIN provisao_tecnica_competencia p ON p.id = i.provisao_tecnica_competencia_id
           WHERE i.excluido_em IS NULL AND p.id = (SELECT q.id FROM provisao_tecnica_competencia q
                  WHERE q.estabelecimento_id = ? AND q.metodo = ? AND q.competencia < ? AND q.excluido_em IS NULL
                    AND q.situacao IN ('calculada','contabilizada') ORDER BY q.competencia DESC LIMIT 1)
           GROUP BY i.tipo_provisao`,
-        [est, e.metodo, e.competencia],
-        { teto: 20 },
-      );
-      const anteriores = Object.fromEntries(ant.map((r) => [textoObrigatorio(r['tipo_provisao']), centavos(r['v'])]));
-      const informados: ItemInformado[] = e.informados.map((i) => ({
-        tipo: i.tipo,
-        valorCentavos: Math.round(i.valor * 100),
-        observacao: i.observacao,
-      }));
-      const r = calcularProvisoesTecnicas({
-        competencia: e.competencia,
-        metodo: e.metodo,
-        contas: e.contas,
-        base,
-        informados,
-        notaTecnica: e.notaTecnica,
-        anteriores,
-      });
-      exigir(r.problemas);
-      const periodo = baseDaCompetencia(e.competencia);
-      const agora = await tx.uma<{ a: unknown }>('SELECT NOW(3) AS a');
-      const usuario = tx.contexto.usuario ?? null;
-      let id: number;
-      let versao: number;
-      if (ex) {
-        id = Number(ex['id']);
-        await tx.executar(
-          'UPDATE provisao_tecnica_item SET excluido_em = NOW(3), excluido_por = ? WHERE provisao_tecnica_competencia_id = ? AND excluido_em IS NULL',
-          [usuario, id],
+          [est, e.metodo, e.competencia],
+          { teto: 20 },
         );
-        versao = await tx.alterar('provisao_tecnica_competencia', id, Number(ex['versao']), {
-          situacao: 'calculada',
-          base_inicio: periodo.inicio,
-          base_fim: periodo.fim,
-          calculado_em: agora?.['a'] ?? null,
-          calculado_por_usuario_id: usuario,
-          observacao: r.memoria,
-        });
-      } else {
-        id = await tx.incluir('provisao_tecnica_competencia', {
-          estabelecimento_id: est,
+        const anteriores = Object.fromEntries(
+          ant.map((r) => [textoObrigatorio(r['tipo_provisao']), centavos(r['v'])]),
+        );
+        const informados: ItemInformado[] = e.informados.map((i) => ({
+          tipo: i.tipo,
+          valorCentavos: Math.round(i.valor * 100),
+          observacao: i.observacao,
+        }));
+        const r = calcularProvisoesTecnicas({
           competencia: e.competencia,
-          base_inicio: periodo.inicio,
-          base_fim: periodo.fim,
           metodo: e.metodo,
-          situacao: 'calculada',
-          calculado_em: agora?.['a'] ?? null,
-          calculado_por_usuario_id: usuario,
-          observacao: r.memoria,
+          contas: e.contas,
+          base,
+          informados,
+          notaTecnica: e.notaTecnica,
+          anteriores,
         });
-        versao = 1;
-      }
-      const seq = await tx.uma('SELECT COALESCE(MAX(sequencia), 0) AS s FROM provisao_tecnica_item WHERE provisao_tecnica_competencia_id = ?', [id]);
-      const desde = Number(seq?.['s'] ?? 0);
-      for (const i of r.itens)
-        await tx.incluir('provisao_tecnica_item', {
-          provisao_tecnica_competencia_id: id,
-          sequencia: desde + i.sequencia,
-          tipo_provisao: i.tipo,
-          conta_contabil_id: i.conta,
-          valor: decimal(i.valorCentavos),
-          valor_anterior: i.anteriorCentavos === null ? null : decimal(i.anteriorCentavos),
-          observacao: i.memoria.slice(0, 2000),
-        });
-      return { id, versao, total: decimal(r.totalCentavos) };
-    });
+        exigir(r.problemas);
+        const periodo = baseDaCompetencia(e.competencia);
+        const agora = await tx.uma<{ a: unknown }>('SELECT NOW(3) AS a');
+        const usuario = tx.contexto.usuario ?? null;
+        let id: number;
+        let versao: number;
+        if (ex) {
+          id = Number(ex['id']);
+          await tx.executar(
+            'UPDATE provisao_tecnica_item SET excluido_em = NOW(3), excluido_por = ? WHERE provisao_tecnica_competencia_id = ? AND excluido_em IS NULL',
+            [usuario, id],
+          );
+          versao = await tx.alterar('provisao_tecnica_competencia', id, Number(ex['versao']), {
+            situacao: 'calculada',
+            base_inicio: periodo.inicio,
+            base_fim: periodo.fim,
+            calculado_em: agora?.['a'] ?? null,
+            calculado_por_usuario_id: usuario,
+            observacao: r.memoria,
+          });
+        } else {
+          id = await tx.incluir('provisao_tecnica_competencia', {
+            estabelecimento_id: est,
+            competencia: e.competencia,
+            base_inicio: periodo.inicio,
+            base_fim: periodo.fim,
+            metodo: e.metodo,
+            situacao: 'calculada',
+            calculado_em: agora?.['a'] ?? null,
+            calculado_por_usuario_id: usuario,
+            observacao: r.memoria,
+          });
+          versao = 1;
+        }
+        const seq = await tx.uma(
+          'SELECT COALESCE(MAX(sequencia), 0) AS s FROM provisao_tecnica_item WHERE provisao_tecnica_competencia_id = ?',
+          [id],
+        );
+        const desde = Number(seq?.['s'] ?? 0);
+        for (const i of r.itens)
+          await tx.incluir('provisao_tecnica_item', {
+            provisao_tecnica_competencia_id: id,
+            sequencia: desde + i.sequencia,
+            tipo_provisao: i.tipo,
+            conta_contabil_id: i.conta,
+            valor: decimal(i.valorCentavos),
+            valor_anterior: i.anteriorCentavos === null ? null : decimal(i.anteriorCentavos),
+            observacao: i.memoria.slice(0, 2000),
+          });
+        return { id, versao, total: decimal(r.totalCentavos) };
+      },
+    );
   }
 
   private static async travar(tx: TxOperacao, est: number, id: number, versao: number) {
@@ -571,8 +650,16 @@ export class PortaProvisaoTecnicaPropria {
     )[0];
     if (!r) throw naoEncontrado();
     if (Number(r['versao']) !== versao)
-      throw new ErroOperacao(409, 'versao-desatualizada', 'Versão desatualizada', 'A provisão foi alterada por outra pessoa.');
-    return { situacao: textoObrigatorio(r['situacao']) as SituacaoProvisaoTecnica, competencia: dataIso(r['competencia']) ?? '' };
+      throw new ErroOperacao(
+        409,
+        'versao-desatualizada',
+        'Versão desatualizada',
+        'A provisão foi alterada por outra pessoa.',
+      );
+    return {
+      situacao: textoObrigatorio(r['situacao']) as SituacaoProvisaoTecnica,
+      competencia: dataIso(r['competencia']) ?? '',
+    };
   }
 
   contabilizar(
@@ -581,75 +668,94 @@ export class PortaProvisaoTecnicaPropria {
     e: { versao: number; contaDespesa: number; contaReversao: number | null },
     trilha: Trilha,
   ): Promise<Gravado> {
-    return this.gravar(c, 'operadora.provisao-tecnica.contabilizar', 'provisao_tecnica_competencia', trilha, async (tx, est) => {
-      const p = await PortaProvisaoTecnicaPropria.travar(tx, est, id, e.versao);
-      exigir(conferirAcaoProvisao(p.situacao, 'contabilizar'));
-      const ids = [e.contaDespesa, ...(e.contaReversao ? [e.contaReversao] : [])];
-      const cs = await tx.consultar(
-        `SELECT id, classificacao FROM conta_contabil WHERE id IN (${ids.map(() => '?').join(', ')}) AND tipo = 'analitica' AND ativo = TRUE AND excluido_em IS NULL`,
-        ids,
-        { teto: 2 },
-      );
-      const classe = new Map(cs.map((r) => [Number(r['id']), textoObrigatorio(r['classificacao'])]));
-      if (!classe.has(e.contaDespesa) || (e.contaReversao && !classe.has(e.contaReversao)))
-        throw recusa('conta-invalida', 'Use contas contábeis analíticas e ativas.', { campos: ['contaDespesa'] });
-      const itens = await tx.consultar(
-        `SELECT i.tipo_provisao, i.valor, i.valor_anterior, c.classificacao FROM provisao_tecnica_item i
+    return this.gravar(
+      c,
+      'operadora.provisao-tecnica.contabilizar',
+      'provisao_tecnica_competencia',
+      trilha,
+      async (tx, est) => {
+        const p = await PortaProvisaoTecnicaPropria.travar(tx, est, id, e.versao);
+        exigir(conferirAcaoProvisao(p.situacao, 'contabilizar'));
+        const ids = [e.contaDespesa, ...(e.contaReversao ? [e.contaReversao] : [])];
+        const cs = await tx.consultar(
+          `SELECT id, classificacao FROM conta_contabil WHERE id IN (${ids.map(() => '?').join(', ')}) AND tipo = 'analitica' AND ativo = TRUE AND excluido_em IS NULL`,
+          ids,
+          { teto: 2 },
+        );
+        const classe = new Map(cs.map((r) => [Number(r['id']), textoObrigatorio(r['classificacao'])]));
+        if (!classe.has(e.contaDespesa) || (e.contaReversao && !classe.has(e.contaReversao)))
+          throw recusa('conta-invalida', 'Use contas contábeis analíticas e ativas.', {
+            campos: ['contaDespesa'],
+          });
+        const itens = await tx.consultar(
+          `SELECT i.tipo_provisao, i.valor, i.valor_anterior, c.classificacao FROM provisao_tecnica_item i
            JOIN conta_contabil c ON c.id = i.conta_contabil_id
           WHERE i.provisao_tecnica_competencia_id = ? AND i.excluido_em IS NULL ORDER BY i.sequencia`,
-        [id],
-        { teto: 100 },
-      );
-      const fim = baseDaCompetencia(p.competencia).fim;
-      const rotulo = `${p.competencia.slice(5, 7)}/${p.competencia.slice(0, 4)}`;
-      const partidas = partidasDaProvisao(
-        itens.map((i) => ({
-          tipo: textoObrigatorio(i['tipo_provisao']),
-          contaClassificacao: textoObrigatorio(i['classificacao']),
-          valorCentavos: centavos(i['valor']),
-          anteriorCentavos: i['valor_anterior'] === null ? null : centavos(i['valor_anterior']),
-        })),
-        classe.get(e.contaDespesa) ?? '',
-        e.contaReversao ? (classe.get(e.contaReversao) ?? null) : null,
-        rotulo,
-      );
-      let lancamento: number | null = null;
-      if (partidas.length)
-        lancamento = (
-          await gravacaoDosFatos(tx, est).gravarLancamento({
-            chave: `provisao-tecnica:${id}:${e.versao}`,
-            tipo: 'automatico',
-            empresa: est,
-            data: fim,
-            competencia: fim.slice(0, 7),
-            historico: `Provisões técnicas da operadora ${rotulo}`,
-            partidas,
-            fatoId: null,
-            regraId: null,
-            regra: null,
-            estornaId: null,
-            justificativa: null,
-          })
-        ).id;
-      const agora = await tx.uma<{ a: unknown }>('SELECT NOW(3) AS a');
-      const versao = await tx.alterar('provisao_tecnica_competencia', id, e.versao, {
-        situacao: 'contabilizada',
-        contabilizado_em: agora?.['a'] ?? null,
-      });
-      return { id, versao, lancamento };
-    });
+          [id],
+          { teto: 100 },
+        );
+        const fim = baseDaCompetencia(p.competencia).fim;
+        const rotulo = `${p.competencia.slice(5, 7)}/${p.competencia.slice(0, 4)}`;
+        const partidas = partidasDaProvisao(
+          itens.map((i) => ({
+            tipo: textoObrigatorio(i['tipo_provisao']),
+            contaClassificacao: textoObrigatorio(i['classificacao']),
+            valorCentavos: centavos(i['valor']),
+            anteriorCentavos: i['valor_anterior'] === null ? null : centavos(i['valor_anterior']),
+          })),
+          classe.get(e.contaDespesa) ?? '',
+          e.contaReversao ? (classe.get(e.contaReversao) ?? null) : null,
+          rotulo,
+        );
+        let lancamento: number | null = null;
+        if (partidas.length)
+          lancamento = (
+            await gravacaoDosFatos(tx, est).gravarLancamento({
+              chave: `provisao-tecnica:${id}:${e.versao}`,
+              tipo: 'automatico',
+              empresa: est,
+              data: fim,
+              competencia: fim.slice(0, 7),
+              historico: `Provisões técnicas da operadora ${rotulo}`,
+              partidas,
+              fatoId: null,
+              regraId: null,
+              regra: null,
+              estornaId: null,
+              justificativa: null,
+            })
+          ).id;
+        const agora = await tx.uma<{ a: unknown }>('SELECT NOW(3) AS a');
+        const versao = await tx.alterar('provisao_tecnica_competencia', id, e.versao, {
+          situacao: 'contabilizada',
+          contabilizado_em: agora?.['a'] ?? null,
+        });
+        return { id, versao, lancamento };
+      },
+    );
   }
 
-  cancelar(c: ContextoPorta, id: number, e: { versao: number; motivo: string }, trilha: Trilha): Promise<Gravado> {
-    return this.gravar(c, 'operadora.provisao-tecnica.cancelar', 'provisao_tecnica_competencia', trilha, async (tx, est) => {
-      const p = await PortaProvisaoTecnicaPropria.travar(tx, est, id, e.versao);
-      exigir(conferirAcaoProvisao(p.situacao, 'cancelar'));
-      const versao = await tx.alterar('provisao_tecnica_competencia', id, e.versao, {
-        situacao: 'cancelada',
-        observacao: `Cancelada: ${e.motivo.trim()}`,
-      });
-      return { id, versao };
-    });
+  cancelar(
+    c: ContextoPorta,
+    id: number,
+    e: { versao: number; motivo: string },
+    trilha: Trilha,
+  ): Promise<Gravado> {
+    return this.gravar(
+      c,
+      'operadora.provisao-tecnica.cancelar',
+      'provisao_tecnica_competencia',
+      trilha,
+      async (tx, est) => {
+        const p = await PortaProvisaoTecnicaPropria.travar(tx, est, id, e.versao);
+        exigir(conferirAcaoProvisao(p.situacao, 'cancelar'));
+        const versao = await tx.alterar('provisao_tecnica_competencia', id, e.versao, {
+          situacao: 'cancelada',
+          observacao: `Cancelada: ${e.motivo.trim()}`,
+        });
+        return { id, versao };
+      },
+    );
   }
 }
 

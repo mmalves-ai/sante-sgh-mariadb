@@ -164,7 +164,9 @@ export interface PainelCiclos {
 }
 
 const categoria = (v: unknown): CategoriaIndicador =>
-  (CATEGORIAS_INDICADOR as readonly string[]).includes(String(v)) ? (String(v) as CategoriaIndicador) : 'fisico';
+  (CATEGORIAS_INDICADOR as readonly string[]).includes(String(v))
+    ? (String(v) as CategoriaIndicador)
+    : 'fisico';
 
 type Fonte = Pick<TxOperacao, 'consultar' | 'uma'>;
 
@@ -208,7 +210,11 @@ export class PortaCmeCicloPropria extends PortaCmePropria {
           fase: numOuNull(r['fase_reprocessamento_id']),
           exigeRecolhimento: bool(r['exige_recolhimento']),
         })),
-        fases: fases.map((r) => ({ id: num(r['id']), descricao: String(r['descricao']), ordem: num(r['ordem']) })),
+        fases: fases.map((r) => ({
+          id: num(r['id']),
+          descricao: String(r['descricao']),
+          ordem: num(r['ordem']),
+        })),
         rejeicoes: await this.rejeicoes(l, est.id),
       };
     });
@@ -423,7 +429,10 @@ export class PortaCmeCicloPropria extends PortaCmePropria {
           indicador_fisico: i.fisico === 'conforme',
           indicador_quimico: i.quimico === 'conforme',
           indicador_biologico: i.biologico === 'conforme',
-          observacao: [txtOuNull(ci['observacao']), e.observacao, d.motivo].filter(Boolean).join(' ').slice(0, 500),
+          observacao: [txtOuNull(ci['observacao']), e.observacao, d.motivo]
+            .filter(Boolean)
+            .join(' ')
+            .slice(0, 500),
           ...this.marcaDesfecho(d, agora, usuario),
         });
         await this.aplicarAosPacotes(tx, est, ciclo, d, agora);
@@ -456,10 +465,15 @@ export class PortaCmeCicloPropria extends PortaCmePropria {
           [e.motivo],
         );
         if (!motivo) throw naoEncontrado('Motivo de rejeição');
-        const fase = await tx.uma('SELECT id, ordem FROM fase_reprocessamento WHERE id = ? AND ativo = TRUE', [e.fase]);
+        const fase = await tx.uma(
+          'SELECT id, ordem FROM fase_reprocessamento WHERE id = ? AND ativo = TRUE',
+          [e.fase],
+        );
         if (!fase) throw naoEncontrado('Fase do reprocessamento');
         const retorno = e.faseRetorno
-          ? await tx.uma('SELECT id, ordem FROM fase_reprocessamento WHERE id = ? AND ativo = TRUE', [e.faseRetorno])
+          ? await tx.uma('SELECT id, ordem FROM fase_reprocessamento WHERE id = ? AND ativo = TRUE', [
+              e.faseRetorno,
+            ])
           : null;
         if (e.faseRetorno && !retorno) throw naoEncontrado('Fase de retorno');
         if (e.setor) {
@@ -487,7 +501,9 @@ export class PortaCmeCicloPropria extends PortaCmePropria {
         const cicloId = ciclo ? num(ciclo['id']) : numOuNull(pacote!['ciclo_esterilizacao_id']);
         const agora = new Date();
         if (pacote)
-          await tx.alterar('pacote_esteril', num(pacote['id']), num(pacote['versao']), { situacao: 'rejeitado' });
+          await tx.alterar('pacote_esteril', num(pacote['id']), num(pacote['versao']), {
+            situacao: 'rejeitado',
+          });
         if (ciclo)
           await tx.alterar('ciclo_esterilizacao', num(ciclo['id']), num(ciclo['versao']), {
             situacao: 'reprovado',

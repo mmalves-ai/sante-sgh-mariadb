@@ -47,22 +47,25 @@ describe.skipIf(SEM_BANCO)('desconto em folha da mensalidade (MariaDB, cliente f
   }
 
   const incluir = async (competencia: string, valor: number) => {
-    const r = await cobranca.gravar(contexto(m), trilhaTela(m, 'fatura_plano', 'operadora.cobranca.incluida'), (g) =>
-      g.incluir({
-        operadora: m.operadora,
-        contrato: m.contrato,
-        beneficiario: m.beneficiario,
-        tipo: 3,
-        competencia,
-        descricao: 'MENSALIDADE SINTETICA FOLHA',
-        valor,
-        vencimento: VENCE,
-        acordoOrigem: null,
-        parcela: null,
-        parcelas: null,
-        itens: [],
-        por: 'c3028.teste',
-      }),
+    const r = await cobranca.gravar(
+      contexto(m),
+      trilhaTela(m, 'fatura_plano', 'operadora.cobranca.incluida'),
+      (g) =>
+        g.incluir({
+          operadora: m.operadora,
+          contrato: m.contrato,
+          beneficiario: m.beneficiario,
+          tipo: 3,
+          competencia,
+          descricao: 'MENSALIDADE SINTETICA FOLHA',
+          valor,
+          vencimento: VENCE,
+          acordoOrigem: null,
+          parcela: null,
+          parcelas: null,
+          itens: [],
+          por: 'c3028.teste',
+        }),
     );
     faturas.push(r.id);
     return r.id;
@@ -86,7 +89,9 @@ describe.skipIf(SEM_BANCO)('desconto em folha da mensalidade (MariaDB, cliente f
          SELECT ?, id, 10, '2020-01-01', NOW(3) FROM forma_cobranca_plano WHERE codigo = ?`,
         [m.contrato, FORMA],
       );
-      await e.executar("UPDATE beneficiario_plano SET matricula_empresa = 'MF-0209' WHERE id = ?", [m.beneficiario]);
+      await e.executar("UPDATE beneficiario_plano SET matricula_empresa = 'MF-0209' WHERE id = ?", [
+        m.beneficiario,
+      ]);
     });
   }, 120_000);
   afterAll(async () => {
@@ -112,32 +117,62 @@ describe.skipIf(SEM_BANCO)('desconto em folha da mensalidade (MariaDB, cliente f
     ]);
     expect(previa.valorTotal).toBe(140);
 
-    const g = await porta.gerar(contexto(m), { ...e, tipo: 'mensal', observacao: null }, T('operadora.desconto-folha.gerada'));
+    const g = await porta.gerar(
+      contexto(m),
+      { ...e, tipo: 'mensal', observacao: null },
+      T('operadora.desconto-folha.gerada'),
+    );
     const [r] = await ler('SELECT * FROM remessa_desconto_folha WHERE id = ?', [g.id]);
-    expect(r).toMatchObject({ estabelecimento_id: m.est, contratante_plano_id: m.contratante, situacao: 'gerada', tipo_remessa: 'mensal' });
+    expect(r).toMatchObject({
+      estabelecimento_id: m.est,
+      contratante_plano_id: m.contratante,
+      situacao: 'gerada',
+      tipo_remessa: 'mensal',
+    });
     expect(String(r!['numero'])).toMatch(/^DF-\d+$/);
     expect(Number(r!['valor_enviado'])).toBe(140);
     const itens = await ler(
       'SELECT sequencia, fatura_plano_id, matricula_funcional, valor_enviado, valor_atrasado, situacao_retorno FROM remessa_desconto_folha_item WHERE remessa_desconto_folha_id = ? ORDER BY sequencia',
       [g.id],
     );
-    expect(itens.map((i) => [Number(i['fatura_plano_id']), i['matricula_funcional'], Number(i['valor_enviado']), i['situacao_retorno']])).toEqual([
+    expect(
+      itens.map((i) => [
+        Number(i['fatura_plano_id']),
+        i['matricula_funcional'],
+        Number(i['valor_enviado']),
+        i['situacao_retorno'],
+      ]),
+    ).toEqual([
       [atrasada, 'MF-0209', 40, 'pendente'],
       [atual, 'MF-0209', 100, 'pendente'],
     ]);
-    const trilha = await ler("SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'remessa_desconto_folha' AND entidade_id = ?", [String(g.id)]);
+    const trilha = await ler(
+      "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'remessa_desconto_folha' AND entidade_id = ?",
+      [String(g.id)],
+    );
     expect(Number(trilha[0]!['n'])).toBeGreaterThanOrEqual(1);
 
     // a mesma remessa de novo é recusada, sem escrita
-    const dup = await porta.gerar(contexto(m), { ...e, tipo: 'mensal', observacao: null }, T('x')).catch((x: unknown) => x);
+    const dup = await porta
+      .gerar(contexto(m), { ...e, tipo: 'mensal', observacao: null }, T('x'))
+      .catch((x: unknown) => x);
     expect(codigoDe(dup)).toBe('remessa-ja-gerada');
     // a cobrança pendente na remessa não entra noutra (a prévia a critica)
-    expect((await porta.previa(contexto(m), e)).criticas.map((x) => x.codigo)).toEqual(['ja-em-remessa', 'ja-em-remessa']);
+    expect((await porta.previa(contexto(m), e)).criticas.map((x) => x.codigo)).toEqual([
+      'ja-em-remessa',
+      'ja-em-remessa',
+    ]);
 
     const arq = await porta.arquivo(contexto(m), g.id);
     expect(arq.conteudo.trim().split('\n')).toHaveLength(3);
     // retorno antes do envio: recusado
-    expect(codigoDe(await porta.lerRetorno(contexto(m), g.id, { versao: 1, texto: 'MF-0209;90', creditoEm: VENCE }, T('x')).catch((x: unknown) => x))).toBe('situacao-invalida');
+    expect(
+      codigoDe(
+        await porta
+          .lerRetorno(contexto(m), g.id, { versao: 1, texto: 'MF-0209;90', creditoEm: VENCE }, T('x'))
+          .catch((x: unknown) => x),
+      ),
+    ).toBe('situacao-invalida');
 
     const env = await porta.enviar(contexto(m), g.id, 1, T('operadora.desconto-folha.enviada'));
     expect(env.versao).toBe(2);
@@ -146,45 +181,90 @@ describe.skipIf(SEM_BANCO)('desconto em folha da mensalidade (MariaDB, cliente f
       .lerRetorno(contexto(m), g.id, { versao: 2, texto: 'MF-0209;90\nOUTRA;5', creditoEm: VENCE }, T('x'))
       .catch((x: unknown) => x);
     expect(codigoDe(ruim)).toBe('retorno-com-problemas');
-    expect((await ler('SELECT situacao FROM fatura_plano WHERE id = ?', [atrasada]))[0]!['situacao']).toBe('aberta');
+    expect((await ler('SELECT situacao FROM fatura_plano WHERE id = ?', [atrasada]))[0]!['situacao']).toBe(
+      'aberta',
+    );
 
-    const ret = await porta.lerRetorno(contexto(m), g.id, { versao: 2, texto: 'matricula;valor\nMF-0209;90,00', creditoEm: VENCE }, T('operadora.desconto-folha.retorno'));
+    const ret = await porta.lerRetorno(
+      contexto(m),
+      g.id,
+      { versao: 2, texto: 'matricula;valor\nMF-0209;90,00', creditoEm: VENCE },
+      T('operadora.desconto-folha.retorno'),
+    );
     expect(ret.versao).toBe(3);
-    const [r2] = await ler('SELECT situacao, retorno_linhas, valor_descontado, retorno_lido_em FROM remessa_desconto_folha WHERE id = ?', [g.id]);
+    const [r2] = await ler(
+      'SELECT situacao, retorno_linhas, valor_descontado, retorno_lido_em FROM remessa_desconto_folha WHERE id = ?',
+      [g.id],
+    );
     expect(r2).toMatchObject({ situacao: 'retorno_recebido', retorno_linhas: 1 });
     expect(Number(r2!['valor_descontado'])).toBe(90);
-    const it2 = await ler('SELECT valor_descontado, situacao_retorno FROM remessa_desconto_folha_item WHERE remessa_desconto_folha_id = ? ORDER BY sequencia', [g.id]);
+    const it2 = await ler(
+      'SELECT valor_descontado, situacao_retorno FROM remessa_desconto_folha_item WHERE remessa_desconto_folha_id = ? ORDER BY sequencia',
+      [g.id],
+    );
     expect(it2.map((i) => [Number(i['valor_descontado']), i['situacao_retorno']])).toEqual([
       [40, 'descontado'],
       [50, 'descontado_parcial'],
     ]);
-    const fs = await ler('SELECT id, situacao, valor_pago, data_pagamento FROM fatura_plano WHERE id IN (?, ?) ORDER BY id', [atrasada, atual]);
+    const fs = await ler(
+      'SELECT id, situacao, valor_pago, data_pagamento FROM fatura_plano WHERE id IN (?, ?) ORDER BY id',
+      [atrasada, atual],
+    );
     expect(fs.map((f) => [f['situacao'], Number(f['valor_pago'])])).toEqual([
       ['paga', 40],
       ['paga_parcial', 50],
     ]);
 
     // depois do retorno não se cancela; confere
-    expect(codigoDe(await porta.cancelar(contexto(m), g.id, { versao: 3, motivo: 'teste de recusa' }, T('x')).catch((x: unknown) => x))).toBe('situacao-invalida');
+    expect(
+      codigoDe(
+        await porta
+          .cancelar(contexto(m), g.id, { versao: 3, motivo: 'teste de recusa' }, T('x'))
+          .catch((x: unknown) => x),
+      ),
+    ).toBe('situacao-invalida');
     const conf = await porta.conferir(contexto(m), g.id, 3, T('operadora.desconto-folha.conferida'));
     expect(conf.versao).toBe(4);
-    expect((await ler('SELECT situacao, atrasos_validados_em FROM remessa_desconto_folha WHERE id = ?', [g.id]))[0]).toMatchObject({ situacao: 'conferida' });
+    expect(
+      (
+        await ler('SELECT situacao, atrasos_validados_em FROM remessa_desconto_folha WHERE id = ?', [g.id])
+      )[0],
+    ).toMatchObject({ situacao: 'conferida' });
 
     // o saldo da parcial entra na remessa seguinte
     const prox = await porta.previa(contexto(m), { ...e, competencia: '2026-12' });
     expect(prox.itens.map((i) => [i.fatura, i.valorEnviado])).toContainEqual([atual, 50]);
     // outro estabelecimento não vê a remessa
-    expect(codigoDe(await porta.remessa(contexto(m, m.outroEst), g.id).catch((x: unknown) => x))).toBe('nao-encontrado');
+    expect(codigoDe(await porta.remessa(contexto(m, m.outroEst), g.id).catch((x: unknown) => x))).toBe(
+      'nao-encontrado',
+    );
     expect((await porta.remessas(contexto(m), m.operadora)).map((x) => x.id)).toContain(g.id);
   });
 
   it('cancela a remessa gerada e libera as cobranças para outra', async () => {
-    const e = { operadora: m.operadora, contratante: m.contratante, competencia: '2026-12', tipo: 'complementar' as const, observacao: 'SINTETICA' };
+    const e = {
+      operadora: m.operadora,
+      contratante: m.contratante,
+      competencia: '2026-12',
+      tipo: 'complementar' as const,
+      observacao: 'SINTETICA',
+    };
     const g = await porta.gerar(contexto(m), e, T('operadora.desconto-folha.gerada'));
-    const c = await porta.cancelar(contexto(m), g.id, { versao: 1, motivo: 'gerada por engano' }, T('operadora.desconto-folha.cancelada'));
+    const c = await porta.cancelar(
+      contexto(m),
+      g.id,
+      { versao: 1, motivo: 'gerada por engano' },
+      T('operadora.desconto-folha.cancelada'),
+    );
     expect(c.versao).toBe(2);
-    expect((await ler('SELECT situacao FROM remessa_desconto_folha WHERE id = ?', [g.id]))[0]!['situacao']).toBe('cancelada');
-    expect((await porta.previa(contexto(m), e)).criticas.filter((x) => x.codigo === 'ja-em-remessa')).toHaveLength(0);
-    expect(codigoDe(await porta.arquivo(contexto(m), g.id).catch((x: unknown) => x))).toBe('situacao-invalida');
+    expect(
+      (await ler('SELECT situacao FROM remessa_desconto_folha WHERE id = ?', [g.id]))[0]!['situacao'],
+    ).toBe('cancelada');
+    expect(
+      (await porta.previa(contexto(m), e)).criticas.filter((x) => x.codigo === 'ja-em-remessa'),
+    ).toHaveLength(0);
+    expect(codigoDe(await porta.arquivo(contexto(m), g.id).catch((x: unknown) => x))).toBe(
+      'situacao-invalida',
+    );
   });
 });

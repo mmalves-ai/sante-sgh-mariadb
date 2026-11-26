@@ -102,7 +102,12 @@ export interface ItemRemessaFolhaLido {
 }
 
 const naoEncontrado = (o: string) =>
-  new ErroOperacao(404, 'nao-encontrado', 'Registro não encontrado', `${o} não existe ou é de outro estabelecimento.`);
+  new ErroOperacao(
+    404,
+    'nao-encontrado',
+    'Registro não encontrado',
+    `${o} não existe ou é de outro estabelecimento.`,
+  );
 const situacaoRecusada = (detalhe: string) => recusa('situacao-invalida', detalhe, { campos: ['situacao'] });
 const centavos = (v: number) => Math.round(v * 100) / 100;
 const ultimoDia = (inicio: string) => {
@@ -171,7 +176,12 @@ export class PortaDescontoFolhaPropria {
     fn: (tx: TxOperacao, est: number) => Promise<Gravado>,
   ): Promise<Gravado> {
     if (!c.chaveIdempotencia)
-      throw new ErroOperacao(400, 'entrada-invalida', 'Pedido incompleto', 'Falta a Idempotency-Key do pedido de gravação.');
+      throw new ErroOperacao(
+        400,
+        'entrada-invalida',
+        'Pedido incompleto',
+        'Falta a Idempotency-Key do pedido de gravação.',
+      );
     const est = await this.ler(c, async (_l, e) => e);
     const operacao = definirOperacao<Record<string, unknown>, Gravado>({
       nome,
@@ -233,7 +243,10 @@ export class PortaDescontoFolhaPropria {
       [est, op, contratante, inicio, ultimoDia(inicio), inicio],
     );
     if (linhas.length > 5000)
-      throw recusa('remessa-grande-demais', 'A remessa passa de 5.000 cobranças: gere por contratante menor.');
+      throw recusa(
+        'remessa-grande-demais',
+        'A remessa passa de 5.000 cobranças: gere por contratante menor.',
+      );
     return linhas.map((f) => ({
       fatura: Number(f['id']),
       numero: textoObrigatorio(f['numero']),
@@ -298,7 +311,11 @@ export class PortaDescontoFolhaPropria {
           ORDER BY nome, ct.id LIMIT 30`,
         [est, op, t, t, t],
       );
-      return linhas.map((r) => ({ id: Number(r['id']), codigo: textoObrigatorio(r['codigo']), nome: textoObrigatorio(r['nome']) }));
+      return linhas.map((r) => ({
+        id: Number(r['id']),
+        codigo: textoObrigatorio(r['codigo']),
+        nome: textoObrigatorio(r['nome']),
+      }));
     });
   }
 
@@ -321,10 +338,19 @@ export class PortaDescontoFolhaPropria {
   }
 
   /** A prévia da remessa da competência: os itens e as críticas, sem gravar nada. */
-  previa(c: ContextoPorta, e: Pick<EntradaRemessaFolha, 'operadora' | 'contratante' | 'competencia'>): Promise<MontagemRemessaFolha> {
+  previa(
+    c: ContextoPorta,
+    e: Pick<EntradaRemessaFolha, 'operadora' | 'contratante' | 'competencia'>,
+  ): Promise<MontagemRemessaFolha> {
     return this.ler(c, async (l, est) => {
       await PortaDescontoFolhaPropria.operadoraDoEst(l, est, e.operadora);
-      const cob = await PortaDescontoFolhaPropria.cobrancas(l, est, e.operadora, e.contratante, e.competencia);
+      const cob = await PortaDescontoFolhaPropria.cobrancas(
+        l,
+        est,
+        e.operadora,
+        e.contratante,
+        e.competencia,
+      );
       return montarRemessaFolha(cob, e.competencia);
     });
   }
@@ -356,15 +382,22 @@ export class PortaDescontoFolhaPropria {
         [est, e.contratante, competencia, e.tipo],
       );
       if (ja)
-        throw recusa('remessa-ja-gerada', 'Já existe remessa desta contratante na competência: cancele-a antes.', {
-          campos: ['competencia'],
-        });
+        throw recusa(
+          'remessa-ja-gerada',
+          'Já existe remessa desta contratante na competência: cancele-a antes.',
+          {
+            campos: ['competencia'],
+          },
+        );
       const m = montarRemessaFolha(
         await PortaDescontoFolhaPropria.cobrancas(tx, est, e.operadora, e.contratante, e.competencia),
         e.competencia,
       );
       if (!m.itens.length)
-        throw recusa('remessa-sem-itens', 'Nenhuma cobrança da contratante entra no desconto em folha da competência.');
+        throw recusa(
+          'remessa-sem-itens',
+          'Nenhuma cobrança da contratante entra no desconto em folha da competência.',
+        );
       const agora = new Date();
       await garantirSequencia(
         tx,
@@ -413,8 +446,13 @@ export class PortaDescontoFolhaPropria {
     return this.gravar(c, `operadora.desconto-folha.${para}`, trilha, async (tx, est) => {
       const r = await PortaDescontoFolhaPropria.remessaDoEst(tx, est, id, true);
       if (!podePassarRemessaFolha(r.situacao, para))
-        throw situacaoRecusada(`A remessa ${r.situacao.replace('_', ' ')} não passa para ${para.replace('_', ' ')}.`);
-      const v = await tx.alterar('remessa_desconto_folha', id, versao, { situacao: para, ...(await extra(r, tx)) });
+        throw situacaoRecusada(
+          `A remessa ${r.situacao.replace('_', ' ')} não passa para ${para.replace('_', ' ')}.`,
+        );
+      const v = await tx.alterar('remessa_desconto_folha', id, versao, {
+        situacao: para,
+        ...(await extra(r, tx)),
+      });
       return { id, versao: v };
     });
   }
@@ -424,7 +462,9 @@ export class PortaDescontoFolhaPropria {
   }
 
   conferir(c: Contexto, id: number, versao: number, trilha: Trilha): Promise<Gravado> {
-    return this.passar(c, id, versao, 'conferida', trilha, async () => ({ atrasos_validados_em: new Date() }));
+    return this.passar(c, id, versao, 'conferida', trilha, async () => ({
+      atrasos_validados_em: new Date(),
+    }));
   }
 
   cancelar(c: Contexto, id: number, e: { versao: number; motivo: string }, trilha: Trilha): Promise<Gravado> {
@@ -473,7 +513,10 @@ export class PortaDescontoFolhaPropria {
           [i.fatura],
         );
         if (!f || !['aberta', 'emitida', 'paga_parcial'].includes(textoObrigatorio(f['situacao'])))
-          throw recusa('cobranca-nao-aberta', 'Uma cobrança da remessa foi baixada ou cancelada por outro caminho.');
+          throw recusa(
+            'cobranca-nao-aberta',
+            'Uma cobrança da remessa foi baixada ou cancelada por outro caminho.',
+          );
         const pago = centavos((numero(f['valor_pago']) ?? 0) + i.valorDescontado);
         const nota = `Desconto em folha: remessa ${r.numero}, ${i.valorDescontado.toFixed(2)}`;
         await tx.alterar('fatura_plano', i.fatura, Number(f['versao']), {

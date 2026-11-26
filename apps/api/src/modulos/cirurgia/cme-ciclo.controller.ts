@@ -6,7 +6,18 @@
 //   POST /api/cirurgia/cme/ciclos/:id/encerrar            conclui ou libera pelos testes (só com indicador aprovado)
 //   POST /api/cirurgia/cme/rejeicoes                      rejeita o pacote ou o ciclo (recolhimento dos distribuídos)
 //   POST /api/cirurgia/cme/rejeicoes/:id/recolher         o pacote distribuído do ciclo rejeitado volta à CME
-import { Body, Controller, Get, HttpCode, Inject, Optional, Param, ParseIntPipe, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Optional,
+  Param,
+  ParseIntPipe,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { PERMISSOES_CME } from '@sgh/contratos';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';

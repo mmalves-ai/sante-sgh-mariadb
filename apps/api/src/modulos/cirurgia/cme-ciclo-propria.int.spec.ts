@@ -104,9 +104,11 @@ describe.skipIf(SEM_BANCO)('PortaCmeCicloPropria contra o MariaDB (contrato de e
     Number((await um('SELECT versao FROM ciclo_esterilizacao WHERE id = ?', [ciclo]))['versao']);
   const testes = async (ciclo: number) =>
     Number(
-      (await um('SELECT COUNT(*) AS n FROM teste_ciclo_esterilizacao WHERE ciclo_esterilizacao_id = ?', [ciclo]))[
-        'n'
-      ],
+      (
+        await um('SELECT COUNT(*) AS n FROM teste_ciclo_esterilizacao WHERE ciclo_esterilizacao_id = ?', [
+          ciclo,
+        ])
+      )['n'],
     );
 
   beforeAll(async () => {
@@ -166,12 +168,10 @@ describe.skipIf(SEM_BANCO)('PortaCmeCicloPropria contra o MariaDB (contrato de e
           [`${P}-${cod}`, `INDICADOR SINTETICO ${cod}`, categoria, lote, controle, agora],
         );
       const fase = (cod: string, ordem: number) =>
-        e.inserir('INSERT INTO fase_reprocessamento (codigo, descricao, ordem, criado_em) VALUES (?, ?, ?, ?)', [
-          `${P}-${cod}`,
-          `FASE SINTETICA ${cod}`,
-          ordem,
-          agora,
-        ]);
+        e.inserir(
+          'INSERT INTO fase_reprocessamento (codigo, descricao, ordem, criado_em) VALUES (?, ?, ?, ?)',
+          [`${P}-${cod}`, `FASE SINTETICA ${cod}`, ordem, agora],
+        );
       const motivo = (cod: string, recolhe: boolean) =>
         e.inserir(
           'INSERT INTO motivo_rejeicao_reprocessamento (codigo, descricao, exige_recolhimento, criado_em) VALUES (?, ?, ?, ?)',
@@ -251,9 +251,19 @@ describe.skipIf(SEM_BANCO)('PortaCmeCicloPropria contra o MariaDB (contrato de e
       ),
     ).toBe(422);
     expect(await testes(ciclo)).toBe(0);
-    await porta.registrarTeste(ctx(), ciclo, { tipo: m.fisico, resultado: 'aprovado', leitura, valorMedido: '134 C' });
+    await porta.registrarTeste(ctx(), ciclo, {
+      tipo: m.fisico,
+      resultado: 'aprovado',
+      leitura,
+      valorMedido: '134 C',
+    });
     // O químico inconclusivo é repetido: vale o último teste do tipo, e o repetido aprovado libera.
-    await porta.registrarTeste(ctx(), ciclo, { tipo: m.quimico, resultado: 'inconclusivo', lote: 'LQ0', leitura });
+    await porta.registrarTeste(ctx(), ciclo, {
+      tipo: m.quimico,
+      resultado: 'inconclusivo',
+      lote: 'LQ0',
+      leitura,
+    });
     expect((await porta.ciclo(ctx(), ciclo)).indicadores.quimico).toBe('pendente');
     await porta.registrarTeste(ctx(), ciclo, {
       tipo: m.quimico,
@@ -284,9 +294,11 @@ describe.skipIf(SEM_BANCO)('PortaCmeCicloPropria contra o MariaDB (contrato de e
       [ciclo],
     );
     expect(c).toMatchObject({ situacao: 'liberado' });
-    expect([Number(c['indicador_fisico']), Number(c['indicador_quimico']), Number(c['indicador_biologico'])]).toEqual(
-      [1, 1, 0],
-    );
+    expect([
+      Number(c['indicador_fisico']),
+      Number(c['indicador_quimico']),
+      Number(c['indicador_biologico']),
+    ]).toEqual([1, 1, 0]);
     expect(c['liberado_em']).not.toBeNull();
     for (const p of pacotes) expect(await situacao(p)).toBe('esteril');
   });
@@ -340,11 +352,12 @@ describe.skipIf(SEM_BANCO)('PortaCmeCicloPropria contra o MariaDB (contrato de e
     );
     expect(await situacao(pacotes[2]!)).toBe('rejeitado');
     expect(await situacao(pacotes[0]!)).toBe('distribuido');
-    expect(
-      await erro(porta.recolher(ctx(), r.rejeicao as number, { pacote: pacotes[2] })),
-    ).toBe(422);
+    expect(await erro(porta.recolher(ctx(), r.rejeicao as number, { pacote: pacotes[2] }))).toBe(422);
     const painel = await porta.painelCiclos(ctx());
-    expect(painel.rejeicoes.find((x) => x.id === r.rejeicao)).toMatchObject({ pendentes: 1, exigeRecolhimento: true });
+    expect(painel.rejeicoes.find((x) => x.id === r.rejeicao)).toMatchObject({
+      pendentes: 1,
+      exigeRecolhimento: true,
+    });
     const v = await porta.recolher(ctx(), r.rejeicao as number, { pacote: pacotes[0] });
     expect(v).toMatchObject({ pendentes: 0, situacao: 'concluida' });
     expect(await situacao(pacotes[0]!)).toBe('rejeitado');
@@ -361,15 +374,20 @@ describe.skipIf(SEM_BANCO)('PortaCmeCicloPropria contra o MariaDB (contrato de e
   it('teste reprovado reprova o ciclo e rejeita os pacotes; trilha e outro estabelecimento', async () => {
     const p = (await porta.prepararPacote(ctx(), { caixa })).pacote;
     const c2 = (await porta.abrirCiclo(ctx(), { equipamento, metodo: m.metodo, pacotes: [p] })).ciclo;
-    await porta.registrarTeste(ctx(), c2, { tipo: m.fisico, resultado: 'aprovado', leitura, valorMedido: '134 C' });
+    await porta.registrarTeste(ctx(), c2, {
+      tipo: m.fisico,
+      resultado: 'aprovado',
+      leitura,
+      valorMedido: '134 C',
+    });
     await porta.registrarTeste(ctx(), c2, { tipo: m.quimico, resultado: 'reprovado', lote: 'LQ2', leitura });
     const r = await porta.encerrar(ctx(), c2, { versao: await versao(c2) });
     expect(r.situacao).toBe('reprovado');
     expect(await situacao(p)).toBe('rejeitado');
     expect(await erro(porta.ciclo(ctx(P2), c2))).toBe(404);
-    expect(
-      await erro(porta.registrarTeste(ctx(P2), c2, { tipo: m.fisico, resultado: 'pendente' })),
-    ).toBe(404);
+    expect(await erro(porta.registrarTeste(ctx(P2), c2, { tipo: m.fisico, resultado: 'pendente' }))).toBe(
+      404,
+    );
     const trilha = await um(
       `SELECT COUNT(*) AS n FROM trilha_auditoria t JOIN estabelecimento e ON e.id = t.estabelecimento_id
         WHERE e.codigo = ? AND t.entidade IN ('teste_ciclo_esterilizacao', 'rejeicao_reprocessamento')`,

@@ -25,7 +25,11 @@ import {
   sessaoDe,
 } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
-import { type Gravado, PORTA_DESCONTO_FOLHA, type PortaDescontoFolhaPropria } from './desconto-folha-propria.js';
+import {
+  type Gravado,
+  PORTA_DESCONTO_FOLHA,
+  type PortaDescontoFolhaPropria,
+} from './desconto-folha-propria.js';
 
 const LER = 'operadora.cobranca.ler';
 const GERAR = 'operadora.cobranca.gerar';
@@ -73,7 +77,9 @@ export class DescontoFolhaOperadoraController {
     @Query('termo') termo: string | undefined,
     @Req() req: RequisicaoAutorizada,
   ) {
-    return this.ok(this.porta.contratantes(sessaoDe(req).porta, idDaRota(String(op ?? '')), String(termo ?? '')));
+    return this.ok(
+      this.porta.contratantes(sessaoDe(req).porta, idDaRota(String(op ?? '')), String(termo ?? '')),
+    );
   }
 
   @Get('operadora/desconto-folha/remessas')
@@ -107,7 +113,11 @@ export class DescontoFolhaOperadoraController {
   gerar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     return this.ok(
-      this.porta.gerar(this.ctx(s, 'desconto-folha-gerar'), corpo(esquemaGerar, b), this.trilha(s, 'operadora.desconto-folha.gerada')),
+      this.porta.gerar(
+        this.ctx(s, 'desconto-folha-gerar'),
+        corpo(esquemaGerar, b),
+        this.trilha(s, 'operadora.desconto-folha.gerada'),
+      ),
     );
   }
 
@@ -119,7 +129,12 @@ export class DescontoFolhaOperadoraController {
     const s = sessaoDe(req);
     const e = corpo(esquemaVersao, b);
     return this.ok(
-      this.porta.enviar(this.ctx(s, 'desconto-folha-envio'), idDaRota(n), e.versao, this.trilha(s, 'operadora.desconto-folha.enviada')),
+      this.porta.enviar(
+        this.ctx(s, 'desconto-folha-envio'),
+        idDaRota(n),
+        e.versao,
+        this.trilha(s, 'operadora.desconto-folha.enviada'),
+      ),
     );
   }
 
@@ -147,7 +162,12 @@ export class DescontoFolhaOperadoraController {
     const s = sessaoDe(req);
     const e = corpo(esquemaVersao, b);
     return this.ok(
-      this.porta.conferir(this.ctx(s, 'desconto-folha-conferencia'), idDaRota(n), e.versao, this.trilha(s, 'operadora.desconto-folha.conferida')),
+      this.porta.conferir(
+        this.ctx(s, 'desconto-folha-conferencia'),
+        idDaRota(n),
+        e.versao,
+        this.trilha(s, 'operadora.desconto-folha.conferida'),
+      ),
     );
   }
 

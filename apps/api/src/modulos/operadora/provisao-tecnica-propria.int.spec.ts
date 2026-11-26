@@ -43,7 +43,9 @@ const trilha =
     correlacao: 'teste-c3026',
   });
 const q = (sql: string, p: unknown[] = []) =>
-  nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'teste-c3026' }, (l) => l.consultar(sql, p, { teto: 1000 }));
+  nucleo!.lerSomente({ cliente: CLIENTE, correlacao: 'teste-c3026' }, (l) =>
+    l.consultar(sql, p, { teto: 1000 }),
+  );
 
 async function limpar(n: NucleoProprio, m: MassaBase) {
   await n.escrever({ cliente: CLIENTE, correlacao: 'limpeza-c3026' }, async (e) => {
@@ -60,7 +62,10 @@ async function limpar(n: NucleoProprio, m: MassaBase) {
       'DELETE i FROM provisao_tecnica_item i JOIN provisao_tecnica_competencia p ON p.id = i.provisao_tecnica_competencia_id WHERE p.estabelecimento_id IN (?, ?)',
       [m.est, m.outroEst],
     );
-    await e.executar('DELETE FROM provisao_tecnica_competencia WHERE estabelecimento_id IN (?, ?)', [m.est, m.outroEst]);
+    await e.executar('DELETE FROM provisao_tecnica_competencia WHERE estabelecimento_id IN (?, ?)', [
+      m.est,
+      m.outroEst,
+    ]);
     await e.executar(
       `DELETE m FROM mapa_conta_balancete_ans m JOIN plano_contas_padrao_ans a ON a.id = m.plano_contas_padrao_ans_id
         WHERE a.versao_fonte = ?`,
@@ -92,7 +97,8 @@ beforeAll(async () => {
   const est = massa.est;
   await nucleo.escrever({ cliente: CLIENTE, correlacao: 'massa-c3026' }, async (e) => {
     const agora = new Date();
-    let plano = (await e.uma<{ id: unknown }>("SELECT id FROM plano_contas WHERE codigo = 'C3026-PC'", []))?.id;
+    let plano = (await e.uma<{ id: unknown }>("SELECT id FROM plano_contas WHERE codigo = 'C3026-PC'", []))
+      ?.id;
     if (!plano)
       plano = await e.inserir(
         "INSERT INTO plano_contas (codigo, descricao, tipo, mascara, quantidade_niveis, vigencia_inicio, criado_em) VALUES ('C3026-PC', 'PLANO SINTETICO C3026', 'contabil', '9.9.99.999', 4, '2000-01-01', ?)",
@@ -103,7 +109,12 @@ beforeAll(async () => {
       ['2.9.26.002', 'PESL', 'passivo', 'credora'],
       ['4.9.26.001', 'DESPESA', 'despesa', 'devedora'],
     ] as const) {
-      const ex = (await e.uma<{ id: unknown }>('SELECT id FROM conta_contabil WHERE plano_contas_id = ? AND classificacao = ?', [plano, cl]))?.id;
+      const ex = (
+        await e.uma<{ id: unknown }>(
+          'SELECT id FROM conta_contabil WHERE plano_contas_id = ? AND classificacao = ?',
+          [plano, cl],
+        )
+      )?.id;
       conta[nome] = Number(
         ex ??
           (await e.inserir(
@@ -151,8 +162,12 @@ describe.skipIf(!PODE)('contabilidade regulatória da operadora no banco (C3-026
       ['812', 'analitica'],
     ] as const)
       await porta!.gravarContaPadrao(c, ans(cod, tipo), trilha('conta'));
-    expect(await codigoDe(porta!.gravarContaPadrao(c, ans('8111', 'analitica'), trilha('conta')))).toBe('superior-analitica');
-    expect(await codigoDe(porta!.gravarContaPadrao(c, ans('81', 'sintetica'), trilha('conta')))).toBe('conta-repetida');
+    expect(await codigoDe(porta!.gravarContaPadrao(c, ans('8111', 'analitica'), trilha('conta')))).toBe(
+      'superior-analitica',
+    );
+    expect(await codigoDe(porta!.gravarContaPadrao(c, ans('81', 'sintetica'), trilha('conta')))).toBe(
+      'conta-repetida',
+    );
     const linhas = await q(
       `SELECT a.codigo_conta_ans, a.grau, s.codigo_conta_ans AS sup FROM plano_contas_padrao_ans a
          LEFT JOIN plano_contas_padrao_ans s ON s.id = a.superior_plano_contas_padrao_ans_id
@@ -178,8 +193,12 @@ describe.skipIf(!PODE)('contabilidade regulatória da operadora no banco (C3-026
     });
     await porta!.gravarMapa(c, op, mapa(conta['PEONA']!, '811'), trilha('mapa'));
     await porta!.gravarMapa(c, op, mapa(conta['PESL']!, '812'), trilha('mapa'));
-    expect(await codigoDe(porta!.gravarMapa(c, op, mapa(conta['PEONA']!, '812'), trilha('mapa')))).toBe('conta-ja-mapeada');
-    expect(await codigoDe(porta!.gravarMapa(c, op, mapa(conta['PESL']!, '81'), trilha('mapa')))).toBe('conta-ans-sintetica');
+    expect(await codigoDe(porta!.gravarMapa(c, op, mapa(conta['PEONA']!, '812'), trilha('mapa')))).toBe(
+      'conta-ja-mapeada',
+    );
+    expect(await codigoDe(porta!.gravarMapa(c, op, mapa(conta['PESL']!, '81'), trilha('mapa')))).toBe(
+      'conta-ans-sintetica',
+    );
     const ms = await porta!.mapas(c, op);
     expect(ms.map((m) => [m.contaAns, m.contaContabil, m.paginaDiops])).toEqual([
       ['811', conta['PEONA'], 3],
@@ -209,7 +228,15 @@ describe.skipIf(!PODE)('contabilidade regulatória da operadora no banco (C3-026
       q(
         'SELECT sequencia, tipo_provisao, valor, valor_anterior, excluido_em IS NOT NULL AS excluido FROM provisao_tecnica_item WHERE provisao_tecnica_competencia_id = ? ORDER BY sequencia',
         [id],
-      ).then((rs) => rs.map((r) => [Number(r['sequencia']), r['tipo_provisao'], Number(r['valor']), r['valor_anterior'] === null ? null : Number(r['valor_anterior']), Number(r['excluido'])]));
+      ).then((rs) =>
+        rs.map((r) => [
+          Number(r['sequencia']),
+          r['tipo_provisao'],
+          Number(r['valor']),
+          r['valor_anterior'] === null ? null : Number(r['valor_anterior']),
+          Number(r['excluido']),
+        ]),
+      );
     expect(await itens(fev.id)).toEqual([
       [1, 'peona', 10200, null, 0],
       [2, 'pesl', 4321, null, 0],
@@ -223,7 +250,9 @@ describe.skipIf(!PODE)('contabilidade regulatória da operadora no banco (C3-026
       informados: [],
       notaTecnica: null,
     };
-    expect(await codigoDe(porta!.calcular(c, { ...recalc, versao: 9 }, trilha('calculo')))).toBe('versao-desatualizada');
+    expect(await codigoDe(porta!.calcular(c, { ...recalc, versao: 9 }, trilha('calculo')))).toBe(
+      'versao-desatualizada',
+    );
     const fev2 = await porta!.calcular(c, { ...recalc, versao: 1 }, trilha('calculo'));
     expect(fev2.versao).toBe(2);
     expect(await itens(fev.id)).toEqual([
@@ -235,7 +264,15 @@ describe.skipIf(!PODE)('contabilidade regulatória da operadora no banco (C3-026
     // Competência seguinte pela base do sistema (sem mensalidade nem guia na massa: zero) e o valor anterior.
     const mar = await porta!.calcular(
       c,
-      { competencia: '2031-03-01', metodo: 'metodologia_ans', contas, base: null, informados: [], notaTecnica: null, versao: null },
+      {
+        competencia: '2031-03-01',
+        metodo: 'metodologia_ans',
+        contas,
+        base: null,
+        informados: [],
+        notaTecnica: null,
+        versao: null,
+      },
       trilha('calculo'),
     );
     expect(await itens(mar.id)).toEqual([
@@ -243,7 +280,12 @@ describe.skipIf(!PODE)('contabilidade regulatória da operadora no banco (C3-026
       [2, 'pesl', 0, 4321, 0],
     ]);
     // Contabilização de fevereiro: D despesa / C provisão, pela variação (sem anterior: o valor inteiro).
-    const k = await porta!.contabilizar(c, fev.id, { versao: 2, contaDespesa: conta['DESPESA']!, contaReversao: null }, trilha('contab'));
+    const k = await porta!.contabilizar(
+      c,
+      fev.id,
+      { versao: 2, contaDespesa: conta['DESPESA']!, contaReversao: null },
+      trilha('contab'),
+    );
     const partidas = await q(
       'SELECT lado, conta_contabil_id, valor FROM partida_contabil WHERE lancamento_contabil_id = ? ORDER BY sequencia',
       [k['lancamento']],
@@ -254,19 +296,28 @@ describe.skipIf(!PODE)('contabilidade regulatória da operadora no banco (C3-026
       ['debito', conta['DESPESA'], 4321],
       ['credito', conta['PESL'], 4321],
     ]);
-    const [sit] = await q('SELECT situacao, contabilizado_em IS NOT NULL AS ok FROM provisao_tecnica_competencia WHERE id = ?', [fev.id]);
+    const [sit] = await q(
+      'SELECT situacao, contabilizado_em IS NOT NULL AS ok FROM provisao_tecnica_competencia WHERE id = ?',
+      [fev.id],
+    );
     expect([sit?.['situacao'], Number(sit?.['ok'])]).toEqual(['contabilizada', 1]);
-    expect(
-      await codigoDe(porta!.calcular(c, { ...recalc, versao: 3 }, trilha('calculo'))),
-    ).toBe('situacao-nao-permite');
+    expect(await codigoDe(porta!.calcular(c, { ...recalc, versao: 3 }, trilha('calculo')))).toBe(
+      'situacao-nao-permite',
+    );
     // Balancete no padrão da ANS no fim de fevereiro: provisões no ramo 8; a despesa não mapeada fica de fora.
     const b = await porta!.balancete(c, op, '2031-02-28');
     const linha = (cod: string) => b.linhas.find((l) => l.codigo === cod)?.saldoCentavos;
-    expect([linha('8'), linha('81'), linha('811'), linha('812')]).toEqual([-2132100, -2132100, -1700000, -432100]);
-    expect(b.semMapa.some((s) => s.contaContabil === conta['DESPESA'] && s.saldoCentavos === 2132100)).toBe(true);
+    expect([linha('8'), linha('81'), linha('811'), linha('812')]).toEqual([
+      -2132100, -2132100, -1700000, -432100,
+    ]);
+    expect(b.semMapa.some((s) => s.contaContabil === conta['DESPESA'] && s.saldoCentavos === 2132100)).toBe(
+      true,
+    );
     // Cancelamento de março; a contabilizada não cancela.
     await porta!.cancelar(c, mar.id, { versao: 1, motivo: 'Teste sintético' }, trilha('cancelar'));
-    expect(await codigoDe(porta!.cancelar(c, fev.id, { versao: 3, motivo: 'x' }, trilha('cancelar')))).toBe('situacao-nao-permite');
+    expect(await codigoDe(porta!.cancelar(c, fev.id, { versao: 3, motivo: 'x' }, trilha('cancelar')))).toBe(
+      'situacao-nao-permite',
+    );
     const lidas = await porta!.provisoes(c);
     expect(lidas.map((p) => [p.competencia, p.situacao, p.total, p.itens.length])).toEqual([
       ['2031-03-01', 'cancelada', 0, 2],

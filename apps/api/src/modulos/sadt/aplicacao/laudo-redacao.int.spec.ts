@@ -639,7 +639,9 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         WHERE v.laudo_diagnostico_id = ? ORDER BY v.numero_versao`,
       [item, r.id],
     );
-    expect(docsIcp.map((d) => [d['v'], d['tipo'], d['cat'], d['sem_envelope'], d['ligado'], d['eventos']])).toEqual([
+    expect(
+      docsIcp.map((d) => [d['v'], d['tipo'], d['cat'], d['sem_envelope'], d['ligado'], d['eventos']]),
+    ).toEqual([
       [1, 'registro-clinico', 'lancado', 1, 1, 1],
       [2, 'registro-clinico', 'lancado', 1, 1, 1],
       [3, 'registro-clinico', 'lancado', 1, 1, 1],
@@ -649,7 +651,9 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
     expect(tela.versoes.every((v) => v.documento !== null)).toBe(true);
     // Sem política ICP-Brasil do estabelecimento para o tipo, fica a assinatura eletrônica avançada do clique; com a
     // política vigente (nível icp-brasil, destino interno), as três versões entram na fila do laudista.
-    const tipoLaudo = Number((await um("SELECT id FROM tipo_documento_clinico WHERE codigo = 'registro-clinico'", []))!['id']);
+    const tipoLaudo = Number(
+      (await um("SELECT id FROM tipo_documento_clinico WHERE codigo = 'registro-clinico'", []))!['id'],
+    );
     const politicaAntes = await um(
       `SELECT COUNT(*) AS n FROM regra_politica_assinatura r JOIN politica_assinatura p ON p.id = r.politica_assinatura_id
         WHERE p.estabelecimento_id = ? AND p.tipo_documento_clinico_id = ? AND p.ativo AND r.vigente = 1
@@ -678,7 +682,9 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         expect(naFila.versoes.map((v) => v.assinaturaIcp)).toEqual(['na-fila', 'na-fila', 'na-fila']);
       } finally {
         await nucleo.escrever(ctxT, async (e) => {
-          await e.executar('DELETE FROM regra_politica_assinatura WHERE politica_assinatura_id = ?', [politica]);
+          await e.executar('DELETE FROM regra_politica_assinatura WHERE politica_assinatura_id = ?', [
+            politica,
+          ]);
           await e.executar('DELETE FROM politica_assinatura WHERE id = ?', [politica]);
         });
       }

@@ -211,7 +211,9 @@ describe.skipIf(SEM_BANCO)('referência do empenho no pedido e no título (Maria
     expect(Number(await ref('titulo_pagar', t1))).toBe(emp);
     expect(Number(await ref('titulo_pagar', t2))).toBe(emp);
     expect(
-      await codigoDe(porta.referirTitulo(c, anulado, { id: t1, versao: await versao('titulo_pagar', t1) }, k())),
+      await codigoDe(
+        porta.referirTitulo(c, anulado, { id: t1, versao: await versao('titulo_pagar', t1) }, k()),
+      ),
     ).toBe('referencia-de-outro-empenho');
     expect(Number(await ref('titulo_pagar', t1))).toBe(emp);
 

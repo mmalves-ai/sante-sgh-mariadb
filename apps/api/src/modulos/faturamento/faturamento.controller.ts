@@ -481,7 +481,9 @@ export class FaturamentoController {
   /** Os setores do estabelecimento para a escolha no simulador (06-FAT linha 11). */
   @Get('simulador/opcoes')
   @Permissao('faturamento.preco.simular')
-  async opcoesSimulador(@Req() req: RequisicaoAutorizada): Promise<{ setores: { id: number; nome: string }[] }> {
+  async opcoesSimulador(
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<{ setores: { id: number; nome: string }[] }> {
     return { setores: await this.porta.setoresDoSimulador(ctx(sessaoDe(req))) };
   }
 
