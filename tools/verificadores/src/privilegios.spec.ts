@@ -132,6 +132,15 @@ const outra = definirOperacao({ nome: 'y', tabelas: TABELAS_OUTRAS });`;
     ]);
   });
 
+  it('acesso indexado a objeto de nomes (${TABELAS[tipo]}) vale para todas as propriedades; objeto desconhecido segue recusado', () => {
+    const texto = `const TABELA_X: Record<T, string> = { a: 'leito', b: 'paciente' };
+const q = \`SELECT * FROM \${TABELA_X[tipo]} WHERE id = ?\`;
+const d = \`UPDATE \${OUTRA[tipo]} SET x = 1\`;`;
+    const r = analisarTexto(texto, modelo, lerConstantes([texto]), 'm/x.ts');
+    expect(r.uso).toEqual({ leito: ['SELECT'], paciente: ['SELECT'] });
+    expect(r.dinamicos.map((d) => [d.acao, d.expressao])).toEqual([['UPDATE', 'OUTRA[tipo]']]);
+  });
+
   it('resolve lista filtrada pela diferença exata e objeto de listas; filtro de outra forma não se resolve', () => {
     const c = lerConstantes([
       `const A = ['leito', 'paciente', 'vinculo'] as const;
