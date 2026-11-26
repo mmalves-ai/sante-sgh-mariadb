@@ -260,7 +260,8 @@ test.describe('@C1-083 cultura e antibiograma', () => {
       return json(r, { id: 22, itens: 2, retirados: 0, padrao: false });
     });
 
-    await entrar(page, 'SINT.BIOMEDICO');
+    // O cadastro dos painéis pede sadt.catalogo.editar, que o SINT.BIOMEDICO não tem; SINT.LABORATORIO tem toda a área.
+    await entrar(page, 'SINT.LABORATORIO');
     await page.goto('/sadt/microbiologia/cadastro');
     await expect(page.getByTestId('tela-antibiograma-cadastro')).toBeVisible();
     await expect(page.getByTestId('antibiograma-painel-21')).toContainText('PAINEL SINTETICO');

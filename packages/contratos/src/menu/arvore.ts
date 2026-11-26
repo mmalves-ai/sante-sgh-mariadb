@@ -151,7 +151,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo), para o cadastro de credores chegar à tela sem a leitura das remessas; a contagem acompanha.
 // C1-035 (09-AREA linha 86): o item "Auditoria das checagens" da enfermagem entrou à mão (mesmo motivo; F8 vai como
 // fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":511,"M":198,"P":57,"N":256};
+// C1-083 (05-SADT linha 12): o item "Painéis de antibiograma e pontos de corte" do laboratório entrou à mão (mesmo
+// motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":512,"M":198,"P":57,"N":257};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -330,6 +332,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"diagnostico-sadt.limites-do-pedido-de-exame","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Limites do pedido de exame"],"titulo":"Limites do pedido de exame","selo":"N","fase":7,"rota":"/sadt/limites","permissao":"sadt.catalogo.ler"},
   {"id":"diagnostico-sadt.autoliberacao-de-resultados","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Autoliberação de resultados"],"titulo":"Autoliberação de resultados","selo":"N","fase":7,"rota":"/sadt/autoliberacao","permissao":"sadt.resultado.ler"},
   {"id":"diagnostico-sadt.laboratorio.digitacao-e-importacao-de-resultados","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Digitação e importação de resultados"],"titulo":"Digitação e importação de resultados","selo":"M","fase":2,"rota":"/sadt/resultados/digitacao","permissao":"sadt.resultado.ler"},
+  {"id":"diagnostico-sadt.laboratorio.paineis-de-antibiograma-e-pontos-de-corte","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Painéis de antibiograma e pontos de corte"],"titulo":"Painéis de antibiograma e pontos de corte","selo":"N","fase":7,"rota":"/sadt/microbiologia/cadastro","permissao":"sadt.catalogo.ler"},
   {"id":"diagnostico-sadt.laboratorio.interfaces-de-equipamento","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Interfaces de equipamento"],"titulo":"Interfaces de equipamento","selo":"P","fase":3,"rota":"/sadt/laboratorio/interfaces","permissao":"sadt.interface.ler"},
   {"id":"diagnostico-sadt.laboratorio.laboratorio-de-apoio-envio-e-retorno","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Laboratório","Laboratório de apoio"],"titulo":"Laboratório de apoio","selo":"M","fase":3,"rota":"/sadt/laboratorio/apoio","permissao":"sadt.apoio.ler"},
   {"id":"diagnostico-sadt.liberacao-de-exames-conferencia-e-valor-critico","area":"DIAGNÓSTICO","grupo":null,"caminho":["Diagnóstico","Liberação de exames"],"titulo":"Liberação de exames","selo":"M","fase":2,"rota":"/sadt/resultados/liberacao","permissao":"sadt.resultado.ler"},
