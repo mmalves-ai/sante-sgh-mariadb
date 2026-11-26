@@ -34,6 +34,7 @@ const { t } = useI18n({
       agenda: 'Agenda (HH:MM; "seg HH:MM"; "DD HH:MM")',
       anonimizacao: 'Anonimização',
       campos: 'Campos',
+      sequencia: 'Ordem do campo',
       visao: 'Visão',
       campo: 'Campo',
       sensivelCatalogo: 'Dado sensível pelo catálogo',
@@ -262,7 +263,13 @@ const data = (v: string) => new Date(v).toLocaleString('pt-BR');
       <fieldset>
         <legend>{{ t('campos') }}</legend>
         <div v-for="(c, i) in p.campos" :key="i">
-          <input v-model.number="c.sequencia" type="number" min="1" style="width: 4em" />
+          <input
+            v-model.number="c.sequencia"
+            type="number"
+            min="1"
+            :aria-label="t('sequencia')"
+            style="width: 4em"
+          />
           <SanteSelecao
             v-model="c.entidade"
             :rotulo="t('visao')"
