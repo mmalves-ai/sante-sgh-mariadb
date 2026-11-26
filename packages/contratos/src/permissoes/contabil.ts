@@ -133,4 +133,31 @@ export const PERMISSOES_CONTABIL_M54_F3: readonly DeclaracaoPermissao[] = [
       escopos: [],
     },
   ),
+  // C3-023 (07-FIN linha 115): LALUR/LACS (partes A e B) e apuração e provisão do IRPJ e da CSLL do lucro real.
+  // Recurso sem opção correspondente no menu de origem: concedido pelo perfil ao administrador do sistema.
+  p(
+    'contabil.lalur.ler',
+    'Consultar o LALUR e o LACS (partes A e B), a apuração do IRPJ e da CSLL e o bloco M da ECF',
+    {
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+      escopos: [],
+    },
+  ),
+  p(
+    'contabil.lalur.editar',
+    'Manter os ajustes da parte A, as contas da parte B e a configuração da provisão do IRPJ e da CSLL',
+    {
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['administrador-sistema'],
+      escopos: [],
+    },
+  ),
+  p('contabil.lalur.apurar', 'Apurar, provisionar e fechar o IRPJ e a CSLL do lucro real', {
+    criticidade: 'sensivel',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['administrador-sistema'],
+    escopos: [],
+  }),
 ];

@@ -18,3 +18,4 @@ export * from './demonstracoes.js';
 export * from './sped.js';
 export * from './publicacao.js';
 export * from './consolidacao.js';
+export * from './lalur.js';

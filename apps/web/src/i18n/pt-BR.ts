@@ -54,6 +54,7 @@ import { mensagensRepasse } from '../modulos/repasse/i18n.js';
 import { mensagensManutencao } from '../modulos/manutencao/i18n.js';
 import { mensagensContabil } from '../modulos/contabil/i18n.js';
 import { mensagensConsolidacao } from '../modulos/contabil/i18n-consolidacao.js';
+import { mensagensLalur } from '../modulos/contabil/i18n-lalur.js';
 import { mensagensPatrimonio } from '../modulos/patrimonio/i18n.js';
 import { mensagensPessoas } from '../modulos/pessoas/i18n.js';
 import { mensagensEstruturaGestao } from '../modulos/cadastro/i18n-estrutura.js';
@@ -2469,6 +2470,7 @@ export const mensagensWeb = {
   contabil: mensagensContabil,
   // 07-FIN L127 (C2-101): a consolidação gerencial do grupo de estabelecimentos.
   consolidacao: mensagensConsolidacao,
+  lalur: mensagensLalur,
   patrimonio: mensagensPatrimonio,
   // M48 (etapa 1): notificação de incidentes, triagem do NSP, prazos e Notivisa.
   qualidade: mensagensQualidade,

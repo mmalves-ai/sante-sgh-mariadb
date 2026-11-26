@@ -12,6 +12,7 @@ import type { ContextoModulo } from '../registro.js';
 import { ContabilController } from './contabil.controller.js';
 import { ConsolidacaoController, NUCLEO_CONSOLIDACAO } from './consolidacao.controller.js';
 import { DemonstracoesContabilController, GERADOR_PDF_CONTABIL } from './demonstracoes.controller.js';
+import { LalurController } from './lalur.controller.js';
 import { LancamentosContabilController } from './lancamentos.controller.js';
 import { PORTA_CONTABIL, type PortaContabil } from './porta.js';
 import { PortaContabilMemoria } from './porta-memoria.js';
@@ -58,6 +59,8 @@ export function moduloContabil(ctx: ContextoModulo, opcoes: OpcoesModuloContabil
       DemonstracoesContabilController,
       // C2-101 (07-FIN linha 127): consolidação gerencial de várias empresas.
       ConsolidacaoController,
+      // C3-023 (07-FIN linha 115): LALUR/LACS e apuração e provisão do IRPJ e da CSLL do lucro real.
+      LalurController,
     ],
     providers: [
       { provide: PORTA_CONTABIL, useValue: porta },
