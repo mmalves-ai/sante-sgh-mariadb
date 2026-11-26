@@ -38,7 +38,7 @@ test.describe('Pacotes de dados de parceiros contra o catálogo @C2-037 @fase3',
     const form = painel.getByTestId('pacote-novo');
     await expect(form).toBeVisible();
     await form.getByLabel('Parceiro (código)').fill('PARC-SINT-E2E');
-    await form.getByLabel('Código').fill('E2E-C2037');
+    await form.getByLabel('Código', { exact: true }).fill('E2E-C2037');
     await form.getByLabel('Nome').fill('Atendimentos do dia (sintético)');
     await form.getByLabel('Conteúdo').fill('Atendimentos com entrada no período, fonte sintética');
 
