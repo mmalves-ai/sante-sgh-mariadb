@@ -57,6 +57,11 @@ import {
   SERVICO_REGRAS_COMERCIAIS,
   ServicoRegrasComerciais,
 } from './regras-comerciais.controller.js';
+import {
+  ExcecaoRegraController,
+  SERVICO_EXCECAO_REGRA,
+  ServicoExcecaoRegra,
+} from './regra-excecao.controller.js';
 import { PORTA_FATURAMENTO, type PortaFaturamento, portaFaturamentoIndisponivel } from './porta.js';
 import { PortaFaturamentoMemoria } from './porta-memoria.js';
 import { PortaFaturamentoPropria } from './porta-propria.js';
@@ -102,6 +107,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
       ParticularAdiantamentoController,
       AuditoriaTramiteController,
       RegrasComerciaisController,
+      ExcecaoRegraController,
       ParametrosFaturamentoController,
       SimulacaoReceitaController,
       ReceitaContabilController,
@@ -178,6 +184,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloFaturamento = {}
       },
       // F8 (06-FAT linhas 13, 19 e 23): regras de criação e quebra de conta, franquia e desconto por volume, remoção e
       // ligação tarifada (banco próprio).
+      // C1-090 (06-FAT linha 16): exceções da regra de lançamento automático (banco próprio).
+      {
+        provide: SERVICO_EXCECAO_REGRA,
+        useValue:
+          !opcoes.porta && ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new ServicoExcecaoRegra(ctx.nucleo)
+            : null,
+      },
       {
         provide: SERVICO_REGRAS_COMERCIAIS,
         useValue:

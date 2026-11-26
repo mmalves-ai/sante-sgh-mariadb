@@ -41,6 +41,8 @@
 
 import { cobrancasDeDiferenca, type DiferencaAcomodacao } from './diferenca-acomodacao.js';
 import { aplicarPacoteNasDiarias, type PacoteDeDiarias } from './pacote-diarias.js';
+// Cadastro e encerramento da exceção da regra de lançamento (C1-090).
+export * from './excecao-regra-lancamento.js';
 export {
   aplicarPacoteNasDiarias,
   type DiariaDoPacoteNaAcomodacao,
