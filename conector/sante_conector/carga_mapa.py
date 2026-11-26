@@ -1642,7 +1642,10 @@ class CargaMapa(carga.Carga):
                     if dc == "id" and op.get("complementa") and x is None:
                         return None, None, pend, ("pai_inexistente", "media"), []
                 if x == "@data_carga" and "vigencia" in c:  # vigência: nunca a data da carga (ADR 0007, 16)
-                    x = self._vigencia(p, linha, chave, None, pend)
+                    pv = []  # T2 (corretor): como a `#vigencia`, sai com o secundário opcional que não grava
+                    x = self._vigencia(p, linha, chave, None, pv)
+                    pend.extend(pv)
+                    pend_vig.extend(pv)
                 elif x == "@data_carga":
                     x = self.data_carga
                     if c.get("regra") and nome in ("=@data_carga", "=~@data_carga"):  # ex.: competência da carga

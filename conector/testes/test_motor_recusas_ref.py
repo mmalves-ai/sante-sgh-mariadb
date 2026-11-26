@@ -2,6 +2,7 @@
 trinca do campo do modelo e a corrente reversa), M5 (`zero_e_chave`), M6 (secundário de pai recusado), M7 (corrente de
 dois saltos), M12 (chave composta aninhada no componente) e M15 (texto vazio é sem pai; coluna anulável com pai
 recusado grava NULL). Só dados falsos."""
+import datetime
 import unittest
 
 from sante_conector import mapa
@@ -190,6 +191,36 @@ class PaiRecusado(unittest.TestCase):
         self.assertEqual(cm.adiadas, [])
         self.assertEqual([x[2] for x in cm.pendencias], ["pai_pendente"])  # recalculada, uma só
         self.assertEqual(cm._buf, [])
+
+
+class VigenciaDoOpcional(unittest.TestCase):
+    """recusas-fase2 (T2, corretor): a vigência é derivada (evidência ou data estimada), não valor da origem; no
+    secundário `opcional`, ela sozinha não faz o destino gravar, e as pendências dela saem com ele."""
+
+    def _valores(self, val, coluna="#vigencia:DT"):
+        cm = motor()
+        cm.info = {"sec": {"valor": (True, "varchar", 50, False, None),
+                           "vigente_desde": (True, "date", None, False, None)}}
+        cm.lt.colunas = lambda t: [{"nome": "DT", "codigo_tipo": 35}, {"nome": "VAL", "codigo_tipo": 37}]
+        cm._evidencia = lambda t, cols: ({}, datetime.date(2020, 1, 1))  # sem data na linha; a da tabela: estimada
+        vig = {"coluna": coluna, "destino": "vigente_desde", "regra": "", "depara": "", "referencia": "",
+               "valores": None, "vigencia": ["DT"] if coluna.startswith("#vigencia:") else None}
+        v = {"coluna": "VAL", "destino": "valor", "regra": "texto", "depara": "", "referencia": "", "valores": None}
+        p = {"tabela": "T", "destinos": ["sec"], "opcoes": {"sec": {"opcional": True}}, "colunas": {"sec": [vig, v]},
+             "duas_fases": set()}
+        vals, _, pend, recusa, _ = cm._valores(p, {"VAL": val, "DT": None}, "9")
+        self.assertIsNone(recusa)
+        return vals["sec"], [r for r, _ in pend]
+
+    def test_so_a_vigencia_nao_grava_e_a_pendencia_sai(self):
+        for coluna in ("#vigencia:DT", "@vigencia_carga", "=@data_carga"):
+            self.assertEqual(self._valores(None, coluna), ([], []), coluna)
+
+    def test_com_valor_da_origem_grava_e_a_pendencia_fica(self):
+        for coluna in ("#vigencia:DT", "@vigencia_carga", "=@data_carga"):
+            vals, pend = self._valores("x", coluna)
+            self.assertEqual(vals, [("", {"vigente_desde": datetime.date(2020, 1, 1), "valor": "x"})], coluna)
+            self.assertEqual(pend, ["vigencia_sem_fonte"], coluna)
 
 
 if __name__ == "__main__":

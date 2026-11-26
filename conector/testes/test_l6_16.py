@@ -118,8 +118,9 @@ class Plano(unittest.TestCase):
         self.assertEqual(g["carater_cirurgia_id"]["coluna"], "=~eletiva")
         sit = [c["coluna"] for c in self.plano["CCAGENDA"]["colunas"]["agendamento_cirurgico"]
                if c["destino"] == "situacao"]
-        # bloqueio da grade e situação da origem antes do presumido (nunca agendado para o que a origem diz outro)
-        self.assertEqual(sit, ["HORA_BLOQUEADA", "ID_TBSITAGE", "=~agendado"])
+        # bloqueio da grade e situação da origem antes do presumido (nunca agendado para o que a origem diz outro);
+        # T2 (pedido 67): sem situação, suspenso presumido (não acionável), nunca agendado
+        self.assertEqual(sit, ["HORA_BLOQUEADA", "ID_TBSITAGE", "=~suspenso"])
         pac = [c["coluna"] for c in self.plano["CCAGENDA"]["colunas"]["agendamento_cirurgico"]
                if c["destino"] == "paciente_id"]
         self.assertEqual(pac, ["PRONT", "CPF"])
@@ -217,7 +218,7 @@ class Plano(unittest.TestCase):
 
     def test_situacao_bloqueio_sangue_e_contaminacao(self):
         sit = lambda col, v: self._valor_de("CCAGENDA", "agendamento_cirurgico", col, "situacao", v)
-        for cod, esperado in (("C", "confirmado"), ("A", "confirmado"), ("S", "realizado"), ("N", "agendado"),
+        for cod, esperado in (("C", "confirmado"), ("A", "confirmado"), ("S", "realizado"), ("N", "suspenso"),
                               ("R", "agendado"), ("X", "cancelado"), ("F", "cancelado"), ("U", "suspenso"),
                               ("HR", "horario_bloqueado"), ("Q", "horario_bloqueado")):
             self.assertEqual(sit("ID_TBSITAGE", cod), (esperado, []), cod)

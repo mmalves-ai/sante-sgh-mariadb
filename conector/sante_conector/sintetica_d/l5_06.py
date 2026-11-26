@@ -540,11 +540,12 @@ def linhas(r, ins):
         # da mescla) e é recusado por ser o segundo profissional da mesma pessoa (1062, visível para o hospital
         # resolver); o 8 aponta pessoa ausente do índice (pai_inexistente); sem data de início: vigência pela
         # evidência (vigencia_sem_fonte)
+        # T2 (corretor): a vigência `=@data_carga` do secundário opcional que não grava sai com ele (1, não 2)
         "TBPROFIS": {"gravados": 6, "pendencias": {"valor_presumido": 8, "valor_fora_do_dominio": 3,
                                                    "documento_invalido": 7, "codigo_inexistente_destino": 1,
                                                    "adotado_existente": 1, "mescla_conflito_origem_guardada": 1,
                                                    "restricao_destino_4025": 1, "restricao_destino_1062": 1,
-                                                   "data_sentinela": 1, "vigencia_sem_fonte": 2,
+                                                   "data_sentinela": 1, "vigencia_sem_fonte": 1,
                                                    "pai_inexistente": 3}},
         "TBESPEC": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_4025": 1,
                                                   "valor_fora_do_dominio": 1}},

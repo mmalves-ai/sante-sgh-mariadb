@@ -24,7 +24,7 @@ Rodada 3 (bloco cirúrgico inteiro carrega):
 - ato cirúrgico: horários HHMM com a data do ato (#data_hora), ato que atravessa a meia-noite (virada_de_dia nas
   quatro colunas de fim), paciente pelo atendimento (encadeada RECADATE > PRONT > RICADPAC), sem sala (1048),
   atendimento nunca visto (1048) e sala recusada (pai_pendente);
-- agenda: caráter presumido eletivo pelo cadastro do destino (cod:, valor_presumido), situação presumida agendado,
+- agenda: caráter presumido eletivo pelo cadastro do destino (cod:, valor_presumido), situação presumida suspenso (pedido 67; sem cancelado_em, 4025),
   cirurgião pela inscrição (encadeada até o profissional), procedimento principal criado no cadastro cirúrgico
   (antes;adotar:codigo) com o nome da tabela de procedimentos da origem ou, ambíguo, o código derivado; prontuário e
   profissional nunca vistos (1048), sem duração (CHECK de agendado, 4025), ATEND fora do domínio;
@@ -258,11 +258,11 @@ def _bloco(ins):
                                    "70.5" if i == 1 else "0"), SUPUR="N", USUARIO="USR_EXEMPLO_A",
                                CID10="K359" if i == 1 else None, DIAG="Diagnóstico exemplo %d" % i, POT_CONT=pot))
     # agenda: 1 completa, confirmada (C), 2 unidades de sangue (reserva TRUE); 2 procedimento ambíguo, sem inclusão,
-    # sem situação (agendado presumido); 3 prontuário nunca visto (1048); 4 cirurgião nunca visto (1048), realizada
+    # sem situação (suspenso presumido, pedido 67: sem cancelado_em, 4025); 3 prontuário nunca visto (1048); 4 cirurgião nunca visto (1048), realizada
     # (S); 5 sem duração (CHECK de agendado, 4025; o procedimento já existe: adotado); 6 ATEND fora do domínio, sem
     # procedimento e cancelada (X: sem a data do cancelamento o CHECK recusa, 4025); 7 sem prontuário: paciente pelo
     # CPF; 8 horário bloqueado na grade (S: recusa 4025, nunca agendada); 9 horário reservado (HR: recusa 4025);
-    # 10 situação sem par (valor_fora_do_dominio, agendado presumido); 11 sem prontuário nem CPF conhecido (1048)
+    # 10 situação sem par (valor_fora_do_dominio, suspenso presumido: 4025); 11 sem prontuário nem CPF conhecido (1048)
     for i, sala, quando, dur, pront, reg, atend, esp, procto, crm, incl, sit, blq, san, cpf in [
             (1, 1, dt(2026, 4, 6, 8, 0), h(2, 0), 700, 5000, "I", 7, 30101010, 50, dt(2026, 3, 30, 10, 0), "C", "N",
              2, None),
@@ -325,15 +325,17 @@ def _esperado_bloco():
         "CCCADCIR": {"gravados": 2, "pendencias": {"virada_de_dia": 4, "restricao_destino_1048": 2,
                                                    "pai_inexistente": 1, "pai_pendente": 1,
                                                    "valor_fora_do_dominio": 1}},
-        # valor_presumido 13 (rodada 6): caráter eletivo presumido nas 11 linhas + situação agendado presumida só nas 2
+        # valor_presumido 13 (rodada 6): caráter eletivo presumido nas 11 linhas + situação suspenso presumida só nas 2
         # em que é ela que grava (o motor deixou de marcar o =~ concorrente quando uma coluna anterior preenche)
         # 3 e 11: o banco acusa o CHECK (4025) antes do NOT NULL do paciente; 5: recusada (4025), a adoção é desfeita;
-        # 6 cancelada sem data do cancelamento, 8 e 9 horário bloqueado: 4025
-        "CCAGENDA": {"gravados": 4, "pendencias": {"valor_presumido": 13, "pai_ambiguo": 1, "pai_inexistente": 3,
-                                                   "restricao_destino_1048": 1, "restricao_destino_4025": 6,
+        # 6 cancelada sem data do cancelamento, 8 e 9 horário bloqueado: 4025; T2 (pedido 67): 2 (sem situação) e 10
+        # (situação sem par) entram suspenso presumido e o CHECK do cancelamento (sem cancelado_em) recusa: 4025
+        "CCAGENDA": {"gravados": 2, "pendencias": {"valor_presumido": 13, "pai_ambiguo": 1, "pai_inexistente": 3,
+                                                   "restricao_destino_1048": 1, "restricao_destino_4025": 8,
                                                    "valor_fora_do_dominio": 2}},
-        "CCHISAGE": {"gravados": 3, "pendencias": {"valor_presumido": 5, "pai_ambiguo": 3, "pai_inexistente": 4,
-                                                   "restricao_destino_1048": 2}},
+        # T2 (pedido 67): 2 e 5 ligam à agenda 2, agora recusada: pai_pendente (NOT NULL), visíveis até a agenda gravar
+        "CCHISAGE": {"gravados": 1, "pendencias": {"valor_presumido": 3, "pai_ambiguo": 3, "pai_inexistente": 2,
+                                                   "pai_pendente": 2, "restricao_destino_1048": 2}},
         "CCPROEXT": {"gravados": 2, "pendencias": {"pai_inexistente": 2, "adotado_existente": 1,
                                                    "restricao_destino_1048": 1}},
         "CCLANCIR": {"gravados": 2, "pendencias": {"adotado_existente": 1, "pai_inexistente": 1,
@@ -346,7 +348,7 @@ def linhas(r, ins):
     ins("RICADPAC", [2, 701, 11122233344])
     # agenda excluída ou cancelada: 1 completa; 2 atendimento nunca visto e sem prontuário (paciente pelo CPF; a
     # identificação informada fica no retrato); 3 prontuário nunca visto;
-    # 4 sem a data da última atualização (1048); 5 usuário nunca carregado (pai_inexistente e 1048)
+    # 4 sem a data da última atualização (a inclusão presumida, P2b); 5 usuário nunca carregado (pai_inexistente e 1048)
     ts = datetime.datetime(2026, 2, 3, 14, 5)
     for i, pront, reg, usu, quando in [(1, 700, 5000, "USR_EXEMPLO_A", ts), (2, None, 9999, "USR_EXEMPLO_B", ts),
                                        (3, 888, 5000, "USR_EXEMPLO_C", ts), (4, 701, 5000, "USR_EXEMPLO_A", None),
@@ -403,8 +405,9 @@ def linhas(r, ins):
         "PRFA_TIPO_SINAL": {"gravados": 3, "pendencias": {"restricao_destino_1062": 1}},
         "PRTIPO_PROFISSIONAL": {"gravados": 4, "pendencias": {}},
         "TBANESTESIA": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
-        "CCAGENDA_EXC_CANC": {"gravados": 3, "pendencias": {"valor_presumido": 5, "pai_inexistente": 3,
-                                                            "restricao_destino_1048": 2}},
+        # recusas-fase2 (P2b, L6-16 r4): a 4, sem a data da última atualização, grava pela inclusão presumida
+        "CCAGENDA_EXC_CANC": {"gravados": 4, "pendencias": {"valor_presumido": 6, "pai_inexistente": 3,
+                                                            "restricao_destino_1048": 1}},
         "CCPARAM": {"gravados": 4, "pendencias": {"valor_presumido": 7, "valor_fora_do_dominio": 8, "pai_inexistente": 1,
                                                   "restricao_destino_1048": 2, "restricao_destino_1062": 1}},
     }

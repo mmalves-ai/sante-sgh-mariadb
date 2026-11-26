@@ -14,6 +14,8 @@ FATIA = ["PRSITDOCUMENTO", "PRSITDOCUMENTOASSINADO", "PRSITEXAME", "PRSITUACAOCH
          "PRTPASSINATURA_TBOID", "PRTPCOMP", "PRTPDOCUMENTO", "PRTPINFOPERGOPERADORA", "PRINFOPERGOPERADORA",
          "PRTPINFUSAO", "PRTPLAN", "PRMODOVENT", "PRTPLAN_GETABVIA"]
 RECUSAS = ("restricao_destino_", "codigo_colisao_caixa", "pai_pendente")
+# recusas-fase2 (R9): pai_pendente em coluna anulável é aviso (a linha grava sem a ligação); não conta como recusa
+AVISO_R9 = {"PRINDICEAGRUPAMENTO": 1, "PRPARAMORIGEMCABIMP": 1}
 
 
 class L607(unittest.TestCase):
@@ -93,6 +95,36 @@ class L607(unittest.TestCase):
                  and not d["destino"].startswith(("parametro_opcao.", "modulo_sistema.", "parametro_definicao."))]
         # rodada 5: o parâmetro da pergunta entra INATIVO de propósito (destino do dado presumido, o hospital configura)
         self.assertEqual(fixos, [("PRTPCOMP", "=evolucao"), ("PRTIPOPERGPAR", "=0")])
+
+    def test_situacoes_pelo_nome_e_nunca_estado_acionavel_presumido(self):
+        # T2 (pedido 67): a categoria ou etapa vem do nome (de-para); o nome sem par cai no terminal não acionável
+        # presumido, nunca no estado que gera trabalho (rascunho ao autor, assinatura pendente, exame pedido, checagem
+        # pendente)
+        esperado = {"PRSITDOCUMENTO": ("situacao_documento_prontuario", "categoria", "=~arquivado"),
+                    "PRSITDOCUMENTOASSINADO": ("situacao_assinatura_documento", "categoria", "=~cancelado"),
+                    "PRSITEXAME": ("situacao_procedimento_prescrito", "etapa", "=~suspenso"),
+                    "PRSITUACAOCHECAGEM": ("situacao_checagem", "categoria", "=~suspenso")}
+        todos = mapa.ler_valores(mapa.DIR_PACOTE)
+        for t, (dt, dc, lit) in esperado.items():
+            self.assertEqual([(c["coluna"], c["depara"]) for c in self.plano[t]["colunas"][dt] if c["destino"] == dc],
+                             [("NOME", "valores"), (lit, "")], t)
+            v = {x["valor_origem"]: x["valor_destino"] for x in todos
+                 if (x["tabela"], x["coluna"], x["destino"]) == (t, "NOME", "%s.%s" % (dt, dc))}
+            self.assertTrue(v, t)
+            self.assertIn(lit[2:], set(v.values()), t)  # o terminal também tem o seu nome na origem
+        v = lambda t, d: {x["valor_origem"]: x["valor_destino"] for x in todos
+                          if (x["tabela"], x["coluna"], x["destino"]) == (t, "NOME", d)}
+        doc = v("PRSITDOCUMENTO", "situacao_documento_prontuario.categoria")
+        self.assertEqual((doc["Rascunho"], doc["ASSINADO"], doc["Lançado"], doc["Arquivado"]),
+                         ("rascunho", "assinado", "lancado", "arquivado"))
+        ass = v("PRSITDOCUMENTOASSINADO", "situacao_assinatura_documento.categoria")
+        self.assertEqual((ass["Pendente"], ass["Assinado"], ass["Cancelado"]), ("pendente", "assinado", "cancelado"))
+        chk = v("PRSITUACAOCHECAGEM", "situacao_checagem.categoria")
+        self.assertEqual((chk["Administrado"], chk["SUSPENSO"], chk["Pendente"]),
+                         ("administrado", "suspenso", "pendente"))
+        # a etapa do exame usa os mesmos rótulos da situação do procedimento prescrito (L6-09)
+        self.assertEqual(v("PRSITEXAME", "situacao_procedimento_prescrito.etapa"),
+                         v("TBSTATUSPROCEDIMENTO", "situacao_procedimento_prescrito.etapa"))
 
     def test_listas_do_hospital_e_parametro_pelo_rotulo(self):  # rodada 5 (ADR 0006, 1; ADR 0007, 18)
         for t in ("PRTIPONOTIFICACAO", "PRTPASSINATURA_TBOID"):
@@ -174,7 +206,7 @@ class L607(unittest.TestCase):
         esp = l6_07.linhas(random.Random(1), lambda t, v: vistos.setdefault(t, []).append(v))
         self.assertEqual(set(esp), set(FATIA) - set(l6_07.NAO_CARREGADAS))
         for t, e in esp.items():
-            recusas = sum(v for k, v in e["pendencias"].items() if k.startswith(RECUSAS))
+            recusas = sum(v for k, v in e["pendencias"].items() if k.startswith(RECUSAS)) - AVISO_R9.get(t, 0)
             self.assertEqual(e["gravados"] + recusas, len(vistos[t]), t)
 
 

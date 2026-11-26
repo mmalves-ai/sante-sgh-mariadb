@@ -81,16 +81,18 @@ def _simples(ins, t, nomes, extra=lambda i: []):
 
 
 def linhas(r, ins):
+    # T2 (pedido 67): categoria e etapa das situações pelo nome (de-para); 1 e 5 do documento, 1 da assinatura, 1 do
+    # exame, A e D da checagem com par; as outras sem par caem no terminal não acionável presumido
     E = "   "  # só espaços: vira NULL, NOT NULL no destino recusa a linha
-    _simples(ins, "PRSITDOCUMENTO", ["Situação exemplo um", "  Situação   com  espaços ", E, "Exemplo €“”",
-                                     "Situação exemplo cinco"])
-    _simples(ins, "PRSITDOCUMENTOASSINADO", ["Assinatura falsa um", "Assinatura falsa dois", E])
-    _simples(ins, "PRSITEXAME", ["Exame um", "Exame dois", "Exame três"])
-    for cod, nome, ativo, proc in [("A", "Checagem exemplo A", "S", "Administração"),
+    _simples(ins, "PRSITDOCUMENTO", ["Rascunho", "  Situação   com  espaços ", E, "Exemplo €“”",
+                                     "ASSINADO"])
+    _simples(ins, "PRSITDOCUMENTOASSINADO", ["Pendente", "Assinatura falsa dois", E])
+    _simples(ins, "PRSITEXAME", ["Realizado", "Exame dois", "Exame três"])
+    for cod, nome, ativo, proc in [("A", "Administrado", "S", "Administração"),
                                    ("a", "Só difere de A pela caixa", "S", "CUIDADOS"),
                                    ("B", "Checagem exemplo B", "N", "Processo falso"),   # sem par: padrão
                                    ("C", "Checagem exemplo C", None, None),
-                                   ("D", "Checagem exemplo D", "X", "Sinais vitais"),
+                                   ("D", "SUSPENSO", "X", "Sinais vitais"),
                                    ("E", E, "S", "Coleta"),                               # sem nome: recusa
                                    ("1", "Checagem de código numérico", "S", "Conferência"),
                                    ("#", "Código fora do de-para", "S", "Coleta")]:       # sem par: recusa
@@ -149,10 +151,12 @@ def linhas(r, ins):
         "PRTPASSINATURA_TBOID": {"gravados": 5, "pendencias": {"adotado_existente": 9, "pai_pendente": 1,
                                                                "pai_inexistente": 1}},
         "PRTIPOPERGPAR": {"gravados": 3, "pendencias": {"valor_presumido": 5, "valor_fora_do_dominio": 2}},
-        "PRSITDOCUMENTO": {"gravados": 4, "pendencias": {"valor_presumido": 5, "restricao_destino_1048": 1}},
-        "PRSITDOCUMENTOASSINADO": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
-        "PRSITEXAME": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
-        "PRSITUACAOCHECAGEM": {"gravados": 6, "pendencias": {"valor_presumido": 8, "valor_fora_do_dominio": 3,
+        "PRSITDOCUMENTO": {"gravados": 4, "pendencias": {"valor_presumido": 3, "valor_fora_do_dominio": 2,
+                                                         "restricao_destino_1048": 1}},
+        "PRSITDOCUMENTOASSINADO": {"gravados": 2, "pendencias": {"valor_presumido": 2, "valor_fora_do_dominio": 1,
+                                                                 "restricao_destino_1048": 1}},
+        "PRSITEXAME": {"gravados": 3, "pendencias": {"valor_presumido": 2, "valor_fora_do_dominio": 2}},
+        "PRSITUACAOCHECAGEM": {"gravados": 6, "pendencias": {"valor_presumido": 6, "valor_fora_do_dominio": 8,
                                                              "restricao_destino_1048": 2}},
         "PRSUMARIO_ALTA_COMP": {"gravados": 3, "pendencias": {"valor_presumido": 4, "valor_fora_do_dominio": 1,
                                                               "restricao_destino_1048": 1}},
@@ -160,9 +164,11 @@ def linhas(r, ins):
         "PRTIPOPRESENTEADMISSAO": {"gravados": 3, "pendencias": {"valor_presumido": 3, "valor_fora_do_dominio": 1}},
         "PRTPALERTA": {"gravados": 2, "pendencias": {"valor_presumido": 2}},
         "PRTPASSINATURA": {"gravados": 5, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1}},
-        "PRINDICEAGRUPAMENTO": {"gravados": 3, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1,
+        # recusas-fase2 (R9): o tipo de documento recusado em coluna anulável grava sem a ligação (pai_pendente é
+        # aviso, religada no reprocessamento): AVISO_R9 no teste da fatia
+        "PRINDICEAGRUPAMENTO": {"gravados": 4, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1,
                                                               "pai_inexistente": 1}},
-        "PRPARAMORIGEMCABIMP": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "pai_pendente": 1}},
+        "PRPARAMORIGEMCABIMP": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 1, "pai_pendente": 1}},
         "PRTPASSINATURA_PRSITDOC": {"gravados": 3, "pendencias": {"valor_presumido": 4, "pai_pendente": 2,
                                                                   "valor_elevado_ao_minimo": 1, "pai_inexistente": 1,
                                                                   "restricao_destino_1048": 1}},
