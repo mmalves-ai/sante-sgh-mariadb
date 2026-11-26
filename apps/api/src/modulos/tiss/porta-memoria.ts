@@ -63,6 +63,7 @@ import type { LiberacaoGravacao } from '../exames/public-api.js';
 import { ENTRADAS_TISS } from './esquemas.js';
 import type { LinhaContasCompetencia } from '@sgh/contratos/regras-faturamento';
 import { type ArmazemXmlTiss, armazemXmlMemoria } from './armazem-xml.js';
+import { CalendarioEntregaMemoria } from './calendario-entrega-propria.js';
 import type {
   ContextoTiss,
   FiltroAcompanhamentoPorta,
@@ -212,6 +213,8 @@ export class PortaTissMemoria implements PortaTiss {
   readonly destino = 'memoria' as const;
   readonly armazem: ArmazemXmlTiss & { objetos: Map<string, Uint8Array> } = armazemXmlMemoria();
   private readonly estados = new Map<string, Estado>();
+  /** O cadastro do calendário de entrega por convênio (06-FAT linha 31), com a mesma regra da fonte própria. */
+  readonly calendario = new CalendarioEntregaMemoria((cv) => CONVENIOS[cv] ?? null);
   private readonly montador = criarMontadorLote(this.armazem.guardar);
 
   constructor(private readonly catalogo: EstadoCatalogo | null) {}
@@ -1202,16 +1205,20 @@ export class PortaTissMemoria implements PortaTiss {
             o.paradoDias,
         );
         const p = prazoRecurso(o.prazoRecurso, cv, o.hoje);
-        // Calendário sintético: a janela do dia 10 ao 15 do mês corrente (competência anterior) e a do mês seguinte.
+        // Calendário sintético (sem cadastro): a janela do dia 10 ao 15 do mês corrente (competência anterior) e a do mês seguinte.
         const mes = o.hoje.slice(0, 8);
         const seguinte = new Date(Date.parse(`${mes}01T12:00:00Z`) + 32 * 86_400_000)
           .toISOString()
           .slice(0, 8);
         const anterior = new Date(Date.parse(`${mes}01T12:00:00Z`) - 86_400_000).toISOString().slice(0, 8);
-        const cal: JanelaEntrega[] = [
-          { competencia: `${anterior}01`, entregaInicio: `${mes}10`, entregaFim: `${mes}15` },
-          { competencia: `${mes}01`, entregaInicio: `${seguinte}10`, entregaFim: `${seguinte}15` },
-        ].map((x) => ({ ...x, pagamentoPrevisto: null, prazoPagamentoDias: 30, restritivo: false }));
+        // O convênio com janela cadastrada usa só o cadastro.
+        const cadastradas = this.calendario.ativas(cv);
+        const cal: JanelaEntrega[] = cadastradas.length
+          ? cadastradas
+          : [
+              { competencia: `${anterior}01`, entregaInicio: `${mes}10`, entregaFim: `${mes}15` },
+              { competencia: `${mes}01`, entregaInicio: `${seguinte}10`, entregaFim: `${seguinte}15` },
+            ].map((x) => ({ ...x, pagamentoPrevisto: null, prazoPagamentoDias: 30, restritivo: false }));
         const proxima = proximaEntrega(cal, o.hoje);
         return {
           convenio: cv,

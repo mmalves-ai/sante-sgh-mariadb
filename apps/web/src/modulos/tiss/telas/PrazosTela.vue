@@ -2,11 +2,13 @@
 // Prazos de envio (ficha do M31, seção 7, painel): `/faturamento/prazos`. Por operadora, a janela de entrega do
 // calendário do convênio (aberta, com os dias até fechar, ou a próxima, com os dias até abrir; a restritiva avisa que a
 // fonte pagadora não recebe fora dela), o pagamento previsto, os lotes sem protocolo e os parados (sem protocolo há
-// mais dias que o parâmetro) e o prazo de recurso (sem prazo cadastrado, o alerta: DP-33.9).
+// mais dias que o parâmetro) e o prazo de recurso (sem prazo cadastrado, o alerta: DP-33.9). Abaixo, o cadastro do
+// calendário de entrega por convênio (CalendarioEntrega): a janela gravada aparece no painel na hora.
 import { useQuery } from '@tanstack/vue-query';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
 import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
+import CalendarioEntrega from '../componentes/CalendarioEntrega.vue';
 import { lerPrazos } from '../api-tiss.js';
 import { data } from '../usar-tiss.js';
 
@@ -76,6 +78,7 @@ const p = useQuery({ queryKey: ['tiss', 'prazos'], queryFn: () => lerPrazos() })
         </tr>
       </tbody>
     </table>
+    <CalendarioEntrega />
   </section>
 </template>
 

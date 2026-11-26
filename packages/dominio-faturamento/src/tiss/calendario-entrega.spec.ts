@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   conferirEntregaNoCalendario,
+  conferirSobreposicaoJanela,
   entregasAFrente,
   type JanelaEntrega,
   pagamentoPrevistoDaJanela,
@@ -79,5 +80,29 @@ describe('calendário de entrega da fatura', () => {
     // Sem janela restritiva (ou sem calendário da competência), a entrega passa: o painel só avisa.
     expect(conferirEntregaNoCalendario([livre], ['2026-09-01'], '2027-01-01')).toBeNull();
     expect(conferirEntregaNoCalendario([r1], ['2026-08-01'], '2027-01-01')).toBeNull();
+  });
+
+  it('recusa a entrega antes da competência e a janela sobreposta na mesma competência', () => {
+    expect(validarJanelaEntrega(j({ entregaInicio: '2026-09-30' }))?.codigo).toBe(
+      'entrega-antes-da-competencia',
+    );
+    const ativas = [
+      { id: 1, competencia: '2026-10-01', entregaInicio: '2026-11-05', entregaFim: '2026-11-10' },
+    ];
+    expect(
+      conferirSobreposicaoJanela(j({ entregaInicio: '2026-11-10', entregaFim: '2026-11-12' }), ativas)
+        ?.codigo,
+    ).toBe('janela-sobreposta');
+    // A própria janela (alteração), outra competência e a janela que encosta sem cruzar passam.
+    expect(conferirSobreposicaoJanela(j(), ativas, 1)).toBeNull();
+    expect(
+      conferirSobreposicaoJanela(
+        j({ competencia: '2026-11-01', entregaInicio: '2026-12-05', entregaFim: '2026-12-10' }),
+        ativas,
+      ),
+    ).toBeNull();
+    expect(
+      conferirSobreposicaoJanela(j({ entregaInicio: '2026-11-11', entregaFim: '2026-11-12' }), ativas),
+    ).toBeNull();
   });
 });

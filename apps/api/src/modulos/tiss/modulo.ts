@@ -43,6 +43,8 @@ import {
 } from './competencia-trabalho.controller.js';
 
 export interface OpcoesModuloTiss {
+import { CalendarioEntregaController, FONTE_CALENDARIO_ENTREGA } from './calendario-entrega.controller.js';
+import { CalendarioEntregaProprio } from './calendario-entrega-propria.js';
   /** Testes: a porta já montada. */
   readonly porta?: PortaTiss;
   /** Testes: a guarda do XML (padrão: a da memória, ou a do disco local). */
@@ -98,6 +100,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
     ],
     providers: [
       { provide: PORTA_TISS, useValue: porta },
+      CalendarioEntregaController,
       // F3.9 (08-INTG L128): consulta de elegibilidade e resposta da operadora; sem núcleo, 503.
       {
         provide: PORTA_ELEGIBILIDADE,
@@ -131,5 +134,16 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
     ],
     exports: [PORTA_TISS],
+      // 06-FAT linha 31: cadastro do calendário de entrega por convênio (banco próprio; na fonte sintética, a memória
+      // da porta do TISS, que o painel de prazos lê).
+      {
+        provide: FONTE_CALENDARIO_ENTREGA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new CalendarioEntregaProprio(ctx.nucleo)
+            : porta instanceof PortaTissMemoria
+              ? porta.calendario
+              : null,
+      },
   };
 }

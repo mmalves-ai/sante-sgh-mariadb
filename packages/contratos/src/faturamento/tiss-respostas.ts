@@ -120,6 +120,27 @@ export interface JanelaEntregaLida {
   readonly restritivo: boolean;
 }
 
+/** Uma janela do calendário de entrega da fatura cadastrada para o convênio (06-FAT linha 31). */
+export interface JanelaCalendarioLida {
+  readonly id: number;
+  readonly convenio: number;
+  readonly convenioNome: string;
+  /** Primeiro dia do mês de competência (AAAA-MM-DD). */
+  readonly competencia: string;
+  readonly inicio: string;
+  readonly fim: string;
+  readonly pagamentoPrevisto: string | null;
+  readonly prazoPagamentoDias: number | null;
+  /** O pagamento previsto calculado: a data fixa ou o fim da entrega mais o prazo. */
+  readonly pagamentoCalculado: string | null;
+  readonly restritivo: boolean;
+  readonly ativo: boolean;
+  readonly observacao: string;
+  /** aberta, futura ou encerrada em relação a hoje. */
+  readonly situacao: 'aberta' | 'futura' | 'encerrada';
+  readonly versao: number;
+}
+
 export interface PrazoEnvio {
   readonly convenio: number;
   readonly convenioNome: string;

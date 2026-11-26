@@ -82,7 +82,11 @@ export function conferirContaParaLoteModelo(
   return null;
 }
 
-/** Situações do protocolo de recebimento (as do modelo), com o número que a tela usa. */
+/**
+ * Situações do protocolo de recebimento com o número da terminologia TISS do status do protocolo (o mesmo padrão da
+ * base em situacao_protocolo_recebimento, migração 12_FAT/99_situacao_protocolo_tiss). "Recusado" não existe na
+ * terminologia: fica fora da lista (só o histórico antigo o tem).
+ */
 export const SITUACOES_PROTOCOLO: readonly {
   readonly id: number;
   readonly valor: string;
@@ -91,10 +95,17 @@ export const SITUACOES_PROTOCOLO: readonly {
   { id: 1, valor: 'recebido', nome: 'Recebido' },
   { id: 2, valor: 'em_analise', nome: 'Em análise' },
   { id: 3, valor: 'liberado_pagamento', nome: 'Liberado para pagamento' },
-  { id: 4, valor: 'encerrado', nome: 'Encerrado' },
-  { id: 5, valor: 'aguardando_informacao', nome: 'Aguardando informação' },
-  { id: 6, valor: 'cancelado', nome: 'Cancelado' },
-  { id: 7, valor: 'recusado', nome: 'Recusado' },
+  { id: 4, valor: 'encerrado', nome: 'Encerrado sem pagamento' },
+  {
+    id: 5,
+    valor: 'analisado_aguardando_liberacao',
+    nome: 'Analisado e aguardando liberação para o pagamento',
+  },
+  { id: 6, valor: 'pagamento_efetuado', nome: 'Pagamento efetuado' },
+  { id: 7, valor: 'nao_localizado', nome: 'Não localizado' },
+  { id: 8, valor: 'aguardando_informacao', nome: 'Aguardando informação complementar' },
+  { id: 9, valor: 'cancelado', nome: 'Cancelado' },
+  { id: 10, valor: 'bloqueio_judicial', nome: 'Bloqueio judicial do prestador' },
 ];
 export const situacaoProtocoloDoNumero = (n: number | null): string | null =>
   n === null ? null : (SITUACOES_PROTOCOLO.find((s) => s.id === n)?.valor ?? null);

@@ -63,8 +63,10 @@ describe('vocabulário do modelo', () => {
   });
   it('situações do protocolo ida e volta; número fora da lista é nulo', () => {
     expect(situacaoProtocoloDoNumero(1)).toBe('recebido');
-    expect(numeroDaSituacaoProtocolo('recusado')).toBe(7);
-    expect(situacaoProtocoloDoNumero(9)).toBeNull();
+    expect(numeroDaSituacaoProtocolo('cancelado')).toBe(9);
+    expect(numeroDaSituacaoProtocolo('aguardando_informacao')).toBe(8);
+    expect(numeroDaSituacaoProtocolo('recusado')).toBeNull();
+    expect(situacaoProtocoloDoNumero(11)).toBeNull();
     expect(situacaoProtocoloDoNumero(null)).toBeNull();
   });
   it('grupo, natureza e tabela TISS do item', () => {

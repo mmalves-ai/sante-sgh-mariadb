@@ -1704,8 +1704,12 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
         (x) => x.convenio === ids.fonte,
       );
 
-    // Situações do protocolo lidas do banco: as sete do padrão da base, com o número do status TISS.
-    expect((await porta.situacoesProtocolo(c)).map((x) => x.id)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    // Situações do protocolo lidas do banco: as dez da terminologia TISS do status do protocolo, com o número dela
+    // (8 é aguardando informação complementar, 9 cancelado); a "recusado", fora da terminologia, fica inativa.
+    const situacoes = await porta.situacoesProtocolo(c);
+    expect(situacoes.map((x) => x.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(situacoes.find((x) => x.id === 8)?.nome).toBe('Aguardando informação complementar');
+    expect(situacoes.find((x) => x.id === 4)?.nome).toBe('Encerrado sem pagamento');
 
     // Janela restritiva da competência da conta do lote, de daqui a 10 a 15 dias, com pagamento 30 dias depois.
     await janela(comp, dia(10), dia(15), true, 30);
@@ -1787,7 +1791,7 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
       );
     await alterar(false);
     try {
-      expect((await porta.situacoesProtocolo(c)).map((x) => x.id)).not.toContain(5);
+      expect((await porta.situacoesProtocolo(c)).map((x) => x.id)).not.toContain(8);
       expect(
         codigo(
           await erroDe(
@@ -1800,7 +1804,7 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
                 protocolo: 'PRTC1130',
                 data: dia(12),
                 recibo: '',
-                situacao: 5,
+                situacao: 8,
               },
               op(),
             ),
