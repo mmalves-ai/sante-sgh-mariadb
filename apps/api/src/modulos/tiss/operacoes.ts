@@ -656,7 +656,8 @@ function gerarLote(montador: MontadorLoteTiss | null, assinaturaNoDia: Assinatur
         });
         await tx.alterar('conta_hospitalar', n(ct['id']), n(ct['versao']), { situacao: 'faturada' });
       }
-      await gravarGuiasDoLote(tx, {
+      // A OPME cobrada acima do autorizado pela operadora volta como aviso do lote (06-FAT linha 25).
+      const avisosOpme = await gravarGuiasDoLote(tx, {
         estabelecimento: est,
         fonte: e.convenio,
         tipoGuia: TIPO_GUIA_TISS[tipoGuia],
@@ -690,7 +691,10 @@ function gerarLote(montador: MontadorLoteTiss | null, assinaturaNoDia: Assinatur
         contas: enviadas.length,
         contasForaDoArquivo: ap.omitidas.length,
         valor: m.valor,
-        alertas: avisos.length ? `Confira antes do envio: ${avisos.join('; ')}.` : '',
+        alertas:
+          avisos.length || avisosOpme.length
+            ? `Confira antes do envio: ${[...avisos, ...avisosOpme].join('; ')}.`
+            : '',
       };
     },
     alvo: (_e, r) => ({ tabela: 'lote_tiss', id: n(r['lote']) }),
