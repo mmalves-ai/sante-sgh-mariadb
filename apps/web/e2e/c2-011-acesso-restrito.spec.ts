@@ -100,7 +100,7 @@ test.describe('F8 paciente com acesso restrito ao prontuário @C2-011', () => {
       return json(r, { id: 31 }, 201);
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.DIRETOR.CLINICO');
     await page.goto('/cadastros/pacientes/acesso-restrito');
     await expect(page.getByTestId('acesso-restrito')).toBeVisible();
     await expect(page.getByRole('link', { name: 'PACIENTE SINTETICO RESTRITO' })).toBeVisible();

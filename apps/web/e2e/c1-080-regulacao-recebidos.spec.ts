@@ -144,12 +144,15 @@ test.describe('regulação: pedidos recebidos da central @C1-080', () => {
     const registrar = page.getByTestId('rec-registrar');
     await expect(registrar).toBeDisabled();
     await escolher(page.getByTestId('rec-central'), { rotulo: /CENTRAL-SINT/ });
-    await page.getByTestId('rec-numero').fill('A 1');
+    await page.getByTestId('rec-numero').locator('input, textarea').fill('A 1');
     await expect(page.getByTestId('form-recebido')).toContainText('Número da central de 4 a 30 letras');
-    await page.getByTestId('rec-numero').fill('reg-sint-0003');
+    await page.getByTestId('rec-numero').locator('input, textarea').fill('reg-sint-0003');
     await escolher(page.getByTestId('rec-prioridade'), 'urgente');
     await expect(page.getByTestId('rec-erro-resumo')).toBeVisible();
-    await page.getByTestId('rec-resumo').fill('Quadro sintético estável, aguarda leito clínico.');
+    await page
+      .getByTestId('rec-resumo')
+      .locator('input, textarea')
+      .fill('Quadro sintético estável, aguarda leito clínico.');
     await expect(page.getByTestId('rec-erro-resumo')).toHaveCount(0);
     await page.getByTestId('rec-busca').fill('sintetico');
     await page.getByTestId('rec-buscar').click();
@@ -173,7 +176,10 @@ test.describe('regulação: pedidos recebidos da central @C1-080', () => {
     await expect(confirmar).toBeDisabled();
     await escolher(page.getByTestId('resp-motivo'), 'outro');
     await expect(page.getByTestId('resp-problemas')).toContainText('Detalhe o motivo da recusa');
-    await page.getByTestId('resp-complemento').fill('Equipe sintética indisponível hoje');
+    await page
+      .getByTestId('resp-complemento')
+      .locator('input, textarea')
+      .fill('Equipe sintética indisponível hoje');
     await expect(confirmar).toBeEnabled();
     await confirmar.click();
     await expect(page.getByTestId('recebidos-mensagem')).toContainText('CENTRAL-SINT');
@@ -280,7 +286,10 @@ test.describe('regulação: pedidos recebidos da central @C1-080', () => {
     await expect(confirmar).toBeDisabled();
     await escolher(page.getByTestId('canc-motivo'), { rotulo: 'Outro motivo' });
     await expect(page.getByTestId('encerrar-problemas')).toContainText('Detalhe o motivo do cancelamento');
-    await page.getByTestId('canc-complemento').fill('Central sintética reabriu como pedido novo');
+    await page
+      .getByTestId('canc-complemento')
+      .locator('input, textarea')
+      .fill('Central sintética reabriu como pedido novo');
     await semViolacaoAxe(page, '/internacao/nir/regulacao (cancelamento)');
     await expect(confirmar).toBeEnabled();
     await confirmar.click();
