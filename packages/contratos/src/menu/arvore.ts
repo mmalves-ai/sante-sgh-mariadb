@@ -167,7 +167,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // contagem acompanha.
 // C3-023 (07-FIN linha 115, F7): o item "LALUR e apuração do IRPJ e da CSLL" da contabilidade entrou à mão (mesmo
 // motivo; F7 vai como fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":521,"M":198,"P":57,"N":266};
+// C3-028 (08-SGO linha 97, F7): o item "Desconto em folha" da operadora própria entrou à mão (mesmo motivo; F7 vai
+// como fase 7); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":522,"M":198,"P":57,"N":267};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -459,6 +461,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.rede-credenciada-e-prestadora","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Rede credenciada e prestadora"],"titulo":"Rede credenciada e prestadora","selo":"N","fase":6,"rota":"/operadora/rede","permissao":"operadora.prestador.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.atendimento-autorizacao-e-protocolos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Atendimento, autorização e protocolos"],"titulo":"Atendimento, autorização e protocolos","selo":"N","fase":6,"rota":"/operadora/autorizacoes","permissao":"operadora.dominio.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.cobranca-e-mensalidades","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Cobrança e mensalidades"],"titulo":"Cobrança e mensalidades","selo":"N","fase":6,"rota":"/operadora/cobranca","permissao":"operadora.cobranca.ler"},
+  {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.desconto-em-folha","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Desconto em folha"],"titulo":"Desconto em folha","selo":"N","fase":7,"rota":"/operadora/desconto-folha","permissao":"operadora.cobranca.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.regras-de-coparticipacao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Regras de coparticipação"],"titulo":"Regras de coparticipação","selo":"N","fase":7,"rota":"/operadora/coparticipacao-regras","permissao":"operadora.beneficiario.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.promocao-da-saude-e-cronicos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Promoção da saúde e crônicos"],"titulo":"Promoção da saúde e crônicos","selo":"N","fase":7,"rota":"/operadora/programas-saude","permissao":"operadora.promocao.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.aditivos-e-cancelamento-de-contratos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Aditivos e cancelamento de contratos"],"titulo":"Aditivos e cancelamento de contratos","selo":"N","fase":7,"rota":"/operadora/contratos","permissao":"operadora.beneficiario.ler"},
