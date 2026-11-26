@@ -471,7 +471,8 @@ watch(operadora, () => {
                 <template v-if="m.ativo && m.vigenciaFim === null">
                   <SanteCampoTexto
                     :id="`mapa-fim-${m.id}`"
-                    v-model="fimMapa[m.id]"
+                    :model-value="fimMapa[m.id] ?? ''"
+                    @update:model-value="(v: string) => (fimMapa[m.id] = v)"
                     :max-bytes="10"
                     :rotulo="t('mapa.fim')"
                     :data-testid="`mapa-fim-${m.id}`"
@@ -707,7 +708,8 @@ watch(operadora, () => {
               <template v-if="p.situacao === 'aberta' || p.situacao === 'calculada'">
                 <SanteCampoTexto
                   :id="`prov-motivo-${p.id}`"
-                  v-model="motivo[p.id]"
+                  :model-value="motivo[p.id] ?? ''"
+                  @update:model-value="(v: string) => (motivo[p.id] = v)"
                   :max-bytes="500"
                   :rotulo="t('provisoes.motivo')"
                   :data-testid="`prov-motivo-${p.id}`"
