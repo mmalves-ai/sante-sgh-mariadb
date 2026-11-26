@@ -121,8 +121,9 @@ test.describe('C2-014 transplante para a central estadual @C2-014', () => {
       return json(r, { id: 901 });
     });
 
-    // Permissão clínica: a segregação retira do administrador sem perfil assistencial; entra o coordenador médico.
-    await entrar(page, 'SINT.DIRETOR.CLINICO');
+    // Permissão clínica: a segregação retira do administrador sem perfil assistencial; entra a coordenadora de enfermagem
+    // (SINT.COORD.ENF, perfil coordenador-enfermagem). SINT.DIRETOR.CLINICO tem só diretoria-clinica, que não recebe a permissão.
+    await entrar(page, 'SINT.COORD.ENF');
     await page.goto('/faturamento/sus/transplantes');
     await expect(page.getByTestId('tela-transplante')).toBeVisible();
     await expect(page.getByTestId('transplante-receptores-vazio')).toBeVisible();
