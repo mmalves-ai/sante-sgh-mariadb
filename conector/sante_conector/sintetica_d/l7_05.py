@@ -430,7 +430,8 @@ def linhas(r, ins):
         "GELOCARM": {"gravados": 7, "pendencias": {"valor_presumido": 8, "restricao_destino_1048": 1,
                                                    "pai_pendente": 1, "pai_inexistente": 1,
                                                    "valor_fora_do_dominio": 1}},
-        # recusas fase 2 (C1, R9): o kit padrão recusado (5) é coluna anulável: grava sem o padrão (pai_pendente fica)
+        # recusas fase 2 (C1, R9): o kit padrão recusado (5) é coluna anulável: grava sem o padrão;
+        # pai_pendente fica aberta e a ligação é refeita quando o pai for corrigido (M15, _readiar_anulaveis)
         "GEKITRAS": {"gravados": 5, "pendencias": {"pai_pendente": 2, "pai_inexistente": 2,
                                                    "restricao_destino_1048": 1, "valor_fora_do_dominio": 1}},
         "GEDESCOM": {"gravados": 3, "pendencias": {"catalogo_codigo_inexistente": 1, "restricao_destino_1048": 1,

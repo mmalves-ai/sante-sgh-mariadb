@@ -105,6 +105,9 @@ CREATE TABLE GEBARRAS ("ITEM" INTEGER NOT NULL, "BARRA" VARCHAR(20) NOT NULL, "F
   PRIMARY KEY ("ITEM","BARRA"));
 CREATE TABLE TBSITUACAOFARMACIA ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(50) NOT NULL, "ATIVO" CHAR(1), PRIMARY KEY
   ("ID"));
+CREATE TABLE GELOCARM ("COD" SMALLINT NOT NULL, "NOME" VARCHAR(35), "GRUPO" SMALLINT, "SGRUPO" SMALLINT, "ITEM"
+  SMALLINT, "UNI_DIG_TRA" SMALLINT NOT NULL, "UNI_VIS_TRA" SMALLINT NOT NULL, "MOBILE_ATIVO" INTEGER, "LOCAL_ORIGEM"
+  INTEGER, PRIMARY KEY ("COD"));
 """
 CARREGADAS = ("GENIVELSERV", "GEPADRAO_DATAMATRIX_QRCODE", "GEPORTALCOMPRAS", "GEREFER", "GESITUACAOPED",
               "GETPLANCTO", "TBCATEGO", "TBFABOPM", "TBGRUPOUNIDADEMEDIDA", "TBLABORA", "TBSITUACAOFARMACIA",
@@ -117,6 +120,9 @@ TRILHA_R6 = ("GEULTDOCGER",)  # r6: numeração por tipo e competência em seque
 BLOQUEADAS = ()  # r6: GEULTDOCGER carrega em sequencia_documento_estoque (agrupado por tipo e mês)
 CARREGADAS = CARREGADAS + TRILHA_R5 + TRILHA_R6
 DESCARTADAS = ()
+# recusas fase 2 (A10): o local de estoque é pai externo (da L7-05) e também origem LIDA pela condição
+# se:LOC_ARM>GELOCARM>COD do indicador de local padrão do usuário: entra na imagem só para ser lido, nunca carregado
+ORIGEM_PAIS = ("GELOCARM",)
 PAIS_EXTERNOS = {"TBUSERS": ["almox.exemplo", "farm.exemplo", "novo.exemplo"], "GELOCARM": [1, 2, 3],
                  "GEGRUPOS": [1, 2], "GEITENS": [10, 20], "TBTIPOTELEFONE": [1]}
 PREPARO_DESTINO = ("INSERT INTO municipio_ibge (codigo_ibge, nome, unidade_federativa_id, criado_em) VALUES"
@@ -219,7 +225,11 @@ def linhas(r, ins):
     for v in [("almox.exemplo", 1, "EN"), ("almox.exemplo", 1, "SA"), ("almox.exemplo", 2, "EN"),
               ("farm.exemplo", 1, "EN"), ("ninguem.exemplo", 1, "EN"), ("almox.exemplo", 9, "EN")]:
         ins("GELOCUSU", list(v))
-    # local padrão: almox|1 já criado por GELOCUSU (adotado); farm|3 com S/N inválido; novo sem local (1048)
+    # os locais externos 1 a 3 na origem (lidos pela condição do local padrão)
+    for v in [(1, "Almoxarifado exemplo"), (2, "Farmácia exemplo"), (3, "Posto exemplo")]:
+        ins("GELOCARM", _por_nome("GELOCARM", v[0], NOME=v[1], LOCAL_ORIGEM=None))
+    # local padrão: almox|1 já criado por GELOCUSU (adotado) e farm|3 com S/N inválido gravam padrao=1; novo sem
+    # LOC_ARM vai ao ARM1 com padrao=0 (CONFERIR_DESTINO confere os três valores)
     ins("GEUSERS", _por_nome("GEUSERS", 1, USUARIO="almox.exemplo", LOC_ARM=1))
     ins("GEUSERS", _por_nome("GEUSERS", 2, USUARIO="farm.exemplo", LOC_ARM=3, VISUAL_PRECO="X"))
     ins("GEUSERS", _por_nome("GEUSERS", 3, USUARIO="novo.exemplo", LOC_ARM=None))
@@ -328,9 +338,8 @@ def linhas(r, ins):
         "GELOCUSU": {"gravados": 5, "pendencias": {"adotado_existente": 3, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 1, "valor_presumido": 12}},
         # recusas fase 2 (A10): sem LOC_ARM o usuário 3 vai ao ARM1 (concorrente, padrão falso) e grava; a condição
-        # se:LOC_ARM>GELOCARM>COD lê o local na origem, que esta imagem não tem (pai externo): pai_inexistente nas 2
-        # linhas com LOC_ARM
-        "GEUSERS": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2}},
+        # se:LOC_ARM>GELOCARM>COD acha o local na origem (ORIGEM_PAIS) nas 2 linhas com LOC_ARM: nenhuma pendência dela
+        "GEUSERS": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1}},
         # recusas fase 2 (A05): o código vem de GRU+COD (único na tabela toda): o nome repetido entre grupos e o nome
         # comprido gravam (sem 1062 nem codigo_derivado)
         "GESUBGRU": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
@@ -387,3 +396,18 @@ PREPARO_DESTINO = PREPARO_DESTINO + (
   ('patrimonio.tipo_calculo_depreciacao', 'texto'),
   ('patrimonio.considera_valor_residual', 'booleano')
     ]) + ") d WHERE m.codigo = 'patrimonio'")
+
+
+# valor gravado (A10): o local padrão do usuário pela condição na origem; a concorrente do ARM1 nunca é padrão
+_O = ("(SELECT id_destino FROM {ctl}.conector_origem WHERE tabela_origem='%s' AND chave_original='%s'"
+      " AND entidade_destino='externo')")
+_PADRAO = "SELECT padrao = %d FROM local_estoque_usuario WHERE usuario_id = " + _O + " AND local_estoque_id = " + _O
+CONFERIR_DESTINO = [
+    ("almox.exemplo no local 1 (LOC_ARM existente): padrao=1",
+     _PADRAO % (1, "TBUSERS", "almox.exemplo", "GELOCARM", "1")),
+    ("farm.exemplo no local 3 (LOC_ARM existente): padrao=1",
+     _PADRAO % (1, "TBUSERS", "farm.exemplo", "GELOCARM", "3")),
+    ("novo.exemplo sem LOC_ARM: uma linha só, pelo ARM1, com padrao=0",
+     "SELECT COUNT(*) = 1 AND MAX(padrao) = 0 FROM local_estoque_usuario WHERE usuario_id = "
+     + _O % ("TBUSERS", "novo.exemplo")),
+]

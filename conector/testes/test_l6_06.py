@@ -31,6 +31,14 @@ R5 = {"PROFTGABARITO", "PROFTGRADUACAO", "PROFTTPARQUIV", "PRPARAM_CHECAGEM", "P
       "PRPARTAMPADPRESC", "PRPROCESSOPEP", "PRSITCHECAGEM"}
 
 
+
+# PENDENTE DE DECISÃO (pedido 67 de pedidos-do-mapa.md, recusas-fase2 P3a): o orquestrador ou o dono clínico
+# decidem antes do reprocessamento se estas presumidas clínicas valem. Até lá, a lista abaixo é a única exceção
+# aceita à regra "nome sem par não é presumido". Se a decisão for contrária: esvaziar a lista (volta a exigir só o
+# de-para) e tirar as concorrentes do mapa. Nenhuma outra presumida clínica entra sem decisão registrada.
+PRESUMIDAS_PEDIDO_67 = {("PROPCAOPERIODO", "periodo_consulta_sumario_alta.atendimento_inteiro"): "=~1",
+                        ("PRSITAPRAZAM", "situacao_aprazamento.categoria"): "=~pendente"}
+
 class L6_06(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -73,10 +81,8 @@ class L6_06(unittest.TestCase):
 
     def test_sem_literal_presumido_e_fixos(self):
         lit = {(c["tabela"], c["destino"]): c["coluna"] for c in self.decl if c["coluna"].startswith("=")}
-        # recusas-fase2 P3a (pedido 67, decisão clínica pendente): só as duas concorrentes do nome sem par
-        self.assertEqual({k: v for k, v in lit.items() if v.startswith("=~")},
-                         {("PROPCAOPERIODO", "periodo_consulta_sumario_alta.atendimento_inteiro"): "=~1",
-                          ("PRSITAPRAZAM", "situacao_aprazamento.categoria"): "=~pendente"})
+        # nenhuma presumida além das PENDENTES DE DECISÃO do pedido 67 (concorrentes do nome sem par)
+        self.assertEqual({k: v for k, v in lit.items() if v.startswith("=~")}, PRESUMIDAS_PEDIDO_67)
         self.assertEqual(lit[("PRPADRECEITA", "modelo_receita.formato")], "=livre")
         self.assertEqual(lit[("PRSAE_LIKERT", "escala_resultado_enfermagem.tipo_escala")], "=likert_1_a_5")
         for t in self.esp:
@@ -116,7 +122,7 @@ class L6_06(unittest.TestCase):
                                 "ref:PROFTGRUPEXAME"),
                                ("PRPADRECEITA", "USUARIO", "modelo_receita.criado_por", "ref:TBUSERS"),
                                ("PRPADRECEITA", "USUARIO", "modelo_receita.profissional_id", "ref:TBPROFIS.ID_TBUSERS"),
-                               # P3a: a concorrente presumida só preenche quando o de-para não deu valor (senao)
+                               # pedido 67 (pendente): a presumida só preenche quando o de-para não deu valor (senao)
                                ("PROPCAOPERIODO", "=~1", "periodo_consulta_sumario_alta.atendimento_inteiro", "senao")})
         self.assertEqual(set(l6_06.PAIS_EXTERNOS), {"TBUSERS", "TBPESSOA"})
 

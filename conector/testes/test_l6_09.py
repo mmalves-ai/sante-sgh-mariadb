@@ -16,8 +16,12 @@ FATIA = ["TBGRAUGRAVINT", "TBHORMED", "TBHORMED_TBUNIDAD", "TBLANC_DIAG_MANTER",
          "TBSITUACAOMP", "TBSTATUSPROCEDIMENTO", "TBTABELA_CAMPO"]
 
 
-# recusas-fase2 P3a (pedido 67, decisão clínica pendente): concorrentes presumidas do nome sem par
-CONCORRENTES = {("TBLISTADIAGNOSTICOSITUACAO", "categoria"): ["=~ativo"], ("TBSITUACAOMP", "categoria"): ["=~suspensa"],
+# PENDENTE DE DECISÃO (pedido 67 de pedidos-do-mapa.md, recusas-fase2 P3a): o orquestrador ou o dono clínico
+# decidem antes do reprocessamento se estas presumidas clínicas valem. Até lá, a lista abaixo é a única exceção
+# aceita à regra "nome sem par não é presumido". Se a decisão for contrária: esvaziar a lista (volta a exigir só o
+# de-para) e tirar as concorrentes do mapa. Nenhuma outra presumida clínica entra sem decisão registrada.
+PRESUMIDAS_PEDIDO_67 = {("TBLISTADIAGNOSTICOSITUACAO", "categoria"): ["=~ativo"],
+                        ("TBSITUACAOMP", "categoria"): ["=~suspensa"],
                 ("TBSTATUSPROCEDIMENTO", "etapa"): ["=~pedido"]}
 
 
@@ -71,8 +75,9 @@ class L609(unittest.TestCase):
                            ("TBSTATUSPROCEDIMENTO", "situacao_procedimento_prescrito", ["etapa", "final"])]:
             for dc in dcs:
                 c = [(x["coluna"], x["depara"]) for x in self.plano[t]["colunas"][dt] if x["destino"] == dc]
-                # recusas-fase2 P3a (pedido 67): o nome sem par cai na concorrente presumida, sempre depois do de-para
-                self.assertEqual(c, [("NOME", "valores")] + [(x, "") for x in CONCORRENTES.get((t, dc), [])], (t, dc))
+                # pedido 67 (PENDENTE DE DECISÃO): o nome sem par cai na presumida, sempre depois do de-para
+                esperado = [("NOME", "valores")] + [(x, "") for x in PRESUMIDAS_PEDIDO_67.get((t, dc), [])]
+                self.assertEqual(c, esperado, (t, dc))
         presumidas = [d for d in self.decl if d["coluna"].startswith("=~")]
         self.assertEqual([(d["tabela"], d["destino"]) for d in presumidas],
                          [("TBLISTADIAGNOSTICOSITUACAO", "situacao_problema.categoria"),

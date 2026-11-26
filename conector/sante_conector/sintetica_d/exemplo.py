@@ -82,7 +82,8 @@ def linhas(r, ins):
         grupo, dt, hhmm, banco, usuario = 1 + i % 2, datetime.date(2026, 1, i), 830, (1, 237)[i % 2], 1 + i % 2
         descr = "Item ação %d" % i
         if i == 3:
-            grupo = 3            # pai recusado, coluna anulável: grava NULL com pai_pendente (M15, recusas fase 2)
+            grupo = 3            # pai recusado, coluna anulável: grava NULL com pai_pendente (M15, recusas fase 2;
+            #                      a ligação é refeita quando o pai for corrigido: _readiar_anulaveis)
         if i == 4:
             grupo = 99           # pai inexistente: NULL com pendência
         if i == 5:

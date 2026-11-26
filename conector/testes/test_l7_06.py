@@ -9,7 +9,7 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l7_06
 
 TABELAS = set(l7_06.CARREGADAS)
-NA_IMAGEM = TABELAS | set(l7_06.DESCARTADAS)
+NA_IMAGEM = TABELAS | set(l7_06.DESCARTADAS) | set(l7_06.ORIGEM_PAIS)
 DESTINOS = {
     "GENIVELSERV": "nivel_servico", "GEPADRAO_DATAMATRIX_QRCODE": "padrao_leitura_codigo",
     "GEPORTALCOMPRAS": "portal_cotacao", "GEREFER": "categoria_contabil_insumo",
@@ -62,7 +62,9 @@ class Plano(unittest.TestCase):
         return {c["destino"]: c for c in self.plano[t]["colunas"][DESTINOS[t]]}
 
     def test_tabelas_e_destinos(self):
-        self.assertEqual(set(self.plano), TABELAS)
+        # o local de estoque externo está na imagem só para a condição do local padrão (ORIGEM_PAIS): planejado, e
+        # a conferência o registra como já carregado pela L7-05 (nunca regravado aqui)
+        self.assertEqual(set(self.plano), TABELAS | set(l7_06.ORIGEM_PAIS))
         for t, dt in DESTINOS.items():
             self.assertEqual(self.plano[t]["destinos"], [dt] + SECUNDARIOS.get(t, []), t)
 

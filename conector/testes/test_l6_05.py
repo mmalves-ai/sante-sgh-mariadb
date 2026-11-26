@@ -52,6 +52,13 @@ def _raiz_ddl():
     return None
 
 
+
+# PENDENTE DE DECISÃO (pedido 67 de pedidos-do-mapa.md, recusas-fase2 P3a): o orquestrador ou o dono clínico
+# decidem antes do reprocessamento se estas presumidas clínicas valem. Até lá, a lista abaixo é a única exceção
+# aceita à regra "nome sem par não é presumido". Se a decisão for contrária: esvaziar a lista (volta a exigir só o
+# de-para) e tirar as concorrentes do mapa. Nenhuma outra presumida clínica entra sem decisão registrada.
+PRESUMIDAS_PEDIDO_67 = {("PRASSINANTE", "papel"): ["=~responsavel_legal"]}
+
 class Plano(unittest.TestCase):
     def setUp(self):
         self.m = _mapa()
@@ -210,13 +217,12 @@ class Plano(unittest.TestCase):
 
     def test_sem_presumido_que_muda_o_sentido_clinico(self):
         """Lado do balanço, papel de quem assina, período do fechamento e tipo da frequência vêm do de-para de valores:
-        valor sem par vira NULL com valor_fora_do_dominio e a linha é recusada pelo NOT NULL (nada presumido)."""
-        # recusas-fase2 P3a (pedido 67, decisão clínica pendente): o tipo de assinante sem par entra como responsável
-        # legal presumido, sempre depois do de-para e com valor_presumido
-        concorrente = {("PRASSINANTE", "papel"): "=~responsavel_legal"}
+        valor sem par vira NULL com valor_fora_do_dominio e a linha é recusada pelo NOT NULL (nada presumido), com
+        uma única exceção ainda PENDENTE DE DECISÃO (pedido 67): PRESUMIDAS_PEDIDO_67, concorrente depois do
+        de-para."""
         for t, d in POR_VALORES:
             c = self._col(t, d)
-            self.assertEqual([x["coluna"] for x in c[1:]], [concorrente[(t, d)]] if (t, d) in concorrente else [], (t, d))
+            self.assertEqual([x["coluna"] for x in c[1:]], PRESUMIDAS_PEDIDO_67.get((t, d), []), (t, d))
             c = c[:1]
             self.assertIsNotNone(c[0]["valores"], (t, d))
             self.assertFalse(c[0]["coluna"].startswith("="), (t, d))
