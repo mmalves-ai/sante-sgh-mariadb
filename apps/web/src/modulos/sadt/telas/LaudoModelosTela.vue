@@ -304,6 +304,18 @@ textarea {
   overflow: hidden;
   clip-path: inset(50%);
 }
+/* Alvo mínimo de 24 px (WCAG 2.5.8, axe target-size): a caixa de marcação padrão tem 13 px e o link de voltar, a
+   altura da linha do texto. */
+input[type='checkbox'] {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  vertical-align: middle;
+}
+.linha a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 1.5rem;
+}
 @media (max-width: 900px) {
   .colunas {
     grid-template-columns: 1fr;
