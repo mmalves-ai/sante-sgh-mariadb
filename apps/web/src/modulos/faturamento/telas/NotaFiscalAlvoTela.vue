@@ -248,6 +248,7 @@ const desligar = (id: number, versao: number) =>
                 step="0.01"
                 min="0"
                 :value="valorDe(c)"
+                :aria-label="`${t('apropriado')}: ${c.numeroNota ?? c.rps}`"
                 :aria-invalid="errosDe(c) ? 'true' : 'false'"
                 :data-testid="`nf-valor-${c.id}`"
                 @input="valores[c.id] = Number(($event.target as HTMLInputElement).value)"

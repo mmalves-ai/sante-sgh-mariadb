@@ -2,8 +2,10 @@
 // contrato abre a aba das tabelas do convênio sintético, escolhe "Índice de cobrança" e um índice no combo, vê a
 // validação na hora (sem data e sem valor nada é gravado), registra uma vigência nova de CH numa data futura e a vê na
 // linha do tempo; repetir a mesma data é recusado na hora, no campo, sem pedido ao servidor (a mudança de valor é
-// sempre uma vigência nova; nada se apaga). Fonte sintética; axe na seção.
-import { expect, test, type Page } from '@playwright/test';
+// sempre uma vigência nova; nada se apaga). Fonte sintética; axe na seção. Os índices exigem o banco próprio (sem ele a
+// API responde 503): aqui a API dos índices é simulada, com estado (a gravação aparece na releitura); o efeito no banco
+// é o contrato de efeito da API.
+import { expect, test, type Page, type Route } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
 
@@ -23,9 +25,67 @@ function dataFutura(): string {
   return d.toISOString().slice(0, 10);
 }
 
+type Vigencia = {
+  tipo: 'indice' | 'porte' | 'porte-anestesico';
+  chave: string;
+  tabelaId: number | null;
+  inicio: string;
+  valor: number;
+  valorHorarioEspecial: number | null;
+};
+
+/** API simulada dos índices do convênio 305: opções e vigências, e a gravação de uma vigência nova. */
+async function simularIndices(page: Page): Promise<void> {
+  const vigencias: Vigencia[] = [
+    {
+      tipo: 'indice',
+      chave: '1',
+      tabelaId: null,
+      inicio: '2025-01-01',
+      valor: 0.5,
+      valorHorarioEspecial: null,
+    },
+  ];
+  const json = (rota: Route, corpo: unknown, status = 200) =>
+    rota.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
+  await page.route('**/api/cadastros/convenios/305/indices/**', async (rota) => {
+    const req = rota.request();
+    const caminho = new URL(req.url()).pathname;
+    if (req.method() === 'GET' && caminho.endsWith('/indices/opcoes'))
+      return json(rota, {
+        indices: [
+          { id: 1, codigo: 'CH', descricao: 'CH PADRAO', tipo: 'ch' },
+          { id: 2, codigo: 'UCO', descricao: 'UCO', tipo: 'uco' },
+        ],
+        portes: [{ codigo: '3A', descricao: 'PORTE 3A' }],
+        tabelas: [],
+        vigencias,
+      });
+    if (req.method() === 'POST' && caminho.endsWith('/indices/indice')) {
+      const c = req.postDataJSON() as {
+        indiceId: number;
+        tabelaId: number | null;
+        vigenciaInicio: string;
+        valor: number;
+      };
+      vigencias.push({
+        tipo: 'indice',
+        chave: String(c.indiceId),
+        tabelaId: c.tabelaId,
+        inicio: c.vigenciaInicio,
+        valor: c.valor,
+        valorHorarioEspecial: null,
+      });
+      return json(rota, { id: 900 + vigencias.length }, 201);
+    }
+    return rota.fallback();
+  });
+}
+
 test.describe('Valor do índice e do porte por vigência @C2-020 @fase3', () => {
   test('vigência nova de CH na linha do tempo; data repetida recusada na hora; axe', async ({ page }) => {
     const externas = vigiarExternas(page);
+    await simularIndices(page);
     await entrar(page, 'SINT.FATURAMENTO');
     await page.goto('/cadastros/convenios');
     await page.getByTestId('convenios-busca').fill('operadora alfa');
