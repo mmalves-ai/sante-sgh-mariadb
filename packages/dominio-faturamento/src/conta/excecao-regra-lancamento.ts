@@ -9,6 +9,11 @@
 // - Motivo: obrigatório, de 5 a 500 caracteres (quem lê a exceção depois precisa saber por que ela existe).
 // - Encerrar: a exceção vale até ontem (fim = ontem); a que ainda não começou não se encerra (o início é o registro do
 //   que foi combinado) e a já encerrada não se encerra de novo.
+// - Cancelar: a exceção gravada errada que começa hoje ou depois se cancela antes de valer (motivo de 5 a 500
+//   caracteres; a linha fica no banco com quem cancelou, quando e por quê, e a apuração passa a ignorá-la). A que já
+//   valeu antes de hoje se encerra, nunca se cancela (as contas já apuradas com ela continuam explicadas).
+// - Recorte de todos os estabelecimentos: só com permissão própria (incluir e encerrar ou cancelar a exceção global
+//   muda a apuração dos outros estabelecimentos).
 
 export const EFEITOS_EXCECAO_REGRA = ['nao_aplicar', 'aplicar_somente'] as const;
 export type EfeitoExcecaoRegra = (typeof EFEITOS_EXCECAO_REGRA)[number];
@@ -76,12 +81,14 @@ export function diaAnterior(dia: string): string {
   return x.toISOString().slice(0, 10);
 }
 
-/** Situação da exceção no dia: futura, vigente ou encerrada. */
+/** Situação da exceção no dia: cancelada, futura, vigente ou encerrada. */
 export function situacaoExcecaoRegra(
   inicio: string | null,
   fim: string | null,
   hoje: string,
-): 'futura' | 'vigente' | 'encerrada' {
+  cancelada = false,
+): 'cancelada' | 'futura' | 'vigente' | 'encerrada' {
+  if (cancelada) return 'cancelada';
   if (fim !== null && fim < hoje) return 'encerrada';
   if (inicio !== null && inicio > hoje) return 'futura';
   return 'vigente';
@@ -91,16 +98,24 @@ export type EncerramentoExcecao =
   | { readonly ok: true; readonly vigenciaFim: string }
   | {
       readonly ok: false;
-      readonly codigo: 'excecao-encerrada' | 'excecao-futura';
+      readonly codigo: 'excecao-encerrada' | 'excecao-futura' | 'excecao-cancelada';
       readonly mensagem: string;
     };
+
+const JA_CANCELADA = {
+  ok: false,
+  codigo: 'excecao-cancelada',
+  mensagem: 'A exceção já está cancelada.',
+} as const;
 
 /** Encerrar a exceção: passa a valer até ontem. Nunca apaga. */
 export function encerramentoExcecaoRegra(
   inicio: string | null,
   fim: string | null,
   hoje: string,
+  cancelada = false,
 ): EncerramentoExcecao {
+  if (cancelada) return JA_CANCELADA;
   const ontem = diaAnterior(hoje);
   if (fim !== null && fim <= ontem)
     return { ok: false, codigo: 'excecao-encerrada', mensagem: 'A exceção já está encerrada.' };
@@ -108,7 +123,49 @@ export function encerramentoExcecaoRegra(
     return {
       ok: false,
       codigo: 'excecao-futura',
-      mensagem: 'A exceção começa hoje ou depois: só se encerra depois do primeiro dia de vigência.',
+      mensagem:
+        'A exceção começa hoje ou depois: só se encerra depois do primeiro dia de vigência. Se foi gravada errada, cancele.',
     };
   return { ok: true, vigenciaFim: ontem };
+}
+
+export type CancelamentoExcecao =
+  | { readonly ok: true; readonly motivo: string }
+  | {
+      readonly ok: false;
+      readonly codigo: 'excecao-cancelada' | 'excecao-em-vigor' | 'entrada-invalida';
+      readonly mensagem: string;
+    };
+
+/**
+ * Cancelar a exceção gravada errada antes de valer: só a que começa hoje ou depois (a que já valeu antes de hoje se
+ * encerra). Pede o motivo (5 a 500 caracteres). Nunca apaga: a porta grava quem, quando e por quê.
+ */
+export function cancelamentoExcecaoRegra(
+  inicio: string | null,
+  cancelada: boolean,
+  hoje: string,
+  motivo: string,
+): CancelamentoExcecao {
+  if (cancelada) return JA_CANCELADA;
+  if (inicio === null || inicio < hoje)
+    return {
+      ok: false,
+      codigo: 'excecao-em-vigor',
+      mensagem: 'A exceção já valeu antes de hoje: encerre-a (passa a valer até ontem) em vez de cancelar.',
+    };
+  const m = motivo.trim();
+  if (m.length < 5)
+    return {
+      ok: false,
+      codigo: 'entrada-invalida',
+      mensagem: 'Escreva o motivo do cancelamento (ao menos 5 caracteres).',
+    };
+  if (m.length > 500)
+    return {
+      ok: false,
+      codigo: 'entrada-invalida',
+      mensagem: 'O motivo do cancelamento passa de 500 caracteres.',
+    };
+  return { ok: true, motivo: m };
 }

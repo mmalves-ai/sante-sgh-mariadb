@@ -419,7 +419,12 @@ function excecaoCasa(x: ExcecaoRegraLancamento, t: TaxaAutomatica, e: EntradaApu
 export function taxaPermitidaPelasExcecoes(t: TaxaAutomatica, e: EntradaApuracao, dia: string): boolean {
   const xs = t.excecoes ?? [];
   if (xs.some((x) => x.efeito === 'nao_aplicar' && excecaoCasa(x, t, e, dia))) return false;
-  const somente = xs.filter((x) => x.efeito === 'aplicar_somente');
+  // "aplicar_somente" restringe só o próprio recorte de estabelecimento: a de outro estabelecimento não tira a regra
+  // das contas deste (sem o recorte da conta, só contam as que valem para todos).
+  const est = e.recorte?.estabelecimento ?? null;
+  const somente = xs.filter(
+    (x) => x.efeito === 'aplicar_somente' && (x.estabelecimento === null || x.estabelecimento === est),
+  );
   return somente.length === 0 || somente.some((x) => excecaoCasa(x, t, e, dia));
 }
 

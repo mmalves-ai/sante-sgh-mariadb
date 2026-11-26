@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   type CadastroExcecaoRegra,
+  cancelamentoExcecaoRegra,
   diaAnterior,
   encerramentoExcecaoRegra,
   situacaoExcecaoRegra,
@@ -97,5 +98,34 @@ describe('encerramento e situação da exceção', () => {
     expect(situacaoExcecaoRegra('2026-12-01', null, '2026-11-25')).toBe('futura');
     expect(situacaoExcecaoRegra('2026-11-01', '2026-11-25', '2026-11-25')).toBe('vigente');
     expect(situacaoExcecaoRegra('2026-11-01', '2026-11-24', '2026-11-25')).toBe('encerrada');
+    expect(situacaoExcecaoRegra('2026-12-01', null, '2026-11-25', true)).toBe('cancelada');
+  });
+  it('a cancelada não se encerra', () => {
+    const r = encerramentoExcecaoRegra('2026-01-01', null, '2026-11-25', true);
+    expect(r.ok ? '' : r.codigo).toBe('excecao-cancelada');
+  });
+});
+
+describe('cancelamento da exceção antes de valer', () => {
+  it('a que começa hoje ou depois se cancela, com o motivo aparado', () => {
+    expect(cancelamentoExcecaoRegra('2026-11-25', false, '2026-11-25', '  Fonte errada  ')).toEqual({
+      ok: true,
+      motivo: 'Fonte errada',
+    });
+    expect(cancelamentoExcecaoRegra('2026-12-01', false, '2026-11-25', 'Recorte errado').ok).toBe(true);
+  });
+  it('a que já valeu antes de hoje se encerra, não se cancela; a cancelada não se cancela de novo', () => {
+    const r1 = cancelamentoExcecaoRegra('2026-11-24', false, '2026-11-25', 'Recorte errado');
+    expect(r1.ok ? '' : r1.codigo).toBe('excecao-em-vigor');
+    const r2 = cancelamentoExcecaoRegra(null, false, '2026-11-25', 'Recorte errado');
+    expect(r2.ok ? '' : r2.codigo).toBe('excecao-em-vigor');
+    const r3 = cancelamentoExcecaoRegra('2026-12-01', true, '2026-11-25', 'Recorte errado');
+    expect(r3.ok ? '' : r3.codigo).toBe('excecao-cancelada');
+  });
+  it('motivo de 5 a 500 caracteres', () => {
+    const r1 = cancelamentoExcecaoRegra('2026-12-01', false, '2026-11-25', ' abc ');
+    expect(r1.ok ? '' : r1.codigo).toBe('entrada-invalida');
+    const r2 = cancelamentoExcecaoRegra('2026-12-01', false, '2026-11-25', 'x'.repeat(501));
+    expect(r2.ok ? '' : r2.codigo).toBe('entrada-invalida');
   });
 });

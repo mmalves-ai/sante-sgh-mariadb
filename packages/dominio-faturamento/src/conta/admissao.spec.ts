@@ -304,6 +304,26 @@ describe('exceções da regra de lançamento e tabela forçada', () => {
     ).toEqual(['taxa:1']);
   });
 
+  it('"aplicar_somente" de outro estabelecimento não tira a regra das contas deste', () => {
+    // A conta é do estabelecimento 3: a "aplicar_somente" do 4 (fonte 8) não vale aqui, e a regra segue lançada.
+    expect(
+      chaves({
+        taxas: taxas([excecao({ efeito: 'aplicar_somente', estabelecimento: 4, fontePagadora: 8 })]),
+      }),
+    ).toEqual(['taxa:1']);
+    // A do próprio estabelecimento (3) e a de todos (nulo) restringem.
+    expect(
+      chaves({
+        taxas: taxas([excecao({ efeito: 'aplicar_somente', estabelecimento: 3, fontePagadora: 8 })]),
+      }),
+    ).toEqual([]);
+    expect(
+      chaves({
+        taxas: taxas([excecao({ efeito: 'aplicar_somente', estabelecimento: null, fontePagadora: 8 })]),
+      }),
+    ).toEqual([]);
+  });
+
   it('a tabela forçada do item da regra segue no lançamento; a diária usa a da conta', () => {
     const r = apurarLancamentos(base({ taxas: taxas([]) }));
     expect(r.lancar.find((l) => l.chave === 'taxa:1')?.tabelaPreco).toBe(77);
