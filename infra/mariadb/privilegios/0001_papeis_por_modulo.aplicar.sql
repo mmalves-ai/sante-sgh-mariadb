@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.aplicar (alcance 6e07db2a7114). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.aplicar (alcance c3b4637d268f). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -421,6 +421,7 @@ GRANT SELECT, INSERT, UPDATE ON volume_prontuario TO sgh_mod_adt;
 GRANT SELECT, INSERT, UPDATE ON agenda_escala TO sgh_mod_agenda;
 GRANT SELECT, INSERT, UPDATE ON agenda_especialidade TO sgh_mod_agenda;
 GRANT SELECT ON agenda_fonte_pagadora TO sgh_mod_agenda;
+GRANT SELECT ON agenda_item_agendavel TO sgh_mod_agenda;
 GRANT SELECT, INSERT, UPDATE ON agenda_servico TO sgh_mod_agenda;
 GRANT SELECT, INSERT, UPDATE ON agenda_usuario TO sgh_mod_agenda;
 GRANT SELECT, INSERT, UPDATE ON bloqueio_agenda TO sgh_mod_agenda;
@@ -1938,6 +1939,7 @@ GRANT SELECT, INSERT, UPDATE ON devolucao_adiantamento_paciente TO sgh_mod_fatur
 GRANT SELECT ON diferenca_acomodacao TO sgh_mod_faturamento;
 GRANT SELECT ON documento_emitido TO sgh_mod_faturamento;
 GRANT SELECT, INSERT, UPDATE ON empresa_auditoria_externa TO sgh_mod_faturamento;
+GRANT SELECT ON especialidade_medica TO sgh_mod_faturamento;
 GRANT SELECT ON estabelecimento TO sgh_mod_faturamento;
 GRANT SELECT, INSERT, UPDATE ON estorno_repasse TO sgh_mod_faturamento;
 GRANT SELECT, INSERT, UPDATE ON evento_contabil TO sgh_mod_faturamento;
@@ -2045,7 +2047,7 @@ GRANT SELECT, INSERT, UPDATE ON regra_desconto_volume_faixa TO sgh_mod_faturamen
 GRANT SELECT ON regra_diaria TO sgh_mod_faturamento;
 GRANT SELECT, INSERT, UPDATE ON regra_faturabilidade TO sgh_mod_faturamento;
 GRANT SELECT ON regra_lancamento TO sgh_mod_faturamento;
-GRANT SELECT ON regra_lancamento_excecao TO sgh_mod_faturamento;
+GRANT SELECT, INSERT, UPDATE ON regra_lancamento_excecao TO sgh_mod_faturamento;
 GRANT SELECT ON regra_lancamento_item TO sgh_mod_faturamento;
 GRANT SELECT ON regra_percentual_cobranca TO sgh_mod_faturamento;
 GRANT SELECT ON regra_repasse TO sgh_mod_faturamento;
@@ -2980,6 +2982,7 @@ GRANT SELECT, INSERT, UPDATE ON kit_prescricao TO sgh_mod_pep;
 GRANT SELECT, INSERT, UPDATE ON kit_prescricao_item TO sgh_mod_pep;
 GRANT SELECT ON leito_hospitalar TO sgh_mod_pep;
 GRANT SELECT, INSERT, UPDATE ON leitura_prontuario TO sgh_mod_pep;
+GRANT SELECT ON liberacao_antimicrobiano TO sgh_mod_pep;
 GRANT SELECT ON limite_dose_principio TO sgh_mod_pep;
 GRANT SELECT ON lista_controle_especial TO sgh_mod_pep;
 GRANT SELECT ON lotacao_profissional TO sgh_mod_pep;
@@ -4575,7 +4578,7 @@ GRANT SELECT ON apuracao_repasse TO sgh_mod_tiss;
 GRANT SELECT ON apuracao_repasse_item TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON arquivo TO sgh_mod_tiss;
 GRANT SELECT ON atendimento TO sgh_mod_tiss;
-GRANT SELECT ON calendario_entrega_fatura TO sgh_mod_tiss;
+GRANT SELECT, INSERT, UPDATE ON calendario_entrega_fatura TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON cancelamento_guia TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON cancelamento_guia_item TO sgh_mod_tiss;
 GRANT SELECT ON carater_atendimento_tiss TO sgh_mod_tiss;
@@ -4620,7 +4623,9 @@ GRANT SELECT ON grupo_motivo_glosa TO sgh_mod_tiss;
 GRANT SELECT, INSERT ON guia_fonte_pagadora TO sgh_mod_tiss;
 GRANT SELECT, INSERT ON guia_fonte_pagadora_opme TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON guia_tiss TO sgh_mod_tiss;
+GRANT SELECT ON guia_tiss_despesa TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON guia_tiss_opme TO sgh_mod_tiss;
+GRANT SELECT ON guia_tiss_procedimento TO sgh_mod_tiss;
 GRANT SELECT ON guia_tiss_profissional TO sgh_mod_tiss;
 GRANT SELECT, INSERT ON idempotencia_operacao TO sgh_mod_tiss;
 GRANT SELECT ON inscricao_conselho TO sgh_mod_tiss;

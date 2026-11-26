@@ -286,6 +286,28 @@ export const VARIAVEIS: readonly Variavel[] = [
     },
   ),
   v(
+    'DATA_MART_CHAVE',
+    'seguranca',
+    'obrigatoria',
+    MARCADOR_SEGREDO,
+    'Chave do pseudônimo do paciente no data mart (HMAC). Sem ela, fora de dev, a carga diária falha. Nunca troque depois do uso.',
+    {
+      segredo: true,
+      comoGerar: GERAR_32,
+    },
+  ),
+  v(
+    'PACOTES_PARCEIRO_CHAVE_PSEUDONIMO',
+    'seguranca',
+    'opcional',
+    '',
+    'Chave do pseudônimo dos pacotes de dados entregues aos parceiros. Nunca troque depois do uso.',
+    {
+      segredo: true,
+      comoGerar: GERAR_32,
+    },
+  ),
+  v(
     'PORTAL_CHAVE_MESTRA',
     'seguranca',
     'opcional',
@@ -482,6 +504,31 @@ export const VARIAVEIS: readonly Variavel[] = [
     '',
     'Endereço do serviço de consulta do eSocial (padrão: o oficial de produção).',
   ),
+  // C2-059: NF-e de saída de mercadoria (simulador fora de produção; a SEFAZ só com AMBIENTE=producao e a chave ligada).
+  v(
+    'NFE_SEFAZ_LIGADA',
+    'integracoes',
+    'opcional',
+    '',
+    '1: envia a NF-e de saída à SEFAZ (só com AMBIENTE=producao e o certificado); vazio: o simulador local.',
+  ),
+  v(
+    'NFE_CERTIFICADO_ARQUIVO',
+    'integracoes',
+    'opcional',
+    '',
+    'Certificado e-CNPJ (A1) da NF-e em PEM, no cofre (convertido do .pfx na implantação).',
+  ),
+  v(
+    'NFE_CHAVE_ARQUIVO',
+    'integracoes',
+    'opcional',
+    '',
+    'Chave privada do certificado da NF-e em PEM (arquivo 0600, no cofre).',
+  ),
+  v('NFE_CHAVE_SENHA', 'integracoes', 'opcional', '', 'Senha da chave do certificado da NF-e.', {
+    segredo: true,
+  }),
   // Rotinas
   ...(
     [
@@ -520,6 +567,11 @@ export const VARIAVEIS: readonly Variavel[] = [
         'Despertar diário das contas dormentes (sim liga em dev/ci; nao desliga).',
       ],
       ['PORTAL_VIGENCIA', 'Vigência dos acessos ao portal.'],
+      ['AVISO_CLINICO_EMAIL', 'Despacho por e-mail dos avisos clínicos.'],
+      ['NOTIFICACAO_DESPACHO', 'Despacho das notificações por regra.'],
+      ['DATAMART_CARGA_DIARIA', 'Carga diária do data mart de cada estabelecimento.'],
+      ['FILA_ERP_ENVIO', 'Fila de envio ao ERP corporativo.'],
+      ['PACOTES_PARCEIRO_ENTREGA', 'Entrega dos pacotes de dados aos parceiros.'],
     ] as const
   ).map(([k, d]) => v(k, 'rotinas', 'opcional', '', `${d} Vazio: o padrão do ambiente.`)),
   ...(
@@ -666,6 +718,13 @@ export const VARIAVEIS: readonly Variavel[] = [
     'Pasta das imagens de origem lidas pelo conector (somente leitura). Vazio: a do pacote.',
   ),
   v(
+    'DATA_MART_DIR',
+    'caminhos',
+    'opcional',
+    '',
+    'Pasta dos arquivos do data mart (um SQLite por estabelecimento). Vazio: .tmp/data-mart sob a pasta do serviço.',
+  ),
+  v(
     'CONECTOR_LOG_DIR',
     'caminhos',
     'opcional',
@@ -734,6 +793,7 @@ export const NAO_CONFIGURAVEIS: Readonly<Record<string, string>> = {
   FB_ABC_NOME: 'teste: estabelecimento fictício',
   FB_ABC_BANCO: 'teste: estabelecimento fictício',
   SGH_ARQUIVO_AMBIENTE: 'definida pela unit do systemd (aponta para este arquivo)',
+  HOSTNAME: 'do sistema: o nome da máquina, gravado pelo worker na execução das rotinas',
   SGH_PROCESSO: 'definida pelo próprio processo (api ou worker)',
   SGH_CONTAINERS_LOCAIS: 'dev/homologação: containers locais aceitos como destino pela neutralização',
   SGH_CLIENTE_TESTE: 'teste: cliente de teste do lote (banco e pasta de arquivos próprios)',

@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.recolher (alcance 6e07db2a7114). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.recolher (alcance c3b4637d268f). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -371,6 +371,7 @@ REVOKE SELECT, INSERT, UPDATE ON volume_prontuario FROM sgh_mod_adt;
 REVOKE SELECT, INSERT, UPDATE ON agenda_escala FROM sgh_mod_agenda;
 REVOKE SELECT, INSERT, UPDATE ON agenda_especialidade FROM sgh_mod_agenda;
 REVOKE SELECT ON agenda_fonte_pagadora FROM sgh_mod_agenda;
+REVOKE SELECT ON agenda_item_agendavel FROM sgh_mod_agenda;
 REVOKE SELECT, INSERT, UPDATE ON agenda_servico FROM sgh_mod_agenda;
 REVOKE SELECT, INSERT, UPDATE ON agenda_usuario FROM sgh_mod_agenda;
 REVOKE SELECT, INSERT, UPDATE ON bloqueio_agenda FROM sgh_mod_agenda;
@@ -1888,6 +1889,7 @@ REVOKE SELECT, INSERT, UPDATE ON devolucao_adiantamento_paciente FROM sgh_mod_fa
 REVOKE SELECT ON diferenca_acomodacao FROM sgh_mod_faturamento;
 REVOKE SELECT ON documento_emitido FROM sgh_mod_faturamento;
 REVOKE SELECT, INSERT, UPDATE ON empresa_auditoria_externa FROM sgh_mod_faturamento;
+REVOKE SELECT ON especialidade_medica FROM sgh_mod_faturamento;
 REVOKE SELECT ON estabelecimento FROM sgh_mod_faturamento;
 REVOKE SELECT, INSERT, UPDATE ON estorno_repasse FROM sgh_mod_faturamento;
 REVOKE SELECT, INSERT, UPDATE ON evento_contabil FROM sgh_mod_faturamento;
@@ -1995,7 +1997,7 @@ REVOKE SELECT, INSERT, UPDATE ON regra_desconto_volume_faixa FROM sgh_mod_fatura
 REVOKE SELECT ON regra_diaria FROM sgh_mod_faturamento;
 REVOKE SELECT, INSERT, UPDATE ON regra_faturabilidade FROM sgh_mod_faturamento;
 REVOKE SELECT ON regra_lancamento FROM sgh_mod_faturamento;
-REVOKE SELECT ON regra_lancamento_excecao FROM sgh_mod_faturamento;
+REVOKE SELECT, INSERT, UPDATE ON regra_lancamento_excecao FROM sgh_mod_faturamento;
 REVOKE SELECT ON regra_lancamento_item FROM sgh_mod_faturamento;
 REVOKE SELECT ON regra_percentual_cobranca FROM sgh_mod_faturamento;
 REVOKE SELECT ON regra_repasse FROM sgh_mod_faturamento;
@@ -2930,6 +2932,7 @@ REVOKE SELECT, INSERT, UPDATE ON kit_prescricao FROM sgh_mod_pep;
 REVOKE SELECT, INSERT, UPDATE ON kit_prescricao_item FROM sgh_mod_pep;
 REVOKE SELECT ON leito_hospitalar FROM sgh_mod_pep;
 REVOKE SELECT, INSERT, UPDATE ON leitura_prontuario FROM sgh_mod_pep;
+REVOKE SELECT ON liberacao_antimicrobiano FROM sgh_mod_pep;
 REVOKE SELECT ON limite_dose_principio FROM sgh_mod_pep;
 REVOKE SELECT ON lista_controle_especial FROM sgh_mod_pep;
 REVOKE SELECT ON lotacao_profissional FROM sgh_mod_pep;
@@ -4525,7 +4528,7 @@ REVOKE SELECT ON apuracao_repasse FROM sgh_mod_tiss;
 REVOKE SELECT ON apuracao_repasse_item FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON arquivo FROM sgh_mod_tiss;
 REVOKE SELECT ON atendimento FROM sgh_mod_tiss;
-REVOKE SELECT ON calendario_entrega_fatura FROM sgh_mod_tiss;
+REVOKE SELECT, INSERT, UPDATE ON calendario_entrega_fatura FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON cancelamento_guia FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON cancelamento_guia_item FROM sgh_mod_tiss;
 REVOKE SELECT ON carater_atendimento_tiss FROM sgh_mod_tiss;
@@ -4570,7 +4573,9 @@ REVOKE SELECT ON grupo_motivo_glosa FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT ON guia_fonte_pagadora FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT ON guia_fonte_pagadora_opme FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON guia_tiss FROM sgh_mod_tiss;
+REVOKE SELECT ON guia_tiss_despesa FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON guia_tiss_opme FROM sgh_mod_tiss;
+REVOKE SELECT ON guia_tiss_procedimento FROM sgh_mod_tiss;
 REVOKE SELECT ON guia_tiss_profissional FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT ON idempotencia_operacao FROM sgh_mod_tiss;
 REVOKE SELECT ON inscricao_conselho FROM sgh_mod_tiss;

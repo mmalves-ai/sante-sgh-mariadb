@@ -2,6 +2,7 @@
 // Tabelas de registro do paciente dos módulos 06_PEP, 07_INT, 08_CC, 10_SADT (db/migracoes), mais as do núcleo
 // (trilha_auditoria). Não edite à mão: ./pnpm imutabilidade:gerar regrava.
 export const TABELAS_CLINICAS_MODELO: readonly string[] = [
+  'acesso_prontuario_restrito',
   'acidente_internacao',
   'acionamento_resposta_rapida',
   'acompanhamento_oncologico',
@@ -72,6 +73,7 @@ export const TABELAS_CLINICAS_MODELO: readonly string[] = [
   'exame_oftalmologico',
   'excecao_restricao_exame',
   'fechamento_censo_paciente',
+  'fechamento_checagem_paciente',
   'fechamento_horario_checagem',
   'ficha_antimicrobiano',
   'gestacao_paciente',
@@ -141,6 +143,7 @@ export const TABELAS_CLINICAS_MODELO: readonly string[] = [
   'reserva_leito',
   'resultado_exame',
   'reuniao_leitos_paciente',
+  'senha_prontuario_paciente',
   'sessao_hemodialise',
   'sessao_quimioterapia',
   'sessao_radioterapia',

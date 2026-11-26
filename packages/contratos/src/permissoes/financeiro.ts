@@ -81,7 +81,6 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
       criticidade: 'sensivel',
       concessaoPorPerfil: 'por-perfil',
       perfis: ['cadastro-credor', 'administrador-sistema'],
-      escopos: [],
     },
   ),
   p('financeiro.adiantamento.ler', 'Consultar adiantamentos a fornecedores e médicos e as compensações'),
@@ -206,7 +205,6 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
     {
       concessaoPorPerfil: 'por-perfil',
       perfis: ['emissor-nota-fiscal', 'administrador-sistema'],
-      escopos: [],
     },
   ),
   p(
@@ -216,7 +214,6 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
       criticidade: 'sensivel',
       concessaoPorPerfil: 'por-perfil',
       perfis: ['emissor-nota-fiscal', 'administrador-sistema'],
-      escopos: [],
     },
   ),
   // C2-094 (09-AREA linha 78): entrada de serviço tomado. Recurso novo, sem opção correspondente no menu de origem:
@@ -227,7 +224,6 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
     {
       concessaoPorPerfil: 'por-perfil',
       perfis: ['emissor-nota-fiscal', 'administrador-sistema'],
-      escopos: [],
     },
   ),
   p(
@@ -237,7 +233,6 @@ const PERMISSOES_DO_MODULO: readonly DeclaracaoPermissao[] = [
       criticidade: 'sensivel',
       concessaoPorPerfil: 'por-perfil',
       perfis: ['emissor-nota-fiscal', 'administrador-sistema'],
-      escopos: [],
     },
   ),
   p('financeiro.dmed.ler', 'Consultar as DMED geradas'),

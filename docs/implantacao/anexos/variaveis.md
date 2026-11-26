@@ -70,6 +70,8 @@ servidor, nunca em repositório, e-mail ou chamado.
 |---|---|---|---|
 | `PLATAFORMA_CHAVE_MESTRA` | obrigatoria | sim | Chave mestra (32 bytes em base64): segundo fator, selos e cifras. |
 | `ACESSO_CHAVE_MESTRA` | opcional | sim | Chave própria do envelope da credencial forte e do segundo fator do login (32 bytes em base64; padrão: a mestra). Nunca troque depois do uso. |
+| `DATA_MART_CHAVE` | obrigatoria | sim | Chave do pseudônimo do paciente no data mart (HMAC). Sem ela, fora de dev, a carga diária falha. Nunca troque depois do uso. |
+| `PACOTES_PARCEIRO_CHAVE_PSEUDONIMO` | opcional | sim | Chave do pseudônimo dos pacotes de dados entregues aos parceiros. Nunca troque depois do uso. |
 | `PORTAL_CHAVE_MESTRA` | opcional | sim | Chave própria do portal (32 bytes em base64; padrão: a mestra). |
 | `PESSOAS_CHAVE_CPF` | recomendada | sim | Chave da cifra do CPF dos colaboradores (padrão: a mestra). Nunca troque depois do uso. |
 | `PLATAFORMA_EM_NOME_DE` | opcional |  | Rótulo do atendimento da plataforma na trilha. |
@@ -130,6 +132,10 @@ servidor, nunca em repositório, e-mail ou chamado.
 | `ESOCIAL_CHAVE_SENHA` | opcional | sim | Senha da chave do certificado do eSocial. |
 | `ESOCIAL_ENVIO_URL` | opcional |  | Endereço do serviço de envio do eSocial (padrão: o oficial de produção). |
 | `ESOCIAL_CONSULTA_URL` | opcional |  | Endereço do serviço de consulta do eSocial (padrão: o oficial de produção). |
+| `NFE_SEFAZ_LIGADA` | opcional |  | 1: envia a NF-e de saída à SEFAZ (só com AMBIENTE=producao e o certificado); vazio: o simulador local. |
+| `NFE_CERTIFICADO_ARQUIVO` | opcional |  | Certificado e-CNPJ (A1) da NF-e em PEM, no cofre (convertido do .pfx na implantação). |
+| `NFE_CHAVE_ARQUIVO` | opcional |  | Chave privada do certificado da NF-e em PEM (arquivo 0600, no cofre). |
+| `NFE_CHAVE_SENHA` | opcional | sim | Senha da chave do certificado da NF-e. |
 | `INTEGRACAO_CLIENTES` | opcional |  | Clientes cujo ciclo de integração o worker roda (separados por vírgula). Vazio: os ativos da plataforma. |
 
 ## Rotinas do worker (ligar, desligar, intervalos)
@@ -139,6 +145,7 @@ servidor, nunca em repositório, e-mail ou chamado.
 | `VIGIA_ARQUIVOS` | opcional |  | Vigia de integridade dos arquivos (hash x registro). |
 | `VIGIA_ARQUIVOS_MS` | opcional |  | Intervalo do vigia dos arquivos, em ms (padrão 6 h). |
 | `OUTBOX_RELAY` | opcional |  | Envio da caixa de saída (e-mails, avisos e integrações). Vazio: o padrão do ambiente. |
+| `TRANSMISSOR_TISS` | opcional |  | Transmissor TISS da elegibilidade e da comunicação de beneficiário (destino falso fora de produção). Vazio: o padrão do ambiente. |
 | `INTEGRACAO` | opcional |  | Integrações de saída do worker. Vazio: o padrão do ambiente. |
 | `VIGIA_BANCO` | opcional |  | Vigia do banco (transações, travas e conexões; desligado desliga). Vazio: o padrão do ambiente. |
 | `RELATORIO_ENVIO` | opcional |  | Envio agendado de relatórios. Vazio: o padrão do ambiente. |
@@ -160,10 +167,16 @@ servidor, nunca em repositório, e-mail ou chamado.
 | `SADT_VIGIA_CRITICOS` | opcional |  | Vigia dos resultados críticos. Vazio: o padrão do ambiente. |
 | `ACESSO_CONTAS_DORMENTES_DESPERTAR` | opcional |  | Despertar diário das contas dormentes (sim liga em dev/ci; nao desliga). Vazio: o padrão do ambiente. |
 | `PORTAL_VIGENCIA` | opcional |  | Vigência dos acessos ao portal. Vazio: o padrão do ambiente. |
+| `AVISO_CLINICO_EMAIL` | opcional |  | Despacho por e-mail dos avisos clínicos. Vazio: o padrão do ambiente. |
+| `NOTIFICACAO_DESPACHO` | opcional |  | Despacho das notificações por regra. Vazio: o padrão do ambiente. |
+| `DATAMART_CARGA_DIARIA` | opcional |  | Carga diária do data mart de cada estabelecimento. Vazio: o padrão do ambiente. |
+| `FILA_ERP_ENVIO` | opcional |  | Fila de envio ao ERP corporativo. Vazio: o padrão do ambiente. |
+| `PACOTES_PARCEIRO_ENTREGA` | opcional |  | Entrega dos pacotes de dados aos parceiros. Vazio: o padrão do ambiente. |
 | `VIGIA_MUDANCAS_MS` | opcional |  | Intervalo ou tamanho: vigia de mudanças das telas ao vivo. Vazio: o padrão. |
 | `VIGIA_BANCO_MS` | opcional |  | Intervalo ou tamanho: vigia do banco. Vazio: o padrão. |
 | `VIGIA_TRANSACAO_LIMITE_MS` | opcional |  | Intervalo ou tamanho: limite da transação longa no vigia do banco. Vazio: o padrão. |
 | `OUTBOX_INTERVALO_MS` | opcional |  | Intervalo ou tamanho: caixa de saída. Vazio: o padrão. |
+| `TRANSMISSOR_TISS_INTERVALO_MS` | opcional |  | Intervalo ou tamanho: transmissor TISS. Vazio: o padrão. |
 | `INTEGRACAO_INTERVALO_MS` | opcional |  | Intervalo ou tamanho: integrações. Vazio: o padrão. |
 | `INTEGRACAO_LOTE_FATOS` | opcional |  | Intervalo ou tamanho: lote das integrações (fatos por ciclo). Vazio: o padrão. |
 | `BUSCA_VIGIA_MS` | opcional |  | Intervalo ou tamanho: índice de busca. Vazio: o padrão. |
@@ -193,6 +206,7 @@ servidor, nunca em repositório, e-mail ou chamado.
 | variável | uso | segredo | descrição |
 |---|---|---|---|
 | `CONECTOR_ORIGENS_DIR` | opcional |  | Pasta das imagens de origem lidas pelo conector (somente leitura). Vazio: a do pacote. |
+| `DATA_MART_DIR` | opcional |  | Pasta dos arquivos do data mart (um SQLite por estabelecimento). Vazio: .tmp/data-mart sob a pasta do serviço. |
 | `CONECTOR_LOG_DIR` | opcional |  | Pasta dos logs de execução do conector (worker e serviço), lida pela tela Carga e sincronismo. Vazio: a do pacote. |
 | `SGH_RAIZ_REPOSITORIO` | opcional |  | Pasta das ferramentas do pacote usadas pelo painel da plataforma (criar cliente). Vazio: a do pacote. |
 | `ESTRUTURA_HOMOLOGADA` | opcional |  | Resumo homologado da estrutura do banco, conferido pela fumaça da implantação. Vazio: o do pacote. |
