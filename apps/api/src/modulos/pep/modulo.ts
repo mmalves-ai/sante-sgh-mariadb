@@ -54,7 +54,7 @@ import { ServicoRegistro } from './registro-servico.js';
 import { ServicoProntuario } from './servico.js';
 import { EstadoProntuario } from './sessao-prontuario.js';
 import { EquipePainelController } from './equipe-painel.controller.js';
-import { PORTA_EQUIPE_PAINEL, PortaEquipePainelPropria } from './equipe-painel-propria.js';
+import { provedoresDaEquipe } from './equipe-provedores.js';
 import { SumarioAltaSecoesController } from './sumario-alta-secoes.controller.js';
 import { FARMACOVIGILANCIA, FarmacovigilanciaController } from './farmacovigilancia.controller.js';
 import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
@@ -221,6 +221,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       ]
     : [];
   const p = portasDoPep(ctx, opcoes);
+  const equipe = provedoresDaEquipe(ctx);
   const cadastro = opcoes.cadastro ?? (await portaDoCadastro(ctx));
   const rede = opcoes.rede ?? (await portasDaRede(ctx)).mpi;
   return {
@@ -274,14 +275,9 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       { provide: SERVICO_DOCUMENTOS, useValue: new ServicoDocumentos(p.documentos) },
       { provide: PORTA_WORKLIST, useValue: p.worklist },
       ...estudosImagem,
-      // F3.3 (L90, L91, L94): painel no banco, configuração por setor e equipe assistencial; sem núcleo, 503.
-      {
-        provide: PORTA_EQUIPE_PAINEL,
-        useValue:
-          ctx.nucleo && ctx.configuracao.clientePadrao
-            ? new PortaEquipePainelPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
-            : null,
-      },
+      // F3.3 (L90, L91, L94): painel no banco, configuração por setor e equipe assistencial; sem núcleo, 503. Com a
+      // porta, o provedor real de VINCULO_ASSISTENCIAL (a forma "equipe"), exportado a todos os módulos.
+      ...equipe.providers,
       // F3.3 (L90): filtros salvos do painel (vários por usuário, padrão único, colunas com largura); sem núcleo, 503.
       {
         provide: PORTA_PAINEL_FILTROS,
@@ -452,6 +448,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       ...(opcoes.configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: opcoes.configuracao }] : []),
     ],
     exports: [
+      ...equipe.exports,
       PORTA_PRONTUARIO,
       PORTA_REGISTRO,
       PORTA_PRESCRICAO,
