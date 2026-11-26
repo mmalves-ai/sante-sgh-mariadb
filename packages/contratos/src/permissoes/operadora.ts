@@ -235,18 +235,18 @@ export const PERMISSOES_OPERADORA_M56: readonly DeclaracaoPermissao[] = [
   ),
   // Contabilidade regulatória (08-SGO L111, C3-026): plano de contas padrão da ANS, mapa das contas e provisões técnicas.
   p(
-    'operadora.provisao-tecnica.ler',
+    'operadora.provisaoTecnica.ler',
     'Consultar o plano de contas padrão da ANS, o mapa das contas, o balancete no padrão da ANS e as provisões técnicas',
     [GESTOR, 'operadora-ans'],
   ),
   p(
-    'operadora.provisao-tecnica.editar',
+    'operadora.provisaoTecnica.editar',
     'Cadastrar contas do plano padrão da ANS e ligar as contas contábeis a elas',
     ['operadora-ans'],
     { criticidade: 'sensivel' },
   ),
   p(
-    'operadora.provisao-tecnica.calcular',
+    'operadora.provisaoTecnica.calcular',
     'Calcular, contabilizar e cancelar as provisões técnicas da competência',
     ['operadora-ans'],
     { criticidade: 'critica' },

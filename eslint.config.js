@@ -124,6 +124,22 @@ export default tseslint.config(
     rules: { 'no-undef': 'off' },
   },
   {
+    // Scripts CommonJS do Node (como o gancho tools/obra/sintaxe-staged.cjs): require é o import deles.
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        require: 'readonly',
+        module: 'writable',
+        exports: 'writable',
+        process: 'readonly',
+        console: 'readonly',
+        __dirname: 'readonly',
+      },
+    },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
     files: ['**/*.ts', '**/*.vue', '**/*.js', '**/*.mjs'],
     plugins: { '@nx': nx },
     rules: {

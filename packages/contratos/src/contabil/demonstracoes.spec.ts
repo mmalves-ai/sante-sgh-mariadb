@@ -72,7 +72,7 @@ describe('entradas da contabilidade (etapa 3)', () => {
       esquemaGerarSped.safeParse({ ...base, tipo: 'ecf', formaTributacao: '9', tipoEntidadeEcf: '05' })
         .success,
     ).toBe(true);
-    expect(FORMAS_ECF_GERADAS).toEqual(['8', '9']);
+    expect(FORMAS_ECF_GERADAS).toEqual(['1', '8', '9']);
   });
 
   it('situação do arquivo: recibo com a data; cancelamento com justificativa', () => {

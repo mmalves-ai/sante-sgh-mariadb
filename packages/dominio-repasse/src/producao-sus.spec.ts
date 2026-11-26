@@ -208,4 +208,55 @@ describe('repasse da produção SUS', () => {
       }),
     ).toEqual(['alvo', 'peso', 'teto']);
   });
+  it('bases hospitalar, ambulatorial e total; percentual nulo, ponto e valor fixo ausentes; fração fora de 0 a 1', () => {
+    const a = ato({ servicoAmbulatorial: 50 });
+    expect(calcularAtoSus(a, regra({ base: 'servico_hospitalar', percentualPago: null })).base).toBe(300);
+    expect(calcularAtoSus(a, regra({ base: 'servico_ambulatorial' })).repasse).toBe(35);
+    expect(calcularAtoSus(a, regra({ base: 'total', percentualPago: 50 })).repasse).toBe(200);
+    expect(calcularAtoSus(a, regra({ base: 'pontos', percentualPago: null })).base).toBe(0);
+    expect(calcularAtoSus(a, regra({ base: 'valor_fixo', percentualPago: 50 })).repasse).toBe(0);
+    expect(calcularAtoSus(ato({ fracaoAprovada: 2 }), regra({})).glosa).toBe(0);
+    expect(calcularAtoSus(ato({ fracaoAprovada: -1 }), regra({})).repasse).toBe(0);
+  });
+
+  it('conferências: código, descrição, fim antes do início, desconto, valor fixo, peso e vigência do rateio', () => {
+    const base = {
+      codigo: 'código com espaço',
+      descricao: 'ab',
+      base: 'valor_fixo' as const,
+      procedimento: null,
+      grupo: 3,
+      percentualPago: null,
+      percentualDesconto: -1,
+      valorFixo: 0,
+      valorPonto: null,
+      inicio: '2025-02-01',
+      fim: '2025-01-31',
+    };
+    expect(conferirRegraSus(base)).toEqual(['codigo', 'descricao', 'vigencia', 'percentual', 'valor-fixo']);
+    expect(conferirRegraSus({ ...base, codigo: 'X', descricao: 'd'.repeat(151), fim: null })).toEqual([
+      'descricao',
+      'percentual',
+      'valor-fixo',
+    ]);
+    expect(
+      conferirRegraSus({ ...base, codigo: 'X', descricao: 'Fixo', percentualDesconto: 101, valorFixo: 5 }),
+    ).toEqual(['vigencia', 'percentual']);
+    const rat = {
+      procedimento: 7,
+      grupo: null,
+      usaPeso: true,
+      pesoPercentual: 101,
+      tetoPercentual: 101,
+      inicio: '2025-02-01',
+      fim: '2025-01-31',
+    };
+    expect(conferirRateioSadt(rat)).toEqual(['peso', 'teto', 'vigencia']);
+    expect(
+      conferirRateioSadt({ ...rat, pesoPercentual: 0, tetoPercentual: 50, inicio: '2025-02-15', fim: null }),
+    ).toEqual(['peso', 'vigencia']);
+    expect(conferirRateioSadt({ ...rat, usaPeso: false, tetoPercentual: null, fim: '2025-03-31' })).toEqual(
+      [],
+    );
+  });
 });
