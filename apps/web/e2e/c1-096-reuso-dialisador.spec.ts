@@ -146,8 +146,8 @@ test.describe('@C1-096 Reuso de dialisadores na hemodiálise', () => {
 
     // 95% e os testes certos: liberado.
     await f.getByLabel('Volume interno atual (ml)').fill('95');
-    await escolher(f.getByLabel('Desinfetante antes do enxágue'), 'Presente');
-    await escolher(f.getByLabel('Desinfetante depois do enxágue'), 'Ausente');
+    await escolher(f.getByLabel('Desinfetante antes do enxágue'), { rotulo: 'Presente' });
+    await escolher(f.getByLabel('Desinfetante depois do enxágue'), { rotulo: 'Ausente' });
     await expect(f.getByTestId('reprocessamento-previa')).toContainText('liberado para o próximo uso');
     await semViolacaoAxe(page, '/agenda/sessoes/dialisadores (reprocessamento)');
     await f.getByTestId('reprocessamento-gravar').click();
