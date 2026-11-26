@@ -156,7 +156,9 @@ test.describe('@C3-015 solicitação, entrega e recolhimento do material esteril
       corpos: {},
     };
     await simular(page, e);
-    await entrar(page, 'SINT.ADMIN');
+    // A CME é permissão clínica por perfil (cirurgia.cme.ler e .operar, perfil central-material-esteril): a segregação de
+    // funções a tira do administrador sem perfil assistencial. Quem recebe, entrega e recolhe o material é a equipe da CME.
+    await entrar(page, 'SINT.CME');
     await page.goto('/cirurgia/cme/fluxo');
     await expect(page.getByTestId('tela-cme-fluxo')).toBeVisible();
     await semViolacaoAxe(page, 'fluxo do material esterilizado');
