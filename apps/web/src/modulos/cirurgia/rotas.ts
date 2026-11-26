@@ -106,6 +106,13 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     meta: { permissao: 'cirurgia.cme.ler', menu: `${M} > CME: solicitação, entrega e recolhimento` },
   },
   {
+    // F7, 04-CME L119: material de terceiro e consignado processado pela CME (recebimento, conferência, devolução).
+    path: '/cirurgia/cme/terceiros',
+    name: 'cirurgia.cme.terceiros',
+    component: () => import('./telas/CmeTerceiroTela.vue'),
+    meta: { permissao: 'cirurgia.cme.ler', menu: `${M} > CME: material de terceiro e consignado` },
+  },
+  {
     // F8, 04-CC L108: projetos e mutirões cirúrgicos do SUS (metas SIGTAP, AIH e APAC marcadas, meta x produção).
     path: '/cirurgia/mutiroes',
     name: 'cirurgia.mutiroes',
