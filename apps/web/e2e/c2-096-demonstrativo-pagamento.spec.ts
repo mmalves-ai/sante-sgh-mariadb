@@ -37,7 +37,7 @@ test.describe('demonstrativo de análise e de pagamento, conciliação item a it
     await entrar(page, 'SINT.TISS');
     const sufixo = Date.now().toString(36).slice(-6).toUpperCase();
 
-    // 1. Demonstrativo de análise digitado num lote do próprio teste (conta 9103 do convênio 91): o item não
+    // 1. Demonstrativo de análise digitado num lote do próprio teste (conta 9102 do convênio 91): o item não
     // conciliado do lote 8002 é o do M31, e a porta em memória é uma só na rodada.
     await page.goto('/faturamento/lotes');
     await expect(page.getByTestId('tela-tiss-lotes')).toBeVisible();
@@ -47,7 +47,7 @@ test.describe('demonstrativo de análise e de pagamento, conciliação item a it
     await expect(page.getByTestId('lot-prontas')).toBeVisible();
     const abrir = page.locator('[data-testid^="lot-abrir-"]').first();
     const antes = (await abrir.getAttribute('data-testid')) ?? '';
-    await page.getByTestId('lot-marcar-9103').check();
+    await page.getByTestId('lot-marcar-9102').check();
     await page.getByTestId('lot-montar').click();
     await expect(page.getByTestId('lot-mensagem')).toContainText('04.03.00');
     await expect(abrir).not.toHaveAttribute('data-testid', antes);
