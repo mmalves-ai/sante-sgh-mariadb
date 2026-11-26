@@ -76,6 +76,12 @@ test.describe('Receituário com itens estruturados @C2-021 @F3.3', () => {
     await expect(page.getByTestId('receita-problema-0')).toContainText('RDC 471/2021');
     await expect(page.getByTestId('emitir-receita')).toBeDisabled();
     await expect(page.getByTestId('receita-tipo-sugerido')).toContainText('antimicrobiano');
+    // A faixa do paciente fica fixa no alto: com a tela rolada ela cobre o botão do receituário sugerido (axe
+    // target-size). Volta ao topo, como o leitor vê a sugestão logo abaixo do tipo.
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      document.getElementById('conteudo')?.scrollTo(0, 0);
+    });
     await semViolacaoAxe(page, '/pep/paciente/1001 receitas (antimicrobiano na simples)');
     await page.getByTestId('receita-usar-tipo').click();
     // No antimicrobiano a duração é obrigatória: sem ela o envio segue travado.

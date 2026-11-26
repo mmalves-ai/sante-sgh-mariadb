@@ -166,13 +166,13 @@ test.describe('@C2-097 padrões da prescrição e favoritos do prescritor', () =
     await esperarSemSelectNativo(page.locator('body'));
     await ed.getByTestId('padrao-codigo').fill('KIT-SINT-1');
     await ed.getByTestId('padrao-nome').fill('Kit sintético de hidratação');
-    await escolher(ed.getByTestId('padrao-tipo-kit'), 'Solução');
+    await escolher(ed.getByTestId('padrao-tipo-kit'), 'solucao');
     await ed.getByTestId('padrao-item-catalogo-0').fill('Soro fisiológico sintético 0,9%');
     await ed.getByTestId('padrao-item-quantidade-0').fill('1');
     await escolher(ed.getByTestId('padrao-item-unidade-0'), { indice: 1 });
     await expect(page.getByTestId('padrao-problemas')).toContainText('diluente');
     await expect(page.getByTestId('padrao-salvar')).toBeDisabled();
-    await escolher(ed.getByTestId('padrao-item-papel-0'), 'Diluente');
+    await escolher(ed.getByTestId('padrao-item-papel-0'), 'diluente');
     await expect(page.getByTestId('padrao-problemas')).toHaveCount(0);
     await page.getByTestId('padrao-salvar').click();
     await expect(page.getByTestId('padrao-aviso')).toBeVisible();
@@ -247,7 +247,7 @@ test.describe('@C2-097 padrões da prescrição e favoritos do prescritor', () =
     await esperarSemSelectNativo(page.locator('body'));
     await expect(page.getByTestId('favoritar-kit')).toBeDisabled();
     await expect(page.getByTestId('favoritar-item')).toBeDisabled();
-    await escolher(barra.getByTestId('escolher-kit'), KIT.nome);
+    await escolher(barra.getByTestId('escolher-kit'), { rotulo: KIT.nome });
     await barra.getByTestId('botao-aplicar-kit').click();
     await expect(page.getByTestId('aviso-protocolo')).toContainText('2 item(ns) do kit');
     await expect(page.getByTestId('aviso-protocolo')).toContainText('1 item(ns) do kit ficam para completar');

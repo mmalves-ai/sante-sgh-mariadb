@@ -155,7 +155,9 @@ test.describe('Prescrição: itens da gravação própria @C2-087', () => {
     );
 
     const [vmi] = detalhe('vmi');
-    expect(vmi).toEqual(expect.objectContaining({ tempoInspiratorio: 1, tempoExpiratorio: 2.5 }));
+    expect(vmi).toEqual(
+      expect.objectContaining({ pressaoInspiratoria: 20, tempoInspiratorio: 1, tempoExpiratorio: 2.5 }),
+    );
     const [vni] = detalhe('vni');
     expect(vni).toEqual(expect.objectContaining({ pressaoSuporte: 8, duracaoMinutos: 60 }));
     const [itemHemo] = detalhe('hemoterapia');

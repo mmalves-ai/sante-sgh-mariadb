@@ -919,6 +919,11 @@ const opcoesModo = computed(() => op('modos', (g) => !g || g === (tipo.value ===
           <label :for="`${px}-fio2`">{{ t('pep.presc.item.fio2') }}</label>
           <input :id="`${px}-fio2`" v-model="f.fio2" inputmode="numeric" />
         </div>
+        <!-- Pressão inspiratória: o IPAP na VNI e a pressão do modo pressão controlada na VMI. -->
+        <div class="campo curto">
+          <label :for="`${px}-pi`">{{ t('pep.presc.item.pressaoInsp') }}</label>
+          <input :id="`${px}-pi`" v-model="f.pInsp" inputmode="numeric" />
+        </div>
         <template v-if="tipo === 'vmi'">
           <div class="campo curto">
             <label :for="`${px}-peep`">{{ t('pep.presc.item.peep') }}</label>
@@ -942,10 +947,6 @@ const opcoesModo = computed(() => op('modos', (g) => !g || g === (tipo.value ===
           </div>
         </template>
         <template v-else>
-          <div class="campo curto">
-            <label :for="`${px}-pi`">{{ t('pep.presc.item.pressaoInsp') }}</label>
-            <input :id="`${px}-pi`" v-model="f.pInsp" inputmode="numeric" />
-          </div>
           <div class="campo curto">
             <label :for="`${px}-pe`">{{ t('pep.presc.item.pressaoExp') }}</label>
             <input :id="`${px}-pe`" v-model="f.pExp" inputmode="numeric" />

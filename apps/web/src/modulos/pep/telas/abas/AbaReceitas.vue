@@ -226,13 +226,9 @@ async function emitir(): Promise<void> {
               @acionar="tirarItem(i)"
             />
           </div>
-          <SanteAlerta
-            v-for="p in problemasDoItem(i)"
-            :key="p.campo"
-            variante="aviso"
-            :texto="p.motivo"
-            :data-testid="`receita-problema-${i}`"
-          />
+          <div v-if="problemasDoItem(i).length > 0" class="linha" :data-testid="`receita-problema-${i}`">
+            <SanteAlerta v-for="p in problemasDoItem(i)" :key="p.campo" variante="aviso" :texto="p.motivo" />
+          </div>
         </fieldset>
         <SanteBotao
           variante="secundario"
