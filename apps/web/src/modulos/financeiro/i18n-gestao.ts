@@ -74,4 +74,11 @@ export const mensagensGestaoFinanceiro = {
     desfazerRestricao: 'Desfazer a restrição (voltar a todos os tipos)',
     liberado: 'Liberado',
   },
+  /** A emissão do título a receber: o tipo de documento, só entre os liberados aos perfis do usuário. */
+  emissaoReceber: {
+    tipoDocumento: 'Tipo de documento',
+    restrito: 'O seu perfil emite só os tipos de documento listados.',
+    semTipo:
+      'Nenhum tipo de documento a receber está liberado ao seu perfil: peça a liberação em Permissões do financeiro.',
+  },
 };

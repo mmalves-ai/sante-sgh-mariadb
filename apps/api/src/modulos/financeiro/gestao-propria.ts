@@ -707,6 +707,31 @@ export async function tiposDoPerfil(
   };
 }
 
+/**
+ * Os tipos de documento a receber ativos com a marca do que os perfis do usuário da sessão liberam (a mesma regra da
+ * trava, perfil a perfil) e o padrão do cadastro: a tela da emissão só oferece o que vai passar.
+ */
+export async function tiposDocumentoReceberDoUsuario(l: Leitor, est: number, usuario: number) {
+  const perfis = await perfisNoTipoLancamento(l, est, usuario, 'contas_receber');
+  const linhas = await l.consultar(
+    `SELECT id, codigo, descricao FROM tipo_documento_financeiro
+      WHERE ativo = TRUE AND sentido IN ('receber','ambos')
+      ORDER BY (codigo = 'fatura') DESC, nativo_sistema DESC, id LIMIT 300`,
+    [],
+  );
+  const tipos = linhas.map((r) => ({
+    tipo: numero(r['id']),
+    codigo: String(r['codigo']),
+    descricao: String(r['descricao']),
+    liberado: conferirTipoLancamento(perfis, numero(r['id']), '', 'contas_receber') === null,
+  }));
+  return {
+    restrito: perfis.some((p) => p.restrito),
+    padrao: tipos[0]?.tipo ?? null,
+    tipos: [...tipos].sort((a, b) => a.descricao.localeCompare(b.descricao)),
+  };
+}
+
 export async function perfisDoEstabelecimento(l: Leitor, est: number) {
   const linhas = await l.consultar(
     `SELECT id, codigo, nome FROM perfil_acesso WHERE (estabelecimento_id IS NULL OR estabelecimento_id = ?)

@@ -7,6 +7,7 @@
 //   POST /api/financeiro/gestao/escopo-contas             { usuario, conta, consultar, movimentar, vigencia... }
 //   GET  /api/financeiro/gestao/perfis                    os perfis de acesso do estabelecimento
 //   GET  /api/financeiro/gestao/tipos-lancamento?perfil=  os tipos de lançamento com a marca do perfil
+//   GET  /api/financeiro/gestao/tipos-documento-receber   os tipos a receber liberados ao usuário (emissão)
 //   POST /api/financeiro/gestao/tipos-lancamento          { perfil, tipo, liberado }
 //   POST /api/financeiro/gestao/tipos-lancamento/restricao { perfil, restrito } (restrito sem tipo: nada passa)
 //   GET  /api/financeiro/gestao/lancamentos?alvo=&termo=  busca pelo número do título ou documento do movimento
@@ -43,6 +44,7 @@ import {
   esquemaRestricaoTipoLancamento,
   esquemaTipoLancamentoPerfil,
   perfisDoEstabelecimento,
+  tiposDocumentoReceberDoUsuario,
   tiposDoPerfil,
   usuariosDoEstabelecimento,
 } from './gestao-propria.js';
@@ -52,6 +54,7 @@ import {
   manterRestricaoMemoria,
   manterTipoMemoria,
   perfisMemoria,
+  tiposDocumentoReceberMemoria,
   tiposMemoria,
   usuariosMemoria,
 } from './gestao-permissoes-memoria.js';
@@ -213,6 +216,17 @@ export class GestaoFinanceiroController {
     const mem = this.estMemoria(req);
     if (mem !== null) return tiposMemoria(mem, n, o);
     return this.ler(req, (l, est) => tiposDoPerfil(l, est, n, o));
+  }
+
+  /** A emissão do título a receber: os tipos de documento com a marca do que os perfis do usuário liberam. */
+  @Get('tipos-documento-receber')
+  @Permissao('financeiro.tituloReceber.ler')
+  tiposDocumentoReceber(@Req() req: RequisicaoAutorizada) {
+    const mem = this.estMemoria(req);
+    if (mem !== null) return tiposDocumentoReceberMemoria(mem, sessaoDe(req).login);
+    const usuario = sessaoDe(req).porta.usuario;
+    if (usuario === null) throw new ErroProblema('nao-autenticado', 401, 'Sessão necessária');
+    return this.ler(req, (l, est) => tiposDocumentoReceberDoUsuario(l, est, usuario));
   }
 
   @Post('tipos-lancamento')

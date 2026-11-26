@@ -60,6 +60,7 @@ import type { EstadoOperacao } from '@sgh/contratos';
 import { type ContextoOperacao, ErroOperacao, recusa } from '@sgh/nucleo';
 import type { LiberacaoGravacao } from '../exames/public-api.js';
 import { DeParaContabilMemoria, fatosDosTitulosMemoria } from './contabil-fiscal-memoria.js';
+import { exigirTipoDocumentoReceberMemoria } from './gestao-permissoes-memoria.js';
 import { ESQUEMAS_OPERACAO_FINANCEIRO } from './esquemas.js';
 import type {
   BasesDrePorta,
@@ -483,13 +484,15 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
       ],
     });
     // As contas da competência fechada do convênio 92, sem título (o evento da competência gera).
-    for (const [id, total] of [
-      [9301, 700],
-      [9302, 300],
+    // A conta do convênio 93 é da emissão com o tipo de documento liberado ao perfil (E2E @C1-044).
+    for (const [id, total, convenio] of [
+      [9301, 700, 92],
+      [9302, 300, 92],
+      [9393, 450, 93],
     ] as const)
       s.contasFat.set(id, {
         id,
-        convenio: 92,
+        convenio,
         tipo: 'E',
         competencia: hoje.slice(0, 7),
         fechada: 'A',
@@ -599,7 +602,13 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    const resultado = this.aplicar(s, op, analise.data as never, loginDoContexto(ctx));
+    const resultado = this.aplicar(
+      s,
+      op,
+      analise.data as never,
+      loginDoContexto(ctx),
+      ctx.estabelecimento ?? 0,
+    );
     s.idem.set(chave, { hash, resultado });
     return { resultado, repetida: false, trilha: null };
   }
@@ -608,14 +617,20 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
     if (r) throw recusa(r.codigo, r.mensagem, r.campos ? { campos: r.campos } : {});
   }
 
-  private aplicar(s: Estado, op: string, e: never, usuario: string): Record<string, number | string> {
+  private aplicar(
+    s: Estado,
+    op: string,
+    e: never,
+    usuario: string,
+    est = 0,
+  ): Record<string, number | string> {
     switch (op) {
       case 'financeiro.criarTituloPagar':
         return this.criarTituloPagar(s, e, usuario);
       case 'financeiro.baixarTitulo':
         return this.baixar(s, e, usuario);
       case 'financeiro.criarTituloReceber':
-        return this.criarTituloReceber(s, e, usuario);
+        return this.criarTituloReceber(s, e, usuario, est);
       case 'financeiro.lancarMovimento':
         return this.lancarMovimento(s, e, usuario);
       default:
@@ -900,7 +915,10 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
     s: Estado,
     e: import('@sgh/contratos').CriarTituloReceberEntrada,
     usuario: string,
+    est = 0,
   ): Record<string, number | string> {
+    // F3.8, 07-FIN linha 99: o tipo de documento (ou a fatura, o padrão) liberado aos perfis do usuário.
+    const tipoDocumento = exigirTipoDocumentoReceberMemoria(est, usuario, e.tipoDocumento ?? null);
     const contas = e.contas.map((x) => {
       const c = s.contasFat.get(x.conta);
       if (!c) throw recusa('conta-inexistente', 'A conta não existe.', { campos: ['contas'] });
@@ -950,6 +968,7 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
       dev,
       valor,
       documento: e.documento,
+      tipoDocumento,
       ids: contas.map((c) => c.id).join(','),
       convenio: p.convenio,
     };

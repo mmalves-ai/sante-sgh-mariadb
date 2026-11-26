@@ -96,6 +96,22 @@ export const lerTiposDoPerfil = (
     `${P}/tipos-lancamento${qs({ perfil, operacao })}`,
     confiar<{ restrito: boolean; tipos: TipoDoPerfil[] }>(),
   );
+/** O tipo de documento a receber com a marca do que os perfis do usuário da sessão liberam (emissão do título). */
+export interface TipoDocumentoReceber {
+  readonly tipo: number;
+  readonly codigo: string;
+  readonly descricao: string;
+  readonly liberado: boolean;
+}
+export const lerTiposDocumentoReceber = (): Promise<{
+  restrito: boolean;
+  padrao: number | null;
+  tipos: TipoDocumentoReceber[];
+}> =>
+  ler(
+    `${P}/tipos-documento-receber`,
+    confiar<{ restrito: boolean; padrao: number | null; tipos: TipoDocumentoReceber[] }>(),
+  );
 export const gravarTipoDoPerfil = (
   e: { perfil: number; tipo: number; liberado: boolean; operacao: OperacaoTipo },
   chave: string,

@@ -6,10 +6,15 @@
 // - Tipo de documento que não serve a receber: recusado na liberação e na criação, sem gravar.
 // - A liberação fica com o tipo de documento (nunca com credor nem lançamento), no estabelecimento, e a marca de restrito
 //   vale só para o título a receber (o movimento bancário do perfil continua livre).
+// - A tela da emissão lê os tipos com a marca do que os perfis do usuário liberam (a mesma regra da trava).
+// - A renegociação (acordo) cria um título a receber com o tipo do título de origem: fora da lista, recusada sem gravar
+//   acordo nem título; com o tipo liberado, o título do acordo grava com ele.
 // Só contagens e ids sintéticos.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { tiposDocumentoReceberDoUsuario } from '../gestao-propria.js';
 import { PortaFinanceiroPropria } from '../porta-propria.js';
+import { OPERACOES_RENEGOCIACAO } from '../renegociacao-propria.js';
 import {
   CLIENTE,
   codigoDaGravacao,
@@ -207,6 +212,91 @@ describe.skipIf(SEM_BANCO)(
       ).toBe('tipo-lancamento-nao-liberado');
       expect(await titulos()).toBe(n0 + 1);
       console.info(`[c1-044] título a receber: 1 gravado com o documento liberado; 4 recusas sem gravar`);
+    });
+
+    it('a emissão lê os tipos liberados ao usuário; a renegociação respeita a lista do título a receber', async () => {
+      const EM_30_DIAS = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+      const executor = m.nucleo.criarExecutor();
+      const renegociar = (titulo: number) =>
+        executor.executar(
+          OPERACOES_RENEGOCIACAO['financeiro.renegociarTitulosReceber'] as never,
+          CLIENTE,
+          { titulos: [titulo], quantidadeParcelas: 1, primeiroVencimento: EM_30_DIAS },
+          { ...m.ctx(m.lanca), chaveIdempotencia: `c1-044-${randomUUID()}` },
+        );
+      const contar = async (tabela: 'renegociacao' | 'titulo_receber') =>
+        Number(
+          (await consultar(`SELECT COUNT(*) AS n FROM ${tabela} WHERE estabelecimento_id = ?`, [m.est]))[0]?.[
+            'n'
+          ],
+        );
+      const tiposDaTela = () =>
+        m.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'c1-044' }, (l) =>
+          tiposDocumentoReceberDoUsuario(l, m.est, m.lanca),
+        );
+
+      // Perfil livre de novo: a tela marca todos os tipos como liberados e os dois títulos de origem gravam.
+      await executar('financeiro.manterRestricaoTipoLancamento', {
+        perfil,
+        restrito: false,
+        operacao: 'contas_receber',
+      });
+      const livre = await tiposDaTela();
+      expect(livre.restrito).toBe(false);
+      expect(livre.padrao).toBe(docPadrao);
+      expect(livre.tipos.every((t) => t.liberado)).toBe(true);
+      expect(livre.tipos.map((t) => t.tipo)).not.toContain(docPagar);
+      const emitir = async (conta: number, documento: number, tipoDocumento: number) =>
+        Number(
+          (
+            (
+              await executar('financeiro.criarTituloReceber', {
+                contas: [{ conta, versao: null }],
+                vencimento: EM_30_DIAS,
+                documento,
+                referente: '',
+                tipoDocumento,
+              })
+            ).resultado as Record<string, unknown>
+          )['titulo'],
+        );
+      const daFatura = await emitir(m.contasHospitalares[1]!, 920_443, docPadrao);
+      const doRecibo = await emitir(m.contasHospitalares[2]!, 920_444, docLiberado);
+      expect(daFatura).toBeGreaterThan(0);
+      expect(doRecibo).toBeGreaterThan(0);
+
+      // Liberado só o recibo: a tela mostra o perfil restrito e só o recibo liberado.
+      await executar('financeiro.manterTipoLancamento', {
+        perfil,
+        tipo: docLiberado,
+        liberado: true,
+        operacao: 'contas_receber',
+      });
+      const restrito = await tiposDaTela();
+      expect(restrito.restrito).toBe(true);
+      expect(restrito.tipos.filter((t) => t.liberado).map((t) => t.tipo)).toEqual([docLiberado]);
+
+      // O acordo do título da fatura (fora da lista) é recusado: nem acordo nem título novo.
+      const [a0, t0] = [await contar('renegociacao'), await contar('titulo_receber')];
+      expect(await codigoDaGravacao(renegociar(daFatura))).toBe('tipo-lancamento-nao-liberado');
+      expect([await contar('renegociacao'), await contar('titulo_receber')]).toEqual([a0, t0]);
+      const [origem] = await consultar('SELECT situacao FROM titulo_receber WHERE id = ?', [daFatura]);
+      expect(String(origem?.['situacao'])).not.toBe('renegociado');
+
+      // O acordo do título do recibo (liberado) grava, e o título do acordo leva o recibo.
+      const ok = await renegociar(doRecibo);
+      expect(ok).toBeTruthy();
+      expect([await contar('renegociacao'), await contar('titulo_receber')]).toEqual([a0 + 1, t0 + 1]);
+      const [novo] = await consultar(
+        `SELECT t.tipo_documento_financeiro_id AS d, t.tipo_origem FROM renegociacao r
+           JOIN titulo_receber t ON t.id = r.novo_titulo_receber_id
+          WHERE r.estabelecimento_id = ? ORDER BY r.id DESC LIMIT 1`,
+        [m.est],
+      );
+      expect([Number(novo?.['d']), String(novo?.['tipo_origem'])]).toEqual([docLiberado, 'acordo']);
+      console.info(
+        '[c1-044] renegociação: 1 recusa sem gravar (fora da lista), 1 acordo com o tipo liberado',
+      );
     });
   },
 );

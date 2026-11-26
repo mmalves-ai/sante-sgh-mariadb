@@ -111,6 +111,8 @@ const esquemaCompetencia = z
     mes: z.number().int().min(1).max(12),
     vencimento: z.string().regex(DATA),
     documento: z.number().int().min(0).max(2_147_483_647).default(0),
+    /** Tipo de documento a receber dos títulos (nulo = o padrão do cadastro), liberado aos perfis do usuário. */
+    tipoDocumento: z.number().int().positive().nullable().default(null),
   })
   .strict();
 const esquemaBaixaManual = z

@@ -175,11 +175,20 @@ export const criarTituloReceber = (
     vencimento: string;
     documento: number;
     referente: string;
+    /** Tipo de documento a receber (nulo = o padrão do cadastro), liberado aos perfis do usuário. */
+    tipoDocumento: number | null;
   },
   chave: string,
 ) => gravar(`${F}/receber/titulos`, corpo, chave);
 export const titulosDaCompetencia = (
-  corpo: { convenio: number; ano: number; mes: number; vencimento: string; documento: number },
+  corpo: {
+    convenio: number;
+    ano: number;
+    mes: number;
+    vencimento: string;
+    documento: number;
+    tipoDocumento: number | null;
+  },
   chave: string,
 ) => gravar(`${F}/receber/competencia`, corpo, chave);
 export const baixaManual = (

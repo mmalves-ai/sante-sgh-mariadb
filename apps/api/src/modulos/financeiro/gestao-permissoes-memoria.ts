@@ -4,6 +4,7 @@
 // consultar, vigência; a marca de restrito separada da lista, por operação) e as mesmas recusas da gravação no banco.
 import {
   conferirEscopoConta,
+  conferirTipoLancamento,
   OPERACOES_TIPO_LANCAMENTO,
   type OperacaoTipoLancamento,
 } from '@sgh/dominio-financeiro';
@@ -159,4 +160,53 @@ export function manterRestricaoMemoria(est: number, x: RestricaoTipoLancamentoEn
   if (x.restrito) e.restritos.add(marca);
   else e.restritos.delete(marca);
   return { operacao, perfil: x.perfil, restrito: x.restrito };
+}
+
+/**
+ * Os perfis de cada usuário sintético no estabelecimento: o lançador (contas a pagar e a receber) tem o perfil de contas
+ * a pagar, o mesmo que a tela de permissões restringe; os outros não têm perfil com lista de tipos.
+ */
+const PERFIS_DO_LOGIN: Readonly<Record<string, readonly number[]>> = { 'SINT.FIN.LANCA': [9302] };
+
+const perfisDoLogin = (est: number, login: string, operacao: OperacaoTipoLancamento) => {
+  const e = estado(est);
+  return (PERFIS_DO_LOGIN[login] ?? []).map((perfil) => ({
+    restrito: e.restritos.has(`${perfil}:${operacao}`),
+    concedeOperacao: true,
+    liberados: [...e.liberados]
+      .filter((k) => k.startsWith(`${perfil}:${operacao}:`))
+      .map((k) => Number(k.split(':')[2])),
+  }));
+};
+
+/** Os tipos de documento a receber com a marca do que o usuário da sessão pode usar (a fatura é o padrão). */
+export function tiposDocumentoReceberMemoria(est: number, login: string) {
+  const perfis = perfisDoLogin(est, login, 'contas_receber');
+  return {
+    restrito: perfis.some((p) => p.restrito),
+    padrao: TIPOS.documento[0].tipo as number,
+    tipos: TIPOS.documento.map((t) => ({
+      ...t,
+      liberado: conferirTipoLancamento(perfis, t.tipo, '', 'contas_receber') === null,
+    })),
+  };
+}
+
+/** A trava do título a receber na sessão sintética: o tipo (ou a fatura, o padrão) tem de estar liberado ao usuário. */
+export function exigirTipoDocumentoReceberMemoria(est: number, login: string, tipo: number | null): number {
+  const t = TIPOS.documento.find((x) => x.tipo === (tipo ?? TIPOS.documento[0].tipo));
+  if (!t)
+    throw recusa(
+      'tipo-documento-invalido',
+      'O tipo de documento não existe ou não serve a título a receber.',
+      ['tipoDocumento'],
+    );
+  const r = conferirTipoLancamento(
+    perfisDoLogin(est, login, 'contas_receber'),
+    t.tipo,
+    t.descricao,
+    'contas_receber',
+  );
+  if (r) throw recusa(r.codigo, r.mensagem, r.campos ?? []);
+  return t.tipo;
 }

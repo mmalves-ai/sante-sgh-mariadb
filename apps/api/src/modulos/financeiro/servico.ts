@@ -370,7 +370,14 @@ export class ServicoFinanceiro {
   /** Regra 10: toda conta apresentada da competência ganha título (um por convênio e tipo; o particular, um por conta). */
   async titulosDaCompetencia(
     s: SessaoCadastro,
-    d: { convenio: number; ano: number; mes: number; vencimento: string; documento: number },
+    d: {
+      convenio: number;
+      ano: number;
+      mes: number;
+      vencimento: string;
+      documento: number;
+      tipoDocumento?: number | null;
+    },
   ): Promise<ResultadoFinanceiro> {
     const contas = await this.porta.contasSemTitulo(ctx(s), { convenio: d.convenio, ano: d.ano, mes: d.mes });
     if (contas.length === 0)
@@ -950,12 +957,13 @@ export class ServicoFinanceiro {
  */
 export function entradasDaCompetencia(
   contas: readonly { id: number; tipo: string; versao: string }[],
-  d: { ano: number; mes: number; vencimento: string; documento: number },
+  d: { ano: number; mes: number; vencimento: string; documento: number; tipoDocumento?: number | null },
 ): {
   contas: { conta: number; versao: string }[];
   vencimento: string;
   documento: number;
   referente: string;
+  tipoDocumento: number | null;
 }[] {
   const grupos = new Map<string, { conta: number; versao: string }[]>();
   for (const c of contas)
@@ -969,5 +977,6 @@ export function entradasDaCompetencia(
       // receber repete convênio, apresentação e documento; D-FATURA-32).
       documento: d.documento > 0 ? d.documento + i : 0,
       referente: `Competência ${d.ano}-${String(d.mes).padStart(2, '0')}`,
+      tipoDocumento: d.tipoDocumento ?? null,
     }));
 }

@@ -20,6 +20,7 @@ import {
   type ResultadoOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { exigirTipoLancamentoLiberado } from './gestao-propria.js';
 import { exigirPeriodoAberto } from './periodo-propria.js';
 import { dataIso, instanteIso, numero } from './vocabulario.js';
 
@@ -168,6 +169,15 @@ const renegociar = definirOperacao<z.infer<typeof esquemaRenegociar>, ResultadoO
       }),
     );
     const base = titulos[0] as Record<string, unknown>;
+    // F3.8, 07-FIN linha 99: o acordo cria um título a receber com o tipo de documento do título de origem; a lista
+    // do perfil no título a receber vale também aqui (sem ela, o acordo contornaria a trava da emissão).
+    await exigirTipoLancamentoLiberado(
+      tx,
+      est,
+      usuario,
+      numero(base['tipo_documento_financeiro_id']),
+      'contas_receber',
+    );
     const devedor = await identificacaoDoDevedor(tx, base);
     await garantirSequencia(
       tx,

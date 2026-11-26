@@ -18,6 +18,7 @@ import {
   novaChave,
   titulosDaCompetencia,
 } from '../api-financeiro.js';
+import { lerTiposDocumentoReceber } from '../api-gestao.js';
 import { data, reais, somarDias, usarFinanceiro } from '../usar-financeiro.js';
 
 const { t } = useI18n();
@@ -59,6 +60,30 @@ const contas = useQuery({
   queryFn: () => contasSemTitulo(pedidoContas.value ?? {}),
   enabled: computed(() => pedidoContas.value !== null),
 });
+// F3.8, 07-FIN linha 99: o tipo de documento do título, só entre os liberados aos perfis do usuário (a API recusa o
+// resto); com o perfil livre, todos, e o padrão do cadastro já escolhido.
+const tiposDoc = useQuery({
+  queryKey: ['financeiro', 'tipos-documento-receber'],
+  queryFn: lerTiposDocumentoReceber,
+  enabled: computed(() => pode('financeiro.criarTituloReceber')),
+});
+const tipoDoc = ref('');
+const opcoesTipoDoc = computed(() =>
+  (tiposDoc.data.value?.tipos ?? [])
+    .filter((x) => x.liberado)
+    .map((x) => ({ valor: String(x.tipo), rotulo: x.descricao })),
+);
+watch(
+  opcoesTipoDoc,
+  (ops) => {
+    if (ops.some((o) => o.valor === tipoDoc.value)) return;
+    const padrao = String(tiposDoc.data.value?.padrao ?? '');
+    tipoDoc.value = ops.find((o) => o.valor === padrao)?.valor ?? ops[0]?.valor ?? '';
+  },
+  { immediate: true },
+);
+const semTipoDoc = computed(() => !!tiposDoc.data.value && opcoesTipoDoc.value.length === 0);
+const tipoEscolhido = () => (tipoDoc.value ? Number(tipoDoc.value) : null);
 const marcadas = reactive(new Set<number>());
 function alternar(id: number) {
   if (marcadas.has(id)) marcadas.delete(id);
@@ -93,6 +118,7 @@ const daCompetencia = () =>
         mes: Number(comp.mes),
         vencimento: comp.vencimento,
         documento: Number(comp.documento) || 0,
+        tipoDocumento: tipoEscolhido(),
       },
       novaChave('competencia'),
     ),
@@ -107,6 +133,7 @@ const dasMarcadas = () =>
         vencimento: comp.vencimento,
         documento: Number(comp.documento) || 0,
         referente: '',
+        tipoDocumento: tipoEscolhido(),
       },
       novaChave('titulo-receber'),
     ),
@@ -265,10 +292,25 @@ const dasMarcadas = () =>
           data-testid="tr-c-documento"
         />
       </span>
+      <span class="campo">
+        <SanteSelecao
+          v-model="tipoDoc"
+          :rotulo="t('financeiro.gestao.emissaoReceber.tipoDocumento')"
+          :opcoes="opcoesTipoDoc"
+          :desabilitado="semTipoDoc"
+          obrigatorio
+          data-testid="tr-tipo-documento"
+        />
+      </span>
       <button
         type="button"
         :disabled="
-          gravando || !comp.convenio || !comp.mes || !comp.documento || !pode('financeiro.criarTituloReceber')
+          gravando ||
+          semTipoDoc ||
+          !comp.convenio ||
+          !comp.mes ||
+          !comp.documento ||
+          !pode('financeiro.criarTituloReceber')
         "
         data-testid="tr-gerar-competencia"
         @click="daCompetencia"
@@ -277,13 +319,19 @@ const dasMarcadas = () =>
       </button>
       <button
         type="button"
-        :disabled="gravando || marcadas.size === 0 || !pode('financeiro.criarTituloReceber')"
+        :disabled="gravando || semTipoDoc || marcadas.size === 0 || !pode('financeiro.criarTituloReceber')"
         data-testid="tr-gerar-marcadas"
         @click="dasMarcadas"
       >
         {{ t('financeiro.receber.gerarDasMarcadas') }}
       </button>
     </form>
+    <p v-if="semTipoDoc" class="secundario" role="status" data-testid="tr-tipo-documento-aviso">
+      {{ t('financeiro.gestao.emissaoReceber.semTipo') }}
+    </p>
+    <p v-else-if="tiposDoc.data.value?.restrito" class="secundario" data-testid="tr-tipo-documento-aviso">
+      {{ t('financeiro.gestao.emissaoReceber.restrito') }}
+    </p>
     <p v-if="!pode('financeiro.criarTituloReceber')" class="secundario">
       {{ motivo('financeiro.criarTituloReceber') }}
     </p>
