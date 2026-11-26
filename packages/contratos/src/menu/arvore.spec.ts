@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 522, M: 198, P: 57, N: 267 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 523, M: 198, P: 57, N: 268 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(522);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(523);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -337,6 +337,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/faturamento/glosas', // M31
         '/faturamento/guias', // M31
         '/faturamento/guias-convenio', // C1-122 (06-FAT linha 24)
+        '/faturamento/horario-especial', // C2-063 (06-FAT linha 17)
         '/faturamento/lancamento-automatico', // M30
         '/faturamento/lancamentos',
         '/faturamento/lotes', // M31
