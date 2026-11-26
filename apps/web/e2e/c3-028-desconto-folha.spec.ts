@@ -140,7 +140,8 @@ test.describe('C3-028 desconto em folha da mensalidade @C3-028', () => {
     await expect(page.getByTestId('tela-desconto-folha')).toBeVisible();
     await expect(page.getByTestId('desconto-folha-previa')).toBeDisabled();
 
-    await escolher(page.getByTestId('desconto-folha-contratante'), { rotulo: 'Sintético' });
+    // O rótulo da opção é `código — nome` (opContratantes da tela); a busca remota leva o texto digitado.
+    await escolher(page.getByTestId('desconto-folha-contratante'), { rotulo: 'C-SINT — Órgão Sintético' });
     await page.getByTestId('desconto-folha-competencia').fill('2026-10');
     await page.getByTestId('desconto-folha-previa').click();
     await expect(page.getByTestId('desconto-folha-previa-itens')).toContainText('MAT-001');
