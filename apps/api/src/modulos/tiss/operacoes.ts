@@ -81,7 +81,7 @@ import {
   TIPO_GUIA_NO_MODELO,
   type TipoGuiaLote,
 } from './regras-tiss.js';
-import { operacoesGlosa } from './operacoes-glosa.js';
+import { operacoesGlosaCom } from './operacoes-glosa.js';
 // F3.7 (06-FAT linhas 29 a 31): regra de apresentação, valor padrão, credenciamento e fatura ao pagador no lote.
 import { apresentarLote, gravarFaturaDoLote, protocolarFaturaDoLote } from './apresentacao-propria.js';
 // F3.1 (02-CAD linha 25): o número da guia sai da faixa da operadora e a guia emitida fica gravada com o lote.
@@ -966,6 +966,6 @@ export function operacoesTiss(
     'faturamento.registrarProtocolo': registrarProtocolo as unknown as Operacao<never, ResultadoOperacao>,
     'faturamento.fecharCompetencia': fecharCompetencia as unknown as Operacao<never, ResultadoOperacao>,
     'faturamento.reabrirCompetencia': reabrirCompetencia as unknown as Operacao<never, ResultadoOperacao>,
-    ...(operacoesGlosa as unknown as Record<string, Operacao<never, ResultadoOperacao>>),
+    ...(operacoesGlosaCom(montador) as unknown as Record<string, Operacao<never, ResultadoOperacao>>),
   };
 }
