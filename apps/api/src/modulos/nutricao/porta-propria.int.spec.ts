@@ -84,6 +84,10 @@ describe.skipIf(SEM_BANCO)('porta própria da nutrição (MariaDB, cliente f22_o
 
   const limpar = (e: Escritor) =>
     (async () => {
+      await e.executar('DELETE FROM agendamento_cirurgico WHERE estabelecimento_id IN (?, ?)', [
+        ids.est,
+        ids.outroEst,
+      ]);
       await e.executar(
         'DELETE it FROM mapa_dieta_item it JOIN mapa_dieta m ON m.id = it.mapa_dieta_id WHERE m.estabelecimento_id IN (?, ?)',
         [ids.est, ids.outroEst],
@@ -590,6 +594,53 @@ describe.skipIf(SEM_BANCO)('porta própria da nutrição (MariaDB, cliente f22_o
       1,
     );
     expect(await porta.retrato(outro, `${P}-UI`, ids.refeicao, hoje)).toBeNull();
+  });
+
+  it('cirurgias da janela do jejum: a agenda migrada sem situação (nao_informada) não entra; a agendada entra', async () => {
+    const agora = new Date();
+    const [agendada, naoInformada] = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'teste-03-04-cir' },
+      async (e) => {
+        const ua = await e.uma<{ id: number }>(
+          'SELECT id FROM unidade_assistencial WHERE estabelecimento_id = ? AND codigo = ?',
+          [ids.est, `${P}-UA`],
+        );
+        const uc = await garantir(
+          e,
+          'SELECT id FROM unidade_cirurgica WHERE estabelecimento_id = ? AND unidade_assistencial_id = ?',
+          [ids.est, Number(ua?.id)],
+          'INSERT INTO unidade_cirurgica (estabelecimento_id, unidade_assistencial_id, funciona_24_horas, criado_em) VALUES (?, ?, TRUE, ?)',
+          [ids.est, Number(ua?.id), agora],
+        );
+        const sala = await garantir(
+          e,
+          'SELECT id FROM sala_cirurgica WHERE estabelecimento_id = ? AND codigo = ?',
+          [ids.est, `${P}-SC`],
+          "INSERT INTO sala_cirurgica (estabelecimento_id, unidade_cirurgica_id, codigo, descricao, criado_em) VALUES (?, ?, ?, 'SALA L0304', ?)",
+          [ids.est, uc, `${P}-SC`, agora],
+        );
+        const carater = await garantir(
+          e,
+          'SELECT id FROM carater_cirurgia WHERE codigo = ?',
+          [`${P}-ELE`],
+          "INSERT INTO carater_cirurgia (codigo, descricao, criado_em) VALUES (?, 'ELETIVA L0304', ?)",
+          [`${P}-ELE`, agora],
+        );
+        const agendar = (numero: string, situacao: string) =>
+          e.inserir(
+            `INSERT INTO agendamento_cirurgico (estabelecimento_id, numero, paciente_id, cirurgiao_profissional_id, carater_cirurgia_id,
+             situacao, sala_cirurgica_id, inicio_previsto_em, duracao_prevista_minutos, tipo_cobertura, solicitado_em, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?, '2031-03-11 12:00:00', 90, 'particular', ?, ?)`,
+            [ids.est, numero, ids.paciente, ids.profissional, carater, situacao, sala, agora, agora],
+          );
+        return [await agendar(`${P}-AG1`, 'agendado'), await agendar(`${P}-AG2`, 'nao_informada')];
+      },
+    );
+    const janela = (await porta.cirurgias(ctx, '2031-03-10T00:00', '2031-03-12T00:00')).map(
+      (c) => c.agendamento,
+    );
+    expect(janela).toContain(agendada);
+    expect(janela).not.toContain(naoInformada);
   });
 
   it('mapa de dietas: o paciente em jejum (sem dieta) entra com a modalidade de jejum; sem prescrição não gera bandeja', async () => {

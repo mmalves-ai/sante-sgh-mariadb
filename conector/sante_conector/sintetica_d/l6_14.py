@@ -8,7 +8,7 @@ Dados 100% falsos (nomes e códigos inventados). Carregadas (CARREGADAS) e anoma
   distintos na origem; a chave única composta do destino não distingue caixa: hoje restricao_destino_1062); destino
   secundário unidade_internacao (unidade assistencial pela UNID, tipo presumido, idades em anos): UNID nula recusa o
   bloco (1048), o segundo bloco da mesma unidade assistencial ADOTA a unidade de internação (UNIQUE do modelo, M5);
-- RISITREGLEITO: nome nulo (1048), código da central nulo (aceito), estado presumido 'solicitado' com a linha
+- RISITREGLEITO: nome nulo (1048), código da central nulo (aceito), estado presumido 'cancelado' (pedido 67) com a linha
   inativa (o NIR não a usa) até o de-para de valores (valor_presumido conta toda linha lida, inclusive a recusada);
 - TBALTARN: nome só de espaços (vira NULL: 1048), nome com acento, óbito presumido FALSE com a linha inativa.
 - RITITFIC: o mesmo COD em duas variantes de impressão (GRAFICA N e S: a segunda ADOTA o título, adotado_existente),

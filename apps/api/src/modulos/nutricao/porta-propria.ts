@@ -1449,6 +1449,7 @@ export class PortaNutricaoPropria implements PortaNutricao {
     });
   }
 
+  // A agenda migrada sem situação ('nao_informada', V-D1) não é acionável: não põe o paciente em jejum pré-operatório.
   cirurgias(c: ContextoNutricao, de: string, ate: string): Promise<CirurgiaDaJanela[]> {
     return this.ler(c, async (l, est, fuso) =>
       (
@@ -1458,7 +1459,8 @@ export class PortaNutricaoPropria implements PortaNutricao {
              FROM agendamento_cirurgico a
              LEFT JOIN internacao i ON i.atendimento_id = a.atendimento_id AND i.excluido_em IS NULL
             WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.cancelado_em IS NULL
-              AND a.situacao NOT IN ('cancelado', 'suspenso', 'reprovado') AND a.inicio_previsto_em IS NOT NULL
+              AND a.situacao NOT IN ('cancelado', 'suspenso', 'reprovado', 'nao_informada')
+              AND a.inicio_previsto_em IS NOT NULL
               AND a.inicio_previsto_em >= ? AND a.inicio_previsto_em < ?
             ORDER BY a.inicio_previsto_em, a.id`,
           [est, instante(de, fuso), instante(ate, fuso)],

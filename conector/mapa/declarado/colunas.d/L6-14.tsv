@@ -8,7 +8,7 @@ RIBLOCOS	NOME	bloco_internacao.nome	texto_nome			L6-14: sem nome recusa a linha 
 RISITREGLEITO	ID	situacao_pedido_leito.codigo	texto			L6-14: chave inteira da origem gravada como código (texto); RISITREGLEITO é a única alimentadora
 RISITREGLEITO	NOME	situacao_pedido_leito.descricao	texto_nome			L6-14: sem nome recusa a linha (NOT NULL)
 RISITREGLEITO	CODIGO	situacao_pedido_leito.codigo_central	texto			L6-14: código da situação na central reguladora, guardado como texto
-RISITREGLEITO	=~solicitado	situacao_pedido_leito.estado				L6-14: a origem não diz o estado do fluxo do NIR; entra 'solicitado' presumido (valor_presumido por linha) e a linha fica INATIVA (ativo=FALSE) até o de-para de valores (pedido 7), para que o NIR nunca a escolha nem a ofereça
+RISITREGLEITO	=~cancelado	situacao_pedido_leito.estado				L6-14 recusas-fase2 V (pedido 67, correção): a origem não diz o estado do fluxo do NIR; nunca presumir 'solicitado', que poria o pedido na fila do NIR; entra o terminal 'cancelado' (não acionável) com valor_presumido por linha, e a linha fica INATIVA (ativo=FALSE) até o de-para de valores (pedido 7), para que o NIR nunca a escolha nem a ofereça
 RISITREGLEITO	=0	situacao_pedido_leito.ativo				L6-14: situação migrada inativa até a reclassificação do estado e do final pelo de-para de valores (pedido 7): o NIR só usa situação ativa (situacaoDoEstado e o cadastro filtram ativo)
 TBALTARN	ID	desfecho_recem_nascido.codigo	texto			L6-14: chave inteira da origem gravada como código (texto); TBALTARN é a única alimentadora
 TBALTARN	NOME	desfecho_recem_nascido.descricao	texto_nome			L6-14: nome vazio recusa a linha (NOT NULL)

@@ -82,19 +82,19 @@ def _simples(ins, t, nomes, extra=lambda i: []):
 
 def linhas(r, ins):
     # T2 (pedido 67): categoria e etapa das situações pelo nome (de-para); 1 e 5 do documento, 1 da assinatura, 1 do
-    # exame, A e D da checagem com par; as outras sem par caem no terminal não acionável presumido
+    # exame: sem par cai no terminal não acionável presumido; checagem: A, a, D e 1 com par, B, C e # sem par recusam
     E = "   "  # só espaços: vira NULL, NOT NULL no destino recusa a linha
     _simples(ins, "PRSITDOCUMENTO", ["Rascunho", "  Situação   com  espaços ", E, "Exemplo €“”",
                                      "ASSINADO"])
     _simples(ins, "PRSITDOCUMENTOASSINADO", ["Pendente", "Assinatura falsa dois", E])
     _simples(ins, "PRSITEXAME", ["Realizado", "Exame dois", "Exame três"])
     for cod, nome, ativo, proc in [("A", "Administrado", "S", "Administração"),
-                                   ("a", "Só difere de A pela caixa", "S", "CUIDADOS"),
-                                   ("B", "Checagem exemplo B", "N", "Processo falso"),   # sem par: padrão
+                                   ("a", "Pendente", "S", "CUIDADOS"),                # só difere de A pela caixa
+                                   ("B", "Checagem exemplo B", "N", "Processo falso"),   # categoria sem par: recusa (V, pedido 67)
                                    ("C", "Checagem exemplo C", None, None),
                                    ("D", "SUSPENSO", "X", "Sinais vitais"),
                                    ("E", E, "S", "Coleta"),                               # sem nome: recusa
-                                   ("1", "Checagem de código numérico", "S", "Conferência"),
+                                   ("1", "Executado", "S", "Conferência"),                # código numérico
                                    ("#", "Código fora do de-para", "S", "Coleta")]:       # sem par: recusa
         ins("PRSITUACAOCHECAGEM", [cod, nome, ativo, None, proc])
     for i, (desc, st) in enumerate([("Seção falsa um", "A"), ("Seção falsa dois", "I"), ("Seção falsa três", "Z"),
@@ -158,8 +158,8 @@ def linhas(r, ins):
         "PRSITDOCUMENTOASSINADO": {"gravados": 2, "pendencias": {"valor_presumido": 2, "valor_fora_do_dominio": 1,
                                                                  "restricao_destino_1048": 1}},
         "PRSITEXAME": {"gravados": 3, "pendencias": {"valor_presumido": 2, "valor_fora_do_dominio": 2}},
-        "PRSITUACAOCHECAGEM": {"gravados": 6, "pendencias": {"valor_presumido": 6, "valor_fora_do_dominio": 8,
-                                                             "restricao_destino_1048": 2}},
+        # V (pedido 67, correção): categoria sem par recusa a linha (B, C e #), sem presumida; E sem nome (1048)
+        "PRSITUACAOCHECAGEM": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 4, "restricao_destino_1048": 1}},
         "PRSUMARIO_ALTA_COMP": {"gravados": 3, "pendencias": {"valor_presumido": 4, "valor_fora_do_dominio": 1,
                                                               "restricao_destino_1048": 1}},
         "PRTIPODOCANEXO": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},

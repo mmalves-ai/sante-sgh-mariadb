@@ -272,12 +272,12 @@ def linhas(r, ins):
         for t in ("NFSEEMPDESENT", "NFSEEMPDESENV"):
             _ins(ins, t, ID=i, NOME="Entidade %d exemplo" % i, VERSAOXML="2.0%d" % i)
         _ins(ins, "MFTIPOLANC_TBOPCOES", ID_TBOPCOES=i, ID_MFTIPOLANC=i)
-    # rateios: 1 e 2 do título a receber 9201 (70 = 60 + 10: sequência e percentual pelo grupo de leitura); o título
-    # não é carregado nesta imagem (L8-11): pai_inexistente e a CHECK do pai recusa (4025, visível); o 2 também com
-    # natureza 1|1|2 inexistente (1048); 3 TP_LAN 9 sem título (fora das duas condições, CHECK recusa); 4 sem centro
-    # de custo (NOT NULL, 1048)
-    for tl, doc, tp, v, cdc in [(2, 9201, "E", "60.00", 1), (2, 9201, "E", "10.00", 1), (9, 5, "X", "5.00", 1),
-                                (2, 9202, "E", "30.00", None)]:
+    # rateios: 1 e 2 do título a receber 9201 (70 = 60 + 10: sequência e percentual pelo grupo de leitura), carregado
+    # nesta imagem (MFCTAREC abaixo): o 1 grava ligado ao título; o 2 com natureza 1|1|2 inexistente (pai_inexistente e
+    # 1048); 3 TP_LAN 9 sem título (fora das condições, CHECK do pai recusa, 4025); 4 sem centro de custo (NOT NULL, 1048)
+    # P7 (A06): TP_LAN 1 = a receber (era 2 antes da P7; o 2 ficou sem título e não exercitava mais a ligação)
+    for tl, doc, tp, v, cdc in [(1, 9201, "E", "60.00", 1), (1, 9201, "E", "10.00", 1), (9, 5, "X", "5.00", 1),
+                                (1, 9202, "E", "30.00", None)]:
         _ins(ins, "MFLANGSI", EMPRESA=1, FORN=5, DOC=doc, TIPO=tp, GRUPO=1, SUBGRUPO=1, ITEM=1 if v != "10.00" else 2,
              VALOR=decimal.Decimal(v), CDC=cdc, TP_LAN=tl, DATA=datetime.date(2025, 1, 5), SERIE="A")
     # agrupador 1: um movimento (10/01) e dois títulos a receber (05/01, 70 + 30): data 05/01, a receber 100;
@@ -363,11 +363,11 @@ def linhas(r, ins):
 
 ESPERADO = {
     # agrupador 1 com filhos na imagem (data e total a receber dos filhos); 2 sem filho: data da carga, visível
-    # rateios: título a receber fora desta imagem (pai_inexistente nas 3 linhas de TP_LAN 2) e natureza 1|1|2
-    # inexistente (pai_inexistente); recusas: 1 e 3 sem título (CHECK do pai, 4025), 2 sem natureza e 4 sem centro
-    # de custo (1048). A gravação com o título carregado espera o pedido 20 da L8-11 e a ordem (pedido B desta fatia)
-    "MFLANGSI": {"gravados": 0, "pendencias": {"pai_inexistente": 4, "restricao_destino_1048": 2,
-                                               "restricao_destino_4025": 2}},
+    # rateios (V, correção, pela P7/A06: TP_LAN 1 = a receber): o 1 grava ligado ao título 9201; o 2 com natureza
+    # 1|1|2 inexistente (pai_inexistente, 1048); o 3 TP_LAN 9 sem título (CHECK do pai, 4025); o 4 sem centro de custo
+    # (1048)
+    "MFLANGSI": {"gravados": 1, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2,
+                                               "restricao_destino_4025": 1}},
     # V3b (recusas-fase2): a data da carga (concorrente) só vale e só avisa quando nenhum filho deu a data
     "MFCABECLANC": {"gravados": 2, "pendencias": {"sem_filho_com_valor": 1, "vigencia_sem_fonte": 1}},
     "GPORIGEM": {"gravados": 4, "pendencias": {"valor_presumido": 5, "restricao_destino_1048": 1,

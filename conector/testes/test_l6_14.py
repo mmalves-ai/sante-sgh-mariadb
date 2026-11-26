@@ -73,7 +73,7 @@ class Plano(unittest.TestCase):
 
     def test_literais_presumidos_e_estabelecimento(self):
         self.assertEqual(self.cols("RETPLEITO", "tipo_leito_observacao")["categoria"]["coluna"], "=~outro")
-        self.assertEqual(self.cols("RISITREGLEITO", "situacao_pedido_leito")["estado"]["coluna"], "=~solicitado")
+        self.assertEqual(self.cols("RISITREGLEITO", "situacao_pedido_leito")["estado"]["coluna"], "=~cancelado")
         self.assertEqual(self.cols("TBALTARN", "desfecho_recem_nascido")["obito"]["coluna"], "=~0")
         # estado e óbito presumidos: a linha entra inativa até o de-para de valores (o NIR só usa situação ativa)
         self.assertEqual(self.cols("RISITREGLEITO", "situacao_pedido_leito")["ativo"]["coluna"], "=0")

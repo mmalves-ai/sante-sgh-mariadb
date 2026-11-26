@@ -16,6 +16,9 @@ FATIA = ["PRSITDOCUMENTO", "PRSITDOCUMENTOASSINADO", "PRSITEXAME", "PRSITUACAOCH
 RECUSAS = ("restricao_destino_", "codigo_colisao_caixa", "pai_pendente")
 # recusas-fase2 (R9): pai_pendente em coluna anulável é aviso (a linha grava sem a ligação); não conta como recusa
 AVISO_R9 = {"PRINDICEAGRUPAMENTO": 1, "PRPARAMORIGEMCABIMP": 1}
+# V (pedido 67, correção): categoria da checagem sem par recusa a linha (exige_dominio: valor_fora_do_dominio); as
+# outras valor_fora_do_dominio da fatia são avisos (padrão do destino)
+RECUSA_DOMINIO = {"PRSITUACAOCHECAGEM": 3}
 
 
 class L607(unittest.TestCase):
@@ -76,13 +79,15 @@ class L607(unittest.TestCase):
 
     def test_literais_presumidos_e_neutros(self):
         presumidos = {"PRSITDOCUMENTO": "categoria", "PRSITDOCUMENTOASSINADO": "categoria", "PRSITEXAME": "etapa",
-                      "PRSITUACAOCHECAGEM": "categoria", "PRSUMARIO_ALTA_COMP": "tipo_conteudo",
+                      "PRSUMARIO_ALTA_COMP": "tipo_conteudo",
                       "PRTIPOPRESENTEADMISSAO": "significado", "PRTPDOCUMENTO": "nivel",
                       "PRTPALERTA": "categoria", "PRTPASSINATURA": "categoria", "PRTPINFUSAO": "modo",
                       "PRTPLAN": "categoria"}
         for t, dc in presumidos.items():
             self.assertTrue(self.cols(t)[dc]["coluna"].startswith("=~"), t)
         # domínio com CHECK que a origem traz em coluna própria: de-para de valores, nunca constante presumida
+        # a categoria da checagem não tem presumida (V, pedido 67): nome sem par recusa a linha
+        self.assertFalse(self.cols("PRSITUACAOCHECAGEM")["categoria"]["coluna"].startswith("="))
         for t, dc, col in [("PRSITUACAOCHECAGEM", "processo_enfermagem", "NOME_PROCESSO_ENFERMAGEM"),
                            ("PRMODOVENT", "tipo_ventilacao", "ID_PRTPLAN"),
                            ("PRPARAMORIGEMCABIMP", "fonte_dados", "ORIGEM_DADOS")]:
@@ -102,8 +107,7 @@ class L607(unittest.TestCase):
         # pendente)
         esperado = {"PRSITDOCUMENTO": ("situacao_documento_prontuario", "categoria", "=~arquivado"),
                     "PRSITDOCUMENTOASSINADO": ("situacao_assinatura_documento", "categoria", "=~cancelado"),
-                    "PRSITEXAME": ("situacao_procedimento_prescrito", "etapa", "=~suspenso"),
-                    "PRSITUACAOCHECAGEM": ("situacao_checagem", "categoria", "=~suspenso")}
+                    "PRSITEXAME": ("situacao_procedimento_prescrito", "etapa", "=~suspenso")}
         todos = mapa.ler_valores(mapa.DIR_PACOTE)
         for t, (dt, dc, lit) in esperado.items():
             self.assertEqual([(c["coluna"], c["depara"]) for c in self.plano[t]["colunas"][dt] if c["destino"] == dc],
@@ -119,6 +123,12 @@ class L607(unittest.TestCase):
                          ("rascunho", "assinado", "lancado", "arquivado"))
         ass = v("PRSITDOCUMENTOASSINADO", "situacao_assinatura_documento.categoria")
         self.assertEqual((ass["Pendente"], ass["Assinado"], ass["Cancelado"]), ("pendente", "assinado", "cancelado"))
+        # V (pedido 67, correção): a categoria da checagem sem par RECUSA a linha (exige_dominio), sem presumida: sem
+        # neutro no CHECK, todo terminal (suspenso, não administrado) mentiria sobre uma dose talvez dada
+        cat = [c for c in self.plano["PRSITUACAOCHECAGEM"]["colunas"]["situacao_checagem"]
+               if c["destino"] == "categoria"]
+        self.assertEqual([(c["coluna"], c["depara"], bool(c.get("exige_dominio"))) for c in cat],
+                         [("NOME", "valores", True)])
         chk = v("PRSITUACAOCHECAGEM", "situacao_checagem.categoria")
         self.assertEqual((chk["Administrado"], chk["SUSPENSO"], chk["Pendente"]),
                          ("administrado", "suspenso", "pendente"))
@@ -206,7 +216,7 @@ class L607(unittest.TestCase):
         esp = l6_07.linhas(random.Random(1), lambda t, v: vistos.setdefault(t, []).append(v))
         self.assertEqual(set(esp), set(FATIA) - set(l6_07.NAO_CARREGADAS))
         for t, e in esp.items():
-            recusas = sum(v for k, v in e["pendencias"].items() if k.startswith(RECUSAS)) - AVISO_R9.get(t, 0)
+            recusas = sum(v for k, v in e["pendencias"].items() if k.startswith(RECUSAS)) - AVISO_R9.get(t, 0) + RECUSA_DOMINIO.get(t, 0)
             self.assertEqual(e["gravados"] + recusas, len(vistos[t]), t)
 
 
