@@ -5,7 +5,7 @@
 // recusado sem motivo trava o botão; com o motivo, a conferência fecha o romaneio entregue em parte.
 // O romaneio grava só no banco próprio, que a fonte sintética do E2E não tem: as respostas de
 // `/api/suprimentos/romaneios*` são simuladas pelo Playwright com massa SINTÉTICA no formato do servidor. A regra está
-// em packages/contratos/src/suprimentos/regras/romaneio-entrega.spec.ts e o que fica no banco em
+// em packages/dominio-suprimentos/src/romaneio-entrega.spec.ts e o que fica no banco em
 // apps/api/src/modulos/suprimentos/romaneio-entrega.int.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
