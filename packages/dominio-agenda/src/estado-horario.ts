@@ -94,14 +94,16 @@ export interface SinaisMarcacao {
   readonly temSenha: boolean;
 }
 
+/** 'nao_informada': marcação migrada sem situação na origem (sinal 'N'), encerrada: nenhuma ação. */
 export type EstadoMarcacao =
-  'marcada' | 'confirmada' | 'chegou' | 'atendida' | 'faltou' | 'transferida' | 'outra';
+  'marcada' | 'confirmada' | 'chegou' | 'atendida' | 'faltou' | 'transferida' | 'nao_informada' | 'outra';
 
 export function estadoDaMarcacao(m: SinaisMarcacao): EstadoMarcacao {
   if (m.atendido.trim() === 'S') return 'atendida';
   const s = m.situacaoHorario.trim();
   if (s === 'F') return 'faltou';
   if (s === 'T') return 'transferida';
+  if (s === 'N') return 'nao_informada';
   if (s === 'A' || m.temSenha) return 'chegou';
   if (s === 'C') return 'confirmada';
   if (s === '') return 'marcada';

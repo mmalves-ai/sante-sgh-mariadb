@@ -42,7 +42,7 @@ const segurado = z.object({
   sequencia: z.number().nullable(),
   coberturaPacienteId: z.number().nullable(),
   titularCoberturaId: z.number().nullable(),
-  numeroCarteira: z.string(),
+  numeroCarteira: z.string().nullable(),
   validadeCarteira: z.string().nullable(),
   matriculaFuncional: z.string().nullable(),
   cargo: z.string().nullable(),

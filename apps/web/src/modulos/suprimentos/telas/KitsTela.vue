@@ -124,7 +124,10 @@ async function conferir(k: KitRastreavel): Promise<void> {
                 >
               </td>
               <td>
-                {{ i.lote ?? '—' }}<template v-if="i.validade"> · {{ data(i.validade) }}</template>
+                {{ i.lote ?? '—' }}<template v-if="i.validade"> · {{ data(i.validade) }}</template
+                ><strong v-else-if="i.lote" :data-testid="`kit-sem-validade-${i.item}`">
+                  · {{ t('suprimentos.alertas.semValidade', 'validade não informada na origem') }}</strong
+                >
               </td>
               <td>{{ qtd(i.quantidade) }}</td>
               <td>{{ qtd(i.saldo) }}</td>

@@ -125,7 +125,7 @@ const SQL_TELE = `SELECT t.id, t.modalidade, t.situacao, t.marcacao_horario_id, 
   (SELECT um.login FROM teleconsulta_participante pm JOIN usuario um ON um.id = pm.usuario_id
      WHERE pm.teleconsulta_id = t.id AND pm.papel = 'profissional' AND pm.excluido_em IS NULL
      ORDER BY pm.sequencia DESC LIMIT 1) AS medico_login,
-  (mh.id IS NOT NULL AND mh.excluido_em IS NULL AND sm.significado NOT IN ('cancelada','falta')
+  (mh.id IS NOT NULL AND mh.excluido_em IS NULL AND sm.significado NOT IN ('cancelada','falta','nao_informada')
      AND ha.inicio_em = t.agendada_para) AS marcacao_vigente
 FROM teleconsulta t
 LEFT JOIN unidade_federativa uf ON uf.id = t.local_paciente_unidade_federativa_id
@@ -423,7 +423,7 @@ export class PortaTelemedicinaPropria implements PortaTelemedicina {
 
 const TABELAS = [TABELA, PARTICIPANTE] as const;
 const PREFIXO_RECUSA = 'telemedicina-';
-const MARCACAO_SEM_VALIDADE: ReadonlySet<string> = new Set(['cancelada', 'falta']);
+const MARCACAO_SEM_VALIDADE: ReadonlySet<string> = new Set(['cancelada', 'falta', 'nao_informada']);
 const VIVAS = ['agendada', 'aguardando', 'sala_aberta', 'em_andamento'] as const;
 
 /** A recusa de negócio atravessa o executor como ErroOperacao (409) e volta a ErroTelemedicina do lado de cá. */

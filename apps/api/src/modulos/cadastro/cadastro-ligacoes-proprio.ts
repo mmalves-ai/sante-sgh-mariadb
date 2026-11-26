@@ -470,13 +470,21 @@ const opAlterarSolicitante = (t: RegistroTrilhaTela) =>
         `SELECT s.conselho_classe_id, s.conselho_unidade_federativa_id, s.numero_conselho, cc.sigla AS conselho,
                 uf.sigla AS uf
            FROM solicitante_externo s JOIN conselho_classe cc ON cc.id = s.conselho_classe_id
-           JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
+           LEFT JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
           WHERE s.id = ? AND s.excluido_em IS NULL`,
         [e.id],
       );
       if (!atual) throw naoAchado('Solicitante');
       const sigla = (e.conselho ?? String(atual['conselho'])).toUpperCase();
-      const ufSigla = (e.uf ?? String(atual['uf'])).toUpperCase();
+      // O solicitante migrado pode vir sem UF do conselho: alterar exige informá-la (o registro continua obrigatório).
+      const ufAtual = texto(atual['uf']);
+      if (!e.uf && ufAtual === null)
+        throw recusaCampo(
+          'uf-obrigatoria',
+          'Informe a UF do conselho: o cadastro veio da origem sem ela.',
+          'uf',
+        );
+      const ufSigla = (e.uf ?? ufAtual ?? '').toUpperCase();
       const numero = e.numero ?? String(atual['numero_conselho']);
       const conselho = await tx.uma('SELECT id FROM conselho_classe WHERE sigla = ? AND ativo', [sigla]);
       if (!conselho) throw recusaCampo('conselho-inexistente', 'Conselho não encontrado.', 'conselho');
@@ -503,7 +511,7 @@ const opAlterarSolicitante = (t: RegistroTrilhaTela) =>
         id: e.id,
         anterior: {
           conselho: String(atual['conselho']),
-          uf: String(atual['uf']),
+          uf: ufAtual ?? '',
           numero: String(atual['numero_conselho']),
         },
         novo: { conselho: sigla, uf: ufSigla, numero },
@@ -514,6 +522,14 @@ const opAlterarSolicitante = (t: RegistroTrilhaTela) =>
           'solicitante-existente',
           `Já existe outro solicitante com este conselho, UF e número (cadastro ${registro.recusar.join(', ')}).`,
           { campos: ['numero'] },
+        );
+      // O migrado sem UF não troca de registro com o unificado nele: o duplicado ficaria sem UF (o banco recusa o
+      // cadastro do sistema sem ela) e a UF que a origem não trouxe não se inventa.
+      if (registro.trocarCom !== null && ufAtual === null)
+        throw recusaCampo(
+          'troca-sem-uf-anterior',
+          'Este cadastro veio da origem sem a UF do conselho: para assumir o registro do cadastro unificado nele, desfaça a unificação antes.',
+          'numero',
         );
       const versaoDe = async (id: number) =>
         Number(
@@ -553,7 +569,7 @@ const opAlterarSolicitante = (t: RegistroTrilhaTela) =>
       if (registro.trocarCom !== null)
         await tx.alterar('solicitante_externo', registro.trocarCom, await versaoDe(registro.trocarCom), {
           conselho_classe_id: Number(atual['conselho_classe_id']),
-          conselho_unidade_federativa_id: Number(atual['conselho_unidade_federativa_id']),
+          conselho_unidade_federativa_id: num(atual['conselho_unidade_federativa_id']),
           numero_conselho: String(atual['numero_conselho']),
         });
       return { id: e.id, registroTrocadoCom: registro.trocarCom };
@@ -756,7 +772,7 @@ export interface FichaSolicitante {
 const SQL_SOLICITANTES = `SELECT s.id, s.nome, cc.sigla AS conselho, uf.sigla AS uf, s.numero_conselho, o.codigo_cbo, s.ativo, s.versao,
        s.sucessor_solicitante_externo_id AS sucessor
   FROM solicitante_externo s JOIN conselho_classe cc ON cc.id = s.conselho_classe_id
-  JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
+  LEFT JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
   LEFT JOIN ocupacao_cbo o ON o.id = s.ocupacao_cbo_id WHERE s.excluido_em IS NULL`;
 const comparavel = (
   r: Record<string, unknown>,
@@ -1064,7 +1080,7 @@ export class CadastroLigacoesProprio {
         return {
           id: s.id,
           nome: s.nome,
-          registro: `${s.conselho} ${s.numero ?? ''}/${s.uf}`,
+          registro: `${s.conselho} ${s.numero ?? ''}${s.uf ? `/${s.uf}` : ' (UF não informada na origem)'}`,
           ativo: s.ativo,
           // Versão lida: a unificação a confere (o duplicado não é unificado por cima de outra alteração).
           versao: s.versao,
@@ -1079,7 +1095,7 @@ export class CadastroLigacoesProprio {
       const s = await l.uma(
         `SELECT s.*, cc.sigla AS conselho, uf.sigla AS uf, o.codigo_cbo FROM solicitante_externo s
            JOIN conselho_classe cc ON cc.id = s.conselho_classe_id
-           JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
+           LEFT JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
            LEFT JOIN ocupacao_cbo o ON o.id = s.ocupacao_cbo_id WHERE s.id = ? AND s.excluido_em IS NULL`,
         [id],
       );
@@ -1121,7 +1137,8 @@ export class CadastroLigacoesProprio {
       versao: Number(s['versao']),
       nome: String(s['nome']),
       conselho: String(s['conselho']),
-      uf: String(s['uf']),
+      // Migrado sem UF do conselho: o campo vem vazio para ser informado (nunca "null").
+      uf: texto(s['uf']) ?? '',
       numero: String(s['numero_conselho']),
       cpf: texto(s['cpf']),
       cns: texto(s['cns']),

@@ -351,6 +351,12 @@ export class PortaEtiquetaIdentificacaoPropria implements PortaEtiquetaIdentific
       }
       const hoje = dataIso(new Date()) as string;
       const validade = lote ? dataIso(lote['validade']) : null;
+      if (lote && validade === null)
+        throw recusa(
+          'lote-sem-validade',
+          `Lote ${t(lote['numero_lote'])} sem validade (não informada na origem): informe a validade do lote antes de emitir a etiqueta.`,
+          { campos: ['lote'] },
+        );
       recusarTodas(
         conferirEmissaoEtiquetas({
           controlaLote: b(item['controla_lote']),

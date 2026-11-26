@@ -231,4 +231,16 @@ describe('exame físico estruturado: registro, resumo e texto', () => {
       }),
     ).toBe('Cardiovascular · Membro superior (esquerdo): alterado; Edema ++');
   });
+
+  describe('exame físico no registro migrado sem conta do autor', () => {
+    it('ninguém acrescenta: nem o usuário da sessão, nem o contexto sem usuário (nunca 0 contra 0)', () => {
+      const agora = new Date('2026-11-20T18:00:00Z');
+      const reg = { situacao: 'finalizado', autorUsuarioId: null, lancadoEm: null, assinado: false };
+      expect(codigos({ falhas: registroAceitaExame(reg, 7, agora) })).toContain('nao-e-autor');
+      expect(codigos({ falhas: registroAceitaExame(reg, null, agora) })).toContain('nao-e-autor');
+      expect(codigos({ falhas: registroAceitaExame({ ...reg, autorUsuarioId: 7 }, null, agora) })).toContain(
+        'nao-e-autor',
+      );
+    });
+  });
 });

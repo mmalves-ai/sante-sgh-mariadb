@@ -98,6 +98,8 @@ export type CausaDivergenciaRepasse = (typeof CAUSAS_DIVERGENCIA_REPASSE)[number
 export const PENDENCIAS_APURACAO = [
   'sem-executante',
   'sem-regra',
+  /** A regra migrada veio sem percentual e sem valor fixo: o item espera o valor da regra. */
+  'regra-migrada-sem-valor',
   'nao-conciliado',
   'nao-credenciado',
   'ja-integrado',

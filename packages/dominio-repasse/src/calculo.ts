@@ -107,8 +107,12 @@ export function calcularItem(
   const r = resolverRegra(item, regras);
   if (!r.regra) return pendente(item, 'sem-regra', { ignoradas: r.ignoradas });
   const regra = r.regra;
-  const b = baseDoItem(item, regra.base, o.basePadrao);
   const comum = { regra: regra.id, dimensoes: r.dimensoes, ignoradas: r.ignoradas };
+  // Sem percentual e sem valor fixo só existe na regra migrada (o banco recusa nas demais): o item fica pendente para
+  // a regra receber o valor, em vez de virar repasse de R$ 0,00 calado.
+  if (!(regra.percentual > 0) && !(regra.valorFixo > 0))
+    return pendente(item, 'regra-migrada-sem-valor', comum);
+  const b = baseDoItem(item, regra.base, o.basePadrao);
   if (!b.ok) return pendente(item, b.pendencia, comum);
   const fixo = regra.percentual > 0 ? 0 : centavos(regra.valorFixo);
   const sem = regra.percentual > 0 ? aplicarPercentual(b.valor.centavos, regra.percentual) : fixo;

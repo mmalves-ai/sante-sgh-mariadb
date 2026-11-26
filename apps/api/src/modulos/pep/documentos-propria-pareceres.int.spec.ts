@@ -1196,4 +1196,34 @@ describe.skipIf(SEM_BANCO)('DocumentosPropriaPareceres contra o MariaDB (cliente
     ).toEqual({ codigo: 'nao-encontrado', status: 404 });
     expect(await porta.coassinaturas(CX, LOGIN)).toEqual([]);
   });
+
+  it('coassinatura do registro migrado sem conta do autor: o residente é o login do vínculo do profissional', async () => {
+    const sup = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-migrado` }, async (e) => {
+      const agora = new Date();
+      const r = await e.uma(
+        'SELECT modelo_documento_clinico_id AS m FROM registro_assistencial WHERE id = ?',
+        [ids.registro],
+      );
+      const registro = await e.inserir(
+        `INSERT INTO registro_assistencial (estabelecimento_id, paciente_id, atendimento_id, modelo_documento_clinico_id,
+           autor_profissional_id, autor_usuario_id, data_hora_clinica, data_hora_lancamento, impressao_digital,
+           situacao, exige_coassinatura, origem, criado_em)
+         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, 'aguardando_coassinatura', TRUE, 'migracao', ?)`,
+        [ids.est, ids.paciente, ids.atendimento, r!['m'], ids.profResidente, agora, agora, HASH, agora],
+      );
+      return e.inserir(
+        `INSERT INTO registro_assistencial_supervisao (registro_assistencial_id, sequencia, supervisionado_profissional_id,
+           preceptor_profissional_id, tipo_vinculo, solicitado_em, criado_em) VALUES (?, 1, ?, ?, 'residente', ?, ?)`,
+        [registro, ids.profResidente, ids.prof, agora, agora],
+      );
+    });
+    expect(await porta.supervisao(C(), sup)).toMatchObject({
+      id: sup,
+      residente: RESIDENTE,
+      preceptor: LOGIN,
+    });
+    expect(await porta.coassinaturas(C(), LOGIN)).toContainEqual(
+      expect.objectContaining({ id: sup, residente: RESIDENTE }),
+    );
+  });
 });

@@ -242,7 +242,8 @@ export function validarExameFisico(
 /** O registro clínico como a regra do complemento o vê. */
 export interface RegistroParaExame {
   readonly situacao: string;
-  readonly autorUsuarioId: number;
+  /** Conta do autor; nula no registro migrado cujo autor não tinha login na origem (ninguém acrescenta nele). */
+  readonly autorUsuarioId: number | null;
   /** Lançamento do registro no sistema (nulo no registro sem lançamento conhecido, como o migrado). */
   readonly lancadoEm: Date | null;
   /** O documento do registro já tem assinatura concluída (o conteúdo assinado não recebe acréscimo). */
@@ -254,7 +255,11 @@ export interface RegistroParaExame {
  * nem corrigido); sem assinatura concluída (o conteúdo assinado não muda); e dentro da janela de complemento contada do
  * lançamento. Fora disso, o exame vai num registro novo, com data e assinatura próprias.
  */
-export function registroAceitaExame(registro: RegistroParaExame, usuario: number, agora: Date): FalhaRegra[] {
+export function registroAceitaExame(
+  registro: RegistroParaExame,
+  usuario: number | null,
+  agora: Date,
+): FalhaRegra[] {
   const f: FalhaRegra[] = [];
   if (!(SITUACOES_REGISTRO_COM_EXAME as readonly string[]).includes(registro.situacao))
     f.push(
@@ -263,7 +268,7 @@ export function registroAceitaExame(registro: RegistroParaExame, usuario: number
         'O registro está suspenso ou corrigido: registre o exame num registro novo.',
       ),
     );
-  if (registro.autorUsuarioId !== usuario)
+  if (registro.autorUsuarioId === null || usuario === null || registro.autorUsuarioId !== usuario)
     f.push(falha('nao-e-autor', 'Só o autor do registro acrescenta achados do exame físico.'));
   if (registro.assinado)
     f.push(

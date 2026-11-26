@@ -241,7 +241,8 @@ const podeAtender = computed(() => gravacao.data.value?.operacoes['atenderRequis
         >
       </p>
       <p>
-        {{ data(r.data) }} {{ r.hora }} · {{ r.localNome }} · {{ r.centroCustoNome || r.centroCusto }} ·
+        {{ data(r.data) }} {{ r.hora }} · {{ r.localNome }} ·
+        {{ r.centroCustoNome || r.centroCusto || '—' }} ·
         {{ r.usuario }}
         <template v-if="r.paciente"> · {{ r.paciente.nome }}</template>
       </p>

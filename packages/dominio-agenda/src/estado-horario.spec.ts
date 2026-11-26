@@ -98,6 +98,19 @@ describe('estado da marcação e ações', () => {
     expect(estadoDaMarcacao(m({ situacaoHorario: 'T' }))).toBe('transferida');
     expect(estadoDaMarcacao(m({ situacaoHorario: 'Z' }))).toBe('outra');
   });
+  it('marcação migrada sem situação na origem (sinal N): estado próprio, encerrada, sem nenhuma ação', () => {
+    expect(estadoDaMarcacao(m({ situacaoHorario: 'N' }))).toBe('nao_informada');
+    for (const h of [
+      { data: '2026-10-22', hora: '0800' },
+      { data: '2026-10-20', hora: '0800' },
+    ])
+      expect(acoesDaMarcacao(m({ situacaoHorario: 'N' }), h, relogio)).toEqual({
+        cancelar: false,
+        remarcar: false,
+        confirmar: false,
+        registrarFalta: false,
+      });
+  });
   it('ações: cancelar e remarcar até o check-in; confirmar só futura; falta só passada', () => {
     const futuro = { data: '2026-10-22', hora: '0800' };
     const passado = { data: '2026-10-20', hora: '0800' };

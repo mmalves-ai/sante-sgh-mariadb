@@ -579,6 +579,14 @@ export class PortaGastoSalaPropria extends PortaEstabelecimentoPropria {
     );
     const v = lt ? lt['validade'] : null;
     const validade = v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '').slice(0, 10);
+    // O lote migrado sem validade não vai a paciente: a recusa diz o motivo (nunca "vencido").
+    if (lt && (v === null || v === undefined))
+      throw recusaRegra('Gasto de sala recusado', [
+        {
+          campo: `itens.${k}.lote`,
+          mensagem: `Item ${k + 1}: lote sem validade (não informada na origem): informe a validade do lote antes de usar.`,
+        },
+      ]);
     if (!lt || lt['situacao'] !== 'liberado' || validade < hoje)
       throw recusaRegra('Gasto de sala recusado', [
         {

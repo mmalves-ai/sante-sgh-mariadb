@@ -134,13 +134,17 @@ const SQL_LOGIN_DO_PROFISSIONAL = (profissional: string, estabelecimento: string
              v.vigencia_inicio DESC, v.id DESC LIMIT 1)`;
 
 const SQL_SUPERVISAO = `
-  SELECT s.id, s.registro_assistencial_id, ra.paciente_id, ra.atendimento_id, ur.login AS residente,
+  SELECT s.id, s.registro_assistencial_id, ra.paciente_id, ra.atendimento_id,
+         COALESCE(ur.login, ${SQL_LOGIN_DO_PROFISSIONAL('ra.autor_profissional_id', 'ra.estabelecimento_id')}) AS residente,
          ${SQL_LOGIN_DO_PROFISSIONAL('s.preceptor_profissional_id', 'ra.estabelecimento_id')} AS preceptor,
          s.situacao, COALESCE(s.decidido_em, s.solicitado_em) AS em
     FROM registro_assistencial_supervisao s
     JOIN registro_assistencial ra ON ra.id = s.registro_assistencial_id AND ra.excluido_em IS NULL
-    JOIN usuario ur ON ur.id = ra.autor_usuario_id
+    LEFT JOIN usuario ur ON ur.id = ra.autor_usuario_id
    WHERE ra.estabelecimento_id = ? AND s.excluido_em IS NULL`;
+
+/** O autor do registro migrado sem conta na origem nem vínculo a uma conta aqui. */
+export const AUTOR_SEM_LOGIN = 'login do autor não registrado na origem';
 
 interface Estabelecimento {
   readonly id: number;
@@ -503,7 +507,7 @@ export class DocumentosPropriaPareceres {
       registro: num(x['registro_assistencial_id']),
       paciente: num(x['paciente_id']),
       atendimento: numOuNull(x['atendimento_id']),
-      residente: String(x['residente']),
+      residente: textoOuNull(x['residente']) ?? AUTOR_SEM_LOGIN,
       preceptor: preceptor ?? textoOuNull(x['preceptor']) ?? '',
       situacao: situacaoSupervisaoLida(x['situacao']),
       em: dataHora(x['em'], fuso),

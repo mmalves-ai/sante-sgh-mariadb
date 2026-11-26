@@ -185,6 +185,8 @@ export function estadoPelaSituacao(
       return 'faltou';
     case 'transferida':
       return 'transferida';
+    case 'nao_informada':
+      return 'nao_informada';
     default:
       return 'outra';
   }
@@ -975,7 +977,9 @@ export class ServicoAgendaPortal {
           ? 'faltou'
           : m.estado === 'transferida'
             ? 'transferido'
-            : 'marcado';
+            : m.estado === 'nao_informada'
+              ? 'nao-informada'
+              : 'marcado';
     return {
       tipo: m.tipo,
       id: String(m.id),

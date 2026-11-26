@@ -25,6 +25,7 @@ import {
   PACIENTE_SINTETICO_CCIH,
   PortaCcihMemoria,
 } from './porta-ccih-memoria.js';
+import { fichaDe } from './porta-auditoria-antimicrobiano-propria.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
 /** 2026-10-22 13:00 em São Paulo. */
@@ -326,5 +327,22 @@ describe('restrição por vínculo nas rotas do prontuário e da prescrição (M
       ),
     ).toBe(true);
     expect(m.t.eventos.some((e) => e.evento === EVENTOS_AUDITAVEIS.permissaoNegada.codigo)).toBe(false);
+  });
+});
+
+// A ficha de antimicrobiano migrada sem atendimento ligado na origem (ficha_antimicrobiano.atendimento_id nulo só com
+// origem='migracao') entra na fila da comissão com o atendimento nulo, nunca 0.
+describe('ficha de antimicrobiano migrada sem atendimento', () => {
+  it('o atendimento fica nulo na ficha migrada e vem preenchido na ficha nova', () => {
+    const linha = {
+      id: 1,
+      versao: 1,
+      paciente_id: 2,
+      atendimento_id: null,
+      prescricao_item_id: 3,
+      dias_previstos: 7,
+    };
+    expect(fichaDe(linha).atendimento).toBeNull();
+    expect(fichaDe({ ...linha, atendimento_id: 5 }).atendimento).toBe(5);
   });
 });

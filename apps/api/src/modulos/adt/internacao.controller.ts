@@ -527,12 +527,23 @@ export class InternacaoController {
         { codigo: 'sem-alta-medica' },
       );
     const bruto = (b ?? {}) as Record<string, unknown>;
+    // A alta médica migrada sem médico informado na origem: a saída leva o médico que a recepção informar; sem ele, a
+    // recusa diz o que falta (nunca o médico 0).
+    const medicoAlta = a.vinculo ?? bruto['medicoAlta'];
+    if (medicoAlta === null || medicoAlta === undefined)
+      throw new ErroProblema(
+        'recusa-de-negocio',
+        409,
+        'Médico da alta não registrado na origem',
+        'A alta médica veio da migração sem o médico: informe o médico da alta para registrar a saída.',
+        { codigo: 'medico-alta-nao-registrado', campos: ['medicoAlta'] },
+      );
     // O motivo é o da alta médica (D-ALTA-21); outro motivo da recepção só quando coerente com o destino que o médico
     // decidiu (ex.: "melhorado" e "curado" para o domicílio). O médico é sempre o da alta médica.
     const e = corpo(esquemaDarAlta, {
       ...bruto,
       motivo: bruto['motivo'] ?? a.motivo,
-      medicoAlta: a.vinculo,
+      medicoAlta,
       internacao,
     });
     if (e.motivo !== a.motivo && !motivoCoerente(e.motivo, a.destino as DestinoAlta))

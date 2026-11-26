@@ -148,7 +148,8 @@ export interface SeguradoLido {
   sequencia: number | null;
   coberturaPacienteId: number | null;
   titularCoberturaId: number | null;
-  numeroCarteira: string;
+  /** Nula só na conta migrada sem carteira (origem 'migracao'): a tela mostra o campo vazio para informar. */
+  numeroCarteira: string | null;
   validadeCarteira: string | null;
   matriculaFuncional: string | null;
   cargo: string | null;
@@ -204,7 +205,7 @@ export async function seguradoContaPropria(l: Leitor, est: number, conta: number
         sequencia: n(r['sequencia']),
         coberturaPacienteId: nn(r['cobertura_paciente_id']),
         titularCoberturaId: nn(r['titular_cobertura_id']),
-        numeroCarteira: String(r['numero_carteira']),
+        numeroCarteira: txn(r['numero_carteira']),
         validadeCarteira: dataIso(r['validade_carteira']),
         matriculaFuncional: txn(r['matricula_funcional']),
         cargo: txn(r['cargo']),
@@ -594,7 +595,7 @@ export const opGravarSegurado = definirOperacao({
       if (e.versao === null)
         throw recusa('conflito-versao', 'Os dados do segurado mudaram: recarregue a conta.', { campos: [] });
       const mesma =
-        String(a['numero_carteira']) === e.numeroCarteira &&
+        txn(a['numero_carteira']) === e.numeroCarteira &&
         nn(a['cobertura_paciente_id']) === e.coberturaPacienteId;
       if (mesma) {
         const versao = await tx.alterar('conta_hospitalar_segurado', n(a['id']), e.versao, valores);

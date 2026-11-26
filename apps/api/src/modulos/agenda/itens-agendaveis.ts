@@ -771,8 +771,11 @@ export class ItensAgendaveisPropria {
         'Marcação não encontrada',
         'A marcação não existe.',
       );
-    if (m['significado'] === 'cancelada' || m['significado'] === 'falta')
-      throw recusa('marcacao-encerrada', 'A marcação está cancelada ou com falta: não recebe itens.');
+    if (['cancelada', 'falta', 'nao_informada'].includes(String(m['significado'])))
+      throw recusa(
+        'marcacao-encerrada',
+        'A marcação está cancelada, com falta ou migrada sem situação na origem: não recebe itens.',
+      );
     const inicio = instante(m['inicio_em']);
     const fim = new Date(inicio.getTime() + num(m['duracao_minutos']) * 60_000);
     const unicos = [...new Set(pedidos)];
@@ -917,7 +920,7 @@ export class ItensAgendaveisPropria {
               AND mi.excluido_em IS NULL AND mi.situacao = 'marcado'
          JOIN marcacao_horario mh ON mh.id = mi.marcacao_horario_id AND mh.excluido_em IS NULL AND mh.id <> ?
               AND mh.estabelecimento_id = ?
-         JOIN situacao_marcacao s ON s.id = mh.situacao_marcacao_id AND s.significado NOT IN ('cancelada', 'falta')
+         JOIN situacao_marcacao s ON s.id = mh.situacao_marcacao_id AND s.significado NOT IN ('cancelada', 'falta', 'nao_informada')
          JOIN horario_agenda ha ON ha.id = mh.horario_agenda_id
         WHERE x.excluido_em IS NULL AND x.recurso_agendavel_id IN (${marc(Math.max(recursos.length, 1))})
           AND ha.inicio_em < ? AND DATE_ADD(ha.inicio_em, INTERVAL mh.duracao_minutos MINUTE) > ?`;

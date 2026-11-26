@@ -46,7 +46,8 @@ export interface FichaParaAuditoria {
   readonly versao: number;
   readonly paciente: number;
   readonly nome: string;
-  readonly atendimento: number;
+  /** Atendimento da ficha; nulo só na ficha migrada sem atendimento ligado na origem. */
+  readonly atendimento: number | null;
   readonly item: number;
   readonly antimicrobiano: string;
   readonly finalidade: string;
@@ -143,13 +144,13 @@ const SQL_AUDITORIA = `SELECT x.*, u.nome AS auditor, t.descricao AS tipo, pp.de
   LEFT JOIN tipo_auditoria_ccih t ON t.id = x.tipo_auditoria_ccih_id
   LEFT JOIN parecer_padrao_auditoria_antimicrobiano pp ON pp.id = x.parecer_padrao_auditoria_antimicrobiano_id`;
 
-function fichaDe(x: Linha): FichaParaAuditoria {
+export function fichaDe(x: Linha): FichaParaAuditoria {
   return {
     id: n(x['id']),
     versao: n(x['versao']),
     paciente: n(x['paciente_id']),
     nome: texto(x['nome']),
-    atendimento: n(x['atendimento_id']),
+    atendimento: nn(x['atendimento_id']),
     item: n(x['prescricao_item_id']),
     antimicrobiano: texto(x['antimicrobiano']),
     finalidade: texto(x['finalidade']),
@@ -374,10 +375,19 @@ export class PortaAuditoriaAntimicrobianoPropria {
     );
     for (const a of anteriores)
       await tx.alterar('auditoria_prescricao_ccih', n(a['id']), n(a['versao']), { situacao: 'encerrada' });
+    const atendimento = nn(fi['atendimento_id']);
+    // A auditoria se liga ao atendimento: a ficha migrada sem atendimento ligado na origem é lida na fila, mas a auditoria
+    // pede o atendimento (a recusa diz o que falta, nunca o atendimento 0).
+    if (atendimento === null)
+      throw recusar(
+        409,
+        'ficha-sem-atendimento',
+        'A ficha veio da migração sem atendimento ligado na origem: a auditoria precisa do atendimento da ficha.',
+      );
     const agora = new Date();
     const id = await tx.incluir('auditoria_prescricao_ccih', {
       estabelecimento_id: est,
-      atendimento_id: n(fi['atendimento_id']),
+      atendimento_id: atendimento,
       paciente_id: n(fi['paciente_id']),
       prescricao_item_id: n(fi['prescricao_item_id']),
       item_prescritivel_id: n(fi['item_prescritivel_id']),

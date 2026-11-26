@@ -82,6 +82,7 @@ import type {
   OpcoesListaInternacoes,
   PortaAdt,
 } from './porta.js';
+import { MEDICO_ALTA_NAO_REGISTRADO } from './porta.js';
 import type {
   DetalheInternacao,
   EstadosDoMapa,
@@ -142,6 +143,25 @@ const TABELAS_DIRETAS = [
   'atributo_categoria_acomodacao',
   'ocorrencia_arquivo_prontuario',
 ];
+
+export { MEDICO_ALTA_NAO_REGISTRADO };
+
+/** O médico da alta para a tela: o nome, ou o rótulo da alta migrada sem médico. */
+export function medicoDaAlta(v: unknown): string {
+  return v === null || v === undefined || v === '' ? MEDICO_ALTA_NAO_REGISTRADO : texto(v);
+}
+
+/** A alta médica decidida como a porta a devolve. */
+export function altaMedicaDaLinha(r: Linha): AltaMedicaDecidida {
+  return {
+    id: n(r['id']),
+    vinculo: nn(r['profissional_id']),
+    motivo: n(r['motivo_saida_hospitalar_id']),
+    destino: DESTINO_DA_TELA[texto(r['destino'])] ?? texto(r['destino']),
+    decididaEm: r['alta_medica_em'] ? (r['alta_medica_em'] as Date).toISOString() : '',
+    decididaPor: texto(r['login']),
+  };
+}
 
 const SQL_RESUMO = `
   SELECT i.id, i.versao, i.paciente_id, p.numero_prontuario, COALESCE(p.nome_social, pf.nome) AS nome,
@@ -338,7 +358,7 @@ export class PortaAdtPropria implements PortaAdt {
               motivo: n(r['am_motivo']),
               destino: DESTINO_DA_TELA[texto(r['am_destino'])] ?? texto(r['am_destino']),
               decididaEm: (r['am_em'] as Date).toISOString(),
-              medico: texto(r['am_medico']),
+              medico: medicoDaAlta(r['am_medico']),
             }
           : null,
       versao: carimboVersao(r['versao']),
@@ -557,14 +577,7 @@ export class PortaAdtPropria implements PortaAdt {
   }
 
   private altaDe(r: Linha): AltaMedicaDecidida {
-    return {
-      id: n(r['id']),
-      vinculo: n(r['profissional_id']),
-      motivo: n(r['motivo_saida_hospitalar_id']),
-      destino: DESTINO_DA_TELA[texto(r['destino'])] ?? texto(r['destino']),
-      decididaEm: r['alta_medica_em'] ? (r['alta_medica_em'] as Date).toISOString() : '',
-      decididaPor: texto(r['login']),
-    };
+    return altaMedicaDaLinha(r);
   }
 
   altaMedica(c: ContextoAdt, reg: number) {

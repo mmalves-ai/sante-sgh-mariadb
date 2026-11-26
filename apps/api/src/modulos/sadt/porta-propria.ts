@@ -1970,7 +1970,7 @@ export class PortaSadtPropria implements PortaSadt {
           `SELECT s.id, s.nome, cc.sigla, s.numero_conselho, uf.sigla AS uf, s.ativo
              FROM solicitante_externo s
              JOIN conselho_classe cc ON cc.id = s.conselho_classe_id
-             JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
+             LEFT JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
             WHERE s.excluido_em IS NULL AND s.sucessor_solicitante_externo_id IS NULL ${f}
             ORDER BY s.nome, s.id LIMIT 50`,
           p,
@@ -1979,7 +1979,8 @@ export class PortaSadtPropria implements PortaSadt {
       ).map((r) => ({
         id: n(r['id']),
         nome: texto(r['nome']),
-        registro: `${texto(r['sigla'])} ${texto(r['numero_conselho'])}/${texto(r['uf'])}`,
+        // O solicitante migrado pode vir sem UF do conselho: o registro diz isso, nunca "/" solto.
+        registro: `${texto(r['sigla'])} ${texto(r['numero_conselho'])}${texto(r['uf']) ? `/${texto(r['uf'])}` : ' (UF não informada na origem)'}`,
         ativo: verdadeiro(r['ativo']),
       }));
     });

@@ -155,6 +155,13 @@ describe('dados do segurado na conta', () => {
       validarSeguradoConta('aberta', conta.inicio, { ...s, validadeCarteira: '2026-13-40' }).erros,
     ).toHaveProperty('validadeCarteira');
   });
+  it('conta migrada sem carteira: lê sem quebrar e gravar de novo exige a carteira', () => {
+    const migrado = { ...s, numeroCarteira: null };
+    expect(validarSeguradoConta('aberta', conta.inicio, migrado).erros).toHaveProperty('numeroCarteira');
+    expect(validarSeguradoConta('aberta', conta.inicio, { ...migrado, numeroCarteira: '123' }).erros).toEqual(
+      {},
+    );
+  });
   it('dependente exige o titular ou a matrícula; conta cancelada recusa', () => {
     expect(
       validarSeguradoConta('aberta', conta.inicio, { ...s, parentescoTitular: 'filho' }).erros,

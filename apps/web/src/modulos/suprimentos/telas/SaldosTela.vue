@@ -133,9 +133,18 @@ const ALERTA: Record<string, string> = {
                     >{{ l.lote }}</RouterLink
                   >
                   · {{ data(l.validade) }} · {{ qtd(l.quantidade) }}
-                  <strong v-if="ALERTA[l.alerta]"> · {{ t(`suprimentos.${ALERTA[l.alerta]}`) }}</strong>
+                  <strong
+                    v-if="l.alerta === 'sem-validade'"
+                    :data-testid="`sal-sem-validade-${x.item}-${l.lote}`"
+                  >
+                    · {{ t('suprimentos.alertas.semValidade', 'validade não informada na origem') }}</strong
+                  >
+                  <strong v-else-if="ALERTA[l.alerta]"> · {{ t(`suprimentos.${ALERTA[l.alerta]}`) }}</strong>
                   <SanteBotao
-                    v-if="l.alerta === 'suspeita' && pode('suprimentos.corrigirValidadeLote')"
+                    v-if="
+                      (l.alerta === 'suspeita' || l.alerta === 'sem-validade') &&
+                      pode('suprimentos.corrigirValidadeLote')
+                    "
                     variante="texto"
                     :rotulo="t('suprimentos.saldos.corrigir')"
                     @acionar="

@@ -218,6 +218,8 @@ export const ESTADOS_MARCACAO = [
   'atendida',
   'faltou',
   'transferida',
+  // Marcação migrada sem situação na origem (encerrada).
+  'nao_informada',
   'outra',
 ] as const;
 

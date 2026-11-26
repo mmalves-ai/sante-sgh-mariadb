@@ -271,7 +271,12 @@ function buscarRegistro(): void {
             <td>
               <RouterLink :to="`/cadastros/solicitantes/${s.id}`">{{ s.nome }}</RouterLink>
             </td>
-            <td>{{ [s.conselho, s.numero, s.uf].filter((x) => x !== null && x !== '').join(' ') }}</td>
+            <td>
+              {{ [s.conselho, s.numero, s.uf].filter((x) => x !== null && x !== '').join(' ')
+              }}<template v-if="s.conselho && !s.uf">
+                ({{ t('ligacoes.solicitante.ufNaoInformada', 'UF não informada na origem') }})</template
+              >
+            </td>
             <td>{{ s.cbo ?? '' }}</td>
             <td>{{ s.codigosConvenio }}</td>
             <td>

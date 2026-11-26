@@ -40,7 +40,7 @@ const opcoesLocais = computed(() => [
 const opcoesLotes = computed(() => [
   { valor: '', rotulo: item.value?.rastreavel ? M.escolha : M.semLote },
   ...lotes.value
-    .filter((l) => l.alerta !== 'vencido')
+    .filter((l) => l.alerta !== 'vencido' && l.alerta !== 'sem-validade')
     .map((l) => ({
       valor: String(l.id),
       rotulo: `${l.lote} · ${l.validade.split('-').reverse().join('/')}`,

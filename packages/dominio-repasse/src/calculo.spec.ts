@@ -54,6 +54,13 @@ describe('calcularItem', () => {
   });
 });
 
+describe('regra migrada sem valor', () => {
+  it('sem percentual e sem valor fixo: pendência própria, nunca repasse de R$ 0,00 calado', () => {
+    const m = calcularItem(item(), [regra({ id: 7, percentual: 0, valorFixo: 0 })], o);
+    expect(m).toMatchObject({ regra: 7, pendencia: 'regra-migrada-sem-valor', valorCentavos: 0 });
+  });
+});
+
 describe('calcularPeriodo', () => {
   it('item já integrado não entra de novo', () => {
     const ms = calcularPeriodo([item({ id: 1 }), item({ id: 2 })], [regra({ id: 1 })], new Set([2]), o);

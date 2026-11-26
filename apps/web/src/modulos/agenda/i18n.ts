@@ -50,6 +50,7 @@ export const mensagensAgenda = {
     atendida: 'Atendida',
     faltou: 'Faltou',
     transferida: 'Transferida',
+    nao_informada: 'Não informada na origem',
     outra: 'Outra situação',
   },
   risco: {

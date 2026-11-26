@@ -647,8 +647,8 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
       );
       const sol = ids?.['s']
         ? await l.uma(
-            `SELECT s.id, s.nome, CONCAT(cc.sigla, ' ', s.numero_conselho, '/', uf.sigla) AS registro FROM solicitante_externo s
-               JOIN conselho_classe cc ON cc.id = s.conselho_classe_id JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
+            `SELECT s.id, s.nome, CONCAT(cc.sigla, ' ', s.numero_conselho, COALESCE(CONCAT('/', uf.sigla), ' (UF não informada na origem)')) AS registro FROM solicitante_externo s
+               JOIN conselho_classe cc ON cc.id = s.conselho_classe_id LEFT JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
               WHERE s.id = ?`,
             [ids['s']],
           )
@@ -1002,8 +1002,8 @@ export class PortaAtendimentoPropria implements PortaAtendimento {
     return this.ler(c, async (l) =>
       (
         await l.consultar(
-          `SELECT s.id, s.nome, CONCAT(cc.sigla, ' ', s.numero_conselho, '/', uf.sigla) AS registro FROM solicitante_externo s
-             JOIN conselho_classe cc ON cc.id = s.conselho_classe_id JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
+          `SELECT s.id, s.nome, CONCAT(cc.sigla, ' ', s.numero_conselho, COALESCE(CONCAT('/', uf.sigla), ' (UF não informada na origem)')) AS registro FROM solicitante_externo s
+             JOIN conselho_classe cc ON cc.id = s.conselho_classe_id LEFT JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
             WHERE s.ativo AND s.excluido_em IS NULL AND (s.numero_conselho = ? OR CONCAT(' ', s.nome, ' ') LIKE CONCAT('% ', ?, '%'))
             ORDER BY s.nome LIMIT 50`,
           [t, t],

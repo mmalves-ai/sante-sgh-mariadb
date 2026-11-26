@@ -801,7 +801,7 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
       ? await l.uma(
           `SELECT se.nome, cc.codigo_tiss AS conselho, se.numero_conselho AS numero, uf.codigo_ibge AS uf, cbo.codigo_cbo AS cbo,
                   se.telefone FROM solicitante_externo se JOIN conselho_classe cc ON cc.id = se.conselho_classe_id
-             JOIN unidade_federativa uf ON uf.id = se.conselho_unidade_federativa_id
+             LEFT JOIN unidade_federativa uf ON uf.id = se.conselho_unidade_federativa_id
              LEFT JOIN ocupacao_cbo cbo ON cbo.id = se.ocupacao_cbo_id WHERE se.id = ?`,
           [s['solicitante_externo_id']],
         )
@@ -816,6 +816,15 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
             WHERE p.id = ? ORDER BY ic.principal DESC, ic.sequencia LIMIT 1`,
           [s['solicitante_profissional_id']],
         );
+    // O solicitante migrado pode vir sem UF do conselho: a guia TISS exige a UF, então o envio é recusado com o motivo.
+    if (s['solicitante_externo_id'] && sol && (sol['uf'] === null || sol['uf'] === undefined))
+      throw recusaRegra('Envio recusado', [
+        {
+          campo: 'solicitante',
+          mensagem:
+            'Solicitante sem UF do conselho: informe a UF no cadastro do solicitante antes de enviar a guia.',
+        },
+      ]);
     const carater = await l.uma('SELECT urgencia FROM carater_atendimento_tiss WHERE id = ?', [
       s['carater_atendimento_tiss_id'],
     ]);

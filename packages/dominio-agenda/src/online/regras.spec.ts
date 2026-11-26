@@ -106,6 +106,8 @@ describe('o que o paciente pode fazer', () => {
   it('cancelar ou remarcar até o prazo da agenda', () => {
     expect(podeMudarPeloPortal(m, CFG, R)).toEqual({ pode: true, motivo: null });
     expect(podeMudarPeloPortal({ ...m, estado: 'chegou' }, CFG, R).pode).toBe(false);
+    // Marcação migrada sem situação na origem: encerrada, o portal só mostra.
+    expect(podeMudarPeloPortal({ ...m, estado: 'nao_informada' }, CFG, R).pode).toBe(false);
     expect(podeMudarPeloPortal(m, null, R).motivo).toContain('central');
     expect(podeMudarPeloPortal(m, { ...CFG, ativa: false }, R).pode).toBe(false);
     expect(podeMudarPeloPortal({ ...m, data: '2026-10-25', hora: '0900' }, CFG, R).motivo).toBe(

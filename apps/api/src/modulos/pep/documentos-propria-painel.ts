@@ -179,13 +179,19 @@ export function painel(
     if (f.meus) {
       filtros.push(`(EXISTS (SELECT 1 FROM registro_assistencial r JOIN usuario u ON u.id = r.autor_usuario_id
                               WHERE r.atendimento_id = a.id AND u.login = ? AND r.excluido_em IS NULL)
+                  OR EXISTS (SELECT 1 FROM registro_assistencial r
+                              JOIN usuario_vinculo_profissional v ON v.profissional_id = r.autor_profissional_id
+                                   AND v.estabelecimento_id = r.estabelecimento_id AND v.excluido_em IS NULL
+                              JOIN usuario u ON u.id = v.usuario_id
+                              WHERE r.atendimento_id = a.id AND r.autor_usuario_id IS NULL AND u.login = ?
+                                AND r.excluido_em IS NULL)
                   OR EXISTS (SELECT 1 FROM interconsulta ic
                               JOIN usuario_vinculo_profissional v ON v.profissional_id = ic.aceito_por_profissional_id
                                    AND v.estabelecimento_id = ic.estabelecimento_id AND v.excluido_em IS NULL
                               JOIN usuario u ON u.id = v.usuario_id
                               WHERE ic.paciente_id = a.paciente_id AND ic.estabelecimento_id = a.estabelecimento_id
                                 AND u.login = ? AND ic.excluido_em IS NULL))`);
-      p.push(f.meus.login, f.meus.login);
+      p.push(f.meus.login, f.meus.login, f.meus.login);
     }
     if (f.equipe) {
       const esp = idsValidos(f.equipe.especialidades);

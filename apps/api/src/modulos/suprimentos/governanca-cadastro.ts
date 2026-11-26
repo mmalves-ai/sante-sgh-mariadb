@@ -489,7 +489,7 @@ async function transferirSaldo(
     if (quantidade <= 0) continue;
     await exigirMesAberto(tx, est, hoje);
     const lotes = await tx.consultar<Linha>(
-      `SELECT sl.lote_insumo_id, sl.quantidade, li.numero_lote, li.validade FROM saldo_lote sl
+      `SELECT sl.lote_insumo_id, sl.quantidade, li.numero_lote, li.validade, li.origem FROM saldo_lote sl
          JOIN lote_insumo li ON li.id = sl.lote_insumo_id
         WHERE sl.local_estoque_id = ? AND li.insumo_id = ? AND sl.quantidade > 0 AND sl.excluido_em IS NULL`,
       [local, absorvido['id']],
@@ -511,7 +511,8 @@ async function transferirSaldo(
     for (const l of lotes) {
       const validade = dia(l['validade']);
       const achado = await tx.uma<Linha>(
-        'SELECT id FROM lote_insumo WHERE estabelecimento_id = ? AND insumo_id = ? AND numero_lote = ? AND validade = ?',
+        // `<=>`: o lote migrado sem validade (nula) também se reencontra no item que permanece.
+        'SELECT id FROM lote_insumo WHERE estabelecimento_id = ? AND insumo_id = ? AND numero_lote = ? AND validade <=> ?',
         [est, permanece['id'], l['numero_lote'], validade],
       );
       const loteId = achado
@@ -521,6 +522,8 @@ async function transferirSaldo(
             insumo_id: permanece['id'],
             numero_lote: l['numero_lote'],
             validade,
+            // A origem segue a do lote original: o migrado sem validade continua aceito pelo banco.
+            origem: l['origem'] ?? 'sistema',
           });
       lotesEntrada.push({ id: loteId, quantidade: quantidadeConvertida(n(l['quantidade']), fator) });
     }

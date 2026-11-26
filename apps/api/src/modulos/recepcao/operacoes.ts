@@ -494,6 +494,7 @@ const RECUSA_DA_SITUACAO: Readonly<Record<string, readonly [string, string]>> = 
   em_atendimento: ['marcacao-em-atendimento', 'O agendamento já está em atendimento.'],
   chegou: ['marcacao-ja-chegou', 'A chegada deste agendamento já foi registrada.'],
   bloqueada: ['marcacao-bloqueada', 'O horário do agendamento está bloqueado.'],
+  nao_informada: ['marcacao-nao-informada', 'Marcação migrada sem situação na origem: encerrada.'],
 };
 
 async function situacaoChegou(tx: TxOperacao): Promise<number> {

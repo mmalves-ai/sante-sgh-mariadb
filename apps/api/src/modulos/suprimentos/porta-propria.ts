@@ -233,8 +233,31 @@ const situacaoNaTela = (s: string) =>
   (s === 'divergente_confirmado' ? 'divergente-confirmado' : s) as
     'pendente' | 'ok' | 'recontar' | 'divergente-confirmado';
 
-/** O alerta do lote (validade com dígitos trocados, vencido, vence na antecedência ou nenhum). */
+/** O lote migrado sem validade conhecida (a validade só fica nula no lote com origem 'migracao'). */
+const semValidade = (r: Linha): boolean => r['validade'] === null || r['validade'] === undefined;
+
+/** A recusa do uso do lote sem validade (nunca "vencido" nem "sem saldo"): primeiro informe a validade. */
+const recusaLoteSemValidade = (lote: string) =>
+  recusa(
+    'lote-sem-validade',
+    `Lote ${lote} sem validade (não informada na origem): informe a validade do lote antes de usar.`,
+    { campos: ['lotes'] },
+  );
+
+/**
+ * O alerta do lote (validade com dígitos trocados, vencido, vence na antecedência, sem validade ou nenhum). O lote
+ * migrado sem validade aparece no saldo com o alerta `sem-validade`, a validade vazia e sem os dias para vencer.
+ */
 function loteLido(r: Linha, hoje: string, alertaDias: number): SaldoItem['lotes'][number] {
+  if (semValidade(r))
+    return {
+      id: n(r['lote_id']),
+      lote: String(r['numero_lote']),
+      validade: '',
+      quantidade: n(r['quantidade']),
+      diasParaVencer: null,
+      alerta: 'sem-validade',
+    };
   const validade = dataIso(r['validade']);
   const dias = diasParaVencer(validade, hoje);
   return {
@@ -469,7 +492,9 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSuprimentos {
       if (!kit) throw recusa('kit-inexistente', 'O carrinho não existe.');
       const itens = await tx.consultar<Linha>(
         `SELECT ki.id, (SELECT MIN(li.validade) FROM kit_rastreavel_lote kl JOIN lote_insumo li ON li.id = kl.lote_insumo_id
-                         WHERE kl.kit_rastreavel_item_id = ki.id AND kl.excluido_em IS NULL AND kl.quantidade > 0) AS validade
+                         WHERE kl.kit_rastreavel_item_id = ki.id AND kl.excluido_em IS NULL AND kl.quantidade > 0) AS validade,
+                       (SELECT MAX(li.validade IS NULL) FROM kit_rastreavel_lote kl JOIN lote_insumo li ON li.id = kl.lote_insumo_id
+                         WHERE kl.kit_rastreavel_item_id = ki.id AND kl.excluido_em IS NULL AND kl.quantidade > 0) AS sem_validade
            FROM kit_rastreavel_item ki WHERE ki.kit_rastreavel_id = ? AND ki.excluido_em IS NULL`,
         [k.kit],
       );
@@ -483,7 +508,10 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSuprimentos {
           campos: ['pendencias'],
         });
       const hoje = await hojeNoEstabelecimento(tx, est);
-      const validades = itens.every((r) => !r['validade'] || !vencido(dataIso(r['validade']), hoje));
+      // O lote migrado sem validade (não informada na origem) não é conforme: o MIN da validade o ignoraria.
+      const semValidade = itens.some((r) => Number(r['sem_validade'] ?? 0) > 0);
+      const vencidos = itens.some((r) => !!r['validade'] && vencido(dataIso(r['validade']), hoje));
+      const validades = !semValidade && !vencidos;
       const agora = new Date();
       const id = await tx.incluir('conferencia_kit_rastreavel', {
         ocorrido_em: agora,
@@ -496,7 +524,16 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSuprimentos {
         itens_conformes: completa,
         validades_conformes: validades,
         resultado: completa && validades ? 'conforme' : 'com_pendencia',
-        pendencias: pendencias || (validades ? null : 'Há lote vencido no carrinho.'),
+        pendencias:
+          pendencias ||
+          (validades
+            ? null
+            : [
+                vencidos ? 'Há lote vencido no carrinho.' : '',
+                semValidade ? 'Há lote sem validade (não informada na origem) no carrinho.' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')),
       });
       await tx.alterar('kit_rastreavel', k.kit, n(kit['versao']), {
         lacre_atual: k.lacre,
@@ -1248,7 +1285,7 @@ async function lerKits(
   const itens = await l.consultar<Linha>(
     `SELECT ki.id, ki.kit_rastreavel_id, ki.insumo_id, i.nome, ki.quantidade_padrao, ki.saldo_atual, ki.obrigatorio,
             (SELECT li.numero_lote FROM kit_rastreavel_lote kl JOIN lote_insumo li ON li.id = kl.lote_insumo_id
-              WHERE kl.kit_rastreavel_item_id = ki.id AND kl.excluido_em IS NULL AND kl.quantidade > 0 ORDER BY li.validade LIMIT 1) AS lote,
+              WHERE kl.kit_rastreavel_item_id = ki.id AND kl.excluido_em IS NULL AND kl.quantidade > 0 ORDER BY li.validade IS NULL, li.validade LIMIT 1) AS lote,
             (SELECT MIN(li.validade) FROM kit_rastreavel_lote kl JOIN lote_insumo li ON li.id = kl.lote_insumo_id
               WHERE kl.kit_rastreavel_item_id = ki.id AND kl.excluido_em IS NULL AND kl.quantidade > 0) AS validade
        FROM kit_rastreavel_item ki JOIN insumo i ON i.id = ki.insumo_id
@@ -1506,7 +1543,7 @@ function lotesTravados(tx: TxOperacao, est: number, local: number, insumo: numbe
        FROM saldo_lote sl JOIN lote_insumo li ON li.id = sl.lote_insumo_id AND li.excluido_em IS NULL
       WHERE sl.estabelecimento_id = ? AND sl.local_estoque_id = ? AND li.insumo_id = ? AND sl.excluido_em IS NULL
         AND sl.quantidade > 0
-      ORDER BY li.validade, li.id`,
+      ORDER BY li.validade IS NULL, li.validade, li.id`,
     [est, local, insumo],
   );
 }
@@ -1728,6 +1765,14 @@ export async function lotesDaSaida(
     // A ordem é estável: dentro de cada grupo segue a validade.
     .sort((a, b) => Number(b['propria']) - Number(a['propria']));
   if (mandados.length) {
+    const semData = mandados.find(
+      (m) =>
+        !livres.some(
+          (r) =>
+            !semValidade(r) && String(r['numero_lote']) === m.lote && dataIso(r['validade']) === m.validade,
+        ) && livres.some((r) => semValidade(r) && String(r['numero_lote']) === m.lote),
+    );
+    if (semData) throw recusaLoteSemValidade(semData.lote);
     recusar(
       conferirLotesSaida(
         quantidade,
@@ -1750,13 +1795,22 @@ export async function lotesDaSaida(
   }
   const usados: LoteUsado[] = [];
   let falta = quantidade;
+  // O lote migrado sem validade vem por último (a consulta o põe no fim) e só sai no ajuste do saldo físico; no uso,
+  // a falta que ele cobriria vira a recusa "lote sem validade".
+  let retidoSemValidade: string | null = null;
   for (const r of livres) {
     if (falta <= 0) break;
-    if (vencido(dataIso(r['validade']), hoje)) continue;
+    if (semValidade(r)) {
+      if (reserva !== 'fisico') {
+        retidoSemValidade ??= String(r['numero_lote']);
+        continue;
+      }
+    } else if (vencido(dataIso(r['validade']), hoje)) continue;
     const q = Math.min(falta, n(r['quantidade']));
     usados.push({ id: n(r['lote_insumo_id']), quantidade: qtd(q) });
     falta = qtd(falta - q);
   }
+  if (falta > 0 && retidoSemValidade !== null) throw recusaLoteSemValidade(retidoSemValidade);
   if (falta > 0)
     throw recusa(
       'saldo-lote-insuficiente',
@@ -3527,7 +3581,8 @@ async function corrigirValidadeLote(
     });
   await tx.alterar('lote_insumo', e.lote, n(l['versao']), {
     validade: e.validade,
-    validade_original: l['validade_original'] ?? atual,
+    // O lote migrado sem validade não tem validade original a guardar (fica nula).
+    validade_original: l['validade_original'] ?? (atual || null),
   });
   return { id: e.lote, ano: Number(hoje.slice(0, 4)), mes: Number(hoje.slice(5, 7)) };
 }
@@ -3933,7 +3988,7 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
       const insumos = [...new Set(usadas.map((r) => n(r['insumo_id'])))];
       if (insumos.length)
         for (const r of await l.consultar<Linha>(
-          `${SQL_LOTES} AND li.insumo_id IN (${lista(insumos.length)}) ORDER BY li.validade, li.id`,
+          `${SQL_LOTES} AND li.insumo_id IN (${lista(insumos.length)}) ORDER BY li.validade IS NULL, li.validade, li.id`,
           [est, ...insumos],
         )) {
           const k = `${n(r['insumo_id'])}:${n(r['local_estoque_id'])}`;
@@ -3977,7 +4032,7 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
     return this.ler(c, async (l, est) =>
       (
         await l.consultar<Linha>(
-          `${SQL_LOTES} AND li.insumo_id = ? AND sl.local_estoque_id = ? ORDER BY li.validade, li.id`,
+          `${SQL_LOTES} AND li.insumo_id = ? AND sl.local_estoque_id = ? ORDER BY li.validade IS NULL, li.validade, li.id`,
           [est, item, local],
         )
       ).map((r) => loteLido(r, hoje, alertaDias)),
@@ -4325,7 +4380,8 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
         local: n(r['atendente_local_estoque_id']),
         localNome: String(r['local_nome']),
         destino: r['tipo'] === 'paciente' ? 1 : 2,
-        centroCusto: n(r['centro_custo_id']),
+        // A requisição de setor migrada pode vir sem centro de custo (a tela mostra "—").
+        centroCusto: numeroOuNulo(r['centro_custo_id']),
         centroCustoNome: texto(r['centro_nome']),
         usuario: texto(r['login']),
         paciente: pacienteLido(r),

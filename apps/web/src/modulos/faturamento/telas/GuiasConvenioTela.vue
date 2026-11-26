@@ -229,8 +229,10 @@ async function anexar() {
           @click="escolhida = g.id"
         >
           <td>
-            {{ g.paciente }}
-            <span class="secundario">· {{ t('auditoriaTramite.guia.prontuario', { n: g.prontuario }) }}</span>
+            {{ g.paciente ?? '—' }}
+            <span v-if="g.prontuario !== null" class="secundario"
+              >· {{ t('auditoriaTramite.guia.prontuario', { n: g.prontuario }) }}</span
+            >
             <RouterLink
               v-if="g.contaId"
               :to="`/faturamento/contas/${g.contaId}`"

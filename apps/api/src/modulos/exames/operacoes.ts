@@ -278,6 +278,11 @@ async function marcacaoTravada(tx: TxOperacao, ctx: ContextoOperacao, id: number
   // 02-AGE 40: cancelar ou remarcar na agenda restrita é de quem está na lista dela com "pode marcar".
   await exigirMarcacaoDeExame(tx, n(m['agenda_nominal']), usuarioDe(ctx));
   if (m['significado'] === 'cancelada') throw recusa('ja-cancelada', 'A marcação já foi cancelada.');
+  if (m['significado'] === 'nao_informada')
+    throw recusa(
+      'marcacao-nao-informada',
+      'A marcação migrada sem situação na origem está encerrada: não pode ser alterada.',
+    );
   if (m['atendido_em'] !== null || ['realizada', 'em_atendimento'].includes(String(m['significado'])))
     throw recusa('ja-atendido', 'O exame já foi atendido: a marcação não pode mais ser desfeita.');
   if (m['chegada_em'] !== null || m['significado'] === 'chegou')

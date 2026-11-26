@@ -106,7 +106,8 @@ export function validarPeriodoConta(
 // ── Dados do segurado na conta ────────────────────────────────────────────────────────────────────
 
 export interface SeguradoConta {
-  readonly numeroCarteira: string;
+  /** Nula só na conta migrada sem carteira: gravar de novo exige informá-la. */
+  readonly numeroCarteira: string | null;
   readonly validadeCarteira: string | null; // AAAA-MM-DD
   readonly parentescoTitular: string | null;
   readonly titularCoberturaId: number | null;
@@ -123,7 +124,7 @@ export function validarSeguradoConta(
   const alertas: string[] = [];
   if (!contaEditavel(situacaoConta))
     erros['conta'] = 'A conta não está aberta: reabra-a para mudar os dados do segurado.';
-  const carteira = s.numeroCarteira.trim();
+  const carteira = (s.numeroCarteira ?? '').trim();
   if (!carteira) erros['numeroCarteira'] = 'Informe o número da carteira usada nesta conta.';
   else if (!/^[0-9A-Za-z.\- /]+$/.test(carteira))
     erros['numeroCarteira'] = 'A carteira tem só letras, números, ponto, traço, barra e espaço.';

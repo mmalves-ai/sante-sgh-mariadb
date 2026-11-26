@@ -1068,7 +1068,7 @@ export async function guiasConvenioPropria(
             (SELECT MIN(gp.prazo_em) FROM guia_pendencia gp WHERE gp.guia_fonte_pagadora_id = g.id
                 AND gp.situacao IN ('aberta','em_tratamento') AND gp.excluido_em IS NULL) AS prazo
        FROM guia_fonte_pagadora g JOIN fonte_pagadora f ON f.id = g.fonte_pagadora_id
-       JOIN paciente pa ON pa.id = g.paciente_id JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
+       LEFT JOIN paciente pa ON pa.id = g.paciente_id LEFT JOIN pessoa_fisica pf ON pf.id = pa.pessoa_fisica_id
        LEFT JOIN agendamento_cirurgico ac ON ac.id = g.agendamento_cirurgico_id
        LEFT JOIN usuario u ON u.id = g.responsavel_usuario_id
       WHERE ${filtros.join(' AND ')}
@@ -1085,8 +1085,9 @@ export async function guiasConvenioPropria(
     tipo: txt(g['tipo_guia']),
     situacao: txt(g['situacao']),
     fonte: txt(g['fonte']),
-    paciente: txt(g['paciente']),
-    prontuario: n(g['numero_prontuario']),
+    // A guia migrada pode vir sem paciente (origem 'migracao'): nulos, a tela mostra "—".
+    paciente: g['paciente'] === null || g['paciente'] === undefined ? null : txt(g['paciente']),
+    prontuario: nn(g['numero_prontuario']),
     atendimentoId: nn(g['atendimento_id']),
     contaId: nn(g['conta_hospitalar_id']),
     solicitadaEm: iso(g['data_solicitacao']),

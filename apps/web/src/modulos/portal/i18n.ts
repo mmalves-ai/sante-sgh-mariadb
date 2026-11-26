@@ -406,6 +406,7 @@ export const mensagensPortal = {
       faltou: 'Não compareceu',
       cancelado: 'Cancelado',
       transferido: 'Transferido',
+      'nao-informada': 'Não informada na origem',
     },
     peloPortal: 'Marcado pelo portal',
     cancelar: 'Cancelar',

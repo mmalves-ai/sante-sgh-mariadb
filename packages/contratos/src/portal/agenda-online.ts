@@ -211,6 +211,8 @@ export const SITUACOES_AGENDAMENTO_PORTAL = [
   'faltou',
   'cancelado',
   'transferido',
+  // Marcação migrada sem situação na origem (encerrada).
+  'nao-informada',
 ] as const;
 export type SituacaoAgendamentoPortal = (typeof SITUACOES_AGENDAMENTO_PORTAL)[number];
 

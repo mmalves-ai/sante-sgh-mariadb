@@ -541,6 +541,13 @@ export class PortaUnitarizacaoDosePropria implements PortaUnitarizacaoDose {
           [e.lote, e.local, est, regra?.origem ?? 0],
         );
         const { hoje, agora } = await relogio(tx, est);
+        // O lote migrado sem validade não vira dose: primeiro informam a validade (nunca "vencido").
+        if (lote && (lote['validade'] === null || lote['validade'] === undefined))
+          throw recusa(
+            'lote-sem-validade',
+            `Lote ${t(lote['numero_lote'])} sem validade (não informada na origem): informe a validade do lote antes de usar.`,
+            { campos: ['lote'] },
+          );
         recusarTodas(
           conferirUnitarizacao({
             regra,

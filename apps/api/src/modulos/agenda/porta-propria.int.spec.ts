@@ -1259,4 +1259,62 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
     // Desfaz o lote para não mexer nos casos seguintes.
     await porta.executar(ctx(), 'agenda.reverterGrade', { geracao: nova });
   });
+
+  it('marcação migrada sem situação na origem: aparece como "nao_informada", fora dos indicadores, e recusa cancelar e remarcar', async () => {
+    const vago = await linha(
+      `SELECT DATE_FORMAT(inicio_em, '%Y-%m-%dT%H:%i:%sZ') AS ini FROM horario_agenda WHERE agenda_servico_id = ? AND data_referencia = ? AND vagas_ocupadas = 0
+         AND situacao = 'livre' AND tipo_horario = 'regular' AND excluido_em IS NULL ORDER BY inicio_em LIMIT 1`,
+      [ids.agenda, DIA],
+    );
+    expect(vago).not.toBeNull();
+    const hora = localDe(FUSO, new Date(String(vago?.['ini']))).hora;
+    const m = await porta.executar(ctx(), 'agenda.agendarConsulta', {
+      agenda: ids.agenda,
+      data: DIA,
+      hora,
+      paciente: ids.pacienteA,
+      convenio: 9141,
+      retorno: false,
+      canal: 'telefone',
+    });
+    const id = Number(m.resultado['marcacao']);
+    const antes = (await porta.indicadores(ctx(), DIA, DIA)).funil.marcados;
+    // Simula a carga: a marcação vira migrada, com a situação "não informada na origem".
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-l0104-migrada' }, async (e) => {
+      await e.executar(
+        `INSERT INTO situacao_marcacao (codigo, descricao, significado, criado_em)
+           SELECT 'l0104-nao-informada', 'Não informada na origem (sintético)', 'nao_informada', UTC_TIMESTAMP(3) FROM DUAL
+           WHERE NOT EXISTS (SELECT 1 FROM situacao_marcacao WHERE significado = 'nao_informada' AND ativo)`,
+        [],
+      );
+      await e.executar(
+        `UPDATE marcacao_horario SET origem = 'migracao', situacao_marcacao_id =
+           (SELECT id FROM situacao_marcacao WHERE significado = 'nao_informada' AND ativo ORDER BY id LIMIT 1)
+         WHERE id = ?`,
+        [id],
+      );
+    });
+    const lida = await porta.marcacao(ctx(), id);
+    expect(lida?.marcacao.situacao).toBe('nao_informada');
+    // Fora do absenteísmo: a migrada encerrada não conta como marcada nos indicadores.
+    expect((await porta.indicadores(ctx(), DIA, DIA)).funil.marcados).toBe(antes - 1);
+    await expect(
+      porta.executar(ctx(), 'agenda.cancelarConsulta', {
+        marcacao: id,
+        motivo: 'PAC-DESISTIU',
+        solicitante: 'paciente',
+      }),
+    ).rejects.toMatchObject(recusada('marcacao-nao-informada'));
+    await expect(
+      porta.executar(ctx(), 'agenda.remarcarConsulta', {
+        marcacao: id,
+        destino: { agenda: ids.agenda, data: DIA, hora },
+        modo: 'liberar',
+        canal: 'telefone',
+      }),
+    ).rejects.toMatchObject(recusada('marcacao-nao-informada'));
+    expect(
+      await contar('SELECT COUNT(*) AS n FROM cancelamento_marcacao WHERE marcacao_horario_id = ?', [id]),
+    ).toBe(0);
+  });
 });

@@ -16,7 +16,7 @@ const esquemaFicha = z.object({
   versao: z.number(),
   paciente: z.number(),
   nome: z.string(),
-  atendimento: z.number(),
+  atendimento: z.number().nullable(),
   item: z.number(),
   antimicrobiano: z.string(),
   finalidade: z.string(),

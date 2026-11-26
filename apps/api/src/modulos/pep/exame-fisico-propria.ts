@@ -434,7 +434,7 @@ export class ExameFisicoPropria {
               registroAceitaExame(
                 {
                   situacao: String(x['situacao']),
-                  autorUsuarioId: num(x['autor_usuario_id']),
+                  autorUsuarioId: numOuNull(x['autor_usuario_id']),
                   lancadoEm: dataDe(x['data_hora_lancamento']),
                   assinado: bool(x['assinado']),
                 },
@@ -552,11 +552,12 @@ export class ExameFisicoPropria {
     const aceita = registroAceitaExame(
       {
         situacao: String(reg['situacao']),
-        autorUsuarioId: num(reg['autor_usuario_id']),
+        autorUsuarioId: numOuNull(reg['autor_usuario_id']),
         lancadoEm: dataDe(reg['data_hora_lancamento']),
         assinado: bool(reg['assinado']),
       },
-      Number(tx.contexto.usuario ?? 0),
+      // Sem usuário na sessão, ninguém é o autor (nunca 0 contra 0 do autor migrado sem conta).
+      tx.contexto.usuario === null || tx.contexto.usuario === undefined ? null : Number(tx.contexto.usuario),
       this.agora(),
     );
     if (aceita.length) recusar(aceita);

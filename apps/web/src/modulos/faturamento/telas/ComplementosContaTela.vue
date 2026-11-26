@@ -172,7 +172,8 @@ const form = reactive<Segurado>({
 watch(
   () => seg.data.value,
   (d) => {
-    if (d) Object.assign(form, d.segurado);
+    // A conta migrada pode vir sem carteira: o campo fica vazio para informar (nunca "null").
+    if (d) Object.assign(form, { ...d.segurado, numeroCarteira: d.segurado.numeroCarteira ?? '' });
   },
   { immediate: true },
 );

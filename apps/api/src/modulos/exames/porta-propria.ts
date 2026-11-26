@@ -96,6 +96,7 @@ function estadoDoHorario(h: Linha): HorarioExame['estado'] {
       return 'realizado';
     case 'falta':
     case 'bloqueada':
+    case 'nao_informada':
       return 'outro';
     default:
       return 'marcado';

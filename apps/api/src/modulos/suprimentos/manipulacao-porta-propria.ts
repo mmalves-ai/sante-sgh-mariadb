@@ -291,16 +291,24 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorManipulacao {
           : ins;
       if (!prod)
         throw recusa('produto-inexistente', 'O produto não está no cadastro.', { campos: ['produto'] });
+      // O lote com a validade informada vem primeiro; o migrado sem validade (mesmo número) só para a recusa clara.
       const lote = await tx.uma<Linha>(
-        `SELECT id FROM lote_insumo
-          WHERE estabelecimento_id = ? AND insumo_id = ? AND numero_lote = ? AND validade = ? AND excluido_em IS NULL
-          ORDER BY id LIMIT 1`,
-        [est, o.insumo, o.loteInsumo, o.validadeInsumo],
+        `SELECT id, validade FROM lote_insumo
+          WHERE estabelecimento_id = ? AND insumo_id = ? AND numero_lote = ? AND (validade <=> ? OR validade IS NULL)
+            AND excluido_em IS NULL
+          ORDER BY validade IS NULL, id LIMIT 1`,
+        [est, o.insumo, o.loteInsumo, o.validadeInsumo || null],
       );
       if (!lote)
         throw recusa('lote-inexistente', 'O lote do insumo não está no estoque deste estabelecimento.', {
           campos: ['loteInsumo'],
         });
+      if (lote['validade'] === null || lote['validade'] === undefined)
+        throw recusa(
+          'lote-sem-validade',
+          `Lote ${o.loteInsumo} sem validade (não informada na origem): informe a validade do lote antes de usar.`,
+          { campos: ['loteInsumo'] },
+        );
       const u = usuario();
       const numero = await tx.proximoNumero('ordem_manipulacao');
       const id = await tx.incluir('ordem_manipulacao', {

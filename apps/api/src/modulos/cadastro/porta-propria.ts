@@ -1007,7 +1007,7 @@ export class PortaCadastroPropria implements PortaCadastro {
               (SELECT COUNT(*) FROM solicitante_externo_fonte_pagadora x WHERE x.solicitante_externo_id = s.id) AS convenios
          FROM solicitante_externo s
          JOIN conselho_classe cc ON cc.id = s.conselho_classe_id
-         JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
+         LEFT JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id
          LEFT JOIN ocupacao_cbo cbo ON cbo.id = s.ocupacao_cbo_id
         WHERE s.excluido_em IS NULL${where} ORDER BY s.nome, s.id LIMIT ${TETO_LISTA + 1}`,
       params,

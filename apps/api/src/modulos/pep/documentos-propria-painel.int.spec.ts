@@ -1216,4 +1216,31 @@ describe.skipIf(SEM_BANCO)('documentos-propria-painel contra o MariaDB (cliente 
       F.executar(nucleo, CLIENTE, executor, C(), 'pep.registrarObito', {}, ctx('o')),
     ).rejects.toMatchObject({ problema: { status: 501 } });
   });
+
+  it('meus pacientes: o registro migrado sem conta do autor conta pelo vínculo do profissional', async () => {
+    const gravar = (sql: string, p: unknown[]) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-migrado` }, (e) => e.executar(sql, p));
+    const meus = { cbos: [], login: LOGIN, hospital: P };
+    await gravar(
+      `UPDATE registro_assistencial SET autor_usuario_id = NULL, origem = 'migracao'
+        WHERE atendimento_id = ? AND autor_usuario_id = ?`,
+      [ids.atendimento, ids.usuario],
+    );
+    try {
+      const r = await F.painel(nucleo, CLIENTE, C(), { unidade: null, busca: `${P} pac`, meus });
+      expect(r.linhas.map((x) => x.paciente)).toContain(ids.paciente);
+      const outro = await F.painel(nucleo, CLIENTE, C(), {
+        unidade: null,
+        busca: `${P} pac`,
+        meus: { ...meus, login: 'ninguem.l96' },
+      });
+      expect(outro.linhas).toEqual([]);
+    } finally {
+      await gravar(
+        `UPDATE registro_assistencial SET autor_usuario_id = ?, origem = 'sistema'
+          WHERE atendimento_id = ? AND autor_usuario_id IS NULL AND origem = 'migracao'`,
+        [ids.usuario, ids.atendimento],
+      );
+    }
+  });
 });

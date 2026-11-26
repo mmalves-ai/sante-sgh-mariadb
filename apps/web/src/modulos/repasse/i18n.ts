@@ -153,6 +153,7 @@ export const mensagensRepasse = {
     pendencia: {
       'sem-executante': 'Item sem executante',
       'sem-regra': 'Sem regra de repasse',
+      'regra-migrada-sem-valor': 'Regra migrada sem valor: informe o percentual ou o valor fixo',
       'nao-conciliado': 'Aguardando conciliação com o convênio',
       'nao-credenciado': 'Profissional sem credenciamento na data',
       'ja-integrado': 'Item já apurado',

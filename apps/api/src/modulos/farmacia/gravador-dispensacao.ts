@@ -66,6 +66,15 @@ const q4 = (x: number) => Math.round(x * 10_000) / 10_000;
 const dataIso = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null;
 
+/** O lote migrado sem validade não vai a paciente: a farmácia informa a validade antes (nunca "vencido"). */
+function recusaLoteSemValidade(lote: string, campo: string) {
+  return recusa(
+    'lote-sem-validade',
+    `Lote ${lote} sem validade (não informada na origem): informe a validade do lote antes de usar.`,
+    { campos: [campo] },
+  );
+}
+
 /** As tabelas que as gravações da farmácia hospitalar declaram ao Executor. */
 export const TABELAS_DISPENSACAO = [
   // C2-024: a dispensação consome as etiquetas lidas da dose (consumirEtiquetas, mesma transação).
@@ -585,6 +594,7 @@ export function gravadorDispensacao(
         partes = [];
         for (const l of x.lotes) {
           const lote = await loteDe(insumo.id, l.lote);
+          if (!lote.validade) throw recusaLoteSemValidade(lote.numero, 'lotes');
           if (lote.situacao !== 'liberado' || lote.validade < hojeIso)
             throw recusa('lote-indisponivel', `O lote ${lote.numero} está vencido ou não liberado.`, {
               campos: ['lotes'],
@@ -1079,7 +1089,8 @@ export function gravadorDispensacao(
     if (!(await centroDoEstabelecimento(p.centroCusto)))
       throw recusa('centro-custo-inexistente', 'O centro de custo não existe.', { campos: ['centroCusto'] });
     const lote = await loteDe(p.item, p.lote, 'lote');
-    if (lote.validade !== p.validade)
+    // A perda não é uso em paciente: o lote migrado sem validade (validade vazia) se identifica só pelo número.
+    if (lote.validade && lote.validade !== p.validade)
       throw recusa('validade-diferente', `A validade do lote ${lote.numero} é ${lote.validade}.`, {
         campos: ['validade'],
       });
@@ -1325,6 +1336,7 @@ export function gravadorDispensacao(
         campos: ['prescritor'],
       });
     const lote = await loteDe(d.item, d.lote, 'lote');
+    if (!lote.validade) throw recusaLoteSemValidade(lote.numero, 'lote');
     if (lote.validade !== d.validade)
       throw recusa('validade-diferente', `A validade do lote ${lote.numero} é ${lote.validade}.`, {
         campos: ['validade'],

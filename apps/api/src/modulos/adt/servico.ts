@@ -35,7 +35,13 @@ import {
   vencimentoDaGuia,
 } from '@sgh/dominio-internacao';
 import { ErroProblema } from '../../problema.filter.js';
-import type { ContextoAdt, EtapaDaLimpeza, OpcoesListaInternacoes, PortaAdt } from './porta.js';
+import {
+  type ContextoAdt,
+  type EtapaDaLimpeza,
+  MEDICO_ALTA_NAO_REGISTRADO,
+  type OpcoesListaInternacoes,
+  type PortaAdt,
+} from './porta.js';
 
 const ms = (iso: string) => {
   const t = Date.parse(iso.length <= 19 ? `${iso.replace(' ', 'T')}Z` : iso);
@@ -79,7 +85,7 @@ export class ServicoAdt {
                 motivo: a.motivo,
                 destino: a.destino,
                 decididaEm: a.decididaEm,
-                medico: nomeMedico(a.vinculo),
+                medico: a.vinculo === null ? MEDICO_ALTA_NAO_REGISTRADO : nomeMedico(a.vinculo),
               },
             }
           : i;

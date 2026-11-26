@@ -13,11 +13,16 @@ export const esquemaChaveDocumentoLida = z.object({ ano: n, mes: n, doc: n });
 export const esquemaLoteSaldo = z.object({
   id: n,
   lote: texto,
+  /** Vazia só no lote migrado sem validade conhecida (alerta `sem-validade`). */
   validade: dataIso,
   quantidade: n,
-  diasParaVencer: n,
-  /** vencido, vence (dentro da antecedência do parâmetro), suspeita (validade com dígitos trocados) ou nenhum. */
-  alerta: z.enum(['vencido', 'vence', 'suspeita', 'nenhum']),
+  /** null no lote sem validade. */
+  diasParaVencer: n.nullable(),
+  /**
+   * vencido, vence (dentro da antecedência do parâmetro), suspeita (validade com dígitos trocados), sem-validade
+   * (lote migrado sem validade: visível, não sai para uso até informarem a validade) ou nenhum.
+   */
+  alerta: z.enum(['vencido', 'vence', 'suspeita', 'sem-validade', 'nenhum']),
 });
 export type LoteSaldo = z.infer<typeof esquemaLoteSaldo>;
 
@@ -127,7 +132,8 @@ export const esquemaRequisicaoPendente = z.object({
   local: n,
   localNome: texto,
   destino: n,
-  centroCusto: n,
+  /** null na requisição de setor migrada sem centro de custo. */
+  centroCusto: n.nullable(),
   centroCustoNome: texto,
   usuario: texto,
   paciente: esquemaPacienteDocumento,

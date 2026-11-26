@@ -12,9 +12,19 @@ export interface Relogio {
   readonly hora: string;
 }
 
-/** Situação da marcação pelo significado (a "transferida" é a remarcada que manteve o horário antigo). */
+/**
+ * Situação da marcação pelo significado (a "transferida" é a remarcada que manteve o horário antigo). A
+ * 'nao_informada' é a marcação migrada sem situação na origem: encerrada, só consulta.
+ */
 export type SituacaoMarcacao =
-  'marcada' | 'confirmada' | 'chegou' | 'em_atendimento' | 'realizada' | 'falta' | 'transferida';
+  | 'marcada'
+  | 'confirmada'
+  | 'chegou'
+  | 'em_atendimento'
+  | 'realizada'
+  | 'falta'
+  | 'transferida'
+  | 'nao_informada';
 
 export interface Agenda {
   readonly id: number;

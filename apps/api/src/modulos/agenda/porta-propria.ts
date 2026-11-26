@@ -220,6 +220,8 @@ const SITUACAO_DO_SIGNIFICADO: Readonly<Record<string, SituacaoMarcacao>> = {
   em_atendimento: 'em_atendimento',
   realizada: 'realizada',
   falta: 'falta',
+  // Marcação migrada sem situação na origem: encerrada (fora da agenda em aberto e dos indicadores).
+  nao_informada: 'nao_informada',
   // Só a remarcada que manteve o horário (cancelamento sem liberar) chega aqui: as canceladas saem da grade.
   cancelada: 'transferida',
 };
@@ -970,7 +972,8 @@ export class PortaAgendaPropria implements PortaAgenda {
          FROM marcacao_horario m JOIN horario_agenda h ON h.id = m.horario_agenda_id
          JOIN agenda_servico a ON a.id = h.agenda_servico_id JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
          JOIN canal_marcacao c ON c.id = m.canal_marcacao_id
-         WHERE m.estabelecimento_id = ? AND m.excluido_em IS NULL AND s.significado <> 'cancelada'
+         WHERE m.estabelecimento_id = ? AND m.excluido_em IS NULL
+           AND s.significado NOT IN ('cancelada', 'nao_informada')
            AND h.data_referencia BETWEEN ? AND ?`,
         [e.id, de, ate],
         { teto: TETO_AGREGADO },
@@ -2300,6 +2303,11 @@ export class PortaAgendaPropria implements PortaAgenda {
     await this.exigirNominal(tx, ctx, num(m['agenda_nominal']), 'marcacao');
     const sig = String(m['significado']);
     if (sig === 'cancelada') throw recusa('ja-cancelada', 'A marcação já foi cancelada ou remarcada.');
+    if (sig === 'nao_informada')
+      throw recusa(
+        'marcacao-nao-informada',
+        'A marcação migrada sem situação na origem está encerrada: não pode ser alterada.',
+      );
     if (m['atendido_em'] !== null || sig === 'realizada')
       throw recusa('ja-atendido', 'O paciente já foi atendido: a marcação não pode mais ser desfeita.');
     if (m['chegada_em'] !== null || sig === 'chegou' || sig === 'em_atendimento')

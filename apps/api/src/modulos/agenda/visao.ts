@@ -28,6 +28,7 @@ const SINAL_SITUACAO: Readonly<Record<SituacaoMarcacao, string>> = {
   realizada: 'S',
   falta: 'F',
   transferida: 'T',
+  nao_informada: 'N',
 };
 
 export const canalDoCodigo = (codigo: string | null | undefined): CanalMarcacao =>

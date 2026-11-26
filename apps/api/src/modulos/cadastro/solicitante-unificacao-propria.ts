@@ -272,9 +272,12 @@ export interface UnificacaoDoSolicitante {
 const SQL = `SELECT s.id, s.versao, s.nome, cc.sigla AS conselho, uf.sigla AS uf, s.numero_conselho,
        DATE_FORMAT(s.unificado_em, '%Y-%m-%d') AS quando
   FROM solicitante_externo s JOIN conselho_classe cc ON cc.id = s.conselho_classe_id
-  JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id WHERE s.excluido_em IS NULL`;
+  LEFT JOIN unidade_federativa uf ON uf.id = s.conselho_unidade_federativa_id WHERE s.excluido_em IS NULL`;
+// O solicitante migrado pode vir sem UF do conselho: o registro diz isso, nunca "null".
 const registro = (r: Record<string, unknown>) =>
-  `${String(r['conselho'])} ${String(r['numero_conselho'])}/${String(r['uf'])}`;
+  `${String(r['conselho'])} ${String(r['numero_conselho'])}${
+    r['uf'] === null || r['uf'] === undefined ? ' (UF não informada na origem)' : `/${String(r['uf'])}`
+  }`;
 
 /** Lado da unificação na ficha: para onde este cadastro foi e quem foi unificado nele. */
 export async function lerUnificacaoDoSolicitante(l: Leitor, id: number): Promise<UnificacaoDoSolicitante> {

@@ -155,9 +155,13 @@ export interface EtapaDaLimpeza {
   readonly origem: OrigemLimpeza | null;
 }
 
+/** O rótulo do médico da alta migrada sem médico informado na origem. */
+export const MEDICO_ALTA_NAO_REGISTRADO = 'médico da alta não registrado na origem';
+
 export interface AltaMedicaDecidida {
   readonly id: number;
-  readonly vinculo: number;
+  /** Médico da alta; nulo só na alta migrada sem médico informado na origem. */
+  readonly vinculo: number | null;
   readonly motivo: number;
   readonly destino: string;
   readonly decididaEm: string;

@@ -117,7 +117,7 @@ export function proximoOferecido<T extends VagaDoPortal>(
 }
 
 export type EstadoParaPortal =
-  'marcada' | 'confirmada' | 'chegou' | 'atendida' | 'faltou' | 'transferida' | 'outra';
+  'marcada' | 'confirmada' | 'chegou' | 'atendida' | 'faltou' | 'transferida' | 'nao_informada' | 'outra';
 
 export interface Decisao {
   readonly pode: boolean;
