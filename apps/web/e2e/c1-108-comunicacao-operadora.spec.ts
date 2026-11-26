@@ -77,7 +77,8 @@ test.describe('C1-108 comunicação à operadora pelo serviço web @C1-108', () 
       return json(r, { id: 801 });
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // Recepção da internação: lê os internados e comunica à operadora (o administrador não tem permissão clínica).
+    await entrar(page, 'SINT.INTERNACAO');
     await page.goto('/internacao');
     await expect(page.getByTestId('tela-internados')).toBeVisible();
     const atalho = page.locator('[data-testid^="int-comunicacoes-"]').first();

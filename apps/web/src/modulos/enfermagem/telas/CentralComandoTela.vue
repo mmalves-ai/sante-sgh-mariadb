@@ -757,9 +757,12 @@ const opcoesUnidadeAlerta = computed(() => [
         data-testid="cc-incluir-criterio"
         @acionar="novaRegra.criterios.push(criterioVazio())"
       />
-      <ul v-if="problemasRegra.length" role="alert" class="lista" data-testid="cc-problemas-regra">
-        <li v-for="p in problemasRegra" :key="p">{{ p }}</li>
-      </ul>
+      <!-- O papel de alerta fica no invólucro: no próprio <ul> ele apagaria a lista e deixaria os itens órfãos (axe). -->
+      <div v-if="problemasRegra.length" role="alert" data-testid="cc-problemas-regra">
+        <ul class="lista">
+          <li v-for="p in problemasRegra" :key="p">{{ p }}</li>
+        </ul>
+      </div>
       <SanteBotao
         :rotulo="t(k('gravarRegra'))"
         :desabilitado="problemasRegra.length > 0"
