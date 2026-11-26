@@ -465,9 +465,12 @@ function gravarRetorno(r: RemessaDaOs) {
         </div>
       </form>
 
-      <ul v-if="problemas.length > 0" class="vencido" role="alert" data-testid="os-corretiva-problemas">
-        <li v-for="x in problemas" :key="x">{{ x }}</li>
-      </ul>
+      <!-- O role="alert" fica no invólucro: num <ul> ele apaga o papel de lista e os <li> ficam órfãos (axe listitem). -->
+      <div v-if="problemas.length > 0" role="alert" data-testid="os-corretiva-problemas">
+        <ul class="vencido">
+          <li v-for="x in problemas" :key="x">{{ x }}</li>
+        </ul>
+      </div>
       <ErroManutencao v-if="erro" :erro="erro" grupo="corretiva" />
     </template>
   </section>
