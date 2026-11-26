@@ -474,3 +474,25 @@ describe('dispositivos (perfil Painel/Totem)', () => {
     expect(revogado.statusCode).toBeGreaterThanOrEqual(400);
   });
 });
+
+// C1-101 (02-AGE 42): a conversão do pré-cadastro da marcação sem prontuário (painel do dia e chegada do guichê) só
+// aparece a quem cria paciente, e a chegada lista os marcados de hoje pela consulta da agenda. Os perfis sintéticos
+// de agenda e de recepção têm as duas pelas opções do mapa (3255 e 3310), sem nada injetado na sessão (E2E
+// c1-101-sem-prontuario.spec.ts).
+describe('C1-101: permissões da conversão do pré-cadastro nos perfis sintéticos', () => {
+  const permissoes = async (login: string): Promise<string[]> => {
+    const s = await entrar(login);
+    const r = await app.inject({ method: 'GET', url: '/api/sessao', headers: { cookie: s.cookie } });
+    expect(r.statusCode).toBe(200);
+    return (r.json() as { permissoes: string[] }).permissoes;
+  };
+  it('a recepção do guichê e a central da agenda leem a agenda do dia e criam paciente', async () => {
+    for (const login of ['SINT.SENHAS', 'SINT.AGENDA'])
+      expect(await permissoes(login)).toEqual(
+        expect.arrayContaining(['cadastro.paciente.criar', 'agenda.marcacao.ler']),
+      );
+  });
+  it('o guichê só de senhas continua sem criar paciente', async () => {
+    expect(await permissoes('SINT.GUICHE')).not.toContain('cadastro.paciente.criar');
+  });
+});

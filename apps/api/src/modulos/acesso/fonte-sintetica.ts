@@ -361,7 +361,9 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
   },
   /**
    * M17: call center e recepção ambulatorial: todas as opções de Recepção externa › Agenda (3310 a 3406 e
-   * Liberar horários bloqueados 3270) e a busca do cadastro de pacientes (3254, 6027). Grupo próprio (AGENDA).
+   * Liberar horários bloqueados 3270), a busca do cadastro de pacientes (3254, 6027) e o cadastro de pacientes da
+   * recepção externa (3255: cadastro.paciente.criar, para converter o pré-cadastro da marcação sem prontuário no painel
+   * do dia, 02-AGE 42). Grupo próprio (AGENDA).
    */
   'SINT.AGENDA': {
     senha: SENHA_SINTETICA,
@@ -372,7 +374,8 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: {
       grupo: 'AGENDA',
       opcoesGrupo: [
-        3254, 6027, 3310, 3311, 3312, 3313, 3314, 3315, 3316, 3317, 3325, 3328, 3329, 3397, 3405, 3406, 3270,
+        3254, 6027, 3255, 3310, 3311, 3312, 3313, 3314, 3315, 3316, 3317, 3325, 3328, 3329, 3397, 3405, 3406,
+        3270,
       ],
     },
   },
@@ -386,7 +389,8 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: {
       grupo: 'AGENDA',
       opcoesGrupo: [
-        3254, 6027, 3310, 3311, 3312, 3313, 3314, 3315, 3316, 3317, 3325, 3328, 3329, 3397, 3405, 3406, 3270,
+        3254, 6027, 3255, 3310, 3311, 3312, 3313, 3314, 3315, 3316, 3317, 3325, 3328, 3329, 3397, 3405, 3406,
+        3270,
       ],
     },
     escopos: { unidades: ['2'] },
@@ -401,7 +405,8 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: {
       grupo: 'AGENDA',
       opcoesGrupo: [
-        3254, 6027, 3310, 3311, 3312, 3313, 3314, 3315, 3316, 3317, 3325, 3328, 3329, 3397, 3405, 3406, 3270,
+        3254, 6027, 3255, 3310, 3311, 3312, 3313, 3314, 3315, 3316, 3317, 3325, 3328, 3329, 3397, 3405, 3406,
+        3270,
       ],
     },
     escopos: { tiposAgenda: ['5'] },
@@ -410,7 +415,9 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
    * M19: recepção ambulatorial: o gerador de senhas (3308), os atendimentos (5739, 5745, 6026), o encaminhamento e a
    * localização (6034 a 6038), o localizar paciente do prontuário (3900, 5149, 5147, 3907, 5148), a liberação de
    * guichê bloqueado (5572), as estatísticas (3293), os cadastros do painel eletrônico (3724 a 3727) e os painéis
-   * (3970 a 3973). Grupo próprio (SENHAS).
+   * (3970 a 3973). Na chegada, a consulta da agenda (3310: agenda.marcacao.ler) e o cadastro de pacientes da recepção
+   * externa (3255: cadastro.paciente.criar), para listar os marcados de hoje sem prontuário e converter o pré-cadastro
+   * ali mesmo (02-AGE 42). Grupo próprio (SENHAS).
    */
   'SINT.SENHAS': {
     senha: SENHA_SINTETICA,
@@ -422,7 +429,7 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       grupo: 'SENHAS',
       opcoesGrupo: [
         3254, 6027, 3308, 5739, 5745, 6026, 6034, 6035, 6036, 6038, 3900, 5149, 5147, 3907, 5148, 5572, 3293,
-        3724, 3725, 3726, 3727, 3970, 3971, 3972, 3973,
+        3724, 3725, 3726, 3727, 3970, 3971, 3972, 3973, 3255, 3310,
       ],
     },
   },

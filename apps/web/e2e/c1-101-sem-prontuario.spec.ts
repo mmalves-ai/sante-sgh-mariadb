@@ -10,6 +10,13 @@
 // chegada recusada antes e gravada depois) está nos contratos de efeito
 // apps/api/src/modulos/recepcao/chegada-pre-cadastro.int.spec.ts e
 // apps/api/src/modulos/cadastro/paciente-vinculos-proprio.int.spec.ts.
+// Permissões: as dos perfis sintéticos, sem nada injetado na sessão. SINT.AGENDA converte no painel do dia com o
+// cadastro de pacientes da recepção externa (cadastro.paciente.criar); SINT.SENHAS lista os marcados de hoje pela
+// consulta da agenda (agenda.marcacao.ler) e converte com a mesma permissão do cadastro.
+// Limite conhecido do trecho do guichê: a porta em memória não converte o pré-cadastro nem liga a agenda em memória à
+// lista de agendados da recepção em memória, e a marcação é de um dia futuro (a grade de hoje pode já ter passado).
+// Por isso a leitura do dia do guichê e a lista de agendados são simuladas a partir da marcação gravada acima; o
+// fecho "paciente_id preenchido e pré-cadastro convertido" pela leitura real fica no contrato de efeito.
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -53,16 +60,6 @@ interface Pedido {
  * prévia pede a busca e a escolha do paciente traz a divergência do nascimento (ligar só com motivo).
  */
 async function simularConversao(page: Page, pedidos: Pedido[], porCpf: boolean): Promise<void> {
-  // A tela só oferece a conversão a quem pode criar paciente e ler a agenda (a gravação real é simulada abaixo).
-  await page.route('**/api/sessao', async (rota) => {
-    const resposta = await rota.fetch();
-    const corpo = (await resposta.json()) as { permissoes?: string[] };
-    if (Array.isArray(corpo.permissoes))
-      corpo.permissoes = [
-        ...new Set([...corpo.permissoes, 'cadastro.paciente.criar', 'agenda.marcacao.ler']),
-      ];
-    await rota.fulfill({ response: resposta, json: corpo });
-  });
   await page.route('**/api/cadastros/pre-cadastros/**', async (rota) => {
     const req = rota.request();
     const url = new URL(req.url());
