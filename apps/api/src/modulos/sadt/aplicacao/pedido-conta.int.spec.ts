@@ -34,6 +34,7 @@ describe.skipIf(SEM_BANCO)('exame pedido na conta do paciente (MariaDB, cliente 
   const itemDaConta = (exameItem: number) =>
     um(
       `SELECT i.id, i.situacao, i.quantidade, i.valor_unitario, i.valor_total, i.item_faturavel_id,
+              (SELECT o.codigo FROM origem_lancamento o WHERE o.id = i.origem_lancamento_id) AS origem,
               (SELECT COUNT(*) FROM conta_hospitalar_item_memoria x WHERE x.conta_hospitalar_item_id = i.id
                   AND x.operacao = 'inclusao') AS inclusoes,
               (SELECT COUNT(*) FROM conta_hospitalar_item_memoria x WHERE x.conta_hospitalar_item_id = i.id
@@ -238,6 +239,8 @@ describe.skipIf(SEM_BANCO)('exame pedido na conta do paciente (MariaDB, cliente 
       unitario: Number(i?.['valor_unitario']),
       total: Number(i?.['valor_total']),
     }).toEqual({ situacao: 'lancado', quantidade: 2, unitario: 40, total: 80 });
+    // A origem do lançamento vem da semente 12_FAT/99_origem_lancamento_diagnostico (antes entrava sem origem).
+    expect(i?.['origem']).toBe('diagnostico');
     expect(await faturado(itemB)).toBe(1);
     expect(await valorItensDaConta()).toBe(antes + 80);
     expect(
