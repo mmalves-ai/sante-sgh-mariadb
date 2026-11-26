@@ -173,7 +173,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo; F7 vai como fase 7); a contagem acompanha.
 // C3-028 (08-SGO linha 97, F7): o item "Desconto em folha" da operadora própria entrou à mão (mesmo motivo; F7 vai
 // como fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":524,"M":198,"P":57,"N":269};
+// C2-024 (05-SUP linha 14, F3): o item "Etiquetas de identificação" do estoque e almoxarifado entrou à mão (mesmo
+// motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":525,"M":198,"P":57,"N":270};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -392,6 +394,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"suprimentos.estoque-e-almoxarifado.devolucoes","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Devoluções"],"titulo":"Devoluções","selo":"M","fase":3,"rota":"/suprimentos/devolucoes","permissao":"suprimentos.devolucao.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.padronizacao-e-unificacao-de-itens","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Padronização e unificação de itens"],"titulo":"Padronização e unificação de itens","selo":"N","fase":7,"rota":"/suprimentos/governanca-cadastro","permissao":"suprimentos.item.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.saldos-lotes-validades-e-rastreabilidade","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Saldos, lotes, validades e rastreabilidade"],"titulo":"Saldos, lotes, validades e rastreabilidade","selo":"M","fase":3,"rota":"/suprimentos/saldos","permissao":"suprimentos.saldo.ler"},
+  {"id":"suprimentos.estoque-e-almoxarifado.etiquetas-de-identificacao","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Etiquetas de identificação"],"titulo":"Etiquetas de identificação","selo":"N","fase":3,"rota":"/suprimentos/etiquetas","permissao":"suprimentos.nota.registrar"},
   {"id":"suprimentos.estoque-e-almoxarifado.consignados","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Consignados"],"titulo":"Consignados","selo":"P","fase":5,"rota":"/suprimentos/consignados","permissao":"suprimentos.consignado.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.kits-e-carrinhos-de-parada-rastreaveis","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Kits e carrinhos de parada rastreáveis"],"titulo":"Kits e carrinhos de parada rastreáveis","selo":"M","fase":3,"rota":"/suprimentos/kits","permissao":"suprimentos.kit.ler"},
   {"id":"suprimentos.estoque-e-almoxarifado.inventario-balanco-e-estoque-inicial","area":"SUPRIMENTOS","grupo":null,"caminho":["Suprimentos","Estoque e almoxarifado","Inventário, balanço e estoque inicial"],"titulo":"Inventário, balanço e estoque inicial","selo":"M","fase":3,"rota":"/suprimentos/inventarios","permissao":"suprimentos.inventario.ler"},

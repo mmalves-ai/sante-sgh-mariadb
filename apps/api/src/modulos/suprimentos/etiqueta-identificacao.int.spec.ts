@@ -6,6 +6,9 @@
 // etiqueta (pelo Code 128 e pelo DataMatrix), o código de barras do item com a quantidade representada e o padrão de
 // leitura configurado (expressão com grupos), e recusa o código desconhecido. A baixa deixa a etiqueta consumida (não
 // apagada), a leitura seguinte é recusada, e a devolvida volta a ativa. Outro estabelecimento não lê a etiqueta.
+// A ficha não devolve o ZPL: ele só sai pela reimpressão registrada (motivo do catálogo da impressão padrão, via 2 em
+// `registro_reimpressao`, `impressoes` somado, `permite_reimpressao` respeitado). A saída do estoque consome a etiqueta
+// lida na mesma transação, com o movimento em `movimento_consumo_id`; a etiqueta de outro item desfaz a saída inteira.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { randomUUID } from 'node:crypto';
 import { digitoGs1, identificadorValido } from '@sgh/contratos/regras-suprimentos';
@@ -13,6 +16,8 @@ import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import { PortaEtiquetaIdentificacaoPropria } from './etiqueta-identificacao.js';
+import { PortaSuprimentosPropria } from './porta-propria.js';
+import type { ContextoSuprimentos } from './porta.js';
 import {
   CLIENTE,
   codigoDe,
@@ -29,6 +34,7 @@ type L = Record<string, unknown>;
 const base12 = `20${String(Date.now()).slice(-10)}`;
 const GTIN = `${base12}${digitoGs1(base12)}`;
 const PADRAO = `T${Date.now().toString(36).toUpperCase()}`.slice(0, 12);
+const MOTIVO = `TETQ${Date.now().toString(36).toUpperCase()}`.slice(0, 30);
 
 describe.skipIf(SEM_BANCO)('etiqueta de identificação e leitura do código (MariaDB)', () => {
   let nucleo: NucleoProprio;
@@ -36,6 +42,8 @@ describe.skipIf(SEM_BANCO)('etiqueta de identificação e leitura do código (Ma
   let m: MassaSuprimentos;
   let c: ContextoPortaM18;
   let cB: ContextoPortaM18;
+  let motivo = 0;
+  let motivoComplemento = 0;
   const um = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-c2024' }, (l) => l.uma<L>(sql, p));
 
@@ -71,6 +79,18 @@ describe.skipIf(SEM_BANCO)('etiqueta de identificação e leitura do código (Ma
         },
         m.marca,
       );
+      const agora = new Date();
+      await e.executar(
+        `INSERT INTO motivo_reimpressao (codigo, descricao, ativo, exige_complemento, criado_em, criado_por)
+         VALUES (?, 'Etiqueta danificada (teste)', TRUE, FALSE, ?, ?), (?, 'Outro (teste)', TRUE, TRUE, ?, ?)`,
+        [MOTIVO, agora, m.usuario, `${MOTIVO}C`, agora, m.usuario],
+      );
+      const ms = await e.consultar<L>('SELECT id, codigo FROM motivo_reimpressao WHERE codigo IN (?, ?)', [
+        MOTIVO,
+        `${MOTIVO}C`,
+      ]);
+      motivo = Number(ms.find((x) => x['codigo'] === MOTIVO)?.['id']);
+      motivoComplemento = Number(ms.find((x) => x['codigo'] === `${MOTIVO}C`)?.['id']);
     });
   }, 120_000);
 
@@ -79,6 +99,11 @@ describe.skipIf(SEM_BANCO)('etiqueta de identificação e leitura do código (Ma
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-c2024-limpa' }, async (e) => {
       await e.executar('DELETE FROM padrao_leitura_codigo WHERE codigo = ?', [PADRAO]);
       await e.executar('DELETE FROM insumo_codigo_barras WHERE codigo_barras = ?', [GTIN]);
+      await e.executar(
+        `DELETE FROM registro_reimpressao WHERE estabelecimento_id IN (?, ?) AND entidade = 'etiqueta_identificacao'`,
+        [m.estA, m.estB],
+      );
+      await e.executar('DELETE FROM motivo_reimpressao WHERE codigo IN (?, ?)', [MOTIVO, `${MOTIVO}C`]);
     });
     await limparMassa(nucleo, m);
     await nucleo.encerrar?.();
@@ -178,11 +203,61 @@ describe.skipIf(SEM_BANCO)('etiqueta de identificação e leitura do código (Ma
     );
   });
 
-  it('a etiqueta volta com o ZPL para a reimpressão; outro estabelecimento não a vê', async () => {
+  it('a ficha não traz o ZPL; a reimpressão registra motivo e via, soma as impressões e respeita o bloqueio', async () => {
     const f = await porta.ficha(c, etiquetaId);
     expect(f).toMatchObject({ identificador, situacao: 'ativa', impressoes: 1, datamatrix });
-    expect(f?.zpl).toContain('^BXN');
+    expect(f).not.toHaveProperty('zpl');
     expect(await porta.ficha(cB, etiquetaId)).toBeNull();
+    expect((await porta.motivosReimpressao(c)).map((x) => x.codigo)).toEqual(
+      expect.arrayContaining([motivo, motivoComplemento]),
+    );
+    const registros = async () =>
+      Number(
+        (
+          await um(
+            `SELECT COUNT(*) AS n FROM registro_reimpressao WHERE entidade = 'etiqueta_identificacao' AND entidade_id = ?`,
+            [etiquetaId],
+          )
+        )?.['n'],
+      );
+    // O motivo que pede complemento sem ele e o motivo inexistente: recusa, nada gravado.
+    expect(
+      await codigoDe(porta.reimprimir(c, etiquetaId, { motivo: motivoComplemento, complemento: null }, k())),
+    ).toBe('complemento-obrigatorio');
+    expect(
+      await codigoDe(porta.reimprimir(c, etiquetaId, { motivo: 999_999_999, complemento: null }, k())),
+    ).toBe('motivo-inexistente');
+    expect(await registros()).toBe(0);
+    const chave = k();
+    const r = await porta.reimprimir(c, etiquetaId, { motivo, complemento: null }, chave);
+    expect(r).toMatchObject({ id: etiquetaId, via: 2, impressoes: 2 });
+    expect(r.zpl).toContain('^BXN');
+    expect(r.zpl).toContain(`^FD${identificador}^FS`);
+    // A repetição pela mesma chave não registra de novo.
+    expect((await porta.reimprimir(c, etiquetaId, { motivo, complemento: null }, chave)).via).toBe(2);
+    expect(await registros()).toBe(1);
+    expect(
+      await um(
+        `SELECT r.via, r.motivo_reimpressao_id AS motivo, r.usuario_id AS usuario, e.impressoes
+           FROM registro_reimpressao r JOIN etiqueta_identificacao e ON e.id = r.entidade_id
+          WHERE r.entidade = 'etiqueta_identificacao' AND r.entidade_id = ?`,
+        [etiquetaId],
+      ),
+    ).toMatchObject({ via: 2, motivo, usuario: m.usuario, impressoes: 2 });
+    // Outro estabelecimento não reimprime; a etiqueta com a reimpressão bloqueada também não.
+    expect(await codigoDe(porta.reimprimir(cB, etiquetaId, { motivo, complemento: null }, k()))).toBe(
+      'etiqueta-desconhecida',
+    );
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-c2024-bloqueio' }, (e) =>
+      e.executar('UPDATE etiqueta_identificacao SET permite_reimpressao = FALSE WHERE id = ?', [etiquetaId]),
+    );
+    expect(await codigoDe(porta.reimprimir(c, etiquetaId, { motivo, complemento: null }, k()))).toBe(
+      'reimpressao-nao-permitida',
+    );
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-c2024-bloqueio' }, (e) =>
+      e.executar('UPDATE etiqueta_identificacao SET permite_reimpressao = TRUE WHERE id = ?', [etiquetaId]),
+    );
+    expect(await registros()).toBe(1);
   });
 
   it('lê a etiqueta pelo Code 128 e pelo DataMatrix, o código do item e o padrão configurado', async () => {
@@ -225,7 +300,8 @@ describe.skipIf(SEM_BANCO)('etiqueta de identificação e leitura do código (Ma
     expect(r).toMatchObject({ id: etiquetaId, baixadas: 1 });
     expect(
       await um('SELECT situacao, versao, excluido_em FROM etiqueta_identificacao WHERE id = ?', [etiquetaId]),
-    ).toMatchObject({ situacao: 'consumida', versao: 2, excluido_em: null });
+      // versão 3: a reimpressão (via 2) somou as impressões antes da baixa.
+    ).toMatchObject({ situacao: 'consumida', versao: 3, excluido_em: null });
     expect(await codigoDe(porta.ler(c, identificador))).toBe('etiqueta-inativa');
     expect(
       await codigoDe(
@@ -274,5 +350,94 @@ describe.skipIf(SEM_BANCO)('etiqueta de identificação e leitura do código (Ma
         ),
       ),
     ).toBe('etiqueta-desconhecida');
+  });
+
+  it('a saída do estoque consome a etiqueta lida na mesma transação, com o movimento; a de outro item desfaz tudo', async () => {
+    const estoque = new PortaSuprimentosPropria(nucleo);
+    const cs = c as unknown as ContextoSuprimentos;
+    let n = 0;
+    const saida = (etiquetas: string[]) =>
+      estoque.executar(
+        cs,
+        'suprimentos.registrarSaida',
+        {
+          destino: 2,
+          local: m.localA,
+          centroCusto: m.centroCusto,
+          localConsumo: 1,
+          itens: [
+            {
+              item: m.insumo,
+              quantidade: 1,
+              lotes: [{ lote: `${m.marca}L1`, validade: '2027-03-31', quantidade: 1 }],
+              etiquetas,
+            },
+          ],
+        },
+        { ...cs, chaveIdempotencia: `t-etq-saida-${Date.now().toString(36)}-${++n}` },
+      );
+    const saldo = async () =>
+      Number(
+        (
+          await um('SELECT quantidade AS q FROM saldo_estoque WHERE local_estoque_id = ? AND insumo_id = ?', [
+            m.localA,
+            m.insumo,
+          ])
+        )?.['q'],
+      );
+    const [a] = (
+      await porta.emitir(
+        c,
+        {
+          insumo: m.insumo,
+          lote: m.lote,
+          local: m.localA,
+          quantidade: 1,
+          etiquetas: 1,
+          tipo: 'unidade',
+          notaEntradaItem: null,
+        },
+        k(),
+      )
+    ).etiquetas;
+    // A etiqueta de outro item (o OPME): a saída inteira é desfeita e a etiqueta lida continua ativa.
+    const [deOutro] = (
+      await porta.emitir(
+        c,
+        {
+          insumo: m.insumoOpme,
+          lote: null,
+          local: null,
+          quantidade: 1,
+          etiquetas: 1,
+          tipo: 'unidade',
+          notaEntradaItem: null,
+        },
+        k(),
+      )
+    ).etiquetas;
+    expect(deOutro).toBeDefined();
+    const antes = await saldo();
+    {
+      expect(await codigoDe(saida([a!.identificador, deOutro.identificador]))).toBe('etiqueta-de-outro-item');
+      expect(await saldo()).toBe(antes);
+      expect(await um('SELECT situacao FROM etiqueta_identificacao WHERE id = ?', [a!.id])).toMatchObject({
+        situacao: 'ativa',
+      });
+    }
+    expect(await codigoDe(saida(['EX0000000000']))).toBe('etiqueta-desconhecida');
+    expect(await saldo()).toBe(antes);
+    const r = await saida([a!.identificador.toLowerCase()]);
+    expect(r.resultado['etiquetas']).toBe(1);
+    expect(await saldo()).toBe(antes - 1);
+    const e = await um(
+      `SELECT e.situacao, e.movimento_consumo_id AS mov, mv.insumo_id AS ins, e.excluido_em
+         FROM etiqueta_identificacao e JOIN movimento_estoque mv ON mv.id = e.movimento_consumo_id WHERE e.id = ?`,
+      [a!.id],
+    );
+    expect(e).toMatchObject({ situacao: 'consumida', ins: m.insumo, excluido_em: null });
+    // A mesma etiqueta não sai de novo.
+    expect(await codigoDe(saida([a!.identificador]))).toBe('etiqueta-inativa');
+    expect(await saldo()).toBe(antes - 1);
   });
 });

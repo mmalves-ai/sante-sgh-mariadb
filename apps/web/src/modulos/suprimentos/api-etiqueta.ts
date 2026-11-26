@@ -80,3 +80,27 @@ export const baixarEtiquetas = (e: {
   situacao: 'consumida' | 'devolvida' | 'descartada' | 'cancelada' | 'reativar';
   movimento?: number | null;
 }) => enviar<{ id: number; baixadas: number }>(`${S}/etiquetas/baixa`, 'etiquetas-baixa', e);
+
+export interface MotivoReimpressao {
+  readonly codigo: number;
+  readonly descricao: string;
+  readonly exigeComplemento: boolean;
+}
+export interface ResultadoReimpressao {
+  readonly id: number;
+  readonly via: number;
+  readonly impressoes: number;
+  readonly registro: number;
+  readonly zpl: string;
+}
+
+/** Os motivos ativos da reimpressão (o catálogo da impressão padrão). */
+export async function motivosReimpressao(): Promise<MotivoReimpressao[]> {
+  const r = await fetch(`${S}/etiquetas/motivos-reimpressao`, { headers: { accept: 'application/json' } });
+  if (!r.ok) throw await erroDaResposta(r);
+  return (await r.json()) as MotivoReimpressao[];
+}
+
+/** A reimpressão registrada com o motivo: volta a via seguinte e o arquivo da impressora. */
+export const reimprimirEtiqueta = (id: number, e: { motivo: number; complemento: string | null }) =>
+  enviar<ResultadoReimpressao>(`${S}/etiquetas/${id}/reimpressao`, 'etiqueta-reimpressao', e);

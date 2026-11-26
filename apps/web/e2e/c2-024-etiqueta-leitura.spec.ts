@@ -8,7 +8,7 @@
 // formato do servidor. A regra está em packages/dominio-suprimentos/src/identificacao-estoque-emissao.spec.ts e o que
 // fica no banco em apps/api/src/modulos/suprimentos/etiqueta-identificacao.int.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
-import { semViolacaoAxe } from './ajuda.js';
+import { itemDoMenu, semViolacaoAxe } from './ajuda.js';
 import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
@@ -116,7 +116,22 @@ test.describe('@C2-024 etiqueta de identificação e leitura do código', () => 
       );
     });
 
-    await page.goto('/suprimentos/etiquetas');
+    let reimpressao: Record<string, unknown> | null = null;
+    await page.route(/\/api\/suprimentos\/etiquetas\/motivos-reimpressao$/, (rota) =>
+      json(rota, [
+        { codigo: 1, descricao: 'Etiqueta danificada', exigeComplemento: false },
+        { codigo: 2, descricao: 'Outro motivo', exigeComplemento: true },
+      ]),
+    );
+    await page.route(/\/api\/suprimentos\/etiquetas\/1\/reimpressao$/, (rota) => {
+      reimpressao = rota.request().postDataJSON() as Record<string, unknown>;
+      return json(rota, { id: 1, via: 2, impressoes: 2, registro: 77, zpl: '^XA^FDE0000016 VIA 2^FS^XZ' });
+    });
+
+    // A tela pelo menu: Suprimentos > Estoque e almoxarifado > Etiquetas de identificação.
+    await page.goto('/inicio');
+    await (await itemDoMenu(page, 'Etiquetas de identificação')).click();
+    await expect(page).toHaveURL(/\/suprimentos\/etiquetas/);
     await expect(page.getByTestId('tela-suprimentos-etiquetas')).toBeVisible();
     await page.getByTestId('etq-leitura-codigo').fill('07891234567895');
     await page.getByTestId('etq-leitura-codigo').press('Enter');
@@ -134,6 +149,20 @@ test.describe('@C2-024 etiqueta de identificação e leitura do código', () => 
     await expect(page.getByTestId('etq-zpl')).toContainText('^XA');
     expect(corpo).toMatchObject({ insumo: 9101, lote: 71, etiquetas: 2, tipo: 'unidade' });
 
+    // Reimpressão só com motivo; o motivo que exige complemento trava até 5 letras.
+    await page.getByTestId('etq-reimprimir-E0000016').click();
+    await expect(page.getByTestId('etq-reimpressao')).toBeVisible();
+    await expect(page.getByTestId('etq-confirmar-reimpressao')).toBeDisabled();
+    await escolher(page.getByTestId('etq-motivo'), { rotulo: /Outro motivo/ });
+    await expect(page.getByTestId('etq-complemento-curto')).toBeVisible();
+    await expect(page.getByTestId('etq-confirmar-reimpressao')).toBeDisabled();
+    await page.getByTestId('etq-complemento').fill('Rasgou no transporte');
+    await expect(page.getByTestId('etq-confirmar-reimpressao')).toBeEnabled();
+    await page.getByTestId('etq-confirmar-reimpressao').click();
+    await expect(page.getByTestId('etq-reimpressa')).toContainText('2');
+    await expect(page.getByTestId('etq-zpl-reimpressao')).toContainText('VIA 2');
+    expect(reimpressao).toEqual({ motivo: 2, complemento: 'Rasgou no transporte' });
+
     // A etiqueta consumida é recusada na leitura; o lote vencido mostra o alerta.
     await page.getByTestId('etq-leitura-codigo').fill('E0000016');
     await page.getByTestId('etq-leitura-codigo').press('Enter');
@@ -142,5 +171,50 @@ test.describe('@C2-024 etiqueta de identificação e leitura do código', () => 
     await page.getByTestId('etq-leitura-codigo').press('Enter');
     await expect(page.getByTestId('etq-leitura-alerta-vencido')).toBeVisible();
     await semViolacaoAxe(page, '/suprimentos/etiquetas');
+  });
+
+  test('dispensação: a leitura fica presa ao paciente e a etiqueta vai no corpo da dispensação', async ({
+    page,
+  }) => {
+    await entrar(page, 'SINT.FARMACEUTICO');
+    const filaResp = page.waitForResponse((r) => /\/api\/farmacia\/fila/.test(r.url()) && r.ok());
+    await page.goto('/farmacia/dispensacao');
+    await expect(page.getByTestId('tela-farmacia-dispensacao')).toBeVisible();
+    type Dose = { item: number; horario: number; bloqueio?: unknown };
+    const fila = (await (await filaResp).json()) as {
+      pacientes: { atendimento: number; horarios: { doses: Dose[] }[] }[];
+    };
+    const doses = (a: number) =>
+      (fila.pacientes.find((p) => p.atendimento === a)?.horarios ?? []).flatMap((h) => h.doses);
+    const d1 = doses(9001).find((d) => !d.bloqueio)!;
+    const itens1 = new Set(doses(9001).map((d) => d.item));
+    const deOutro = doses(9002).find((d) => !d.bloqueio && !itens1.has(d.item))!;
+    await page.route(/\/api\/suprimentos\/leitura\?codigo=/, (rota) => {
+      const codigo = new URL(rota.request().url()).searchParams.get('codigo') ?? '';
+      const item = codigo === 'OUTRO' ? deOutro.item : d1.item;
+      return json(
+        rota,
+        leitura({
+          item: { ...ITEM, codigo: item, rastreavel: false },
+          identificador: 'E0000031',
+          origem: 'etiqueta',
+        }),
+      );
+    });
+
+    // O item da dose de outro paciente, lido no campo do 9001, é recusado com o aviso.
+    await page.getByTestId('disp-leitura-9001-codigo').fill('OUTRO');
+    await page.getByTestId('disp-leitura-9001-codigo').press('Enter');
+    await expect(page.getByTestId('disp-leitura-aviso-9001')).toContainText('outro paciente');
+    // A etiqueta da dose certa marca a dose e aparece ao lado dela.
+    await page.getByTestId('disp-leitura-9001-codigo').fill('E0000031');
+    await page.getByTestId('disp-leitura-9001-codigo').press('Enter');
+    await expect(page.getByTestId(`disp-etiqueta-${d1.horario}`)).toContainText('E0000031');
+    const pedido = page.waitForRequest(
+      (r) => /\/api\/farmacia\/dispensar$/.test(r.url()) && r.method() === 'POST',
+    );
+    await page.getByTestId('disp-dispensar-9001').click();
+    const corpo = (await pedido).postDataJSON() as { doses: { horario: number; etiquetas?: string[] }[] };
+    expect(corpo.doses.find((d) => d.horario === d1.horario)?.etiquetas).toEqual(['E0000031']);
   });
 });

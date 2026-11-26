@@ -11,6 +11,10 @@ import { useI18n } from 'vue-i18n';
 import {
   emitirEtiquetas,
   type LeituraCodigo as Leitura,
+  type MotivoReimpressao,
+  motivosReimpressao,
+  reimprimirEtiqueta,
+  type ResultadoReimpressao,
   type ResultadoEmissao,
   type TipoEtiqueta,
 } from '../api-etiqueta.js';
@@ -106,6 +110,47 @@ async function copiar(): Promise<void> {
   await globalThis.navigator?.clipboard?.writeText(resultado.value.zpl).catch(() => undefined);
   copiado.value = true;
 }
+
+// Reimpressão de uma etiqueta emitida: só pelo registro com motivo (e o complemento quando o motivo exige); a via
+// seguinte e o arquivo da impressora voltam do servidor.
+const motivos = ref<MotivoReimpressao[]>([]);
+const reimprimindo = ref<{ id: number; identificador: string } | null>(null);
+const motivo = ref('');
+const complemento = ref('');
+const reimpressa = ref<ResultadoReimpressao | null>(null);
+const opcoesMotivos = computed(() => [
+  { valor: '', rotulo: M.escolha },
+  ...motivos.value.map((m) => ({ valor: String(m.codigo), rotulo: m.descricao })),
+]);
+const exigeComplemento = computed(
+  () => motivos.value.find((m) => String(m.codigo) === motivo.value)?.exigeComplemento ?? false,
+);
+const complementoCurto = computed(
+  () => exigeComplemento.value && complemento.value.replace(/[^\p{L}]/gu, '').length < 5,
+);
+async function abrirReimpressao(e: { id: number; identificador: string }): Promise<void> {
+  erro.value = null;
+  reimpressa.value = null;
+  motivo.value = '';
+  complemento.value = '';
+  reimprimindo.value = e;
+  if (!motivos.value.length) motivos.value = await motivosReimpressao().catch((x) => ((erro.value = x), []));
+}
+async function reimprimir(): Promise<void> {
+  if (!reimprimindo.value || !motivo.value || complementoCurto.value) return;
+  erro.value = null;
+  ocupado.value = true;
+  try {
+    reimpressa.value = await reimprimirEtiqueta(reimprimindo.value.id, {
+      motivo: Number(motivo.value),
+      complemento: complemento.value.trim() || null,
+    });
+  } catch (x) {
+    erro.value = x;
+  } finally {
+    ocupado.value = false;
+  }
+}
 </script>
 
 <template>
@@ -154,12 +199,21 @@ async function copiar(): Promise<void> {
           <tr>
             <th scope="col">{{ M.identificador }}</th>
             <th scope="col">{{ M.conteudo }}</th>
+            <th scope="col">{{ M.reimprimir }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="e in resultado.etiquetas" :key="e.id" :data-testid="`etq-${e.identificador}`">
             <td>{{ e.identificador }}</td>
             <td>{{ e.legivel }}</td>
+            <td>
+              <SanteBotao
+                variante="secundario"
+                :rotulo="M.reimprimir"
+                :data-testid="`etq-reimprimir-${e.identificador}`"
+                @acionar="abrirReimpressao(e)"
+              />
+            </td>
           </tr>
         </tbody>
       </table>
@@ -169,6 +223,31 @@ async function copiar(): Promise<void> {
       </div>
       <p v-if="copiado" role="status">{{ M.copiado }}</p>
       <pre class="zpl" tabindex="0" :aria-label="M.zpl" data-testid="etq-zpl">{{ resultado.zpl }}</pre>
+      <form v-if="reimprimindo" class="painel" data-testid="etq-reimpressao" @submit.prevent="reimprimir">
+        <h2>{{ M.reimpressaoTitulo }}: {{ reimprimindo.identificador }}</h2>
+        <SanteSelecao v-model="motivo" :rotulo="M.motivo" :opcoes="opcoesMotivos" data-testid="etq-motivo" />
+        <span v-if="exigeComplemento" class="campo">
+          <label for="etq-complemento">{{ M.complemento }}</label>
+          <input id="etq-complemento" v-model="complemento" maxlength="500" data-testid="etq-complemento" />
+        </span>
+        <p v-if="complementoCurto" role="alert" data-testid="etq-complemento-curto">
+          {{ M.complementoCurto }}
+        </p>
+        <div class="acoes">
+          <SanteBotao
+            tipo="submit"
+            :rotulo="M.confirmarReimpressao"
+            :desabilitado="ocupado || !motivo || complementoCurto"
+            data-testid="etq-confirmar-reimpressao"
+          />
+        </div>
+        <template v-if="reimpressa">
+          <p role="status" data-testid="etq-reimpressa">{{ M.reimpressa }} {{ reimpressa.via }}</p>
+          <pre class="zpl" tabindex="0" :aria-label="M.zpl" data-testid="etq-zpl-reimpressao">{{
+            reimpressa.zpl
+          }}</pre>
+        </template>
+      </form>
     </template>
   </section>
 </template>

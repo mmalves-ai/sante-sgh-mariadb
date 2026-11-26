@@ -54,6 +54,8 @@ export const esquemaItemSaida = z
     prescritorControlado: id.optional(),
     /** Na saída que atende requisição: a sequência do item pedido. */
     seq: smallint.optional(),
+    /** As etiquetas de identificação lidas deste item: consumidas na mesma transação da saída. */
+    etiquetas: z.array(z.string().trim().min(3).max(100)).max(200).optional(),
   })
   .strict();
 

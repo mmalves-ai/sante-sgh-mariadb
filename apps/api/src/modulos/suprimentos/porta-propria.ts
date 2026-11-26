@@ -143,6 +143,7 @@ import {
   portaisDoPedido,
   TABELAS_MAPA_COTACAO,
 } from './mapa-cotacao.js';
+import { consumirEtiquetas } from './etiqueta-identificacao.js';
 import { TABELAS_VINCULO_PEDIDO_CONTRATO, vincularPedidoNaCompra } from './contrato-porta-propria.js';
 import {
   controlarOrcamentoDoDocumento,
@@ -2173,6 +2174,7 @@ export async function registrarSaida(
     observacao: e.observacao ?? null,
   });
   let total = 0;
+  let etiquetasConsumidas = 0;
   let ultimo: SaidaFeita | null = null;
   const contaDoEstoque = lancadorContaEstoque(tx, est, usuarioDe(tx));
   for (const [k, it] of e.itens.entries()) {
@@ -2228,6 +2230,13 @@ export async function registrarSaida(
         dataBase: hoje,
       });
     await fecharItem(tx, item, mov, it.quantidade);
+    // C2-024 (05-SUP linha 14): as etiquetas lidas do item saem consumidas com o movimento, na mesma transação.
+    if (it.etiquetas?.length)
+      etiquetasConsumidas += await consumirEtiquetas(tx, est, {
+        insumo: it.item,
+        identificadores: it.etiquetas,
+        movimento: mov.id,
+      });
     total += mov.valor;
     ultimo = { mov, item, lotes, insumo: it.item, quantidade: it.quantidade };
     if (ri) {
@@ -2254,6 +2263,7 @@ export async function registrarSaida(
     });
   }
   const extra: Ids = {};
+  if (etiquetasConsumidas) extra['etiquetas'] = etiquetasConsumidas;
   // O OPME e a manipulação saem com um item só (o contrato confere): o registro deles aponta o movimento da saída.
   if (e.opme && ultimo) extra['consumo'] = await gravarConsumoOpme(tx, est, e, ultimo);
   if (e.manipulacao && ultimo)
@@ -3694,6 +3704,8 @@ const OPERACOES: Readonly<Record<string, Manipulador>> = {
 
 /** As tabelas que as operações do estoque gravam. */
 export const TABELAS_OPERACOES_SUPRIMENTOS = [
+  // C2-024: a saída consome as etiquetas lidas (etiqueta-identificacao.ts, consumirEtiquetas).
+  'etiqueta_identificacao',
   'documento_estoque',
   'documento_estoque_item',
   'movimento_estoque',

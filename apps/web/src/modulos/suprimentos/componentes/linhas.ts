@@ -12,7 +12,7 @@ export interface LinhaItem {
   disponiveis: LoteSaldo[];
   lotes: Record<number, string>;
   prescritor: string;
-  /** Os identificadores das etiquetas lidas (baixadas como consumidas depois da saída gravada). */
+  /** Os identificadores das etiquetas lidas (consumidos na mesma transação da saída, com o movimento). */
   etiquetas?: string[];
 }
 

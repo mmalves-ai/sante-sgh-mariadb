@@ -8,7 +8,6 @@ import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { baixarEtiquetas } from '../api-etiqueta.js';
 import { novaChave, registrarSaida } from '../api-suprimentos.js';
 import AvisoSuprimentos from '../componentes/AvisoSuprimentos.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
@@ -73,18 +72,18 @@ async function gravar(): Promise<void> {
         ...(d === 3 && numero(medico.value) > 0 ? { medico: numero(medico.value) } : {}),
         ...(d === 5 ? { terceiro: numero(terceiro.value) } : {}),
         ...(observacao.value.trim() ? { observacao: observacao.value.trim() } : {}),
-        itens: itensDaEntrada(linhas.value),
+        // As etiquetas lidas de cada item saem consumidas na mesma transação da saída, ligadas ao movimento.
+        itens: itensDaEntrada(linhas.value).map((it, k) => {
+          const etiquetas = linhas.value[k]?.etiquetas ?? [];
+          return etiquetas.length ? { ...it, etiquetas } : it;
+        }),
       },
       novaChave('saida'),
     );
     mensagem.value = r.mensagem;
     avisos.value = r.avisos;
-    // As etiquetas lidas saem como consumidas (a leitura seguinte da mesma etiqueta é recusada).
-    const lidas = linhas.value.flatMap((l) => l.etiquetas ?? []);
-    if (lidas.length) {
-      const b = await baixarEtiquetas({ identificadores: lidas, situacao: 'consumida' });
-      avisos.value = [...avisos.value, `${M.baixadas} ${b.baixadas}`];
-    }
+    const baixadas = Number(r.ids['etiquetas'] ?? 0);
+    if (baixadas) avisos.value = [...avisos.value, `${M.baixadas} ${baixadas}`];
     linhas.value = [];
     await cliente.invalidateQueries({ queryKey: ['suprimentos'] });
   } catch (x) {
