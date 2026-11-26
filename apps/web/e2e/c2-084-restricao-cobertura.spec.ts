@@ -148,7 +148,7 @@ test.describe('restrição de cobertura e compatibilidade @C2-084', () => {
     const externas = vigiarExternas(page);
     const est: Estado = { restricoes: [], excecoes: [], gravados: [] };
     await simular(page, est);
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.CONTAS');
     await page.goto('/faturamento/cobertura');
     await expect(page.getByTestId('cobertura')).toBeVisible();
 
