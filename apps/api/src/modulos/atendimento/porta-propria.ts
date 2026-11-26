@@ -1753,6 +1753,10 @@ const OPERACAO_ABRIR = definirOperacao({
       planoId: plano ?? null,
       categoriaId: Number(cat['id']),
       estabelecimentoId: est,
+      // 02-REC linha 37: a regra (e a senha que ela exige) pode valer só na especialidade, no serviço ou no setor.
+      especialidadeId: esp,
+      servicoId: num('servico'),
+      setorId: Number(unidade['id']),
       pacienteId: Number(pac['id']),
       data: hoje,
       carteira: texto(e['matricula']) ?? null,
