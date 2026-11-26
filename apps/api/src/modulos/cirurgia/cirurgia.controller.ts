@@ -402,7 +402,11 @@ export class CirurgiaController {
     const e = await this.servico.exigirEstado(s.porta, idDaRota(id));
     await this.servico.exigirSalaPermitida(s.porta, s.login, e.sala);
     const p = corpo(esquemaCancelarCirurgia, { ...(b as object), agendamento: e.id });
-    if (e.agendamento !== null || (e.estado !== 'solicitado' && e.estado !== 'suspenso'))
+    // A 'nao-informada' (migrada sem situação na origem) também não ocupa a sala: cancela por aqui (V-D1).
+    if (
+      e.agendamento !== null ||
+      (e.estado !== 'solicitado' && e.estado !== 'suspenso' && e.estado !== 'nao-informada')
+    )
       throw new ErroProblema(
         'recusa-de-negocio',
         409,

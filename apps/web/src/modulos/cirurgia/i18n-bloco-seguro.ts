@@ -125,6 +125,7 @@ export const mensagensBlocoSeguro = {
       realizado: 'Realizado',
       suspenso: 'Suspenso',
       cancelado: 'Cancelado',
+      'nao-informada': 'Não informada na origem',
     } as Record<string, string>,
   },
   rastreio: {

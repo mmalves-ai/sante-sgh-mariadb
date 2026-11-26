@@ -86,7 +86,8 @@ def linhas(r, ins):
     for g in [(1, "Grave", "S", 2), (2, "  Moderada  ", "S", 1), (3, "Leve", "N", 1), (4, "Contraindicada", "X", 99),
               (5, "Sem nível", "S", 1), (6, "   ", "S", 1), (7, "GRAVE", "S", 2)]:
         ins("TBGRAUGRAVINT", list(g))
-    # grade: 3 sem hora (1048), 5 tipo E sem par (1048), 6 hora inválida (1048)
+    # grade: 3 sem hora (1048), 5 tipo E vira ambulatório (P3a, recusas-fase2: E externo -> ambulatório; grava),
+    # 6 hora inválida (1048)
     for h in [(1, "I", "0700", 1, "S", "N"), (2, "U", "0000", 0, "N", "S"), (3, "A", None, 1, None, None),
               (4, "A", "0600", None, "N", "N"), (5, "E", "0700", 1, "N", "N"), (6, "I", "2575", 1, "N", "N")]:
         ins("TBHORMED", list(h))
@@ -180,12 +181,13 @@ def linhas(r, ins):
     return {
         "TBGRAUGRAVINT": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 2, "pai_inexistente": 1,
                                                         "restricao_destino_1048": 2, "restricao_destino_1062": 1}},
-        "TBHORMED": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "hora_invalida": 1,
-                                                   "restricao_destino_1048": 3}},
+        "TBHORMED": {"gravados": 4, "pendencias": {"hora_invalida": 1, "restricao_destino_1048": 2}},
         "TBHORMED_TBUNIDAD": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 8,
                                                             "restricao_destino_1048": 2}},
         "TBNUMDOSE": {"gravados": 9, "pendencias": {"adotado_existente": 5, "restricao_destino_4025": 1}},
-        "TBHORARIODOSE": {"gravados": 14, "pendencias": {"restricao_destino_4025": 2, "hora_invalida": 1,
+        # R9 (recusas-fase2): 7|1, da grade recusada 3, grava com a grade NULL e pai_pendente (religa no
+        # reprocessamento)
+        "TBHORARIODOSE": {"gravados": 15, "pendencias": {"restricao_destino_4025": 2, "hora_invalida": 1,
                                                          "pai_pendente": 1, "pai_inexistente": 2,
                                                          "restricao_destino_1048": 2}},
         "TBTABELA_CAMPO": {"gravados": 4, "pendencias": {"adotado_existente": 7}},

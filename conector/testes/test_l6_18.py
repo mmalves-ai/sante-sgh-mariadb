@@ -227,6 +227,7 @@ class Regras(unittest.TestCase):
 
 
 DESDOBRADAS = {"CHPARAM", "CVPARAM"}
+R9_GRAVADAS = {"PRHORPAD": 1}
 
 
 class Sintetica(unittest.TestCase):
@@ -239,7 +240,8 @@ class Sintetica(unittest.TestCase):
             if t in DESDOBRADAS:
                 continue
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
-            self.assertEqual(cont[t], e["gravados"] + recusas, t)
+            # R9 (recusas-fase2): linha gravada com a coluna anulável NULL e pai_pendente (PRHORPAD 7, dieta recusada)
+            self.assertEqual(cont[t], e["gravados"] + recusas - R9_GRAVADAS.get(t, 0), t)
         # desdobradas (rodada 6): "gravados" conta itens (uma linha do destino por coluna com valor), de uma linha só
         self.assertEqual({t: cont[t] for t in DESDOBRADAS}, {"CHPARAM": 1, "CVPARAM": 1})
         self.assertEqual({t: esp[t]["gravados"] for t in DESDOBRADAS}, {"CHPARAM": 2, "CVPARAM": 10})

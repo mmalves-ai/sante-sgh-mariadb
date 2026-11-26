@@ -415,8 +415,10 @@ def linhas(r, ins):
               (2025, 4, 11, datetime.date(2025, 4, 2), 1, 102, D("1.000"), D("5.00")),
               (2025, 4, 12, datetime.date(2025, 4, 3), 1, 103, D("2.000"), D("4.00"))]:
         ins("GEKONCDC", list(x))
-    # "gravados" conta as linhas da origem gravadas (4, em 3 grupos: test_l7_05 confere as somas)
-    esp["GEKONCDC"] = {"gravados": 4, "pendencias": {"pai_inexistente": 5, "restricao_destino_1048": 1}}
+    # "gravados" conta as linhas da origem gravadas (4, em 3 grupos: test_l7_05 confere as somas); o local pelo
+    # documento de saída (concorrente) só é tentado na 5, sem local pelo centro: um pai_inexistente (V3b,
+    # recusas-fase2: a concorrente com a coluna já preenchida não é avaliada)
+    esp["GEKONCDC"] = {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}
     esp["GECTRVMM"] = {"gravados": 0, "pendencias": {"pai_inexistente": 6, "restricao_destino_1048": 3}}
 
     # --- rodada 5 (ADR 0006): terceiros só com nome e nascimento e histórico de compra na trilha (retrato completo);

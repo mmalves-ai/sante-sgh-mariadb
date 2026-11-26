@@ -368,7 +368,8 @@ ESPERADO = {
     # de custo (1048). A gravação com o título carregado espera o pedido 20 da L8-11 e a ordem (pedido B desta fatia)
     "MFLANGSI": {"gravados": 0, "pendencias": {"pai_inexistente": 4, "restricao_destino_1048": 2,
                                                "restricao_destino_4025": 2}},
-    "MFCABECLANC": {"gravados": 2, "pendencias": {"sem_filho_com_valor": 1, "vigencia_sem_fonte": 2}},
+    # V3b (recusas-fase2): a data da carga (concorrente) só vale e só avisa quando nenhum filho deu a data
+    "MFCABECLANC": {"gravados": 2, "pendencias": {"sem_filho_com_valor": 1, "vigencia_sem_fonte": 1}},
     "GPORIGEM": {"gravados": 4, "pendencias": {"valor_presumido": 5, "restricao_destino_1048": 1,
                                                "valor_fora_do_dominio": 1}},
     "GPTP_RESPONSAVEL": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1}},

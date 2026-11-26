@@ -245,7 +245,9 @@ def linhas(r, ins):
     return {
         "PRTPREFEIC": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1}},
         "RISETOR": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 5}},
-        "PRVIAADMIN": {"gravados": 4, "pendencias": {"restricao_destino_1048": 2, "valor_fora_do_dominio": 1}},
+        # P2b (recusas-fase2): a 6 tenta o tipo e o próprio nome (concorrente `senao`), nenhum casa: uma
+        # valor_fora_do_dominio por declaração
+        "PRVIAADMIN": {"gravados": 4, "pendencias": {"restricao_destino_1048": 2, "valor_fora_do_dominio": 2}},
         "TBDIETAS": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "pai_inexistente": 1,
                                                    "valor_fora_do_dominio": 2}},
         "PRCARACT_TBDIETAS": {"gravados": 6, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
@@ -253,10 +255,11 @@ def linhas(r, ins):
         "CHTPLIMPEZA_GEITENS": {"gravados": 3, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1,
                                                               "restricao_destino_1048": 1}},
         # hora inválida conta nas duas colunas que leem HORARIO (início e corte); a linha recusada por pai_pendente
-        # não chega ao literal presumido
-        "PRHORPAD": {"gravados": 4, "pendencias": {"hora_invalida": 2, "restricao_destino_1048": 2, "pai_pendente": 2,
+        # (refeição, NOT NULL) não chega ao literal presumido; R9 (recusas-fase2): a 7, de dieta recusada, grava
+        # com a dieta NULL e pai_pendente
+        "PRHORPAD": {"gravados": 5, "pendencias": {"hora_invalida": 2, "restricao_destino_1048": 2, "pai_pendente": 2,
                                                    "pai_inexistente": 1, "valor_fora_do_dominio": 1,
-                                                   "valor_presumido": 6}},
+                                                   "valor_presumido": 7}},
         "TBLEITO_CHPROFISLIMP": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2,
                                                                "vigencia_sem_fonte": 5}},
         "CHSOLICITLIMP": {"gravados": 5, "pendencias": {"pai_inexistente": 3, "pai_ambiguo": 1,

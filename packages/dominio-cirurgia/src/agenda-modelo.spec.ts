@@ -7,6 +7,7 @@ import {
   type SalaDaAgenda,
   SITUACOES_AGENDAMENTO_MODELO,
   situacaoDoEstado,
+  situacaoOcupaSala,
 } from './agenda-modelo.js';
 import { ESTADOS_AGENDAMENTO } from './estados.js';
 
@@ -44,6 +45,7 @@ describe('situação do modelo ↔ estado da tela', () => {
     expect(estadoDaSituacao('agendado')).toBe('confirmado');
     expect(estadoDaSituacao('em_andamento')).toBe('em-sala');
     expect(estadoDaSituacao('no_bloco')).toBe('no-bloco');
+    expect(estadoDaSituacao('nao_informada')).toBe('nao-informada');
     expect(estadoDaSituacao('inexistente')).toBeNull();
   });
   it('cada estado da tela vai a uma situação que volta ao mesmo estado (inclusive "no bloco")', () => {
@@ -56,6 +58,12 @@ describe('situação do modelo ↔ estado da tela', () => {
     expect(conferirTransicao('realizado', 'solicitado', null)).toBe('transicao-invalida');
     expect(conferirTransicao('cancelado', 'cancelado', null)).toBeNull();
     expect(conferirTransicao('xyz', 'cancelado', null)).toBe('situacao-desconhecida');
+    // V-D1: a migrada sem situação só vai a cancelada ou volta a pedido de sala; nunca ao bloco nem à sala.
+    expect(conferirTransicao('nao_informada', 'cancelado', 'nao-informada')).toBeNull();
+    expect(conferirTransicao('nao_informada', 'solicitado', null)).toBeNull();
+    expect(conferirTransicao('nao_informada', 'no-bloco', null)).toBe('transicao-invalida');
+    expect(conferirTransicao('nao_informada', 'confirmado', null)).toBe('transicao-invalida');
+    expect(situacaoOcupaSala('nao_informada')).toBe(false);
   });
 });
 

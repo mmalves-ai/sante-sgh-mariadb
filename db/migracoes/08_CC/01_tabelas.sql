@@ -59,7 +59,7 @@ CREATE TABLE agendamento_cirurgico (
   CONSTRAINT ck_agendamento_cirurgico_regime CHECK (regime_paciente IN ('internado','externo')),
   CONSTRAINT ck_agendamento_cirurgico_cobertura CHECK (tipo_cobertura IN ('convenio','particular','sus')),
   CONSTRAINT ck_agendamento_cirurgico_fonte CHECK (tipo_cobertura <> 'convenio' OR fonte_pagadora_id IS NOT NULL),
-  CONSTRAINT ck_agendamento_cirurgico_situacao CHECK (situacao IN ('solicitado','em_analise','reprovado','agendado','confirmado','em_andamento','realizado','suspenso','cancelado')),
+  CONSTRAINT ck_agendamento_cirurgico_situacao CHECK (situacao IN ('solicitado','em_analise','reprovado','agendado','confirmado','no_bloco','em_andamento','realizado','suspenso','cancelado','nao_informada')),
   CONSTRAINT ck_agendamento_cirurgico_sala CHECK (situacao IN ('solicitado','em_analise','reprovado','cancelado') OR (sala_cirurgica_id IS NOT NULL AND inicio_previsto_em IS NOT NULL AND duracao_prevista_minutos IS NOT NULL)),
   CONSTRAINT ck_agendamento_cirurgico_duracao CHECK (duracao_prevista_minutos IS NULL OR duracao_prevista_minutos BETWEEN 5 AND 1440),
   CONSTRAINT ck_agendamento_cirurgico_cancelamento CHECK (situacao NOT IN ('cancelado','suspenso') OR cancelado_em IS NOT NULL),

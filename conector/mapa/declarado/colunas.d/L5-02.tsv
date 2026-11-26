@@ -96,6 +96,6 @@ TBMOVTERMSTATUS	#codigo_derivado:ID:30:legado_situacao_	situacao_termo_consentim
 TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.descricao	texto			r5 ADR 0006/0007: rótulo do cliente
 TBMOVTERMSTATUS	ATIVO	situacao_termo_consentimento.ativo	booleano_sn			r5 ADR 0006/0007: 
 TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	texto_nome	valores		r5 ADR 0006/0007: etapa pelo rótulo (ADR 0007, 18); sem par: a seguinte (presumida)
-TBMOVTERMSTATUS	=~pendente	situacao_termo_consentimento.etapa				r5 ADR 0006/0007: rótulo sem par: pendente presumida (valor_presumido, visível)
+TBMOVTERMSTATUS	=~cancelado	situacao_termo_consentimento.etapa				recusas-fase2 V4 (pedido 67, como a PRTPTCLE da L6-08): rótulo sem par nunca vira pendente, que cobraria assinatura de termo antigo; sem valor neutro no CHECK, entra cancelado presumido (terminal e não acionável; autoriza_procedimento fica no padrão falso), com valor_presumido
 TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	texto_nome	valores		r5 ADR 0006/0007: encerra o termo pelo rótulo; sem par: padrão (falso)
 TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	texto_nome	valores		r5 ADR 0006/0007: libera o procedimento pelo rótulo; sem par: padrão (falso)

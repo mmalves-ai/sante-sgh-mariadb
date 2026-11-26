@@ -107,7 +107,7 @@ class ConferenciaExemploR4b(unittest.TestCase):
         self.assertEqual(lidos["sal"], [["01", 5], ["01", 7]])
         self.assertEqual(lidos["par"], [["6.00", "14.00"], ["0.00", "13.00"], [None, None]])
         self.assertEqual(lidos["est"], [["aberto"], ["fechado"]])
-        self.assertEqual(lidos["frq"], [["vezes_dia"], ["se_necessario"], ["a_criterio"]])
+        self.assertEqual(lidos["frq"], [["vezes_dia"], ["se_necessario"], ["a_criterio"], ["vezes_dia"]])
         self.assertEqual(lidos["opc"], [["Sim", 1], ["Sim", 2], ["Nao", 1]])
 
 

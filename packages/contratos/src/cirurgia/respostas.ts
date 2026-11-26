@@ -27,6 +27,8 @@ export const ESTADOS_CIRURGIA = [
   'realizado',
   'suspenso',
   'cancelado',
+  /** Migrada sem situação na origem: só consulta, cancelar ou reagendar. */
+  'nao-informada',
 ] as const;
 
 export const esquemaAgendamentoCirurgico = z.object({

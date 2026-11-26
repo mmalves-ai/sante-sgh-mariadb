@@ -206,7 +206,8 @@ class L609(unittest.TestCase):
         self.assertEqual(set(esp), set(self.plano))
         recusa = ("restricao_destino_", "pai_pendente", "codigo_colisao_caixa")
         self.assertEqual(esp["TBHORARIODOSE"]["pendencias"]["pai_inexistente"], 2)  # 99: as duas colunas encadeadas
-        extra = {}
+        # R9 (recusas-fase2): o horário 7|1, da grade recusada, grava com a grade NULL e também conta pai_pendente
+        extra = {"TBHORARIODOSE": -1}
         for t, e in esp.items():
             self.assertEqual(e["gravados"] + extra.get(t, 0)
                              + sum(v for k, v in e["pendencias"].items() if k.startswith(recusa)), len(vistos[t]), t)

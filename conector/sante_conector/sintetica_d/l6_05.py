@@ -6,7 +6,8 @@ GECADANTIMI grava a ficha do antimicrobiano migrada (origem 'migracao', 06_PEP/1
 pela encadeada RECADATE > PRONT > RICADPAC (pais de L3 na imagem só com as colunas da referência), prescritor pela
 inscrição no conselho (TBCBOPRO > profissional), convênio e finalidade nativa pela inicial do tipo; anomalias: convênio e
 profissional nunca carregados (NULL com pai_inexistente, a ficha migrada aceita), tipo sem par (valor_fora_do_dominio),
-atendimento nunca carregado e atendimento sem paciente (pai_inexistente e recusa 1048). PRFICHAREL grava um leiaute de impressão por
+atendimento nunca carregado (NULL com pai_inexistente: a ficha migrada aceita, ck_ficha_antimicrobiano_atendimento
+da 06_PEP/99z) e atendimento sem paciente (pai_inexistente e recusa 1048). PRFICHAREL grava um leiaute de impressão por
 COD (agrupar no principal), com os componentes numa lista JSON e o tipo de migração criado antes e adotado. PRDADOSENVIOOPERADORA grava a informação clínica com o grupo padrão gravado ANTES (criado
 pela primeira linha, adotado pelas seguintes). PRLOCPACDEFAULT (L5-01) entra só como origem do pai da preferência, lida pela ref: encadeada
 de PRFAVORITO_EXIBIR (preferência -> login -> usuário). Anomalias: descrição vazia em destino NOT NULL (1048), código com
@@ -119,14 +120,15 @@ DADOS = [
                              [4, "Agravo exemplo quatro"]],
      {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}}),
     # sequência = id da origem (nunca muda: apagar a 2 e criar a 8 no diferencial não colide nem desloca a 3);
-    # agravo 1: ids 1, 2, 3, 6; 6 repete campo e subcódigo do 2 (1062); 5 aponta o agravo recusado; 7 aponta agravo
-    # nunca visto; 8 entra com lacuna na chave (sequência 8, depois da 3)
+    # agravo 1: ids 1, 2, 3, 6; 6 repete campo e subcódigo do 2 (recusas-fase2: `adotar:` pela chave única, adota a
+    # pergunta do 2 e guarda o enunciado divergente: adotado_existente e mescla_conflito_origem_guardada); 5 aponta o
+    # agravo recusado; 7 aponta agravo nunca visto; 8 entra com lacuna na chave (sequência 8, depois da 3)
     ("PRAGRAVOPERGUNTA", [[1, 1, 10, 0, "Data dos primeiros sintomas"], [2, 1, 11, 0, "Febre?"],
                           [3, 1, 11, 1, "Temperatura  aferida"], [4, 2, 10, 0, "Pergunta exemplo"],
                           [5, 3, 10, 0, "Pergunta do agravo recusado"], [6, 1, 11, 0, "Febre repetida"],
                           [7, 9, 1, 0, "Pergunta de agravo inexistente"], [8, 1, 12, 0, "Pergunta nova depois de lacuna"]],
-     {"gravados": 5, "pendencias": {"pai_pendente": 1, "restricao_destino_1062": 1, "pai_inexistente": 1,
-                                    "restricao_destino_1048": 1}}),
+     {"gravados": 6, "pendencias": {"pai_pendente": 1, "adotado_existente": 1, "mescla_conflito_origem_guardada": 1,
+                                    "pai_inexistente": 1, "restricao_destino_1048": 1}}),
     ("PRBHINTENSIDADE", [[1, "Pequena"], [2, "Moderada"], [3, "Grande"], [4, "  Muito\r\ngrande "]],
      {"gravados": 4, "pendencias": {}}),
     ("PRBHTPELIMINA", [[1, "Diurese", "S", "N", "N", "S", "N", "S"], [2, "Vômito", "N", "S", "S", "S", "N", "S"],
@@ -186,11 +188,11 @@ DADOS = [
                                [4, "Peso exemplo"]],
      {"gravados": 3, "pendencias": {"adotado_existente": 2, "restricao_destino_1048": 1}}),
     # usuário pela preferência (10, 20) e o login dela; 30 tem login nunca visto; 99 não existe; 4 S/N fora do domínio;
-    # coluna da tela = chave do atributo gravada pela coluna do painel; 7 aponta a coluna 4, recusada (pai_pendente)
+    # coluna da tela = chave do atributo gravada pela coluna do painel; 7 aponta a coluna 4, que grava com a chave
+    # própria presumida (recusas-fase2 P3a): sem pai_pendente
     ("PRFAVORITO_EXIBIR", [[1, 10, 1, 1, "S"], [2, 10, 2, 2, "N"], [3, 20, 1, 1, "S"], [4, 20, 3, None, "X"],
                            [5, 30, 1, 1, "S"], [6, 99, 1, 1, "S"], [7, 10, 4, 3, "S"]],
-     {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2, "restricao_destino_1048": 2,
-                                    "pai_pendente": 1}}),
+     {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2, "restricao_destino_1048": 2}}),
     # leiaute de impressão: COD 1 com três componentes fora da ordem da chave (sequência 2, 1 e uma sem sequência)
     # e propriedades com quebra de linha e acento; COD 2 com um componente; o tipo de migração é criado pela
     # primeira linha e adotado pelas seguintes; o leiaute entra inativo
@@ -205,7 +207,8 @@ PREFERENCIAS = [_pref(10, U1), _pref(20, U2), _pref(30, "usuario.exemplo.nunca")
 
 
 # ficha do antimicrobiano (ID, REG, TIPO, CRM, ID_TBCBOPRO, CONV): 1 completa; 2 convênio nunca carregado; 3 tipo sem
-# par e profissional nunca carregado (inscrição 51); 4 atendimento nunca carregado (recusa); 5 atendimento sem paciente
+# par e profissional nunca carregado (inscrição 51); 4 atendimento nunca carregado (grava sem atendimento, ficha
+# migrada); 5 atendimento sem paciente (recusa)
 FICHAS = [[1, 5000, "P", 1234, 50, 3], [2, 5001, "E", 1234, 50, 9], [3, 5001, "X", 4321, 51, 3],
           [4, 5002, "T", 1234, 50, 3], [5, 5003, "T", 1234, 50, 3]]
 
@@ -222,8 +225,8 @@ def linhas(r, ins):
         ins("TBCBOPRO", [i, 1, "SP", 1000 + i, prof, "N"] + [None] * 12)
     for v in FICHAS:
         ins("GECADANTIMI", list(v))
-    esperado["GECADANTIMI"] = {"gravados": 3, "pendencias": {"pai_inexistente": 4, "valor_fora_do_dominio": 1,
-                                                             "restricao_destino_1048": 2}}
+    esperado["GECADANTIMI"] = {"gravados": 4, "pendencias": {"pai_inexistente": 4, "valor_fora_do_dominio": 1,
+                                                             "restricao_destino_1048": 1}}
     for tab, ls, esp in DADOS:
         for v in ls:
             ins(tab, list(v))

@@ -17,8 +17,9 @@ DESTINO = {"CHCRITICIDADE": "criticidade_area", "CHAREA": "area_higienizavel", "
            "CHTPLIMPEZA": "modalidade_limpeza", "CHPROFISLIMP": "profissional_higienizacao",
            "CHAREA_CHPROFISLIMP": "escala_higienizacao", "CHPROFLIMPTEL": "profissional_higienizacao_telefone"}
 # gravados = 0 na imagem sintética só enquanto o pedido de código compartilhado não for aplicado (texto no L6-17.json)
-AGUARDA_PEDIDO = {"CHPROFISLIMP": "ck_profissional_higienizacao_vinculo",
-                  "CHAREA_CHPROFISLIMP": "ck_profissional_higienizacao_vinculo", "CHPROFLIMPTEL": "#juntar:"}
+# recusas-fase2 (09_HOT/99z): o CHECK de vínculo aceita o profissional migrado sem ponta; nenhuma tabela da fatia
+# espera pedido de código compartilhado (todas gravam ao menos uma linha)
+AGUARDA_PEDIDO = {}
 SEM_CODIGO = {"CHAREA", "CHPROFISLIMP", "CHAREA_CHPROFISLIMP", "CHPROFLIMPTEL"}
 PRESUMIDOS = {("CHCRITICIDADE", "classificacao_sanitaria"): "=~critica",
               ("CHOCORRENCIA", "modalidade"): "=~emergencial", ("CHSITUACAO", "etapa"): "=~aguardando",

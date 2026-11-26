@@ -199,7 +199,7 @@ CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	A	confirmado	L6-16 r3b: situ
 CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	C	confirmado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Confirmado
 CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	S	realizado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Realizado
 CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	R	agendado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Outros: marcada
-CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	N	suspenso	recusas-fase2 T2 (pedido 67): a origem diz que não informa a situação: suspenso, nunca agendado; L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Não informado
+CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	N	nao_informada	recusas-fase2 V-D1: a origem diz que não informa a situação: 'nao_informada' (neutro, não acionável), nunca agendado; L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Não informado
 CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	F	cancelado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Faltou
 CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	T	cancelado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Transferido: a marcação original deixa de valer
 CCAGENDA	ID_TBSITAGE	agendamento_cirurgico.situacao	X	cancelado	L6-16 r3b: situação da origem (mesmo domínio de TBSITAGE.COD, evidência do L6-04): Cancelado

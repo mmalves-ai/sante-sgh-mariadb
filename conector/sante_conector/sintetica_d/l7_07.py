@@ -45,7 +45,7 @@ CREATE TABLE GEITENS (COD INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(60), GRU SM
   CONVER NUMERIC(18,3), FATOR_CONV NUMERIC(18,3), UNI_PRESC VARCHAR(7), RASTREAR SMALLINT NOT NULL,
   DOSE VARCHAR(15), MANIPULACAO VARCHAR(1), CURVA VARCHAR(1), CURVA_XYZ CHAR(1), PEP VARCHAR(1), ITEM_DIST_UNICA
   VARCHAR(1), MEDGERAL VARCHAR(1), MAT VARCHAR(1), SOLUCAO VARCHAR(1), PORTARIA VARCHAR(2), CLASSIF SMALLINT, REF
-  INTEGER, TIPO_REF SMALLINT, COD_SIMPAS VARCHAR(15), DATA_EI DATE, DATA_EM4 DATE, VLRMED NUMERIC(18,4), CUSTO
+  INTEGER, TIPO_REF SMALLINT, COD_SIMPAS VARCHAR(15), BRASIN INTEGER, DATA_EI DATE, DATA_EM4 DATE, VLRMED NUMERIC(18,4), CUSTO
   NUMERIC(18,4), VENDA NUMERIC(18,4), VLR_UNF NUMERIC(18,4), VLR_USU NUMERIC(18,4), LUCR100 NUMERIC(9,2), CUST100
   NUMERIC(9,2), EST_INI NUMERIC(18,3), ESTOQUE NUMERIC(18,3), TOTAL NUMERIC(18,2), MOVI_E VARCHAR(1), MOVI_S
   VARCHAR(1), MOVI_D VARCHAR(1), MOVI_R VARCHAR(1), MOVI_L VARCHAR(1), MOV_TRANSFERENCIA VARCHAR(1), ATU_FAT
@@ -210,7 +210,8 @@ def linhas(r, ins):
               (3, 102, "L003", dt(2027, 7, 1), 2, dt(2027, 9, 1)),
               (4, 101, "L001", dt(2027, 5, 1), 1, None),           # mesmo lote físico em OUTRO local: adota a
                                                                    # linha do lote 1 (adotado_existente)
-              (5, 103, "L005", dt(1899, 12, 30), None, None),      # data_sentinela e 1048
+              (5, 103, "L005", dt(1899, 12, 30), None, None),      # data_sentinela: validade NULL (K1b, lote
+                                                                   # migrado sem validade conhecida) e grava
               (6, 107, "L006", dt(2027, 1, 1), None, None),        # pai_pendente
               (7, 104, "L007", dt(2028, 1, 1), 77, None)]:         # fabricante nunca visto: NULL
         ins("GEVALMEM", [x[0], x[1], x[2], x[3], x[4], x[5], None, 2 if x[0] == 4 else 1, D(5), D(0), D(10), None,
@@ -229,7 +230,7 @@ def linhas(r, ins):
     for x in [(1, 1, D(10), 1, None, None), (2, 1, D(5), 2, None, None), (3, 2, D(3), None, dt(2027, 1, 1), "L900"),
               (4, 2, D(2), None, None, None),                      # 4025 (sem lote)
               (5, 3, None, 1, None, None),                         # 1048
-              (6, 3, D(1), 5, None, None),                         # lote recusado: pai_pendente
+              (6, 3, D(1), 5, None, None),                         # lote sem validade (K1b): grava
               (7, 3, D(4), 1, None, None), (8, 99, D(1), 1, None, None)]:  # inventário nunca visto: 1048
         ins("GERASVALESTINI", [x[0], x[1], x[2], x[3], x[4], x[5], None])
     for x in [(101, "VO"), (101, "IV"), (102, "VO"), (107, "VO"), (103, "XX")]:
@@ -246,8 +247,8 @@ def linhas(r, ins):
     # saldo do LOTE no kit: complementa o kit_rastreavel_lote gravado pela linha (lotes gravados: 1, 4, 10)
     for x in [(1, D(5)), (4, D("2.5")), (10, D(-1)),               # -1: valor_fora_do_dominio, fica o gravado
               (2, D(1)),                                           # linha sem lote: pai_inexistente
-              (6, D(1)),                                           # linha recusada: pai_inexistente (o motor
-                                                                   # não distingue pelo secundário do pai)
+              (6, D(1)),                                           # linha recusada: pai_pendente (o motor
+                                                                   # distingue o pai recusado pelo secundário)
               (99, D(1))]:                                         # linha nunca vista: pai_inexistente
         ins("GESALDOKITRAS", list(x))
     # ---- rodada 3: suprimentos (balanço, pedido, nota de entrada, consumo do paciente, lote por movimento)
@@ -259,7 +260,7 @@ def linhas(r, ins):
               (4, "Principio com codigo", "N", "1234"),            # DCB com zeros à esquerda: liga ao oficial
               (5, "Principio codigo falso", "S", "99999"),         # DCB fora do oficial: tenta o nome, sem par
               (6, None, "S", None),                                # sem nome: 1048
-              (7, "Principio falso A ", "S", None)]:               # nome repetido no cadastro: 1062
+              (7, "Principio falso A ", "S", None)]:               # nome repetido: ADOTA o 1 (A04)
         ins("TBPRINC", list(x) + [7, "ZZ" if x[0] == 3 else "ML"])   # 3: unidade nunca vista (NULL)
     ins("TBCBOPRO", [1, 501])
     for x in [(101, 1), (102, 1), (102, 2),
@@ -273,14 +274,15 @@ def linhas(r, ins):
     dth = datetime.datetime
     for x in [(1, 1, 101, D(5), dth(2025, 1, 31, 23, 0)), (2, 1, 101, D(3), dth(2025, 2, 28, 23, 0)),
               (3, 3, 102, D(2), dth(2025, 2, 28, 23, 0)),
-              (4, 5, 103, D(1), dth(2025, 2, 28, 23, 0)),          # lote recusado: pai_pendente (recusa)
+              (4, 5, 103, D(1), dth(2025, 2, 28, 23, 0)),          # lote sem validade (K1b): grava
               (5, 99, 101, D(1), dth(2025, 2, 28, 23, 0)),         # lote nunca visto: pai_inexistente
               (6, 2, 101, D(4), None)]:                            # sem data: 1048
         _l(ins, "GERASVALFINAL", ID=x[0], ID_GEVALMEM=x[1], ITEM=x[2], QTDE=x[3], DATA=x[4])
     for x in [(1, 1, 101, D(4), dth(2025, 1, 1, 0, 0), 1), (2, 2, 101, D(7), dth(2025, 1, 1, 0, 0), None)]:
         _l(ins, "GERASVALINICIAL", ID=x[0], ID_GEVALMEM=x[1], ITEM=x[2], QTDE=x[3], DATA=x[4], ID_GERASVALFINAL=x[5])
-    # balanço: o número leva o prefixo de domínio; o mesmo DOC em outro mês colide (1062, pedido texto_composto)
-    for x in [(1, 10, dt(2026, 1, 31), 1, "T"), (2, 10, dt(2026, 2, 28), 1, "T"),     # 1062
+    # balanço: o número leva o prefixo de domínio com ANO, MES e DOC (A04, recusas-fase2): o mesmo DOC em outro mês
+    # grava
+    for x in [(1, 10, dt(2026, 1, 31), 1, "T"), (2, 10, dt(2026, 2, 28), 1, "T"),
               (2, 11, dt(2026, 2, 28), 2, "F"),
               (3, 12, None, 1, "T"),                                                 # sem data: 1048
               (3, 13, dt(2026, 3, 31), 9, "T"),                                      # local nunca visto
@@ -289,16 +291,17 @@ def linhas(r, ins):
            OQUE="B", CDC=1)
     for x in [(1, 1, 1, 10, 101, D(5), "T"), (2, 1, 1, 10, 102, D(3), "F"),  # SEQ repetido: sequência própria
               (3, 1, 2, 10, 101, D(1), "T"),                       # mesmo insumo na mesma contagem: 1062
-              (4, 2, 1, 10, 101, D(1), "T"),                       # balanço recusado: pai_pendente
+              (4, 2, 1, 10, 101, D(1), "T"),                       # balanço do mesmo DOC em outro mês (A04)
               (5, 9, 1, 99, 101, D(1), "T"),                       # balanço nunca visto: pai_inexistente e 1048
               (6, 2, 1, 11, 103, D(-1), "T"),                      # contagem negativa: 4025
               (7, 2, 2, 11, 107, D(1), "T")]:                      # insumo recusado: pai_pendente
         _l(ins, "GELANBAL", ID=x[0], ANO=2026, MES=x[1], SEQ=x[2], DOC=x[3], ITEM=x[4], QTDE=x[5], VLR_UNI=D(2),
            CONSOL=x[6], DIFER=D(0), ID_NOMCOM=1)
-    for x in [(1, 100, 1, 1, "P", 1, dt(2026, 1, 5)), (2, 100, 2, 1, "E", 5, dt(2026, 1, 6)),  # DOC repetido no ano
-              (3, 101, 0, 1, "P", 2, dt(2026, 1, 7)),              # sem fornecedor: 1048 (pedido de modelo)
-              (4, 102, 1, 1, "P", 5, dt(1899, 12, 30)),            # aprovado sem data: data_sentinela e 4025
-              (5, 103, 1, 2, "Z", None, dt(2026, 1, 8)),           # tipo fora do domínio; sem situação: rascunho
+    # centro de custo pela chave do pai, o COD (A08, recusas-fase2: na origem ID_TBCENCUS casa com o COD)
+    for x in [(1, 100, 1, 10, "P", 1, dt(2026, 1, 5)), (2, 100, 2, 10, "E", 5, dt(2026, 1, 6)),  # DOC repetido no ano
+              (3, 101, 0, 10, "P", 2, dt(2026, 1, 7)),             # sem fornecedor: 1048 (pedido de modelo)
+              (4, 102, 1, 10, "P", 5, dt(1899, 12, 30)),           # aprovado sem data: data_sentinela e 4025
+              (5, 103, 1, 20, "Z", None, dt(2026, 1, 8)),          # tipo fora do domínio; sem situação: rascunho
               (6, 104, 1, 999, "P", 1, dt(2026, 1, 9))]:           # centro de custo nunca visto: 1048
         _l(ins, "GECADPED", ID=x[0], OQUE="P", ANO=2026, DOC=x[1], FORN=x[2], ID_TBCENCUS=x[3], TIPO_COMPRA=x[4],
            ID_GESITUACAOPED=x[5], DT_HOMOL=x[6], DATA=dt(2026, 1, 4), USUARIO="ADMIN", VLR_FRETE=D(1),
@@ -312,14 +315,15 @@ def linhas(r, ins):
            DATA_GRAV=x[3], HORA_GRAV="0930", EMPRESA=1, DESTINO=0)
     for x in [(11, 1, 1, 101, 1, D(10), D(10)), (12, 1, 2, 102, 1, D(5), None),  # sem QTDE_ARM: vale QTDE
               (13, 2, 1, 101, 2, D(4), D(4)), (14, 2, 2, 103, 1, D(2), D(2)),     # nota com dois locais
-              (15, 2, 2, 102, 2, D(1), D(1)),                      # SEQ repetida na nota: 1062
+              (15, 2, 2, 102, 2, D(1), D(1)),                      # SEQ repetida na nota: próximo livre
+                                                                   # (sequencia_renumerada, A04 e M3 do C1)
               (17, 1, 3, 107, 1, D(1), D(1)),                      # insumo recusado: pai_pendente
               (18, 1, 4, 101, 1, D(0), D(0))]:                     # quantidade zero: 4025
         _l(ins, "GELANNFS", ID_GELANNFS=x[0], ANO=2026, MES=1, DOC=x[1], SEQ=x[2], ITEM=x[3], ARM=x[4], QTDE=x[5],
            QTDE_ARM=x[6], FATOR=D(0) if x[0] == 12 else D(1), VLR_UNI=D(2), CUSTO=D(2), VLR_TOT=D(4), LAB=1,
            ITEM_NOTA_ENTRADA=x[2])
     for x in [(1, 11, D(10), 1), (2, 13, D(3), 2), (3, 13, D(1), 3),
-              (5, 11, D(1), 5),                                    # lote recusado: pai_pendente
+              (5, 11, D(1), 5),                                    # lote sem validade (K1b): grava
               (6, 99, D(1), 1),                                    # item nunca visto: pai_inexistente e 1048
               (7, 12, D(0), 1)]:                                   # quantidade zero: 4025
         _l(ins, "GERASVALNFS", ID=x[0], ID_GELANNFS=x[1], QTDE=x[2], ID_GEVALMEM=x[3], LOTE="L", ID_TBLABORA=1)
@@ -348,35 +352,41 @@ def linhas(r, ins):
         "GEUSERS_TBCLASSI": {"gravados": 1, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1,
                                                            "restricao_destino_4025": 1, "vigencia_sem_fonte": 3}},
         "GEKITKPI": {"gravados": 2, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1}},
-        "TBPRINC": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1,
-                                                  "codigo_inexistente_destino": 4, "pai_inexistente": 1}},
+        # A04: o nome repetido (7) adota o princípio 1; a 4, ligada pelo DCB, não tenta o nome (concorrente com a
+        # coluna já preenchida: sem codigo_inexistente_destino de ruído)
+        "TBPRINC": {"gravados": 6, "pendencias": {"restricao_destino_1048": 1, "adotado_existente": 1,
+                                                  "codigo_inexistente_destino": 3, "pai_inexistente": 1}},
         "GEITENS_TBPRINC": {"gravados": 6, "pendencias": {"pai_pendente": 1}},
-        "GERASVALFINAL": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
+        "GERASVALFINAL": {"gravados": 5, "pendencias": {"pai_inexistente": 1,
                                                         "restricao_destino_1048": 1}},
         "GERASVALINICIAL": {"gravados": 2, "pendencias": {}},
-        "GECADBAL": {"gravados": 3, "pendencias": {"valor_presumido": 6, "restricao_destino_1062": 1,
+        "GECADBAL": {"gravados": 4, "pendencias": {"valor_presumido": 6,
                                                    "restricao_destino_1048": 2, "pai_inexistente": 1,
                                                    "valor_fora_do_dominio": 1}},
-        "GELANBAL": {"gravados": 2, "pendencias": {"restricao_destino_1062": 1, "pai_pendente": 2,
+        "GELANBAL": {"gravados": 3, "pendencias": {"restricao_destino_1062": 1, "pai_pendente": 1,
                                                    "pai_inexistente": 4, "restricao_destino_1048": 1,
                                                    "restricao_destino_4025": 1}},
         "GECADPED": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "pai_inexistente": 1,
                                                    "data_sentinela": 1, "restricao_destino_4025": 2,
                                                    "valor_fora_do_dominio": 1}},
         "GECADNFS": {"gravados": 2, "pendencias": {}},
-        "GELANNFS": {"gravados": 4, "pendencias": {"restricao_destino_1062": 1, "restricao_destino_4025": 1,
+        "GELANNFS": {"gravados": 5, "pendencias": {"sequencia_renumerada": 1, "restricao_destino_4025": 1,
                                                    "pai_pendente": 1}},
-        "GERASVALNFS": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
+        "GERASVALNFS": {"gravados": 4, "pendencias": {"pai_inexistente": 1,
                                                       "restricao_destino_1048": 1, "restricao_destino_4025": 1}},
         "GERASVALTRANSFLOTE": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1,
                                                              "restricao_destino_1062": 1}},
+        # A08: o local 1 é criado pela primeira linha (nome e tipo presumidos) e adotado pelas outras gravadas;
+        # valor_presumido conta nas duas colunas em toda linha lida que chega ao secundário (6 linhas)
         "GELANPAC": {"gravados": 3, "pendencias": {"pai_inexistente": 4, "hora_invalida": 1,
                                                    "restricao_destino_1048": 2, "pai_pendente": 1,
-                                                   "restricao_destino_4025": 1}},
+                                                   "restricao_destino_4025": 1, "adotado_existente": 2,
+                                                   "valor_presumido": 12}},
         "GEKITITE": {"gravados": 4, "pendencias": {"pai_pendente": 1, "restricao_destino_4025": 1,
                                                    "pai_inexistente": 3, "restricao_destino_1048": 3,
                                                    "valor_fora_do_dominio": 1}},
-        "GESALDOKITRAS": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 3}},
+        "GESALDOKITRAS": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2,
+                                                        "pai_pendente": 1}},
         "TBTP_ENV_LISTA_AVAL_FARM": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "TBUNICON": {"gravados": 5, "pendencias": {"codigo_colisao_caixa": 2, "restricao_destino_1048": 1,
                                                    "valor_fora_do_dominio": 1}},
@@ -387,15 +397,15 @@ def linhas(r, ins):
                                                    "restricao_destino_1406": 1, "pai_inexistente": 1}},
         "GEUNIPRESC": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1,
                                                      "restricao_destino_4025": 2, "pai_pendente": 1}},
-        "GEVALMEM": {"gravados": 5, "pendencias": {"adotado_existente": 1, "data_sentinela": 1,
-                                                   "restricao_destino_1048": 1, "pai_pendente": 1,
+        "GEVALMEM": {"gravados": 6, "pendencias": {"adotado_existente": 1, "data_sentinela": 1,
+                                                   "pai_pendente": 1,
                                                    "pai_inexistente": 1}},
         "GEITEMKITRAS": {"gravados": 6, "pendencias": {"adotado_existente": 2, "mescla_conflito_origem_guardada": 2,
                                                        "restricao_destino_4025": 1,
                                                        "pai_pendente": 1, "pai_inexistente": 3,
                                                        "restricao_destino_1048": 2}},
-        "GERASVALESTINI": {"gravados": 4, "pendencias": {"restricao_destino_4025": 1, "restricao_destino_1048": 2,
-                                                         "pai_pendente": 1, "pai_inexistente": 1}},
+        "GERASVALESTINI": {"gravados": 5, "pendencias": {"restricao_destino_4025": 1, "restricao_destino_1048": 2,
+                                                         "pai_inexistente": 1}},
         "GEVIASITEM": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                      "restricao_destino_1048": 1}},
     }

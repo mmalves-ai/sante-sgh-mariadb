@@ -148,7 +148,9 @@ def linhas(r, ins):
         ins("PRTPLAN_GETABVIA", [item, via, vis, marc])
     return {
         "PRTIPONOTIFICACAO": {"gravados": 3, "pendencias": {"adotado_existente": 4}},
-        "PRTPASSINATURA_TBOID": {"gravados": 5, "pendencias": {"adotado_existente": 9, "pai_pendente": 1,
+        # V3b (recusas-fase2): a 4 tem o rótulo pelo identificador; o rótulo pelo tipo recusado (concorrente) nem é
+        # tentado: grava, sem pai_pendente
+        "PRTPASSINATURA_TBOID": {"gravados": 6, "pendencias": {"adotado_existente": 11,
                                                                "pai_inexistente": 1}},
         "PRTIPOPERGPAR": {"gravados": 3, "pendencias": {"valor_presumido": 5, "valor_fora_do_dominio": 2}},
         "PRSITDOCUMENTO": {"gravados": 4, "pendencias": {"valor_presumido": 3, "valor_fora_do_dominio": 2,

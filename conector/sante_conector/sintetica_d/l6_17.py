@@ -21,10 +21,10 @@ Cobertura total (rodada de 2026-11-21):
 - CHTPLIMPEZA: tempo previsto em TIMESTAMP 1899-12-30 HH:MM vira minutos (minutos_em_timestamp); 00:00 vira NULL e
   recusa (1048); outra data grava os minutos com hora_com_data; nome nulo (1048); tipo presumido 'concorrente';
 - CHPROFISLIMP: vínculo presumido 'proprio' sem ponta (funcionário e terceirizada fora do mapa): o CHECK de vínculo
-  recusa toda linha (restricao_destino_4025) até a proposta de modelo do L6-17.json; CPF inválido
+  aceita o migrado sem ponta (09_HOT/99z, recusas-fase2), toda linha grava; CPF inválido
   (documento_invalido), login desconhecido (pai_inexistente);
-- CHAREA_CHPROFISLIMP e CHPROFLIMPTEL: filhas do profissional recusado (pai_pendente); vigência pela data da carga e
-  sequência por profissional declaradas.
+- CHAREA_CHPROFISLIMP e CHPROFLIMPTEL: filhas do profissional; vigência pela data da carga (vigencia_sem_fonte) e
+  sequência por profissional declaradas; telefone sem DDD (9 dígitos) recusado pelo CHECK do número (4025).
 """
 import datetime
 
@@ -125,11 +125,14 @@ def linhas(r, ins):
         ins("CHTPLIMPEZA", [i, nome, datetime.datetime(*d, m // 60, m % 60), at])
     return {
         "CHCRITICIDADE": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
-        "CHAREA": {"gravados": 3, "pendencias": {"restricao_destino_1048": 3, "pai_inexistente": 1,
+        # P2b (recusas-fase2): sigla = SIGLA_ID (#codigo_derivado): a 3, sem sigla, grava pelo ID
+        "CHAREA": {"gravados": 4, "pendencias": {"restricao_destino_1048": 2, "pai_inexistente": 1,
                                                  "restricao_destino_1062": 1, "valor_fora_do_dominio": 1}},
         "CHOCORRENCIA": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 4}},
-        "CHSITUACAO": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "pai_inexistente": 1,
-                                                     "valor_presumido": 6}},
+        # P2b (recusas-fase2): a 6, sem ordem, recebe a ordem presumida 1 (#seq:ORDEM, valor_presumido) e colide
+        # com a ordem 1 da situação 1 (uq ordem: 1062, visível)
+        "CHSITUACAO": {"gravados": 5, "pendencias": {"restricao_destino_1062": 1, "pai_inexistente": 1,
+                                                     "valor_presumido": 7}},
         "CVTERMINALFAB": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
         "CVTPIDENTIFIC": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},
         "CVTPSITACESSO": {"gravados": 3, "pendencias": {"valor_presumido": 3}},
@@ -142,8 +145,10 @@ def linhas(r, ins):
                                                        "pai_inexistente": 1}},
         "CHTPLIMPEZA": {"gravados": 3, "pendencias": {"restricao_destino_1048": 2, "hora_com_data": 1,
                                                       "valor_presumido": 5}},
-        "CHPROFISLIMP": {"gravados": 0, "pendencias": {"restricao_destino_4025": 3, "valor_presumido": 3,
-                                                       "documento_invalido": 1, "pai_inexistente": 1}},
-        "CHAREA_CHPROFISLIMP": {"gravados": 0, "pendencias": {"pai_pendente": 4}},
-        "CHPROFLIMPTEL": {"gravados": 0, "pendencias": {"pai_pendente": 2}},
+        # recusas-fase2 (09_HOT/99z): o CHECK de vínculo aceita o migrado sem ponta; as filhas gravam; o telefone 1
+        # (9 dígitos, sem DDD) segue recusado pelo CHECK do número (4025)
+        "CHPROFISLIMP": {"gravados": 3, "pendencias": {"valor_presumido": 3, "documento_invalido": 1,
+                                                       "pai_inexistente": 1}},
+        "CHAREA_CHPROFISLIMP": {"gravados": 4, "pendencias": {"vigencia_sem_fonte": 4}},
+        "CHPROFLIMPTEL": {"gravados": 1, "pendencias": {"restricao_destino_4025": 1}},
     }

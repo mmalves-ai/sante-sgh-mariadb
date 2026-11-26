@@ -308,9 +308,10 @@ def linhas(r, ins):
         # conta-itens-2 (conferidor): a 3 (tabela licenciada) grava a equivalência no item ligado ao espelho (9601);
         # a busca do código na tabela concorrente e a vigência pela data da carga somam 1 cada (antes: licença)
         # recusas fase 2 (P6, A03): concorrente cod: pelo item de referência próprio (TAB+COD+CLASSIF, fonte outra);
-        # a 3 (ligada ao espelho, achada pela primeira) e a 4 (item inexistente) não têm item próprio com o código:
-        # codigo_inexistente_destino nas duas (a concorrente é avaliada mesmo quando a primeira já deu o valor)
-        "TBREFMEMTUSS": {"gravados": 3, "pendencias": {"catalogo_codigo_inexistente": 6, "codigo_inexistente_destino": 2,
+        # a 3 é ligada ao espelho pela primeira (a concorrente nem é avaliada, V3b); a 4 (item inexistente) não tem
+        # item próprio com o código: codigo_inexistente_destino. Termo: a tabela 20 só é tentada quando a 19 não
+        # achou (2: 19 sem par e 20 acha; 5: as duas sem par): catalogo_codigo_inexistente 3
+        "TBREFMEMTUSS": {"gravados": 3, "pendencias": {"catalogo_codigo_inexistente": 3, "codigo_inexistente_destino": 1,
                                                        "pai_inexistente": 1, "restricao_destino_1048": 2,
                                                        # rodada 5 (ADR 0007, 16): a linha com data própria de
                                                        # evidência não é mais "sem fonte"

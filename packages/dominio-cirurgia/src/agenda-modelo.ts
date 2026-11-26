@@ -18,6 +18,7 @@ export const SITUACOES_AGENDAMENTO_MODELO = [
   'realizado',
   'suspenso',
   'cancelado',
+  'nao_informada',
 ] as const;
 export type SituacaoAgendamentoModelo = (typeof SITUACOES_AGENDAMENTO_MODELO)[number];
 
@@ -32,6 +33,7 @@ const ESTADO_DA_SITUACAO: Readonly<Record<SituacaoAgendamentoModelo, EstadoAgend
   realizado: 'realizado',
   suspenso: 'suspenso',
   cancelado: 'cancelado',
+  nao_informada: 'nao-informada',
 };
 
 /** Situação gravada → estado da tela; null para código desconhecido (quem chama registra ou recusa). */
@@ -58,6 +60,8 @@ export function situacaoDoEstado(e: EstadoAgendamento): SituacaoAgendamentoModel
       return 'cancelado';
     case 'no-bloco':
       return 'no_bloco';
+    case 'nao-informada':
+      return 'nao_informada';
   }
 }
 

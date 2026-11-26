@@ -338,7 +338,7 @@ export class PortaReservaCirurgiaPropria extends PortaEstabelecimentoPropria {
                  JOIN agendamento_cirurgico a ON a.id = r.agendamento_cirurgico_id
                 WHERE r.equipamento_saude_id = ? AND r.excluido_em IS NULL AND a.excluido_em IS NULL
                   AND r.situacao IN ('reservado', 'confirmado', 'em_uso')
-                  AND a.situacao NOT IN ('cancelado', 'suspenso', 'reprovado', 'realizado')
+                  AND a.situacao NOT IN ('cancelado', 'suspenso', 'reprovado', 'realizado', 'nao_informada')
                   AND r.reserva_inicio < ? AND r.reserva_fim > ?`,
               [e.equipamento, `${periodo.fim}:00`, `${periodo.inicio}:00`],
             )

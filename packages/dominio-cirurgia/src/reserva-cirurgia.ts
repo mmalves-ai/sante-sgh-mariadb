@@ -28,15 +28,24 @@ export const SITUACOES_EQUIPAMENTO_OCUPADO = ['reservado', 'confirmado', 'em_uso
 export const SITUACOES_EQUIPAMENTO_CANCELAVEL = ['reservado', 'confirmado'] as const;
 /** Situações da reserva de hemocomponente que ainda podem ser ligadas à requisição ou canceladas. */
 export const SITUACOES_HEMOCOMPONENTE_ABERTA = ['solicitada', 'reservada'] as const;
-/** Situações da cirurgia que soltam o equipamento: a reserva dela não ocupa mais o horário. */
+/**
+ * Situações da cirurgia que soltam o equipamento: a reserva dela não ocupa mais o horário. A 'nao_informada' (migrada
+ * sem situação na origem) não é acionável e também não ocupa.
+ */
 export const SITUACOES_AGENDAMENTO_SOLTA_RESERVA = [
   'cancelado',
   'suspenso',
   'reprovado',
   'realizado',
+  'nao_informada',
 ] as const;
 /** Situações da cirurgia em que a reserva ainda aberta pode ser liberada (a cirurgia não vai acontecer como marcada). */
-export const SITUACOES_AGENDAMENTO_LIBERA_RESERVA = ['cancelado', 'suspenso', 'reprovado'] as const;
+export const SITUACOES_AGENDAMENTO_LIBERA_RESERVA = [
+  'cancelado',
+  'suspenso',
+  'reprovado',
+  'nao_informada',
+] as const;
 /** Duração máxima de uma reserva de equipamento (uma cirurgia longa cabe; um dia inteiro não). */
 export const RESERVA_EQUIPAMENTO_MAXIMA_MINUTOS = 24 * 60;
 export const QUANTIDADE_MAXIMA_EQUIPAMENTO = 20;

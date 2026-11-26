@@ -607,7 +607,8 @@ def linhas(r, ins):
         "GERASVALBAL": {"gravados": 4, "pendencias": {pi: 2, r48: 2, r25: 2, r62: 1}},
         "GEUSERS_TBCENCUS": {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 5, pi: 2, r48: 2}},
         "PRPARINTEGEST": {"gravados": 2, "pendencias": {"valor_presumido": 4, r48: 1, "valor_fora_do_dominio": 1}},
-        "GECADSAI": {"gravados": 4, "pendencias": {pi: 6, r48: 3, r25: 1, "valor_fora_do_dominio": 3}},
+        # V3b (recusas-fase2): o atendimento pela CONTA (concorrente) só é tentado quando o paciente não deu o valor
+        "GECADSAI": {"gravados": 4, "pendencias": {pi: 5, r48: 3, r25: 1, "valor_fora_do_dominio": 3}},
         "GEINFVENEXT": {"gravados": 1, "pendencias": {"pai_pendente": 1, pi: 1}},
         "GECADDEV": {"gravados": 3, "pendencias": {pi: 1}},
         "GELANDEV": {"gravados": 1, "pendencias": {pi: 6, r48: 2}},
@@ -621,10 +622,12 @@ def linhas(r, ins):
         # lote 3 recusado: pai_pendente recusa a linha (a trilha não grava referência a linha recusada)
         "PRINTEGRACAOESTOQUE": {"gravados": 0, "pendencias": {pi: 2}},
         "GELANPED": {"gravados": 3, "pendencias": {pi: 1, r48: 1, r25: 1}},
-        "GECADDISPENSACAO": {"gravados": 3, "pendencias": {pi: 5, r48: 1, r25: 1}},
+        # V3b (recusas-fase2): pai_inexistente só da concorrente usada
+        "GECADDISPENSACAO": {"gravados": 3, "pendencias": {pi: 4, r48: 1, r25: 1}},
         "GECTRLENTREGADOCSAIDA": {"gravados": 1, "pendencias": {"codigo_inexistente_destino": 1, r48: 2}},
         "GELANDISPENSACAO": {"gravados": 2, "pendencias": {pi: 1, "pai_pendente": 1, r48: 1}},
-        "GELANSAI": {"gravados": 3, "pendencias": {pi: 8, r48: 2, r25: 1}},
+        # V3b (recusas-fase2): pai_inexistente só da concorrente usada
+        "GELANSAI": {"gravados": 3, "pendencias": {pi: 6, r48: 2, r25: 1}},
         "GELANSAIREQ": {"gravados": 2, "pendencias": {pi: 6, r48: 1, r25: 1}},
         "GERASVALDEVLOTE": {"gravados": 1, "pendencias": {pi: 1, r48: 2}},
         "PREXTRATOITEM_SUBST": {"gravados": 1, "pendencias": {r48: 1, r25: 1}},

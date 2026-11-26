@@ -195,7 +195,7 @@ DADOS = [
     ("TBUNID_IDADE", [[1, "Anos"], [2, "Meses"], [3, "DIAS"], [4, "Décadas"]],
      {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 2, "restricao_destino_1048": 1}}),    # solicitante externo: ID, COD_CONSELHO_PROFISSIONAL, NOME, COD_CONVENIO, ID_TBUF, ID_TBCONSPROF, ID_TBCBOSUS, ATIVO
     # 1 completo; 2 sem CBO e inativo, espaços repetidos; 3 conselho fora do catálogo (catalogo_codigo_inexistente +
-    # 1048); 4 sem UF (1048); 5 repete conselho, UF e número do 1 (ADOTA a linha do 1: adotado_existente e nome
+    # 1048); 4 sem UF (recusas-fase2 P1b: grava com a UF nula, só no solicitante migrado); 5 repete conselho, UF e número do 1 (ADOTA a linha do 1: adotado_existente e nome
     # divergente guardado em historico_mescla_migracao, ADR 0007, 20; antes recusava com 1062); 6 CBO inexistente (pai_inexistente,
     # anulável) e S/N fora do domínio (padrão ativo); 7 mesmo número do 1 em outra UF (gravado); 8 sem conselho na
     # origem (ID_TBCONSPROF nulo): CRM presumido pela evidência (ADR 0007, 18; causa de 3.680 recusas 1048 na carga real);
@@ -210,9 +210,9 @@ DADOS = [
                   [7, 1001, "Solicitante exemplo sete", None, "RJ", 1, 502, None],
                   [8, 1008, "Solicitante exemplo oito", None, "SP", None, None, "S"],
                   [9, 1001, "Solicitante exemplo nove", None, "SP", None, None, "S"]],
-     {"gravados": 6, "pendencias": {"catalogo_codigo_inexistente": 1, "pai_inexistente": 1, "valor_fora_do_dominio": 1,
+     {"gravados": 7, "pendencias": {"catalogo_codigo_inexistente": 1, "pai_inexistente": 1, "valor_fora_do_dominio": 1,
                                     "valor_presumido": 1,
-                                    "restricao_destino_1048": 2, "adotado_existente": 1,
+                                    "restricao_destino_1048": 1, "adotado_existente": 1,
                                     "mescla_conflito_origem_guardada": 1, "adocao_por_valor_presumido": 1}}),
 ]
 

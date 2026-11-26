@@ -180,7 +180,9 @@ class SinteticaL506(unittest.TestCase):
         for t, e in esp.items():
             if t == "ATPARAMGERAL":
                 continue
+            # R9: pai_pendente em coluna anulável é aviso numa linha gravada (`pai_pendente_gravado`), não recusa
             recusas = sum(n for r, n in e["pendencias"].items() if r.startswith("restricao_destino") or r == "pai_pendente")
+            recusas -= e.get("pai_pendente_gravado", 0)
             self.assertEqual(e["gravados"] + recusas, cont[t], t)
 
     def test_vinculo_profissional_fonte_carrega_de_verdade(self):

@@ -132,7 +132,9 @@ class Sintetica(unittest.TestCase):
         esp = l5_03.linhas(random.Random(1), lambda t, v: cont.__setitem__(t, cont.get(t, 0) + 1))
         self.assertEqual(set(esp), TABELAS)
         for t, e in esp.items():
+            # R9: pai_pendente em coluna anulável é aviso numa linha gravada (`pai_pendente_gravado`), não recusa
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
+            recusas -= e.get("pai_pendente_gravado", 0)
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
 
     def test_ddl_da_fatia_e_das_cadeias(self):

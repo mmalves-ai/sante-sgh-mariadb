@@ -103,6 +103,8 @@ def linhas(r, ins):
     ins(FRQ, [1, 1, None])
     ins(FRQ, [2, 7, "SN"])
     ins(FRQ, [3, None, "ZZ"])
+    # 4 pelo número; o nome sem par nem é avaliado (concorrente com a coluna já preenchida: sem pendência de ruído)
+    ins(FRQ, [4, 1, "ZZ"])
     ins(PER, [1, 10, 1])
     ins(PER, [2, 10, 2])
     ins(PER, [3, 20, 1])
@@ -115,7 +117,7 @@ def linhas(r, ins):
         SAL: {"gravados": 2, "pendencias": {}},
         PAR: {"gravados": 3, "pendencias": {"valor_elevado_ao_minimo": 1}},
         EST: {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1}},
-        FRQ: {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "valor_presumido": 1}},
+        FRQ: {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "valor_presumido": 1}},
         PER: {"gravados": 3, "pendencias": {}},
         RES: {"gravados": 3, "pendencias": {"pai_inexistente": 1, "sem_item_a_gravar": 1}},
     }

@@ -68,6 +68,7 @@ export const SITUACOES_AGENDAMENTO = [
   'realizado',
   'suspenso',
   'cancelado',
+  'nao_informada',
 ] as const;
 const OCUPA_SALA = "('agendado', 'confirmado', 'no_bloco', 'em_andamento', 'realizado')";
 

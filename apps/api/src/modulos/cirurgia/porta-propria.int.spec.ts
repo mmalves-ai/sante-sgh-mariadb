@@ -774,6 +774,104 @@ describe.skipIf(SEM_BANCO)('porta própria do centro cirúrgico (f22_o3)', () =>
     ).not.toHaveLength(0);
   });
 
+  it('V-D1: agendamento migrado sem situação ("nao_informada"): fora do mapa, da agenda do cirurgião e da ocupação; visível na consulta; cancela ou reagenda; nunca vai ao bloco', async () => {
+    const trilha = {
+      estabelecimento: m.est,
+      usuario: m.usuario,
+      acao: 'alteracao' as const,
+      entidade: 'tela',
+      entidadeId: null,
+      correlacao: 'teste-03-01-nao-informada',
+    };
+    const ids: number[] = [];
+    for (const hora of ['01:00', '02:30']) {
+      const r = await porta.executar(ctx(m.est), 'cirurgia.agendarCirurgia', entradaAgendar(hora), op(m.est));
+      ids.push(Number(r.resultado['agendamento']));
+    }
+    // A carga grava a situação 'nao_informada' (o CHECK do modelo a aceita pela migração da V1).
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'nao-informada-03-01' }, (e) =>
+      e.executar(
+        `UPDATE agendamento_cirurgico SET situacao = 'nao_informada' WHERE id IN (${ids.map(() => '?').join(', ')})`,
+        ids,
+      ),
+    );
+    const [idCancela, idReagenda] = ids as [number, number];
+    // Fora do mapa do bloco, do detalhe da sala e da agenda do cirurgião.
+    const mapa = (await porta.agendamentos(ctx(m.est), amanha(), amanha(), null)).itens.map((x) => x.id);
+    expect(mapa).not.toContain(idCancela);
+    expect(mapa).not.toContain(idReagenda);
+    expect(await porta.agendamento(ctx(m.est), idCancela)).toBeNull();
+    const doCirurgiao = await porta.agendamentosDoCirurgiao(ctx(m.est), [m.cirurgiao], amanha(), amanha());
+    expect(doCirurgiao.itens.map((x) => x.id)).not.toContain(idCancela);
+    // Visível na consulta, com o estado próprio e sem ocupar a sala.
+    const visto = await porta.estado(ctx(m.est), idCancela);
+    expect(visto).toMatchObject({ estado: 'nao-informada', agendamento: null });
+    const periodo = await porta.estadosDoPeriodo(ctx(m.est), amanha(), amanha());
+    expect(periodo.filter((p) => ids.includes(p.id)).map((p) => p.estado)).toEqual([
+      'nao-informada',
+      'nao-informada',
+    ]);
+    // Não é acionável: não entra no bloco, nem em sala, nem se confirma.
+    for (const estado of ['no-bloco', 'em-sala', 'confirmado'] as const)
+      await expect(
+        porta.gravarSgh(ctx(m.est), trilha, (g) =>
+          g.mudarEstado({
+            id: idCancela,
+            estado,
+            visto: { estado: 'nao-informada', versao: visto!.versao ?? null },
+            usuario: m.login,
+          }),
+        ),
+      ).rejects.toThrow(/estado-invalido/);
+    // Cancelar: a situação, o instante e o motivo.
+    await porta.gravarSgh(ctx(m.est), trilha, (g) =>
+      g.mudarEstado({
+        id: idCancela,
+        estado: 'cancelado',
+        visto: { estado: 'nao-informada', versao: visto!.versao ?? null },
+        motivo: MOTIVO,
+        solicitante: 'hospital',
+        usuario: m.login,
+      }),
+    );
+    const [c] = await ler<Record<string, unknown>>(
+      'SELECT situacao, cancelado_em, motivo_suspensao_cirurgia_id FROM agendamento_cirurgico WHERE id = ?',
+      [idCancela],
+    );
+    expect(c).toMatchObject({ situacao: 'cancelado' });
+    expect(c!['cancelado_em']).not.toBeNull();
+    expect(c!['motivo_suspensao_cirurgia_id']).not.toBeNull();
+    // Reagendar: volta a pedido de sala e é confirmado na sala pelo caminho de sempre.
+    const vr = await porta.estado(ctx(m.est), idReagenda);
+    await porta.gravarSgh(ctx(m.est), trilha, (g) =>
+      g.mudarEstado({
+        id: idReagenda,
+        estado: 'solicitado',
+        visto: { estado: 'nao-informada', versao: vr!.versao ?? null },
+        usuario: m.login,
+      }),
+    );
+    expect(await porta.estado(ctx(m.est), idReagenda)).toMatchObject({
+      estado: 'solicitado',
+      agendamento: null,
+    });
+    const novo = await porta.executar(
+      ctx(m.est),
+      'cirurgia.agendarCirurgia',
+      entradaAgendar('02:30', { solicitacao: idReagenda }),
+      op(m.est),
+    );
+    expect(Number(novo.resultado['agendamento'])).toBe(idReagenda);
+    const [g] = await ler<Record<string, unknown>>(
+      'SELECT situacao FROM agendamento_cirurgico WHERE id = ?',
+      [idReagenda],
+    );
+    expect(g!['situacao']).toBe('agendado');
+    expect((await porta.agendamentos(ctx(m.est), amanha(), amanha(), null)).itens.map((x) => x.id)).toContain(
+      idReagenda,
+    );
+  });
+
   it('a gravação direta com a mesma chave de idempotência não grava de novo', async () => {
     const trilha = {
       estabelecimento: m.est,

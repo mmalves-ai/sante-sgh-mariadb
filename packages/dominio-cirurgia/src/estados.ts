@@ -1,6 +1,9 @@
 // Estados do agendamento cirúrgico (ficha do M18, seção 6). "Solicitado" não ocupa a sala; confirmar põe a cirurgia
 // na agenda da sala; cancelar e suspender tiram da sala pelo caminho auditável (a situação muda, com o motivo); "no
 // bloco" e "em sala" são marcações do andamento; "realizado" nasce do registro do ato cirúrgico.
+// "Não informada" (V-D1, recusas da carga): o agendamento migrado sem situação na origem. Não é acionável (não ocupa a
+// sala, não vai ao mapa do bloco, à fila do dia nem ao aviso); só se consulta, cancela ou reagenda (volta a pedido de
+// sala, como a suspensa retomada, e é confirmado na sala pelo caminho de sempre).
 
 export const ESTADOS_AGENDAMENTO = [
   'solicitado',
@@ -10,6 +13,7 @@ export const ESTADOS_AGENDAMENTO = [
   'realizado',
   'suspenso',
   'cancelado',
+  'nao-informada',
 ] as const;
 export type EstadoAgendamento = (typeof ESTADOS_AGENDAMENTO)[number];
 
@@ -21,6 +25,7 @@ export const ROTULOS_ESTADO: Readonly<Record<EstadoAgendamento, string>> = {
   realizado: 'Realizado',
   suspenso: 'Suspenso',
   cancelado: 'Cancelado',
+  'nao-informada': 'Não informada na origem',
 };
 
 const TRANSICOES: Readonly<Record<EstadoAgendamento, readonly EstadoAgendamento[]>> = {
@@ -31,6 +36,7 @@ const TRANSICOES: Readonly<Record<EstadoAgendamento, readonly EstadoAgendamento[
   suspenso: ['solicitado', 'cancelado'],
   realizado: [],
   cancelado: [],
+  'nao-informada': ['solicitado', 'cancelado'],
 };
 
 export function estadoValido(e: string): e is EstadoAgendamento {
@@ -77,7 +83,7 @@ export function acoesDoEstado(e: EstadoAgendamento): AcoesAgendamento {
     mover: e === 'confirmado' || e === 'solicitado',
     cancelar: podeIr(e, 'cancelado'),
     suspender: podeIr(e, 'suspenso'),
-    retomar: e === 'suspenso',
+    retomar: e === 'suspenso' || e === 'nao-informada',
     registrar: ocupaSala(e),
     marcarNoBloco: e === 'confirmado',
     marcarEmSala: e === 'confirmado' || e === 'no-bloco',

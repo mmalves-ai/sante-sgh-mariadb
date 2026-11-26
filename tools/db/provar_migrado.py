@@ -12,7 +12,7 @@ Depois, na tabela real (com as FKs e todas as CHECKs), grava um registro clínic
 profissional e sem usuário: os pais obrigatórios são criados antes (só eles com check_constraint_checks=0), numa
 transação desfeita no fim (nada fica no banco). Também: profissional inexistente dá ERRO 1452 (FK) e o mesmo registro com origem 'sistema'
 dá 4025.
-Por fim, as chaves únicas novas do K1b (UNICOS): numa cópia sem CHECKs, a mesma linha gravada duas vezes dá ERRO 1062.
+Por fim, as chaves únicas novas do K1b e do V-D2 (UNICOS): numa cópia sem CHECKs, a mesma linha gravada duas vezes dá ERRO 1062.
 Imprime "ok" (com o número de casos) ou a lista de erros; sai com 1 se houver erro. Não lê dados de pessoas.
 """
 import re
@@ -62,6 +62,9 @@ CASOS = [
      [(S, "4025"), (M, "ok")]),
     ("situacao_marcacao", "ck_situacao_marcacao_significado", {},
      [({"significado": "nao_informada"}, "ok"), ({"significado": "inexistente"}, "4025")]),
+    # V-D1: agenda cirúrgica sem situação na origem entra 'nao_informada' (neutra, não acionável)
+    ("agendamento_cirurgico", "ck_agendamento_cirurgico_situacao", {},
+     [({"situacao": "nao_informada"}, "ok"), ({"situacao": "agendado"}, "ok"), ({"situacao": "inexistente"}, "4025")]),
     ("profissional_higienizacao", "ck_profissional_higienizacao_vinculo",
      {"vinculo": "proprio", "colaborador_id": None, "empresa_fornecedora_id": None}, [(S, "4025"), (M, "ok")]),
     ("exame_laboratorio_apoio", "ck_exame_laboratorio_apoio_exame", {"exame_id": None},
@@ -88,6 +91,15 @@ CASOS = [
 UNICOS = [
     ("rateio_lancamento", "uq_rateio_lancamento_adiantamento", {**M, "adiantamento_id": 1, "sequencia": 1}),
     ("lote_insumo", "uq_lote_insumo_sem_validade", {**M, "validade": None, "numero_lote": "SEM_LOTE"}),
+    # V-D2: o princípio do cadastro próprio do cliente tem a mesma chave única do oficial
+    ("alergia_paciente_principio", "uq_alergia_paciente_principio_cliente_par",
+     {"principio_ativo_id": None, "principio_ativo_cliente_id": 1}),
+    ("item_nao_padronizado_principio", "uq_item_nao_padronizado_principio_cliente_par",
+     {"principio_ativo_id": None, "principio_ativo_cliente_id": 1}),
+    ("alergeno_principio_ativo", "uq_alergeno_principio_ativo_cliente_par",
+     {"principio_ativo_id": None, "principio_ativo_cliente_id": 1}),
+    ("insumo_principio_ativo", "uq_insumo_principio_ativo_insumo_principio_cliente",
+     {"principio_ativo_id": None, "principio_ativo_cliente_id": 1}),
 ]
 
 

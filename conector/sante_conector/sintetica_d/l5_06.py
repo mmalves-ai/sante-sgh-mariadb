@@ -476,18 +476,20 @@ def linhas(r, ins):
              DATA_NASCIMENTO=nasc, CPF=r.randint(10 ** 9, 10 ** 10), ID_TBUSERS=usu, NOME_MAE="Mãe exemplo %d" % i,
              LOGRADOURO="Rua  exemplo %d" % i, PESO_RN=None if i % 2 else 3.25)
     # telefone da versão do paciente (trilha do cadastro no instante da versão pai, ligada pelo hash dos dados):
-    # 1021 e 1028 versões recusadas (pai_pendente), 5555 versão nunca vista (pai_inexistente, 1048)
+    # 1021 e 1028 versões recusadas (R9: gravam com a correlação nula e pai_pendente; a 1021 também sem o paciente,
+    # nunca visto: pai_inexistente), 5555 versão nunca vista (pai_inexistente, 1048)
     for hp, tipo in [(1007, 1), (1007, 2), (1014, 1), (1021, 1), (1028, 1), (5555, 1)]:
         _ins(ins, "HTPACTELEFONE", ID_HTPACIENTE=hp, ID_TBTIPOTELEFONE=tipo, TELEFONE="0000-%04d" % (hp + tipo),
              NOME_CONTATO="Contato exemplo" if tipo == 2 else None)
     # histórico do profissional: 2 usuário nunca visto (grava), 4 profissional recusado (pai_pendente),
-    # 5 momento sentinela (1048)
+    # 5 momento sentinela (recusas-fase2 P1b: grava com a vigência da carga, vigencia_sem_fonte)
     for i, prof in [(1, 1), (2, 2), (3, 4), (4, 8), (5, 1)]:
         _ins(ins, "HTPROFIS", ID=i, ID_TBPROFIS=prof, DATA_HORA_HISTORICO=SENT if i == 5 else DH(2025, 3, i, 9, 15),
              NOME="Profissional exemplo %d" % prof, ID_TBUSERS="NINGUEM" if i == 2 else "USUARIO1",
              EMAIL="hist%d@exemplo.invalid" % i, NASC=D(1970, 1, i))
-    # telefone da versão do profissional: (2,1) usuário da versão nunca visto (grava), (4,1) e (5,1) versões
-    # recusadas (pai_pendente), (77,1) versão nunca vista (pai_inexistente, 1048)
+    # telefone da versão do profissional: (2,1) usuário da versão nunca visto (grava), (4,1) versão recusada (R9:
+    # grava com pai_pendente), (5,1) momento da versão sentinela (data_sentinela, 1048: o instante da trilha é o da
+    # origem, sem a vigência estimada da versão), (77,1) versão nunca vista (pai_inexistente, 1048)
     for hp, tipo in [(1, 1), (1, 2), (2, 1), (4, 1), (5, 1), (77, 1)]:
         _ins(ins, "HTPROFISTEL", ID_HTPROFIS=hp, ID_TBTIPOTELEFONE=tipo, TELEFONE="9000-%04d" % (hp * 10 + tipo))
     # versões do atendimento (pai da L6-02 só para a referência encadeada): 3 atendimento nunca visto, 4 sentinela
@@ -573,12 +575,12 @@ def linhas(r, ins):
         # r3 (revisão): telefone vira trilha do cadastro ligada à versão pelo hash (nunca versão própria): versão
         # recusada (paciente nunca visto, sem nome) deixa o telefone com pai_pendente; a versão nunca vista deixa uma
         # pai_inexistente por referência (paciente, momento, usuário, hash) e o momento NOT NULL recusa (1048)
-        "HTPACTELEFONE": {"gravados": 3, "pendencias": {"pai_inexistente": 4, "pai_pendente": 2,
-                                                        "restricao_destino_1048": 1}},
-        "HTPROFIS": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1, "data_sentinela": 1,
-                                                   "restricao_destino_1048": 1}},
-        "HTPROFISTEL": {"gravados": 3, "pendencias": {"pai_inexistente": 5, "pai_pendente": 2,
-                                                      "restricao_destino_1048": 1}},
+        "HTPACTELEFONE": {"gravados": 5, "pai_pendente_gravado": 2, "pendencias": {
+            "pai_inexistente": 5, "pai_pendente": 2, "restricao_destino_1048": 1}},
+        "HTPROFIS": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1, "data_sentinela": 1,
+                                                   "vigencia_sem_fonte": 1}},
+        "HTPROFISTEL": {"gravados": 4, "pai_pendente_gravado": 2, "pendencias": {
+            "pai_inexistente": 5, "pai_pendente": 2, "data_sentinela": 1, "restricao_destino_1048": 2}},
         "HTATENDRESP": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "data_sentinela": 1,
                                                       "restricao_destino_1048": 2}},
     }

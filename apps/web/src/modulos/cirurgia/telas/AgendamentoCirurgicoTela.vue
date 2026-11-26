@@ -48,6 +48,8 @@ const detalhe = useQuery({
 const d = computed(() => detalhe.data.value);
 const a = computed(() => d.value?.agendamento);
 const acoes = computed(() => (a.value ? acoesDoEstado(a.value.estado) : null));
+// V-D1: a cirurgia migrada sem situação na origem (não acionável) aparece com o rótulo próprio e só cancela ou reagenda.
+const naoInformada = computed(() => a.value?.estado === 'nao-informada');
 const nomeSala = (c: number | null) =>
   c === null ? '—' : (opcoes.data.value?.salas.find((s) => s.codigo === c)?.nome ?? String(c));
 const acao = ref<'' | 'mover' | 'cancelar' | 'pendencia'>('');
@@ -209,7 +211,9 @@ async function pendencia(): Promise<void> {
         </div>
         <div>
           <dt>{{ t('cirurgia.agendamento.estado') }}</dt>
-          <dd data-testid="agendamento-estado">{{ a.estadoRotulo }}</dd>
+          <dd data-testid="agendamento-estado">
+            {{ naoInformada ? t('cirurgia.agendamento.naoInformada') : a.estadoRotulo }}
+          </dd>
         </div>
         <div>
           <dt>{{ t('cirurgia.procedimento') }}</dt>
@@ -253,6 +257,12 @@ async function pendencia(): Promise<void> {
         data-testid="alerta-conflito"
       />
       <SanteAlerta v-if="a.excecao" variante="info" :texto="t('cirurgia.mapa.excecao')" />
+      <SanteAlerta
+        v-if="naoInformada"
+        variante="info"
+        :texto="t('cirurgia.agendamento.naoInformadaTexto')"
+        data-testid="alerta-nao-informada"
+      />
 
       <div v-if="!encerrado" class="acoes">
         <SanteBotao
@@ -282,7 +292,7 @@ async function pendencia(): Promise<void> {
         <SanteBotao
           v-if="podeAndamento && acoes?.retomar && a.estadoId !== null"
           variante="secundario"
-          :rotulo="t('cirurgia.agendamento.retomar')"
+          :rotulo="naoInformada ? t('cirurgia.agendamento.reagendar') : t('cirurgia.agendamento.retomar')"
           @acionar="andamento('solicitado')"
         />
         <SanteBotao
@@ -377,7 +387,7 @@ async function pendencia(): Promise<void> {
             :rotulo="t('cirurgia.agendamento.quemPediu')"
             :opcoes="solicitantes"
           />
-          <label
+          <label v-if="!naoInformada"
             ><input v-model="cSuspender" type="checkbox" /> {{ t('cirurgia.agendamento.suspender') }}</label
           >
         </div>

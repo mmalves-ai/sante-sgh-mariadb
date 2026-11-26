@@ -158,6 +158,10 @@ export const mensagensCirurgia = {
     noBloco: 'Paciente no bloco',
     emSala: 'Paciente em sala',
     retomar: 'Retomar o pedido',
+    reagendar: 'Reagendar (volta a pedido de sala)',
+    naoInformada: 'Não informada na origem',
+    naoInformadaTexto:
+      'Cirurgia trazida do sistema anterior sem situação: fica fora do mapa do bloco, da fila do dia e dos avisos. Cancele ou reagende.',
     pendencia: 'Registrar pendência',
     pendencias: 'Pendências pré-operatórias',
     tipoPendencia: 'Pendência',

@@ -20,15 +20,15 @@ Anomalias cobertas, por tabela:
   repetição presumida;
 - TBALERTA_TBOPCOES_TBEVENTOS: sequência por regra, regra recusada e inexistente, tela inexistente;
 - TBUSUCPL: profissional pela cadeia inscrição > profissional, sem inscrição (4025), profissional inexistente,
-  empresa inexistente; senha secundária preenchida que NUNCA é lida;
-- PRJUSTIF_IMP_EXPORTACAO: usuário pela inscrição do cadastro complementar (o mesmo usuário com a mesma inscrição em
-  duas empresas, i=2, ainda dá pai_ambiguo e recusa: a regra que só acusa usuários diferentes é pedido ao motor;
-  com ela, i=2 grava), tipo de operação e formato presumidos, documento exportado (tipo + id na origem), sem
+  a mesma inscrição noutra empresa (a empresa vira o estabelecimento do cliente: 1062); senha secundária preenchida que NUNCA é lida;
+- PRJUSTIF_IMP_EXPORTACAO: usuário pelo login do profissional da inscrição (recusas-fase2 P1a: TBCBOPRO > TBPROFIS
+  > login; i=2 grava), sem login nem profissional (CHECK do autor), tipo de operação e formato presumidos, documento exportado (tipo + id na origem), sem
   justificativa (4025), sem data, sem inscrição;
 - exclusões (CCCADCIR_EXCLUSAO, SIPACAGD_EXCLUSAO): autor presumido (valor_presumido), atendimento pelo registro
   (um visto, um nunca visto), sem usuário, sem data, paciente inexistente;
 - trilha (TBCABTRILHA, TBLANTRALERTA, TBLANTRILHASGH): paciente pela versão do cadastro, tipo de ação recusado
-  (pai_pendente), sem usuário (CHECK do autor), mensagem longa e vazia, linhas idênticas sem chave.
+  (R9: grava com o tipo nulo e pai_pendente), sem usuário (CHECK do autor), mensagem longa e vazia, linhas idênticas
+  sem chave.
 """
 import datetime
 from pathlib import Path
@@ -73,7 +73,7 @@ def _create(t):
 TABELAS = ("TBHISTSENHA", "TBUNIUSE", "TBUSERCON", "TBUSERSCOMPL", "TBUSERS_TBPAPEL", "TBALERTA_TBOPCOES_TBEVENTOS",
            "TBUSERS_TBALERTA", "TBLOCAL_TBUSERS", "PRJUSTIF_IMP_EXPORTACAO", "CCCADCIR_EXCLUSAO", "TBUSUCPL",
            "TBUSERS_TBCONVEN", "SIPACAGD_EXCLUSAO", "TBCABTRILHA", "TBLANTRALERTA", "TBLANTRILHASGH")
-CADEIA = ("TBCBOPRO", "TBSEXO", "HTPACIENTE", "TBTIPOOID")  # de outras fatias: só lidas pela referência encadeada
+CADEIA = ("TBCBOPRO", "TBPROFIS", "TBSEXO", "HTPACIENTE", "TBTIPOOID")  # de outras fatias: só lidas pela referência encadeada
 DDL = """
 CREATE TABLE TBTPPERM_RICADPAC (ID INTEGER NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(23));
 CREATE TABLE TBOID (ID SMALLINT NOT NULL PRIMARY KEY, OID VARCHAR(30) NOT NULL, DESCRICAO VARCHAR(100) NOT NULL,
@@ -143,6 +143,10 @@ def linhas(r, ins):
     for i, sus, prof in [(50, 1, 300), (51, 1, 301), (52, 2, 399), (53, 9, 300)]:
         ins("TBCBOPRO", _linha("TBCBOPRO", ID=i, ID_TBCBOSUS=sus, ID_TBPROFIS=prof, UF="ZZ", COD=90000 + i,
                                VINC_EMPR="N"))
+    # recusas-fase2 P1a: o login da exportação vem do profissional da inscrição (TBCBOPRO > TBPROFIS > login); 399 e
+    # o 9 da inscrição 53 nunca foram carregados
+    for prof, login in [(300, A), (301, B)]:
+        ins("TBPROFIS", _linha("TBPROFIS", ID=prof, ID_TBUSERS=login, NOME="Profissional exemplo %d" % prof))
     for cod, nome, sigla in [(1, "Masculino", "M"), (2, "Feminino", "F"), (3, "Ignorado", "I")]:
         ins("TBSEXO", [cod, nome, sigla])
     for i, pac in [(40, 700), (41, 799)]:
@@ -255,8 +259,9 @@ def linhas(r, ins):
         ins("TBTPPERM_RICADPAC", [i, d])
     # r5 (ADR 0007, 17): histórico de senhas com o resumo importado (falso: SHA-256 de textos de exemplo)
     import base64 as _b64, hashlib as _hl
-    _h = lambda s: _hl.sha256(s.encode()).hexdigest()
-    for u, s, salt in [(A, _h("exemplo-1"), "sal-1"), (B, _b64.b64encode(_hl.sha256(b"exemplo-2").digest()).decode(), None),
+    # recusas-fase2 P1a: o resumo da origem é SHA-1 (40 hex; base64 vira hex); outro formato recusa
+    _h = lambda s: _hl.sha1(s.encode()).hexdigest()
+    for u, s, salt in [(A, _h("exemplo-1"), "sal-1"), (B, _b64.b64encode(_hl.sha1(b"exemplo-2").digest()).decode(), None),
                        (C, "nao-e-resumo", None), ("zeca", _h("exemplo-3"), None)]:
         ins("TBHISTSENHA", [u, ts, s, salt])
     return {
@@ -280,17 +285,22 @@ def linhas(r, ins):
         "TBALERTA_TBOPCOES_TBEVENTOS": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 2,
                                                                       "restricao_destino_1048": 1}},
         "TBUSERS_TBALERTA": {"gravados": 2, "pendencias": {"pai_pendente": 1}},
-        "TBUSUCPL": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 5, "pai_inexistente": 2,
-                                                   "restricao_destino_4025": 2, "restricao_destino_1048": 1}},
-        "PRJUSTIF_IMP_EXPORTACAO": {"gravados": 3, "pendencias": {
-            "valor_presumido": 27, "pai_ambiguo": 1, "pai_inexistente": 3, "catalogo_codigo_inexistente": 1,
-            "restricao_destino_1048": 4, "restricao_destino_4025": 2}},
+        # recusas-fase2 P1a: a empresa vira o estabelecimento do cliente: A na empresa 2 repete o vínculo da empresa 1
+        "TBUSUCPL": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 5, "pai_inexistente": 1,
+                                                   "restricao_destino_4025": 2, "restricao_destino_1062": 1}},
+        # recusas-fase2 P1a: login pelo profissional da inscrição (sem ambiguidade: a 2 grava); sem login, o autor
+        # migrado sem profissional recusa pelo CHECK do autor (6 e 8), não mais pelo NOT NULL
+        "PRJUSTIF_IMP_EXPORTACAO": {"gravados": 4, "pendencias": {
+            "valor_presumido": 27, "pai_inexistente": 4, "catalogo_codigo_inexistente": 1,
+            "restricao_destino_1048": 1, "restricao_destino_4025": 4}},
         "CCCADCIR_EXCLUSAO": {"gravados": 1, "pendencias": {"valor_presumido": 3, "pai_inexistente": 2,
                                                             "restricao_destino_1048": 2}},
         "SIPACAGD_EXCLUSAO": {"gravados": 2, "pendencias": {"valor_presumido": 2, "pai_inexistente": 1}},
-        "TBCABTRILHA": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 3,
-                                                      "restricao_destino_4025": 1}},
-        "TBLANTRALERTA": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
+        # R9: o tipo de ação recusado (coluna anulável) deixa a trilha 2 gravada com o tipo nulo e pai_pendente; o
+        # alerta e o campo da trilha 2 gravam com ela
+        "TBCABTRILHA": {"gravados": 5, "pai_pendente_gravado": 1, "pendencias": {
+            "pai_pendente": 1, "pai_inexistente": 3, "restricao_destino_4025": 1}},
+        "TBLANTRALERTA": {"gravados": 4, "pendencias": {"pai_inexistente": 1,
                                                         "texto_resumido": 1, "restricao_destino_1048": 2}},
-        "TBLANTRILHASGH": {"gravados": 4, "pendencias": {"valor_presumido": 4, "pai_pendente": 1}},
+        "TBLANTRILHASGH": {"gravados": 5, "pendencias": {"valor_presumido": 5}},
     }

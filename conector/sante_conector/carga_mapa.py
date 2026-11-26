@@ -156,6 +156,8 @@ Resíduo do motor da rodada 4 (pedidos que ainda bloqueavam tabelas; prova em `s
   numérico: NULL com valor_fora_do_dominio); a regra declarada vale para o RESULTADO (ex.: `piso:0`);
 - opção de coluna `exige_dominio` (com `depara=valores`): valor sem par recusa a linha (valor_fora_do_dominio) em vez
   de cair no padrão do destino;
+- coluna concorrente (várias declarações do mesmo destino): vale a primeira com valor; as seguintes nem são avaliadas
+  quando a coluna já está preenchida (sem pendência nem recusa de um caminho não usado; `marca` continua avisando);
 - opção de coluna `senao`: concorrente que preenche o destino apaga a pendência valor_fora_do_dominio das
   declarações anteriores da mesma coluna (o valor certo veio por outro caminho);
 - literal presumido `=~x` em coluna concorrente: a pendência valor_presumido só quando o literal é o valor gravado
@@ -633,6 +635,10 @@ def _truncar(v, precisao):
     return v.replace(microsecond=(v.microsecond // q) * q)
 
 
+# V3b (recusas-fase2): concorrentes avaliadas mesmo com a coluna já preenchida, pelo efeito fora dela (o segredo vai
+# ao cofre, o arquivo ao armazenamento, o número livre é reservado)
+_CONCORRENTE_COM_EFEITO = ("#cofre:", "#arquivo:", "#seq_livre:")
+
 class CargaMapa(carga.Carga):
     def __init__(self, leitor, cr, ctl, eid, imagem_id, mapa_exec, progresso=None, entidades_usadas=(),
                  sincronizar=False, limite_exclusao=None, confirmar_exclusao_em_massa=False, limite_global=None,
@@ -802,15 +808,24 @@ class CargaMapa(carga.Carga):
 
     def _colisoes(self, p):
         """Chaves das linhas cujo código `codigo_char` colide pela caixa num destino de chave única sem caixa."""
+        # recusas-fase2 V3a: `#codigo_derivado:X:n[:prefixo]` de uma coluna só também entra (o prefixo de domínio não
+        # tira a colisão pela caixa: 'GA' e 'Ga' colidem como 'A' e 'a'), senão a primeira lida vencia pela ordem
         alvo = [c["coluna"] for dt in p["destinos"] for c in p["colunas"][dt]
-                if c["regra"] == "codigo_char" and not _especial(c["coluna"]) and c["destino"] in self._unicos_sem_caixa(dt)]
+                if c["regra"] == "codigo_char" and c["destino"] in self._unicos_sem_caixa(dt)
+                and (not _especial(c["coluna"]) or (c["coluna"].startswith("#codigo_derivado:")
+                                                    and len(fontes_especial(c["coluna"])) == 1))]
         if not alvo:
             return set()
         por_col = {c: {} for c in alvo}
         for linha, ch_sem in self._linhas_mapa(p):
             chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
             for c in alvo:
-                x = sentinela.aplicar("codigo_char", linha[c])[0]
+                if c.startswith("#codigo_derivado:"):
+                    _, fonte, n, pre = (c.split(":") + [""])[:4]
+                    y = sentinela.aplicar("codigo_char", linha[fonte])[0]
+                    x = codigo_derivado(None if y is None else str(y), int(n), pre)[0]
+                else:
+                    x = sentinela.aplicar("codigo_char", linha[c])[0]
                 if x is not None:
                     por_col[c].setdefault(x, []).append(chave)
         saida = set()
@@ -1519,6 +1534,14 @@ class CargaMapa(carga.Carga):
                     marcas[nome] = c
                     continue
                 n0 = len(pend)
+                if dc in pos and modelo[pos[dc]][1] is not None and not c.get("marca") \
+                        and not nome.startswith(_CONCORRENTE_COM_EFEITO):
+                    # V3b (recusas-fase2): concorrente com a coluna já preenchida por declaração anterior não é
+                    # avaliada: vale a primeira com valor, e a conversão, o `cod:`, o espelho e o de-para desta não
+                    # deixam pendência de ruído (ex.: codigo_inexistente_destino ou valor_fora_do_dominio de um
+                    # caminho que nem foi usado) nem recusam a linha. Exceção: declaração com efeito fora da coluna
+                    # (cofre, arquivo, número livre), avaliada como antes
+                    continue
                 if c.get("se") and not self._cond(linha, c["se"], pend):
                     x = None  # condição da coluna fora: NULL sem pendência (a próxima concorrente é tentada)
                 elif nome.startswith("=~"):

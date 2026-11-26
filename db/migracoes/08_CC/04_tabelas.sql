@@ -110,7 +110,7 @@ ALTER TABLE agendamento_cirurgico
   MODIFY paciente_id BIGINT UNSIGNED NULL,
   ADD CONSTRAINT ck_agendamento_cirurgico_paciente CHECK (paciente_id IS NOT NULL OR (canal_solicitacao = 'portal' AND paciente_informado IS NOT NULL AND situacao IN ('solicitado','em_analise','reprovado','cancelado'))),
   DROP CONSTRAINT ck_agendamento_cirurgico_situacao,
-  ADD CONSTRAINT ck_agendamento_cirurgico_situacao CHECK (situacao IN ('solicitado','em_analise','reprovado','agendado','confirmado','no_bloco','em_andamento','realizado','suspenso','cancelado'));
+  ADD CONSTRAINT ck_agendamento_cirurgico_situacao CHECK (situacao IN ('solicitado','em_analise','reprovado','agendado','confirmado','no_bloco','em_andamento','realizado','suspenso','cancelado','nao_informada'));
 
 CREATE TABLE agendamento_cirurgico_versao (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
