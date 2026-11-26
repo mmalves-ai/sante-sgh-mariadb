@@ -58,6 +58,20 @@ describe('mapa de cotação em arquivo', () => {
     });
   });
 
+  it('neutraliza o início de fórmula no texto (injeção em planilha) e devolve a marca original na volta', () => {
+    const t = montarArquivoCotacao(
+      [{ item: 50, seq: 1, nome: '=HYPERLINK("x")' }],
+      [{ ...propostas[1]!, fornecedorNome: '@Fornecedor', marca: '+Marca', valorUnitario: 2 }],
+    );
+    const linha = lerCsv(t)[1]!;
+    expect(linha[3]).toBe('\'=HYPERLINK("x")');
+    expect(linha[6]).toBe("'@Fornecedor");
+    expect(linha[8]).toBe("'+Marca");
+    expect(ADAPTADOR_ARQUIVO_COTACAO.lerRespostas(t, propostas).respostas).toEqual([
+      { proposta: 2, valorUnitario: 2, marca: '+Marca' },
+    ]);
+  });
+
   it('lê valores da planilha brasileira', () => {
     expect(lerValorPlanilha('1.234,56')).toBe(1234.56);
     expect(lerValorPlanilha('R$ 12,5')).toBe(12.5);

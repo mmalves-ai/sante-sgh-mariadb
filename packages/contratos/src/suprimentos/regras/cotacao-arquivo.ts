@@ -75,9 +75,12 @@ export const COLUNAS_MAPA_COTACAO = [
 const SEP = ';';
 const MAX_MARCA = 25;
 
-/** A célula no CSV: aspas quando tem separador, aspas ou quebra de linha. */
+/** Início de texto que a planilha executaria como fórmula (injeção de fórmula em CSV, OWASP). */
+const INICIO_FORMULA = /^[=+\-@\t\r]/;
+
+/** A célula no CSV: aspas quando tem separador, aspas ou quebra de linha; texto com início de fórmula ganha o apóstrofo. */
 function celula(v: string | number): string {
-  const t = String(v);
+  const t = typeof v === 'string' && INICIO_FORMULA.test(v) ? `'${v}` : String(v);
   return /[";\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
 }
 
@@ -232,7 +235,8 @@ export function lerArquivoRespostas(
       });
       return;
     }
-    const marca = cMarca >= 0 ? (l[cMarca] ?? '').replace(/\s+/g, ' ').trim() : undefined;
+    const marca =
+      cMarca >= 0 ? (l[cMarca] ?? '').replace(/^'(?=[=+\-@])/, '').replace(/\s+/g, ' ').trim() : undefined;
     if (marca !== undefined && marca.length > MAX_MARCA) {
       recusas.push({ linha, codigo: 'marca-longa', mensagem: 'A marca tem no máximo 25 caracteres.' });
       return;
