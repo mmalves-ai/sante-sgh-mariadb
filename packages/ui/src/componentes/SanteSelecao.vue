@@ -23,6 +23,11 @@ const props = withDefaults(
     obrigatorio?: boolean;
     /** Força a busca ligada ou desligada; sem valor, ela aparece só em lista grande. */
     busca?: boolean | undefined;
+    /**
+     * Busca remota (cadastro grande no servidor): liga a caixa de busca, recebe cada termo digitado nela e a lista
+     * mostra as opções como vieram (quem filtra é o servidor; a opção já escolhida a tela mantém nas opções).
+     */
+    buscar?: ((termo: string) => void) | undefined;
   }>(),
   { busca: undefined },
 );
@@ -33,9 +38,14 @@ const termo = ref('');
 
 /** Valor vazio (null ou ''): o OpenVue mostra o placeholder, então ele recebe o rótulo dessa opção. */
 const vazio = (v: unknown) => v === null || v === '';
-const comBusca = computed(() => props.busca ?? props.opcoes.length > LIMIAR_BUSCA);
+const comBusca = computed(
+  () => props.buscar !== undefined || (props.busca ?? props.opcoes.length > LIMIAR_BUSCA),
+);
 const visiveis = computed(() =>
-  (comBusca.value ? filtrarOpcoes(props.opcoes, termo.value) : props.opcoes).map((o) => ({
+  (comBusca.value && props.buscar === undefined
+    ? filtrarOpcoes(props.opcoes, termo.value)
+    : props.opcoes
+  ).map((o) => ({
     ...o,
     __termo: termo.value,
   })),
@@ -44,6 +54,7 @@ const textoVazio = computed(() => props.opcoes.find((o) => vazio(o.valor))?.rotu
 const valorDoTeste = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const aoFiltrar = (e: { value: string }) => {
   termo.value = e.value;
+  props.buscar?.(e.value);
 };
 </script>
 

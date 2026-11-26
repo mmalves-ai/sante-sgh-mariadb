@@ -93,7 +93,8 @@ const opcoesClasse = computed(() =>
   opcoesDe(ap.value?.classesContaminacao, t('cirurgia.procedimentoCirurgico.semInformar')),
 );
 
-// Busca no servidor do item cobrado e do SUS (a partir de 2 letras); a opção já gravada fica sempre na lista.
+// Busca no servidor do item cobrado e do SUS (a partir de 2 letras), digitada na busca do próprio combo; a opção já
+// gravada fica sempre na lista.
 const termoItem = ref('');
 const termoSigtap = ref('');
 const itensAchados = useQuery({
@@ -293,26 +294,18 @@ const MARCAS = ['exigeLateralidade', 'exigeExameImagem', 'exigePlano', 'obstetri
       />
       <fieldset>
         <legend>{{ t('cirurgia.procedimentoCirurgico.faturamento') }}</legend>
-        <label
-          >{{ t('cirurgia.procedimentoCirurgico.buscarItem') }}
-          <input v-model="termoItem" type="search" maxlength="60" data-testid="procedimento-busca-item"
-        /></label>
         <SanteSelecao
           v-model="f.itemFaturavel"
           :rotulo="t('cirurgia.procedimentoCirurgico.itemFaturavel')"
           :opcoes="opcoesItem"
-          :busca="false"
+          :buscar="(q: string) => (termoItem = q)"
           data-testid="procedimento-item"
         />
-        <label
-          >{{ t('cirurgia.procedimentoCirurgico.buscarSigtap') }}
-          <input v-model="termoSigtap" type="search" maxlength="60" data-testid="procedimento-busca-sigtap"
-        /></label>
         <SanteSelecao
           v-model="f.procedimentoSigtap"
           :rotulo="t('cirurgia.procedimentoCirurgico.procedimentoSigtap')"
           :opcoes="opcoesSigtap"
-          :busca="false"
+          :buscar="(q: string) => (termoSigtap = q)"
           data-testid="procedimento-sigtap"
         />
         <p v-if="!f.itemFaturavel" role="note" data-testid="procedimento-sem-faturamento">

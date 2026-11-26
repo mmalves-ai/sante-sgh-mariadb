@@ -8,7 +8,7 @@
 // (apps/api/src/modulos/cirurgia/procedimento-cirurgico-propria.int.spec.ts).
 import { expect, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
-import { esperarSemSelectNativo } from './combos.js';
+import { digitarNaBusca, esperarSemSelectNativo, fecharCombo } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 const API = '/api/cirurgia/procedimentos-cirurgicos';
@@ -49,11 +49,12 @@ test.describe('centro cirúrgico: cadastro do procedimento cirúrgico @C1-089 @F
       await expect(page.getByTestId(id)).toBeVisible();
     await expect(page.getByTestId('procedimento-sem-faturamento')).toBeVisible();
     const itens = page.waitForResponse((r) => r.url().includes(`${API}/itens-faturaveis`));
-    await page.getByTestId('procedimento-busca-item').fill('3031');
+    await digitarNaBusca(page.getByTestId('procedimento-item'), '3031');
     expect((await itens).status()).toBe(503);
     const sus = page.waitForResponse((r) => r.url().includes(`${API}/sigtap`));
-    await page.getByTestId('procedimento-busca-sigtap').fill('0407');
+    await digitarNaBusca(page.getByTestId('procedimento-sigtap'), '0407');
     expect((await sus).status()).toBe(503);
+    await fecharCombo(page.getByTestId('procedimento-sigtap'));
     await esperarSemSelectNativo(tela);
 
     const salvar = page.getByTestId('procedimento-salvar');

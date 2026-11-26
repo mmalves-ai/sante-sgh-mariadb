@@ -106,6 +106,28 @@ describe('SanteSelecao: busca embutida na lista (ADR 0027)', () => {
     w.unmount();
   });
 
+  it('busca remota: lista curta com busca, cada termo vai a buscar e as opções vêm sem filtro local', async () => {
+    const termos: string[] = [];
+    const w = montar(SanteSelecao, {
+      props: {
+        rotulo: 'Item cobrado',
+        opcoes: [
+          { valor: '', rotulo: 'Sem ligação' },
+          { valor: '7', rotulo: '30310 — Apendicectomia' },
+        ],
+        modelValue: '',
+        buscar: (q: string) => termos.push(q),
+      },
+    });
+    await abrir(w);
+    expect(busca()).not.toBeNull();
+    await digitar('apendice');
+    expect(termos).toEqual(['apendice']);
+    // O servidor já filtrou: a tela decide o que mostra (nada some pelo filtro local).
+    expect(opcoesAbertas()).toEqual(['Sem ligação', '30310 — Apendicectomia']);
+    w.unmount();
+  });
+
   it('nome do campo pelo rótulo; data-valor para os testes; obrigatório anunciado', () => {
     const w = montar(SanteSelecao, {
       props: { rotulo: 'Profissional', opcoes: grandes, modelValue: 'p5', obrigatorio: true },

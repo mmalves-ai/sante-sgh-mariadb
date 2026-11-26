@@ -49,6 +49,15 @@ export async function escolher(campo: Locator, escolha: Escolha): Promise<void> 
 }
 
 /** Valor atual do combo ('' para vazio/nulo), para trocar `toHaveValue`. */
+/** Digita na busca embutida da lista (combo com busca remota: cada termo vai ao servidor) e deixa a lista aberta. */
+export async function digitarNaBusca(campo: Locator, termo: string): Promise<void> {
+  const lista = await abrirCombo(campo);
+  await lista
+    .locator('xpath=ancestor::*[@data-pc-section="overlay"][1]')
+    .locator('input[role="searchbox"]')
+    .fill(termo);
+}
+
 export async function esperarValor(campo: Locator, valor: string): Promise<void> {
   await expect(involucroDe(campo)).toHaveAttribute('data-valor', valor);
 }
