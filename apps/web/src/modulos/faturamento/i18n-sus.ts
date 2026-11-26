@@ -2,6 +2,7 @@
 // estabelecimento (DP-35), BPA, APAC e AIH. Sem nome de sistema antigo (ADR 0023). Toda regra da crítica e toda recusa
 // do domínio tem texto (o spec confere pelo tipo).
 import { mensagensSusEstabelecimento } from './i18n-estabelecimento-sus.js';
+import { mensagensSusConfiguracao } from './i18n-sus-configuracao.js';
 import { mensagensSusAih, mensagensSusRetorno } from './i18n-sus-aih.js';
 import { mensagensSusProgramacao } from './i18n-sus-programacao.js';
 
@@ -10,6 +11,7 @@ export const mensagensSus = {
   // Etapa 4: a AIH, os leitos de UTI e o retorno do gestor (i18n-sus-aih.ts).
   aih: mensagensSusAih,
   estabelecimento: mensagensSusEstabelecimento,
+  configuracao: mensagensSusConfiguracao,
   programacao: mensagensSusProgramacao,
   retorno: mensagensSusRetorno,
   carregando: 'Carregando…',

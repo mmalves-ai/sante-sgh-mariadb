@@ -306,6 +306,16 @@ export const rotasFaturamento: RouteRecordRaw[] = [
       menu: 'Faturamento > Faturamento SUS > Médicos solicitantes SUS',
     },
   },
+  // C1-051 (06-SUS linha 53): permissão por usuário e setor e parâmetros por instrumento do faturamento SUS.
+  {
+    path: '/faturamento/sus/configuracao',
+    name: 'faturamento.susConfiguracao',
+    component: () => import('./telas/ConfiguracaoSusTela.vue'),
+    meta: {
+      permissao: 'faturamento.sus.ler',
+      menu: 'Faturamento > Faturamento SUS > Configuração (permissões por setor e parâmetros)',
+    },
+  },
   // M51 (etapa 4): a AIH, o retorno do gestor e os leitos de UTI habilitados (desligados por estabelecimento até haver
   // contrato SUS, DP-35).
   {
