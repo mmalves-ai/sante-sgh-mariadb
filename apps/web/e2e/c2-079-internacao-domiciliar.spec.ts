@@ -249,7 +249,8 @@ test.describe('internação domiciliar: orçamento, transferência para casa, ch
       return json(r, { title: 'Não encontrado', status: 404 }, 404);
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    await // Equipe da internação: consulta e grava a internação (internacao.internacao.ler e .criar).
+    await entrar(page, 'SINT.INTERNACAO');
     await page.goto('/internacao/domiciliar');
     await expect(page.getByTestId('tela-internacao-domiciliar')).toBeVisible();
     await semViolacaoAxe(page, '/internacao/domiciliar (painel)');

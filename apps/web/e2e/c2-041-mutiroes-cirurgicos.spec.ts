@@ -194,7 +194,8 @@ test.describe('@C2-041 mutirões cirúrgicos do SUS', () => {
     const externas = vigiarExternas(page);
     const api = simular(page);
     await api.ligar();
-    await entrar(page, 'SINT.ADMIN');
+    await // Faturista do SUS (AIH): lê o SUS, mantém o projeto (susCadastro.editar) e marca a AIH (susAih.registrar).
+    await entrar(page, 'SINT.FATURISTA.AIH');
 
     await page.goto('/cirurgia/mutiroes');
     await expect(page.getByTestId('mutiroes-cirurgicos')).toBeVisible();

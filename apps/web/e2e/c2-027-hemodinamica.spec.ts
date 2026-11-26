@@ -279,6 +279,8 @@ test.describe('@C2-027 registro de hemodinâmica', () => {
     await page.getByTestId('hemo-refazer').click();
     await expect(page.getByTestId('hemodinamica-encerrado')).toHaveCount(0);
     await page.getByTestId('hemo-inicio').locator('input').fill('11:30');
+    // A hora se confirma ao sair do campo (SanteHora); só então o início deixa de faltar e o botão se habilita.
+    await page.getByTestId('hemo-inicio').locator('input').press('Tab');
     await page.getByTestId('hemo-iniciar').click();
     await expect(page.getByTestId('hemodinamica-situacao')).toHaveAttribute('data-situacao', 'em_andamento');
     expect(api.corpos[2]).toMatchObject({ viaAcesso: 'femoral_direita', primeiroOperador: 11 });
