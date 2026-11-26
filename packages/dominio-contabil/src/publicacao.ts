@@ -41,12 +41,13 @@ export interface LinhaFatoPublicado {
   readonly conteudo: string;
 }
 
+export type CodigoFatoInvalido = 'tipo-fato' | 'entidade-fato' | 'data-fato' | 'valor-fato' | 'centro-fato';
+
 export class FatoInvalido extends Error {
-  constructor(
-    readonly codigo: 'tipo-fato' | 'entidade-fato' | 'data-fato' | 'valor-fato' | 'centro-fato',
-    mensagem: string,
-  ) {
+  readonly codigo: CodigoFatoInvalido;
+  constructor(codigo: CodigoFatoInvalido, mensagem: string) {
     super(mensagem);
+    this.codigo = codigo;
     this.name = 'FatoInvalido';
   }
 }

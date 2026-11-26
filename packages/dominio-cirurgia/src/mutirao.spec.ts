@@ -70,7 +70,7 @@ describe('situação do projeto', () => {
 
 describe('validarMeta', () => {
   it('exige o SIGTAP do procedimento e não repete no projeto', () => {
-    expect(validarMeta({ sigtap: null, quantidadePrevista: 5, valorUnitario: null })[0]?.campo).toBe(
+    expect(validarMeta({ sigtap: null, quantidadePrevista: 5, valorUnitario: null }, [])[0]?.campo).toBe(
       'procedimento',
     );
     expect(

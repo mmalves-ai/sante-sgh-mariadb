@@ -295,7 +295,7 @@ export function avaliarAlertas(e: EntradaMotor): AlertaPrescricao[] {
   return r;
 }
 
-export const JUSTIFICATIVA_MINIMA = 10;
+export const JUSTIFICATIVA_MINIMA_ALERTA_PRESCRICAO = 10;
 
 /** Pode assinar? Bloqueio total impede; "justificar" impede sem justificativa (10+ letras) ou com o item mantido. */
 export function impede(alertas: readonly AlertaPrescricao[]): { impede: boolean; motivo: string | null } {
@@ -305,7 +305,7 @@ export function impede(alertas: readonly AlertaPrescricao[]): { impede: boolean;
     if (
       a.nivel === 'justificar' &&
       (a.decisao?.decisao !== 'mantido' ||
-        (a.decisao.justificativa ?? '').trim().length < JUSTIFICATIVA_MINIMA)
+        (a.decisao.justificativa ?? '').trim().length < JUSTIFICATIVA_MINIMA_ALERTA_PRESCRICAO)
     )
       return { impede: true, motivo: 'alerta-sem-justificativa' };
   }
