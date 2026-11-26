@@ -364,6 +364,18 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
       'regra 7 do M24: o cadastro do item marca o potencialmente perigoso; a lista do hospital complementa (validação humana, ficha seção 13)',
   },
   {
+    chave: 'pep.pesquisa.triagemAutomatica',
+    modulo: 'pep',
+    descricao:
+      'Liga a triagem automática de elegibilidade da pesquisa clínica sobre os prontuários do estabelecimento (só sugestão à equipe do estudo)',
+    tipo: 'booleano',
+    padrao: 'false',
+    niveis: ['estabelecimento', 'rede'],
+    critico: false,
+    dono: 'comitê de ética em pesquisa e diretoria clínica',
+    origem: '03-PEP L144: LGPD art. 11, II, c e Res. CNS 466/2012; desligada por padrão',
+  },
+  {
     chave: 'pep.prescricao.duplaChecagem',
     modulo: 'pep',
     descricao: 'Item de alta vigilância exige dupla checagem na administração (marca para a beira do leito)',

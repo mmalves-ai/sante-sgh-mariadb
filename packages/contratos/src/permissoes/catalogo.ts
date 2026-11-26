@@ -46,6 +46,7 @@ import { PERMISSOES_QUALIDADE_M48 } from './qualidade.js';
 import { PERMISSOES_QUALIDADE_CCIH_M48 } from './qualidade-ccih.js';
 import { PERMISSOES_QUALIDADE_AGRAVO_M48 } from './qualidade-agravo.js';
 import { PERMISSOES_CIRURGIA_CME } from './cirurgia-cme.js';
+import { PERMISSOES_PESQUISA_CLINICA } from './pesquisa-clinica.js';
 import { PERMISSOES_QUALIDADE_GESTAO_M48 } from './qualidade-gestao.js';
 import { PERMISSOES_FOLHA_M53 } from './pessoas-folha.js';
 import {
@@ -135,6 +136,8 @@ export const CATALOGO_DECLARADO: readonly DeclaracaoPermissao[] = [
   ...PERMISSOES_QUALIDADE_AGRAVO_M48,
   // F7 (05-SUP linha 29): central de material esterilizado.
   ...PERMISSOES_CIRURGIA_CME,
+  // 03-PEP L144: pesquisa clínica.
+  ...PERMISSOES_PESQUISA_CLINICA,
   ...PERMISSOES_QUALIDADE_GESTAO_M48,
   ...PERMISSOES_FOLHA_M53,
   ...PERMISSOES_PESSOAS_M52_F1,
@@ -205,6 +208,8 @@ export const PERFIS_COMPLEMENTARES = [
   'ouvidoria',
   // F7 (05-SUP linha 29): equipe da central de material esterilizado (RDC 15/2012); concessão nominal ou pelo mapa.
   'central-material-esteril',
+  // 03-PEP L144: equipe do centro de pesquisa clínica (Res. CNS 466/2012); concessão nominal ou pelo mapa.
+  'pesquisa-clinica',
   /**
    * M44: diretoria clínica (responsável técnico e diretor clínico): publica o protocolo de classificação de risco.
    * Só por concessão nominal da gestão de acessos (SGH_ACESSO_PERFIL_USUARIO) ou pelo mapa aprovado; nenhum grupo

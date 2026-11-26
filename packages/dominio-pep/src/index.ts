@@ -151,3 +151,5 @@ export * from './especialidades/acompanhamento-oncologico.js';
 export * from './curvas-crescimento.js';
 // 03-PEP L145: doação e transplante de órgãos (doador, receptor, destino do órgão, acompanhamento).
 export * from './transplante.js';
+// 03-PEP L144: pesquisa clínica (estudo, critérios, triagem como sugestão, participantes).
+export * from './pesquisa-clinica.js';

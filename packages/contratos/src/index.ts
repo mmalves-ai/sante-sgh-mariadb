@@ -348,6 +348,7 @@ export * from './permissoes/qualidade-ccih.js';
 export * from './qualidade/agravo.js';
 export * from './permissoes/qualidade-agravo.js';
 export * from './permissoes/cirurgia-cme.js';
+export * from './permissoes/pesquisa-clinica.js';
 // M48, etapa 5: gestão da qualidade (ONA) e envios regulatórios.
 export * from './qualidade/gestao.js';
 export * from './permissoes/qualidade-gestao.js';
