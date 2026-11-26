@@ -244,7 +244,7 @@ const CACHE_SITUACAO_PLATAFORMA_MS = 180_000;
 export const PREFIXO_LOGIN_PLATAFORMA = 'plataforma:';
 
 /** Os métodos do segundo fator que a conta escolhe (o mesmo conjunto de codigo-email.ts). */
-type MetodoSegundoFatorSessao = 'aplicativo' | 'email';
+type MetodoSegundoFatorSessao = 'aplicativo' | 'email' | 'dispositivo';
 
 /** Login do administrador da plataforma sem o prefixo da sessão. */
 export function loginPuroPlataforma(login: string): string {

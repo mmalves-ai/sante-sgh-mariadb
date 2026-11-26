@@ -269,7 +269,11 @@ describe('quem entra e onde (sem lista de bloqueio)', () => {
       url: '/api/plataforma/como/usuarios?estabelecimento=aa&grupo=MEDICOS',
       headers: plat(n),
     });
-    expect(usuarios.json()).toEqual([{ login: 'SINT.MEDICO', nome: 'Usuário sintético (desenvolvimento)' }]);
+    // MEDICOS da fonte sintética: SINT.MEDICO e SINT.PESQUISA (C3-020, médico da equipe de pesquisa).
+    expect(usuarios.json()).toEqual([
+      { login: 'SINT.MEDICO', nome: 'Usuário sintético (desenvolvimento)' },
+      { login: 'SINT.PESQUISA', nome: 'Usuário sintético (desenvolvimento)' },
+    ]);
     // Logins bloqueados não aparecem.
     const sint = await app.inject({
       method: 'GET',
