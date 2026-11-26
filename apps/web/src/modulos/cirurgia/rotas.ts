@@ -92,6 +92,13 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     meta: { permissao: 'cirurgia.cme.ler', menu: `${M} > CME: cadastro de caixas e instrumentais` },
   },
   {
+    // F7, 04-CME L116: ciclo de esterilização pelos testes dos indicadores, liberação e rejeição no reprocessamento.
+    path: '/cirurgia/cme/ciclos',
+    name: 'cirurgia.cme.ciclos',
+    component: () => import('./telas/CmeCicloTela.vue'),
+    meta: { permissao: 'cirurgia.cme.ler', menu: `${M} > CME: testes dos ciclos e rejeições` },
+  },
+  {
     // F8, 04-CC L108: projetos e mutirões cirúrgicos do SUS (metas SIGTAP, AIH e APAC marcadas, meta x produção).
     path: '/cirurgia/mutiroes',
     name: 'cirurgia.mutiroes',
