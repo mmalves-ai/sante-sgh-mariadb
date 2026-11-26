@@ -23,3 +23,4 @@ export * from './fiscal-profissional.js';
 export * from './remuneracao-variavel.js';
 export * from './variavel-faixa.js';
 export * from './rateio-setor.js';
+export * from './producao-sus.js';
