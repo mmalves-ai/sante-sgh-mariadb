@@ -3,6 +3,7 @@ import {
   alocarPacotesNaSolicitacao,
   conferirCancelamentoDaSolicitacao,
   conferirConferenciaDoMovimento,
+  conferirGravacaoDaPermissao,
   conferirPermissaoDoSetor,
   conferirRecebimentoDaSolicitacao,
   desfechoDoRecolhimento,
@@ -56,9 +57,9 @@ describe('solicitação', () => {
       'parcial',
     );
     expect(situacaoDaSolicitacaoNoFluxo('aberta', [{ situacao: 'pendente', atendida: 1 }])).toBe('parcial');
-    expect(situacaoDaSolicitacaoNoFluxo('parcial', [{ situacao: 'entregue' }, { situacao: 'cancelado' }])).toBe(
-      'entregue',
-    );
+    expect(
+      situacaoDaSolicitacaoNoFluxo('parcial', [{ situacao: 'entregue' }, { situacao: 'cancelado' }]),
+    ).toBe('entregue');
     expect(situacaoDaSolicitacaoNoFluxo('aberta', [{ situacao: 'cancelado' }])).toBe('cancelada');
   });
 });
@@ -140,5 +141,12 @@ describe('recolhimento', () => {
   it('confere só o movimento aberto', () => {
     expect(conferirConferenciaDoMovimento('aberto')).toEqual([]);
     expect(conferirConferenciaDoMovimento('conferido')).toHaveLength(1);
+  });
+});
+
+describe('conferirGravacaoDaPermissao', () => {
+  it('recusa o colaborador gravando as próprias permissões e aceita outro responsável', () => {
+    expect(conferirGravacaoDaPermissao(7, 7).map((p) => p.campo)).toEqual(['usuario']);
+    expect(conferirGravacaoDaPermissao(8, 7)).toEqual([]);
   });
 });

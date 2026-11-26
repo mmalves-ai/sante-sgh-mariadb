@@ -298,7 +298,21 @@ describe.skipIf(SEM_BANCO)('PortaCmeMovimentoPropria contra o MariaDB (contrato 
   });
 
   it('a permissão por setor sem expurgo recusa o recolhimento; gravar de novo altera a mesma linha', async () => {
-    const p1 = await porta.gravarPermissao(ctx(), {
+    const outro = await um('SELECT MIN(id) AS id FROM usuario WHERE excluido_em IS NULL AND id <> ?', [
+      m.usuario,
+    ]);
+    if (!outro['id']) throw new Error('O cliente de teste precisa de dois usuários.');
+    const gestor = { ...ctx(), usuario: Number(outro['id']) };
+    const contar = () =>
+      um('SELECT COUNT(*) AS n FROM permissao_setor_cme WHERE usuario_id = ?', [m.usuario]).then((r) =>
+        Number(r['n']),
+      );
+    const antes = await contar();
+    expect(
+      await erro(porta.gravarPermissao(ctx(), { usuario: m.usuario, setor: m.destino, expurgo: true })),
+    ).toBe(422);
+    expect(await contar()).toBe(antes);
+    const p1 = await porta.gravarPermissao(gestor, {
       usuario: m.usuario,
       setor: m.destino,
       saidaArsenal: true,
@@ -315,7 +329,7 @@ describe.skipIf(SEM_BANCO)('PortaCmeMovimentoPropria contra o MariaDB (contrato 
         }),
       ),
     ).toBe(422);
-    const p2 = await porta.gravarPermissao(ctx(), {
+    const p2 = await porta.gravarPermissao(gestor, {
       usuario: m.usuario,
       setor: m.destino,
       saidaArsenal: true,

@@ -10,13 +10,14 @@
 //     vai ao expurgo);
 //   - conferir: o setor confere o movimento ("conferido", com quem e quando; itens conferidos);
 //   - permissões: grava as permissões do colaborador da CME por setor (permissao_setor_cme, uma linha por usuário e
-//     setor); a entrega e o recolhimento conferem essas permissões do usuário da sessão.
+//     setor; ninguém grava as próprias); a entrega e o recolhimento conferem essas permissões do usuário da sessão.
 // Recusa da regra: 422, sem escrita. Outro estabelecimento: 404.
 import {
   alocarPacotesNaSolicitacao,
   conferirCancelamentoDaSolicitacao,
   conferirConferenciaDoMovimento,
   conferirEntrega,
+  conferirGravacaoDaPermissao,
   conferirPermissaoDoSetor,
   conferirRecebimentoDaSolicitacao,
   desfechoDoRecolhimento,
@@ -671,32 +672,38 @@ export class PortaCmeMovimentoPropria extends PortaEstabelecimentoPropria {
 
   gravarPermissao(c: ContextoPortaPropria, entrada: unknown) {
     const e = entradaValida(esquemaPermissao, entrada);
-    return this.gravar(c, 'cirurgia.cme.permissao.gravar', ['permissao_setor_cme'], async (tx, est) => {
-      await this.setorDoEstabelecimento(tx, est.id, e.setor, 'Setor');
-      const u = await tx.uma('SELECT id FROM usuario WHERE id = ? AND excluido_em IS NULL', [e.usuario]);
-      if (!u) throw naoEncontrado('Usuário');
-      const valores = Object.fromEntries(CHAVES.map((k) => [COLUNA[k], e[k]]));
-      const atual =
-        (
-          await tx.consultarParaAtualizar<Linha>(
-            'SELECT id, versao, excluido_em FROM permissao_setor_cme WHERE usuario_id = ? AND setor_funcional_id = ?',
-            [e.usuario, e.setor],
-          )
-        )[0] ?? null;
-      if (atual) {
-        await tx.alterar('permissao_setor_cme', num(atual['id']), num(atual['versao']), {
+    return this.gravar(
+      c,
+      'cirurgia.cme.permissao.gravar',
+      ['permissao_setor_cme'],
+      async (tx, est, usuario) => {
+        recusa('Permissão recusada', conferirGravacaoDaPermissao(usuario, e.usuario));
+        await this.setorDoEstabelecimento(tx, est.id, e.setor, 'Setor');
+        const u = await tx.uma('SELECT id FROM usuario WHERE id = ? AND excluido_em IS NULL', [e.usuario]);
+        if (!u) throw naoEncontrado('Usuário');
+        const valores = Object.fromEntries(CHAVES.map((k) => [COLUNA[k], e[k]]));
+        const atual =
+          (
+            await tx.consultarParaAtualizar<Linha>(
+              'SELECT id, versao, excluido_em FROM permissao_setor_cme WHERE usuario_id = ? AND setor_funcional_id = ?',
+              [e.usuario, e.setor],
+            )
+          )[0] ?? null;
+        if (atual) {
+          await tx.alterar('permissao_setor_cme', num(atual['id']), num(atual['versao']), {
+            ...valores,
+            excluido_em: null,
+            excluido_por: null,
+          });
+          return { tabela: 'permissao_setor_cme', id: num(atual['id']), permissao: num(atual['id']) };
+        }
+        const nova = await tx.incluir('permissao_setor_cme', {
+          usuario_id: e.usuario,
+          setor_funcional_id: e.setor,
           ...valores,
-          excluido_em: null,
-          excluido_por: null,
         });
-        return { tabela: 'permissao_setor_cme', id: num(atual['id']), permissao: num(atual['id']) };
-      }
-      const nova = await tx.incluir('permissao_setor_cme', {
-        usuario_id: e.usuario,
-        setor_funcional_id: e.setor,
-        ...valores,
-      });
-      return { tabela: 'permissao_setor_cme', id: nova, permissao: nova };
-    });
+        return { tabela: 'permissao_setor_cme', id: nova, permissao: nova };
+      },
+    );
   }
 }

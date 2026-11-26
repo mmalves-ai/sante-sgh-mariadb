@@ -61,6 +61,21 @@ export function conferirPermissaoDoSetor(
   return [];
 }
 
+/**
+ * Quem grava as permissões da CME por setor não pode ser o próprio colaborador: sem essa segregação, quem a CME
+ * restringiu a um setor se daria qualquer outro e a restrição não valeria nada.
+ */
+export function conferirGravacaoDaPermissao(executor: number, colaborador: number): ProblemaCme[] {
+  if (executor === colaborador)
+    return [
+      {
+        campo: 'usuario',
+        mensagem: 'Você não pode alterar as próprias permissões na CME; peça a outro responsável.',
+      },
+    ];
+  return [];
+}
+
 /** A CME recebe a solicitação (passa a "recebida_cme"): só a aberta. */
 export function conferirRecebimentoDaSolicitacao(situacao: string): ProblemaCme[] {
   if (situacao !== 'aberta')
