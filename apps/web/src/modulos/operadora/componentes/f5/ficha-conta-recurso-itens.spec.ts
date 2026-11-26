@@ -24,6 +24,12 @@ const api = vi.hoisted(() => ({
   registrarRecurso: vi.fn(),
 }));
 vi.mock('../../api-contas.js', () => api);
+// A conferência da conta (C1-100) tem a própria prova (ConferenciaConta.spec); aqui só não chama a rede.
+vi.mock('../../api-conferencia-conta.js', () => ({
+  lerConferencia: vi.fn().mockResolvedValue({ criticas: [], auditorias: [], demonstrativos: [] }),
+  lerApoioRegras: vi.fn().mockResolvedValue({ procedimentos: [], motivos: [], prestadores: [] }),
+  registrarParecer: vi.fn(),
+}));
 
 if (!window.matchMedia) {
   window.matchMedia = (consulta: string) =>

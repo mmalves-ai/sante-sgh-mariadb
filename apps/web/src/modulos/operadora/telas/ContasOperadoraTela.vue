@@ -16,11 +16,14 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { lerApoioContas, lerContas } from '../api-contas.js';
 import { dataBr } from '../componentes/f1/comum.js';
 import FichaConta from '../componentes/f5/FichaConta.vue';
+import { mensagensConferenciaConta } from '../i18n-conferencia-conta.js';
 import PagamentosPrestadores from '../componentes/f5/PagamentosPrestadores.vue';
 import ReceberConta from '../componentes/f5/ReceberConta.vue';
 
 const { t } = useI18n();
 const cliente = useQueryClient();
+/** Atalho das regras de crítica das contas (C1-100). */
+const ROTULO_REGRAS_CRITICA = mensagensConferenciaConta.regras.titulo;
 const apoio = useQuery({ queryKey: ['operadora', 'contas', 'apoio'], queryFn: () => lerApoioContas() });
 const a = computed(() => apoio.data.value ?? null);
 const ligada = computed(() => a.value?.ligada === true);
@@ -123,6 +126,11 @@ watch(ligada, (v) => {
   <section class="tela-operadora" aria-labelledby="ope-contas-titulo" data-testid="tela-operadora-contas">
     <h1 id="ope-contas-titulo">{{ t('operadoraContas.titulo') }}</h1>
     <p>{{ t('operadoraContas.texto') }}</p>
+    <p>
+      <RouterLink to="/operadora/regras-critica-conta" data-testid="link-regras-critica-conta">{{
+        ROTULO_REGRAS_CRITICA
+      }}</RouterLink>
+    </p>
 
     <MensagemErro v-if="apoio.isError.value" :erro="apoio.error.value" />
     <p v-else-if="!a" role="status">{{ t('operadoraContas.carregando') }}</p>

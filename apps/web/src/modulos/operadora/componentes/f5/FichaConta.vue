@@ -14,7 +14,7 @@ import type {
   ResultadoConta,
 } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteDialogo, SanteSelecao } from '@sgh/ui';
-import { useQuery } from '@tanstack/vue-query';
+import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../../casca/MensagemErro.vue';
@@ -32,10 +32,12 @@ import {
   registrarRecurso,
 } from '../../api-contas.js';
 import { dataBr, numeroDe } from '../f1/comum.js';
+import ConferenciaConta from './ConferenciaConta.vue';
 
 const props = defineProps<{ id: number; apoio: ApoioContas }>();
 const emit = defineEmits<{ gravado: [r: ResultadoConta]; fechar: [] }>();
 const { t } = useI18n();
+const cliente = useQueryClient();
 
 const ficha = useQuery({
   queryKey: computed(() => ['operadora', 'contas', 'ficha', props.id]),
@@ -219,6 +221,9 @@ async function demonstrativo(tipo: 'analise' | 'pagamento' = 'analise'): Promise
     baixarDemonstrativo(
       await (tipo === 'pagamento' ? lerDemonstrativoPagamento(props.id) : lerDemonstrativo(props.id)),
     );
+    // O demonstrativo de análise entregue fica registrado: a conferência mostra a entrega nova (C1-100).
+    if (tipo === 'analise')
+      await cliente.invalidateQueries({ queryKey: ['operadora', 'contas', 'conferencia', props.id] });
   } catch (e) {
     erroDemonstrativo.value = e instanceof ErroApi && e.problema?.detail ? e.problema.detail : String(e);
   } finally {
@@ -548,6 +553,11 @@ const decidivel = (g: GuiaConta) =>
           <template v-if="e.texto"> · {{ e.texto }}</template>
         </li>
       </ol>
+
+      <ConferenciaConta
+        :conta="c"
+        :categoria-auditor="apoio.auditor?.operadora === c.operadora ? apoio.auditor.categoria : null"
+      />
     </template>
 
     <SanteDialogo v-model:visivel="visivel" :titulo="titulo" largura="44rem">
