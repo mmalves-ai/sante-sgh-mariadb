@@ -599,3 +599,12 @@ corrente de CronCreate morre com a sessão; ao retomar, recriar (formato na mem�
 - API do painel (3310, pid 1146506) segue no build de 24/11: rebuild na árvore principal só com a construir-2 parada
   (o build da árvore com trabalho pela metade quebraria o dist que a API carrega sob demanda).
 - Segundo merge (conector-autor-registro): a Painel de Injeção junta 9208e894, roda ci-sim e avisa o commit.
+
+## Passagem de 26/11 01h00 (Sessão de Construção)
+- Push: origin/main = 801e90b1 (ci-sim VERDE, 960 commits do dia). Painel 3310 com o build de 801e90b1 (dist copiado da
+  árvore limpa; o anterior em sante-sgh-dados/obra/painel-dist-anterior); migrações no cliente_prontocardio (1 CHECK da
+  carga recusado em dominio_sus, avisado à Painel de Injeção).
+- Fichas: 258/467 (55%). Esperam E2E: 32 prontas da completar-3 + E2E vermelhos das prontas (1ª e 2ª construção).
+- Plano de economia (docs/obra/plano-reducao-tokens-2026-11-25.md) e decisões (docs/obra/decisoes-tomadas.md) valem.
+- Sobras sem commit na árvore (C2-064, C2-113, cancelamento de contrato, telas da operadora): não entram em push.
+- Próximo: preflight-e2e.sh → integrar-3 (E2E das prontas pendentes, corretor com o erro extraído) → funções B e C.
