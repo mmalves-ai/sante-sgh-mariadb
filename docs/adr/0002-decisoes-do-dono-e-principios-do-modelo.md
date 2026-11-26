@@ -101,7 +101,7 @@ Onde este ADR muda o ADR 0001, vale este.
 | Gatilho | **Nenhum** com regra de negócio |
 | Índice | `ix_<tabela>_<colunas>`; único `uq_<tabela>_<colunas>`. Toda FK tem índice |
 | Comentário | `COMMENT` em toda tabela (descrição própria do catálogo) e nas colunas cujo nome não basta |
-| Migrações | `db/migracoes/<NN>_<modulo>/`: `tabelas.sql` (CREATE TABLE sem FK de outro módulo) e `chaves.sql` (FKs). O aplicador roda todos os `tabelas.sql` na ordem e depois todos os `chaves.sql`. Só para frente |
+| Migrações | `db/migracoes/<NN>_<modulo>/`: `tabelas.sql` (CREATE TABLE sem FK de outro módulo) e `chaves.sql` (FKs). O aplicador roda todos os `tabelas.sql` na ordem e depois todos os `chaves.sql`. Só para frente. Hoje o aplicador (`tools/db/criar_cliente.py`) **reaplica todos os arquivos a cada passada**: todo arquivo é idempotente e tem de valer **em qualquer ordem** em banco já existente. Exemplo: um CHECK recriado numa migração antiga precisa da mesma lista que a migração mais nova (`13_SUS/06` e `/94`, 26/11/2026). Quando o aplicador passar a gravar o hash em `migracao_aplicada` (lido pela conferência da implantação), vale a regra de **nunca alterar migração já aplicada**. A reescrita só entra **registrada** (motivo e hash novo), aceita pelo aplicador |
 
 ## Consequências
 
