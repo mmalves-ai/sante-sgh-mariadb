@@ -63,12 +63,14 @@ test.describe('F3.1 foto do paciente para a identificação positiva @C3-010', (
         resultado: corpo['resultado'],
         motivoDispensa: corpo['motivoDispensa'],
         atendimento: null,
-        usuario: 'SINT.ADMIN',
+        usuario: 'SINT.RECEPCAO',
       });
       return json(r, { id: conferencias.length }, 201);
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // A conferência da identidade é da recepção: SINT.RECEPCAO tem cadastro.paciente.ler e editar; o administrador sem
+    // perfil assistencial não recebe cadastro.paciente.ler (concessão por perfil) e a rota mostrava Sem permissão.
+    await entrar(page, 'SINT.RECEPCAO');
     await page.goto(`/cadastros/pacientes/${PACIENTE}/identificacao`);
     await expect(page.getByTestId('fi-sem-foto')).toBeVisible();
     await expect(page.getByTestId('fi-base-legal')).toContainText('LGPD art. 11');
