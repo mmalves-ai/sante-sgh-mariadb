@@ -48,6 +48,14 @@ test.describe('@F3.5-06 resultado: digitar, liberar e retificar pelo exame pedid
     await page.goto('/pep/paciente/1001/exames');
     await page.getByTestId('incluir-exame-502').click();
     await page.getByTestId('enviar-pedido').click();
+    // O servidor da rodada é compartilhado: outro spec (M26, @C1-077) pode ter pedido o potássio deste paciente nas
+    // últimas 24 horas, e então o pedido repetido só sai com os avisos conferidos (regra do pedido, não se afrouxa).
+    const enviado = page.getByTestId('aba-exames-conteudo').getByText('Pedido enviado.');
+    await expect(enviado.or(page.getByTestId('avisos-pedido'))).toBeVisible();
+    if (!(await enviado.isVisible())) {
+      await page.getByTestId('confirmar-avisos').check();
+      await page.getByTestId('enviar-pedido').click();
+    }
     await expect(page.getByTestId('aba-exames-conteudo')).toContainText('Pedido enviado.');
 
     // A biomédica coleta, recebe a amostra e recebe o pedido no setor.
