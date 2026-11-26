@@ -36,15 +36,17 @@ import { ElegibilidadeController } from './elegibilidade.controller.js';
 import { PORTA_ELEGIBILIDADE, PortaElegibilidadePropria } from './elegibilidade-propria.js';
 import { AutorizacaoPreviaController } from './autorizacao-previa.controller.js';
 import { PORTA_AUTORIZACAO_PREVIA, PortaAutorizacaoPreviaPropria } from './autorizacao-previa-propria.js';
+import { OpmeLiberacaoController } from './opme-liberacao.controller.js';
+import { PORTA_LIBERACAO_OPME, PortaLiberacaoOpmePropria } from './opme-guia-propria.js';
 import {
   CompetenciaTrabalhoController,
   SERVICO_COMPETENCIA_TRABALHO,
   ServicoCompetenciaTrabalho,
 } from './competencia-trabalho.controller.js';
-
-export interface OpcoesModuloTiss {
 import { CalendarioEntregaController, FONTE_CALENDARIO_ENTREGA } from './calendario-entrega.controller.js';
 import { CalendarioEntregaProprio } from './calendario-entrega-propria.js';
+
+export interface OpcoesModuloTiss {
   /** Testes: a porta já montada. */
   readonly porta?: PortaTiss;
   /** Testes: a guarda do XML (padrão: a da memória, ou a do disco local). */
@@ -96,11 +98,12 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
       ElegibilidadeController,
       ApresentacaoTissController,
       AutorizacaoPreviaController,
+      OpmeLiberacaoController,
       CompetenciaTrabalhoController,
+      CalendarioEntregaController,
     ],
     providers: [
       { provide: PORTA_TISS, useValue: porta },
-      CalendarioEntregaController,
       // F3.9 (08-INTG L128): consulta de elegibilidade e resposta da operadora; sem núcleo, 503.
       {
         provide: PORTA_ELEGIBILIDADE,
@@ -117,11 +120,30 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
             ? new PortaAutorizacaoPreviaPropria(ctx.nucleo, ctx.configuracao.clientePadrao, armazem)
             : null,
       },
+      // 06-FAT linha 25: liberação da OPME acima do limite na alçada (quatro olhos); sem núcleo, 503.
+      {
+        provide: PORTA_LIBERACAO_OPME,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaLiberacaoOpmePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       // 06-FAT linha 32: competência de trabalho do faturista (só com o banco próprio; sem ele, 503).
       {
         provide: SERVICO_COMPETENCIA_TRABALHO,
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao ? new ServicoCompetenciaTrabalho(ctx.nucleo) : null,
+      },
+      // 06-FAT linha 31: cadastro do calendário de entrega por convênio (banco próprio; na fonte sintética, a memória
+      // da porta do TISS, que o painel de prazos lê).
+      {
+        provide: FONTE_CALENDARIO_ENTREGA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new CalendarioEntregaProprio(ctx.nucleo)
+            : porta instanceof PortaTissMemoria
+              ? porta.calendario
+              : null,
       },
       { provide: ARMAZEM_XML_TISS, useValue: armazem },
       { provide: GERADOR_PDF_TISS, useValue: geradorPdf },
@@ -134,16 +156,5 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
     ],
     exports: [PORTA_TISS],
-      // 06-FAT linha 31: cadastro do calendário de entrega por convênio (banco próprio; na fonte sintética, a memória
-      // da porta do TISS, que o painel de prazos lê).
-      {
-        provide: FONTE_CALENDARIO_ENTREGA,
-        useValue:
-          ctx.nucleo && ctx.configuracao.clientePadrao
-            ? new CalendarioEntregaProprio(ctx.nucleo)
-            : porta instanceof PortaTissMemoria
-              ? porta.calendario
-              : null,
-      },
   };
 }
