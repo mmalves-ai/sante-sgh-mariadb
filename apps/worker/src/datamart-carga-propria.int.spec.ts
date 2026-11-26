@@ -211,4 +211,50 @@ describe.skipIf(SEM_BANCO)('carga do data mart registrada pelo worker (f22_o5)',
     );
     expect(Number(t!['n'])).toBeGreaterThanOrEqual(2);
   });
+  it('o pedido manual aberto na hora da agendada segura a agendada: só uma carga aberta', async () => {
+    const porta = new PortaDataMartPropria(nucleo, CLIENTE);
+    const hora = new Date('2026-11-27T08:00:00.000Z');
+    const desde = new Date('2026-11-27T03:00:00.000Z');
+    const pedido = new Date(hora.getTime() - 60_000);
+    const usuario = await escrever(nucleo, (e) => garantirUsuario(e, 'f528.datamart'));
+    const id = await escrever(nucleo, (e) =>
+      e.inserir(
+        `INSERT INTO carga_data_mart (estabelecimento_id, assunto, tipo_carga, disparo, ocorrido_em, situacao, usuario_id,
+                dados, criado_em)
+         VALUES (?, 'data_mart', 'completa', 'manual', ?, 'em_execucao', ?, '{"pedido":"aguardando"}', ?)`,
+        [outro.id, pedido, usuario, pedido],
+      ),
+    );
+    const abertas = async () =>
+      Number(
+        (
+          await ler(
+            "SELECT COUNT(*) AS n FROM carga_data_mart WHERE estabelecimento_id = ? AND situacao = 'em_execucao'",
+            [outro.id],
+          )
+        )[0]!['n'],
+      );
+    // Aguardando: a agendada não abre.
+    expect(await porta.abrir(outro, hora, desde)).toBeNull();
+    // Assumido por outro processo do worker (iniciado): continua sem abrir, nem pelo ciclo.
+    expect(await porta.assumir(outro, id)).toBe(true);
+    expect(await porta.abrir(outro, hora, desde)).toBeNull();
+    expect((await cicloDataMart(porta, CLIENTE, outro, sintetico, hora)).carga).toBeNull();
+    expect(await abertas()).toBe(1);
+    expect(
+      await ler("SELECT id FROM carga_data_mart WHERE estabelecimento_id = ? AND disparo = 'agendado'", [
+        outro.id,
+      ]),
+    ).toHaveLength(0);
+    // A manual aberta há mais do que o teto (interrompida) não segura mais a agendada.
+    await escrever(nucleo, (e) =>
+      e.executar('UPDATE carga_data_mart SET ocorrido_em = ? WHERE id = ?', [
+        new Date(hora.getTime() - 7 * 3_600_000),
+        id,
+      ]),
+    );
+    const agendada = await porta.abrir(outro, hora, desde);
+    expect(agendada).toBeGreaterThan(0);
+    expect(await porta.abrir(outro, hora, desde)).toBeNull();
+  });
 });

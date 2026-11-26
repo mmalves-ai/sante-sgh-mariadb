@@ -10,6 +10,7 @@ import {
   type FechamentoDaCarga,
   PEDIDO_AGUARDANDO,
   PEDIDO_INICIADO,
+  podeAbrirAgendada,
 } from '@sgh/dominio-relatorio';
 import { definirOperacao, type Executor, type Leitor } from '@sgh/nucleo';
 import { z } from 'zod';
@@ -63,7 +64,7 @@ const operacaoAbrir = definirOperacao<z.infer<typeof ABRIR>, { carga: number | n
   tabelas: ['carga_data_mart'],
   entrada: ABRIR,
   gravar: async (tx, e) => {
-    // A trava do estabelecimento serializa dois consumidores: o segundo vê a carga aberta e não abre outra.
+    // A trava do estabelecimento serializa os consumidores e o pedido da API: o segundo vê a carga aberta e não abre outra.
     await tx.consultarParaAtualizar('SELECT id FROM estabelecimento WHERE id = ?', [e.estabelecimento], {
       teto: 1,
     });
@@ -74,6 +75,16 @@ const operacaoAbrir = definirOperacao<z.infer<typeof ABRIR>, { carga: number | n
       { teto: 10 },
     );
     if (ja.length > 0) return { carga: null };
+    // Sob a mesma trava: a carga aberta de qualquer disparo (o pedido manual aguardando ou já assumido por outro
+    // processo do worker) segura a agendada, que fica para a volta seguinte; a aberta há mais do que o teto não.
+    const abertas = await tx.consultar<{ id: unknown; ocorrido_em: unknown }>(
+      `SELECT id, ocorrido_em FROM carga_data_mart
+        WHERE estabelecimento_id = ? AND assunto = ? AND situacao = 'em_execucao'`,
+      [e.estabelecimento, ASSUNTO_CARGA_DATAMART],
+      { teto: 50 },
+    );
+    const vistas = abertas.map((a) => ({ id: Number(a.id), ocorridoEm: quando(a.ocorrido_em) ?? e.inicio }));
+    if (!podeAbrirAgendada(vistas, e.inicio)) return { carga: null };
     const carga = await tx.incluir('carga_data_mart', {
       estabelecimento_id: e.estabelecimento,
       assunto: ASSUNTO_CARGA_DATAMART,

@@ -38,6 +38,14 @@ export function decidirPedidoManual(abertas: readonly CargaAberta[], agora: Date
   return viva ? { aceito: false, motivo: 'carga-em-andamento', carga: viva.id } : { aceito: true };
 }
 
+/**
+ * A carga agendada do dia só abre se nenhuma carga do estabelecimento (manual ou agendada) está aberta há menos do
+ * que o teto: o pedido manual aguardando ou iniciado na hora da agendada não roda junto nem em seguida dela.
+ */
+export function podeAbrirAgendada(abertas: readonly CargaAberta[], agora: Date): boolean {
+  return decidirPedidoManual(abertas, agora).aceito;
+}
+
 /** A situação que a tela mostra: a aberta separa o pedido que aguarda, a execução e a interrompida. */
 export function situacaoVisivel(
   c: { readonly situacao: string; readonly pedido: string | null; readonly ocorridoEm: Date },

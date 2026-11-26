@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decidirPedidoManual,
   duracaoDaCarga,
+  podeAbrirAgendada,
   situacaoVisivel,
   TETO_CARGA_ABERTA_MS,
 } from './datamart-pedido.js';
@@ -21,6 +22,12 @@ describe('controle da carga do data mart na administração (01-REL L113)', () =
     expect(decidirPedidoManual([{ id: 8, ocorridoEm: antes(TETO_CARGA_ABERTA_MS) }], AGORA)).toEqual({
       aceito: true,
     });
+  });
+
+  it('a agendada não abre com outra carga aberta há menos do que o teto, de qualquer disparo', () => {
+    expect(podeAbrirAgendada([], AGORA)).toBe(true);
+    expect(podeAbrirAgendada([{ id: 9, ocorridoEm: antes(30 * 60_000) }], AGORA)).toBe(false);
+    expect(podeAbrirAgendada([{ id: 10, ocorridoEm: antes(TETO_CARGA_ABERTA_MS + 1) }], AGORA)).toBe(true);
   });
 
   it('a situação visível separa aguardando, em execução e interrompida', () => {
