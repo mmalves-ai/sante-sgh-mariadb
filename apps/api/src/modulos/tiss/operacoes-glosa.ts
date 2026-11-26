@@ -317,15 +317,28 @@ const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
 
 // ── Lote de recurso ─────────────────────────────────────────────────────────────────────────────────────
 
-/** O lote TISS de origem da conta (o mais recente não cancelado, fora os de recurso) e a guia principal nele. */
-const SQL_ORIGEM = `
-  SELECT lt.id AS lote, lt.numero_lote, lt.numero_protocolo,
-         (SELECT gt.numero_guia_prestador FROM guia_tiss gt WHERE gt.lote_tiss_id = lt.id AND gt.conta_hospitalar_id = ltc.conta_hospitalar_id
-             AND gt.excluido_em IS NULL ORDER BY gt.guia_tiss_principal_id IS NOT NULL, gt.id LIMIT 1) AS numero_guia,
-         (SELECT gt.numero_guia_operadora FROM guia_tiss gt WHERE gt.lote_tiss_id = lt.id AND gt.conta_hospitalar_id = ltc.conta_hospitalar_id
-             AND gt.excluido_em IS NULL ORDER BY gt.guia_tiss_principal_id IS NOT NULL, gt.id LIMIT 1) AS guia_operadora,
-         (SELECT gt.senha FROM guia_tiss gt WHERE gt.lote_tiss_id = lt.id AND gt.conta_hospitalar_id = ltc.conta_hospitalar_id
-             AND gt.excluido_em IS NULL ORDER BY gt.guia_tiss_principal_id IS NOT NULL, gt.id LIMIT 1) AS senha
+/** A guia principal da conta num lote (número no prestador e na operadora, senha): fica para o item sem linha de guia. */
+const GUIA_PRINCIPAL = `SELECT gp.numero_guia_prestador AS numero_guia, gp.numero_guia_operadora AS guia_operadora, gp.senha
+      FROM guia_tiss gp WHERE gp.lote_tiss_id = ? AND gp.conta_hospitalar_id = ? AND gp.excluido_em IS NULL
+     ORDER BY gp.guia_tiss_principal_id IS NOT NULL, gp.id LIMIT 1`;
+
+/**
+ * O lote TISS que a glosa respondeu: o do demonstrativo de análise de onde veio a baixa (glosa → demonstrativo →
+ * lote). O protocolo é o do lote ou, sem ele, o que o demonstrativo informou.
+ */
+const SQL_ORIGEM_DA_GLOSA = `
+  SELECT lt.id AS lote, lt.numero_lote, COALESCE(lt.numero_protocolo, d.numero_protocolo) AS numero_protocolo
+    FROM glosa g
+    JOIN demonstrativo_analise_conta d ON d.id = g.demonstrativo_analise_conta_id AND d.excluido_em IS NULL
+    JOIN lote_tiss lt ON lt.id = d.lote_tiss_id AND lt.excluido_em IS NULL AND lt.situacao <> 'cancelado'
+   WHERE g.id = ?`;
+
+/**
+ * Sem demonstrativo ligado à glosa (baixa digitada): o lote mais recente não cancelado da conta, fora os de recurso.
+ * A escolha fica avisada, porque a conta pode ter sido reapresentada depois da glosa.
+ */
+const SQL_ORIGEM_DA_CONTA = `
+  SELECT lt.id AS lote, lt.numero_lote, lt.numero_protocolo
     FROM lote_tiss_conta ltc JOIN lote_tiss lt ON lt.id = ltc.lote_tiss_id
    WHERE ltc.conta_hospitalar_id = ? AND ltc.excluido_em IS NULL AND lt.excluido_em IS NULL
      AND lt.situacao <> 'cancelado' AND lt.tipo_envio <> 'recurso_glosa'
@@ -338,6 +351,25 @@ const SQL_ITEM_TISS = `
     JOIN item_faturavel ifa ON ifa.id = ci.item_faturavel_id
     LEFT JOIN motivo_glosa mg ON mg.id = ?
    WHERE ci.id = ?`;
+
+/**
+ * A guia em que o item foi apresentado no lote de origem (procedimento, outras despesas ou OPME, pelo item da conta):
+ * o número no prestador e na operadora, a senha, a tabela e o código como foram enviados.
+ */
+const SQL_GUIA_DO_ITEM = `
+  SELECT gt.numero_guia_prestador AS numero_guia, gt.numero_guia_operadora AS guia_operadora, gt.senha,
+         x.tabela_tiss, x.codigo, x.descricao
+    FROM (SELECT guia_tiss_id, tabela_tiss, codigo_procedimento AS codigo, descricao
+            FROM guia_tiss_procedimento WHERE conta_hospitalar_item_id = ? AND excluido_em IS NULL
+          UNION ALL
+          SELECT guia_tiss_id, tabela_tiss, codigo_item AS codigo, descricao
+            FROM guia_tiss_despesa WHERE conta_hospitalar_item_id = ? AND excluido_em IS NULL
+          UNION ALL
+          SELECT guia_tiss_id, tabela_tiss, codigo_item AS codigo, descricao
+            FROM guia_tiss_opme WHERE conta_hospitalar_item_id = ? AND excluido_em IS NULL) x
+    JOIN guia_tiss gt ON gt.id = x.guia_tiss_id AND gt.excluido_em IS NULL
+   WHERE gt.lote_tiss_id = ?
+   ORDER BY gt.id LIMIT 1`;
 
 /** O cadastro TISS vigente do convênio no estabelecimento (como na geração do lote) e o nome da operadora. */
 const SQL_CADASTRO_TISS = `
@@ -514,14 +546,24 @@ const registrarRecurso = (montador: MontadorRecursoTiss | null) =>
           recursoAnterior: retornado ? n(l['recurso_glosa_id']) : null,
         };
       });
-      // O lote TISS de origem de cada conta: a guia de recurso cita um lote e o protocolo dele.
+      // O lote TISS de origem de cada glosa: a guia de recurso cita o lote que a glosa respondeu e o protocolo dele (pelo
+      // demonstrativo da baixa); sem demonstrativo, o lote mais recente da conta, com aviso.
       const origens = new Map<number, Linha | null>();
       for (const p of pedidos) {
+        const glosa = n(p.l['glosa_id']);
+        if (origens.has(glosa)) continue;
         const conta = n(p.l['conta_hospitalar_id']);
-        if (!origens.has(conta)) origens.set(conta, (await tx.uma<Linha>(SQL_ORIGEM, [conta])) ?? null);
+        const doDemonstrativo = await tx.uma<Linha>(SQL_ORIGEM_DA_GLOSA, [glosa]);
+        const lt = doDemonstrativo ?? (await tx.uma<Linha>(SQL_ORIGEM_DA_CONTA, [conta])) ?? null;
+        if (lt && !doDemonstrativo)
+          alertas.add(
+            'Glosa sem demonstrativo ligado: a guia de recurso cita o lote mais recente da conta; confira se é o lote que a operadora glosou.',
+          );
+        const principal = lt ? await tx.uma<Linha>(GUIA_PRINCIPAL, [n(lt['lote']), conta]) : null;
+        origens.set(glosa, lt ? { ...lt, ...(principal ?? {}) } : null);
       }
       const comOrigem = pedidos.map((p) => {
-        const og = origens.get(n(p.l['conta_hospitalar_id'])) ?? null;
+        const og = origens.get(n(p.l['glosa_id'])) ?? null;
         return { ...p, origem: og, loteOrigem: og ? n(og['lote']) : null };
       });
       for (const p of pedidos) {
@@ -580,15 +622,22 @@ const registrarRecurso = (montador: MontadorRecursoTiss | null) =>
         }
         const itensTiss: ItemRecursoTiss[] = [];
         for (const p of lote.itens) {
-          const it = await tx.uma<Linha>(SQL_ITEM_TISS, [p.l['motivo_glosa_id'] ?? null, n(p.l['id'])]);
+          const item = n(p.l['id']);
+          const it = await tx.uma<Linha>(SQL_ITEM_TISS, [p.l['motivo_glosa_id'] ?? null, item]);
+          // A guia em que o item foi apresentado (honorário, outras despesas...); sem linha de guia, a principal da conta.
+          const gi =
+            p.loteOrigem !== null
+              ? await tx.uma<Linha>(SQL_GUIA_DO_ITEM, [item, item, item, p.loteOrigem])
+              : null;
+          const guia = gi ?? p.origem;
           itensTiss.push({
-            numeroGuia: p.origem ? texto(p.origem['numero_guia']) || null : null,
-            numeroGuiaOperadora: p.origem ? texto(p.origem['guia_operadora']) || null : null,
-            senha: p.origem ? texto(p.origem['senha']) || null : null,
+            numeroGuia: guia ? texto(guia['numero_guia']) || null : null,
+            numeroGuiaOperadora: guia ? texto(guia['guia_operadora']) || null : null,
+            senha: guia ? texto(guia['senha']) || null : null,
             data: dataIso(it?.['realizado_em']),
-            codigoTabela: tabelaTissDoItem(texto(it?.['tipo_item'])),
-            codigo: texto(it?.['codigo']),
-            descricao: texto(it?.['descricao']),
+            codigoTabela: texto(gi?.['tabela_tiss']).trim() || tabelaTissDoItem(texto(it?.['tipo_item'])),
+            codigo: texto(gi?.['codigo']).trim() || texto(it?.['codigo']),
+            descricao: texto(gi?.['descricao']).trim() || texto(it?.['descricao']),
             codigoGlosa: it?.['codigo_tuss'] ? texto(it['codigo_tuss']).padStart(4, '0') : null,
             valorRecursado: p.valor,
             justificativa: texto(p.l['justificativa']),
