@@ -39,10 +39,9 @@ export class AutenticadorWebAuthnSimulado {
   /** Desligue para simular um dispositivo que não conferiu a biometria/PIN. */
   verificaUsuario = true;
 
-  constructor(
-    readonly algoritmo: -7 | -8 = -7,
-    contadorInicial = 0,
-  ) {
+  readonly algoritmo: -7 | -8;
+  constructor(algoritmo: -7 | -8 = -7, contadorInicial = 0) {
+    this.algoritmo = algoritmo;
     this.contador = contadorInicial;
     if (algoritmo === -7) {
       const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });

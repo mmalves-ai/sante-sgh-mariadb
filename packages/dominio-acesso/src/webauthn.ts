@@ -32,11 +32,10 @@ export type CodigoRecusaWebAuthn =
   | 'limite-dispositivos';
 
 export class ErroWebAuthn extends Error {
-  constructor(
-    readonly codigo: CodigoRecusaWebAuthn,
-    mensagem: string,
-  ) {
+  readonly codigo: CodigoRecusaWebAuthn;
+  constructor(codigo: CodigoRecusaWebAuthn, mensagem: string) {
     super(mensagem);
+    this.codigo = codigo;
     this.name = 'ErroWebAuthn';
   }
 }

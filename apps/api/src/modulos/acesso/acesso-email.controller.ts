@@ -323,6 +323,9 @@ export class AcessoEmailController {
 
   /** POST .../dispositivos/opcoes-cadastro: o desafio do cadastro (senha conferida há pouco; CSRF). */
   @Post('sessao/segundo-fator/dispositivos/opcoes-cadastro')
+  @AuditadoNoHandler(
+    'desafio WebAuthn do cadastro: só emite o desafio (efêmero, na sessão); o cadastro do dispositivo grava a trilha',
+  )
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
   async opcoesCadastroDispositivo(@Req() req: Req) {
@@ -376,6 +379,9 @@ export class AcessoEmailController {
 
   /** POST .../dispositivos/opcoes-validacao: o desafio para conferir o dispositivo (CSRF). */
   @Post('sessao/segundo-fator/dispositivos/opcoes-validacao')
+  @AuditadoNoHandler(
+    'desafio WebAuthn da validação: só emite o desafio (efêmero, na sessão); a validação grava a trilha',
+  )
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
   async opcoesValidacaoDispositivo(@Req() req: Req) {

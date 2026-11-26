@@ -101,6 +101,7 @@ export class DescontoFolhaOperadoraController {
   }
 
   @Post('operadora/desconto-folha/previa')
+  @AuditadoNoHandler('prévia do desconto em folha: só leitura, nada é gravado (POST pelo tamanho do pedido)')
   @HttpCode(200)
   @Permissao(LER)
   previa(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {

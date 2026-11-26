@@ -9,7 +9,7 @@
 //   POST operadora/provisoes-tecnicas/calculo                         calcula (ou recalcula) a competência
 //   POST operadora/provisoes-tecnicas/:id/contabilizacao              grava o lançamento da variação
 //   POST operadora/provisoes-tecnicas/:id/cancelamento                cancela com motivo
-// Ler com operadora.provisao-tecnica.ler; plano e mapa com .editar; cálculo, contabilização e cancelamento com
+// Ler com operadora.provisaoTecnica.ler; plano e mapa com .editar; cálculo, contabilização e cancelamento com
 // .calcular. Cada gravação vai pela porta própria (Executor do núcleo), com a trilha_auditoria na mesma transação.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -34,9 +34,9 @@ import {
   type PortaProvisaoTecnicaPropria,
 } from './provisao-tecnica-propria.js';
 
-const LER = 'operadora.provisao-tecnica.ler';
-const EDITAR = 'operadora.provisao-tecnica.editar';
-const CALCULAR = 'operadora.provisao-tecnica.calcular';
+const LER = 'operadora.provisaoTecnica.ler';
+const EDITAR = 'operadora.provisaoTecnica.editar';
+const CALCULAR = 'operadora.provisaoTecnica.calcular';
 const AUD = 'operadora.provisao-tecnica.gravado com a trilha_auditoria na mesma transação (porta própria)';
 
 const data = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
