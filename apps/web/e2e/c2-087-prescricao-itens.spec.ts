@@ -158,8 +158,8 @@ test.describe('Prescrição: itens da gravação própria @C2-087', () => {
     expect(vmi).toEqual(expect.objectContaining({ tempoInspiratorio: 1, tempoExpiratorio: 2.5 }));
     const [vni] = detalhe('vni');
     expect(vni).toEqual(expect.objectContaining({ pressaoSuporte: 8, duracaoMinutos: 60 }));
-    const [hemo] = detalhe('hemoterapia');
-    expect(hemo?.['indicacao']).toBe('Anemia sintomática com hemoglobina abaixo do alvo.');
+    const [itemHemo] = detalhe('hemoterapia');
+    expect(itemHemo?.['indicacao']).toBe('Anemia sintomática com hemoglobina abaixo do alvo.');
     expect(externas).toEqual([]);
   });
 });
