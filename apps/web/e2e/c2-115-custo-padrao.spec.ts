@@ -167,8 +167,9 @@ test.describe('@C2-115 custo-padrão por procedimento', () => {
     await expect(page.getByTestId('cp-item-1')).toContainText('E2E-INS');
     await expect(page.getByTestId('cp-total')).toContainText('R$ 11,00');
 
+    // Ativar não é destrutivo: o efeito na ficha anterior é dito antes, sem diálogo de confirmação.
+    await expect(page.getByTestId('cp-ativar-aviso')).toContainText('véspera');
     await page.getByTestId('cp-ativar').click();
-    await page.getByRole('button', { name: /confirmar/i }).click();
     await expect(page.getByTestId('cp-situacao')).toHaveText('Ativa');
     await expect(page.getByTestId('cp-painel-item')).toHaveCount(0);
 
