@@ -92,7 +92,7 @@ test.describe('@C1-124 Produção interna: lote produzido e kit montado', () => 
           id: 31,
           numero: 8,
           versao: 3,
-          finalidade: 'Nutrição parenteral',
+          finalidade: 'prescricao',
           produto: 51,
           produtoNome: 'Bolsa sintética de nutrição',
           quantidadePrevista: 10,
@@ -137,7 +137,7 @@ test.describe('@C1-124 Produção interna: lote produzido e kit montado', () => 
       if (req.method() === 'POST') {
         const corpo = req.postDataJSON() as Record<string, unknown>;
         posts.push({ caminho: url.pathname, corpo, chave: req.headers()['idempotency-key'] ?? null });
-        const gravado = (numeroLote: string) => ({
+        const gravado = (numeroLote: string, saidaPaciente: number | null = null) => ({
           id: 90 + posts.length,
           numeroLote,
           loteEstoque: 500 + posts.length,
@@ -147,11 +147,13 @@ test.describe('@C1-124 Produção interna: lote produzido e kit montado', () => 
           valorAdicional: 0,
           valorTotal: 125,
           custoUnitario: 12.5,
+          saidaPaciente,
         });
         if (url.pathname === `${B}/ordens/31/fechamento`) {
           painel.aFechar = [];
           painel.lotes.unshift(lote(91, 'manipulacao', 'MP-20261125-0001'));
-          return json(rota, gravado('MP-20261125-0001'), 201);
+          // A ordem é a dose do paciente: o lote sai direto a ele (saída devolvida pela API).
+          return json(rota, gravado('MP-20261125-0001', 801), 201);
         }
         if (url.pathname === `${B}/kits`) {
           painel.lotes.unshift(lote(92, 'kit_montado', 'KT-20261125-0001'));
@@ -170,10 +172,13 @@ test.describe('@C1-124 Produção interna: lote produzido e kit montado', () => 
     await abrirPelaManipulacao(page);
     const tela = page.getByTestId('tela-farmacia-producao-interna');
     await expect(tela.getByTestId('prod-ordem-31')).toContainText('Bolsa sintética de nutrição');
+    await expect(tela.getByTestId('prod-ordem-31')).toContainText('Dose do paciente');
 
     // ---------------- fechamento da ordem baixada
     await tela.getByTestId('prod-escolher-31').click();
     const fechamento = tela.getByTestId('prod-fechamento');
+    // A dose individual avisa que o lote vai ao paciente e não ao saldo livre do local.
+    await expect(fechamento.getByTestId('prod-dose')).toContainText('não entra no saldo livre');
     // A validade vem sugerida pela ordem; a quantidade produzida, pela prevista.
     await expect(fechamento.getByTestId('prod-validade')).toHaveValue('2026-11-27T10:00');
     await expect(fechamento.getByTestId('prod-produzida')).toHaveValue('10');
@@ -194,6 +199,7 @@ test.describe('@C1-124 Produção interna: lote produzido e kit montado', () => 
     await semViolacaoAxe(page, '/farmacia/producao-interna');
     await fechamento.getByTestId('prod-fechar-gravar').click();
     await expect(tela.getByTestId('prod-aviso')).toContainText('MP-20261125-0001');
+    await expect(tela.getByTestId('prod-aviso')).toContainText('entregue ao paciente');
     await expect(tela.getByTestId('prod-lotes')).toContainText('MP-20261125-0001');
     await expect(tela.getByTestId('prod-ordens')).toHaveCount(0);
 

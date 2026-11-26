@@ -37,6 +37,7 @@ export const mensagensProducaoInterna = {
     numeroLote: 'Número do lote (vazio: gerado)',
     gravar: 'Gravar o lote produzido',
     cancelar: 'Cancelar',
+    dose: 'Dose individual do paciente da prescrição: o lote sai direto ao paciente e ao atendimento na mesma gravação e não entra no saldo livre do local.',
   },
   kit: {
     titulo: 'Montagem de kit',
@@ -73,4 +74,7 @@ export const mensagensProducaoInterna = {
     ordem: 'Ordem {numero}',
   },
   gravado: 'Lote {lote} gravado: custo total {total}, {unidade} por unidade.',
+  gravadoDose:
+    'Lote {lote} gravado e entregue ao paciente da prescrição (não fica no estoque livre): custo total {total}, {unidade} por unidade.',
+  finalidades: { prescricao: 'Dose do paciente', estoque: 'Estoque' } as Record<string, string>,
 } as const;

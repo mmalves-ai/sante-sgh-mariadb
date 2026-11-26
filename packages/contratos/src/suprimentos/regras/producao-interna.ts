@@ -215,3 +215,62 @@ export function conferirValidadeDoKit(
       ]
     : [];
 }
+
+/** Finalidade da ordem de manipulação: a dose de um paciente (item da prescrição) ou o produto para o estoque. */
+export const FINALIDADES_ORDEM_MANIPULACAO = ['prescricao', 'estoque'] as const;
+export type FinalidadeOrdemManipulacao = (typeof FINALIDADES_ORDEM_MANIPULACAO)[number];
+
+/**
+ * Para onde vai o lote produzido: o da ordem para o estoque entra como lote livre do local; a dose de um paciente
+ * (quimioterapia, nutrição parenteral) nunca fica no saldo livre: sai direto ao paciente e ao atendimento da ordem,
+ * na mesma transação da entrada, e nenhuma outra saída pode escolhê-la.
+ */
+export type DestinoDoLoteProduzido =
+  | { readonly tipo: 'estoque' }
+  | {
+      readonly tipo: 'paciente';
+      readonly paciente: number;
+      readonly atendimento: number | null;
+      readonly prescricaoItem: number;
+    };
+
+export interface OrdemParaDestino {
+  readonly finalidade: string;
+  readonly paciente: number | null;
+  readonly atendimento: number | null;
+  readonly prescricaoItem: number | null;
+}
+
+export function destinoDoLoteProduzido(o: OrdemParaDestino): {
+  readonly destino: DestinoDoLoteProduzido | null;
+  readonly recusas: RecusaSuprimentos[];
+} {
+  if (o.finalidade === 'estoque') return { destino: { tipo: 'estoque' }, recusas: [] };
+  if (o.finalidade !== 'prescricao')
+    return {
+      destino: null,
+      recusas: [
+        r('finalidade-desconhecida', 'A finalidade da ordem de manipulação não é conhecida.', 'ordem'),
+      ],
+    };
+  if (o.paciente === null || o.prescricaoItem === null)
+    return {
+      destino: null,
+      recusas: [
+        r(
+          'dose-sem-paciente',
+          'A ordem é a dose de um paciente, mas não traz o paciente e o item da prescrição: o lote não pode ir ao estoque livre.',
+          'ordem',
+        ),
+      ],
+    };
+  return {
+    destino: {
+      tipo: 'paciente',
+      paciente: o.paciente,
+      atendimento: o.atendimento,
+      prescricaoItem: o.prescricaoItem,
+    },
+    recusas: [],
+  };
+}

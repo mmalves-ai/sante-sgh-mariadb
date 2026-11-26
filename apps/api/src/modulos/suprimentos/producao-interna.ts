@@ -15,6 +15,7 @@ import {
   consumoDaMontagem,
   type CustoIndiretoDoLote,
   custoDoLote,
+  destinoDoLoteProduzido,
   numeroLoteProduzido,
   type RecusaSuprimentos,
   type TipoLoteProduzido,
@@ -58,7 +59,11 @@ export const OPERACOES_PRODUCAO_INTERNA = {
   fechar: 'suprimentos.producao.fechar-ordem',
   montar: 'suprimentos.producao.montar-kit',
 } as const;
-export const TIPO_MOVIMENTO_PRODUCAO = { entrada: 'producao_entrada', consumo: 'producao_consumo' } as const;
+export const TIPO_MOVIMENTO_PRODUCAO = {
+  entrada: 'producao_entrada',
+  consumo: 'producao_consumo',
+  dosePaciente: 'producao_dose_paciente',
+} as const;
 const TETO_LOTES = 300;
 
 export interface CustoMandado {
@@ -98,6 +103,8 @@ export type LoteProduzidoGravado = {
   readonly valorAdicional: number;
   readonly valorTotal: number;
   readonly custoUnitario: number;
+  /** A saída da dose ao paciente na mesma transação (ordem com finalidade de prescrição); null no lote livre. */
+  readonly saidaPaciente: number | null;
 };
 
 export interface LoteProduzidoLido {
@@ -347,6 +354,7 @@ async function gravarLote(
     valorAdicional: p.valorAdicional,
     valorTotal: custo.valorTotal,
     custoUnitario: custo.custoUnitario,
+    saidaPaciente: null,
   };
 }
 
@@ -526,7 +534,8 @@ export class PortaProducaoInternaPropria implements PortaProducaoInterna {
     return this.executar(c, OPERACOES_PRODUCAO_INTERNA.fechar, entrada, chave, async (tx, est) => {
       const [o] = await tx.consultarParaAtualizar<Linha>(
         `SELECT id, versao, situacao, finalidade, insumo_id, unidade_medida_id, local_estoque_id, quantidade_prevista,
-                valor_custo_total, lote_produzido_id, formula_padrao_manipulacao_id, atendimento_id, paciente_id
+                valor_custo_total, lote_produzido_id, formula_padrao_manipulacao_id, atendimento_id, paciente_id,
+                prescricao_item_id
            FROM ordem_manipulacao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
         [ordem, est],
       );
@@ -547,6 +556,15 @@ export class PortaProducaoInternaPropria implements PortaProducaoInterna {
           custos: e.custos.map((x) => ({ ...x, valorUnitario: 0 })),
         }),
       );
+      // A dose de um paciente nunca vai ao saldo livre: a finalidade decide o destino (domínio).
+      const d = destinoDoLoteProduzido({
+        finalidade: String(o['finalidade']),
+        paciente: nn(o['paciente_id']),
+        atendimento: nn(o['atendimento_id']),
+        prescricaoItem: nn(o['prescricao_item_id']),
+      });
+      recusarTodas(d.recusas);
+      const destino = d.destino!;
       await exigirMesAberto(tx, est, hoje);
       await insumoAtivo(tx, n(o['insumo_id']));
       const custos = await custosVigentes(tx, est, hoje, e.custos);
@@ -569,13 +587,29 @@ export class PortaProducaoInternaPropria implements PortaProducaoInterna {
         atendimento: nn(o['atendimento_id']),
         paciente: nn(o['paciente_id']),
       });
+      let saidaPaciente: number | null = null;
+      if (destino.tipo === 'paciente') {
+        const saida = await movimentar(tx, est, {
+          local: n(o['local_estoque_id']),
+          insumo: n(o['insumo_id']),
+          quantidade: e.quantidadeProduzida,
+          natureza: 'saida',
+          tipoMovimento: await tipoMovimentoId(tx, TIPO_MOVIMENTO_PRODUCAO.dosePaciente),
+          lotes: [{ id: r.loteEstoque, quantidade: e.quantidadeProduzida }],
+          hoje,
+          atendimento: destino.atendimento,
+          paciente: destino.paciente,
+          faturavel: destino.atendimento !== null,
+        });
+        saidaPaciente = saida.id;
+      }
       await tx.alterar('ordem_manipulacao', ordem, n(o['versao']), {
         lote_produzido_id: r.id,
         quantidade_produzida: e.quantidadeProduzida,
         quantidade_perda: e.perda,
         validade_em: coluna(e.validadeEm),
       });
-      return r;
+      return { ...r, saidaPaciente };
     });
   }
 

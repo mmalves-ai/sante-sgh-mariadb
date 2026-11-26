@@ -89,7 +89,12 @@ function custosDe(q: Record<number, string>): {
 }
 const nomeDoCusto = (id: number) => custosComValor.value.find((c) => c.id === id)?.descricao ?? String(id);
 const avisoGravado = (g: LoteProduzidoGravadoTela) =>
-  fmt(M.gravado, { lote: g.numeroLote, total: real(g.valorTotal), unidade: realUnit(g.custoUnitario) });
+  fmt(g.saidaPaciente ? M.gravadoDose : M.gravado, {
+    lote: g.numeroLote,
+    total: real(g.valorTotal),
+    unidade: realUnit(g.custoUnitario),
+  });
+const finalidade = (f: string) => M.finalidades[f] ?? f;
 
 // ------------------------------------------------ fechamento da ordem baixada
 const ordem = ref<OrdemAFecharTela | null>(null);
@@ -292,7 +297,7 @@ const gravacaoKit = useMutation({
             <tr v-for="o in painel.data.value.aFechar" :key="o.id" :data-testid="`prod-ordem-${o.id}`">
               <td>{{ o.numero }}</td>
               <td>{{ o.produtoNome }}</td>
-              <td>{{ o.finalidade }}</td>
+              <td>{{ finalidade(o.finalidade) }}</td>
               <td>{{ qtd(o.quantidadePrevista) }}</td>
               <td>{{ real(o.valorInsumos) }}</td>
               <td>
@@ -316,6 +321,9 @@ const gravacaoKit = useMutation({
           @submit.prevent="gravacaoFechamento.mutate()"
         >
           <h3>{{ fmt(M.fechar.ordem, { numero: ordem.numero, produto: ordem.produtoNome }) }}</h3>
+          <p v-if="ordem.finalidade === 'prescricao'" class="secundario" data-testid="prod-dose">
+            {{ M.fechar.dose }}
+          </p>
           <div class="filtros">
             <label class="campo">
               <span>{{ M.fechar.produzida }}</span>

@@ -7,6 +7,7 @@ import {
   conferirValidadeDoKit,
   consumoDaMontagem,
   custoDoLote,
+  destinoDoLoteProduzido,
   type FechamentoParaConferir,
   type MontagemParaConferir,
   numeroLoteProduzido,
@@ -116,5 +117,33 @@ describe('kit montado na produção interna', () => {
     ).toEqual(['validade-acima-componente']);
     expect(conferirValidadeDoKit('2027-01-09T23:00', ['2027-03-31', '2027-01-09'])).toEqual([]);
     expect(conferirValidadeDoKit('2030-01-01T00:00', [])).toEqual([]);
+  });
+});
+
+describe('destino do lote produzido pela finalidade da ordem', () => {
+  const ordem = { finalidade: 'prescricao', paciente: 7, atendimento: 9, prescricaoItem: 11 };
+  it('a ordem para o estoque entra como lote livre do local', () => {
+    expect(destinoDoLoteProduzido({ ...ordem, finalidade: 'estoque' })).toEqual({
+      destino: { tipo: 'estoque' },
+      recusas: [],
+    });
+  });
+  it('a dose do paciente vai ao paciente, ao atendimento e ao item da prescrição, nunca ao saldo livre', () => {
+    expect(destinoDoLoteProduzido(ordem)).toEqual({
+      destino: { tipo: 'paciente', paciente: 7, atendimento: 9, prescricaoItem: 11 },
+      recusas: [],
+    });
+    expect(destinoDoLoteProduzido({ ...ordem, atendimento: null }).destino).toMatchObject({
+      tipo: 'paciente',
+      atendimento: null,
+    });
+  });
+  it('recusa a dose sem paciente ou sem item da prescrição e a finalidade desconhecida', () => {
+    const cod = (o: Partial<typeof ordem>) =>
+      destinoDoLoteProduzido({ ...ordem, ...o }).recusas.map((x) => x.codigo);
+    expect(cod({ paciente: null as unknown as number })).toEqual(['dose-sem-paciente']);
+    expect(cod({ prescricaoItem: null as unknown as number })).toEqual(['dose-sem-paciente']);
+    expect(cod({ finalidade: 'doacao' })).toEqual(['finalidade-desconhecida']);
+    expect(destinoDoLoteProduzido({ ...ordem, paciente: null }).destino).toBeNull();
   });
 });

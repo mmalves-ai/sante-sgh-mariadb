@@ -74,6 +74,8 @@ export const esquemaLoteProduzidoGravado = z.object({
   valorAdicional: z.number(),
   valorTotal: z.number(),
   custoUnitario: z.number(),
+  /** A saída da dose ao paciente (ordem com finalidade de prescrição); null no lote que fica livre no estoque. */
+  saidaPaciente: id.nullable().optional(),
 });
 export type LoteProduzidoGravadoTela = z.infer<typeof esquemaLoteProduzidoGravado>;
 

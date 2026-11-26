@@ -3297,7 +3297,7 @@ local_estoque_setor	SUP	vinculo	F3	Setores atendidos por cada local de estoque, 
 local_estoque_transferencia	SUP	vinculo	F3	Locais de destino autorizados a receber transferência de cada local de estoque	rodada2:nova	05	1
 local_estoque_usuario	SUP	vinculo	F3	Usuários que movimentam cada local de estoque e as operações permitidas	func: locais de estoque; MV: USU_ESTOQUE; SPDATA: GELOCUSU, GEUSERS; dep: perfil e permissão (01); GETABFUN vai a profissional (02)	05	5
 lote_insumo	SUP	principal	F3	Lote do insumo com fabricante, validade, data de fabricação e situação	func: lote e validade; MV: LOTE; SPDATA: GEVALMEM; correção de validade vai a historico_entidade:lote_insumo	05	5
-lote_produzido	SUP	principal	F7	Lote do produto manipulado ou do kit montado, com validade e rótulo	func: manipulação; MV: MVTO_KIT_PRODUZIDO; Produto: produção interna, lote da ordem e kit montado (05-SUP linha 12; migração 11_SUP/95_producao_interna)	05	3
+lote_produzido	SUP	principal	F7	Lote do produto manipulado ou do kit montado, com validade e rótulo	func: manipulação; MV: MVTO_KIT_PRODUZIDO; Produto: produção interna, lote da ordem e kit montado (05-SUP linha 12; migrações 11_SUP/95_producao_interna e 95_producao_dose_paciente: a dose do paciente sai direto a ele)	05	3
 lote_produzido_custo	SUP	item	F7	Custo fixo apropriado a cada lote produzido, com quantidade, valor unitário e total	rodada2:nova	05	1
 modalidade_analise_produto	SUP	dominio	F8	Modalidade de análise técnica de produto (amostra, documental, laboratorial) na qualificação para compra	rodada2:nova	05	1
 modalidade_compra_publica	SUP	dominio	F7	Modalidade de contratação pública (pregão, concorrência, dispensa, inexigibilidade)	func: compras públicas; MV: MODALIDADE_LICITACAO	05	3
