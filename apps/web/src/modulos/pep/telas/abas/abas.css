@@ -23,6 +23,15 @@
   align-items: center;
   gap: var(--sgh-espaco-1);
 }
+/* Alvo mínimo de 24 px (WCAG 2.5.8, axe target-size): as marcas ficam empilhadas (ex.: manifestações da alergia) e a
+   caixa padrão de 13 px fica a menos de 24 px da vizinha. */
+.form .marca input[type='checkbox'],
+.form .marca input[type='radio'] {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  padding: 0;
+  flex: none;
+}
 .form input,
 .form select,
 .form textarea {
