@@ -110,7 +110,9 @@ test.describe('@C3-014 CME: testes dos indicadores do ciclo, liberação e rejei
       return json(r, { pendentes: 0, situacao: 'concluida' });
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // A CME é permissão clínica por perfil (cirurgia.cme.ler e .operar, perfil central-material-esteril): a segregação de
+    // funções a tira do administrador sem perfil assistencial. Quem testa, libera e rejeita o ciclo é a equipe da CME.
+    await entrar(page, 'SINT.CME');
     await page.goto('/cirurgia/cme/ciclos');
     await expect(page.getByTestId('tela-cme-ciclos')).toBeVisible();
     await escolher(page.getByTestId('cme-ciclo-escolha'), { rotulo: /CE-000009/ });
