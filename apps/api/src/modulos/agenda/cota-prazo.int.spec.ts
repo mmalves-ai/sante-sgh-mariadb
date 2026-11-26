@@ -3,7 +3,9 @@
 // do lote são limpos antes e depois. Prova: as linhas em cota_marcacao e prazo_aviso_marcacao (versão, ativo, sem
 // apagar), a trilha na mesma transação, as recusas do domínio e a trava na marcação: antecedência mínima, aviso ao
 // paciente, cota que bloqueia no limite e que só alerta, restrição confirmada da agenda que recusa e estimada que
-// alerta, e a leitura com o uso da cota na janela. SGH_NUCLEO_SEM_BANCO=1 pula.
+// alerta, e a leitura com o uso da cota na janela; a remarcação com a cota no limite (a origem sai da contagem e o
+// aviso volta), o item principal da agenda gravado na marcação e a cota por item, e a restrição por plano.
+// SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -20,14 +22,27 @@ const DIA = '2030-03-12'; // terça-feira
 const AGORA = instanteDe(FUSO, '2030-03-11', '09:00');
 const CONVENIO = 9107;
 const OUTRO = 9108;
-const HORAS = ['08:00', '08:15', '08:30', '08:45'];
+const HORAS = ['08:00', '08:15', '08:30', '08:45', '09:00', '09:15', '09:30', '09:45'];
 const recusada = (codigo: string) => ({ problema: expect.objectContaining({ codigo }) });
 
 describe.skipIf(SEM_BANCO)('cotas e prazos de marcação (porta própria, MariaDB)', () => {
   let nucleo: NucleoProprio;
   let cotas: CotasPrazosPropria;
   let porta: PortaAgendaPropria;
-  const ids = { est: 0, agenda: 0, usuario: 0, paciente: 0, fpA: 0, fpB: 0, esp: 0, cota: 0, prazo: 0 };
+  const ids = {
+    est: 0,
+    agenda: 0,
+    usuario: 0,
+    paciente: 0,
+    fpA: 0,
+    fpB: 0,
+    esp: 0,
+    cota: 0,
+    prazo: 0,
+    item: 0,
+    itemFora: 0,
+    plano: 0,
+  };
 
   const garantir = async (e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]) => {
     const l = await e.uma<{ id: number }>(sel, p);
@@ -38,7 +53,13 @@ describe.skipIf(SEM_BANCO)('cotas e prazos de marcação (porta própria, MariaD
     await e.executar('DELETE FROM cota_marcacao WHERE estabelecimento_id = ?', est);
     await e.executar('DELETE FROM prazo_aviso_marcacao WHERE estabelecimento_id = ?', est);
     await e.executar('DELETE FROM agenda_restricao WHERE agenda_servico_id = ?', [ids.agenda]);
+    await e.executar('DELETE FROM cancelamento_marcacao WHERE estabelecimento_id = ?', est);
+    await e.executar(
+      'UPDATE marcacao_horario SET remarcada_marcacao_horario_id = NULL WHERE estabelecimento_id = ?',
+      est,
+    );
     await e.executar('DELETE FROM marcacao_horario WHERE estabelecimento_id = ?', est);
+    await e.executar('DELETE FROM agenda_item_agendavel WHERE agenda_servico_id = ?', [ids.agenda]);
     await e.executar('DELETE FROM horario_agenda WHERE estabelecimento_id = ?', est);
     await e.executar(
       'DELETE p FROM geracao_grade_periodo p JOIN geracao_grade g ON g.id = p.geracao_grade_id WHERE g.estabelecimento_id = ?',
@@ -73,7 +94,7 @@ describe.skipIf(SEM_BANCO)('cotas e prazos de marcação (porta própria, MariaD
     correlacao: 'teste-f107c',
     chaveIdempotencia: `f107c-${randomUUID()}`,
   });
-  const marcar = (hora: string, convenio: number) =>
+  const marcar = (hora: string, convenio: number, extra: { item?: number; plano?: number } = {}) =>
     porta
       .executar(ctxPorta(), 'agenda.agendarConsulta', {
         agenda: ids.agenda,
@@ -83,6 +104,7 @@ describe.skipIf(SEM_BANCO)('cotas e prazos de marcação (porta própria, MariaD
         convenio,
         retorno: false,
         canal: 'telefone',
+        ...extra,
       })
       .then((r) => r.resultado as { marcacao: number; avisos?: string });
   const cotaBase = () => ({
@@ -221,6 +243,24 @@ describe.skipIf(SEM_BANCO)('cotas e prazos de marcação (porta própria, MariaD
         if (!(await e.uma('SELECT id FROM tipo_marcacao WHERE natureza = ? AND ativo', [nat])))
           await dominio('tipo_marcacao', `f107c-${nat}`, { natureza: nat });
       await dominio('canal_marcacao', 'telefone');
+      for (const [k, cod] of [
+        ['item', 'f107c-item'],
+        ['itemFora', 'f107c-item-fora'],
+      ] as const)
+        ids[k] = await garantir(
+          e,
+          'SELECT id FROM item_agendavel WHERE codigo = ?',
+          [cod],
+          "INSERT INTO item_agendavel (codigo, descricao, tipo_item, duracao_minutos, criado_em) VALUES (?, ?, 'consulta', 15, ?)",
+          [cod, `ITEM SINTETICO ${cod}`, agora],
+        );
+      ids.plano = await garantir(
+        e,
+        'SELECT id FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ? AND codigo = ?',
+        [ids.fpB, 'f107c-plano'],
+        'INSERT INTO plano_fonte_pagadora (fonte_pagadora_id, codigo, descricao, criado_em) VALUES (?, ?, ?, ?)',
+        [ids.fpB, 'f107c-plano', 'PLANO SINTETICO F107C', agora],
+      );
       await limpar(e);
     });
     cotas = new CotasPrazosPropria(nucleo, CLIENTE, () => DIA);
@@ -236,7 +276,7 @@ describe.skipIf(SEM_BANCO)('cotas e prazos de marcação (porta própria, MariaD
           semana: 3,
           duracao: '00:15',
           horaInicio: '08:00',
-          horaFim: '09:00',
+          horaFim: '10:00',
           intervaloInicio: null,
           intervaloFim: null,
         },
@@ -341,5 +381,106 @@ describe.skipIf(SEM_BANCO)('cotas e prazos de marcação (porta própria, MariaD
     );
     const r = await marcar('08:45', OUTRO);
     expect(r.avisos).toContain('Regra da agenda ainda a confirmar');
+  });
+
+  it('a remarcação com a cota no limite passa (a origem sai da contagem) e devolve o aviso ao paciente', async () => {
+    // A cota do convênio A volta a bloquear, no limite das 3 marcações ativas (08:00, 08:15 e 08:30).
+    await cotas.salvarCota(ctxG(), { ...cotaBase(), id: ids.cota, versao: 2, quantidadeMaxima: 3 });
+    await expect(marcar('09:00', CONVENIO)).rejects.toMatchObject(recusada('cota-esgotada'));
+    const [origem] = await ler<{ id: number }>(
+      `SELECT m.id FROM marcacao_horario m JOIN horario_agenda h ON h.id = m.horario_agenda_id
+        WHERE m.estabelecimento_id = ? AND h.inicio_em = ?`,
+      [ids.est, instanteDe(FUSO, DIA, '08:30')],
+    );
+    const r = (
+      await porta.executar(ctxPorta(), 'agenda.remarcarConsulta', {
+        marcacao: Number(origem!.id),
+        destino: { agenda: ids.agenda, data: DIA, hora: '09:00' },
+        modo: 'liberar',
+        canal: 'telefone',
+      })
+    ).resultado as { marcacao: number; avisos?: string };
+    expect(r.avisos).toContain('Aviso ao paciente: Chegue 15 minutos antes com a carteirinha.');
+    const linhas = await ler<{ id: number; significado: string; remarcada: number | null }>(
+      `SELECT m.id, s.significado, m.remarcada_marcacao_horario_id AS remarcada FROM marcacao_horario m
+         JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
+        WHERE m.id IN (?, ?) ORDER BY m.id`,
+      [Number(origem!.id), r.marcacao],
+    );
+    expect(linhas.map((x) => [x.significado, x.remarcada === null ? null : Number(x.remarcada)])).toEqual([
+      ['cancelada', null],
+      ['aguardando', Number(origem!.id)],
+    ]);
+    const [n] = await ler<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM marcacao_horario m JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
+        WHERE m.estabelecimento_id = ? AND m.fonte_pagadora_id = ? AND s.significado <> 'cancelada'`,
+      [ids.est, ids.fpA],
+    );
+    expect(Number(n!.n)).toBe(3);
+  });
+
+  it('o item principal da agenda vai à marcação e a cota por item vale; o item fora da agenda é recusado', async () => {
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'item-f107c' }, (e) =>
+      e.executar(
+        'INSERT INTO agenda_item_agendavel (agenda_servico_id, item_agendavel_id, criado_em) VALUES (?, ?, NOW(3))',
+        [ids.agenda, ids.item],
+      ),
+    );
+    // A cota por agenda e item que a agenda não oferece nunca valeria: recusada no cadastro.
+    await expect(
+      cotas.salvarCota(ctxG(), {
+        ...cotaBase(),
+        agenda: ids.agenda,
+        fontePagadora: null,
+        especialidade: null,
+        item: ids.itemFora,
+        quantidadeMaxima: 1,
+      }),
+    ).rejects.toMatchObject(recusada('item-fora-da-agenda'));
+    await cotas.salvarCota(ctxG(), {
+      ...cotaBase(),
+      agenda: ids.agenda,
+      fontePagadora: null,
+      especialidade: null,
+      item: ids.item,
+      quantidadeMaxima: 1,
+    });
+    await expect(marcar('09:15', OUTRO, { item: ids.itemFora })).rejects.toMatchObject(
+      recusada('item-fora-da-agenda'),
+    );
+    const r = await marcar('09:15', OUTRO);
+    const [m] = await ler<{ item_agendavel_id: number | null }>(
+      'SELECT item_agendavel_id FROM marcacao_horario WHERE id = ?',
+      [r.marcacao],
+    );
+    expect(Number(m!.item_agendavel_id)).toBe(ids.item);
+    await expect(marcar('09:30', OUTRO)).rejects.toMatchObject(recusada('cota-esgotada'));
+  });
+
+  it('a restrição confirmada por plano vale só para a marcação daquele plano; plano de outro convênio é recusado', async () => {
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'plano-f107c' }, async (e) => {
+      // A cota por item sai de cena: o caso é só a restrição por plano.
+      await e.executar(
+        'UPDATE cota_marcacao SET ativo = FALSE WHERE estabelecimento_id = ? AND item_agendavel_id IS NOT NULL',
+        [ids.est],
+      );
+      await e.executar(
+        `INSERT INTO agenda_restricao (agenda_servico_id, fonte_pagadora_id, plano_fonte_pagadora_id, idade_minima_anos,
+           vigencia_inicio, situacao_revisao, criado_em) VALUES (?, ?, ?, 60, '2030-01-01', 'confirmada', NOW(3))`,
+        [ids.agenda, ids.fpB, ids.plano],
+      );
+    });
+    await expect(marcar('09:30', CONVENIO, { plano: ids.plano })).rejects.toMatchObject(
+      recusada('plano-de-outro-convenio'),
+    );
+    await expect(marcar('09:30', OUTRO, { plano: ids.plano })).rejects.toMatchObject(
+      recusada('restricao-agenda'),
+    );
+    const r = await marcar('09:30', OUTRO);
+    const [m] = await ler<{ plano_fonte_pagadora_id: number | null }>(
+      'SELECT plano_fonte_pagadora_id FROM marcacao_horario WHERE id = ?',
+      [r.marcacao],
+    );
+    expect(m!.plano_fonte_pagadora_id).toBeNull();
   });
 });

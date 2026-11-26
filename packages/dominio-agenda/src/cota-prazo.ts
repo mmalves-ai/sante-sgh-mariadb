@@ -370,3 +370,34 @@ export function restricaoNaMarcacao(a: AgendaEstruturada, p: PerguntaRestricao):
     alertas: tudo.permitido ? [] : [`Regra da agenda ainda a confirmar: ${tudo.impedimentos.join(' ')}`],
   };
 }
+
+// ---------------------------------------------------------------- item principal da marcação
+
+export type DecisaoItem =
+  | { readonly ok: true; readonly item: number | null }
+  | { readonly ok: false; readonly codigo: string; readonly mensagem: string };
+
+/**
+ * O item agendável principal da marcação (02-AGE 47), que leva a restrição, o prazo e a cota por item até ela:
+ * - o informado tem de estar entre os itens da agenda;
+ * - o da marcação remarcada segue se a agenda de destino o oferece; senão vale a regra seguinte;
+ * - sem informado, vale o único item da agenda; agenda sem item ou com vários fica sem item (sem recusa).
+ */
+export function itemDaMarcacao(
+  itensDaAgenda: readonly number[],
+  p: { readonly informado: number | null; readonly anterior?: number | null },
+): DecisaoItem {
+  if (p.informado !== null) {
+    if (!itensDaAgenda.includes(p.informado))
+      return {
+        ok: false,
+        codigo: 'item-fora-da-agenda',
+        mensagem: 'A agenda não oferece este item: escolha um item da agenda ou outra agenda.',
+      };
+    return { ok: true, item: p.informado };
+  }
+  const anterior = p.anterior ?? null;
+  if (anterior !== null && itensDaAgenda.includes(anterior)) return { ok: true, item: anterior };
+  const unicos = [...new Set(itensDaAgenda)];
+  return { ok: true, item: unicos.length === 1 ? unicos[0]! : null };
+}

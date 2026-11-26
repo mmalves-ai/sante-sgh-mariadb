@@ -23,6 +23,7 @@ import {
 } from '../api-agenda.js';
 import AlertaCredenciamentoMarcacao from '../componentes/AlertaCredenciamentoMarcacao.vue';
 import AvisoGravacao from '../componentes/AvisoGravacao.vue';
+import { guardarAvisos } from '../avisos-marcacao.js';
 import ErroAgenda from '../componentes/ErroAgenda.vue';
 import { dataBr, horaBr, horaDoContrato } from '../formato.js';
 import { usarAgenda } from '../usar-agenda.js';
@@ -224,6 +225,7 @@ async function marcar(): Promise<void> {
     mensagem.value = t('agenda.marcar.marcada');
     chave.value = novaChave('marcar');
     await cliente.invalidateQueries({ queryKey: ['agenda'] });
+    guardarAvisos(r.resultado);
     const id = Number(r.resultado['marcacao']);
     if (id) await roteador.push(`/agenda/consultas/marcacoes/${id}`);
   } catch (x) {
@@ -290,6 +292,7 @@ async function marcarSemPront(): Promise<void> {
     mensagem.value = t('agenda.marcar.marcada');
     chave.value = novaChave('marcar');
     await cliente.invalidateQueries({ queryKey: ['agenda'] });
+    guardarAvisos(r.resultado);
     const id = Number(r.resultado['marcacao']);
     if (id) await roteador.push(`/agenda/consultas/marcacoes/${id}`);
   } catch (x) {
@@ -343,6 +346,7 @@ async function fazerEncaixe(): Promise<void> {
     );
     mensagem.value = t('agenda.marcar.encaixado');
     await cliente.invalidateQueries({ queryKey: ['agenda'] });
+    guardarAvisos(r.resultado);
     const id = Number(r.resultado['marcacao']);
     if (id) await roteador.push(`/agenda/consultas/marcacoes/${id}`);
   } catch (x) {

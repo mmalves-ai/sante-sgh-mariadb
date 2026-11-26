@@ -119,6 +119,13 @@ const baseMarcacao = {
   canal: esquemaCanal,
   /** 02-AGE 49: grupo de prioridade legal (id); a regra do domínio pode subir pela idade ou pelo cadastro. */
   prioridadeLegal: id.nullable().optional(),
+  /**
+   * 02-AGE 47: item agendável principal da marcação (entre os itens da agenda). Sem ele, vale o único item da agenda;
+   * a restrição, o prazo e a cota por item alcançam a marcação por ele.
+   */
+  item: id.nullable().optional(),
+  /** 02-AGE 47: plano do convênio (id), quando conhecido: alcança a restrição da agenda por plano. */
+  plano: id.nullable().optional(),
 };
 
 export const esquemaAgendarConsulta = z

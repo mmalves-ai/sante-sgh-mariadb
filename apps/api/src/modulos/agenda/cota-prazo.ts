@@ -166,6 +166,8 @@ export async function usoDaCota(
   estabelecimento: number,
   c: CotaMarcacao,
   janela: { inicio: string; fim: string },
+  /** A marcação que sai da contagem: na remarcação, a de origem (cancelada na mesma transação). */
+  foraDaContagem: number | null = null,
 ): Promise<{ usadas: number; vagas: number }> {
   const filtros: string[] = [];
   const valores: unknown[] = [];
@@ -179,6 +181,7 @@ export async function usoDaCota(
   filtrar(' AND m.especialidade_medica_id = ?', c.especialidade);
   filtrar(' AND m.tipo_marcacao_id = ?', c.tipoMarcacao);
   filtrar(' AND m.item_agendavel_id = ?', c.item);
+  filtrar(' AND m.id <> ?', foraDaContagem);
   const recorte = filtros.join('');
   const [u] = await l.consultar(
     `SELECT COUNT(*) AS n FROM marcacao_horario m
@@ -237,6 +240,10 @@ export interface MarcacaoAConferir {
   readonly especialidade: number | null;
   readonly tipoMarcacao: number | null;
   readonly item?: number | null;
+  /** Plano do convênio, quando conhecido (restrição da agenda por plano). */
+  readonly plano?: number | null;
+  /** Remarcação: a marcação de origem, que sai da contagem da cota (sai uma, entra uma). */
+  readonly remarcadaDe?: number | null;
   readonly retorno: boolean;
   readonly encaixe: boolean;
   readonly administrador: boolean;
@@ -273,6 +280,7 @@ export async function exigirRegrasDaMarcacao(tx: TxOperacao, p: MarcacaoAConferi
       idadeAnos: idadeEm(p.nascimento, p.data),
       sexo,
       fontePagadoraId: p.fontePagadora,
+      planoId: p.plano ?? null,
       itemAgendavelId: p.item ?? null,
       retorno: p.retorno,
       encaixe: p.encaixe,
@@ -324,7 +332,10 @@ export async function exigirRegrasDaMarcacao(tx: TxOperacao, p: MarcacaoAConferi
       .filter((c) => cotaAlcanca(c, alvo));
     const usos = [];
     for (const c of travadas)
-      usos.push({ cota: c, ...(await usoDaCota(tx, p.estabelecimento, c, janelaDaCota(c, p.data))) });
+      usos.push({
+        cota: c,
+        ...(await usoDaCota(tx, p.estabelecimento, c, janelaDaCota(c, p.data), p.remarcadaDe ?? null)),
+      });
     const dc = decidirCotas(usos, { administrador: p.administrador });
     if (!dc.ok) throw recusa(dc.codigo, dc.mensagem);
     alertas.push(...dc.alertas);
@@ -523,6 +534,22 @@ export class CotasPrazosPropria {
       throw falta('tipoMarcacao');
     if (a.item != null && !(await tx.uma('SELECT id FROM item_agendavel WHERE id = ?', [a.item])))
       throw falta('item');
+    // O recorte por agenda e item só alcança marcação se a agenda oferece o item: recusa o que nunca valeria.
+    if (
+      a.agenda != null &&
+      a.item != null &&
+      !(await tx.uma(
+        'SELECT id FROM agenda_item_agendavel WHERE agenda_servico_id = ? AND item_agendavel_id = ? AND excluido_em IS NULL',
+        [a.agenda, a.item],
+      ))
+    )
+      throw recusa(
+        'item-fora-da-agenda',
+        'A agenda do recorte não oferece este item: a regra nunca valeria.',
+        {
+          campos: ['item'],
+        },
+      );
   }
 
   private async travar(

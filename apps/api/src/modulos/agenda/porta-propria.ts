@@ -52,6 +52,7 @@ import {
   prioridadeGravadaNaEspera,
   prioridadeVigenteNaEspera,
   prioridadeNaMarcacao,
+  itemDaMarcacao,
 } from '@sgh/dominio-agenda';
 import type { PessoaSemProntuario } from '@sgh/dominio-agenda';
 import {
@@ -1349,6 +1350,8 @@ export class PortaAgendaPropria implements PortaAgenda {
             canal: e.canal,
             observacao: e.observacao ?? null,
             prioridadeLegal: e.prioridadeLegal ?? null,
+            item: e.item ?? null,
+            plano: e.plano ?? null,
             encaixe: encaixe ? ('motivo' in e ? String(e.motivo) : '') : null,
             remarcadaDe: null,
             alertas,
@@ -1699,6 +1702,9 @@ export class PortaAgendaPropria implements PortaAgenda {
           const convenio = e.convenio ?? codigoNum(m['convenio']);
           if (convenio === null)
             throw recusa('convenio-inexistente', 'O convênio da marcação não tem código de negócio.');
+          const mesmoConvenio = convenio === codigoNum(m['convenio']);
+          const alertas: string[] = [];
+          const avisos: string[] = [];
           const nova = await this.marcarNoHorario(tx, ctx, {
             agenda: e.destino.agenda,
             data: e.destino.data,
@@ -1710,8 +1716,13 @@ export class PortaAgendaPropria implements PortaAgenda {
             canal: e.canal,
             observacao: e.observacao ?? txt(m['observacao']),
             prioridadeAnterior: numOuNull(m['grupo_prioridade_legal_id']),
+            // 02-AGE 47: o item segue se a agenda de destino o oferece; o plano segue só no mesmo convênio.
+            itemAnterior: numOuNull(m['item_agendavel_id']),
+            plano: mesmoConvenio ? numOuNull(m['plano_fonte_pagadora_id']) : null,
             encaixe: null,
             remarcadaDe: num(m['id']),
+            alertas,
+            avisos,
           });
           const protocolo = await this.cancelarMarcacao(tx, ctx, m, {
             motivo: e.motivo,
@@ -1720,7 +1731,13 @@ export class PortaAgendaPropria implements PortaAgenda {
             liberar: e.modo === 'liberar',
             nova,
           });
-          return { marcacao: nova, anterior: e.marcacao, protocolo };
+          return {
+            marcacao: nova,
+            anterior: e.marcacao,
+            protocolo,
+            ...(alertas.length ? { alerta: 'profissional-nao-credenciado', alertaMotivo: alertas[0]! } : {}),
+            ...(avisos.length ? { avisos: avisos.join('\n') } : {}),
+          };
         },
         alvo: (_e, r) => ({ tabela: 'marcacao_horario', id: Number(r.marcacao) }),
       }),
@@ -2265,7 +2282,7 @@ export class PortaAgendaPropria implements PortaAgenda {
   private async travarMarcacao(tx: TxOperacao, ctx: ContextoOperacao, id: number): Promise<Linha> {
     const [m] = await tx.consultarParaAtualizar(
       `SELECT m.id, m.versao, m.horario_agenda_id, m.paciente_id, m.pre_cadastro_id, m.encaixe, m.retorno, m.observacao, m.chegada_em,
-         m.atendido_em, m.canal_marcacao_id, m.grupo_prioridade_legal_id, s.significado, fp.codigo AS convenio, h.inicio_em,
+         m.atendido_em, m.canal_marcacao_id, m.grupo_prioridade_legal_id, m.item_agendavel_id, m.plano_fonte_pagadora_id, s.significado, fp.codigo AS convenio, h.inicio_em,
          h.agenda_servico_id AS agenda_nominal
        FROM marcacao_horario m JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
        JOIN fonte_pagadora fp ON fp.id = m.fonte_pagadora_id JOIN horario_agenda h ON h.id = m.horario_agenda_id
@@ -2433,6 +2450,12 @@ export class PortaAgendaPropria implements PortaAgenda {
       prioridadeLegal?: number | null;
       /** 02-AGE 49: grupo gravado na marcação remarcada; segue para a nova (desativado deixa de valer, sem recusa). */
       prioridadeAnterior?: number | null;
+      /** 02-AGE 47: item agendável principal informado (tem de ser da agenda); sem ele, vale o único item da agenda. */
+      item?: number | null;
+      /** 02-AGE 47: item da marcação remarcada; segue se a agenda de destino o oferece (sem recusa). */
+      itemAnterior?: number | null;
+      /** 02-AGE 47: plano do convênio (tem de ser do convênio da marcação). */
+      plano?: number | null;
       /** Motivo do encaixe; null = vaga da grade. */
       encaixe: string | null;
       remarcadaDe: number | null;
@@ -2559,6 +2582,31 @@ export class PortaAgendaPropria implements PortaAgenda {
       'SELECT especialidade_medica_id FROM agenda_especialidade WHERE agenda_servico_id = ? AND excluido_em IS NULL ORDER BY principal DESC, id LIMIT 1',
       [p.agenda],
     );
+    // 02-AGE 47: o item principal (entre os itens da agenda) e o plano do convênio alcançam restrição, prazo e cota.
+    const itensDaAgenda = (
+      await tx.consultar(
+        'SELECT item_agendavel_id FROM agenda_item_agendavel WHERE agenda_servico_id = ? AND excluido_em IS NULL',
+        [p.agenda],
+        { teto: TETO_AGREGADO },
+      )
+    ).map((x) => num(x['item_agendavel_id']));
+    const item = itemDaMarcacao(itensDaAgenda, {
+      informado: p.item ?? null,
+      anterior: p.itemAnterior ?? null,
+    });
+    if (!item.ok) throw recusa(item.codigo, item.mensagem, { campos: ['item'] });
+    let plano: number | null = null;
+    if (p.plano != null) {
+      const pl = await tx.uma(
+        'SELECT id FROM plano_fonte_pagadora WHERE id = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL',
+        [p.plano, fp['id']],
+      );
+      if (!pl)
+        throw recusa('plano-de-outro-convenio', 'O plano informado não é do convênio da marcação.', {
+          campos: ['plano'],
+        });
+      plano = num(pl['id']);
+    }
     // 02-AGE 47: restrição da agenda, prazo de aviso e cota de marcação (regras do domínio, na mesma transação).
     const avisos = await exigirRegrasDaMarcacao(tx, {
       estabelecimento: Number(ctx.estabelecimento),
@@ -2572,6 +2620,9 @@ export class PortaAgendaPropria implements PortaAgenda {
       fontePagadora: num(fp['id']),
       especialidade: esp ? num(esp['especialidade_medica_id']) : null,
       tipoMarcacao: num(tipo['id']),
+      item: item.item,
+      plano,
+      remarcadaDe: p.remarcadaDe,
       retorno: p.retorno,
       encaixe: p.encaixe !== null,
       administrador: this.papel.getStore()?.administrador === true,
@@ -2699,6 +2750,8 @@ export class PortaAgendaPropria implements PortaAgenda {
       situacao_marcacao_id: await this.situacaoMarcacao(tx, 'aguardando'),
       canal_marcacao_id: canal['id'],
       fonte_pagadora_id: fp['id'],
+      plano_fonte_pagadora_id: plano,
+      item_agendavel_id: item.item,
       especialidade_medica_id: esp ? esp['especialidade_medica_id'] : null,
       executante_profissional_id: a['profissional_id'],
       remarcada_marcacao_horario_id: p.remarcadaDe,

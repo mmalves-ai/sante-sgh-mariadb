@@ -97,6 +97,13 @@ export const mensagensAgenda = {
     'nao-aceito': 'A agenda não tem este item.',
     'ja-na-fila': 'O paciente já aguarda nesta agenda ou especialidade.',
     'antecedencia-minima': 'O horário está perto demais: o estabelecimento exige antecedência mínima.',
+    'antecedencia-maxima': 'O horário está longe demais: a agenda ainda não abriu marcação para esta data.',
+    'cota-esgotada':
+      'A cota de marcação deste convênio, especialidade ou item já chegou ao limite no período: escolha outra data ou agenda.',
+    'restricao-agenda':
+      'A agenda não atende este paciente por uma regra confirmada (idade, sexo, retorno ou encaixe) para o convênio, plano ou item.',
+    'item-fora-da-agenda': 'A agenda não oferece este item: escolha um item da agenda ou outra agenda.',
+    'plano-de-outro-convenio': 'O plano informado não é do convênio da marcação.',
     'recurso-desligado':
       'A agenda ainda não foi liberada para gravar neste estabelecimento ou setor: as telas ficam em consulta.',
     'operacao-nao-liberada': 'Esta gravação ainda não foi liberada neste estabelecimento.',

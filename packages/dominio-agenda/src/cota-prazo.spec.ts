@@ -7,6 +7,7 @@ import {
   cotaAlcanca,
   decidirCotas,
   decidirPrazo,
+  itemDaMarcacao,
   janelaDaCota,
   limiteDaCota,
   type PrazoAviso,
@@ -239,5 +240,41 @@ describe('restrição da agenda na marcação', () => {
   it('o padrão da agenda (idade) vale para todos', () => {
     const d = restricaoNaMarcacao({ ...base, padrao: { ...base.padrao, idadeMinimaAnos: 60 } }, pergunta);
     expect(d).toMatchObject({ ok: false, codigo: 'restricao-agenda' });
+  });
+  it('a regra por plano e por item só vale para a marcação daquele plano e item', () => {
+    const porPlano = { ...restricao('confirmada'), planoId: 7 };
+    const porItem = { ...restricao('confirmada'), id: 3, fontePagadoraId: null, itemAgendavelId: 9 };
+    expect(restricaoNaMarcacao({ ...base, restricoes: [porPlano] }, pergunta).ok).toBe(true);
+    expect(
+      restricaoNaMarcacao({ ...base, restricoes: [porPlano] }, { ...pergunta, planoId: 7 }),
+    ).toMatchObject({
+      ok: false,
+      codigo: 'restricao-agenda',
+    });
+    expect(restricaoNaMarcacao({ ...base, restricoes: [porItem] }, pergunta).ok).toBe(true);
+    expect(
+      restricaoNaMarcacao({ ...base, restricoes: [porItem] }, { ...pergunta, itemAgendavelId: 9 }),
+    ).toMatchObject({ ok: false, codigo: 'restricao-agenda' });
+  });
+});
+
+describe('item principal da marcação', () => {
+  it('o informado tem de ser da agenda', () => {
+    expect(itemDaMarcacao([4, 5], { informado: 5 })).toEqual({ ok: true, item: 5 });
+    expect(itemDaMarcacao([4, 5], { informado: 6 })).toMatchObject({
+      ok: false,
+      codigo: 'item-fora-da-agenda',
+    });
+    expect(itemDaMarcacao([], { informado: 6 })).toMatchObject({ ok: false, codigo: 'item-fora-da-agenda' });
+  });
+  it('sem informado vale o único item da agenda; com vários ou nenhum, fica sem item', () => {
+    expect(itemDaMarcacao([4], { informado: null })).toEqual({ ok: true, item: 4 });
+    expect(itemDaMarcacao([4, 5], { informado: null })).toEqual({ ok: true, item: null });
+    expect(itemDaMarcacao([], { informado: null })).toEqual({ ok: true, item: null });
+  });
+  it('o item da remarcada segue se o destino o oferece; senão, a regra do destino', () => {
+    expect(itemDaMarcacao([4, 5], { informado: null, anterior: 5 })).toEqual({ ok: true, item: 5 });
+    expect(itemDaMarcacao([4], { informado: null, anterior: 5 })).toEqual({ ok: true, item: 4 });
+    expect(itemDaMarcacao([4, 6], { informado: null, anterior: 5 })).toEqual({ ok: true, item: null });
   });
 });

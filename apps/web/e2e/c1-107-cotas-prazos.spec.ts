@@ -3,13 +3,29 @@
 // vê a validação na hora (sem limite e percentual acima de 100 recusados antes de gravar), vê o uso de hoje contra o
 // limite (esgotada em destaque) e cria o prazo de aviso (antecedência incoerente recusada na hora). As cotas e prazos
 // só existem no banco do cliente (na fonte sintética a API responde 503): as respostas são simuladas pelo Playwright
-// com massa SINTÉTICA, no contrato do servidor. O efeito no banco e a trava na marcação estão em
-// apps/api/src/modulos/agenda/cota-prazo.int.spec.ts.
+// com massa SINTÉTICA, no contrato do servidor. Na marcação (porta da agenda em memória, fonte sintética), a central
+// vê a recusa da cota esgotada com o texto próprio e, marcada a consulta, a ficha mostra os avisos devolvidos (prazo ao
+// paciente e cota que só alerta); a recusa e os avisos são simulados no contrato do servidor. O efeito no banco e a
+// trava na marcação estão em apps/api/src/modulos/agenda/cota-prazo.int.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
+const FERIADOS = ['01-01', '04-21', '09-07', '11-02', '11-15', '12-25'];
+
+/** Próximo dia útil a partir de três dias à frente (relógio de São Paulo), fora dos feriados fixos. */
+function diaUtil(): string {
+  const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  const d = new Date(`${hoje}T12:00:00Z`);
+  for (let i = 3; i < 20; i++) {
+    const x = new Date(d.getTime() + i * 86_400_000);
+    const iso = x.toISOString().slice(0, 10);
+    const sem = x.getUTCDay();
+    if (sem !== 0 && sem !== 6 && !FERIADOS.includes(iso.slice(5))) return iso;
+  }
+  throw new Error('sem dia útil');
+}
 
 async function entrar(page: Page, login: string): Promise<void> {
   await page.context().clearCookies();
@@ -121,6 +137,77 @@ test.describe('@C1-107 cotas e prazos de marcação', () => {
     await expect(page.getByTestId('prazos-lista')).toContainText('Chegue 15 minutos antes.');
 
     await semViolacaoAxe(page, 'cotas e prazos de marcação');
+    expect(externas).toEqual([]);
+  });
+
+  test('na marcação, a cota esgotada recusa com texto próprio e a ficha mostra os avisos', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const externas = vigiarExternas(page);
+    const dia = diaUtil();
+    let tentativas = 0;
+    // 1ª tentativa: a cota bloqueia; 2ª: a marcação passa (porta em memória) e a resposta leva os avisos do contrato.
+    await page.route('**/api/agenda/consultas/marcacoes', async (rota) => {
+      if (rota.request().method() !== 'POST') return rota.fallback();
+      tentativas += 1;
+      if (tentativas === 1)
+        return json(
+          rota,
+          {
+            type: 'https://sgh.local/problemas/cota-esgotada',
+            title: 'Operação recusada',
+            status: 409,
+            detail: 'Cota sintética esgotada.',
+            codigo: 'cota-esgotada',
+          },
+          409,
+        );
+      const resposta = await rota.fetch();
+      const corpo = (await resposta.json()) as { resultado: Record<string, unknown> };
+      corpo.resultado['avisos'] = [
+        'Aviso ao paciente: Chegue 15 minutos antes com a carteirinha.',
+        'A cota de marcação passou do limite: 3 de 2 no período.',
+      ].join('\n');
+      return rota.fulfill({ response: resposta, json: corpo });
+    });
+    await entrar(page, 'SINT.AGENDA');
+    await page.goto('/agenda/consultas/marcar');
+    await expect(page.getByTestId('tela-marcar')).toBeVisible();
+    const busca = page.getByRole('region', { name: 'Buscar vagas' });
+    await escolher(busca.getByLabel('Agenda'), '901');
+    await page.getByTestId('vagas-de').fill(dia);
+    await page.getByTestId('vagas-ate').fill(dia);
+    await busca.getByRole('button', { name: 'Buscar vagas' }).click();
+    await expect(page.getByTestId('tabela-vagas')).toBeVisible();
+    await page
+      .getByTestId(new RegExp(`^vaga-901-${dia}-\\d{4}$`))
+      .first()
+      .click();
+    await page.getByTestId('marcar-termo').fill('cinthya');
+    await page.getByTestId('marcar-termo').press('Enter');
+    await page.getByTestId('paciente-1003').click();
+    await escolher(page.getByRole('region', { name: 'Marcar consulta' }).getByLabel('Convênio'), '10');
+
+    await page.getByTestId('botao-marcar').click();
+    await expect(
+      page.getByText('A cota de marcação deste convênio, especialidade ou item já chegou ao limite'),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/agenda\/consultas\/marcar/);
+
+    await page.getByTestId('botao-marcar').click();
+    await expect(page).toHaveURL(/\/agenda\/consultas\/marcacoes\/\d+/);
+    const avisos = page.getByTestId('marcacao-aviso');
+    await expect(avisos).toHaveCount(2);
+    await expect(avisos.nth(0)).toContainText('Chegue 15 minutos antes com a carteirinha.');
+    await expect(avisos.nth(1)).toContainText('3 de 2');
+    expect(tentativas).toBe(2);
+    await semViolacaoAxe(page, 'ficha da marcação com avisos');
+
+    // Os avisos valem uma vez só: recarregada a ficha, somem.
+    await page.reload();
+    await expect(page.getByTestId('marcacao-dados')).toBeVisible();
+    await expect(page.getByTestId('marcacao-aviso')).toHaveCount(0);
     expect(externas).toEqual([]);
   });
 });

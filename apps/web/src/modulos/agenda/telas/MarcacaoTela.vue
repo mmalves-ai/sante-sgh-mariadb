@@ -4,7 +4,7 @@
 // liberar), confirmar ou registrar a tentativa, registrar a falta e desfazer o encaixe.
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import {
@@ -19,6 +19,7 @@ import {
 import { pode as podePermissao } from '../../../casca/sessao/pode.js';
 import { ofereceAbertura } from '../../atendimento/regras-tela.js';
 import AvisoGravacao from '../componentes/AvisoGravacao.vue';
+import { guardarAvisos, retirarAvisos } from '../avisos-marcacao.js';
 import ErroAgenda from '../componentes/ErroAgenda.vue';
 import { dataBr, horaBr, horaDoContrato } from '../formato.js';
 import { usarAgenda } from '../usar-agenda.js';
@@ -29,6 +30,11 @@ const roteador = useRouter();
 const cliente = useQueryClient();
 const { opcoes, opcoesAgenda, pode, motivoGravacao } = usarAgenda();
 const marcacaoId = computed(() => Number(props.id));
+// 02-AGE 47: os avisos da marcação recém-feita (prazo ao paciente, regra a confirmar, cota que só alerta).
+const avisosMarcacao = ref<string[]>(retirarAvisos());
+watch(marcacaoId, () => {
+  avisosMarcacao.value = retirarAvisos();
+});
 const detalhe = useQuery({
   queryKey: computed(() => ['agenda', 'marcacao', marcacaoId.value]),
   queryFn: () => lerMarcacao(marcacaoId.value),
@@ -88,9 +94,11 @@ async function rodar(
     mensagem.value = r.mensagem;
     acao.value = '';
     await cliente.invalidateQueries({ queryKey: ['agenda'] });
+    guardarAvisos(r.resultado);
     const destino = irPara?.(r.resultado) ?? null;
     if (destino && destino !== marcacaoId.value)
       await roteador.push(`/agenda/consultas/marcacoes/${destino}`);
+    else avisosMarcacao.value = retirarAvisos();
   } catch (e) {
     erro.value = e;
   }
@@ -328,6 +336,13 @@ const desfazer = () => rodar(() => desfazerEncaixe(marcacaoId.value, {}, novaCha
         </div>
       </form>
     </template>
+    <SanteAlerta
+      v-for="(a, i) in avisosMarcacao"
+      :key="`aviso-${i}`"
+      variante="aviso"
+      :texto="a"
+      data-testid="marcacao-aviso"
+    />
     <p v-if="mensagem" role="status" data-testid="marcacao-mensagem">{{ mensagem }}</p>
     <ErroAgenda v-if="erro" :erro="erro" />
   </section>
