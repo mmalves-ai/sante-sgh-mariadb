@@ -517,11 +517,13 @@ const comparacao = useQuery({
       </section>
       <p v-else-if="!rascunho" class="secundario">{{ t(`${K}.ficha.somenteRascunho`) }}</p>
 
+      <p v-if="podeGravar && rascunho" class="secundario" data-testid="cp-ativar-aviso">
+        {{ t(`${K}.ficha.ativarAviso`) }}
+      </p>
       <div v-if="podeGravar" class="acoes">
         <SanteBotao
           v-if="rascunho"
           :rotulo="t(`${K}.ficha.ativar`)"
-          :confirmacao="t(`${K}.ficha.ativarConfirma`)"
           :desabilitado="ocupado || ficha.itens.length === 0"
           data-testid="cp-ativar"
           @acionar="ativar"

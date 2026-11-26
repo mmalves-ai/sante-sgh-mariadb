@@ -132,6 +132,11 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
         est,
       );
       await e.executar('DELETE FROM fatura_fonte_pagadora WHERE estabelecimento_id IN (?, ?)', est);
+      // O demonstrativo de análise (de outros testes do cliente) pode apontar para um lote da massa: desliga antes.
+      await e.executar(
+        'UPDATE demonstrativo_analise_conta SET lote_tiss_id = NULL WHERE lote_tiss_id IN (SELECT id FROM lote_tiss WHERE estabelecimento_id IN (?, ?))',
+        est,
+      );
       await e.executar('DELETE FROM lote_tiss WHERE estabelecimento_id IN (?, ?)', est);
       await e.executar(
         "DELETE FROM arquivo WHERE estabelecimento_id IN (?, ?) AND entidade = 'lote_tiss'",
@@ -522,6 +527,8 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
       expect(xml).toMatch(/valorTotalHonorarios>150\.00</);
       // Sem a guia de autorização da operadora, o aviso explícito (vai o número da guia do prestador).
       expect(String(r.resultado['alertas'])).toContain('guia de autorização');
+      // O executante sem assinatura do cadastro vigente na data do ato (assinaturaNoDia, 02-CAD linha 16): aviso.
+      expect(String(r.resultado['alertas'])).toContain('não tem assinatura cadastrada vigente em');
     } finally {
       // Desfaz este lote (os testes seguintes contam um lote só no estabelecimento).
       await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-03-16' }, async (e) => {

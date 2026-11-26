@@ -251,7 +251,7 @@ test.describe('@C1-122 Guias do convênio no hospital @fase3', () => {
 
     // Assumir a guia: o responsável aparece no painel e na fila.
     await page.getByTestId('gc-assumir').click();
-    await expect(page.getByRole('status')).toHaveText('Gravado.');
+    await expect(page.getByTestId('gc-aviso')).toHaveText('Gravado.');
     expect(s.st.corpos[0]).toEqual({
       rota: '/guias/70/responsavel',
       tipo: expect.stringContaining('application/json'),
@@ -269,7 +269,7 @@ test.describe('@C1-122 Guias do convênio no hospital @fase3', () => {
     await formPend.getByLabel('Prazo').fill('2030-01-10T10:00');
     await expect(formPend).not.toContainText('Escolha o motivo da pendência.');
     await page.getByTestId('gc-abrir-pendencia').click();
-    await expect(page.getByRole('status')).toHaveText('Gravado.');
+    await expect(page.getByTestId('gc-aviso')).toHaveText('Gravado.');
     expect(s.st.corpos[1]).toMatchObject({
       rota: '/guias/70/pendencias',
       corpo: {
@@ -293,7 +293,7 @@ test.describe('@C1-122 Guias do convênio no hospital @fase3', () => {
     await expect(pend.getByRole('button', { name: 'Resolver' })).toBeDisabled();
     await pend.getByPlaceholder('Solução').fill('Laudo recebido do setor de imagem');
     await pend.getByRole('button', { name: 'Resolver' }).click();
-    await expect(page.getByRole('status')).toHaveText('Gravado.');
+    await expect(page.getByTestId('gc-aviso')).toHaveText('Gravado.');
     expect(s.st.corpos[2]).toMatchObject({
       rota: '/guias/pendencias/801/resolucao',
       corpo: { solucao: 'Laudo recebido do setor de imagem' },
@@ -312,7 +312,7 @@ test.describe('@C1-122 Guias do convênio no hospital @fase3', () => {
     expect(s.st.corpos).toHaveLength(3);
     await semViolacaoAxe(page, '/faturamento/guias-convenio (resposta)');
     await page.getByTestId('gc-responder').click();
-    await expect(page.getByRole('status')).toHaveText('Gravado.');
+    await expect(page.getByTestId('gc-aviso')).toHaveText('Gravado.');
     expect(s.st.corpos[3]).toEqual({
       rota: '/guias/70/resposta',
       tipo: expect.stringContaining('application/json'),
@@ -342,7 +342,7 @@ test.describe('@C1-122 Guias do convênio no hospital @fase3', () => {
     await arquivo.setInputFiles({ name: 'laudo-sintetico.pdf', mimeType: 'application/pdf', buffer: pdf });
     await expect(formAnexo.getByRole('alert')).toHaveCount(0);
     await formAnexo.getByRole('button', { name: 'Anexar' }).click();
-    await expect(page.getByRole('status')).toHaveText('Gravado.');
+    await expect(page.getByTestId('gc-aviso')).toHaveText('Gravado.');
     expect(s.st.corpos[4]).toEqual({
       rota: '/guias/70/anexos',
       tipo: 'application/vnd.sgh.anexos+json',

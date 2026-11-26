@@ -75,9 +75,14 @@ const gravar = useMutation({
     await cliente.invalidateQueries({ queryKey: ['faturamento', 'parametros'] });
   },
 });
-watch(pedido, () => {
-  gravado.value = false;
-});
+// O aviso some só quando o faturista mexe no formulário. Vigiar o pedido o apagava logo após gravar,
+// porque a releitura iguala o gravado ao formulário e o pedido fica vazio.
+watch(
+  () => [f.telaInicial, String(f.itensPorPagina).trim(), f.agruparPorPaciente].join('|'),
+  () => {
+    gravado.value = false;
+  },
+);
 </script>
 
 <template>

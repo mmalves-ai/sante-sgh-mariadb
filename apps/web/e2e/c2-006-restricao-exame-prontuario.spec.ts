@@ -64,13 +64,13 @@ async function simularAvaliacao(
   return corpos;
 }
 
-async function abrirPedido(page: Page): Promise<number> {
+/** Abre o pedido e inclui o primeiro exame. O id vai para `exame.valor` ANTES do clique: a avaliação sai na hora. */
+async function abrirPedido(page: Page, exame: { valor: number }): Promise<void> {
   await page.goto('/pep/paciente/1001/exames');
   await expect(page.getByTestId('form-pedido')).toBeVisible();
   const primeiro = page.locator('[data-testid^="incluir-exame-"]').first();
-  const id = Number((await primeiro.getAttribute('data-testid'))!.replace('incluir-exame-', ''));
+  exame.valor = Number((await primeiro.getAttribute('data-testid'))!.replace('incluir-exame-', ''));
   await primeiro.click();
-  return id;
 }
 
 test.describe('Restrição clínica do exame no pedido do prontuário @C2-006 @F3.5', () => {
@@ -98,7 +98,7 @@ test.describe('Restrição clínica do exame no pedido do prontuário @C2-006 @F
       ) as Record<number, Omit<Restricao, 'exame' | 'regra'>>,
       false,
     );
-    exame.valor = await abrirPedido(page);
+    await abrirPedido(page, exame);
     await expect(page.getByTestId('restricoes-pedido')).toBeVisible();
     await expect(page.getByTestId(`restricao-${exame.valor}-bloqueio`)).toContainText('salvo exceção');
     await expect(page.getByTestId('restricao-justificativa')).toBeVisible();
@@ -134,7 +134,7 @@ test.describe('Restrição clínica do exame no pedido do prontuário @C2-006 @F
       ) as Record<number, Omit<Restricao, 'exame' | 'regra'>>,
       true,
     );
-    exame.valor = await abrirPedido(page);
+    await abrirPedido(page, exame);
     await expect(page.getByTestId('restricao-justificativa')).toBeVisible();
     await expect(page.getByTestId('restricao-sem-autorizacao')).toHaveCount(0);
     await page.getByTestId('restricao-justificativa').fill('curta');
@@ -165,7 +165,7 @@ test.describe('Restrição clínica do exame no pedido do prontuário @C2-006 @F
       ) as Record<number, Omit<Restricao, 'exame' | 'regra'>>,
       true,
     );
-    exame.valor = await abrirPedido(page);
+    await abrirPedido(page, exame);
     await expect(page.getByTestId('restricao-bloqueado')).toBeVisible();
     await expect(page.getByTestId('enviar-pedido')).toBeDisabled();
     // O mesmo exame como alerta: a confirmação aparece e o envio fica livre.
@@ -180,7 +180,8 @@ test.describe('Restrição clínica do exame no pedido do prontuário @C2-006 @F
   });
 
   test('a tela de exames do setor leva ao pedido de exames, sem lançamento direto', async ({ page }) => {
-    await entrar(page, 'SINT.ADMIN');
+    // A recepção do setor de exames (o administrador da plataforma não tem permissão clínica nem do setor).
+    await entrar(page, 'SINT.RECEPCAO.SADT');
     await page.goto('/sadt/exames');
     await expect(page.getByTestId('sadt-lancar')).toHaveCount(0);
     await page.getByTestId('sadt-lancar-pedido').click();

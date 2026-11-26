@@ -19,9 +19,9 @@ async function entrar(page: Page, login: string): Promise<void> {
 }
 
 async function passar(page: Page): Promise<void> {
-  await escolher(page.getByTestId('tm-sim-terminal'), 'CATRACA SINTETICA PRINCIPAL');
+  await escolher(page.getByTestId('tm-sim-terminal'), { rotulo: 'CATRACA SINTETICA PRINCIPAL' });
   await page.getByTestId('tm-sim-cracha').fill(CRACHA);
-  await escolher(page.getByTestId('tm-sim-sentido'), 'Entrada');
+  await escolher(page.getByTestId('tm-sim-sentido'), { rotulo: 'Entrada' });
   await page.getByTestId('tm-sim-passar').click();
 }
 
@@ -50,8 +50,8 @@ test.describe('Catraca com o crachá do colaborador @C1-018 @F8', () => {
 
     // A regra do setor UTI SINTETICA, todos os dias, o dia inteiro, entrada e saída.
     const form = page.getByTestId('tm-regra-form');
-    await escolher(page.getByTestId('tm-regra-terminal'), 'CATRACA SINTETICA PRINCIPAL');
-    await escolher(page.getByTestId('tm-regra-setor'), 'UTI SINTETICA');
+    await escolher(page.getByTestId('tm-regra-terminal'), { rotulo: 'CATRACA SINTETICA PRINCIPAL' });
+    await escolher(page.getByTestId('tm-regra-setor'), { rotulo: 'UTI SINTETICA' });
     for (const d of [2, 3, 4, 5, 6]) await form.getByTestId(`tm-regra-dia-${d}`).uncheck();
     await expect(page.getByTestId('tm-regra-problemas')).toContainText('Marque ao menos um dia');
     await expect(page.getByTestId('tm-regra-gravar')).toBeDisabled();

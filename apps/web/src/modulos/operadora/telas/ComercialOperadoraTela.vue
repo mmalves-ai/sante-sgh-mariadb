@@ -670,16 +670,17 @@ const tipoItem = (i: Linha) => {
       :opcoes="operadoras"
       data-testid="comercial-operadora"
     />
-    <div class="comercial__linha" role="tablist">
+    <nav class="comercial__linha" :aria-label="k('titulo')">
       <SanteBotao
         v-for="a in ABAS"
         :key="a"
         :rotulo="k(`abas.${a}`)"
         :variante="aba === a ? 'primario' : 'secundario'"
+        :aria-pressed="aba === a"
         :data-testid="`aba-${a}`"
         @click="aba = a"
       />
-    </div>
+    </nav>
     <SanteAlerta v-if="erro" :texto="erro" variante="alerta" anunciar data-testid="comercial-erro" />
     <SanteAlerta v-if="aviso" :texto="aviso" variante="info" anunciar data-testid="comercial-aviso" />
 

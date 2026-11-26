@@ -53,7 +53,7 @@ function pedido(estado: { situacao: string | null; versao: number }) {
         estado.situacao === 'entregue'
           ? {
               entregueEm: '2026-11-25T11:00:00',
-              entregador: 'SINT.ADMIN',
+              entregador: 'SINT.SAME.COPIA',
               recebedorNome: 'Familiar Sintético',
               vinculo: 'irmao',
               tipoDocumento: 'Documento de identidade (sintético)',
@@ -78,7 +78,8 @@ test.describe('@C2-036 cópia do prontuário no balcão', () => {
     const externas = vigiarExternas(page);
     const estado: { situacao: string | null; versao: number } = { situacao: null, versao: 1 };
     const posts: { url: string; corpo: Record<string, unknown> }[] = [];
-    await entrar(page, 'SINT.ADMIN');
+    // O balcão do arquivo (lê e exporta o prontuário); o administrador não tem permissão clínica.
+    await entrar(page, 'SINT.SAME.COPIA');
     await page.route('**/api/pep/copias-prontuario**', async (route: Route) => {
       const req = route.request();
       const url = req.url();

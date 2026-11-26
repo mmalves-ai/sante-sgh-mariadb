@@ -94,8 +94,17 @@ const linhaDoTempo = computed(() => {
 const fmt = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 6 });
 
 // ── Formulário com validação na hora ──────────────────────────────────────────────────────────────────
-const f = reactive({ vigenciaInicio: '', valor: '', valorHorarioEspecial: '', motivoAlteracao: '' });
-const numero = (s: string): number => (s.trim() === '' ? Number.NaN : Number(s.replace(',', '.')));
+const f = reactive({
+  vigenciaInicio: '',
+  valor: '' as string | number,
+  valorHorarioEspecial: '' as string | number,
+  motivoAlteracao: '',
+});
+// O v-model de um <input type="number"> devolve número (o Vue converte); vazio continua texto.
+const numero = (v: string | number): number => {
+  const s = String(v).trim();
+  return s === '' ? Number.NaN : Number(s.replace(',', '.'));
+};
 const camposVisiveis = computed(() =>
   tipo.value === 'porte-anestesico'
     ? (['vigenciaInicio', 'valor', 'valorHorarioEspecial', 'motivoAlteracao'] as const)
@@ -107,7 +116,7 @@ const erros = computed<Record<string, string>>(() => {
     vigenciaInicio: f.vigenciaInicio,
     valor: numero(f.valor),
     valorHorarioEspecial:
-      tipo.value === 'porte-anestesico' && f.valorHorarioEspecial.trim() !== ''
+      tipo.value === 'porte-anestesico' && String(f.valorHorarioEspecial).trim() !== ''
         ? numero(f.valorHorarioEspecial)
         : null,
     vigenciasExistentes: linhaDoTempo.value.map((v) => v.inicio),
@@ -133,7 +142,8 @@ const entrada = computed<Record<string, unknown>>(() => {
   return {
     ...base,
     porte: alvo.value,
-    valorHorarioEspecial: f.valorHorarioEspecial.trim() === '' ? null : numero(f.valorHorarioEspecial),
+    valorHorarioEspecial:
+      String(f.valorHorarioEspecial).trim() === '' ? null : numero(f.valorHorarioEspecial),
   };
 });
 

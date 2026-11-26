@@ -620,3 +620,12 @@ corrente de CronCreate morre com a sessão; ao retomar, recriar (formato na mem�
   E2E com o erro extraído, consolidar-6. Decisões em docs/obra/decisoes-tomadas.md (32 itens).
 - Regras novas: pre-commit recusa commit que apaga arquivo e erro de sintaxe na versão preparada; E2E por script
   (preflight-e2e.sh + e2e-vm.sh --reporter=list); relatório por relatorio-50.py.
+
+## Passagem de 26/11 10h25 (Sessão de Construção)
+- Push: origin/main = 24a8a134 (ci-sim VERDE na 2ª passada; a 1ª caiu no E2E @M00 por lentidão da 1ª carga do Vite,
+  repetido 2/2 verde em ~3 s). Painel 3310 com o build de 24a8a134 (dist do worktree ci-sim; anterior em
+  sante-sgh-dados/obra/painel-dist-anterior); migrações no cliente_prontocardio: 707 arquivos, 0 erros reais.
+- Painel de Injeção avisada (sha e apps livres). Ela vai pedir exclusividade em pep, adt, internacao, faturamento, tiss,
+  suprimentos, agenda, financeiro, rh, hotelaria (só os pontos com colunas anuláveis do migrado) com lista exata de
+  arquivos em ~1h30; até lá não toca apps/. Eu fecho a rodada de E2E vermelhos e mando o sha antes dos lotes A dela.
+- Pendências: docs/obra/pendencias-2026-11-26.md (133 Parciais: 121 construção, 5 decisão, 3 dependência, 3 externas, 1 E2E).

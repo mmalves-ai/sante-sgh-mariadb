@@ -272,6 +272,9 @@ describe('PortaDocumentosPropria (dublê do núcleo)', () => {
       nivel: 'avancada-sessao',
       hash: HASH,
       comoSuporte: false,
+      // A assinatura do cadastro vigente no dia (assinaturaNoDia): o dublê não tem nenhuma.
+      assinaturaProfissional: null,
+      rqes: [],
     });
     // Nenhuma exclusão física em tabela clínica.
     expect(d.sqls.some((s) => /\bDELETE\b/i.test(s.sql))).toBe(false);

@@ -121,7 +121,8 @@ test.describe('@C2-062 diferença de acomodação', () => {
     const externas = vigiarExternas(page);
     const api = simular(page);
     await api.ligar();
-    await entrar(page, 'SINT.ADMIN');
+    // Segregação: o administrador da plataforma não lê a internação; a recepção da internação (internacao.internacao.ler).
+    await entrar(page, 'SINT.INTERNACAO');
     await page.goto('/internacao/diferenca-acomodacao');
     await expect(page.getByTestId('tela-diferenca-acomodacao')).toBeVisible();
     await page.getByTestId('diferenca-atendimento').fill('FIC-62');

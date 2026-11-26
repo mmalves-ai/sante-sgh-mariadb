@@ -234,8 +234,13 @@ export class PortaGestaoMemoria implements PortaGestao {
     );
   }
 
+  /** C2-060: os setores sintéticos do estabelecimento (a área do documento é escolhida na lista, nunca digitada). */
   setoresDaArea(): ReturnType<PortaGestao['setoresDaArea']> {
-    return Promise.resolve([]);
+    return Promise.resolve([
+      { id: 9101, codigo: 'UTI', nome: 'UTI adulto (sintético)' },
+      { id: 9102, codigo: 'CC', nome: 'Centro cirúrgico (sintético)' },
+      { id: 9103, codigo: null, nome: 'Farmácia (sintético)' },
+    ]);
   }
 
   documentos(_c: ContextoGestao, f: Parameters<PortaGestao['documentos']>[1]) {

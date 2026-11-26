@@ -157,7 +157,8 @@ test.describe('@C2-028 documentos exigidos por diagnóstico, idade ou setor', ()
     const externas = vigiarExternas(page);
     const api = simular(page);
     await api.ligar();
-    await entrar(page, 'SINT.ADMIN');
+    // O profissional (acesso ao prontuário) vê o que falta; o administrador não tem permissão clínica.
+    await entrar(page, 'SINT.MEDICO');
 
     await page.goto('/pep/documentos-exigidos');
     await expect(page.getByTestId('documentos-exigidos')).toBeVisible();
@@ -187,7 +188,11 @@ test.describe('@C2-028 documentos exigidos por diagnóstico, idade ou setor', ()
     await expect(page.getByTestId('docexig-atendimento-11')).toBeVisible();
     await semViolacaoAxe(page, '/pep/documentos-exigidos');
 
-    // Regras: a regra de todos os estabelecimentos criada em outro fica só para leitura.
+    // Regras: a administração do PEP mantém as regras, sem a lista clínica das pendências.
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto('/pep/documentos-exigidos');
+    await expect(page.getByTestId('docexig-aba-pendencias')).toHaveCount(0);
+    // A regra de todos os estabelecimentos criada em outro fica só para leitura.
     await page.getByTestId('docexig-aba-regras').click();
     await expect(page.getByTestId('docexig-regra-39')).toContainText('Vale para todos os estabelecimentos');
     await expect(page.getByTestId('docexig-regra-editar-39')).toHaveCount(0);

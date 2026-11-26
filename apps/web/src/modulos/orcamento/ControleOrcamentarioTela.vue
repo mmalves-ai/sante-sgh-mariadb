@@ -798,6 +798,12 @@ function alternarRegra(x: RegraLida) {
   gap: 0.5rem;
   align-items: center;
 }
+/* Alvo de toque de 24 px (axe target-size): a caixa de marcar nativa tem 13 px. */
+.marca input[type='checkbox'] {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  margin: 0;
+}
 .largo {
   display: flex;
   flex-direction: column;

@@ -137,7 +137,7 @@ test.describe('Regras de coparticipação @C2-116 @fase7', () => {
     await page.getByTestId('copart-valor').locator('input').fill('120');
     await page.getByTestId('copart-teto-evento').locator('input').fill('500');
     await page.getByTestId('copart-teto-mes').locator('input').fill('200');
-    await escolher(page.getByTestId('copart-tipo-guia'), 'SP/SADT');
+    await escolher(page.getByTestId('copart-tipo-guia'), { rotulo: 'SP/SADT' });
     await data(page, 'copart-inicio', '01/12/2026');
     const falta = page.getByTestId('copart-falta');
     await expect(falta).toContainText('percentual de 0 a 100');

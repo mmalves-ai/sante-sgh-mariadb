@@ -104,7 +104,8 @@ test.describe('C2-123 habilitações e serviços SUS do estabelecimento @C2-123'
       return json(r, { id: 0 });
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // O cadastro SUS do estabelecimento é do faturista com os cadastros do SUS (o administrador não lê a produção SUS).
+    await entrar(page, 'SINT.FATURISTA.AIH');
     await page.goto('/faturamento/sus/cadastros/estabelecimento');
     await expect(page.getByTestId('tela-estabelecimento-sus')).toBeVisible();
     await expect(page.getByTestId('estab-sus-hab-vazio')).toBeVisible();

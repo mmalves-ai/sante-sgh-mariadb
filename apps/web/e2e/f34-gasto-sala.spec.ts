@@ -108,7 +108,8 @@ test.describe('centro cirúrgico: gasto de sala do ato @F34-5', () => {
       return json(r, { id: 40 });
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // Quem lança é o bloco (SINT.BLOCO: registro da cirurgia); quem confere e debita é o faturamento (SINT.CONTAS).
+    await entrar(page, 'SINT.BLOCO');
     await page.goto(`/cirurgia/gasto-sala/${ATO}`);
     await expect(page.getByTestId('tela-gasto-sala')).toBeVisible();
     await expect(page.getByTestId('gasto-situacao')).toContainText('ainda não lançado');
@@ -140,9 +141,13 @@ test.describe('centro cirúrgico: gasto de sala do ato @F34-5', () => {
       },
     });
 
-    // Aberto: conferir (pelo nível de quem confere), depois debitar na conta.
+    // Aberto: conferir (pelo nível de quem confere), depois debitar na conta. O bloco não confere o próprio gasto.
     await expect(page.getByTestId('gasto-situacao')).toContainText('aberto');
     await expect(page.getByTestId('gasto-diferencas')).toContainText('não usado');
+    await expect(page.getByTestId('gasto-conferir')).toHaveCount(0);
+    await entrar(page, 'SINT.CONTAS');
+    await page.goto(`/cirurgia/gasto-sala/${ATO}`);
+    await expect(page.getByTestId('gasto-situacao')).toContainText('aberto');
     await page.getByTestId('gasto-conferir').click();
     await expect(page.getByTestId('gasto-situacao')).toContainText('conferido');
     expect(pedidos[1]).toEqual({ caminho: `/atos/${ATO}/conferir`, corpo: { versao: 1 } });
@@ -200,7 +205,7 @@ test.describe('centro cirúrgico: gasto de sala do ato @F34-5', () => {
       return json(r, { ...base, gasto: null, itens: [], diferencas: [], pendencias: [] });
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.BLOCO');
     await page.goto('/cirurgia/registro');
     await expect(page.getByTestId('tabela-realizadas')).toContainText('PACIENTE SINTETICO');
     const atalho = page.getByTestId(`realizada-gasto-${ATO}`);

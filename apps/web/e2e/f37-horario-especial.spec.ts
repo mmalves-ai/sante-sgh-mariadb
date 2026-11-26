@@ -59,7 +59,7 @@ async function simular(page: Page, enviados: Record<string, unknown>[]): Promise
       if (corpo['id']) {
         const k = faixas.findIndex((f) => f.id === corpo['id']);
         faixas[k] = faixa({ ...corpo, versao: Number(corpo['versao']) + 1 });
-      } else faixas.push(faixa({ ...corpo, id: faixas.length + 1 }));
+      } else faixas.push(faixa({ ...corpo, id: faixas.length + 1, versao: 1 })); // a faixa nova nasce na versão 1
       return json(rota, { id: corpo['id'] ?? faixas.length });
     }
     const comTabela = rota.request().url().includes(`tabela=${TABELA}`);

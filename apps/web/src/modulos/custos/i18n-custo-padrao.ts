@@ -49,8 +49,8 @@ export const mensagensCustoPadrao = {
     retirado: 'Item retirado.',
     versoes: 'Outras versões do procedimento',
     ativar: 'Ativar ficha',
-    ativarConfirma:
-      'Ativar esta ficha? A ficha ativa anterior do procedimento termina na véspera do início desta.',
+    ativarAviso:
+      'Ao ativar esta ficha, a ficha ativa anterior do procedimento termina na véspera do início desta.',
     ativada: 'Ficha ativada.',
     inativar: 'Inativar ficha',
     motivo: 'Motivo da inativação',

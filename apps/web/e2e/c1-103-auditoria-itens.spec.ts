@@ -166,7 +166,7 @@ test.describe('auditoria da conta item a item @C1-103', () => {
   }) => {
     const pedidos: Pedido[] = [];
     await simular(page, pedidos);
-    await entrar(page, 'SINT.TISS');
+    await entrar(page, 'SINT.CONTAS');
     await page.goto(`/faturamento/contas/${CONTA}/auditoria-itens`);
     const tela = page.getByTestId('auditoria-itens');
     await expect(tela.getByRole('heading', { name: 'Auditoria da conta C-7403' })).toBeVisible();

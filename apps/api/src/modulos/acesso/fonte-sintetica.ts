@@ -1244,7 +1244,10 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       conselho: true,
     },
   },
-  /** Supervisão de enfermagem: os procedimentos e kits de enfermagem e os aparelhos da beira do leito. */
+  /**
+   * Supervisão de enfermagem: os procedimentos e kits de enfermagem, os aparelhos da beira do leito e a lista de
+   * internados (internacao.internacao.ler, só a consulta; @C1-074: o atalho dos gases na lista de internados).
+   */
   'SINT.SUPERVISOR.ENF': {
     senha: SENHA_SINTETICA,
     criptografada: true,
@@ -1254,7 +1257,22 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: {
       grupo: 'SUPERVISAO_ENFERMAGEM',
       opcoesGrupo: [
-        ...new Set([2582, 3900, 3954, 5535, 3736, 3679, 3689, 3738, 3361, 3362, 4682, 4683, 4684]),
+        ...new Set([
+          2582,
+          3900,
+          3954,
+          5535,
+          3736,
+          3679,
+          3689,
+          3738,
+          3361,
+          3362,
+          4682,
+          4683,
+          4684,
+          ...opcoesDasPermissoes('internacao.internacao.ler'),
+        ]),
       ],
       conselho: true,
     },
@@ -1418,6 +1436,9 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
         'faturamento.regra.*',
         'faturamento.pacote.*',
         'cirurgia.nota.ler',
+      ).concat(
+        // F3.4-5: as cirurgias realizadas (2285, só leitura), para conferir e debitar o gasto de sala do ato na conta.
+        2285,
       ),
     },
     // C1-114: o faturista das contas emite e confere o protocolo de documentos entre setores (perfil próprio).
@@ -3262,10 +3283,14 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: {
       grupo: 'FINGESTOR',
       // F3.8, 07-FIN linha 108: abre a escrituração das entradas (classificar e gerar a EFD vêm do perfil).
-      // F8, 07-FIN linha 79 (C1-069): cadastra o portador do desconto e da cessão (parâmetro financeiro).
+      // F8, 07-FIN linha 79 (C1-069): cadastra o portador do desconto e da cessão (parâmetro financeiro) e confere na
+      // ficha do título a receber com quem cada parcela está (leitura do título). C2-031/C2-045: a cobrança bancária e
+      // Pix vem do perfil (administrador do sistema); processar o retorno e pagar no simulador baixam a parcela.
       opcoesGrupo: opcoesFinanceiro(
         'financeiro.tituloPagar.ler',
         'financeiro.tituloPagar.criar',
+        'financeiro.tituloReceber.ler',
+        'financeiro.tituloReceber.baixar',
         'financeiro.escrituracao.ler',
         'financeiro.parametro.editar',
       ),
@@ -3473,6 +3498,39 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: {
       grupo: 'RECEPSUP',
       opcoesGrupo: opcoesDasPermissoes('convenio.contrato.ler', 'atendimento.atendimento.abrir'),
+    },
+  },
+  /**
+   * C2-036 (03-PEP L131; no fim da lista para não mudar o ID sintético das outras contas): o balcão do serviço de
+   * arquivo que atende o pedido de cópia do prontuário (lê o prontuário e registra pedido, decisão e entrega). Nenhuma
+   * conta tinha as duas permissões; o administrador não tem permissão clínica.
+   */
+  'SINT.SAME.COPIA': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'SAME_COPIA',
+      opcoesGrupo: opcoesDasPermissoes('pep.prontuario.ler', 'pep.prontuario.exportar'),
+    },
+  },
+  /**
+   * C2-064 (03-PEP L94; no fim da lista): o coordenador assistencial com conselho que monta a equipe do atendimento
+   * pelo painel, aplica a equipe padrão do setor e salva a equipe atual como padrão (administração do PEP). O
+   * administrador não tem o painel clínico, e o médico assistente não mexe no padrão do setor.
+   */
+  'SINT.COORD.EQUIPE': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'COORD_EQUIPE',
+      opcoesGrupo: opcoesDasPermissoes('pep.painel.ler', 'pep.admin.editar'),
+      conselho: true,
     },
   },
 };

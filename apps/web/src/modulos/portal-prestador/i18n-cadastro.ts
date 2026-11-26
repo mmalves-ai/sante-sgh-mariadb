@@ -42,7 +42,7 @@ export const mensagensCadastroPortalPrestador = {
     cancelado: 'Cancelado',
   },
   problemas: {
-    'email-invalido': 'O e-mail não está no formato nome@dominio.',
+    'email-invalido': "O e-mail não está no formato nome{'@'}dominio.",
     'cep-invalido': 'O CEP tem 8 dígitos.',
     'cnes-invalido': 'O CNES tem 7 dígitos.',
     'nome-obrigatorio': 'Informe o nome ou a razão social.',

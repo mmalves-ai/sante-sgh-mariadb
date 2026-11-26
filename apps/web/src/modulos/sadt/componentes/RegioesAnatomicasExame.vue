@@ -102,7 +102,7 @@ async function tornarPadrao(r: RegiaoTela) {
     <ul v-else>
       <li v-for="r in ligadas" :key="r.id" :data-testid="`regiao-exame-${r.codigo}`">
         {{ r.descricao }} ({{ r.codigo }})
-        <strong v-if="r.padrao"> · {{ T.padrao }}</strong>
+        <strong v-if="r.padrao" :data-testid="`regiao-marca-padrao-${r.codigo}`"> · {{ T.padrao }}</strong>
         <SanteBotao
           v-if="!r.padrao"
           variante="secundario"

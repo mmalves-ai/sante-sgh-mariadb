@@ -47,6 +47,8 @@ test.describe('internação e centro cirúrgico: regra do gás e texto padrão @
     await expect(page.getByTestId('tela-gases')).toBeVisible();
     await expect(page.getByTestId('gas-lancar')).toBeVisible();
     // A regra de cobrança é do contrato do convênio: quem a mantém entra direto na tela da regra.
+    // A regra de cobrança do gás é do contrato do convênio (convenio.contrato.ler/editar): o supervisor do faturamento.
+    await entrar(page, 'SINT.FATURAMENTO');
     await page.goto('/internacao/gases/regras');
     await expect(page).toHaveURL(/\/internacao\/gases\/regras/);
     await expect(page.getByTestId('tela-regras-gas')).toBeVisible();
@@ -85,9 +87,9 @@ test.describe('internação e centro cirúrgico: regra do gás e texto padrão @
   }) => {
     const externas = vigiarExternas(page);
     // O atalho aparece a quem lê o registro da enfermagem (enfermagem.horario.ler) e abre a lista de internados
-    // (internacao.internacao.ler). Na fonte sintética nenhum perfil de enfermagem abre a lista de internados (o
-    // enfermeiro chega pela beira do leito, no teste acima): o administrador tem as duas.
-    await entrar(page, 'SINT.ADMIN');
+    // (internacao.internacao.ler): a supervisão de enfermagem tem as duas (o enfermeiro de plantão chega pela beira do
+    // leito, no teste acima; o administrador da plataforma não tem permissão clínica).
+    await entrar(page, 'SINT.SUPERVISOR.ENF');
     // A lista de internados vem da fonte sintética em memória; a resolução internação => atendimento lê o banco próprio
     // (provada no contrato de efeito gas-medicinal-propria.int.spec.ts, inclusive a recusa de outro estabelecimento).
     // Aqui a resposta da resolução é fixada no atendimento sintético 1, conferindo que a tela pede a internação clicada.

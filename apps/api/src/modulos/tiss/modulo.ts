@@ -45,6 +45,11 @@ import {
 } from './competencia-trabalho.controller.js';
 import { CalendarioEntregaController, FONTE_CALENDARIO_ENTREGA } from './calendario-entrega.controller.js';
 import { CalendarioEntregaProprio } from './calendario-entrega-propria.js';
+import { CancelamentoDocumentosTissController } from './cancelamento-documentos.controller.js';
+import {
+  PORTA_CANCELAMENTO_DOCUMENTOS_TISS,
+  PortaCancelamentoDocumentosTissPropria,
+} from './cancelamento-documentos-propria.js';
 
 export interface OpcoesModuloTiss {
   /** Testes: a porta já montada. */
@@ -101,6 +106,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
       OpmeLiberacaoController,
       CompetenciaTrabalhoController,
       CalendarioEntregaController,
+      CancelamentoDocumentosTissController,
     ],
     providers: [
       { provide: PORTA_TISS, useValue: porta },
@@ -144,6 +150,14 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloTiss = {})
             : porta instanceof PortaTissMemoria
               ? porta.calendario
               : null,
+      },
+      // 06-FAT linha 28 (C2-091): cancelamento de guia enviada e envio de documentos anexos; sem núcleo, 503.
+      {
+        provide: PORTA_CANCELAMENTO_DOCUMENTOS_TISS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCancelamentoDocumentosTissPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
       },
       { provide: ARMAZEM_XML_TISS, useValue: armazem },
       { provide: GERADOR_PDF_TISS, useValue: geradorPdf },

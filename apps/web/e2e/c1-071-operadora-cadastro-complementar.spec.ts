@@ -299,7 +299,7 @@ test.describe('operadora: responsáveis, setores e parâmetros por operadora @C1
       await escolher(fd.getByTestId('compl-dep-tipo'), { rotulo: 'Autorização' });
       await fd.getByLabel('E-mail do setor').fill('sem-arroba');
       await expect(fd.getByTestId('compl-dep-problemas')).toContainText('E-mail do setor inválido');
-      await expect(fd.getByTestId('compl-dep-gravar').locator('button')).toBeDisabled();
+      await expect(fd.getByTestId('compl-dep-gravar')).toBeDisabled();
       await fd.getByLabel('E-mail do setor').fill('autorizacao@exemplo.invalid');
       await fd.getByTestId('compl-dep-gravar').click();
       await expect(compl.getByTestId('compl-mensagem')).toContainText('Setor gravado');

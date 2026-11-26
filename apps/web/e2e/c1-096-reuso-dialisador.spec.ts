@@ -51,9 +51,12 @@ test.describe('@C1-096 Reuso de dialisadores na hemodiálise', () => {
     await entrar(page, 'SINT.ENF.PLANTAO');
     const leitura = page.waitForResponse((r) => r.url().endsWith(`${D}/em-uso`));
     const menu = page.getByRole('navigation', { name: 'Menu principal' });
-    // Área > grupo > item: a Agenda fica dentro de "Atendimento ao paciente", que começa fechada.
+    // Área > grupo > item: a Agenda fica dentro de "Atendimento ao paciente", que começa fechada. Um grupo com um
+    // item só sobe o item para o nível de cima (filtro-menu, concluir): a enfermagem do plantão vê só o reuso na
+    // Agenda, e o link aparece direto na área; com mais itens visíveis, o grupo Agenda é aberto antes.
     await menu.getByRole('button', { name: /^Atendimento ao paciente/ }).click();
-    await menu.getByRole('button', { name: /^Agenda/ }).click();
+    const grupoAgenda = menu.getByRole('button', { name: /^Agenda/ });
+    if ((await grupoAgenda.count()) > 0) await grupoAgenda.click();
     await menu.getByRole('link', { name: 'Reuso de dialisadores' }).click();
     await expect(page).toHaveURL(/\/agenda\/sessoes\/dialisadores/);
     const tela = page.getByTestId('tela-dialisadores');
@@ -143,8 +146,8 @@ test.describe('@C1-096 Reuso de dialisadores na hemodiálise', () => {
 
     // 95% e os testes certos: liberado.
     await f.getByLabel('Volume interno atual (ml)').fill('95');
-    await escolher(f.getByLabel('Desinfetante antes do enxágue'), 'Presente');
-    await escolher(f.getByLabel('Desinfetante depois do enxágue'), 'Ausente');
+    await escolher(f.getByLabel('Desinfetante antes do enxágue'), { rotulo: 'Presente' });
+    await escolher(f.getByLabel('Desinfetante depois do enxágue'), { rotulo: 'Ausente' });
     await expect(f.getByTestId('reprocessamento-previa')).toContainText('liberado para o próximo uso');
     await semViolacaoAxe(page, '/agenda/sessoes/dialisadores (reprocessamento)');
     await f.getByTestId('reprocessamento-gravar').click();

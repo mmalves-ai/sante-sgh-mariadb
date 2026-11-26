@@ -82,18 +82,18 @@ test.describe('Qualidade: controles estruturados do risco na matriz GUT @C2-060'
     // Dois controles: a linha sem nome não vai.
     await form.getByTestId('risco-controle-adicionar').click();
     await form.getByTestId('risco-controle-adicionar').click();
-    await form.getByTestId('risco-controle-nome-0').fill('Barra de apoio');
+    await form.getByTestId('risco-controle-nome-0').locator('input').fill('Barra de apoio');
     await escolher(form.getByTestId('risco-controle-eficacia-0'), 'eficaz');
     await form.getByTestId('risco-gravar').click();
     await expect(form).toContainText('Dê nome a cada controle');
 
     // O mesmo nome com outra grafia é recusado na hora.
-    await form.getByTestId('risco-controle-nome-1').fill(' barra de apóio ');
+    await form.getByTestId('risco-controle-nome-1').locator('input').fill(' barra de apóio ');
     await form.getByTestId('risco-gravar').click();
     await expect(form).toContainText('duas vezes');
 
     // Mitigado com o único outro controle ineficaz e a barra também ineficaz: recusa.
-    await form.getByTestId('risco-controle-nome-1').fill('Alarme de chamada no banheiro');
+    await form.getByTestId('risco-controle-nome-1').locator('input').fill('Alarme de chamada no banheiro');
     await escolher(form.getByTestId('risco-controle-tipo-1'), 'detectivo');
     await escolher(form.getByTestId('risco-controle-eficacia-1'), 'ineficaz');
     await escolher(form.getByTestId('risco-controle-eficacia-0'), 'ineficaz');
@@ -115,7 +115,9 @@ test.describe('Qualidade: controles estruturados do risco na matriz GUT @C2-060'
 
     // Reaberto, o formulário traz os controles gravados; retirar um deixa a lista exata.
     await page.getByTestId(`reavaliar-${String(risco.id)}`).click();
-    await expect(form.getByTestId('risco-controle-nome-0')).toHaveValue(/Alarme de chamada|Barra de apoio/);
+    await expect(form.getByTestId('risco-controle-nome-0').locator('input')).toHaveValue(
+      /Alarme de chamada|Barra de apoio/,
+    );
     await form.getByTestId('risco-controle-retirar-1').click();
     await escolher(form.getByTestId('risco-controle-eficacia-0'), 'eficaz');
     await form.getByTestId('risco-gravar').click();

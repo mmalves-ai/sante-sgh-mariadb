@@ -9,6 +9,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo); a contagem acompanha.
 // C2-098 (04-HOT L141, F8): o item "Cardápio, ficha técnica e produção" do serviço de nutrição entrou à mão (mesmo
 // motivo); a contagem acompanha.
+// C2-063 (06-FAT L17, F3): o item "Horário especial e urgência" das contas do paciente entrou à mão (mesmo motivo); a
+// contagem acompanha.
 // C2-086 (06-FAT L30, F3): o item "Apresentação TISS por fonte pagadora" dos convênios entrou à mão (mesmo motivo); a
 // contagem acompanha.
 // C3-020 (03-PEP L144): o item "Pesquisa clínica" do PEP entrou à mão (mesmo motivo; F8); a contagem acompanha.
@@ -42,6 +44,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // a contagem acompanha.
 // C2-095 (08-SGO L100): o item "Comercial: propostas e comissões" da operadora própria entrou à mão (mesmo motivo;
 // F7); a contagem acompanha.
+// C2-103 (06-FAT L37): o item "Receita contábil" do faturamento entrou à mão (mesmo motivo; F3); a contagem
+// acompanha.
 // Lote 02-07 (ADR 0003, itens 5 e 9): o item "Migração gradual dos usuários" saiu à mão (o gerador e a fonte não
 // estão neste repositório); a contagem do cabeçalho acompanha.
 // F3.3 (03-PEP L128): o item "Grupos comparativos de resultados" entrou à mão (mesmo motivo); a contagem acompanha.
@@ -169,7 +173,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo; F7 vai como fase 7); a contagem acompanha.
 // C3-028 (08-SGO linha 97, F7): o item "Desconto em folha" da operadora própria entrou à mão (mesmo motivo; F7 vai
 // como fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":522,"M":198,"P":57,"N":267};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":524,"M":198,"P":57,"N":269};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -407,10 +411,12 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.contas-do-paciente.contas-abrir-conferir-fechar-externo-e-internacao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Contas"],"titulo":"Contas","selo":"M","fase":3,"rota":"/faturamento/contas","permissao":"faturamento.conta.ler"},
   {"id":"faturamento.contas-do-paciente.lancamentos-da-conta-procedimentos-taxas-mat-med","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Lançamentos da conta"],"titulo":"Lançamentos da conta","selo":"M","fase":3,"rota":"/faturamento/lancamentos","permissao":"faturamento.item.ler"},
   {"id":"faturamento.contas-do-paciente.lancamento-automatico-por-regra-prescricao-sadt-cc","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Lançamento automático por regra"],"titulo":"Lançamento automático por regra","selo":"M","fase":3,"rota":"/faturamento/lancamento-automatico","permissao":"faturamento.lancamento.ler"},
+  {"id":"faturamento.contas-do-paciente.horario-especial-e-urgencia","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Horário especial e urgência"],"titulo":"Horário especial e urgência","selo":"N","fase":3,"rota":"/faturamento/horario-especial","permissao":"faturamento.conta.ler"},
   {"id":"faturamento.contas-do-paciente.auditoria-de-contas-enfermeiro-e-medico-auditor","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Auditoria de contas"],"titulo":"Auditoria de contas","selo":"M","fase":3,"rota":"/faturamento/auditoria","permissao":"faturamento.auditoria.ler"},
   {"id":"faturamento.contas-do-paciente.protocolo-de-documentos-entre-setores","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Protocolo de documentos entre setores"],"titulo":"Protocolo de documentos entre setores","selo":"N","fase":3,"rota":"/faturamento/protocolos","permissao":"faturamento.tramite.ler"},
   {"id":"faturamento.contas-do-paciente.pacotes-e-orcamentos-padrao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Pacotes e orçamentos-padrão"],"titulo":"Pacotes e orçamentos-padrão","selo":"M","fase":3,"rota":"/faturamento/pacotes","permissao":"faturamento.pacote.ler"},
   {"id":"faturamento.contas-do-paciente.preferencias-do-faturista","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Preferências do faturista"],"titulo":"Preferências do faturista","selo":"N","fase":3,"rota":"/faturamento/preferencias","permissao":"faturamento.conta.ler"},
+  {"id":"faturamento.contas-do-paciente.receita-contabil","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Receita contábil"],"titulo":"Receita contábil","selo":"N","fase":3,"rota":"/faturamento/receita-contabil","permissao":"faturamento.conta.ler"},
   {"id":"faturamento.particular.orcamento-de-particular","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Orçamento de particular"],"titulo":"Orçamento de particular","selo":"P","fase":3,"rota":"/faturamento/particular/orcamentos","permissao":"faturamento.orcamento.ler"},
   {"id":"faturamento.particular.modelos-de-orcamento","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Modelos de orçamento"],"titulo":"Modelos de orçamento","selo":"N","fase":3,"rota":"/faturamento/modelos-orcamento","permissao":"faturamento.orcamento.ler"},
   {"id":"faturamento.particular.recibos-e-caixa","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Recibos e caixa"],"titulo":"Recibos e caixa","selo":"P","fase":3,"rota":"/faturamento/particular/caixa","permissao":"faturamento.recibo.ler"},

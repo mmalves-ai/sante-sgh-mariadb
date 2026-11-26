@@ -280,6 +280,13 @@ label {
 label.marca {
   display: flex;
   align-items: center;
+  gap: var(--sgh-espaco-1);
+}
+/* Alvo de toque mínimo de 24 px (WCAG 2.2, 2.5.8; axe: target-size). */
+label.marca input[type='checkbox'] {
+  inline-size: 24px;
+  block-size: 24px;
+  margin: 0;
 }
 .previa {
   border: 1px solid var(--sgh-borda);

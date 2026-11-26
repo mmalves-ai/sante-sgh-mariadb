@@ -48,6 +48,9 @@ import {
 import { DocumentosPropriaPareceres } from './documentos-propria-pareceres.js';
 import { dataHora, fusoValido } from './registro-porta-propria.js';
 import type { NucleoDocumentosPep } from './documentos-propria-comum.js';
+import { ProfissionalComplementoProprio } from '../cadastro/profissional-complemento-proprio.js';
+import type { NucleoCadastro } from '../cadastro/porta-propria.js';
+import type { ContextoPorta as ContextoCadastro } from '../cadastro/porta.js';
 import type {
   AtendimentoPepLido,
   ContextoGravacaoPep,
@@ -631,6 +634,18 @@ export class PortaDocumentosPropria implements PortaDocumentos {
     return feito.documento;
   }
 
+  private complemento: ProfissionalComplementoProprio | null = null;
+
+  /** O complemento do cadastro do profissional (assinatura vigente no dia e RQE), criado no primeiro uso. */
+  private complementoProfissional(): ProfissionalComplementoProprio {
+    this.complemento ??= new ProfissionalComplementoProprio(
+      this.nucleo as unknown as NucleoCadastro,
+      this.cliente,
+      this.executor,
+    );
+    return this.complemento;
+  }
+
   async assinar(
     c: ContextoGravacaoPep,
     itens: readonly { documento: number; hash: string }[],
@@ -644,6 +659,24 @@ export class PortaDocumentosPropria implements PortaDocumentos {
       'pep.documento.assinar',
       async (tx, est, usuario) => {
         const autor = await this.profissionalDoLogin(tx, est, c.usuarioLogin);
+        // A assinatura do cadastro do profissional que vale no dia do ato (imagem, a que o documento impresso leva) e os
+        // RQE ativos ficam no evento da assinatura (02-CAD linha 16). Pelo suporte, o profissional não assina: nada.
+        const dia = new Date().toLocaleDateString('sv-SE');
+        const doCadastro =
+          autor?.profissional != null && !comoSuporte
+            ? await this.complementoProfissional().assinaturaNoDia(
+                c as unknown as ContextoCadastro,
+                autor.profissional,
+                'imagem',
+                dia,
+              )
+            : null;
+        const assinaturaCadastro = doCadastro
+          ? {
+              assinaturaProfissional: doCadastro.assinatura?.id ?? null,
+              rqes: doCadastro.rqes.map((r) => ({ id: r.id, numero: r.numero, uf: r.uf })),
+            }
+          : {};
         const assinadoSituacao = await tx
           .uma(
             `SELECT id FROM situacao_documento_prontuario WHERE categoria = 'assinado' AND ativo = TRUE
@@ -709,7 +742,7 @@ export class PortaDocumentosPropria implements PortaDocumentos {
             situacao_documento_prontuario_id: situacao,
             profissional_id: comoSuporte ? null : autor.profissional,
             evento_em: agora,
-            dados: JSON.stringify({ nivel, hash, comoSuporte: comoSuporte === true }),
+            dados: JSON.stringify({ nivel, hash, comoSuporte: comoSuporte === true, ...assinaturaCadastro }),
             ocorrido_em: agora,
             usuario_id: usuario,
           });

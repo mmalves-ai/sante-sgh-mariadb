@@ -136,6 +136,24 @@ test.describe('Reajuste coletivo e índices da operadora @C1-086 @fase7', () => 
       return json(r, []);
     });
 
+    // A operadora vem da tela da cobrança (fonte sintética): a fatia da operadora não está ligada na massa do E2E.
+    await page.route('**/api/operadora/cobranca/tela', (r) =>
+      json(r, {
+        liberacao: { ligada: true, motivo: null },
+        acoes: { gerar: false, motivo: 'Somente consulta' },
+        operadoras: [{ id: 7, razaoSocial: 'OPERADORA SINTETICA', registroAns: '000001' }],
+        hoje: '2027-05-01',
+        mensagens: { enviar: false, motivo: 'Desenvolvimento' },
+        parametros: {
+          multaPercentual: 2,
+          jurosPercentualMes: 1,
+          diasLimiteNotificacao: 50,
+          diasInadimplencia: 60,
+          diasPrazoNotificacao: 10,
+          parcelasMaximas: 12,
+        },
+      }),
+    );
     await entrar(page, 'SINT.OPERADORA');
     await page.goto('/operadora/cobranca');
     await page.getByTestId('link-reajuste-coletivo').click();

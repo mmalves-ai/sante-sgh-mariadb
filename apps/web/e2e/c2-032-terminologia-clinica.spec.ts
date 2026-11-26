@@ -281,7 +281,7 @@ test.describe('Terminologia clínica: diagnósticos e regiões do exame @C2-032 
     await escolher(secao.getByTestId('regioes-escolha'), '41');
     await secao.getByTestId('regioes-padrao').check();
     await secao.getByTestId('regioes-ligar-botao').click();
-    await expect(secao.getByTestId('regiao-exame-E2E-MAO')).toContainText('padrão');
+    await expect(secao.getByTestId('regiao-marca-padrao-E2E-MAO')).toContainText('padrão');
     expect(api.enviados['/exame-regioes']?.[0]).toEqual({
       exame: 900,
       acao: 'ligar',
@@ -294,7 +294,7 @@ test.describe('Terminologia clínica: diagnósticos e regiões do exame @C2-032 
     await escolher(secao.getByTestId('regioes-escolha'), '42');
     await secao.getByTestId('regioes-ligar-botao').click();
     await expect(secao.getByTestId('regiao-exame-E2E-DEDO')).toBeVisible();
-    await expect(secao.getByTestId('regiao-exame-E2E-DEDO')).not.toContainText('padrão');
+    await expect(secao.getByTestId('regiao-marca-padrao-E2E-DEDO')).toHaveCount(0);
     expect(api.enviados['/exame-regioes']?.[1]).toEqual({
       exame: 900,
       acao: 'ligar',
@@ -304,8 +304,8 @@ test.describe('Terminologia clínica: diagnósticos e regiões do exame @C2-032 
 
     // Tornar padrão o dedo: UMA gravação, sem retirar e religar; a mão deixa de ser a padrão.
     await secao.getByTestId('regiao-padrao-E2E-DEDO').click();
-    await expect(secao.getByTestId('regiao-exame-E2E-DEDO')).toContainText('padrão');
-    await expect(secao.getByTestId('regiao-exame-E2E-MAO')).not.toContainText('padrão');
+    await expect(secao.getByTestId('regiao-marca-padrao-E2E-DEDO')).toContainText('padrão');
+    await expect(secao.getByTestId('regiao-marca-padrao-E2E-MAO')).toHaveCount(0);
     expect(api.enviados['/exame-regioes']?.[2]).toEqual({ exame: 900, acao: 'padrao', regiao: 42 });
     expect(api.enviados['/exame-regioes']).toHaveLength(3);
 

@@ -12,7 +12,8 @@ import { escolher } from './combos.js';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 
 const SENHA = 'Sintetico#2026';
-const LOGIN = 'SINT.ADMIN';
+// Faturista das contas (faturamento.conta.*): a lista das faturas e a nota da conta são telas do faturamento.
+const LOGIN = 'SINT.CONTAS';
 
 async function entrar(page: Page): Promise<void> {
   await page.context().clearCookies();

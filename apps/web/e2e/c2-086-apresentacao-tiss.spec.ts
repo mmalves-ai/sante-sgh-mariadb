@@ -118,8 +118,11 @@ test.describe('apresentação TISS por fonte pagadora @C2-086', () => {
     await page.route('**/api/faturamento/tiss/apresentacao/**', (rota) => {
       const req = rota.request();
       if (req.method() !== 'POST') return rota.fallback();
-      enviados.push({ url: req.url(), corpo: req.postDataJSON() as Record<string, unknown> });
-      return json(rota, { id: 99, versao: 2 }, 201);
+      const corpo = req.postDataJSON() as Record<string, unknown>;
+      enviados.push({ url: req.url(), corpo });
+      // Alterar a regra mantém o id e sobe a versão (como a API); incluir devolve um id novo.
+      const id = typeof corpo['id'] === 'number' ? corpo['id'] : 99;
+      return json(rota, { id, versao: Number(corpo['versao'] ?? 0) + 1 }, 201);
     });
 
     await entrar(page);

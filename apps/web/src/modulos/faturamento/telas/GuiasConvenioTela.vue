@@ -185,7 +185,7 @@ async function anexar() {
     <h1>{{ t('auditoriaTramite.guia.titulo') }}</h1>
     <ErroFaturamento v-if="fila.error.value" :erro="fila.error.value" />
     <ErroFaturamento v-if="erro" :erro="erro" />
-    <p v-if="aviso" role="status">{{ aviso }}</p>
+    <p v-if="aviso" role="status" data-testid="gc-aviso">{{ aviso }}</p>
     <div class="filtros">
       <SanteSelecao
         v-model="situacao"
