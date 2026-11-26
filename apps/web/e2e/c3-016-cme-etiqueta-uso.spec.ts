@@ -108,7 +108,9 @@ test.describe('@C3-016 etiqueta e baixa do uso do pacote estéril (04-CME linha 
   test('etiqueta incompleta não imprime; a completa gera o ZPL', async ({ page }) => {
     const e: Estado = { faltas: ['lote'], usado: false, corpoUso: null };
     await simular(page, e);
-    await entrar(page, 'SINT.ADMIN');
+    // A CME é permissão clínica por perfil (cirurgia.cme.ler e .operar, perfil central-material-esteril): a segregação de
+    // funções a tira do administrador sem perfil assistencial. Quem etiqueta e confere o pacote é a equipe da CME.
+    await entrar(page, 'SINT.CME');
     await page.goto('/cirurgia/cme');
     await page.getByTestId('cme-etiqueta').fill(ETIQUETA);
     await page.getByTestId('cme-rastrear').click();
@@ -125,7 +127,9 @@ test.describe('@C3-016 etiqueta e baixa do uso do pacote estéril (04-CME linha 
   test('a abertura no paciente exige a embalagem conferida e grava a baixa do uso', async ({ page }) => {
     const e: Estado = { faltas: [], usado: false, corpoUso: null };
     await simular(page, e);
-    await entrar(page, 'SINT.ADMIN');
+    // A CME é permissão clínica por perfil (cirurgia.cme.ler e .operar, perfil central-material-esteril): a segregação de
+    // funções a tira do administrador sem perfil assistencial. Quem etiqueta e confere o pacote é a equipe da CME.
+    await entrar(page, 'SINT.CME');
     await page.goto('/cirurgia/cme');
     await page.getByTestId('cme-etiqueta').fill(ETIQUETA);
     await page.getByTestId('cme-rastrear').click();
