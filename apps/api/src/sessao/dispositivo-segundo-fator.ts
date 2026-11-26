@@ -238,6 +238,54 @@ export class CredencialDispositivoPropria {
     await this.executar(a, 'dispositivo-revogar', op, { login: a.login, id });
   }
 
+  /**
+   * Gestor de acessos (troca ou perda de aparelho): revoga todos os dispositivos ativos de OUTRA conta do cliente, para
+   * que ela volte ao fluxo do aplicativo (sem isso, quem perdeu o aparelho com o método 'dispositivo' fica sem entrada).
+   * Cada credencial é uma operação, com trilha própria. Devolve quantas foram revogadas.
+   */
+  async revogarTodosDeOutro(a: AtorDispositivo, alvo: string): Promise<number> {
+    if (alvo === a.login)
+      throw recusa('remocao-recusada', 'Use as suas preferências para os seus dispositivos.');
+    const gestor = await this.idUsuario(a);
+    if (gestor === null) throw recusa('usuario-inexistente', 'A conta não existe neste cliente.');
+    const ativas = await this.ativas({ rede: a.rede, hospital: a.hospital, login: alvo });
+    for (const c of ativas) {
+      let nome = '';
+      const op = definirOperacao({
+        nome: 'acesso.dispositivo.revogar-de-outro',
+        tabelas: [TABELA_CREDENCIAL_DISPOSITIVO],
+        entrada: ENTRADA,
+        gravar: async (tx) => {
+          const [d] = await tx.consultarParaAtualizar(
+            'SELECT id, nome, versao, revogada_em FROM credencial_dispositivo WHERE id = ?',
+            [c.id],
+            { teto: 1 },
+          );
+          if (!d || d['revogada_em'] != null) return { id: c.id };
+          nome = String(d['nome']);
+          await tx.alterar(TABELA_CREDENCIAL_DISPOSITIVO, c.id, Number(d['versao']), {
+            revogada_em: new Date(),
+            revogada_por: gestor,
+          });
+          return { id: c.id };
+        },
+        alvo: () => ({ tabela: TABELA_CREDENCIAL_DISPOSITIVO, id: c.id }),
+        trilha: () => ({
+          dados: {
+            evento: 'acesso.dispositivo.revogado',
+            recurso: 'acesso.sessao',
+            operacao: 'acesso.dispositivo.revogar-de-outro',
+            resultado: 'sucesso',
+            estacao: a.estacao,
+            diferenca: `dispositivo de ${alvo}: - ${nome}`,
+          },
+        }),
+      });
+      await this.executar(a, 'dispositivo-revogar-de-outro', op, { login: alvo, id: c.id });
+    }
+    return ativas.length;
+  }
+
   /** Grava o uso aceito: o contador novo (só para frente, conferido de novo sob trava) e a hora. */
   async registrarUso(a: AtorDispositivo, id: number, contador: number): Promise<void> {
     const op = definirOperacao({
@@ -321,6 +369,11 @@ export class ServicoDispositivoSegundoFator {
 
   revogar(a: AtorDispositivo, id: number): Promise<void> {
     return this.porta.revogar(a, id);
+  }
+
+  /** Gestor de acessos: revoga os dispositivos de outra conta (troca ou perda de aparelho). */
+  revogarTodosDeOutro(a: AtorDispositivo, alvo: string): Promise<number> {
+    return this.porta.revogarTodosDeOutro(a, alvo);
   }
 
   async iniciarCadastro(sessao: string, a: AtorDispositivo, nomeExibicao: string) {

@@ -5,7 +5,7 @@
 //     CSRF, para o usuário do cliente e para o administrador da plataforma.
 // O token, o código e a senha nunca vão a log nem a trilha; a senha provisória volta só a quem tem o link.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Req } from '@nestjs/common';
-import { PERMISSOES_ACESSO } from '@sgh/contratos';
+import { PERMISSOES_ACESSO, PERMISSOES_M59_F2_CODIGOS } from '@sgh/contratos';
 import { z } from 'zod';
 import { AuditadoNoHandler, Permissao, Publica } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -399,6 +399,30 @@ export class AcessoEmailController {
       const { d, ator } = this.dispositivo(reg, req);
       await d.revogar(ator, n);
       return { dispositivos: await d.listar(ator) };
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /**
+   * POST /api/acesso/identidade/usuarios/:login/dispositivos/revogar: o gestor de acessos revoga os dispositivos de
+   * outra conta (troca ou perda de aparelho), ao lado da revogação do aplicativo; a conta volta ao fluxo do aplicativo.
+   * Senha do gestor conferida de novo (reautenticação) e CSRF.
+   */
+  @Post('acesso/identidade/usuarios/:login/dispositivos/revogar')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_M59_F2_CODIGOS.politica2faEditar)
+  @AuditadoNoHandler('acesso.dispositivo.revogado na mesma transação de cada credencial')
+  async revogarDispositivosDeOutro(@Param('login') bruto: string, @Body() corpo: unknown, @Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    const login = z.string().trim().min(1).max(64).safeParse(bruto);
+    const p = z.object({ senha: z.string().min(1).max(256) }).safeParse(corpo);
+    if (!login.success || !p.success) throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos');
+    try {
+      await this.sessao!.reautenticar(id, rede, p.data.senha);
+      const reg = await this.sessao!.exigirReautenticacaoRecente(id, rede);
+      const { d, ator } = this.dispositivo(reg, req);
+      return { revogados: await d.revogarTodosDeOutro(ator, login.data) };
     } catch (e) {
       this.erro(e);
     }

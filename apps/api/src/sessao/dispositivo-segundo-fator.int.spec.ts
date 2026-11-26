@@ -175,4 +175,41 @@ describe.skipIf(SEM_BANCO)('chave do dispositivo (WebAuthn) no banco próprio', 
     await expect(pref.escolher(ator, 'aplicativo')).resolves.toEqual({ anterior: 'dispositivo' });
     expect(metodoGravado()).toBe('aplicativo');
   }, 60_000);
+
+  it('o gestor de acessos revoga os dispositivos de outra conta (perda do aparelho) com trilha', async () => {
+    const GESTOR = 'wan.gestor';
+    sql(`INSERT INTO usuario (login, nome, dispensa_cpf, criado_em)
+           SELECT '${GESTOR}', 'Gestor fictício wan', TRUE, NOW(3)
+            WHERE NOT EXISTS (SELECT 1 FROM usuario WHERE login = '${GESTOR}');
+         UPDATE credencial_dispositivo d JOIN usuario u ON u.id = d.usuario_id
+            SET d.revogada_em = NOW(3) WHERE u.login = '${LOGIN}' AND d.revogada_em IS NULL;`);
+    const gestor = { ...ator, login: GESTOR };
+    for (const n of ['sessao-3', 'sessao-4']) {
+      const disp = new AutenticadorWebAuthnSimulado(-7, 0);
+      const op = await servico.iniciarCadastro(n, ator, 'Conta fictícia wan');
+      await servico.concluirCadastro(n, ator, disp.cadastrar(op.challenge, ORIGEM, SERVIDOR), `Aparelho ${n}`);
+    }
+    expect(contar('AND d.revogada_em IS NULL')).toBe(2);
+    const trilhaDispositivos = () =>
+      Number(
+        sql(`SELECT COUNT(*) FROM trilha_auditoria t JOIN credencial_dispositivo d ON d.id = t.entidade_id
+              JOIN usuario u ON u.id = d.usuario_id
+             WHERE t.entidade = 'credencial_dispositivo' AND u.login = '${LOGIN}'`).trim(),
+      );
+    const trilhaAntes = trilhaDispositivos();
+    // A própria conta não usa este caminho.
+    await expect(servico.revogarTodosDeOutro(ator, LOGIN)).rejects.toMatchObject({
+      problema: { codigo: 'remocao-recusada' },
+    });
+    await expect(servico.revogarTodosDeOutro(gestor, LOGIN)).resolves.toBe(2);
+    expect(contar('AND d.revogada_em IS NULL')).toBe(0);
+    const idGestor = sql(`SELECT id FROM usuario WHERE login = '${GESTOR}'`).trim();
+    expect(contar(`AND d.revogada_em IS NOT NULL AND d.revogada_por = ${idGestor}`)).toBe(2);
+    expect(trilhaDispositivos()).toBe(trilhaAntes + 2);
+    // Sem aparelho ativo, a entrada não pede mais o dispositivo e a segunda chamada não revoga nada.
+    await expect(servico.iniciarValidacao('sessao-3', ator)).rejects.toMatchObject({
+      problema: { codigo: 'sem-dispositivo' },
+    });
+    await expect(servico.revogarTodosDeOutro(gestor, LOGIN)).resolves.toBe(0);
+  }, 60_000);
 });

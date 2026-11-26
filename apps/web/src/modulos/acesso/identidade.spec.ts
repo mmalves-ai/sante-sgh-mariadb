@@ -497,6 +497,8 @@ describe('usuários: senhas e segundo fator', () => {
         return { status: 200, corpo: pagina };
       if (p.url.endsWith('/SINT.FORTE/segundo-fator/revogar'))
         return { status: 200, corpo: { revogado: true } };
+      if (p.url.endsWith('/SINT.FORTE/dispositivos/revogar'))
+        return { status: 200, corpo: { revogados: 1 } };
       return undefined;
     });
     const w = await montar(IdentidadeUsuarios);
@@ -517,6 +519,10 @@ describe('usuários: senhas e segundo fator', () => {
       .dispatchEvent(new Event('submit'));
     await flushPromises();
     expect(pedidos.find((p) => p.url.endsWith('/revogar'))?.corpo).toEqual({ senha: 'senha-sintetica' });
+    // 01-ADM L62: a revogação do gestor também tira as chaves do dispositivo da conta.
+    expect(pedidos.find((p) => p.url.endsWith('/dispositivos/revogar'))?.corpo).toEqual({
+      senha: 'senha-sintetica',
+    });
     expect(w.get('[data-testid="identidade-aviso"]').text()).toBe('Segundo fator de SINT.FORTE revogado.');
   });
 
