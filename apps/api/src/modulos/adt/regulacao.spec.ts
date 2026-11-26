@@ -184,6 +184,10 @@ describe('regulação estadual (M44, etapa 3)', () => {
       'solicitada',
     ]);
     expect(t.contagens.solicitada).toBeGreaterThanOrEqual(1);
+    // C3-013: a tela lê o de-para aprovado (a situação do pedido e o resumo das linhas a confirmar).
+    expect(t.depara).toMatchObject({ completo: true });
+    expect(t.depara.aConfirmar).toBeGreaterThanOrEqual(0);
+    expect(linha).toHaveProperty('situacaoPedido');
     expect(
       trilha.eventos.filter((e) => e.evento === 'internacao.regulacao.registrada').length,
     ).toBeGreaterThanOrEqual(3);

@@ -2,6 +2,12 @@
 // do fornecedor anterior são "a configuração de regulação recebida" (só consulta).
 export const mensagensRegulacao = {
   carregando: 'Carregando…',
+  depara: {
+    incompleto:
+      'O de-para das situações de regulação está incompleto: a situação do pedido não acompanha a regulação até o NIR aprovar.',
+    aConfirmar:
+      '{n} situação(ões) do de-para ainda a confirmar pelo NIR: o registro da regulação não usa essas linhas.',
+  },
   titulo: 'Regulação estadual',
   texto:
     'O número da regulação de cada solicitação de leito e a situação informada pela central. O número sempre pode ser registrado à mão.',
@@ -37,6 +43,9 @@ export const mensagensRegulacao = {
     pedidaEm: 'pedida em {em} · {prioridade}',
     vigente: '{central} · nº {numero} · {situacao}',
     semRegistro: 'Sem número de regulação.',
+    situacaoPedido: 'Situação do pedido: {rotulo}',
+    situacaoPedidoAConfirmar: 'Situação do pedido: {rotulo} (a confirmar no de-para)',
+    situacaoPedidoSem: 'Situação do pedido: sem correspondente no de-para.',
     historico: 'Histórico da regulação',
     linha: '{em}: {situacao} · nº {numero} · {origem} · {por}',
   },

@@ -104,6 +104,8 @@ export const esquemaRegulacaoDaSolicitacao = z.object({
   solicitacao: n,
   paciente: z.object({ id: n, nome: txt }),
   estadoSolicitacao: txt,
+  /** A situação do pedido equivalente ao estado, pelo de-para aprovado do NIR (C3-013); null sem correspondente. */
+  situacaoPedido: z.object({ codigo: n, rotulo: txt, aConfirmar: z.boolean() }).nullable(),
   prioridade: txt,
   solicitadoEm: txt,
   vigente: esquemaRegistroRegulacao.nullable(),
@@ -131,6 +133,8 @@ export const esquemaTelaRegulacao = z.object({
     modo: z.enum(['desligado', 'simulador']),
   }),
   acoes: z.object({ registrar: z.boolean(), motivo: txt.nullable() }),
+  /** O de-para das situações aprovado pelo NIR (C3-013): completo (regra 10) e as linhas ainda "a confirmar". */
+  depara: z.object({ completo: z.boolean(), aConfirmar: n }),
   lidoEm: txt,
 });
 export type TelaRegulacao = z.infer<typeof esquemaTelaRegulacao>;

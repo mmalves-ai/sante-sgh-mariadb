@@ -6,8 +6,12 @@ import {
   contagemRegulacao,
   decidirRegulacao,
   respostaSimuladaDaCentral,
+  resumoDeparaRegulacao,
+  situacaoDoPedidoNaTela,
+  situacaoDoPedidoPelaRegulacao,
   situacaoFinal,
 } from './regulacao.js';
+import { deparaVigente } from './maquina.js';
 
 const vig = (situacao: 'solicitada' | 'autorizada' | 'negada' | 'concluida' | 'cancelada') => ({
   id: 9,
@@ -121,5 +125,43 @@ describe('regulação estadual', () => {
     ).toBe('concluida');
     const c = contagemRegulacao(['solicitada', null, 'solicitada', 'negada']);
     expect(c).toMatchObject({ 'sem-numero': 1, solicitada: 2, negada: 1, autorizada: 0 });
+  });
+});
+
+describe('a regulação lida pelo de-para aprovado (C3-013)', () => {
+  const proposta = deparaVigente([]);
+  const aprovado = (situacao: number, estado: 'em_analise' | 'solicitado' | 'reservado') =>
+    deparaVigente([{ situacao, estado, aprovadoPor: 'nir.sintetico', aprovadoEm: '2026-11-26T10:00:00Z' }]);
+
+  it('autorizada no pedido em análise vira "Regulado"; solicitada ou em análise vira "Aguardando regulação"', () => {
+    expect(situacaoDoPedidoPelaRegulacao('autorizada', 'em_analise', proposta)).toEqual({
+      codigo: 10,
+      rotulo: 'Regulado',
+    });
+    expect(situacaoDoPedidoPelaRegulacao('solicitada', 'em_analise', proposta)?.codigo).toBe(3);
+    expect(situacaoDoPedidoPelaRegulacao('em_analise', 'em_analise', proposta)?.codigo).toBe(3);
+  });
+
+  it('a regulação nunca move o estado do pedido: outro estado ou situação final deixam o pedido como está', () => {
+    expect(situacaoDoPedidoPelaRegulacao('autorizada', 'solicitado', proposta)).toBeNull();
+    expect(situacaoDoPedidoPelaRegulacao('autorizada', 'reservado', proposta)).toBeNull();
+    for (const s of ['negada', 'cancelada', 'concluida'] as const)
+      expect(situacaoDoPedidoPelaRegulacao(s, 'em_analise', proposta)).toBeNull();
+  });
+
+  it('vale o de-para APROVADO pelo NIR: a linha reapontada para outro estado deixa de valer', () => {
+    expect(situacaoDoPedidoPelaRegulacao('autorizada', 'em_analise', aprovado(10, 'reservado'))).toBeNull();
+    expect(situacaoDoPedidoPelaRegulacao('autorizada', 'reservado', aprovado(10, 'reservado'))?.codigo).toBe(
+      10,
+    );
+  });
+
+  it('linha "a confirmar" não vale; o resumo conta as 6 a confirmar da proposta e a tela mostra a equivalente', () => {
+    const semLinha10 = proposta.map((l) => (l.situacao === 10 ? { ...l, aConfirmar: true } : l));
+    expect(situacaoDoPedidoPelaRegulacao('autorizada', 'em_analise', semLinha10)).toBeNull();
+    expect(resumoDeparaRegulacao(proposta)).toEqual({ completo: true, aConfirmar: 6 });
+    expect(resumoDeparaRegulacao([])).toEqual({ completo: false, aConfirmar: 0 });
+    expect(situacaoDoPedidoNaTela('em_analise', proposta)).toMatchObject({ codigo: 1, aConfirmar: false });
+    expect(situacaoDoPedidoNaTela('inexistente', proposta)).toBeNull();
   });
 });

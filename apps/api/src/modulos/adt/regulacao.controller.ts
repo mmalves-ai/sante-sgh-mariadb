@@ -20,7 +20,15 @@ import {
   type ResultadoNir,
   type TelaRegulacao,
 } from '@sgh/contratos';
-import { contagemRegulacao, decidirRegulacao } from '@sgh/dominio-internacao';
+import {
+  contagemRegulacao,
+  decidirRegulacao,
+  deparaVigente,
+  type LinhaDepara,
+  resumoDeparaRegulacao,
+  situacaoDoPedidoNaTela,
+  situacaoDoPedidoPelaRegulacao,
+} from '@sgh/dominio-internacao';
 import { type RegistroRegulacaoNir } from './tipos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -111,13 +119,26 @@ export class RegulacaoController {
         };
   }
 
+  /** C3-013: o de-para das situações aprovado pelo NIR (a proposta com as linhas aprovadas por cima). */
+  private async depara(c: ReturnType<typeof ctxAdt>): Promise<LinhaDepara[]> {
+    const [aprovados, rotulos] = await Promise.all([
+      this.porta.depara(c),
+      this.porta.situacoes(c).catch(() => new Map<number, string>()),
+    ]);
+    return deparaVigente(aprovados, rotulos);
+  }
+
   @Get()
   @Permissao(P.regulacaoLer)
   @Auditar(EVENTOS_AUDITAVEIS.nirFilaLida.codigo)
   async tela(@Req() req: RequisicaoAutorizada): Promise<TelaRegulacao> {
     const s = sessaoDe(req);
     const c = ctxAdt(s);
-    const [{ agora }, { itens }] = await Promise.all([this.porta.relogio(c), this.porta.abertas(c)]);
+    const [{ agora }, { itens }, depara] = await Promise.all([
+      this.porta.relogio(c),
+      this.porta.abertas(c),
+      this.depara(c),
+    ]);
     const regs = await this.porta.regulacoes(
       c,
       itens.map((x) => x.id),
@@ -129,6 +150,7 @@ export class RegulacaoController {
         solicitacao: x.id,
         paciente: { id: x.paciente, nome: x.nome },
         estadoSolicitacao: x.estado,
+        situacaoPedido: situacaoDoPedidoNaTela(x.estado, depara),
         prioridade: x.prioridade,
         solicitadoEm: x.solicitadoEm,
         vigente: v ? registroDe(v) : null,
@@ -146,6 +168,7 @@ export class RegulacaoController {
         registrar: podeRegistrar && l.ligada,
         motivo: !podeRegistrar ? 'Seu perfil só consulta a regulação.' : l.ligada ? null : l.motivo,
       },
+      depara: resumoDeparaRegulacao(depara),
       lidoEm: agora,
     };
   }
@@ -201,6 +224,8 @@ export class RegulacaoController {
         codigo: d.codigo,
       });
     const conector = await this.estadoConector(s);
+    // C3-013: a situação do pedido acompanha a regulação pelo de-para aprovado, sem mudar o estado do NIR.
+    const situacaoPedido = situacaoDoPedidoPelaRegulacao(e.situacao, sol.estado, await this.depara(c));
     // Com o conector, o pedido novo à central vai pela outbox na mesma transação (só IDs e códigos na carga).
     const outbox =
       conector.ligado && d.novoPedido && e.situacao === 'solicitada'
@@ -229,15 +254,18 @@ export class RegulacaoController {
           mensagemHash: null,
           por: s.login,
           outbox,
+          situacaoPedido: situacaoPedido ? { codigo: situacaoPedido.codigo, estado: sol.estado } : null,
         }),
     );
     this.avisos?.avisar(s.hospital);
     return {
       ok: true,
       id: r.id,
-      mensagem: outbox
-        ? 'Regulação registrada e o pedido enviado à central pelo conector.'
-        : 'Regulação registrada na solicitação de leito.',
+      mensagem:
+        (outbox
+          ? 'Regulação registrada e o pedido enviado à central pelo conector.'
+          : 'Regulação registrada na solicitação de leito.') +
+        (situacaoPedido ? ` Situação do pedido: ${situacaoPedido.rotulo}.` : ''),
     };
   }
 }

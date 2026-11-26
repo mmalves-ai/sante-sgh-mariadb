@@ -353,6 +353,74 @@ describe.skipIf(SEM_BANCO_ADT)(`porta própria do NIR (MariaDB, cliente ${CLIENT
     ).rejects.toSatisfy((e) => codigoDe(e) === 'configuracao-incompleta');
   });
 
+  it('C3-013: a regulação aponta o pedido para a vigente e refina a situação pelo de-para no mesmo estado; estado ou de-para divergente recusa', async () => {
+    const antes = await lerAdt<{ sit: number; estado: string; versao: number }>(
+      M(),
+      'SELECT situacao_pedido_leito_id AS sit, estado_situacao AS estado, versao FROM pedido_leito WHERE id = ?',
+      [pedido],
+    );
+    const estado = antes!.estado;
+    const alvo = await lerAdt<{ id: number }>(
+      M(),
+      'SELECT id FROM situacao_pedido_leito WHERE estado = ? AND ativo = TRUE ORDER BY id <> ? DESC, id LIMIT 1',
+      [estado, antes!.sit],
+    );
+    const outra = await lerAdt<{ id: number; estado: string }>(
+      M(),
+      'SELECT id, estado FROM situacao_pedido_leito WHERE estado <> ? AND ativo = TRUE ORDER BY id LIMIT 1',
+      [estado],
+    );
+    const vigente = await conta('SELECT MAX(id) AS n FROM solicitacao_regulacao WHERE pedido_leito_id = ?', [
+      pedido,
+    ]);
+    const nova = (situacaoPedido: { codigo: number; estado: string } | null) =>
+      grava<{ id: number }>('solicitacao_regulacao', (g) =>
+        g.registrarRegulacao({
+          solicitacao: pedido,
+          central: M().central,
+          sentido: 'saida',
+          // Outro número: o índice único (central, número) ainda recusa a mudança de situação com o mesmo número.
+          numero: 'REG-0303',
+          situacao: 'em_analise',
+          origem: 'manual',
+          observacao: null,
+          anterior: vigente,
+          mensagemHash: null,
+          por: M().login,
+          outbox: null,
+          situacaoPedido,
+        }),
+      );
+    // O pedido mudou de estado desde a leitura: recusa, nada gravado.
+    await expect(nova({ codigo: outra!.id, estado: outra!.estado })).rejects.toSatisfy(
+      (e) => codigoDe(e) === 'conflito-versao',
+    );
+    // A situação do de-para leva a outro estado: recusa, nada gravado.
+    await expect(nova({ codigo: outra!.id, estado })).rejects.toSatisfy(
+      (e) => codigoDe(e) === 'depara-divergente',
+    );
+    expect(
+      await conta('SELECT COUNT(*) AS n FROM solicitacao_regulacao WHERE solicitacao_anterior_id = ?', [
+        vigente,
+      ]),
+    ).toBe(0);
+    const r = await nova({ codigo: alvo!.id, estado });
+    expect(
+      await lerAdt(
+        M(),
+        'SELECT solicitacao_regulacao_id AS reg, situacao_pedido_leito_id AS sit, estado_situacao AS estado, versao FROM pedido_leito WHERE id = ?',
+        [pedido],
+      ),
+    ).toMatchObject({ reg: r.id, sit: alvo!.id, estado, versao: antes!.versao + 1 });
+    expect(
+      await lerAdt(
+        M(),
+        'SELECT solicitacao_anterior_id AS ant, situacao FROM solicitacao_regulacao WHERE id = ?',
+        [r.id],
+      ),
+    ).toMatchObject({ ant: vigente, situacao: 'em_analise' });
+  });
+
   it('cancelar em vez de excluir: a solicitação e a reserva ficam com motivo, quem e quando; o leito volta a livre; o banco recusa o cancelamento incompleto', async () => {
     const p2 = await grava<number>('pedido_leito', (g) =>
       g.solicitar({
