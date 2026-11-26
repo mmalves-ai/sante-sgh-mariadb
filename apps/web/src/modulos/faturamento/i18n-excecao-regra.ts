@@ -46,7 +46,17 @@ export const mensagensExcecaoRegra = {
   vigencia: 'Vigência',
   ate: 'a',
   semFim: 'sem término',
-  situacoes: { futura: 'Futura', vigente: 'Vigente', encerrada: 'Encerrada' },
+  situacoes: { cancelada: 'Cancelada', futura: 'Futura', vigente: 'Vigente', encerrada: 'Encerrada' },
+  cancelar: 'Cancelar',
+  cancelarTitulo: 'Cancelar antes de valer',
+  motivoCancelamento: 'Por que cancelar (gravada errada)',
+  confirmarCancelar: 'Confirmar o cancelamento',
+  desistir: 'Voltar',
+  cancelada: 'Exceção cancelada: a apuração deixa de considerá-la, e o registro continua aqui.',
+  canceladaPor: 'Cancelada por {nome}: {motivo}',
+  soEsteEstabelecimento:
+    'A exceção vale só neste estabelecimento. A de todos os estabelecimentos pede a permissão própria.',
   criadoPor: 'Registrada por {nome}',
-  somenteLeitura: 'Você consulta as exceções; incluir e encerrar pedem a permissão de manter as regras.',
+  somenteLeitura:
+    'Você consulta as exceções; incluir, encerrar e cancelar pedem a permissão de manter as regras.',
 };

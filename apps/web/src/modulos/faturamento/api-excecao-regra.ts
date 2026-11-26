@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { enviar, ler } from '../exames/api-exames.js';
 
 export {
+  cancelamentoExcecaoRegra,
   encerramentoExcecaoRegra,
   NATUREZAS_EXCECAO_REGRA,
   validarExcecaoRegraLancamento,
@@ -40,9 +41,11 @@ const esquemaExcecao = z.object({
   aplica,
   vigenciaInicio: textoN,
   vigenciaFim: textoN,
-  situacao: z.enum(['futura', 'vigente', 'encerrada']),
+  situacao: z.enum(['cancelada', 'futura', 'vigente', 'encerrada']),
   motivo: textoN,
   criadoPor: textoN,
+  motivoCancelamento: textoN.optional().default(null),
+  canceladaPor: textoN.optional().default(null),
 });
 const opcao = z.object({ id: z.number(), rotulo: z.string() });
 const esquemaPainel = z.object({
@@ -90,3 +93,7 @@ export const lerExcecoesRegra = () => ler(U, esquemaPainel);
 export const incluirExcecaoRegra = (p: PedidoExcecao, chave: string) => enviar(U, p, esquemaGravado, chave);
 export const encerrarExcecaoRegra = (id: number, versao: number, chave: string) =>
   enviar(`${U}/${id}/encerramento`, { versao }, esquemaGravado, chave);
+export const cancelarExcecaoRegra = (id: number, versao: number, motivo: string, chave: string) =>
+  enviar(`${U}/${id}/cancelamento`, { versao, motivo }, esquemaGravado, chave);
+/** Permissão do recorte de todos os estabelecimentos (incluir, encerrar e cancelar a exceção global). */
+export const PERMISSAO_EDITAR_GLOBAL = 'faturamento.regra.editarGlobal';

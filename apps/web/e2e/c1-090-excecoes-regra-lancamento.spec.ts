@@ -2,6 +2,8 @@
 // Da tela do lançamento automático para /faturamento/lancamento-automatico/excecoes: a regra com a exceção vigente, a
 // nova exceção com a validação do domínio na hora (sem motivo, item e grupo juntos, nenhuma natureza), o plano filtrado
 // pela fonte escolhida, a gravação com o corpo esperado e o encerramento com confirmação (só a versão vai ao servidor);
+// a exceção futura cancelada antes de valer (motivo conferido na hora; vai a versão e o motivo; continua na lista como
+// cancelada, sem encerrar nem cancelar de novo); com a permissão do recorte global, a opção "todos os estabelecimentos";
 // a resposta 503 sem banco próprio; axe sem violação séria.
 // Fonte sintética: as respostas da API são simuladas pela rota (o contrato de efeito no banco está em
 // regra-excecao-propria.int.spec). Nenhum dado de pessoa.
@@ -93,6 +95,20 @@ async function simular(page: Page, est: Estado, indisponivel = false): Promise<v
     if (r.request().method() === 'POST') {
       const corpo = (r.request().postDataJSON() ?? {}) as Record<string, unknown>;
       est.gravados.push({ url: caminho, corpo });
+      if (caminho.endsWith('/cancelamento')) {
+        est.excecoes = est.excecoes.map((x) =>
+          x['id'] === 503
+            ? {
+                ...x,
+                versao: 2,
+                situacao: 'cancelada',
+                motivoCancelamento: String(corpo['motivo'] ?? '').trim(),
+                canceladaPor: 'USUARIO SINTETICO',
+              }
+            : x,
+        );
+        return json(r, { id: 503, situacao: 'cancelada' });
+      }
       if (caminho.endsWith('/encerramento')) {
         est.excecoes = est.excecoes.map((x) =>
           x['id'] === 501 ? { ...x, versao: 2, vigenciaFim: '2026-11-24', situacao: 'encerrada' } : x,
@@ -209,6 +225,45 @@ test.describe('exceções das regras de lançamento automático @C1-090', () => 
     await expect(page.getByTestId('exr-situacao-501')).toContainText('Encerrada');
     await expect(page.getByTestId('exr-encerrar-501')).toHaveCount(0);
     await semViolacaoAxe(page, 'exceções da regra de lançamento (lista)');
+    expect(externas).toEqual([]);
+  });
+
+  test('cancelar a exceção futura antes de valer, com motivo; o recorte global com a permissão própria', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const futura = { ...VIGENTE, id: 503, vigenciaInicio: '2026-12-01', situacao: 'futura' };
+    const est: Estado = { excecoes: [futura], gravados: [] };
+    await simular(page, est);
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto('/faturamento/lancamento-automatico/excecoes');
+    await expect(page.getByTestId('exr-situacao-503')).toContainText('Futura');
+    // A futura não se encerra (ainda não valeu): só se cancela.
+    await expect(page.getByTestId('exr-encerrar-503')).toHaveCount(0);
+    await page.getByTestId('exr-cancelar-503').click();
+    await page.getByTestId('exr-motivo-cancelar-503').fill('abc');
+    await expect(page.getByTestId('exr-erro-cancelar-503')).toBeVisible();
+    await expect(page.getByTestId('exr-confirmar-cancelar-503')).toBeDisabled();
+    await page.getByTestId('exr-motivo-cancelar-503').fill('Fonte sintetica errada');
+    await expect(page.getByTestId('exr-erro-cancelar-503')).toHaveCount(0);
+    await page.getByTestId('exr-confirmar-cancelar-503').click();
+    await expect(page.getByTestId('exr-mensagem')).toContainText('Exceção cancelada');
+    expect(est.gravados).toEqual([
+      { url: `${U}/503/cancelamento`, corpo: { versao: 1, motivo: 'Fonte sintetica errada' } },
+    ]);
+    await expect(page.getByTestId('exr-situacao-503')).toContainText('Cancelada');
+    await expect(page.getByTestId('exr-cancelada-por-503')).toContainText('Fonte sintetica errada');
+    await expect(page.getByTestId('exr-cancelar-503')).toHaveCount(0);
+    await expect(page.getByTestId('exr-encerrar-503')).toHaveCount(0);
+
+    // O administrador tem faturamento.regra.editarGlobal: a opção de todos os estabelecimentos aparece.
+    await page.getByTestId('exr-nova').click();
+    expect(await rotulosDoCombo(page.getByTestId('exr-estabelecimento'))).toEqual([
+      'Só neste estabelecimento',
+      'Todos os estabelecimentos',
+    ]);
+    await expect(page.getByTestId('exr-so-este')).toHaveCount(0);
+    await semViolacaoAxe(page, 'exceções da regra de lançamento (cancelamento)');
     expect(externas).toEqual([]);
   });
 

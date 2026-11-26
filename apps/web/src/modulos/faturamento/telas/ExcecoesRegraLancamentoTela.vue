@@ -3,6 +3,8 @@
 // Cada regra ativa de taxa de abertura ou de diária aparece com as exceções dela (situação no dia, recorte, naturezas,
 // vigência, motivo e autor). Incluir é um formulário só, com a validação do domínio na hora; encerrar faz a exceção
 // valer até ontem e nunca a apaga. Consultar pede faturamento.regra.ler; incluir e encerrar, faturamento.regra.editar.
+// A exceção gravada errada que começa hoje ou depois se cancela antes de valer (com motivo; continua registrada). A
+// opção "todos os estabelecimentos" só aparece com faturamento.regra.editarGlobal (encerrar e cancelar a global também).
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
@@ -11,12 +13,15 @@ import { RouterLink } from 'vue-router';
 import { usarSessao } from '../../../casca/sessao/sessao.js';
 import { novaChave } from '../api-faturamento.js';
 import {
+  cancelamentoExcecaoRegra,
+  cancelarExcecaoRegra,
   encerramentoExcecaoRegra,
   encerrarExcecaoRegra,
   type ExcecaoRegra,
   incluirExcecaoRegra,
   lerExcecoesRegra,
   NATUREZAS_EXCECAO_REGRA,
+  PERMISSAO_EDITAR_GLOBAL,
   validarExcecaoRegraLancamento,
 } from '../api-excecao-regra.js';
 import BuscaItemCobertura from '../componentes/BuscaItemCobertura.vue';
@@ -28,6 +33,7 @@ const { t } = useI18n();
 const qc = useQueryClient();
 const { permissoes } = usarSessao();
 const podeEditar = computed(() => permissoes.value.has('faturamento.regra.editar'));
+const podeGlobal = computed(() => podeEditar.value && permissoes.value.has(PERMISSAO_EDITAR_GLOBAL));
 const p = useQuery({ queryKey: ['faturamento', 'excecoes-regra'], queryFn: lerExcecoesRegra });
 
 const erro = ref<unknown>(null);
@@ -83,12 +89,14 @@ const efeitos = computed(() =>
 );
 const estabelecimentos = computed(() => [
   { valor: 'este', rotulo: t('excecaoRegra.esteEstabelecimento') },
-  { valor: 'todos', rotulo: t('excecaoRegra.todosEstabelecimentos') },
+  ...(podeGlobal.value ? [{ valor: 'todos', rotulo: t('excecaoRegra.todosEstabelecimentos') }] : []),
 ]);
 const estab = computed({
   get: () => (f.todosEstabelecimentos ? 'todos' : 'este'),
-  set: (v: string) => (f.todosEstabelecimentos = v === 'todos'),
+  set: (v: string) => (f.todosEstabelecimentos = podeGlobal.value && v === 'todos'),
 });
+/** A exceção global só se encerra ou cancela com a permissão própria. */
+const alcanca = (x: ExcecaoRegra) => podeEditar.value && (!x.todosEstabelecimentos || podeGlobal.value);
 
 // A validação do domínio na hora (o estabelecimento da sessão conta como recorte quando a exceção é só dele).
 const erros = computed(() =>
@@ -141,7 +149,41 @@ async function gravar() {
   }
 }
 const encerravel = (x: ExcecaoRegra) =>
-  p.data.value ? encerramentoExcecaoRegra(x.vigenciaInicio, x.vigenciaFim, p.data.value.hoje).ok : false;
+  p.data.value
+    ? encerramentoExcecaoRegra(x.vigenciaInicio, x.vigenciaFim, p.data.value.hoje, x.situacao === 'cancelada')
+        .ok
+    : false;
+// Cancelar: a que começa hoje ou depois; o motivo é conferido pelo domínio na hora (o mesmo do servidor).
+const cancelavel = (x: ExcecaoRegra) =>
+  p.data.value
+    ? cancelamentoExcecaoRegra(x.vigenciaInicio, x.situacao === 'cancelada', p.data.value.hoje, 'motivo').ok
+    : false;
+const cancelando = ref<number | null>(null);
+const motivoCancelamento = ref('');
+const erroCancelamento = computed(() => {
+  const x = cancelando.value;
+  const dia = p.data.value?.hoje;
+  if (x === null || !dia) return null;
+  const r = cancelamentoExcecaoRegra(dia, false, dia, motivoCancelamento.value);
+  return r.ok ? null : r.mensagem;
+});
+function abrirCancelamento(x: ExcecaoRegra) {
+  cancelando.value = x.id;
+  motivoCancelamento.value = '';
+}
+async function cancelar(x: ExcecaoRegra) {
+  if (erroCancelamento.value) return;
+  erro.value = null;
+  mensagem.value = null;
+  try {
+    await cancelarExcecaoRegra(x.id, x.versao, motivoCancelamento.value, novaChave('excecao-regra-cancela'));
+    cancelando.value = null;
+    mensagem.value = t('excecaoRegra.cancelada');
+    await qc.invalidateQueries({ queryKey: ['faturamento', 'excecoes-regra'] });
+  } catch (e) {
+    erro.value = e;
+  }
+}
 async function encerrar(x: ExcecaoRegra) {
   erro.value = null;
   mensagem.value = null;
@@ -219,6 +261,9 @@ const naturezas = (x: ExcecaoRegra) =>
           :opcoes="estabelecimentos"
           data-testid="exr-estabelecimento"
         />
+        <p v-if="!podeGlobal" class="secundario" data-testid="exr-so-este">
+          {{ t('excecaoRegra.soEsteEstabelecimento') }}
+        </p>
         <SanteSelecao
           v-model="f.fontePagadoraId"
           :rotulo="t('excecaoRegra.fonte')"
@@ -338,10 +383,61 @@ const naturezas = (x: ExcecaoRegra) =>
                 <span v-if="x.criadoPor" class="secundario"
                   >· {{ t('excecaoRegra.criadoPor', { nome: x.criadoPor }) }}</span
                 >
+                <span
+                  v-if="x.situacao === 'cancelada'"
+                  class="secundario"
+                  :data-testid="`exr-cancelada-por-${x.id}`"
+                  >·
+                  {{
+                    t('excecaoRegra.canceladaPor', {
+                      nome: x.canceladaPor ?? '',
+                      motivo: x.motivoCancelamento ?? '',
+                    })
+                  }}</span
+                >
               </td>
               <td>
+                <template v-if="alcanca(x) && cancelavel(x)">
+                  <form
+                    v-if="cancelando === x.id"
+                    :aria-label="t('excecaoRegra.cancelarTitulo')"
+                    :data-testid="`exr-form-cancelar-${x.id}`"
+                    @submit.prevent="cancelar(x)"
+                  >
+                    <label :for="`exr-motivo-cancelar-${x.id}`">{{
+                      t('excecaoRegra.motivoCancelamento')
+                    }}</label>
+                    <textarea
+                      :id="`exr-motivo-cancelar-${x.id}`"
+                      v-model="motivoCancelamento"
+                      maxlength="500"
+                      rows="2"
+                      required
+                      :data-testid="`exr-motivo-cancelar-${x.id}`"
+                    />
+                    <p v-if="erroCancelamento" class="erro" :data-testid="`exr-erro-cancelar-${x.id}`">
+                      {{ erroCancelamento }}
+                    </p>
+                    <button
+                      type="submit"
+                      :disabled="!!erroCancelamento"
+                      :data-testid="`exr-confirmar-cancelar-${x.id}`"
+                    >
+                      {{ t('excecaoRegra.confirmarCancelar') }}
+                    </button>
+                    <button type="button" @click="cancelando = null">{{ t('excecaoRegra.desistir') }}</button>
+                  </form>
+                  <button
+                    v-else
+                    type="button"
+                    :data-testid="`exr-cancelar-${x.id}`"
+                    @click="abrirCancelamento(x)"
+                  >
+                    {{ t('excecaoRegra.cancelar') }}
+                  </button>
+                </template>
                 <SanteBotao
-                  v-if="podeEditar && encerravel(x)"
+                  v-if="alcanca(x) && encerravel(x)"
                   variante="destrutivo"
                   :rotulo="t('excecaoRegra.encerrar')"
                   :confirmacao="t('excecaoRegra.confirmarEncerrar')"
