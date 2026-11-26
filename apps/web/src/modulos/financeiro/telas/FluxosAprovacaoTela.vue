@@ -144,7 +144,10 @@ const entrada = computed<NovoFluxoTela>(() => ({
     regraQuorum: e.regraQuorum,
     minimo: e.regraQuorum === 'minimo' ? numOuNulo(e.minimo) : null,
     obrigatoria: e.obrigatoria,
-    aprovadores: e.aprovadores.map((a): AprovadorTela => ({
+    // A linha em branco (sem pessoa e sem papel) ainda não é aprovador: a etapa só com ela não tem aprovador.
+    aprovadores: e.aprovadores
+      .filter((a) => a.usuario || a.papel)
+      .map((a): AprovadorTela => ({
       usuario: idOuNulo(a.usuario),
       papel: idOuNulo(a.papel),
       substituto: idOuNulo(a.substituto),
