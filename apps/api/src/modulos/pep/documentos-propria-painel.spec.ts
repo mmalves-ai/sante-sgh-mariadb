@@ -176,7 +176,9 @@ describe('painel', () => {
     const q = sqls.at(-1)!;
     expect(q.sql).toMatch(/registro_assistencial r JOIN usuario u/);
     expect(q.sql).toMatch(/aceito_por_profissional_id/);
-    expect(q.params).toEqual([7, 7, 'med', 'med']);
+    // Registro migrado sem conta do autor: conta pelo vínculo do profissional autor com o login (recusas da carga, A1).
+    expect(q.sql).toMatch(/r\.autor_usuario_id IS NULL AND u\.login = \?/);
+    expect(q.params).toEqual([7, 7, 'med', 'med', 'med']);
   });
 });
 
