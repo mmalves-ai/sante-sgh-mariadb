@@ -64,6 +64,8 @@ import { ENTRADAS_TISS } from './esquemas.js';
 import type { LinhaContasCompetencia } from '@sgh/contratos/regras-faturamento';
 import { type ArmazemXmlTiss, armazemXmlMemoria } from './armazem-xml.js';
 import { CalendarioEntregaMemoria } from './calendario-entrega-propria.js';
+import { importarPagamentoMemoria } from './demonstrativo-pagamento-memoria.js';
+import type { ResumoPagamento } from './demonstrativo-importacao-propria.js';
 import type {
   ContextoTiss,
   FiltroAcompanhamentoPorta,
@@ -163,7 +165,7 @@ interface Estado {
     por: string;
     em: string;
   }[];
-  demonstrativos: (DemonstrativoLido & { itensM: ItemDemonstrativoLido[] })[];
+  demonstrativos: (DemonstrativoLido & { itensM: ItemDemonstrativoLido[]; resumo?: ResumoPagamento })[];
   decisoes: Map<
     number,
     { estado: string; motivo: string; evidencia: string; por: string; em: string; prazo: string | null }
@@ -211,10 +213,10 @@ const SITUACOES = [
 
 export class PortaTissMemoria implements PortaTiss {
   readonly destino = 'memoria' as const;
-  readonly armazem: ArmazemXmlTiss & { objetos: Map<string, Uint8Array> } = armazemXmlMemoria();
-  private readonly estados = new Map<string, Estado>();
   /** O cadastro do calendário de entrega por convênio (06-FAT linha 31), com a mesma regra da fonte própria. */
   readonly calendario = new CalendarioEntregaMemoria((cv) => CONVENIOS[cv] ?? null);
+  readonly armazem: ArmazemXmlTiss & { objetos: Map<string, Uint8Array> } = armazemXmlMemoria();
+  private readonly estados = new Map<string, Estado>();
   private readonly montador = criarMontadorLote(this.armazem.guardar);
 
   constructor(private readonly catalogo: EstadoCatalogo | null) {}
@@ -880,6 +882,7 @@ export class PortaTissMemoria implements PortaTiss {
             (d.hashArquivo && (x as { hash?: string }).hash === d.hashArquivo),
         );
         if (ja) return { id: ja.id, repetido: true, casados: ja.casados, semCasamento: ja.semCasamento };
+        if (d.tipo === 'pagamento') return importarPagamentoMemoria(s, l.convenio, d);
         const doLote = [...s.itens.values()].filter((i) => l.contas.includes(i.conta));
         const id = (s.seq += 1);
         const itensM: ItemDemonstrativoLido[] = d.itens.map((it, k) => {
@@ -1431,10 +1434,15 @@ export class PortaTissMemoria implements PortaTiss {
     c: ContextoTiss,
     f: { lote: number | null; convenios: readonly number[] | null },
   ): Promise<DemonstrativoLido[]> {
-    return this.e(c)
-      .demonstrativos.filter(
+    const s = this.e(c);
+    // O pagamento cobre vários lotes da operadora: no lote aberto aparecem os pagamentos da mesma operadora.
+    const convenioDoLote = f.lote === null ? null : (s.lotes.get(f.lote)?.convenio ?? null);
+    return s.demonstrativos
+      .filter(
         (d) =>
-          (f.lote === null || d.lote === f.lote) &&
+          (f.lote === null ||
+            d.lote === f.lote ||
+            (d.tipo === 'pagamento' && d.convenio === convenioDoLote)) &&
           (f.convenios === null || f.convenios.includes(d.convenio)),
       )
       .map(({ itensM, ...d }) => ({
@@ -1443,19 +1451,21 @@ export class PortaTissMemoria implements PortaTiss {
         casados: itensM.filter((i) => i.situacao === 'casado').length,
       }))
       .map((d) => {
-        const r: Partial<typeof d & { hash?: string }> = { ...d };
+        const r: Partial<typeof d & { hash?: string; resumo?: ResumoPagamento }> = { ...d };
         delete r.hash;
+        delete r.resumo;
         return r as typeof d;
       });
   }
 
-  async demonstrativo(c: ContextoTiss, id: number) {
+  async demonstrativo(c: ContextoTiss, id: number, tipo: 'analise' | 'pagamento' = 'analise') {
     const s = this.e(c);
-    const d = s.demonstrativos.find((x) => x.id === id);
+    const d = s.demonstrativos.find((x) => x.id === id && x.tipo === tipo);
     if (!d) return null;
     return {
       lote: d.lote,
       convenio: d.convenio,
+      ...(d.resumo ? { pagamento: d.resumo } : {}),
       itens: d.itensM.map((i) => {
         const it = i.item ? s.itens.get(i.item) : undefined;
         return { ...i, versaoItem: it ? versao(it.versao) : i.versaoItem };

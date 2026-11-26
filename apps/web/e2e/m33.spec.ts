@@ -109,9 +109,10 @@ test.describe('repasse médico @M33 @C1-138', () => {
     await page.goto('/repasse/apuracao');
     await expect(page.getByTestId('ap-competencia')).not.toHaveValue('');
     await page.getByTestId('ap-consultar').click();
-    // D-DOURADO-33: a apuração em simulação não gera lançamento (o botão desabilitado, com o motivo à vista).
-    await expect(page.getByTestId('ap-lancar')).toBeDisabled();
-    await expect(page.getByTestId('ap-lancar-motivo')).toContainText('não gera lançamento');
+    // Banco próprio: a apuração gravada é a que vale (o sistema é o de registro do repasse), nunca simulação; o
+    // lançamento pela apuração fica liberado e sem o aviso de simulação (a regra da coexistência não vale aqui).
+    await expect(page.getByTestId('ap-lancar')).toBeEnabled();
+    await expect(page.getByTestId('ap-lancar-motivo')).toHaveCount(0);
     await page.getByTestId('ap-demo-7001').click();
     await expect(page.getByTestId('dm-total')).toContainText('333,00');
     await semViolacaoAxe(page, '/repasse/apuracao/:apuracao/:beneficiario');

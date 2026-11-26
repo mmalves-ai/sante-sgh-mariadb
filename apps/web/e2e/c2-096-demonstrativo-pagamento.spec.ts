@@ -37,8 +37,22 @@ test.describe('demonstrativo de análise e de pagamento, conciliação item a it
     await entrar(page, 'SINT.TISS');
     const sufixo = Date.now().toString(36).slice(-6).toUpperCase();
 
-    // 1. Demonstrativo de análise digitado: um item pago em parte, com o motivo da glosa.
-    await page.goto(`/faturamento/demonstrativos?lote=${LOTE}`);
+    // 1. Demonstrativo de análise digitado num lote do próprio teste (conta 9103 do convênio 91): o item não
+    // conciliado do lote 8002 é o do M31, e a porta em memória é uma só na rodada.
+    await page.goto('/faturamento/lotes');
+    await expect(page.getByTestId('tela-tiss-lotes')).toBeVisible();
+    await escolher(page.getByTestId('lot-convenio'), '91');
+    await escolher(page.getByTestId('lot-tipo-guia'), '2');
+    await page.getByTestId('lot-buscar').click();
+    await expect(page.getByTestId('lot-prontas')).toBeVisible();
+    const abrir = page.locator('[data-testid^="lot-abrir-"]').first();
+    const antes = (await abrir.getAttribute('data-testid')) ?? '';
+    await page.getByTestId('lot-marcar-9103').check();
+    await page.getByTestId('lot-montar').click();
+    await expect(page.getByTestId('lot-mensagem')).toContainText('04.03.00');
+    await expect(abrir).not.toHaveAttribute('data-testid', antes);
+    const loteAnalise = ((await abrir.getAttribute('data-testid')) ?? '').replace('lot-abrir-', '');
+    await page.goto(`/faturamento/demonstrativos?lote=${loteAnalise}`);
     await expect(page.getByTestId('tela-tiss-demonstrativos')).toBeVisible();
     await page.getByTestId('dm-numero').fill(`AN-${sufixo}`);
     const pago = page.locator('[data-testid^="dm-pago-"]').first();
@@ -67,7 +81,7 @@ test.describe('demonstrativo de análise e de pagamento, conciliação item a it
     });
     await escolher(page.getByTestId('dm-modo'), 'xml');
     await escolher(page.getByTestId('dm-tipo'), 'pagamento');
-    await page.getByTestId('dm-numero').fill(`PG-${sufixo}`);
+    // Pelo XML, o número do demonstrativo vem no próprio arquivo (não há campo digitado).
     await page.getByTestId('dm-xml').fill(xml);
     await page.getByTestId('dm-importar').click();
     await expect(page.getByTestId('dm-mensagem')).toContainText(

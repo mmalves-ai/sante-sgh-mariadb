@@ -47,6 +47,7 @@ import {
   situacaoDerivada,
   totalOrcamento,
 } from '@sgh/dominio-faturamento';
+import { type EntradaTotalHonorario, simularReajusteItem } from '@sgh/dominio-preco';
 import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
 import type { EstadoCatalogo } from '../cadastro/porta.js';
 import type { LiberacaoGravacao } from '../exames/public-api.js';
@@ -56,7 +57,9 @@ import type {
   FiltroContasPorta,
   FiltroPagamentos,
   GravadorSghFaturamento,
+  PedidoSimulacao,
   PortaFaturamento,
+  ResultadoSimulacao,
 } from './porta.js';
 import { conferirRecebimentoDaConta } from './regras-conta.js';
 
@@ -124,6 +127,8 @@ const PRECOS: Readonly<Record<string, { nome: string; base: Partial<BaseContrato
   '2:10102019': { nome: 'VISITA HOSPITALAR SINTETICA', base: { ch: { quantidade: 100, indice: 0.9 } } },
   '1:5315': { nome: 'DIARIA SINTETICA DE APARTAMENTO', base: { diaria: { valor: 356.73 } } },
   '1:4239': { nome: 'TAXA SINTETICA DE SALA', base: { diaria: { valor: 105.55 } } },
+  // C3-001: a consulta em consultório do simulador (valor da vigência da tabela; honorário + custo operacional).
+  '3:10101012': { nome: 'CONSULTA SINTETICA EM CONSULTORIO', base: { valores: { ch: 100, co: 20, filme: 0 } } },
   '4:310165': { nome: 'MATERIAL SINTETICO', base: { referencia: { valor: 10.4493, pmc: null, pf: null } } },
 };
 const TIPOS_PENDENCIA: readonly { id: number; nome: string; modulos: readonly number[] }[] = [
@@ -1386,22 +1391,41 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
     };
   }
 
-  async simular(
-    _c: ContextoFaturamento,
-    x: { convenio: number; tipo: 1 | 2 | 3 | 4; codigo: number; quantidade: number; data: string },
-  ) {
+  async simular(_c: ContextoFaturamento, x: PedidoSimulacao): Promise<ResultadoSimulacao> {
     const p = PRECOS[`${x.tipo}:${x.codigo}`];
     if (!p) return { encontrado: false, nome: '', preco: null, vigencia: null };
     const vig = `${x.data.slice(0, 4)}-01-01`;
-    return {
-      encontrado: true,
-      nome: p.nome,
-      preco: precoDaTabela(
-        grupoDoItem(x.tipo)!,
-        { convenio: x.convenio, tabela: 1, nomeTabela: null, vigencia: vig, ...p.base },
-        x.quantidade,
-      ),
-      vigencia: vig,
-    };
+    const preco = precoDaTabela(
+      grupoDoItem(x.tipo)!,
+      { convenio: x.convenio, tabela: 1, nomeTabela: null, vigencia: vig, ...p.base },
+      x.quantidade,
+    );
+    if (!preco) return { encontrado: true, nome: p.nome, preco: null, vigencia: null };
+    // A mesma explicação e o mesmo impacto da fonte própria (origem: a vigência do valor da tabela sintética).
+    const outros = Math.round((preco.unitario - preco.ch - preco.cop - preco.filme) * 100) / 100;
+    const passos = [
+      `Vigência de ${vig} da tabela 1: honorário ${preco.ch} + custo operacional ${preco.cop} + filme ${preco.filme} = ${preco.unitario}.`,
+      `Valor = ${preco.unitario} × ${x.quantidade} = ${preco.valor}.`,
+    ];
+    let impacto: ResultadoSimulacao['impacto'] = null;
+    if (x.reajuste) {
+      const entrada: EntradaTotalHonorario = {
+        item: { ch: 0 },
+        vigente: { ch: preco.ch, co: preco.cop, filme: preco.filme, anes: 0, outros },
+        indices: { valores: new Map(), origem: new Map() },
+        porte: null,
+      };
+      const r = simularReajusteItem(entrada, x.reajuste, x.quantidade);
+      impacto = {
+        atual: r.atual.total,
+        novo: r.novo.total,
+        diferenca: r.diferenca,
+        percentual: r.percentual,
+        afetadoPor: r.afetadoPor,
+        passos: r.novo.passos,
+      };
+    }
+    return { encontrado: true, nome: p.nome, preco, vigencia: vig, origem: 'vigencia', passos, impacto };
   }
+
 }
