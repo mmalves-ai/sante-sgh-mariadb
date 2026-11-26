@@ -210,14 +210,9 @@ test.describe('projeto como centro de resultado @C2-107', () => {
     // Estorno com o motivo: a linha fica como estornada, nada some.
     await page.getByTestId('prj-estornar-21').click();
     await page.getByTestId('prj-estorno-motivo').fill('Lançado no projeto errado');
-    page.once('dialog', (d) => void d.accept());
     await page.getByTestId('prj-estorno-confirmar').click();
-    const dialogo = page.getByRole('alertdialog');
-    if (await dialogo.isVisible().catch(() => false))
-      await dialogo
-        .getByRole('button', { name: /confirmar/i })
-        .last()
-        .click();
+    // O botão destrutivo pede a confirmação no diálogo do SanteBotao; o estorno só sai depois dela.
+    await page.getByTestId('confirmacao').getByRole('button', { name: 'Confirmar' }).click();
     await expect(page.getByTestId('prj-apr-linha-21')).toContainText('Estornada');
     expect(corpos['estorno']).toMatchObject({ versao: 1, motivo: 'Lançado no projeto errado' });
     await semViolacaoAxe(page);
