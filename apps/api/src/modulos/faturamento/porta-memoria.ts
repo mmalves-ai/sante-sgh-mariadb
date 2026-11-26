@@ -128,7 +128,10 @@ const PRECOS: Readonly<Record<string, { nome: string; base: Partial<BaseContrato
   '1:5315': { nome: 'DIARIA SINTETICA DE APARTAMENTO', base: { diaria: { valor: 356.73 } } },
   '1:4239': { nome: 'TAXA SINTETICA DE SALA', base: { diaria: { valor: 105.55 } } },
   // C3-001: a consulta em consultório do simulador (valor da vigência da tabela; honorário + custo operacional).
-  '3:10101012': { nome: 'CONSULTA SINTETICA EM CONSULTORIO', base: { valores: { ch: 100, co: 20, filme: 0 } } },
+  '3:10101012': {
+    nome: 'CONSULTA SINTETICA EM CONSULTORIO',
+    base: { valores: { ch: 100, co: 20, filme: 0 } },
+  },
   '4:310165': { nome: 'MATERIAL SINTETICO', base: { referencia: { valor: 10.4493, pmc: null, pf: null } } },
 };
 const TIPOS_PENDENCIA: readonly { id: number; nome: string; modulos: readonly number[] }[] = [
@@ -1427,5 +1430,4 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
     }
     return { encontrado: true, nome: p.nome, preco, vigencia: vig, origem: 'vigencia', passos, impacto };
   }
-
 }

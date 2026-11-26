@@ -148,15 +148,15 @@ const entrada = computed<NovoFluxoTela>(() => ({
     aprovadores: e.aprovadores
       .filter((a) => a.usuario || a.papel)
       .map((a): AprovadorTela => ({
-      usuario: idOuNulo(a.usuario),
-      papel: idOuNulo(a.papel),
-      substituto: idOuNulo(a.substituto),
-      agrupador: idOuNulo(a.agrupador),
-      valorLimite: numOuNulo(a.valorLimite),
-      aprovaPeloCelular: a.aprovaPeloCelular,
-      vigenciaInicio: fluxo.vigenciaInicio,
-      vigenciaFim: null,
-    })),
+        usuario: idOuNulo(a.usuario),
+        papel: idOuNulo(a.papel),
+        substituto: idOuNulo(a.substituto),
+        agrupador: idOuNulo(a.agrupador),
+        valorLimite: numOuNulo(a.valorLimite),
+        aprovaPeloCelular: a.aprovaPeloCelular,
+        vigenciaInicio: fluxo.vigenciaInicio,
+        vigenciaFim: null,
+      })),
   })),
 }));
 /** A regra do domínio, na hora (a mesma que o servidor aplica ao gravar). */

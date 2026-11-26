@@ -104,7 +104,12 @@ async function simular(page: Page, alvo: { id: number; nome: string }): Promise<
       });
     }
     if (url === `${B}/${alvo.id}/etapas`) {
-      const c = req.postDataJSON() as { nome: string; tipo: string; metaMinutos: number | null; obrigatoria: boolean };
+      const c = req.postDataJSON() as {
+        nome: string;
+        tipo: string;
+        metaMinutos: number | null;
+        obrigatoria: boolean;
+      };
       novaEtapa(c.nome, c.tipo, c.metaMinutos, c.obrigatoria);
       return json(rota, { ok: true, mensagem: 'Etapa incluída: vale para as próximas inclusões.' });
     }
