@@ -6,8 +6,8 @@
 import { SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { ErroApi } from '../../../casca/erros/problem-details.js';
-import { codigoDaRecusa, novaChave } from '../api-adt.js';
+import { ErroApi, mensagemDoErro } from '../../../casca/erros/problem-details.js';
+import { novaChave } from '../api-adt.js';
 import {
   buscarCandidatosOperadores,
   type CandidatoOperador,
@@ -36,12 +36,13 @@ const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const ocupado = ref(false);
 const assinatura = (l: readonly OperadorUnidade[]) => JSON.stringify(l);
-// Sem o banco do cliente (fonte sintética) a API responde 503 "indisponivel": a tela diz isso em vez da mensagem geral.
+// Sem o banco do cliente (fonte sintética) a API responde 503 com o tipo "indisponivel" (no `type` do problema, não no
+// `codigo` das recusas de negócio): a tela diz isso em vez da mensagem geral.
 const semBanco = computed(
   () =>
     erro.value instanceof ErroApi &&
     erro.value.status === 503 &&
-    codigoDaRecusa(erro.value) === 'indisponivel',
+    mensagemDoErro(erro.value).tipo === 'indisponivel',
 );
 const alterada = computed(() => assinatura(lista.value) !== gravada.value);
 

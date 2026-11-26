@@ -84,10 +84,14 @@ test.describe('C3-013: a regulação pelo de-para aprovado do NIR', () => {
     await semViolacaoAxe(page, '/internacao/nir/regulacao (de-para)');
 
     // Solicitada e depois autorizada pela central: no pedido em análise, a situação vira "Regulado".
+    // O rótulo da situação vem do cadastro do estabelecimento (na fonte sintética, em maiúsculas como no cadastro de
+    // origem): a conferência é do nome da situação, sem depender da caixa.
     await registrar(page, emAnalise, 'rj-2026-013013');
-    await expect(page.getByTestId('regulacao-mensagem')).toContainText('Aguardando regulação');
+    await expect(page.getByTestId('regulacao-mensagem')).toContainText(
+      /Situação do pedido: Aguardando regulação\./i,
+    );
     await registrar(page, emAnalise, 'rj-2026-013013', 'autorizada');
-    await expect(page.getByTestId('regulacao-mensagem')).toContainText('Situação do pedido: Regulado');
+    await expect(page.getByTestId('regulacao-mensagem')).toContainText(/Situação do pedido: Regulado\./i);
     await expect(cartao.getByTestId('regulacao-vigente')).toContainText('Autorizada');
     // A regulação nunca move o estado do NIR: o pedido segue em análise na tela da regulação.
     const tela = await (await page.request.get('/api/nir/regulacao')).json();

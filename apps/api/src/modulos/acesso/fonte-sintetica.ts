@@ -1244,7 +1244,10 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       conselho: true,
     },
   },
-  /** Supervisão de enfermagem: os procedimentos e kits de enfermagem e os aparelhos da beira do leito. */
+  /**
+   * Supervisão de enfermagem: os procedimentos e kits de enfermagem, os aparelhos da beira do leito e a lista de
+   * internados (internacao.internacao.ler, só a consulta; @C1-074: o atalho dos gases na lista de internados).
+   */
   'SINT.SUPERVISOR.ENF': {
     senha: SENHA_SINTETICA,
     criptografada: true,
@@ -1254,7 +1257,22 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: {
       grupo: 'SUPERVISAO_ENFERMAGEM',
       opcoesGrupo: [
-        ...new Set([2582, 3900, 3954, 5535, 3736, 3679, 3689, 3738, 3361, 3362, 4682, 4683, 4684]),
+        ...new Set([
+          2582,
+          3900,
+          3954,
+          5535,
+          3736,
+          3679,
+          3689,
+          3738,
+          3361,
+          3362,
+          4682,
+          4683,
+          4684,
+          ...opcoesDasPermissoes('internacao.internacao.ler'),
+        ]),
       ],
       conselho: true,
     },

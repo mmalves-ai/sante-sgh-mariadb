@@ -20,10 +20,11 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-/** Admite o paciente sintético num leito livre da enfermaria e devolve o número da internação. */
+/** Admite o paciente sintético num leito livre do bloco 1 e devolve o número da internação. */
 async function admitir(page: Page): Promise<number> {
   await page.goto('/leitos/mapa');
-  const cartoes = page.locator('[data-testid^="leito-1|ENF1|"][data-situacao="livre"]');
+  // Qualquer leito livre do bloco 1 (enfermaria ou apartamento): os outros arquivos do lote ocupam a enfermaria.
+  const cartoes = page.locator('[data-testid^="leito-1|"][data-situacao="livre"]');
   await expect(cartoes.first()).toBeVisible();
   const origem = ((await cartoes.first().getAttribute('data-testid')) ?? '').replace(/^leito-/, '');
   await page.getByTestId(`admitir-${origem}`).click();
