@@ -1,47 +1,87 @@
-// Busca ativa de resultados (F8, 05-SADT linha 24): o resultado liberado DEPOIS da alta do paciente que é crítico,
-// alterado ou cultura positiva entra na fila da equipe, que procura o paciente, registra cada tentativa de contato e
-// encerra o caso com o desfecho. Regras puras (sem banco):
-//   - entra na fila só o resultado liberado depois da alta (antes dela, a equipe assistencial já o recebeu: o valor
-//     crítico durante o atendimento é da vigia dos críticos); o motivo é o mais grave do caso (crítico > alterado);
-//   - prazo por gravidade: crítico em 24 horas, alterado ou cultura positiva em 72 horas da liberação;
+// Busca ativa de resultados (F8, 05-SADT linha 24): o exame que ficou pendente na alta ou o resultado liberado DEPOIS
+// da alta do paciente que é crítico, alterado ou cultura positiva entra na fila da equipe, que procura o paciente,
+// registra cada tentativa de contato e encerra o caso com o desfecho. Regras puras (sem banco):
+//   - entra na fila o resultado crítico, alterado ou de cultura positiva liberado depois da alta (antes dela, a equipe
+//     assistencial já o recebeu: o valor crítico durante o atendimento é da vigia dos críticos);
+//   - entra também o exame pendente na alta: pedido até a alta, sem resultado liberado e que passou da espera de
+//     24 horas depois da alta (ainda sem resultado, ou liberado só depois dessa espera, mesmo normal); o liberado
+//     normal dentro da espera segue pela entrega comum do resultado;
+//   - o motivo do caso é o mais grave (crítico > alterado > pendente);
+//   - prazo por gravidade: crítico em 24 horas, alterado ou cultura positiva em 72 horas da liberação, pendente em
+//     72 horas do fim da espera; o caso com vários exames vence no prazo mais curto;
 //   - a tentativa de contato tem resultado do vocabulário; o contato feito exige a orientação dada; a nova coleta
 //     combinada é futura e só com o contato feito;
 //   - o caso encerrado (concluído ou cancelado) não recebe contato nem muda; concluir exige o desfecho; "sem contato"
 //     só depois de 3 tentativas sem sucesso; o desfecho do contato feito exige um contato feito; cancelar exige o motivo.
 
-export type MotivoBuscaAtiva = 'resultado_critico' | 'resultado_alterado';
+export type MotivoBuscaAtiva = 'resultado_critico' | 'resultado_alterado' | 'resultado_pendente';
+
+/** Espera, depois da alta, para o exame sem resultado liberado virar pendente na busca ativa. */
+export const ESPERA_PENDENTE_HORAS = 24;
 
 export interface ResultadoCandidato {
   readonly critico: boolean;
   readonly anormal: boolean;
   readonly culturaPositiva: boolean;
-  readonly liberadoEm: Date;
+  /** Liberação do resultado; nulo: o exame ainda não tem resultado liberado. */
+  readonly liberadoEm: Date | null;
   /** Alta médica (ou saída) do atendimento; nulo: o paciente não teve alta. */
   readonly altaEm: Date | null;
+  /** Pedido do exame (para o pendente: só o pedido até a alta conta); nulo: desconhecido, não vira pendente. */
+  readonly solicitadoEm?: Date | null;
 }
 
-/** O motivo do resultado na busca ativa; nulo quando ele não entra na fila. */
-export function motivoDaBuscaAtiva(r: ResultadoCandidato): MotivoBuscaAtiva | null {
-  if (!r.altaEm || r.liberadoEm.getTime() <= r.altaEm.getTime()) return null;
+/** Fim da espera do pendente: a partir dele, o exame sem resultado entra na fila. */
+export function fimEsperaPendente(altaEm: Date): Date {
+  return new Date(altaEm.getTime() + ESPERA_PENDENTE_HORAS * 3_600_000);
+}
+
+/** O motivo do exame na busca ativa; nulo quando ele não entra na fila. */
+export function motivoDaBuscaAtiva(r: ResultadoCandidato, agora: Date = new Date()): MotivoBuscaAtiva | null {
+  if (!r.altaEm) return null;
+  const alta = r.altaEm.getTime();
+  const espera = fimEsperaPendente(r.altaEm).getTime();
+  const pedidoNaInternacao = !!r.solicitadoEm && r.solicitadoEm.getTime() <= alta;
+  if (r.liberadoEm === null)
+    return pedidoNaInternacao && agora.getTime() >= espera ? 'resultado_pendente' : null;
+  if (r.liberadoEm.getTime() <= alta) return null;
   if (r.critico) return 'resultado_critico';
   if (r.anormal || r.culturaPositiva) return 'resultado_alterado';
+  if (pedidoNaInternacao && r.liberadoEm.getTime() >= espera) return 'resultado_pendente';
   return null;
 }
 
 /** O motivo do caso com vários exames: o mais grave. */
 export function motivoDoCaso(motivos: readonly MotivoBuscaAtiva[]): MotivoBuscaAtiva | null {
   if (!motivos.length) return null;
-  return motivos.includes('resultado_critico') ? 'resultado_critico' : 'resultado_alterado';
+  if (motivos.includes('resultado_critico')) return 'resultado_critico';
+  return motivos.includes('resultado_alterado') ? 'resultado_alterado' : 'resultado_pendente';
 }
 
 export const PRAZO_BUSCA_ATIVA_HORAS: Readonly<Record<MotivoBuscaAtiva, number>> = {
   resultado_critico: 24,
   resultado_alterado: 72,
+  resultado_pendente: 72,
 };
 
-/** Prazo do caso a partir da liberação mais antiga. */
-export function prazoDaBuscaAtiva(motivo: MotivoBuscaAtiva, liberadoEm: Date): Date {
-  return new Date(liberadoEm.getTime() + PRAZO_BUSCA_ATIVA_HORAS[motivo] * 3_600_000);
+/** De onde o prazo do exame conta: a liberação; para o pendente, o fim da espera depois da alta. */
+export function referenciaDaBuscaAtiva(
+  motivo: MotivoBuscaAtiva,
+  liberadoEm: Date | null,
+  altaEm: Date,
+): Date {
+  return motivo === 'resultado_pendente' || liberadoEm === null ? fimEsperaPendente(altaEm) : liberadoEm;
+}
+
+/** Prazo do exame a partir da sua referência (a liberação, ou o fim da espera do pendente). */
+export function prazoDaBuscaAtiva(motivo: MotivoBuscaAtiva, referenciaEm: Date): Date {
+  return new Date(referenciaEm.getTime() + PRAZO_BUSCA_ATIVA_HORAS[motivo] * 3_600_000);
+}
+
+/** Prazo do caso: o mais curto entre os dos seus exames. */
+export function prazoDoCaso(itens: readonly { motivo: MotivoBuscaAtiva; referenciaEm: Date }[]): Date | null {
+  if (!itens.length) return null;
+  return new Date(Math.min(...itens.map((i) => prazoDaBuscaAtiva(i.motivo, i.referenciaEm).getTime())));
 }
 
 export const RESULTADOS_CONTATO = [

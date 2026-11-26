@@ -1,14 +1,18 @@
 // Contrato de efeito da busca ativa de resultados (F8, 05-SADT linha 24) no MariaDB real (cliente f22_o2; massa
-// SINTÉTICA do SADT, nenhuma pessoa real). O atendimento da massa recebe alta 2 horas atrás; no laboratório, o exame
-// crítico e um alterado são liberados depois da alta e um alterado antes dela; na imagem, um alterado depois da alta.
+// SINTÉTICA do SADT, nenhuma pessoa real). O atendimento da massa recebe alta 30 horas atrás (pedidos 34 horas atrás);
+// no laboratório, o exame crítico e um alterado são liberados depois da alta e um alterado antes dela; na imagem, um
+// alterado depois da alta; numa terceira requisição, um exame coletado sem resultado liberado (pendente na alta, já
+// passada a espera de 24 horas) e outro com resultado só em digitação.
 // Prova o que fica no banco:
-//   - a varredura abre um caso por requisição só com os liberados depois da alta (o de antes fica de fora), com o
-//     número da sequência do estabelecimento, o motivo mais grave e o prazo pela gravidade; repetir não duplica;
+//   - a varredura abre um caso por requisição só com os liberados depois da alta (o de antes fica de fora) e com os
+//     pendentes na alta, com o número da sequência do estabelecimento, o motivo mais grave e o prazo pela gravidade;
+//   - duas aberturas ao mesmo tempo deixam um caso só por exame (a segunda espera a trava e não abre nada); repetir
+//     não duplica;
 //   - a tentativa de contato fica no histórico e põe o caso em contato com a versão; a versão velha, o contato feito
 //     sem orientação e o "sem contato" antes de 3 tentativas são recusados sem gravar;
 //   - concluir grava desfecho, quem e quando, e resolve os exames; o caso encerrado não recebe contato;
 //   - cancelar exige o motivo e cancela os exames (nada apagado); outro estabelecimento não vê o caso.
-import { NucleoProprio } from '@sgh/nucleo';
+import { garantirSequencia, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   CLIENTE,
@@ -30,6 +34,9 @@ describe.skipIf(SEM_BANCO)('busca ativa de resultados (MariaDB, cliente f22_o2)'
   let m: MassaSadt | null = null;
   let porta: PortaBuscaAtivaPropria;
   let hospital = '';
+  let requisicaoPendente = 0;
+  let itemPendente = 0;
+  let itemEmDigitacao = 0;
   let outroHospital = '';
   const ctx = (h = hospital) => ({
     cliente: CLIENTE,
@@ -47,12 +54,17 @@ describe.skipIf(SEM_BANCO)('busca ativa de resultados (MariaDB, cliente f22_o2)'
     porta = new PortaBuscaAtivaPropria(nucleo, CLIENTE);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-bar' }, async (e) => {
       const agora = Date.now();
-      const alta = new Date(agora - 2 * 3_600_000);
-      // A entrada vem antes da alta (CHECK do atendimento).
+      const alta = new Date(agora - 30 * 3_600_000);
+      // A entrada vem antes da alta (CHECK do atendimento); os pedidos, entre as duas.
       await e.executar('UPDATE atendimento SET entrada_em = ?, alta_medica_em = ? WHERE id = ?', [
-        new Date(agora - 6 * 3_600_000),
+        new Date(agora - 36 * 3_600_000),
         alta,
         m!.base.atendimento,
+      ]);
+      await e.executar('UPDATE requisicao_exame SET solicitado_em = ? WHERE id IN (?, ?)', [
+        new Date(agora - 34 * 3_600_000),
+        m!.requisicao,
+        m!.requisicaoImagem,
       ]);
       // O resultado crítico da massa foi liberado agora (depois da alta).
       await e.executar('UPDATE resultado_exame SET liberado_em = ? WHERE id = ?', [
@@ -66,9 +78,38 @@ describe.skipIf(SEM_BANCO)('busca ativa de resultados (MariaDB, cliente f22_o2)'
            VALUES (?, ?, ?, 'digitado', 'liberado', 1, ?, ?, ?, TRUE, FALSE, ?, 1)`,
           [item, m!.base.paciente, setor, liberado, liberado, m!.base.profissional, new Date(agora)],
         );
-      await resultado(m!.itemLab, m!.setorLab, new Date(agora - 3 * 3_600_000)); // antes da alta: fica de fora
+      await resultado(m!.itemLab, m!.setorLab, new Date(agora - 31 * 3_600_000)); // antes da alta: fica de fora
       await resultado(m!.itemLab2, m!.setorLab, new Date(agora - 30 * 60_000));
       await resultado(m!.itemImagem, m!.setorImagem, new Date(agora - 20 * 60_000));
+      // A terceira requisição, copiada da de imagem: os exames ficaram pendentes na alta.
+      requisicaoPendente = await e.inserir(
+        `INSERT INTO requisicao_exame (estabelecimento_id, numero, paciente_id, atendimento_id, setor_diagnostico_id,
+           solicitante_profissional_id, fonte_pagadora_id, solicitado_em, criado_em, versao)
+         SELECT estabelecimento_id, CONCAT(numero, 'P'), paciente_id, atendimento_id, setor_diagnostico_id,
+                solicitante_profissional_id, fonte_pagadora_id, solicitado_em, criado_em, 1
+           FROM requisicao_exame WHERE id = ?`,
+        [m!.requisicaoImagem],
+      );
+      const pendente = (seq: number, situacao: string) =>
+        e.inserir(
+          `INSERT INTO exame_item (requisicao_exame_id, sequencia, exame_id, material_biologico_id, situacao, criado_em, versao)
+           SELECT ?, ?, exame_id, material_biologico_id, ?, criado_em, 1 FROM exame_item WHERE id = ?`,
+          [requisicaoPendente, seq, situacao, m!.itemImagem],
+        );
+      itemPendente = await pendente(1, 'coletado');
+      itemEmDigitacao = await pendente(2, 'em_analise');
+      await e.inserir(
+        `INSERT INTO resultado_exame (exame_item_id, paciente_id, setor_diagnostico_id, forma_entrada, situacao, numero_versao,
+           resultado_em, anormal, critico, criado_em, versao)
+         VALUES (?, ?, ?, 'digitado', 'em_digitacao', 1, ?, FALSE, FALSE, ?, 1)`,
+        [itemEmDigitacao, m!.base.paciente, m!.setorImagem, new Date(agora), new Date(agora)],
+      );
+      // A sequência já existe (a corrida da primeira criação vira "registro em edição", nunca caso em dobro).
+      await garantirSequencia(
+        e,
+        { tipo: 'busca_ativa', estabelecimento: m!.base.est, prefixo: 'BA' },
+        { agora: new Date(agora), usuario: m!.base.usuario },
+      );
       const ests = await e.consultar<{ id: number; codigo: string }>(
         'SELECT id, codigo FROM estabelecimento WHERE id IN (?, ?)',
         [m!.base.est, m!.base.outroEst],
@@ -101,17 +142,28 @@ describe.skipIf(SEM_BANCO)('busca ativa de resultados (MariaDB, cliente f22_o2)'
     await nucleo.encerrar();
   });
 
-  it('abre um caso por requisição só com o liberado depois da alta, sem duplicar', async () => {
+  it('abre um caso por requisição com o liberado depois da alta e o pendente na alta, sem duplicar', async () => {
     const candidatos = await porta.candidatos(ctx());
     expect(candidatos.map((k) => [k.requisicao, k.motivo, k.itens.length]).sort()).toEqual(
       [
         [m!.requisicao, 'resultado_critico', 2],
         [m!.requisicaoImagem, 'resultado_alterado', 1],
+        [requisicaoPendente, 'resultado_pendente', 2],
       ].sort(),
     );
     expect(await porta.candidatos(ctx(outroHospital))).toEqual([]);
-    expect(await porta.abrirPendentes(ctx())).toEqual({ abertos: 2, exames: 3 });
+    // Duas aberturas ao mesmo tempo: uma abre tudo, a outra espera a trava e não abre nada.
+    const juntas = await Promise.all([porta.abrirPendentes(ctx()), porta.abrirPendentes(ctx())]);
+    expect(juntas.map((r) => r.abertos).sort()).toEqual([0, 3]);
+    expect(juntas.map((r) => r.exames).sort()).toEqual([0, 5]);
     expect(await porta.abrirPendentes(ctx())).toEqual({ abertos: 0, exames: 0 });
+    const [dobro] = await ler(
+      `SELECT COUNT(*) AS n FROM (SELECT x.exame_item_id FROM busca_ativa_resultado_exame x
+          JOIN busca_ativa_resultado b ON b.id = x.busca_ativa_resultado_id
+         WHERE b.estabelecimento_id = ? GROUP BY x.exame_item_id HAVING COUNT(*) > 1) d`,
+      [m!.base.est],
+    );
+    expect(Number(dobro!['n'])).toBe(0);
     const casos = await ler(
       `SELECT b.id, b.numero, b.motivo, b.situacao, b.requisicao_exame_id, b.criado_por,
               TIMESTAMPDIFF(HOUR, b.aberto_em, b.prazo_em) AS horas,
@@ -120,7 +172,7 @@ describe.skipIf(SEM_BANCO)('busca ativa de resultados (MariaDB, cliente f22_o2)'
          FROM busca_ativa_resultado b WHERE b.estabelecimento_id = ? ORDER BY b.id`,
       [m!.base.est],
     );
-    expect(casos).toHaveLength(2);
+    expect(casos).toHaveLength(3);
     const lab = casos.find((x) => Number(x['requisicao_exame_id']) === m!.requisicao)!;
     expect(lab).toMatchObject({
       motivo: 'resultado_critico',
@@ -133,8 +185,14 @@ describe.skipIf(SEM_BANCO)('busca ativa de resultados (MariaDB, cliente f22_o2)'
     const img = casos.find((x) => Number(x['requisicao_exame_id']) === m!.requisicaoImagem)!;
     expect(img).toMatchObject({ motivo: 'resultado_alterado', itens: String(m!.itemImagem) });
     expect(Number(img['horas'])).toBeGreaterThan(24);
+    // O pendente: prazo de 72 horas do fim da espera (alta + 24 h), com os dois exames sem resultado liberado.
+    const pend = casos.find((x) => Number(x['requisicao_exame_id']) === requisicaoPendente)!;
+    expect(pend).toMatchObject({ motivo: 'resultado_pendente', situacao: 'aberto' });
+    expect(String(pend['itens']).split(',').map(Number)).toEqual([itemPendente, itemEmDigitacao]);
+    expect(Number(pend['horas'])).toBeGreaterThanOrEqual(64);
+    expect(Number(pend['horas'])).toBeLessThanOrEqual(66);
     const fila = await porta.fila(ctx(), { situacao: null, paciente: m!.base.paciente });
-    expect(fila).toHaveLength(2);
+    expect(fila).toHaveLength(3);
     expect(fila.every((x) => x.tentativas === 0 && !x.atrasado)).toBe(true);
     expect(await porta.fila(ctx(outroHospital), { situacao: null, paciente: null })).toEqual([]);
   });
@@ -226,9 +284,11 @@ describe.skipIf(SEM_BANCO)('busca ativa de resultados (MariaDB, cliente f22_o2)'
       [caso!.id],
     );
     expect(b).toMatchObject({ situacao: 'cancelado', excluido_em: null, exame: 'cancelado' });
-    expect(await porta.fila(ctx(), { situacao: null, paciente: null })).toEqual([]);
+    expect((await porta.fila(ctx(), { situacao: null, paciente: null })).map((x) => x.motivo)).toEqual([
+      'resultado_pendente',
+    ]);
     expect(
       (await porta.fila(ctx(), { situacao: 'todos', paciente: null })).map((x) => x.situacao).sort(),
-    ).toEqual(['cancelado', 'concluido']);
+    ).toEqual(['aberto', 'cancelado', 'concluido']);
   });
 });

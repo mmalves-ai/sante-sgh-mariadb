@@ -1,7 +1,7 @@
 // Busca ativa de resultados (F8, 05-SADT linha 24). Rotas (porta própria; sem banco do cliente, 503):
 //   GET  /api/sadt/busca-ativa/apoio                 canais de contato, equipe, resultados do contato e desfechos
 //   GET  /api/sadt/busca-ativa?situacao=&paciente=   a fila (abertos por padrão; "todos": também os encerrados)
-//   GET  /api/sadt/busca-ativa/candidatos            os resultados liberados depois da alta ainda fora da fila
+//   GET  /api/sadt/busca-ativa/candidatos            os liberados depois da alta e os pendentes na alta fora da fila
 //   POST /api/sadt/busca-ativa/abrir                 abre os casos dos candidatos (um por requisição)
 //   GET  /api/sadt/busca-ativa/:id                   o caso com exames, tentativas de contato e equipe
 //   POST /api/sadt/busca-ativa/:id/contatos          registra a tentativa de contato

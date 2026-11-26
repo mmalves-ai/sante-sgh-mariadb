@@ -1,5 +1,5 @@
 // Cliente da API da busca ativa de resultados (F8, 05-SADT linha 24): a fila dos resultados críticos, alterados ou
-// de cultura positiva liberados depois da alta, os candidatos ainda fora da fila, o caso com exames, contatos e
+// de cultura positiva liberados depois da alta e dos exames pendentes na alta, os candidatos ainda fora da fila, o caso com exames, contatos e
 // equipe, e as gravações (abrir casos, registrar contato, concluir e cancelar, sempre com a versão do caso).
 import { DESFECHOS_BUSCA_ATIVA, RESULTADOS_CONTATO } from '@sgh/dominio-sadt';
 import { z } from 'zod';

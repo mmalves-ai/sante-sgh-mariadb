@@ -1,9 +1,12 @@
 // Busca ativa de resultados (F8, 05-SADT linha 24), no banco do cliente. As regras são as puras de @sgh/dominio-sadt
 // (critico/busca-ativa); aqui ficam a leitura e a gravação. Contrato de efeito:
 //   - abrir a fila: cada requisição com resultado liberado DEPOIS da alta do atendimento (crítico, alterado ou cultura
-//     positiva) e ainda fora de caso vira um `busca_ativa_resultado` (número da sequência `busca_ativa` do
+//     positiva) ou com exame pendente na alta (pedido até a alta e sem resultado liberado 24 horas depois dela) e
+//     ainda fora de caso vira um `busca_ativa_resultado` (número da sequência `busca_ativa` do
 //     estabelecimento, motivo mais grave, prazo pela gravidade, regra e equipe da regra ativa que abre busca ativa) com
-//     os exames em `busca_ativa_resultado_exame` (pendentes). Repetir não duplica (o exame já em caso fica de fora);
+//     os exames em `busca_ativa_resultado_exame` (pendentes). Repetir não duplica (o exame já em caso fica de fora), nem
+//     com duas aberturas ao mesmo tempo: a abertura trava a sequência do estabelecimento antes de ler e reconfere,
+//     com leitura travada, os exames que já estão em caso;
 //   - contato: cada tentativa vira `busca_ativa_contato` (canal, resultado, orientação, nova coleta combinada, quem e
 //     quando) e o caso passa a `em_contato`, com a versão lida (histórico nunca apagado nem alterado);
 //   - concluir: grava o desfecho, `concluido_em` e quem concluiu; os exames pendentes ficam `resolvido`;
@@ -14,10 +17,12 @@ import {
   conferirConclusaoBuscaAtiva,
   conferirContatoBuscaAtiva,
   DESFECHOS_BUSCA_ATIVA,
+  ESPERA_PENDENTE_HORAS,
   type MotivoBuscaAtiva,
   motivoDaBuscaAtiva,
   motivoDoCaso,
-  prazoDaBuscaAtiva,
+  prazoDoCaso,
+  referenciaDaBuscaAtiva,
   RESULTADOS_CONTATO,
   type SituacaoBuscaAtiva,
   situacaoAposContato,
@@ -142,9 +147,12 @@ export class PortaBuscaAtivaPropria extends PortaEstabelecimentoPropria {
 
   private async lerCandidatos(l: Leitor, est: number, agora: Date) {
     const desde = new Date(agora.getTime() - JANELA_DIAS * 86_400_000);
-    const linhas = await l.consultar<Linha>(
+    const foraDeCaso = `NOT EXISTS (SELECT 1 FROM busca_ativa_resultado_exame x
+                            JOIN busca_ativa_resultado b ON b.id = x.busca_ativa_resultado_id
+                           WHERE x.exame_item_id = ei.id AND x.excluido_em IS NULL AND b.excluido_em IS NULL)`;
+    const liberados = await l.consultar<Linha>(
       `SELECT ei.id AS item, ei.exame_id, ei.requisicao_exame_id AS requisicao, r.paciente_id, r.setor_diagnostico_id,
-              re.critico, re.anormal, re.liberado_em, COALESCE(a.alta_medica_em, a.saida_em) AS alta_em,
+              r.solicitado_em, re.critico, re.anormal, re.liberado_em, COALESCE(a.alta_medica_em, a.saida_em) AS alta_em,
               EXISTS (SELECT 1 FROM resultado_cultura rc
                         LEFT JOIN classificacao_resultado_cultura cc ON cc.id = rc.classificacao_resultado_cultura_id
                        WHERE rc.resultado_exame_id = re.id AND rc.excluido_em IS NULL
@@ -156,51 +164,86 @@ export class PortaBuscaAtivaPropria extends PortaEstabelecimentoPropria {
         WHERE r.estabelecimento_id = ? AND re.situacao = 'liberado' AND re.excluido_em IS NULL
           AND re.liberado_em >= ? AND COALESCE(a.alta_medica_em, a.saida_em) IS NOT NULL
           AND re.liberado_em > COALESCE(a.alta_medica_em, a.saida_em)
-          AND NOT EXISTS (SELECT 1 FROM busca_ativa_resultado_exame x
-                            JOIN busca_ativa_resultado b ON b.id = x.busca_ativa_resultado_id
-                           WHERE x.exame_item_id = ei.id AND x.excluido_em IS NULL AND b.excluido_em IS NULL)
+          AND ${foraDeCaso}
         ORDER BY r.id, ei.sequencia LIMIT 2000`,
       [est, desde],
     );
+    // O exame pendente na alta: pedido até a alta, não cancelado nem recusado, sem resultado liberado e já passada a
+    // espera depois da alta (a regra do domínio decide; aqui só se recorta a janela).
+    const esperaDesde = new Date(agora.getTime() - ESPERA_PENDENTE_HORAS * 3_600_000);
+    const pendentes = await l.consultar<Linha>(
+      `SELECT ei.id AS item, ei.exame_id, ei.requisicao_exame_id AS requisicao, r.paciente_id, r.setor_diagnostico_id,
+              r.solicitado_em, COALESCE(a.alta_medica_em, a.saida_em) AS alta_em
+         FROM exame_item ei
+         JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
+         JOIN atendimento a ON a.id = r.atendimento_id
+        WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL AND r.situacao <> 'cancelada'
+          AND ei.excluido_em IS NULL AND ei.situacao NOT IN ('cancelado','recusado','liberado','entregue')
+          AND COALESCE(a.alta_medica_em, a.saida_em) >= ? AND COALESCE(a.alta_medica_em, a.saida_em) <= ?
+          AND r.solicitado_em <= COALESCE(a.alta_medica_em, a.saida_em)
+          AND NOT EXISTS (SELECT 1 FROM resultado_exame re WHERE re.exame_item_id = ei.id
+                             AND re.situacao IN ('liberado','retificado') AND re.excluido_em IS NULL)
+          AND ${foraDeCaso}
+        ORDER BY r.id, ei.sequencia LIMIT 2000`,
+      [est, desde, esperaDesde],
+    );
+    const data = (v: unknown) => (v === null || v === undefined ? null : new Date(String(v)));
     const porRequisicao = new Map<
       number,
       {
         paciente: number;
         setor: number | null;
-        itens: { item: number; exame: number; motivo: MotivoBuscaAtiva; liberadoEm: Date }[];
+        itens: {
+          item: number;
+          exame: number;
+          motivo: MotivoBuscaAtiva;
+          liberadoEm: Date | null;
+          referenciaEm: Date;
+        }[];
       }
     >();
-    for (const x of linhas) {
-      const liberadoEm = new Date(String(x['liberado_em']));
-      const motivo = motivoDaBuscaAtiva({
-        critico: bool(x['critico']),
-        anormal: bool(x['anormal']),
-        culturaPositiva: bool(x['cultura_positiva']),
-        liberadoEm,
-        altaEm: x['alta_em'] ? new Date(String(x['alta_em'])) : null,
-      });
-      if (!motivo) continue;
+    const vistos = new Set<number>();
+    for (const x of [...liberados, ...pendentes]) {
+      const item = num(x['item']);
+      if (vistos.has(item)) continue;
+      const liberadoEm = data(x['liberado_em']);
+      const altaEm = data(x['alta_em']);
+      const motivo = motivoDaBuscaAtiva(
+        {
+          critico: bool(x['critico']),
+          anormal: bool(x['anormal']),
+          culturaPositiva: bool(x['cultura_positiva']),
+          liberadoEm,
+          altaEm,
+          solicitadoEm: data(x['solicitado_em']),
+        },
+        agora,
+      );
+      if (!motivo || !altaEm) continue;
+      vistos.add(item);
       const r = num(x['requisicao']);
       const g = porRequisicao.get(r) ?? {
         paciente: num(x['paciente_id']),
         setor: numOuNull(x['setor_diagnostico_id']),
         itens: [],
       };
-      g.itens.push({ item: num(x['item']), exame: num(x['exame_id']), motivo, liberadoEm });
+      g.itens.push({
+        item,
+        exame: num(x['exame_id']),
+        motivo,
+        liberadoEm,
+        referenciaEm: referenciaDaBuscaAtiva(motivo, liberadoEm, altaEm),
+      });
       porRequisicao.set(r, g);
     }
-    return [...porRequisicao.entries()].map(([requisicao, g]) => {
-      const motivo = motivoDoCaso(g.itens.map((i) => i.motivo))!;
-      const primeira = new Date(Math.min(...g.itens.map((i) => i.liberadoEm.getTime())));
-      return {
-        requisicao,
-        paciente: g.paciente,
-        setor: g.setor,
-        motivo,
-        prazoEm: prazoDaBuscaAtiva(motivo, primeira),
-        itens: g.itens,
-      };
-    });
+    return [...porRequisicao.entries()].map(([requisicao, g]) => ({
+      requisicao,
+      paciente: g.paciente,
+      setor: g.setor,
+      motivo: motivoDoCaso(g.itens.map((i) => i.motivo))!,
+      prazoEm: prazoDoCaso(g.itens)!,
+      itens: g.itens,
+    }));
   }
 
   /** A fila do estabelecimento (abertos por padrão; `todos` traz os encerrados dos últimos 90 dias). */
@@ -308,17 +351,46 @@ export class PortaBuscaAtivaPropria extends PortaEstabelecimentoPropria {
 
   // ── Gravações ────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Varre os resultados liberados depois da alta e abre um caso por requisição ainda fora da fila. */
+  /**
+   * Varre os resultados liberados depois da alta e os exames pendentes na alta e abre um caso por requisição ainda fora
+   * da fila. Segura contra duas aberturas ao mesmo tempo: trava a linha da sequência do estabelecimento ANTES de ler os
+   * candidatos (a segunda abertura espera a primeira terminar) e reconfere, com leitura travada (que vê o que já foi
+   * gravado, não a imagem da transação), os exames que já entraram em caso.
+   */
   async abrirPendentes(c: ContextoPortaPropria): Promise<{ abertos: number; exames: number }> {
     const r = await this.gravar(c, 'sadt.busca-ativa.abrir', TABELAS, async (tx, est, usuario) => {
       const agora = new Date();
-      const candidatos = await this.lerCandidatos(tx, est.id, agora);
-      if (!candidatos.length) return { abertos: 0, exames: 0, tabela: T_CASO, id: null };
       await garantirSequencia(
         tx,
         { tipo: TIPO_SEQUENCIA, estabelecimento: est.id, prefixo: 'BA' },
         { agora, usuario },
       );
+      // garantirSequencia lê a linha com FOR UPDATE (ou a insere): a trava fica até o fim da transação.
+      const lidos = await this.lerCandidatos(tx, est.id, agora);
+      const ids = lidos.flatMap((k) => k.itens.map((i) => i.item));
+      const jaEmCaso = new Set(
+        ids.length
+          ? (
+              await tx.consultarParaAtualizar<Linha>(
+                `SELECT x.exame_item_id FROM busca_ativa_resultado_exame x
+                   JOIN busca_ativa_resultado b ON b.id = x.busca_ativa_resultado_id
+                  WHERE x.exame_item_id IN (${ids.map(() => '?').join(', ')})
+                    AND x.excluido_em IS NULL AND b.excluido_em IS NULL`,
+                ids,
+                { teto: ids.length * 50 },
+              )
+            ).map((x) => num(x['exame_item_id']))
+          : [],
+      );
+      const candidatos = lidos
+        .map((k) => ({ ...k, itens: k.itens.filter((i) => !jaEmCaso.has(i.item)) }))
+        .filter((k) => k.itens.length > 0)
+        .map((k) => ({
+          ...k,
+          motivo: motivoDoCaso(k.itens.map((i) => i.motivo))!,
+          prazoEm: prazoDoCaso(k.itens)!,
+        }));
+      if (!candidatos.length) return { abertos: 0, exames: 0, tabela: T_CASO, id: null };
       let ultimo: number | null = null;
       let exames = 0;
       for (const k of candidatos) {
@@ -361,7 +433,9 @@ export class PortaBuscaAtivaPropria extends PortaEstabelecimentoPropria {
     const gatilhos =
       motivo === 'resultado_critico'
         ? ['valor_critico', 'resultado_apos_alta']
-        : ['resultado_alterado', 'cultura_positiva', 'resultado_apos_alta'];
+        : motivo === 'resultado_pendente'
+          ? ['atraso_resultado', 'resultado_apos_alta']
+          : ['resultado_alterado', 'cultura_positiva', 'resultado_apos_alta'];
     const r = await tx.uma(
       `SELECT id FROM regra_busca_ativa
         WHERE ativo AND acao = 'abrir_busca_ativa' AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)

@@ -7,6 +7,8 @@ import {
   motivoDaBuscaAtiva,
   motivoDoCaso,
   prazoDaBuscaAtiva,
+  prazoDoCaso,
+  referenciaDaBuscaAtiva,
   situacaoAposContato,
 } from './busca-ativa.js';
 
@@ -38,6 +40,48 @@ describe('busca ativa: entrada na fila', () => {
     expect(casoAtrasado('aberto', new Date('2026-03-12T08:00:00Z'), agora)).toBe(true);
     expect(casoAtrasado('concluido', new Date('2026-03-12T08:00:00Z'), agora)).toBe(false);
     expect(casoAtrasado('em_contato', null, agora)).toBe(false);
+  });
+});
+
+describe('busca ativa: exame pendente na alta', () => {
+  const pedido = new Date('2026-03-10T09:00:00Z');
+  const pendente = { ...base, liberadoEm: null, solicitadoEm: pedido };
+  const fimEspera = new Date('2026-03-11T12:00:00Z');
+  it('sem resultado entra como pendente só depois da espera de 24 horas da alta', () => {
+    expect(motivoDaBuscaAtiva(pendente, new Date('2026-03-11T11:59:00Z'))).toBeNull();
+    expect(motivoDaBuscaAtiva(pendente, fimEspera)).toBe('resultado_pendente');
+    expect(motivoDaBuscaAtiva(pendente, agora)).toBe('resultado_pendente');
+  });
+  it('o pedido depois da alta, sem data de pedido ou sem alta não vira pendente', () => {
+    expect(motivoDaBuscaAtiva({ ...pendente, solicitadoEm: depois }, agora)).toBeNull();
+    expect(motivoDaBuscaAtiva({ ...pendente, solicitadoEm: null }, agora)).toBeNull();
+    expect(motivoDaBuscaAtiva({ ...pendente, altaEm: null }, agora)).toBeNull();
+  });
+  it('liberado normal depois da espera entra como pendente; dentro dela, não; alterado vence', () => {
+    const tarde = new Date('2026-03-11T15:00:00Z');
+    expect(motivoDaBuscaAtiva({ ...pendente, liberadoEm: tarde }, agora)).toBe('resultado_pendente');
+    expect(motivoDaBuscaAtiva({ ...pendente, liberadoEm: depois }, agora)).toBeNull();
+    expect(motivoDaBuscaAtiva({ ...pendente, liberadoEm: tarde, anormal: true }, agora)).toBe(
+      'resultado_alterado',
+    );
+    expect(motivoDaBuscaAtiva({ ...pendente, liberadoEm: antes }, agora)).toBeNull();
+  });
+  it('o caso pendente perde para o alterado e conta o prazo do fim da espera; vale o prazo mais curto', () => {
+    expect(motivoDoCaso(['resultado_pendente'])).toBe('resultado_pendente');
+    expect(motivoDoCaso(['resultado_pendente', 'resultado_alterado'])).toBe('resultado_alterado');
+    expect(motivoDoCaso(['resultado_pendente', 'resultado_critico'])).toBe('resultado_critico');
+    expect(referenciaDaBuscaAtiva('resultado_pendente', null, alta).toISOString()).toBe(
+      fimEspera.toISOString(),
+    );
+    expect(referenciaDaBuscaAtiva('resultado_alterado', depois, alta)).toBe(depois);
+    expect(prazoDaBuscaAtiva('resultado_pendente', fimEspera).toISOString()).toBe('2026-03-14T12:00:00.000Z');
+    expect(
+      prazoDoCaso([
+        { motivo: 'resultado_pendente', referenciaEm: fimEspera },
+        { motivo: 'resultado_alterado', referenciaEm: depois },
+      ])!.toISOString(),
+    ).toBe('2026-03-14T08:00:00.000Z');
+    expect(prazoDoCaso([])).toBeNull();
   });
 });
 

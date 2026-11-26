@@ -94,7 +94,10 @@ test.describe('Busca ativa de resultados @C1-110 @fase8', () => {
           return json(rota, {
             itens: aberto
               ? []
-              : [{ requisicao: 301, paciente: 61, motivo: 'resultado_critico', prazoEm: ontem, exames: 1 }],
+              : [
+                  { requisicao: 301, paciente: 61, motivo: 'resultado_critico', prazoEm: ontem, exames: 1 },
+                  { requisicao: 302, paciente: 62, motivo: 'resultado_pendente', prazoEm: amanha, exames: 1 },
+                ],
           });
         if (caminho === '91')
           return json(rota, {
@@ -161,6 +164,8 @@ test.describe('Busca ativa de resultados @C1-110 @fase8', () => {
     // Candidatos antes de abrir: nada é gravado até confirmar.
     await page.getByTestId('busca-ativa-procurar').click();
     await expect(page.getByTestId('busca-ativa-candidatos')).toContainText('Requisição 301');
+    // O exame pendente na alta entra como candidato, com o motivo próprio.
+    await expect(page.getByTestId('busca-ativa-candidatos')).toContainText('Exame pendente na alta');
     expect(pedidos).toHaveLength(0);
     await page.getByTestId('busca-ativa-abrir-casos').click();
     await expect(page.getByTestId('busca-ativa-mensagem')).toContainText('1 caso(s) aberto(s)');

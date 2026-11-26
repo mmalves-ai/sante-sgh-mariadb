@@ -8,7 +8,7 @@ export const mensagensBuscaAtiva = {
   filtroPaciente: 'Só um paciente (código)',
   atualizar: 'Atualizar',
   procurarNovos: 'Procurar novos resultados',
-  candidatos: 'Resultados liberados depois da alta ainda fora da fila',
+  candidatos: 'Resultados liberados depois da alta e exames pendentes na alta ainda fora da fila',
   nenhumCandidato: 'Nenhum resultado novo para abrir caso.',
   candidato: 'Requisição {requisicao} · paciente {paciente} · {exames} exame(s) · prazo {prazo}',
   abrirCasos: 'Abrir {quantos} caso(s)',
@@ -30,6 +30,7 @@ export const mensagensBuscaAtiva = {
   motivos: {
     resultado_critico: 'Resultado crítico',
     resultado_alterado: 'Resultado alterado ou cultura positiva',
+    resultado_pendente: 'Exame pendente na alta',
   } as Record<string, string>,
   situacoes: {
     aberto: 'Aberto',
