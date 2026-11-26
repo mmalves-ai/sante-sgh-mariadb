@@ -32,6 +32,9 @@ entra **vivo e utilizável** no modelo próprio. Não existe "acervo morto" nem 
      licenciado da origem.
    - Preço e tabela **próprios do hospital** (tabelas negociadas, personalizações) são dado do cliente e entram pelo
      conector.
+   - **Emendado pelo [ADR 0011](0011-licenciados-pela-base-do-cliente.md) (25/11/2026):** o cliente licenciado
+     traz os itens e os preços licenciados da própria base pelo conector, para o espelho do cliente. O "só liga" acima
+     e a origem abaixo valem para cliente sem a licença na própria base.
    - **Origem do conteúdo licenciado (dono, opção b):**
      - **semente inicial**, uma única vez, a partir das edições presentes na cópia da origem da Rede Santé, por uma
        ferramenta do `conector/` (só ela lê o Firebird) que grava no espelho, e não no cliente;

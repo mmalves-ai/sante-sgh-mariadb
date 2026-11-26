@@ -234,6 +234,10 @@ Mudar o guardião ou o plano só com pedido explícito do dono.
   - Todo cliente, inclusive o novo, recebe o espelho.
   - Nunca entram pelo conector: o conector só liga as referências do hospital pelo código e pela edição.
   - A licença é condição comercial.
+  - **Exceção (dono, 25/11/2026, [ADR 0011](docs/adr/0011-licenciados-pela-base-do-cliente.md)):** o cliente licenciado
+    por condição comercial traz os itens e os preços licenciados da própria base pelo conector, para o espelho do
+    cliente, com a ligação por código e edição. O "nunca entram pelo conector" vale só para cliente sem a licença na
+    própria base.
 - **Importação é continuidade (ADR 0006, dono, 2026-11-21).** Tudo que o hospital usa entra vivo e utilizável. Não
   existe arquivo morto.
   - **Catálogo da origem:** entra ligado ao catálogo oficial pelo código. Os itens próprios do hospital entram
