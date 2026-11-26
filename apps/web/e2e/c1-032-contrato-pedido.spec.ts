@@ -84,7 +84,8 @@ test.describe('@C1-032 Pedido de compra ligado ao contrato do fornecedor', () =>
     // 4. Com um só fornecedor, o combo traz o contrato dele: escolhe, inclui o item e cria o pedido ligado.
     await page.getByTestId('ped-fornecedores').fill(FORNECEDOR);
     await escolher(page.getByTestId('ped-contrato'), { rotulo: new RegExp(numero) });
-    await escolher(page.getByTestId('ped-centro'), { rotulo: /\S/ });
+    // O primeiro rótulo é o "Escolha" (valor vazio): o centro de custo é o que vem com código.
+    await escolher(page.getByTestId('ped-centro'), { rotulo: /^\d+ · / });
     await page.getByTestId('ped-busca-termo').fill(ITEM);
     await page.getByTestId('ped-busca-buscar').click();
     await page.getByTestId(`ped-busca-opcao-${ITEM}`).click();

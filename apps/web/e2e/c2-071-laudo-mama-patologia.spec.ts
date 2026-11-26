@@ -44,6 +44,7 @@ const EXAME = {
   setor: 'Imagem sintética',
 };
 const OPCOES_MAMA = {
+  assinante: 11,
   profissionais: [{ id: 11, rotulo: 'LAUDADOR FICTICIO' }],
   categorias: [
     { categoria: '0', rotulo: 'Inconclusivo' },
@@ -151,6 +152,7 @@ function simular(page: Page) {
           recomendacao: 'rotina',
         },
       ],
+      retificados: [],
       emExecucao: laudo.situacao === 'rascunho',
       alertas: [],
       opcoes: OPCOES_MAMA,
