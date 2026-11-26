@@ -162,7 +162,11 @@ export class PesquisaClinicaController {
   @HttpCode(200)
   @Permissao(PERMISSOES_PESQUISA.triar)
   @AuditadoNoHandler('triagem de elegibilidade nos prontuários pelo executor (trilha na mesma transação)')
-  async triar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
+  async triar(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
     const ligada = await this.triagemLigada(req);
     return this.com(req, (p, c) => p.triar(c, id, corpo, ligada));
   }

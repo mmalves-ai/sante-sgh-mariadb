@@ -123,7 +123,11 @@ const esquemaAvaliar = z
     decisao: z.enum(['em_avaliacao', 'incluido', 'recusado', 'inelegivel', 'descartado']),
     avaliador: id.nullable().default(null),
     observacao: texto(4000),
-    consentimentoEm: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/).nullable().default(null),
+    consentimentoEm: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)
+      .nullable()
+      .default(null),
     anexo: id.nullable().default(null),
     codigoParticipante: texto(30),
     braco: texto(60),
@@ -344,7 +348,11 @@ export class PesquisaClinicaPropria extends PortaEstabelecimentoPropria {
           ORDER BY pf.nome LIMIT 30`,
         [`%${termo.trim()}%`, est.id],
       )) as Linha[];
-      return r.map((x) => ({ id: num(x['id']), nome: String(x['nome']), prontuario: num(x['numero_prontuario']) }));
+      return r.map((x) => ({
+        id: num(x['id']),
+        nome: String(x['nome']),
+        prontuario: num(x['numero_prontuario']),
+      }));
     });
   }
 
@@ -363,33 +371,45 @@ export class PesquisaClinicaPropria extends PortaEstabelecimentoPropria {
   async cadastrarEstudo(c: ContextoPortaPropria, entrada: unknown) {
     const e = entradaValida(esquemaEstudo, entrada);
     recusa('Estudo recusado', conferirEstudo({ ...e, aprovacaoEticaEm: null }, 'em_aprovacao'));
-    return this.gravar(c, 'pep.pesquisa.estudo', ['pesquisa_clinica', 'pesquisa_clinica_equipe'], async (tx, est) => {
-      await this.existe(tx, 'profissional', e.investigador, 'Investigador');
-      if (await tx.uma('SELECT id FROM pesquisa_clinica WHERE estabelecimento_id = ? AND codigo = ?', [est.id, e.codigo]))
-        throw recusaRegra('Estudo recusado', [{ campo: 'codigo', mensagem: 'Já há estudo com este código.' }]);
-      const estudo = await tx.incluir('pesquisa_clinica', {
-        estabelecimento_id: est.id,
-        codigo: e.codigo,
-        titulo: e.titulo,
-        titulo_resumido: e.tituloResumido,
-        numero_caae: e.numeroCaae,
-        registro_ensaio: e.registroEnsaio,
-        fase: e.fase,
-        inicio: e.inicio,
-        fim: e.fim,
-        investigador_principal_profissional_id: e.investigador,
-        situacao: 'em_aprovacao',
-        dias_processamento_criterios: e.diasProcessamento,
-        observacao: e.observacao,
-      });
-      await tx.incluir('pesquisa_clinica_equipe', {
-        pesquisa_clinica_id: estudo,
-        profissional_id: e.investigador,
-        papel: 'investigador_principal',
-        inicio: e.inicio,
-      });
-      return { tabela: 'pesquisa_clinica', id: estudo, estudo };
-    });
+    return this.gravar(
+      c,
+      'pep.pesquisa.estudo',
+      ['pesquisa_clinica', 'pesquisa_clinica_equipe'],
+      async (tx, est) => {
+        await this.existe(tx, 'profissional', e.investigador, 'Investigador');
+        if (
+          await tx.uma('SELECT id FROM pesquisa_clinica WHERE estabelecimento_id = ? AND codigo = ?', [
+            est.id,
+            e.codigo,
+          ])
+        )
+          throw recusaRegra('Estudo recusado', [
+            { campo: 'codigo', mensagem: 'Já há estudo com este código.' },
+          ]);
+        const estudo = await tx.incluir('pesquisa_clinica', {
+          estabelecimento_id: est.id,
+          codigo: e.codigo,
+          titulo: e.titulo,
+          titulo_resumido: e.tituloResumido,
+          numero_caae: e.numeroCaae,
+          registro_ensaio: e.registroEnsaio,
+          fase: e.fase,
+          inicio: e.inicio,
+          fim: e.fim,
+          investigador_principal_profissional_id: e.investigador,
+          situacao: 'em_aprovacao',
+          dias_processamento_criterios: e.diasProcessamento,
+          observacao: e.observacao,
+        });
+        await tx.incluir('pesquisa_clinica_equipe', {
+          pesquisa_clinica_id: estudo,
+          profissional_id: e.investigador,
+          papel: 'investigador_principal',
+          inicio: e.inicio,
+        });
+        return { tabela: 'pesquisa_clinica', id: estudo, estudo };
+      },
+    );
   }
 
   async mudarSituacao(c: ContextoPortaPropria, estudo: number, entrada: unknown) {
@@ -455,7 +475,10 @@ export class PesquisaClinicaPropria extends PortaEstabelecimentoPropria {
       await this.estudoDoEst(tx, est.id, estudo);
       if (e.exame !== null) await this.existe(tx, 'exame', e.exame, 'Exame');
       if (e.item !== null) await this.existe(tx, 'item_prescritivel', e.item, 'Item prescritível');
-      if (e.parametroVital !== null && !(await tx.uma('SELECT id FROM parametro_vital WHERE id = ?', [e.parametroVital])))
+      if (
+        e.parametroVital !== null &&
+        !(await tx.uma('SELECT id FROM parametro_vital WHERE id = ?', [e.parametroVital]))
+      )
         throw naoEncontrado('Parâmetro vital');
       const s = await tx.uma(
         'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM pesquisa_clinica_criterio WHERE pesquisa_clinica_id = ?',
@@ -481,16 +504,21 @@ export class PesquisaClinicaPropria extends PortaEstabelecimentoPropria {
 
   async desativarCriterio(c: ContextoPortaPropria, estudo: number, criterio: number, entrada: unknown) {
     const e = entradaValida(esquemaVersao, entrada);
-    return this.gravar(c, 'pep.pesquisa.criterio.desativar', ['pesquisa_clinica_criterio'], async (tx, est) => {
-      await this.estudoDoEst(tx, est.id, estudo);
-      const x = await tx.uma('SELECT id FROM pesquisa_clinica_criterio WHERE id = ? AND pesquisa_clinica_id = ?', [
-        criterio,
-        estudo,
-      ]);
-      if (!x) throw naoEncontrado('Critério');
-      await tx.alterar('pesquisa_clinica_criterio', criterio, e.versao, { ativo: false });
-      return { tabela: 'pesquisa_clinica_criterio', id: criterio };
-    });
+    return this.gravar(
+      c,
+      'pep.pesquisa.criterio.desativar',
+      ['pesquisa_clinica_criterio'],
+      async (tx, est) => {
+        await this.estudoDoEst(tx, est.id, estudo);
+        const x = await tx.uma(
+          'SELECT id FROM pesquisa_clinica_criterio WHERE id = ? AND pesquisa_clinica_id = ?',
+          [criterio, estudo],
+        );
+        if (!x) throw naoEncontrado('Critério');
+        await tx.alterar('pesquisa_clinica_criterio', criterio, e.versao, { ativo: false });
+        return { tabela: 'pesquisa_clinica_criterio', id: criterio };
+      },
+    );
   }
 
   /**
@@ -534,7 +562,9 @@ export class PesquisaClinicaPropria extends PortaEstabelecimentoPropria {
         valorMaximo: numOuNull(x['valor_maximo']),
       }));
       const janela = numOuNull(p['dias_processamento_criterios']) ?? JANELA_PADRAO_DIAS;
-      const filtroPac = e.pacientes.length ? `AND a.paciente_id IN (${e.pacientes.map(() => '?').join(',')})` : '';
+      const filtroPac = e.pacientes.length
+        ? `AND a.paciente_id IN (${e.pacientes.map(() => '?').join(',')})`
+        : '';
       const candidatos = (await tx.consultar(
         `SELECT a.paciente_id, MAX(a.id) AS atendimento, pf.data_nascimento, sx.sigla AS sexo
            FROM atendimento a
@@ -591,7 +621,10 @@ export class PesquisaClinicaPropria extends PortaEstabelecimentoPropria {
   async avaliar(c: ContextoPortaPropria, triagem: number, entrada: unknown) {
     const e = entradaValida(esquemaAvaliar, entrada);
     if (e.decisao === 'incluido')
-      recusa('Inclusão recusada', conferirInclusao({ consentimentoEm: e.consentimentoEm, termoArquivo: e.anexo }));
+      recusa(
+        'Inclusão recusada',
+        conferirInclusao({ consentimentoEm: e.consentimentoEm, termoArquivo: e.anexo }),
+      );
     return this.gravar(
       c,
       'pep.pesquisa.avaliacao',
@@ -615,14 +648,19 @@ export class PesquisaClinicaPropria extends PortaEstabelecimentoPropria {
         const agora = new Date();
         let participante: number | null = null;
         if (e.decisao === 'incluido') {
-          if (!estudoRecruta(String(t['situacao_estudo']) as SituacaoEstudo, bool(t['permite_inclusao_paciente'])))
+          if (
+            !estudoRecruta(
+              String(t['situacao_estudo']) as SituacaoEstudo,
+              bool(t['permite_inclusao_paciente']),
+            )
+          )
             throw recusaRegra('Inclusão recusada', [
               { campo: 'decisao', mensagem: 'Só o estudo que recruta inclui participantes.' },
             ]);
-          const anexo = await tx.uma('SELECT arquivo_id FROM anexo_prontuario WHERE id = ? AND paciente_id = ? AND excluido_em IS NULL AND suspenso_em IS NULL', [
-            e.anexo,
-            t['paciente_id'],
-          ]);
+          const anexo = await tx.uma(
+            'SELECT arquivo_id FROM anexo_prontuario WHERE id = ? AND paciente_id = ? AND excluido_em IS NULL AND suspenso_em IS NULL',
+            [e.anexo, t['paciente_id']],
+          );
           if (!anexo?.['arquivo_id'])
             throw recusaRegra('Inclusão recusada', [
               { campo: 'anexo', mensagem: 'O termo indicado não é anexo do prontuário deste paciente.' },

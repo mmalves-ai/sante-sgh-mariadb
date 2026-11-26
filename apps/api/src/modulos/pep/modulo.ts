@@ -58,6 +58,8 @@ import { PORTA_EQUIPE_PAINEL, PortaEquipePainelPropria } from './equipe-painel-p
 import { SumarioAltaSecoesController } from './sumario-alta-secoes.controller.js';
 import { FARMACOVIGILANCIA, FarmacovigilanciaController } from './farmacovigilancia.controller.js';
 import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
+import { PesquisaClinicaController } from './pesquisa-clinica.controller.js';
+import { PORTA_PESQUISA_CLINICA, PesquisaClinicaPropria } from './pesquisa-clinica-propria.js';
 import { PrescricaoCadastroController } from './prescricao-cadastro.controller.js';
 import { PrescricaoPadroesController } from './prescricao-padroes.controller.js';
 import {
@@ -239,6 +241,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       PlanoCuidadoController,
       CurvasCrescimentoController,
       ExameFisicoController,
+      PesquisaClinicaController,
       TransplanteClinicoController,
       NotaSoapController,
       ProntuarioRestritoController,
@@ -315,6 +318,22 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       },
       // F78.03-1 (03-PEP L103 e L104): reação adversa no paciente e lista de uso contínuo; sem núcleo, 503.
       {
+      // 03-PEP L108 (C2-104): ajuste renal por faixa, restrição de posologia e alerta por setor; sem núcleo, 503.
+      {
+        provide: CADASTRO_RESTRICOES_PRESCRICAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new CadastroRestricoesPrescricaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L144: pesquisa clínica (estudo, critérios, triagem como sugestão, participantes); sem núcleo, 503.
+      {
+        provide: PORTA_PESQUISA_CLINICA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PesquisaClinicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
         provide: FARMACOVIGILANCIA,
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
