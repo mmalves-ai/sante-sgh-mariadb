@@ -452,9 +452,14 @@ describe('gravações', () => {
       registro: 8,
       paciente: 100,
     });
+    // C2-076 (d7274d32): o aceite gera a assinatura do preceptor no documento do prontuário (nasce lançado se faltava,
+    // com o evento de criação e o de assinatura) antes de fechar a supervisão.
     expect(d.escritas.map((e) => [e.tabela, e.valores['situacao']])).toEqual([
-      ['registro_assistencial_supervisao', 'coassinado'],
+      ['documento_prontuario', undefined],
+      ['documento_prontuario_evento', undefined],
+      ['documento_prontuario_evento', undefined],
       ['registro_assistencial', 'finalizado'],
+      ['registro_assistencial_supervisao', 'coassinado'],
     ]);
   });
 

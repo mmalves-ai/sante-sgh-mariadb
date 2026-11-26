@@ -48,7 +48,11 @@ describe('vocabulário do faturamento SUS (M51)', () => {
     expect(sus.length).toBeGreaterThanOrEqual(12);
     for (const p of sus) {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
-      expect(opcoesDoMapa(p.codigo).length).toBeGreaterThan(0);
+      // Mesmo critério do portal: opção no mapa do conector ou concessão por perfil com algum perfil (recurso só do
+      // novo não tem menu de origem; decisão do dono, 25/11).
+      expect(
+        opcoesDoMapa(p.codigo).length > 0 || (p.concessaoPorPerfil === 'por-perfil' && (p.perfis ?? []).length > 0),
+      ).toBe(true);
     }
     const eventos = Object.values(EVENTOS_AUDITAVEIS).map((e) => e.codigo);
     for (const c of [

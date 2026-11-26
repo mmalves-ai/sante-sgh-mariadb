@@ -260,12 +260,9 @@ describe('recusas antes da transação', () => {
       ),
     ).rejects.toMatchObject({ problema: { status: 401, codigo: 'reautenticacao-necessaria' } });
   });
-  // A coassinatura grava no banco próprio desde a L96 (contrato de efeito no .int.spec); parecer e classificação de
-  // risco seguem fechados com 501.
-  it('registro com parecer ou classificação de risco: 501 fechado', async () => {
-    await expect(g.registrar(c as never, { fluxo: { tipo: 'pedido' } } as never, ctx)).rejects.toMatchObject({
-      problema: { status: 501, codigo: 'pendente-modelo-proprio' },
-    });
+  // A coassinatura e o parecer gravam no banco próprio (L96, C2-076 daef9582; contrato de efeito no .int.spec); só a
+  // classificação de risco segue fechada com 501 (grava pela recepção).
+  it('registro com classificação de risco: 501 fechado', async () => {
     await expect(
       g.registrar(c as never, { classificacao: { cor: 'vermelho' } } as never, ctx),
     ).rejects.toMatchObject({ problema: { status: 501, codigo: 'pendente-modelo-proprio' } });

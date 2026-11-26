@@ -614,7 +614,7 @@ export class PortaClassificacaoExternaPropria extends BaseComunicacaoPropria {
             controle: decisao.sufixoControle
               ? `PRF${resumoPacote.slice(0, 10)}${local.toISOString().slice(5, 10).replace('-', '')}${decisao.sufixoControle}`
               : `PRF${resumoPacote.slice(0, 12)}${local.toISOString().slice(5, 10).replace('-', '')}`,
-            processamento: process.env['SGH_AMBIENTE'] === 'producao' ? 'P' : 'T',
+            processamento: process.env['AMBIENTE'] === 'producao' ? 'P' : 'T',
           },
           perfilMensagem,
           perfis,

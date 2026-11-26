@@ -32,8 +32,10 @@ describe('permissões do BI da Rede', () => {
   it('regra 10: o perfil da diretoria da Rede não concede nenhuma permissão do prontuário', () => {
     const doPerfil = CATALOGO_DECLARADO.filter((p) => (p.perfis ?? []).includes(PERFIL_DIRETORIA_REDE));
     expect(doPerfil.map((p) => p.codigo).sort()).toEqual([
+      'config.rotinaCliente.gerir',
       'rede.servico.registrar',
       'relatorio.biRede.acessar',
+      'relatorio.painelGerencial.ler',
     ]);
     expect(doPerfil.some((p) => p.codigo.startsWith('pep.') || p.categoria === 'clinica')).toBe(false);
   });

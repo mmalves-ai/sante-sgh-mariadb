@@ -212,7 +212,19 @@ describe('episódio', () => {
     expect(await episodio(nucleo, 'cli', C, 9)).toEqual({
       motivoInternacao: 'I20 - Angina',
       procedimentos: ['Herniorrafia (K40)', 'Biópsia'],
-      exames: ['HEMOGRAMA', 'Exame externo'],
+      // C1-041 (e7273bf4, 702a8475): ordem alfabética na apresentação e os itens com o momento clínico em `datados`.
+      exames: ['Exame externo', 'HEMOGRAMA'],
+      datados: {
+        procedimentos: [
+          { texto: 'Herniorrafia (K40)', em: null },
+          { texto: 'Herniorrafia (K40)', em: null },
+          { texto: 'Biópsia', em: null },
+        ],
+        exames: [
+          { texto: 'Exame externo', em: null },
+          { texto: 'HEMOGRAMA', em: null },
+        ],
+      },
     });
     const cir = sqls.find((x) => /FROM ato_cirurgico/.test(x.sql))!;
     expect(cir.sql).toMatch(/ac\.situacao = 'realizado'/);

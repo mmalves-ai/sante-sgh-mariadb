@@ -129,10 +129,11 @@ export const PERMISSOES_ENFERMAGEM_M25: readonly DeclaracaoPermissao[] = [
     },
   ),
   // Recurso só do novo (01-ADM L117): a regra de risco da rede vale para todos os hospitais do cliente; concedida
-  // por perfil à diretoria da rede e ao administrador.
+  // por perfil à diretoria clínica e ao administrador (regra clínica; a diretoria da Rede fica sem permissão clínica,
+  // regra 10 do BI da Rede; decisão do dono, 25/11).
   p(
     P.regraRiscoRedePublicar,
     'Criar, ligar e desligar as regras de risco clínico da central de comando que valem para toda a rede',
-    { concessaoPorPerfil: 'por-perfil', perfis: ['diretoria-rede', 'administrador-sistema'] },
+    { concessaoPorPerfil: 'por-perfil', perfis: ['diretoria-clinica', 'administrador-sistema'] },
   ),
 ];

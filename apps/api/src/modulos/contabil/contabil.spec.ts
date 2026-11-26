@@ -289,7 +289,7 @@ describe('contabilidade (etapa 1, F1), pela HTTP', { timeout: 120_000 }, () => {
     expect((await get(c, `${C}/fatos?situacao=xpto`)).statusCode).toBe(400);
     const resumo = (await get(c, `${C}/fatos/resumo`)).json();
     expect(resumo.totais).toEqual({ pendente: 3 });
-    expect(resumo.fontes).toHaveLength(11); // 9 da F1 + a depreciação (M54.6) + o impairment (W0-08)
+    expect(resumo.fontes).toHaveLength(12); // 9 da F1 + a depreciação (M54.6) + o impairment (W0-08) + o repasse (C2-093, 1dfabdc7)
     expect(JSON.stringify(resumo)).not.toMatch(/FCCTAEXT|MFCONPAG|SGH_/);
 
     // Reprocessamento: a conferência não grava; a gravação muda as situações; reaplicar dá zero mudança.
