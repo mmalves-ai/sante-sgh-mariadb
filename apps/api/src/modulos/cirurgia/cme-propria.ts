@@ -65,7 +65,7 @@ export const TABELAS_CME = [
   'sequencia_negocio',
 ] as const;
 
-type Linha = Record<string, unknown>;
+export type Linha = Record<string, unknown>;
 type Fonte = Pick<Leitor, 'consultar' | 'uma'>;
 
 const id = z.number().int().positive();
@@ -149,7 +149,7 @@ const recusa = (titulo: string, p: readonly ProblemaCme[]) => {
 const instante = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString().slice(0, 19) : v ? String(v).replace(' ', 'T').slice(0, 19) : null;
 const dia = (v: unknown): string | null => (v ? (instante(v) ?? '').slice(0, 10) || null : null);
-const hojeNo = (fuso: string): string =>
+export const hojeNo = (fuso: string): string =>
   new Intl.DateTimeFormat('en-CA', { timeZone: fuso }).format(new Date());
 
 export interface CaixaLida {
@@ -283,8 +283,12 @@ const cicloLido = (r: Linha): CicloLido => ({
 });
 
 export class PortaCmePropria extends PortaEstabelecimentoPropria {
-  constructor(nucleo: ConstructorParameters<typeof PortaEstabelecimentoPropria>[0], cliente: string) {
-    super(nucleo, cliente, TABELAS_CME, 'cirurgia.cme');
+  constructor(
+    nucleo: ConstructorParameters<typeof PortaEstabelecimentoPropria>[0],
+    cliente: string,
+    tabelas: readonly string[] = TABELAS_CME,
+  ) {
+    super(nucleo, cliente, tabelas, 'cirurgia.cme');
   }
 
   // ── Leituras ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -880,13 +884,13 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
     );
   }
 
-  private marcaDesfecho(d: DesfechoCiclo, agora: Date, usuario: number) {
+  protected marcaDesfecho(d: DesfechoCiclo, agora: Date, usuario: number) {
     return d.situacao === 'liberado' || d.situacao === 'reprovado'
       ? { situacao: d.situacao, liberado_em: agora, liberado_por_usuario_id: usuario }
       : { situacao: d.situacao };
   }
 
-  private async cicloTravado(tx: TxOperacao, est: number, ciclo: number): Promise<Linha> {
+  protected async cicloTravado(tx: TxOperacao, est: number, ciclo: number): Promise<Linha> {
     const ci =
       (
         await tx.consultarParaAtualizar<Linha>(
@@ -899,7 +903,7 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
   }
 
   /** Liberado: pacotes estéreis com validade; reprovado: pacotes rejeitados (voltam ao reprocessamento). */
-  private async aplicarAosPacotes(
+  protected async aplicarAosPacotes(
     tx: TxOperacao,
     est: { id: number; fuso: string },
     ciclo: number,
@@ -918,6 +922,8 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
       [ciclo],
     );
     const hoje = hojeNo(est.fuso);
+    // Vários pacotes da mesma caixa na carga: a versão e o contador da caixa seguem o que já se gravou nesta carga.
+    const caixas = new Map<number, { versao: number; contador: number }>();
     for (const p of ps) {
       if (d.situacao === 'reprovado') {
         await tx.alterar('pacote_esteril', num(p['id']), num(p['versao']), { situacao: 'rejeitado' });
@@ -936,10 +942,15 @@ export class PortaCmePropria extends PortaEstabelecimentoPropria {
         esterilizado_em: agora,
         validade: validadeDoPacote(hoje, dias),
       });
-      if (p['caixa_instrumental_id'])
-        await tx.alterar('caixa_instrumental', num(p['caixa_instrumental_id']), num(p['cx_versao']), {
-          quantidade_reprocessamentos: num(p['quantidade_reprocessamentos']) + 1,
-        });
+      if (p['caixa_instrumental_id']) {
+        const cx = num(p['caixa_instrumental_id']);
+        const atual = caixas.get(cx) ?? {
+          versao: num(p['cx_versao']),
+          contador: num(p['quantidade_reprocessamentos']),
+        };
+        await tx.alterar('caixa_instrumental', cx, atual.versao, { quantidade_reprocessamentos: atual.contador + 1 });
+        caixas.set(cx, { versao: atual.versao + 1, contador: atual.contador + 1 });
+      }
       const it = await tx.uma(
         "SELECT id, versao FROM solicitacao_material_esteril_item WHERE pacote_esteril_id = ? AND situacao = 'em_processamento' AND excluido_em IS NULL",
         [p['id']],
