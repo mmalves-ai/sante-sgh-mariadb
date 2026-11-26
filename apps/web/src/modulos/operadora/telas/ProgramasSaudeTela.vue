@@ -521,16 +521,17 @@ const descreverCriterio = (k: Programa['criterios'][number]) => {
           · {{ t('grupoRiscoDe', { grupo: programa.grupoRiscoDescricao }) }}</template
         >
       </p>
-      <div class="programas__linha" role="tablist">
+      <nav class="programas__linha" :aria-label="t('titulo')">
         <SanteBotao
           v-for="valor in ['elegiveis', 'participantes', 'agenda', 'resultado', 'criterios'] as const"
           :key="valor"
           :rotulo="t(`abas.${valor}`)"
           :variante="aba === valor ? 'primario' : 'secundario'"
+          :aria-pressed="aba === valor"
           :data-testid="`aba-${valor}`"
           @click="aba = valor"
         />
-      </div>
+      </nav>
 
       <!-- Elegíveis -->
       <div v-if="aba === 'elegiveis'" class="programas__painel" data-testid="painel-elegiveis">

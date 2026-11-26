@@ -185,7 +185,12 @@ test.describe('Cadastro complementar do prestador da rede @C2-118 @fase7', () =>
     await entrar(page, 'SINT.CREDENCIAMENTO');
     await page.goto('/operadora/rede');
     await expect(page.getByTestId('rede-prestadores')).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId('rede-prestadores').getByText('Hospital sintético Beta').first().click();
+    // A ficha abre pelo botão da linha (o nome na célula é texto, não ação).
+    await page
+      .getByTestId('rede-prestadores')
+      .getByRole('button', { name: /Hospital sintético Beta/ })
+      .first()
+      .click();
     const cad = page.getByTestId('rede-cadastro');
     await expect(cad).toBeVisible({ timeout: 30_000 });
     await expect(cad.getByTestId('rede-descredenciamentos')).toContainText('HOSPITAL SINTETICO SUBSTITUTO');

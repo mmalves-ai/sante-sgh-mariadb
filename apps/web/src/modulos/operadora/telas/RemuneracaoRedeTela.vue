@@ -80,14 +80,16 @@ const lista = (xs: Opcao[], nada: string) => [
 ];
 const nulo = (s: string) => (s.trim() ? s.trim() : null);
 
+// Só a gravação (com aviso de sucesso) troca o aviso; a leitura que vem logo depois não o apaga.
 async function tentar<T>(fn: () => Promise<T>, ok?: string): Promise<T | null> {
   erro.value = null;
-  aviso.value = null;
+  if (ok) aviso.value = null;
   try {
     const r = await fn();
     if (ok) aviso.value = ok;
     return r;
   } catch (e) {
+    aviso.value = null;
     erro.value = e instanceof Error ? e.message : String(e);
     return null;
   }
