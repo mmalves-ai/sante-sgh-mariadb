@@ -63,12 +63,21 @@ export interface TesteRegistrado {
   readonly resultado: ResultadoTeste;
   /** A carga só é liberada com este indicador aprovado. */
   readonly liberacaoDepende: boolean;
+  /**
+   * Tipo do indicador. Os testes chegam na ordem do registro: em cada tipo vale o último (o teste repetido depois do
+   * inconclusivo, a leitura registrada depois do biológico posto a incubar). Sem tipo, a categoria agrupa.
+   */
+  readonly tipo?: number;
 }
 
 function situacaoDaCategoria(testes: readonly TesteRegistrado[]): ResultadoIndicador {
   const valem = testes.filter((t) => t.liberacaoDepende);
+  // Reprovado não se desfaz com repetição: a carga do indicador reprovado está reprovada.
   if (valem.some((t) => t.resultado === 'reprovado')) return 'nao_conforme';
-  if (valem.length && valem.every((t) => t.resultado === 'aprovado')) return 'conforme';
+  const ultimoPorTipo = new Map<number | string, ResultadoTeste>();
+  for (const t of valem) ultimoPorTipo.set(t.tipo ?? t.categoria, t.resultado);
+  const ultimos = [...ultimoPorTipo.values()];
+  if (ultimos.length && ultimos.every((r) => r === 'aprovado')) return 'conforme';
   return 'pendente';
 }
 

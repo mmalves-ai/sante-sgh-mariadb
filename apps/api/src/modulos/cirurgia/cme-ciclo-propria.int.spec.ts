@@ -252,6 +252,9 @@ describe.skipIf(SEM_BANCO)('PortaCmeCicloPropria contra o MariaDB (contrato de e
     ).toBe(422);
     expect(await testes(ciclo)).toBe(0);
     await porta.registrarTeste(ctx(), ciclo, { tipo: m.fisico, resultado: 'aprovado', leitura, valorMedido: '134 C' });
+    // O químico inconclusivo é repetido: vale o último teste do tipo, e o repetido aprovado libera.
+    await porta.registrarTeste(ctx(), ciclo, { tipo: m.quimico, resultado: 'inconclusivo', lote: 'LQ0', leitura });
+    expect((await porta.ciclo(ctx(), ciclo)).indicadores.quimico).toBe('pendente');
     await porta.registrarTeste(ctx(), ciclo, {
       tipo: m.quimico,
       resultado: 'aprovado',
@@ -264,8 +267,9 @@ describe.skipIf(SEM_BANCO)('PortaCmeCicloPropria contra o MariaDB (contrato de e
          FROM teste_ciclo_esterilizacao WHERE ciclo_esterilizacao_id = ? ORDER BY sequencia`,
       [ciclo],
     );
-    expect(ts.map((t) => Number(t['sequencia']))).toEqual([1, 2]);
-    expect(ts[1]).toMatchObject({ resultado: 'aprovado', lote_indicador: 'LQ1' });
+    expect(ts.map((t) => Number(t['sequencia']))).toEqual([1, 2, 3]);
+    expect(ts[1]).toMatchObject({ resultado: 'inconclusivo', lote_indicador: 'LQ0' });
+    expect(ts[2]).toMatchObject({ resultado: 'aprovado', lote_indicador: 'LQ1' });
     expect(ts.every((t) => Number(t['responsavel_usuario_id']) === m.usuario && t['leitura_em'])).toBe(true);
     const lido = await porta.ciclo(ctx(), ciclo);
     expect(lido.indicadores).toEqual({ fisico: 'conforme', quimico: 'conforme', biologico: 'pendente' });

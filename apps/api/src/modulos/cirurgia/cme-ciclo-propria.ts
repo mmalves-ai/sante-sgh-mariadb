@@ -316,6 +316,7 @@ export class PortaCmeCicloPropria extends PortaCmePropria {
           categoria: categoria(t['categoria']),
           resultado: String(t['resultado']) as ResultadoTeste,
           liberacaoDepende: bool(t['liberacao_depende']),
+          tipo: num(t['tipo_indicador_esterilizacao_id']),
         })),
       ),
       testes,

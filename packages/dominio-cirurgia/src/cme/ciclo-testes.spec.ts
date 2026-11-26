@@ -74,6 +74,15 @@ describe('indicadores pelos testes: liberação só com indicador aprovado', () 
       desfechoDoCiclo(indicadoresDosTestes([t('fisico', 'aprovado'), t('quimico', 'reprovado')]), false).situacao,
     ).toBe('reprovado');
   });
+  it('o teste repetido depois do inconclusivo e a leitura depois do biológico em incubação valem por tipo', () => {
+    expect(indicadoresDosTestes([t('quimico', 'inconclusivo'), t('quimico', 'aprovado')]).quimico).toBe('conforme');
+    expect(indicadoresDosTestes([t('biologico', 'pendente'), t('biologico', 'aprovado')]).biologico).toBe('conforme');
+    expect(indicadoresDosTestes([t('quimico', 'reprovado'), t('quimico', 'aprovado')]).quimico).toBe('nao_conforme');
+    // Dois tipos exigidos na mesma categoria: o último de cada um precisa estar aprovado.
+    const q = (tipo: number, resultado: 'aprovado' | 'pendente') => ({ ...t('quimico', resultado), tipo });
+    expect(indicadoresDosTestes([q(4, 'aprovado'), q(5, 'pendente')]).quimico).toBe('pendente');
+    expect(indicadoresDosTestes([q(4, 'aprovado'), q(5, 'pendente'), q(5, 'aprovado')]).quimico).toBe('conforme');
+  });
   it('indicador informativo (não decide a liberação) não reprova', () =>
     expect(indicadoresDosTestes([t('quimico', 'aprovado'), t('quimico', 'reprovado', false)]).quimico).toBe(
       'conforme',
