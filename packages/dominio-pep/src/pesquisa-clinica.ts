@@ -276,12 +276,3 @@ export function conferirMudancaParticipante(
 export const participanteSaiu = (s: SituacaoParticipante): boolean => SAIDAS.includes(s);
 export const participanteAtivo = (s: SituacaoParticipante): boolean =>
   s === 'incluido' || s === 'em_tratamento' || s === 'em_acompanhamento';
-
-/** Idade em anos completos na data de referência (AAAA-MM-DD). */
-export function idadeEmAnos(nascimento: string | null, referencia: string): number | null {
-  if (!nascimento) return null;
-  const [an, mn, dn] = nascimento.slice(0, 10).split('-').map(Number);
-  const [ar, mr, dr] = referencia.slice(0, 10).split('-').map(Number);
-  if (!an || !ar) return null;
-  return ar - an - (mr! < mn! || (mr === mn && dr! < dn!) ? 1 : 0);
-}

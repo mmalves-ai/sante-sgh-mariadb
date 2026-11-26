@@ -7,10 +7,10 @@ import {
   conferirTransicaoEstudo,
   type CriterioAvaliavel,
   estudoRecruta,
-  idadeEmAnos,
   triarPaciente,
 } from './pesquisa-clinica.js';
 
+import { idadeEmAnos } from './especialidades/comum.js';
 const estudo = {
   codigo: 'EST-1',
   titulo: 'Estudo sintético',
