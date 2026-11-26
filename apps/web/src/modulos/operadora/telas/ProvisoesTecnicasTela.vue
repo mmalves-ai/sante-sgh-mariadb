@@ -46,8 +46,8 @@ const numero = (v: string): number | null => {
   return Number(s);
 };
 const simNao = computed(() => [
-  { valor: false, rotulo: t('nao') },
-  { valor: true, rotulo: t('sim') },
+  { valor: 'nao' as const, rotulo: t('nao') },
+  { valor: 'sim' as const, rotulo: t('sim') },
 ]);
 
 async function tentar<T>(fn: () => Promise<T>, ok?: string): Promise<T | null> {
@@ -142,7 +142,7 @@ async function incluirConta() {
 const mapas = ref<MapaConta[]>([]);
 const contaPropria = ref<number | null>(null);
 const contaAns = ref<string | null>(null);
-const duplica = ref(false);
+const duplica = ref<'sim' | 'nao'>('nao');
 const inicioMapa = ref('');
 const fimMapa = ref<Record<number, string>>({});
 const contasAnsAnaliticas = computed(() =>
@@ -167,7 +167,7 @@ async function mapear() {
     incluirMapa(operadora.value!, {
       contaContabil: contaPropria.value!,
       contaAns: contaAns.value!,
-      duplicaValor: duplica.value,
+      duplicaValor: duplica.value === 'sim',
       grupo: null,
       subgrupo: null,
       paginaDiops: null,

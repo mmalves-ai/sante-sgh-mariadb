@@ -207,7 +207,7 @@ test.describe('@C3-009 chave do dispositivo como segundo fator', () => {
 
     await page.getByTestId('campo-login').fill('SINT.GUICHE');
     await page.getByTestId('campo-senha').fill(SENHA);
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, 'C3-009 entrada com a chave do dispositivo');
     await page.getByTestId('botao-entrar').click();
     await expect(page).toHaveURL(/\/inicio/);
 

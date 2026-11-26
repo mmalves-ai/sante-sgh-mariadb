@@ -279,7 +279,8 @@ async function processar(l: LoteExclusao): Promise<void> {
                 <template v-if="c.situacao === 'ativa'">
                   <SanteCampoTexto
                     :id="`portais-motivo-${c.id}`"
-                    v-model="motivoBloqueio[c.id]"
+                    :model-value="motivoBloqueio[c.id] ?? ''"
+                    @update:model-value="(v: string) => (motivoBloqueio[c.id] = v)"
                     :rotulo="t('conta.motivo')"
                     :max-bytes="200"
                   />
@@ -410,7 +411,8 @@ async function processar(l: LoteExclusao): Promise<void> {
               <template v-if="podeEditar && (ABERTAS.includes(s.situacao) || s.situacao === 'aprovada')">
                 <SanteCampoTexto
                   :id="`portais-resultado-${s.id}`"
-                  v-model="resultado[s.id]"
+                  :model-value="resultado[s.id] ?? ''"
+                  @update:model-value="(v: string) => (resultado[s.id] = v)"
                   :rotulo="t('solicitacao.resultado')"
                   :max-bytes="1000"
                 />
