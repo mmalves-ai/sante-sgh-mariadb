@@ -25,7 +25,13 @@ test.describe('@C3-025 referência do empenho no pedido e no título', () => {
   }) => {
     const externas = vigiarExternas(page);
     await entrar(page, 'SINT.AUTORIDADE');
-    await page.getByRole('link', { name: 'Ata de registro de preços e empenho' }).first().click();
+    // O menu abre recolhido: Suprimentos > Compras antes do item.
+    const menu = page.getByRole('navigation', { name: 'Menu principal' });
+    await menu.getByRole('button', { name: /^Suprimentos/ }).click();
+    const compras = menu.getByRole('button', { name: /^Compras/ });
+    if ((await compras.count()) > 0 && (await compras.first().getAttribute('aria-expanded')) !== 'true')
+      await compras.first().click();
+    await menu.getByRole('link', { name: 'Ata de registro de preços e empenho' }).click();
     await expect(page).toHaveURL(/\/suprimentos\/atas-registro-preco/);
     const painel = page.getByTestId('ref-empenho');
     await expect(painel).toBeVisible();
