@@ -98,8 +98,11 @@ void tentar(async () => {
   operadoras.value = a.operadoras.map((o) => ({ valor: o.id, rotulo: `${o.nome} (${o.registroAns})` }));
   if (a.operadoras.length === 1) operadora.value = a.operadoras[0]!.id;
 });
+/** Recarrega a lista sem apagar o aviso da gravação que a pediu (só o erro da leitura substitui o aviso). */
 async function carregar(op: number): Promise<void> {
+  const avisoAnterior = aviso.value;
   regras.value = (await tentar(() => lerRegrasCritica(op))) ?? [];
+  if (!erro.value) aviso.value = avisoAnterior;
 }
 watch(operadora, async (op) => {
   regras.value = null;
