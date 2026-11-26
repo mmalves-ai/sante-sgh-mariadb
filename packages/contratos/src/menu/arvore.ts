@@ -44,6 +44,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // a contagem acompanha.
 // C2-095 (08-SGO L100): o item "Comercial: propostas e comissões" da operadora própria entrou à mão (mesmo motivo;
 // F7); a contagem acompanha.
+// C2-103 (06-FAT L37): o item "Receita contábil" do faturamento entrou à mão (mesmo motivo; F3); a contagem
+// acompanha.
 // Lote 02-07 (ADR 0003, itens 5 e 9): o item "Migração gradual dos usuários" saiu à mão (o gerador e a fonte não
 // estão neste repositório); a contagem do cabeçalho acompanha.
 // F3.3 (03-PEP L128): o item "Grupos comparativos de resultados" entrou à mão (mesmo motivo); a contagem acompanha.
@@ -171,7 +173,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo; F7 vai como fase 7); a contagem acompanha.
 // C3-028 (08-SGO linha 97, F7): o item "Desconto em folha" da operadora própria entrou à mão (mesmo motivo; F7 vai
 // como fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":523,"M":198,"P":57,"N":268};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":524,"M":198,"P":57,"N":269};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -414,6 +416,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.contas-do-paciente.protocolo-de-documentos-entre-setores","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Protocolo de documentos entre setores"],"titulo":"Protocolo de documentos entre setores","selo":"N","fase":3,"rota":"/faturamento/protocolos","permissao":"faturamento.tramite.ler"},
   {"id":"faturamento.contas-do-paciente.pacotes-e-orcamentos-padrao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Pacotes e orçamentos-padrão"],"titulo":"Pacotes e orçamentos-padrão","selo":"M","fase":3,"rota":"/faturamento/pacotes","permissao":"faturamento.pacote.ler"},
   {"id":"faturamento.contas-do-paciente.preferencias-do-faturista","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Preferências do faturista"],"titulo":"Preferências do faturista","selo":"N","fase":3,"rota":"/faturamento/preferencias","permissao":"faturamento.conta.ler"},
+  {"id":"faturamento.contas-do-paciente.receita-contabil","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Receita contábil"],"titulo":"Receita contábil","selo":"N","fase":3,"rota":"/faturamento/receita-contabil","permissao":"faturamento.conta.ler"},
   {"id":"faturamento.particular.orcamento-de-particular","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Orçamento de particular"],"titulo":"Orçamento de particular","selo":"P","fase":3,"rota":"/faturamento/particular/orcamentos","permissao":"faturamento.orcamento.ler"},
   {"id":"faturamento.particular.modelos-de-orcamento","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Modelos de orçamento"],"titulo":"Modelos de orçamento","selo":"N","fase":3,"rota":"/faturamento/modelos-orcamento","permissao":"faturamento.orcamento.ler"},
   {"id":"faturamento.particular.recibos-e-caixa","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Recibos e caixa"],"titulo":"Recibos e caixa","selo":"P","fase":3,"rota":"/faturamento/particular/caixa","permissao":"faturamento.recibo.ler"},
