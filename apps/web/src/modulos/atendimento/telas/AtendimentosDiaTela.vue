@@ -227,6 +227,13 @@ const rotuloAcao = (a: Acao) => t(`atendimento.${a}.titulo`);
                 :data-testid="`atd-${ac}-${a.reg}`"
                 >{{ rotuloAcao(ac) }}</RouterLink
               >
+              <RouterLink
+                v-if="a.paciente.id !== null"
+                :to="{ path: '/faturamento/elegibilidade', query: { paciente: String(a.paciente.id) } }"
+                :aria-label="t('atendimento.dia.elegibilidadeDe', { reg: a.reg })"
+                :data-testid="`atd-elegibilidade-${a.reg}`"
+                >{{ t('atendimento.dia.elegibilidade') }}</RouterLink
+              >
             </td>
           </tr>
         </tbody>

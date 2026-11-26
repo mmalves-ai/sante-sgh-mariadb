@@ -46,6 +46,8 @@ export const mensagensAtendimento = {
     limpar: 'Limpar a busca',
     local: 'Local',
     todosLocais: 'Todos os locais',
+    elegibilidade: 'Elegibilidade',
+    elegibilidadeDe: 'Elegibilidade do paciente do atendimento {reg} na operadora',
   },
   naoIdentificado: {
     titulo: 'Identificação pendente (pacientes não identificados)',
