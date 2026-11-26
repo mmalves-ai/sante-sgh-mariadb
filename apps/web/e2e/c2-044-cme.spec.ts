@@ -197,7 +197,7 @@ test.describe('@C2-044 central de material esterilizado (05-SUP linha 29)', () =
       corpos: {},
     };
     await simular(page, e);
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.CME');
     await page.goto('/cirurgia/cme');
     await expect(page.getByTestId('tela-cme')).toBeVisible();
     await semViolacaoAxe(page, 'central de material esterilizado');
