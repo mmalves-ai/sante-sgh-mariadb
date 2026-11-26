@@ -8,9 +8,14 @@ from unittest import mock
 
 from sante_conector import carga_mapa, mapa, sentinela
 try:  # descoberta pelo pacote (conector.sh testes) ou direta
-    from testes._motor_recusas_falso import motor
+    from testes._motor_recusas_falso import gravada, motor
 except ImportError:
-    from _motor_recusas_falso import motor
+    from _motor_recusas_falso import gravada, motor
+
+
+def _destino(pares):
+    """`_todas` falso: SELECT id, coluna FROM destino WHERE id IN (..) sobre {id: número gravado}."""
+    return lambda sql, a=(): [(i, pares[i]) for i in a if i in pares]
 
 D = decimal.Decimal
 
@@ -75,6 +80,22 @@ class SeqLivre(unittest.TestCase):
         b = motor({"T": (["ID", "DOC", "SEQ"], linhas)})._preparar_seq_livre(self._plano())
         self.assertEqual(a, b)
 
+    def test_reexecucao_diferencial_linha_nova_nao_colide(self):
+        n = "#seq_livre:DOC:SEQ"
+        um = motor({"T": (["ID", "DOC", "SEQ"], [(10, 1, 1), (11, 1, 1)])})._preparar_seq_livre(self._plano())
+        self.assertEqual(um[n], {"11": (2, 1)})  # execução 1: o 10 fica com 1, o 11 vira 2
+        ex = {"T": {"10": gravada(100), "11": gravada(101)}}
+        for nova, esperado in (((12, 1, 2), {"11": (2, 1), "12": (3, 2)}),   # chave maior, o 2 já é do 11
+                               ((5, 1, 1), {"11": (2, 1), "5": (3, 1)})):    # chave menor, o 1 já é do 10
+            cm = motor({"T": (["ID", "DOC", "SEQ"], [(10, 1, 1), (11, 1, 1), nova])}, existente=dict(ex),
+                       todas=_destino({100: 1, 101: 2}))
+            m = cm._preparar_seq_livre(self._plano())[n]
+            self.assertEqual(m, esperado)
+            finais = {"10": 1, "11": 2}  # as carregadas: o número gravado, nunca outro
+            finais.update({k: v[0] for k, v in m.items()})
+            finais.setdefault(str(nova[0]), nova[2])
+            self.assertEqual(sorted(finais.values()), [1, 2, 3])  # nenhuma colisão no grupo
+
 
 class SeqFaixa(unittest.TestCase):
     def test_um_numero_por_chave_acima_do_piso(self):
@@ -84,6 +105,16 @@ class SeqFaixa(unittest.TestCase):
         n = "#seq_faixa:ANO+DOC"
         self.assertEqual(cm._seq_faixa_valor(p, "req", "numero", n, {"ANO": 2026, "DOC": 3}), 71)
         self.assertEqual(cm._seq_faixa_valor(p, "req", "numero", n, {"ANO": 2026, "DOC": 3}), 71)
+        self.assertEqual(cm._seq_faixa_valor(p, "req", "numero", n, {"ANO": 2026, "DOC": 4}), 72)
+
+    def test_reexecucao_chave_ja_numerada_guarda_o_numero(self):
+        # execução 1 gravou a linha 1 (chave 2026|3) com o número 71; a execução 2 lê a linha nova 2 da MESMA chave
+        cm = motor({"REQ": (["ID", "ANO", "DOC"], [(1, 2026, 3), (2, 2026, 3), (3, 2026, 4)])},
+                   existente={"REQ": {"1": gravada(500)}}, um=lambda *a: 71, todas=_destino({500: 71}))
+        p = {"tabela": "REQ", "chave": ["ID"], "destinos": ["req"],
+             "colunas": {"req": [{"coluna": "#seq_faixa:ANO+DOC", "destino": "numero"}]}}
+        n = "#seq_faixa:ANO+DOC"
+        self.assertEqual(cm._seq_faixa_valor(p, "req", "numero", n, {"ANO": 2026, "DOC": 3}), 71)  # o mesmo documento
         self.assertEqual(cm._seq_faixa_valor(p, "req", "numero", n, {"ANO": 2026, "DOC": 4}), 72)
 
 
@@ -99,6 +130,21 @@ class SufixoColisao(unittest.TestCase):
         self.assertEqual(cm._sufixo_colisao("agenda", "nome", {"estabelecimento_id": 1, "nome": "agenda b "}, "14",
                                             pend), "agenda b  (14)")  # a mesma desta execução, sem caixa
         self.assertEqual([r for r, _ in pend], ["sufixo_na_colisao", "sufixo_na_colisao"])
+
+    def test_nome_no_tamanho_maximo_cabe_com_o_sufixo(self):
+        def um(sql, a):
+            if "CHARACTER_MAXIMUM_LENGTH" in sql:
+                return 10
+            return 1 if a in ([1, "Agenda A12"], [1, "Agenda (7)"]) else 0
+        cm = motor(um=um)
+        cm._unicos_dc = {("agenda", "nome"): [["estabelecimento_id", "nome"]]}
+        pend = []
+        x = cm._sufixo_colisao("agenda", "nome", {"estabelecimento_id": 1, "nome": "Agenda A12"}, "7", pend)
+        self.assertEqual(x, "Agen (7-2)")  # 'Agenda (7)' também existe: o valor final é conferido de novo
+        self.assertLessEqual(len(x), 10)
+        x = cm._sufixo_colisao("agenda", "nome", {"estabelecimento_id": 1, "nome": "Agenda A12"}, "8", pend)
+        self.assertEqual(x, "Agenda (8)")
+        self.assertEqual(len(pend), 2)
 
 
 def _col(coluna, destino, **kw):
@@ -152,6 +198,18 @@ class DependenciaNaoCarregada(unittest.TestCase):
         with mock.patch.object(carga_mapa, "planejar", return_value=todas):
             self.assertEqual(cm._adiar_dependentes({"FILHO", "NETO", "CICLO", "OUTRA"}, {"PAI": 10}), {})
         self.assertEqual(len(cm.plano), 4)
+
+    def test_tudo_adiado_grava_a_pendencia_e_devolve_resumo_completo(self):
+        cm = self._cm()
+        cm.pend, cm.sinc, cm.sinc_res, cm._commit = cm.pendencias, False, {}, mock.Mock()
+        so_filho = [{"tabela": "FILHO"}]
+        todas = [{"tabela": t} for t in ("PAI", "FILHO")]
+        with mock.patch.object(carga_mapa, "planejar", side_effect=[so_filho, todas]):
+            r = cm.executar({"FILHO"}, {"PAI": 10, "FILHO": 5})
+        cm._commit.assert_called_once_with()  # a pendência dependencia_nao_carregada vai ao controle
+        self.assertEqual(r["pendencias"]["total"], 1)
+        self.assertEqual(r["carga"]["adiadas_por_dependencia"], ["FILHO"])
+        self.assertEqual((r["sincronizar"]["modo"], r["provas"]), ("importar", {}))  # motor.py lê as duas chaves
 
 
 if __name__ == "__main__":

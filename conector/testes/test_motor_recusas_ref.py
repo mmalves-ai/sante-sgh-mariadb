@@ -150,6 +150,47 @@ class PaiRecusado(unittest.TestCase):
         x, recusa, _ = cm._converter("F", "9", {"duas_fases": set()}, {"C": 1}, c, 1, pend, anulavel=True)
         self.assertEqual((x, recusa, [r for r, _ in pend]), (None, None, ["pai_pendente"]))
 
+    def _filho_gravado_nulo(self, pai):
+        cm = motor(existente={"PAI": {"1": pai}, "F": {"9": gravada(50)}})
+        cm.info = {"d": {"x": (True, "bigint", None, False, None)}}
+        reemitida = ("F", "9", "pai_pendente", "alta", None)  # aviso aberto da execução anterior, já reemitido
+        cm._avisos_ant, cm._buf, cm.pend = {"F": {"9": {("pai_pendente", "alta")}}}, [reemitida], [reemitida]
+        cm._reemitidas, cm.adiadas = {("F", "9", "pai_pendente"): 1}, []
+        c = {"coluna": "C", "destino": "x", "regra": "chave_origem", "depara": "", "referencia": "PAI",
+             "valores": None}
+        p = {"tabela": "F", "destinos": ["d"], "opcoes": {}, "colunas": {"d": [c]}, "duas_fases": set()}
+        cm._readiar_anulaveis(p, {"C": 1}, "9", gravada(50))
+        return cm
+
+    def test_m15_pai_corrigido_preenche_a_coluna_anulavel(self):
+        cm = self._filho_gravado_nulo(gravada(7))  # o pai foi corrigido e recarregado
+        self.assertEqual(cm.adiadas, [("d", "x", 50, None, 7, "F", "9", True)])
+        self.assertEqual((cm._buf, cm.pend, cm.pendencias), ([], [], []))  # a pai_pendente sai
+
+        class Cursor:
+            feitos, rowcount = [], 1
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def execute(self, sql, args):
+                self.feitos.append((sql, args))
+        cur = Cursor()
+        cm._c, cm._commit = (lambda: cur), (lambda: None)
+        cm.cont.update(fase2_pendentes=0, fase2_gravadas=0)
+        cm._fase2()
+        self.assertEqual(cur.feitos, [("UPDATE `d` SET `x`=%s WHERE id=%s AND `x` IS NULL", (7, 50))])
+        self.assertEqual((cm.cont["fase2_gravadas"], cm.cont["fase2_refeitas"]), (1, 1))
+
+    def test_m15_pai_ainda_recusado_segue_pendente(self):
+        cm = self._filho_gravado_nulo(recusada())
+        self.assertEqual(cm.adiadas, [])
+        self.assertEqual([x[2] for x in cm.pendencias], ["pai_pendente"])  # recalculada, uma só
+        self.assertEqual(cm._buf, [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -97,6 +97,16 @@ class Sintaxe(unittest.TestCase):
         c.existente["RECADATE"]["1/cobertura_paciente"] = (None, b"", None, "cobertura_sem_convenio", "media")
         self.assertFalse(c._cobertura_por_fazer())
 
+    def test_ficha_alterada_garante_a_cobertura_e_a_continuacao_pula(self):
+        self.assertTrue(carga.Carga._cobertura_da_ficha("RECADATE", "alterada"))  # entra em com_atend com ant[0]
+        self.assertTrue(carga.Carga._cobertura_da_ficha("RECADATE", "igual"))
+        self.assertFalse(carga.Carga._cobertura_da_ficha("REALTA", "alterada"))
+        c = carga.Carga.__new__(carga.Carga)
+        # a execução anterior registrou a cobertura da ficha alterada (pelo atendimento gravado): a próxima pula
+        c.existente = {"RECADATE": {"1": (10, b"", None, None, None), "1/cobertura_paciente": (5, b"", None, None, None),
+                                    "1/cobertura_atendimento": (6, b"", None, None, None)}}
+        self.assertFalse(c._cobertura_por_fazer())
+
 
 @unittest.skipUnless(NO_CONTAINER and os.path.isdir("/app/db/migracoes"), "só no container do conector, com o MariaDB")
 class EspelhoDoCliente(unittest.TestCase):
@@ -122,6 +132,19 @@ class EspelhoDoCliente(unittest.TestCase):
                 r1 = semente_espelho.semear(lt, cx, decl=decl)
                 r2 = semente_espelho.semear(lt, cx, decl=decl, ressemear=["brasindice:0"])
                 r3 = semente_espelho.semear(lt, cx, decl=decl)
+                with cx.cursor() as c:  # a edição ANTIGA perde um preço: é ressemeada e não volta a ativa
+                    c.execute("SELECT MIN(p.id) FROM preco_referencia_matmed p JOIN edicao_referencia_matmed e ON"
+                              " e.id=p.edicao_referencia_matmed_id WHERE e.numero_edicao='2025-03-01'")
+                    c.execute("DELETE FROM preco_referencia_matmed WHERE id=%s", (c.fetchone()[0],))
+                cx.commit()
+                r4 = semente_espelho.semear(lt, cx, decl=decl)
+                self.assertEqual(r4["simpro"]["2025-03-01"]["situacao"], "ressemeada")
+                with cx.cursor() as c:
+                    c.execute("SELECT e.numero_edicao, e.situacao, e.vigencia_fim IS NOT NULL FROM"
+                              " edicao_referencia_matmed e JOIN fonte_referencia_matmed f ON"
+                              " f.id=e.fonte_referencia_matmed_id WHERE f.codigo='simpro' ORDER BY 1")
+                    self.assertEqual([tuple(x) for x in c.fetchall()],
+                                     [("2025-03-01", "substituida", 1), ("2025-04-01", "ativa", 0)])
             finally:
                 cx.close()
             for cat, eds in l8_05.ESPERADO_ESPELHO_CLIENTE.items():

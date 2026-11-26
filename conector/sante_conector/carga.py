@@ -1428,7 +1428,7 @@ class Carga:
                 categoria.clear(); categoria.update(cat_antes)
         self._commit()
         # fichas (RECADATE) e altas (REALTA) ligadas ao atendimento de destino
-        com_atend = []  # M14: fichas com atendimento gravado (novas e iguais): a cobertura do par vem delas
+        com_atend = []  # M14: fichas com atendimento gravado (novas, iguais e alteradas): a cobertura do par vem delas
         for tab, pai_de in (("RECADATE", lambda k, l: str(l["ID_ATCABECATEND"])),
                             ("REALTA", lambda k, l: str(ficha_atend.get(k)) if k in ficha_atend else None)):
             ent = ENT_FILHA[tab]
@@ -1437,7 +1437,7 @@ class Carga:
                 if sit != "nova":
                     if ant[0] is not None:
                         self._ja_carregada(ent, k, sit, ant)
-                        if tab == "RECADATE" and sit == "igual":
+                        if self._cobertura_da_ficha(tab, sit):
                             com_atend.append((k, l, h, ant[0]))
                     continue
                 pai = pai_de(k, l)
@@ -1461,6 +1461,14 @@ class Carga:
         self._commit()
 
     # ----- M14 (recusas fase 2, R18): cobertura do par (paciente, fonte pagadora) pela ficha do atendimento -----
+    @staticmethod
+    def _cobertura_da_ficha(tab, sit):
+        """Ficha já carregada que garante a cobertura do par (M14). A ALTERADA (outra ficha na origem, à espera do
+        Sincronizar) também: a cobertura nasce do atendimento que está gravado (`ant[0]`), e o registro
+        `<REG>/cobertura_paciente` dela existe; sem ele, `_cobertura_por_fazer` ficava verdadeiro para sempre e a
+        continuação nunca mais pulava o grupo do atendimento (corretor do C1)."""
+        return tab == "RECADATE" and sit in ("igual", "alterada")
+
     def _cobertura_por_fazer(self):
         """Ficha já carregada sem o registro `<REG>/cobertura_paciente` (carga anterior ao M14): o grupo do atendimento
         não pode ser pulado na continuação, senão a cobertura nunca nasce."""

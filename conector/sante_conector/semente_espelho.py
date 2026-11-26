@@ -186,6 +186,21 @@ def _gravar(cur, lic, layout, cat, nome, ed, vig, validas):
             pass
 
 
+def _uma_ativa(cur, cat, ed, vig):
+    """Espelho do cliente: a gravação da edição a deixa 'ativa' sem condição. Edição ANTIGA (há outra mais nova da mesma
+    fonte, fora de 'falha') volta a 'substituida', com o fim da vigência na véspera da seguinte: uma só ativa por
+    fonte, também na ressemeadura de uma edição antiga (corretor do C1)."""
+    cur.execute("SELECT MIN(n.vigencia_inicio) FROM edicao_referencia_matmed n JOIN fonte_referencia_matmed f ON"
+                " f.id=n.fonte_referencia_matmed_id WHERE f.codigo=%s AND n.numero_edicao<>%s AND n.situacao<>'falha'"
+                " AND n.vigencia_inicio>%s", (cat, ed, vig))
+    prox = cur.fetchone()[0]
+    if prox is not None:
+        cur.execute("UPDATE edicao_referencia_matmed e JOIN fonte_referencia_matmed f ON f.id=e.fonte_referencia_matmed_id"
+                    " SET e.situacao='substituida', e.vigencia_fim=DATE_SUB(%s, INTERVAL 1 DAY),"
+                    " e.alterado_em=UTC_TIMESTAMP(3), e.versao=e.versao+1 WHERE f.codigo=%s AND e.numero_edicao=%s",
+                    (prox, cat, ed))
+
+
 def semear(lt, conexao, decl=None, lic=None, ressemear=()):
     """Lê as edições do catálogo licenciado na cópia da origem (`lt`, só leitura) e grava no espelho (`conexao`,
     com várias instruções por chamada). Devolve {catalogo: {edicao: {origem, validas, recusadas, espelho, conferido,
@@ -240,7 +255,8 @@ def semear(lt, conexao, decl=None, lic=None, ressemear=()):
                 e["linhas"].append({k: _campo(lt, pais, linha, c) for k, c in campos.items() if not k.startswith("#")})
             res[cat] = {}
             apagou = False
-            for ed, e in sorted(edicoes.items()):
+            # na ordem da VIGÊNCIA (o texto põe '10' antes de '9'): a edição mais nova é gravada por último
+            for ed, e in sorted(edicoes.items(), key=lambda y: (y[1]["vig"] or datetime.date.min, y[0])):
                 validas, recusadas, vistos = [], {}, set()
                 for r in e["linhas"]:
                     try:
@@ -280,6 +296,7 @@ def semear(lt, conexao, decl=None, lic=None, ressemear=()):
                                         (ja[0],))
                             r["precos_apagados"], apagou = int(cur.rowcount or 0), True
                         _gravar(cur, lic, layout, cat, nome, ed, e["vig"], validas)
+                        _uma_ativa(cur, cat, ed, e["vig"])
                         r["situacao"] = "ressemeada" if ja else "semeada"
                 r["espelho"] = _contar(cur, layout, cat, ed)
                 r["conferido"] = r["espelho"] == len(validas)

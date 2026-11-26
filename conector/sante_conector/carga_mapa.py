@@ -183,7 +183,7 @@ from . import sincronizar as sincronizar_mod
 from . import carga, continuar, continuidade, depara, mapa, paralelo, sentinela
 from .carga import AGORA, ErroCarga, chave_txt, soma
 from .leitor import hash_bloco, hash_linha
-from .pendencia import Propagador
+from .pendencia import GRAVIDADES, Propagador
 from .texto import texto_para_cp1252
 
 VERSAO = "mapa-2026-11-21"
@@ -620,6 +620,9 @@ class _AvisoNoLote(Exception):
 
 class _PADRAO(str):
     """Marca, no resumo, a coluna que ficou com o padrão do destino (trocada pelo valor relido depois do INSERT)."""
+
+
+_OCUPADO = object()  # #seq_livre: número do grupo já gravado por uma linha carregada
 
 
 def _truncar(v, precisao):
@@ -1742,35 +1745,75 @@ class CargaMapa(carga.Carga):
         """`#seq_livre:<G1+G2..>:<COL>` (M3): lê a tabela inteira uma vez. No grupo (G1, G2..), o valor de COL único
         fica; o REPETIDO fica só na primeira linha (ordem da chave) e as outras (e as de COL nulo ou não inteiro)
         recebem o próximo livre, máximo do grupo + k, sem salto, na ordem estável da chave. Determinístico: a
-        reexecução diferencial dá o mesmo número. {nome: {chave da linha: (número novo, original)}}."""
-        out = {}
-        specs = {c["coluna"] for dt in p["destinos"] for c in p["colunas"][dt] if c["coluna"].startswith("#seq_livre:")}
+        reexecução diferencial dá o mesmo número. {nome: {chave da linha: (número novo, original)}}.
+        Reexecução diferencial (corretor do C1): a linha JÁ CARREGADA guarda o número gravado no destino (nunca é
+        renumerada; o Sincronizar dela recebe esse número) e o ocupa no grupo; só as linhas ainda sem número no destino
+        passam pela regra acima, com o maior do grupo contando também os números gravados (sem colisão)."""
+        out, specs = {}, {}
+        for dt in p["destinos"]:
+            for c in p["colunas"][dt]:
+                if c["coluna"].startswith("#seq_livre:"):
+                    specs.setdefault(c["coluna"], (dt, c["destino"]))
+        ex = self.existente.get(p["tabela"]) or {}
         for nome in sorted(specs):
             _, g, col = nome.split(":")
             gs = g.split("+")
             nomes, it = self.lt.ler_tudo(p["tabela"], colunas=list(dict.fromkeys(p["chave"] + gs + [col])))
-            maior, primeira, outras = {}, {}, []
+            linhas = []
             for x in it:
                 d = dict(zip(nomes, x))
-                ch = "|".join(self._chave(d[c]) for c in p["chave"])
-                k, n = tuple(self._chave(d[c]) for c in gs), _inteiro(d[col])
+                linhas.append((tuple(self._chave(d[c]) for c in gs), "|".join(self._chave(d[c]) for c in p["chave"]),
+                               d[col]))
+            gravado = self._seq_gravado(p, specs[nome][0], specs[nome][1], ex, [y[1] for y in linhas]) if ex else {}
+            maior, primeira, outras, m = {}, {}, [], {}
+            for k, ch, orig in linhas:  # a já carregada ocupa o número gravado
+                n = gravado.get(ch)
                 if n is None:
-                    outras.append((k, ch, d[col]))
+                    continue
+                maior[k] = max(maior.get(k, n), n)
+                primeira[(k, n)] = _OCUPADO
+                if n != _inteiro(orig):
+                    m[ch] = (n, orig)
+            for k, ch, orig in linhas:
+                if ch in gravado:
+                    continue
+                n = _inteiro(orig)
+                if n is None:
+                    outras.append((k, ch, orig))
                     continue
                 maior[k] = max(maior.get(k, n), n)
                 ant = primeira.get((k, n))
                 if ant is None:
                     primeira[(k, n)] = ch
+                elif ant is _OCUPADO:
+                    outras.append((k, ch, n))
                 elif _ord_chave(ch) < _ord_chave(ant):
                     primeira[(k, n)] = ch
                     outras.append((k, ant, n))
                 else:
                     outras.append((k, ch, n))
-            m, cont = {}, {}
+            cont = {}
             for k, ch, orig in sorted(outras, key=lambda y: (y[0], _ord_chave(y[1]))):
                 cont[k] = cont.get(k, 0) + 1
                 m[ch] = (max(maior.get(k, 0), 0) + cont[k], orig)
             out[nome] = m
+        return out
+
+    def _seq_gravado(self, p, dt, dc, ex, chaves):
+        """{chave da linha: número gravado em `dt`.`dc`} das linhas já carregadas (id no estado da tabela; o destino
+        secundário pelo registro `<chave>/<destino>`). Lido em blocos pelo id, só para as linhas carregadas."""
+        ids = {}
+        for ch in chaves:
+            e = ex.get(ch if dt == p["destinos"][0] else "%s/%s" % (ch, dt))
+            if e is not None and e[0] is not None:
+                ids[int(e[0])] = ch
+        out, lst = {}, sorted(ids)
+        for i in range(0, len(lst), 5000):
+            b = lst[i:i + 5000]
+            for rid, v in self._todas("SELECT id, `%s` FROM `%s` WHERE id IN (%s)" % (dc, dt, ",".join(["%s"] * len(b))),
+                                      b):
+                if int(rid) in ids:
+                    out[ids[int(rid)]] = _inteiro(v)
         return out
 
     def _seq_livre_valor(self, nome, linha, chave, pend):
@@ -1785,7 +1828,9 @@ class CargaMapa(carga.Carga):
         """`#seq_faixa:<C1+C2..>` (R10): um número próprio por chave distinta (C1, C2..), piso + k na ordem em que
         as chaves aparecem (a da chave da origem). Piso: o maior número já gravado na coluna do destino e o maior que
         uma declaração concorrente da mesma coluna, por referência terminada em coluna, pode gravar (a origem do pai
-        inteira). A reexecução diferencial não renumera: a linha já carregada é pulada."""
+        inteira). A reexecução diferencial não renumera: a linha já carregada é pulada, e a chave (C1, C2..) que uma
+        linha já carregada numerou guarda esse número (o mapa chave -> número gravado é lido do destino na primeira
+        chamada): a linha nova de uma chave antiga entra no MESMO documento (corretor do C1)."""
         k = tuple(self._chave(linha.get(x)) for x in nome[11:].split("+"))
         faixas = self.__dict__.setdefault("_faixa_seq", {})
         st = faixas.get((p["tabela"], dt, dc))
@@ -1797,6 +1842,18 @@ class CargaMapa(carga.Carga):
                     vs = [_inteiro(x) for x in self._coluna_pai(ps[-2]["tabela"], ps[-1]["coluna"]).values()]
                     piso = max([piso] + [x for x in vs if x is not None])
             st = faixas[(p["tabela"], dt, dc)] = {"piso": piso, "n": 0, "map": {}}
+            ex = self.existente.get(p["tabela"]) or {}
+            if ex and p.get("chave") and p.get("destinos"):
+                cols = nome[11:].split("+")
+                nomes, it = self.lt.ler_tudo(p["tabela"], colunas=list(dict.fromkeys(p["chave"] + cols)))
+                chs = {}
+                for x in it:
+                    d = dict(zip(nomes, x))
+                    chs["|".join(self._chave(d[c]) for c in p["chave"])] = tuple(self._chave(d.get(y)) for y in cols)
+                grav = self._seq_gravado(p, dt, dc, ex, list(chs))
+                for ch in sorted(grav, key=_ord_chave):
+                    if grav[ch] is not None:
+                        st["map"].setdefault(chs[ch], grav[ch])
         if k not in st["map"]:
             st["n"] += 1
             st["map"][k] = st["piso"] + st["n"]
@@ -1816,22 +1873,40 @@ class CargaMapa(carga.Carga):
 
     def _sufixo_colisao(self, dt, dc, v, chave, pend):
         """`sufixo_colisao` (M11): o texto que já existe numa chave única do destino (ou numa linha desta execução)
-        ganha ' (<chave da origem>)', com a pendência baixa `sufixo_na_colisao`; os outros campos da chave valem."""
+        ganha ' (<chave da origem>)', com a pendência baixa `sufixo_na_colisao`; os outros campos da chave valem.
+        O texto-base é cortado para o resultado caber no tamanho da coluna (CHARACTER_MAXIMUM_LENGTH), e o valor final é
+        conferido de novo: colidindo ainda, ' (<chave>-2)', ' (<chave>-3)'.. (corretor do C1)."""
         x = v.get(dc)
         if not isinstance(x, str) or not x:
             return x
         vistos = self.__dict__.setdefault("_sufixo_vistos", {})
+        tam = self.__dict__.setdefault("_sufixo_tam", {})
+        if (dt, dc) not in tam:
+            tam[(dt, dc)] = _inteiro(self._um(
+                "SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND"
+                " TABLE_NAME=%s AND COLUMN_NAME=%s", (dt, dc))) or None
+        lim = tam[(dt, dc)]
         for cols in self._unicos_com(dt, dc):
             if any(v.get(c) is None for c in cols):
                 continue
-            k = tuple(str(v[c]).strip().lower() for c in cols)
             vs = vistos.setdefault((dt, tuple(cols)), set())
-            if k in vs or self._um("SELECT COUNT(*) FROM `%s` WHERE %s" % (dt, " AND ".join(
-                    "`%s`=%%s" % c for c in cols)), [v[c] for c in cols]):
-                x = "%s (%s)" % (x, chave)
+
+            def existe(y, cols=cols, vs=vs):
+                vv = [y if c == dc else v[c] for c in cols]
+                return tuple(str(a).strip().lower() for a in vv) in vs or bool(self._um(
+                    "SELECT COUNT(*) FROM `%s` WHERE %s" % (dt, " AND ".join("`%s`=%%s" % c for c in cols)), vv))
+            if existe(x):
+                base, i = x, 1
+                while True:
+                    suf = " (%s)" % (chave if i == 1 else "%s-%d" % (chave, i))
+                    y = (base[:max(lim - len(suf), 0)] if lim and len(base) + len(suf) > lim else base) + suf
+                    y = y[:lim] if lim else y
+                    if not existe(y) or i >= 9:
+                        break
+                    i += 1
+                x = y
                 pend.append(("sufixo_na_colisao", "baixa"))
-                k = tuple(str(x if c == dc else v[c]).strip().lower() for c in cols)
-            vs.add(k)
+            vs.add(tuple(str(x if c == dc else v[c]).strip().lower() for c in cols))
         return x
 
     # ----- M1: dependência não carregada adia a tabela -----
@@ -2696,6 +2771,8 @@ class CargaMapa(carga.Carga):
                     self._secundarias_ja_carregadas(p, ents, chave, sit, ant)
                     if nulas and sit == "igual":
                         self._readiar(p, linha, chave, ant, nulas)
+                    if sit == "igual":
+                        self._readiar_anulaveis(p, linha, chave, ant)
                 elif ant[3]:
                     self.prop.registrar(t, chave, ant[3], ant[4] or "alta")
                 continue
@@ -3071,6 +3148,57 @@ class CargaMapa(carga.Carga):
                 elif adiada:
                     self.adiadas.append((dt, dc, rid, c["referencia"], adiada, t, chave, True))
 
+    def _readiar_anulaveis(self, p, linha, chave, ant):
+        """R9/M15 (corretor do C1): linha "igual" gravada com coluna ANULÁVEL por referência deixada NULL por
+        `pai_pendente` (aviso aberto de execução anterior). A referência é refeita pelo mesmo `_converter`: o pai que já
+        carregou (recarregado e corrigido) entra no `_fase2` com o id pronto e `AND coluna IS NULL`, e a pendência
+        reemitida sai; o que segue pendente volta a ter `pai_pendente`. As colunas em duas fases são do `_readiar`."""
+        t = p["tabela"]
+        av = (self.__dict__.get("_avisos_ant") or {}).get(t, {}).get(str(chave)[:500], ())
+        if not any(r == "pai_pendente" for r, _ in av):
+            return
+        ex, refeitas, segue = self.existente.get(t, {}), False, None
+        for i, dt in enumerate(p["destinos"]):
+            if self._desdobrado(p, dt):
+                continue
+            rid = ant[0] if i == 0 else (ex.get("%s/%s" % (chave, dt)) or (None,))[0]
+            if rid is None:
+                continue
+            info, feitas = self.info.get(dt) or {}, set()
+            for c in p["colunas"][dt]:
+                dc = c["destino"]
+                ref = c.get("passos") or (c.get("referencia") and sentinela.regra_efetiva(
+                    c.get("regra") or "texto", self.subtipo.get(c["coluna"], 0)) == "chave_origem")
+                if not ref or dc in feitas or not (info.get(dc) or (False,))[0] or c["coluna"] not in linha:
+                    continue
+                if (c.get("referencia") in p["duas_fases"] and not c.get("passos")) or _passos_em_duas_fases(c, p):
+                    continue
+                if c.get("se") and not self._cond(linha, c["se"], []):
+                    continue
+                pend = []
+                x, recusa, _a = self._converter(t, chave, p, linha, c, linha.get(c["coluna"]), pend, anulavel=True)
+                pp = [g for r, g, *_ in pend if r == "pai_pendente"]
+                if pp:
+                    segue = pp[0] if segue is None or GRAVIDADES.index(pp[0]) > GRAVIDADES.index(segue) else segue
+                    feitas.add(dc)
+                    continue
+                if recusa or x is None:
+                    continue
+                feitas.add(dc)
+                refeitas = True
+                self.adiadas.append((dt, dc, rid, None, x, t, chave, True))
+        if not refeitas and segue is None:
+            return
+        k = (t, str(chave)[:500], "pai_pendente")
+        for lst in (self._buf, self.pend):  # a reemitida (aviso anterior) sai; a que segue é recalculada abaixo
+            for j in range(len(lst) - 1, -1, -1):
+                if tuple(lst[j][:3]) == k:
+                    del lst[j]
+                    break
+        self._reemitidas.pop(k, None)
+        if segue is not None:
+            self._pendencia(t, chave, "pai_pendente", segue)
+
     def _fase2(self):
         """Referências adiadas (autorreferência e ciclo declarado em duas fases): gravadas por UPDATE no fim."""
         feitas = set()  # colunas concorrentes adiadas: vale a primeira resolvida, na ordem declarada
@@ -3079,9 +3207,12 @@ class CargaMapa(carga.Carga):
             so_nulo = len(x) > 7  # refeita de linha "igual" (_readiar): só preenche a coluna que ficou NULL
             if (dt, dc, rid) in feitas:
                 continue
-            if ref not in self.existente:
-                self._carregar_existente(ref)
-            ant = self.existente[ref].get(cpai)
+            if ref is None:  # _readiar_anulaveis: id do pai já resolvido
+                ant = (cpai,)
+            else:
+                if ref not in self.existente:
+                    self._carregar_existente(ref)
+                ant = self.existente[ref].get(cpai)
             if ant is None or ant[0] is None:
                 self.cont["fase2_pendentes"] += 1
                 self._pendencia(t, chave, "pai_pendente" if ant else "pai_inexistente", "media")
@@ -3129,9 +3260,13 @@ class CargaMapa(carga.Carga):
         self.plano = planejar(self.mapa_exec, presentes)
         self.tabelas = [p["tabela"] for p in self.plano]
         self._adiar_dependentes(presentes, contagens)
-        if not self.plano:
-            return {"versao_mapa": VERSAO, "entidades": {}, "pendencias": {"total": 0, "criticas": 0, "por_regra": {}},
-                    "carga": dict(self.cont, por_tabela={})}
+        if not self.plano:  # tudo adiado (M1) ou nada a carregar: as pendências gravadas e o resumo completo
+            self._commit()
+            return {"versao_mapa": VERSAO, "entidades": {},
+                    "pendencias": carga.resumo_pendencias(self.pend, getattr(self, "pend_repetidas", []),
+                                                          lambda t: t),
+                    "carga": dict(self.cont, por_tabela={}), "sincronizar": sincronizar_mod.resumo(self),
+                    "provas": {}}
         for p in self.plano:  # nome da entidade na ordem do plano (como na carga em ordem): a continuação pula
             for dt in p["destinos"]:  # tabelas e o destino comum (`complementa`) não pode trocar de nome
                 self._nome_ent(p["tabela"], dt)
