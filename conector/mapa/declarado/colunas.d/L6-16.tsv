@@ -118,7 +118,7 @@ CCAGENDA_EXC_CANC	ARCO		codigo_char			L6-16: sem destino próprio em registro_ex
 CCAGENDA_EXC_CANC	CONGEL		codigo_char			L6-16: sem destino próprio em registro_excluido (o agendamento excluído não existe no destino): vai no retrato completo (dados, #retrato:*)
 CCAGENDA_EXC_CANC	RX		codigo_char			L6-16: sem destino próprio em registro_excluido (o agendamento excluído não existe no destino): vai no retrato completo (dados, #retrato:*)
 CCAGENDA_EXC_CANC	DATA_NASCIMENTO		data			L6-16 r3b: sem coluna própria: vai no retrato da exclusão (dados), que guarda a identificação informada na agenda
-CCAGENDA_EXC_CANC	DATA_HORA_INCLUSAO		data_hora			L6-16: sem destino próprio em registro_excluido (o agendamento excluído não existe no destino): vai no retrato completo (dados, #retrato:*)
+CCAGENDA_EXC_CANC	DATA_HORA_INCLUSAO	registro_excluido.ocorrido_em	data_hora		presumida	L6-16 r4 (P2b, recusas da carga): concorrente de DATA_HORA_ULTIMA_ATUALIZACAO: sem ela (medido: data sentinela anterior a 1910 nas 66 recusadas), a inclusão da cópia é o momento da exclusão ou do cancelamento, PRESUMIDA (valor_presumido); medido: inclusão válida nas 66
 CCAGENDA_EXC_CANC	ID_TBCBOPRO_PEDIATRA		inteiro			L6-16: sem destino próprio em registro_excluido (o agendamento excluído não existe no destino): vai no retrato completo (dados, #retrato:*)
 CCAGENDA_EXC_CANC	NUM_CELULAR_PACIENTE		texto			L6-16 r3b: sem coluna própria: vai no retrato da exclusão (dados), que guarda a identificação informada na agenda
 CCAGENDA_EXC_CANC	E_MAIL_PACIENTE		texto			L6-16 r3b: sem coluna própria: vai no retrato da exclusão (dados), que guarda a identificação informada na agenda
@@ -139,6 +139,8 @@ CCCADCIR	@estabelecimento	ato_cirurgico.estabelecimento_id				L6-16 r3: o único
 CCCADCIR	ID	ato_cirurgico.numero	texto			L6-16 r3: número do registro da cirurgia no sistema anterior
 CCCADCIR	REG	ato_cirurgico.atendimento_id			ref:RECADATE	L6-16 r3: atendimento pelo registro (L3); nunca visto: pai_inexistente e recusa (NOT NULL)
 CCCADCIR	REG	ato_cirurgico.paciente_id			ref:RECADATE>PRONT>RICADPAC.PRONT	L6-16 r3: paciente do atendimento (encadeada: registro > prontuário > paciente); sem paciente recusa (NOT NULL)
+CCCADCIR	ID	ato_cirurgico.atendimento_id			ref:CCCADCIR>REG>RICADINT@atendimento_id;se:ATEND=I	L6-16 r4 (P2b, recusas da carga): concorrente pela coluna ID (autorreferência encadeada; a mesma coluna REG não pode ser declarada duas vezes): cirurgia de internado (ATEND=I) tem REG da internação, não do atendimento externo; o atendimento é o da internação; medido: 4.243 de 4.243 internados casam RICADINT.REG, 0 casam RECADATE
+CCCADCIR	ID	ato_cirurgico.paciente_id			ref:CCCADCIR>REG>RICADINT@paciente_id;se:ATEND=I	L6-16 r4 (P2b, recusas da carga): concorrente pela coluna ID: paciente do internado pela internação (mesma prova da linha acima)
 CCCADCIR	SALA	ato_cirurgico.sala_cirurgica_id			ref:CCSALAS	L6-16 r3: sala do ato; sem sala recusa (NOT NULL no modelo)
 CCCADCIR	ID_CCTPURGENCIA	ato_cirurgico.carater_cirurgia_id	chave_origem		ref:CCTPURGENCIA	L6-16 r3: caráter da cirurgia; sem caráter recusa (NOT NULL)
 CCCADCIR	TIPO_ANES	ato_cirurgico.tipo_anestesia_id			ref:TBANESTESIA	L6-16 r3: técnica anestésica principal

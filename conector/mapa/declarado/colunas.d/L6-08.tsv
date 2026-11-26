@@ -11,6 +11,7 @@ PRTPPERGUNTA	ID	tipo_campo_modelo.codigo	texto			L6-08: a chave da origem é o c
 PRTPPERGUNTA	NOME	tipo_campo_modelo.descricao	texto_nome			L6-08
 PRTPPERGUNTA	REFERENCIAS	tipo_campo_modelo.referencia	texto			L6-08
 PRTPPERGUNTA	NOME	tipo_campo_modelo.tipo_dado	texto_nome	valores		L6-08: tipo de dado pelo NOME do tipo de pergunta (valores.d/L6-08.tsv: texto, data, número, lista...; evidência: o próprio nome); nome sem par: NULL com valor_fora_do_dominio e a linha recusada (1048, NOT NULL sem padrão) para o cliente classificar. REFERENCIAS preenchida não muda o tipo (par condicional pedido no L6-08.json)
+PRTPPERGUNTA	=~texto	tipo_campo_modelo.tipo_dado				recusas-fase2 (P3a): tipo de pergunta sem par no de-para: texto presumido (tipo neutro, como a PRPERGUNTA), com valor_presumido; o cliente reclassifica
 PRTPPROT	COD	tipo_protocolo_oncologico.codigo	texto			L6-08: a chave da origem é o código (texto no destino)
 PRTPPROT	NOME	tipo_protocolo_oncologico.descricao	texto_nome			L6-08
 PRTPPROT	ORDEM	tipo_protocolo_oncologico.ordem	inteiro			L6-08

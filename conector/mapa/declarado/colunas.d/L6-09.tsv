@@ -3,6 +3,7 @@ TBLISTADIAGNOSTICOSITUACAO	ID	situacao_problema.codigo	inteiro			L6-09: situaç�
 TBLISTADIAGNOSTICOSITUACAO	NOME	situacao_problema.descricao	texto_nome			L6-09: NOT NULL no destino
 TBLISTADIAGNOSTICOSITUACAO	ATIVO	situacao_problema.ativo	booleano_sn			L6-09: S/N
 TBLISTADIAGNOSTICOSITUACAO	NOME	situacao_problema.categoria	texto_nome	valores		L6-09: categoria pelo NOME da situação (valores.d/L6-09.tsv: ativo, suspeito, controlado, remissão, recidiva, resolvido, descartado, inativo); nome sem par: valor_fora_do_dominio e a linha recusada (1048) para o cliente classificar
+TBLISTADIAGNOSTICOSITUACAO	=~ativo	situacao_problema.categoria				recusas-fase2 (P3a): situação sem par entra como ativa presumida (o problema continua visível na lista), com valor_presumido
 TBLISTADIAGNOSTICOSITUACAO	NOME	situacao_problema.clinicamente_ativo	texto_nome	valores		L6-09: clinicamente ativo pelo NOME (resolvido, descartado e inativo: FALSE; remissão segue ativa, na dúvida aparece nos alertas); nome sem par: valor_fora_do_dominio (a linha já é recusada pela categoria)
 TBLANC_DIAG_SUJ_CUID	ID	sujeito_cuidado.codigo	inteiro			L6-09: a chave vira o código
 TBLANC_DIAG_SUJ_CUID	SUJEITO_CUIDADO	sujeito_cuidado.descricao	texto			L6-09: NOT NULL no destino
@@ -68,6 +69,7 @@ TBSITUACAOMP	NOME	situacao_prescricao.descricao	texto_nome			L6-09: NOT NULL no 
 TBSITUACAOMP	ORDEM	situacao_prescricao.ordem	inteiro			L6-09: ordem de exibição (SMALLINT UNSIGNED: negativo é recusado)
 TBSITUACAOMP	ATIVO	situacao_prescricao.ativo	booleano_sn			L6-09: S/N
 TBSITUACAOMP	NOME	situacao_prescricao.categoria	texto_nome	valores		L6-09: categoria pelo NOME da situação (rascunho, planejada, liberada, validada, em preparo, suspensa, encerrada, cancelada); nome sem par: valor_fora_do_dominio e a linha recusada (1048)
+TBSITUACAOMP	=~suspensa	situacao_prescricao.categoria				recusas-fase2 (P3a): situação sem par entra como suspensa presumida (não gera horários nem é final), com valor_presumido; o hospital reclassifica
 TBSITUACAOMP	NOME	situacao_prescricao.vigente	texto_nome	valores		L6-09: gera horários só liberada, validada e em preparo, pelo NOME
 TBSITUACAOMP	NOME	situacao_prescricao.final	texto_nome	valores		L6-09: final só encerrada e cancelada, pelo NOME (suspensa pode voltar)
 TBSITUACAOMP	ICONE					L6-09: não carregada: imagem do ícone (BLOB); o destino guarda o nome do ícone da interface
@@ -78,6 +80,7 @@ TBSTATUSPROCEDIMENTO	NOME	situacao_procedimento_prescrito.codigo	texto			L6-09: 
 TBSTATUSPROCEDIMENTO	NOME	situacao_procedimento_prescrito.descricao	texto_nome			L6-09: NOT NULL no destino
 TBSTATUSPROCEDIMENTO	ATIVO	situacao_procedimento_prescrito.ativo	booleano_sn			L6-09: S/N; nulo fica com o padrão
 TBSTATUSPROCEDIMENTO	NOME	situacao_procedimento_prescrito.etapa	texto_nome	valores		L6-09: etapa pelo NOME (pedido, agendado, coletado, em execução, realizado, laudado, cancelado, suspenso); nome sem par: valor_fora_do_dominio e a linha recusada (1048)
+TBSTATUSPROCEDIMENTO	=~pedido	situacao_procedimento_prescrito.etapa				recusas-fase2 (P3a): situação sem par entra como pedido presumido (etapa inicial, não final), com valor_presumido
 TBSTATUSPROCEDIMENTO	NOME	situacao_procedimento_prescrito.final	texto_nome	valores		L6-09: encerra o ciclo só laudado e cancelado, pelo NOME
 TBGRAUGRAVINT	ID	gravidade_interacao.codigo	inteiro			L6-09: a chave vira o código
 TBGRAUGRAVINT	NOME	gravidade_interacao.descricao	texto_nome			L6-09: NOT NULL no destino

@@ -67,6 +67,7 @@ RPRPA	@estabelecimento	rpa.estabelecimento_id				L8-02: empresa do RPA: estabele
 RPRPA	SERIE	rpa.serie	texto			L8-02: série do recibo
 RPRPA	NUMERO	rpa.numero	inteiro_nao_negativo			L8-02: número do recibo
 RPRPA	ID_RPRPA	rpa.profissional_id			ref:RPRPA_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS	L8-02: profissional beneficiário pela origem encadeada (RPA -> inscrição -> profissional; dependência RPRPA -> TBPROFIS declarada); RPA sem inscrição: recusa (NOT NULL)
+RPRPA	COD_PRESTADOR	rpa.profissional_id			ref:RPRPA.(ID_RPRPA,EMPRESA)=(ID_RPRPA,EMPRESA)>ID_RPRPA>RPLANRPA.ID_RPRPA>ID_RPLANEVE>RPLANEVE_TBCBOPRO.ID_RPLANEVE>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS	recusas fase 2 (P6) (A01): RPA sem inscrição: o profissional pelos lançamentos do RPA (corrente reversa do C1: RPA -> lançamentos do RPA -> inscrição do lançamento -> profissional), sem presunção; 4.812 de 4.812 lançamentos com inscrição; lançamentos de profissionais diferentes: pai_ambiguo visível. A autorreferência pela chave (ID_RPRPA, EMPRESA; EMPRESA preenchida em 5.243 de 5.243) evita declarar ID_RPRPA duas vezes
 RPRPA	DATA_INI	rpa.periodo_inicio	data			L8-02: início do período
 RPRPA	DATA_FIN	rpa.periodo_fim	data			L8-02: fim do período (antes do início: CHECK recusa)
 RPRPA	DATA_INI	rpa.competencia	data_primeiro_dia_mes			L8-02: competência = mês do início do período (decisão de destino)
@@ -88,7 +89,7 @@ RPRPA	COD_PRESTADOR		inteiro			L8-02: código do prestador: duplicado do profiss
 RPRPA	ID_FPLOTTRIBCAD		chave_origem			L8-02: lotação tributária do eSocial: no produto vem do cadastro do empregador e do profissional; o RPA não tem coluna de lotação
 RPRPA	EMPRESA		inteiro			L8-02: empresa: estabelecimento único (@estabelecimento)
 SIORCAME	@estabelecimento	orcamento_particular.estabelecimento_id				L8-02: estabelecimento único do cliente
-SIORCAME	#codigo_derivado:NOME:1	orcamento_particular.numero	texto_nome			L8-02: número sem fonte: código estável derivado do interessado (~ + 8 hex, codigo_derivado); o mesmo interessado em dois setores colide no UNIQUE (restricao_destino_1062); pedido de código pela chave inteira em saida/L8-02.json
+SIORCAME	#codigo_derivado:NOME+ATO:10:S_HASH_SEMPRE	orcamento_particular.numero	texto_nome			recusas fase 2 (P6) (A05): número sem fonte (a chave da origem é NOME, ATO): código estável SEMPRE pelo hash do interessado e do setor, nunca o nome em claro: o prefixo de 13 letras nunca cabe em 10 com o texto, então o código é a 1ª letra do prefixo (S) + ~ + 8 hex (10 caracteres), com pendência baixa codigo_derivado; o mesmo interessado em dois setores não colide, e o S~ não coincide com o número da FCORCAME
 SIORCAME	NOME	orcamento_particular.nome_interessado	texto_nome			L8-02: interessado
 SIORCAME	CONV	orcamento_particular.fonte_pagadora_id			ref:TBCONVEN	L8-02: fonte pagadora (dependência SIORCAME -> TBCONVEN declarada)
 SIORCAME	PERC	orcamento_particular.percentual_desconto	faixa:0,100			L8-02: percentual de desconto
@@ -165,7 +166,7 @@ TBCOOPER	UF_AGE		texto			L8-02 r3: idem LOCAL_AGE
 TBCOOPER	CEP_AGE		inteiro			L8-02 r3: idem LOCAL_AGE
 TBCOOPER	FONE_AGE		texto			L8-02 r3: idem LOCAL_AGE
 TBINDPRO	CONV	valor_indice_item.fonte_pagadora_id			ref:TBCONVEN	L8-02 r3: fonte pagadora (TBCONVEN); inexistente: NOT NULL recusa (dependência TBINDPRO -> TBCONVEN pedida)
-TBINDPRO	PROCTO	valor_indice_item.item_faturavel_id			ref:TBPROCTO.COD_PROCEDIMENTO	L8-02 r3 (revisão): procedimento pelo CÓDIGO (chave alternativa TBPROCTO.COD_PROCEDIMENTO), como TBESPPRO, FCORCPAD, FCORLAME e CCAGENDA: na origem a coluna PROCTO é o código e a ligação pelo id chama-se ID_TBPROCTO (FCLANEXT, TBTABTHM); código em mais de uma tabela de honorários: pai_ambiguo e o NOT NULL recusa (visível); inexistente: pai_inexistente (dependência TBINDPRO -> TBPROCTO pedida)
+TBINDPRO	PROCTO	valor_indice_item.item_faturavel_id			ref:TBPROCTO.(ID_TBCTRTHM,COD_PROCEDIMENTO)=(CONV>TBCONVEN>THM,PROCTO)	recusas fase 2 (P6) (R3): procedimento pela tabela de honorários do convênio (TBCONVEN.THM) e o código PROCTO: par único em 5 de 5 (o código sozinho repete entre tabelas: pai_ambiguo); componente encadeado na chave composta (M2 do C1)
 TBINDPRO	DATA	valor_indice_item.vigencia_inicio	data			L8-02 r3: início da vigência do valor
 TBINDPRO	VALOR	valor_indice_item.valor_indice	decimal_nao_negativo			L8-02 r3: valor do índice do procedimento (índice principal do acordo: indice_cobranca_id nulo); vazio ou negativo recusa
 FCPORANE	TAB	valor_porte_anestesico.tabela_preco_id			ref:TBCTRTHM	L8-02 r3: tabela de honorários pela chave (TBCTRTHM.COD)

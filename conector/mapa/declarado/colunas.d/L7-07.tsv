@@ -4,7 +4,7 @@ TBTP_ENV_LISTA_AVAL_FARM	ID	regra_envio_avaliacao_farmaceutica.codigo	texto			L7
 TBTP_ENV_LISTA_AVAL_FARM	NOME	regra_envio_avaliacao_farmaceutica.descricao	texto_nome			L7-07: sem nome recusa a linha (NOT NULL)
 TBTP_ENV_LISTA_AVAL_FARM	=~nao_enviar	regra_envio_avaliacao_farmaceutica.momento_envio				L7-07: a origem só nomeia o tipo de envio, sem o momento; entra 'nao_enviar' com valor_presumido por linha para o cliente revisar (de-para pedido no L7-07.json)
 TBTP_ENV_LISTA_AVAL_FARM	ATIVO	regra_envio_avaliacao_farmaceutica.ativo	booleano_sn			L7-07: situação da origem; com o momento presumido nao_enviar a regra não põe item na fila, ativa ou não (decisão em F4-decisoes-destino.md)
-TBUNICON	COD	unidade_medida.codigo	codigo_char			L7-07: código da unidade; caixa preservada, colisão de caixa recusa o grupo (codigo_colisao_caixa)
+TBUNICON	COD	unidade_medida.codigo	codigo_char		adotar:codigo	L7-07 (recusas fase 2, A05): código da unidade; a variante que só difere por acento ou caixa (a colação do banco as iguala) ADOTA a unidade já gravada pelo código (adotado_existente, pendência baixa), sem mudar a colação; os insumos que a citam resolvem para a unidade adotada
 TBUNICON	COD	unidade_medida.sigla	codigo_char			L7-07: a origem usa o próprio código como abreviatura exibida (sigla única)
 TBUNICON	NOME	unidade_medida.descricao	texto_nome			L7-07: sem nome recusa a linha (NOT NULL)
 TBUNICON	SITUACAO	unidade_medida.ativo	booleano_ai			L7-07: A ativo, I inativo; fora do domínio: valor_fora_do_dominio e fica o padrão (ativo)
@@ -37,7 +37,7 @@ GEITENS	PSICO	insumo.controlado	booleano_sn			L7-07: marca S/N; fora do domínio
 GEITENS	ANTIMI	insumo.antimicrobiano	booleano_sn			L7-07: marca S/N; fora do domínio: valor_fora_do_dominio e fica o padrão do destino
 GEITENS	SUB		inteiro			L7-07: sem destino: subgrupo tem chave composta (GRU,COD) no pai GESUBGRU e a referência declarada é de uma coluna só (referência composta pedida no L7-07.json)
 GEITENS	CURVA	insumo.curva_abc	codigo_char	valores		L7-07: curva ABC; só A, B e C têm par (valores.d/L7-07.tsv); outro valor fica NULL com valor_fora_do_dominio, sem recusar o insumo
-GEITENS	BRASIN		inteiro			L7-07: nunca migrado: código de tabela licenciada (regra 7)
+GEITENS	BRASIN	insumo.item_referencia_matmed_id	inteiro_zero_nulo		espelho:brasindice	L7-07 (recusas fase 2, ADR 0011): item da tabela licenciada ligado ao espelho do cliente pelo código e pela edição vigente (1.036 com código); sem espelho carregado ou sem o código, NULL com a pendência do espelho (o código fica no conector_origem)
 GEITENS	ID_TBTP_ENV_LISTA_AVAL_FARM		chave_origem			L7-07: sem destino: o produto decide o envio à avaliação farmacêutica por regra (setor, tipo de item, alta vigilância, antimicrobiano, não padronizado), não por ponteiro no insumo; a regra é revista na implantação (decisão em F4-decisoes-destino.md)
 GEITENS	UNI_PRESC	insumo.prescricao_unidade_medida_id	chave_origem		ref:TBUNICON	L7-07: unidade de prescrição do item (GEUNIPRESC dá as unidades alternativas em insumo_unidade); nunca vista: NULL com pai_inexistente; na referência todas existem
 GEITENS	FATOR_CONV	insumo.fator_consumo_prescricao	decimal_positivo			L7-07: unidades de prescrição por unidade de consumo (mesma direção da origem); zero recusa (CHECK > 0); na referência 8406 de 8406 valem 1; nulo/zero como pendência sem recusar: regra decimal_positivo pedida no L7-07.json
@@ -55,9 +55,9 @@ GEITENS	MAT		booleano_sn			L7-07: sem destino: marca de material; ver MEDGERAL (
 GEITENS	SOLUCAO		booleano_sn			L7-07: sem destino: marca de solução; ver MEDGERAL (tipo)
 GEITENS	PORTARIA		texto			L7-07: sem destino: lista da portaria de controle especial: lista_controle_especial é catálogo oficial e o de-para pelo código da lista (catálogo lista_controle_especial em depara.CATALOGOS) está pedido no L7-07.json; o controle especial em si já vem de PSICO (controlado)
 GEITENS	CLASSIF		inteiro			L7-07: sem destino: classificação de despesa do item; no produto a classificação contábil é do grupo (categoria contábil), sem coluna no insumo
-GEITENS	REF		inteiro			L7-07: sem destino: código do item numa tabela de referência de preço (qual, em TIPO_REF): tabela licenciada (regra 7), fica como de-para do cliente
-GEITENS	TIPO_REF		inteiro			L7-07: sem destino: qual tabela de referência de preço (ver REF): licenciada (regra 7)
-GEITENS	COD_SIMPAS		texto			L7-07: sem destino: código em tabela externa de preços; fica como de-para do cliente (regra 7)
+GEITENS	REF	insumo.item_referencia_matmed_id	texto		espelho:brasindice;se:TIPO_REF>TBCTRMEM>REF_BRA=S,T	L7-07 (recusas fase 2, ADR 0011): código do item na tabela de preço TIPO_REF (TBCTRMEM, 7.707 de 7.707 casam): tabela de referência Brasíndice (6.603) liga ao espelho do cliente pelo código (concorrente de BRASIN)
+GEITENS	TIPO_REF		chave_origem			L7-07 (recusas fase 2, ADR 0011): sem destino: tabela de preço do código REF (chave da TBCTRMEM); decide o catálogo do espelho na condição das linhas REF e COD_SIMPAS
+GEITENS	COD_SIMPAS	insumo.item_referencia_matmed_id	texto		espelho:simpro;se:TIPO_REF>TBCTRMEM>REF_SIMP=S,T	L7-07 (recusas fase 2, ADR 0011): código do item na tabela externa de preço; tabela de referência Simpro (517) liga ao espelho do cliente pelo código (concorrente); sem par, pendência do espelho
 GEITENS	DATA_EI		data			L7-07: sem destino: data de cálculo do estoque inicial do sistema antigo; o estoque inicial vem do inventário de abertura (GEESTINI)
 GEITENS	DATA_EM4		data			L7-07: sem destino: data de emissão de relatório do sistema antigo, sem valor de negócio
 GEITENS	VLRMED		decimal			L7-07: sem destino: custo médio calculado: no produto é do saldo por local (saldo_estoque) e do histórico de custo, recalculado dos movimentos; o insumo não guarda custo
@@ -122,9 +122,9 @@ GENOMCOM	NOME	apresentacao_comercial.nome_comercial	texto_nome			L7-07: sem nome
 GENOMCOM	LAB	apresentacao_comercial.fabricante_id	chave_origem		ref:TBLABORA	L7-07: fabricante (L7, ordem 593); nunca visto: NULL com pai_inexistente
 GENOMCOM	ATIVO	apresentacao_comercial.ativo	booleano_sn			L7-07: S/N
 GENOMCOM	BARRA	apresentacao_comercial.codigo_barras	texto			L7-07: GTIN; mais longo que o destino (14) recusa a linha (restricao_destino_1406)
-GENOMCOM	BRASIN		inteiro			L7-07: nunca migrado: código de tabela licenciada (regra 7)
+GENOMCOM	BRASIN	apresentacao_comercial.codigo_referencia_preco	inteiro_zero_nulo			L7-07 (recusas fase 2, ADR 0011): código da apresentação na tabela de preço licenciada do hospital, guardado no item do hospital (0 com código na referência)
 GENOMCOM	COD		inteiro			L7-07: sem destino: sequência do nome comercial no item; a apresentação tem id próprio
-GENOMCOM	TIPO_REF		inteiro			L7-07: sem destino: tabela de referência de preço (licenciada, regra 7)
+GENOMCOM	TIPO_REF		inteiro			L7-07 (recusas fase 2, ADR 0011): sem destino: tabela de preço da apresentação (0 com valor na referência); o código vai em codigo_referencia_preco
 GEUNIPRESC	ITEM	insumo_unidade.insumo_id	chave_origem		ref:GEITENS	L7-07: insumo (mesma fatia); recusado: pai_pendente
 GEUNIPRESC	UNI_PRESC	insumo_unidade.unidade_medida_id	chave_origem		ref:TBUNICON	L7-07: unidade (mesma fatia); nunca vista: pai_inexistente e recusa (NOT NULL); repetida no insumo: 1062
 GEUNIPRESC	FATOR_CONV	insumo_unidade.fator_conversao	decimal			L7-07: nulo recusa (NOT NULL); zero recusa (CHECK > 0)
@@ -135,7 +135,8 @@ GEUNIPRESC	=1	insumo_unidade.uso_prescricao				L7-07: a origem é a tabela de un
 GEUNIPRESC	FATOR_CONV_MP		decimal			L7-07: sem destino: fator da manipulação, sem coluna no modelo
 GEVALMEM	@estabelecimento	lote_insumo.estabelecimento_id				L7-07: o lote não traz o estabelecimento; id do único estabelecimento (vários: estabelecimento_indefinido)
 GEVALMEM	ITEM	lote_insumo.insumo_id	chave_origem		ref:GEITENS;adotar:estabelecimento_id,insumo_id,numero_lote,validade	L7-07: insumo do lote. A linha da origem é o lote POR LOCAL: o mesmo lote físico em outro local ADOTA a linha já gravada (uq_lote_insumo_identificacao), com adotado_existente, em vez de cair em 1062
-GEVALMEM	LOTE	lote_insumo.numero_lote	texto			L7-07: número do lote. A origem tem uma linha por LOCAL (21800 lotes físicos em 32297 linhas na referência; 5993 lotes em 2 ou mais locais): a repetição cai em 1062 até o motor ter o destino compartilhado por chave natural (ITEM,LOTE,DATA), pedido no L7-07.json
+GEVALMEM	LOTE	lote_insumo.numero_lote	texto			L7-07: número do lote. A origem tem uma linha por LOCAL; o mesmo lote físico em outro local adota a linha já gravada (ver ITEM)
+GEVALMEM	=~SEM_LOTE	lote_insumo.numero_lote				L7-07 (recusas fase 2, R13): lote sem número na origem (6.059 recusadas; vazio, não nulo): lote presumido SEM_LOTE com valor_presumido (lote_sem_numero) para TODAS, com saldo ou sem (continuidade), mantendo validade e saldo por local; 12 recolisões no uq_saldo_lote ficam visíveis (1062)
 GEVALMEM	DATA	lote_insumo.validade	data			L7-07: validade; data sentinela: data_sentinela e recusa (NOT NULL) — datas inválidas a sanear
 GEVALMEM	DATA_ORIGINAL	lote_insumo.validade_original	data			L7-07: validade antes da redução
 GEVALMEM	ID_TBLABORA	lote_insumo.fabricante_id	chave_origem			L7-07: fabricante (L7, ordem 593); nunca visto: NULL com pai_inexistente
@@ -183,7 +184,7 @@ GEKITITE	ITEM_OBRIG_KIT_RASTREAVEL	kit_material_item.obrigatorio_kit_rastreavel	
 GESALDOKITRAS	ID_GEITEMKITRAS	kit_rastreavel_lote.id	chave_origem		ref:GEITEMKITRAS/kit_rastreavel_lote;complementa	L7-07 r3 (correção): o saldo é do LOTE no kit (kit_rastreavel_lote: 'saldo do kit por lote'): UPDATE do lote gravado pela linha (complementa pelo destino secundário do pai); linha sem lote ou com lote não gravado: pai_inexistente; item recusado: pai_pendente. O saldo do item (kit_rastreavel_item.saldo_atual) é a soma dos lotes: sobrescrever por linha deixaria o do último lote (pedido kit_quantidade_soma)
 GESALDOKITRAS	QTDE_SALDO	kit_rastreavel_lote.quantidade	decimal_nao_negativo			L7-07 r3 (correção): saldo atual do lote no kit; negativo vira NULL com valor_fora_do_dominio e fica o gravado
 GECADBAL	@estabelecimento	inventario_estoque.estabelecimento_id				L7-07 r3: balanço do estoque = inventário do local
-GECADBAL	#codigo_derivado:DOC:20:balanco_	inventario_estoque.numero				L7-07 r3: número com prefixo de domínio (o inventário inicial usa o número puro: 215 de 251 números coincidem); o mesmo DOC em meses diferentes (30 grupos medidos) colide na chave única até o pedido texto_composto (AAAA/MM/DOC) do saida/L7-07.json: 1062 visível, nunca silencioso
+GECADBAL	#codigo_derivado:ANO+MES+DOC:20:balanco_	inventario_estoque.numero				L7-07 (recusas fase 2, A04): número com prefixo de domínio pelo ANO, MES e DOC (o mesmo DOC aparece em meses e anos diferentes: 173 recusas 1062)
 GECADBAL	ARM	inventario_estoque.local_estoque_id	chave_origem		ref:GELOCARM	L7-07 r3: local inventariado
 GECADBAL	=~geral	inventario_estoque.tipo				L7-07 r3: tipo do balanço (OQUE B/C, sem dicionário) presumido geral, com valor_presumido
 GECADBAL	DATA	inventario_estoque.data_corte	data			L7-07 r3: data do balanço (DATE em DATETIME: meia-noite, tipar)
@@ -219,7 +220,13 @@ GELANBAL	LOTE		texto			L7-07 r3: sem destino: vazio em todas as linhas medidas
 GELANBAL	ID_NOMCOM		chave_origem			L7-07 r3: sem destino: apresentação comercial; o inventário é por insumo
 GELANBAL	ID		chave_origem			L7-07 r3: chave da origem (conector_origem)
 GELANPAC	@estabelecimento	movimento_estoque.estabelecimento_id				L7-07 r3: consumo do paciente é saída do estoque do local
-GELANPAC	LOCAL	movimento_estoque.local_estoque_id	chave_origem		ref:GELOCARM	L7-07 r3: local que forneceu
+GELANPAC	@id:local_estoque	movimento_estoque.local_estoque_id				L7-07 (recusas fase 2, A08): local que forneceu, pelo código (secundário local_estoque abaixo); o local que não está no cadastro da origem é criado inativo, sem trocar o local que forneceu
+GELANPAC	@estabelecimento	local_estoque.estabelecimento_id			local_estoque;antes;adotar:estabelecimento_id,codigo	L7-07 (recusas fase 2, A08): local pelo código: o local cadastrado (GELOCARM, mesmo código como texto) é ADOTADO (adotado_existente, nada sobrescrito); local sem cadastro na origem é criado INATIVO
+GELANPAC	LOCAL	local_estoque.codigo	inteiro		local_estoque	L7-07 (recusas fase 2, A08): código do local (número como texto, como a GELOCARM)
+GELANPAC	=~Local de estoque sem cadastro na origem	local_estoque.nome			local_estoque	L7-07 (recusas fase 2, A08): nome presumido (valor_presumido) do local criado; o cliente renomeia
+GELANPAC	=~outro	local_estoque.tipo			local_estoque	L7-07 (recusas fase 2, A08): tipo presumido (valor_presumido) do local criado
+GELANPAC	=0	local_estoque.ativo			local_estoque	L7-07 (recusas fase 2, A08): local sem cadastro entra inativo (não recebe movimento novo)
+GELANPAC	=migracao	local_estoque.origem			local_estoque	L7-07 (recusas fase 2, A08): local vindo da migração
 GELANPAC	#data_hora:DATA,HORA	movimento_estoque.ocorrido_em				L7-07 r3: data e hora HHMM do lançamento
 GELANPAC	DATA	movimento_estoque.competencia	data_primeiro_dia_mes			L7-07 r3: competência = mês do lançamento
 GELANPAC	=migracao_saida	movimento_estoque.tipo_movimento_estoque_id			cod:tipo_movimento_estoque.codigo	L7-07 r3: tipo nativo de migração (07_chaves.sql), achado pelo código; a origem não tem coluna de tipo
@@ -253,7 +260,7 @@ GECADPED	@estabelecimento	pedido_compra.estabelecimento_id				L7-07 r3: pedido d
 GECADPED	ANO	pedido_compra.ano	inteiro			L7-07 r3: ano do pedido
 GECADPED	ID	pedido_compra.numero	inteiro			L7-07 r3: número único: DOC repete no ano (6.429 grupos medidos); DOC fica sem destino, pedido numero_origem no saida/L7-07.json
 GECADPED	FORN	pedido_compra.empresa_fornecedora_id	chave_origem		ref:TBFORNEC	L7-07 r3: fornecedor; FORN 0 (6.900 linhas medidas, pedido ainda sem fornecedor) recusa por 1048 até o pedido de modelo fornecedor_opcional do saida/L7-07.json
-GECADPED	ID_TBCENCUS	pedido_compra.centro_custo_id	chave_origem		ref:TBCENCUS.ID	L7-07 r3: centro de custo pelo ID (decisão TBCENCUS)
+GECADPED	ID_TBCENCUS	pedido_compra.centro_custo_id	chave_origem		ref:TBCENCUS	L7-07 (recusas fase 2, A08): centro de custo pela chave do pai (COD): 18.090 casam pelo COD
 GECADPED	DATA	pedido_compra.data_pedido	data			L7-07 r3: data do pedido
 GECADPED	TIPO_COMPRA	pedido_compra.tipo_compra	codigo_char	valores		L7-07 r3: P programada, E emergencial, N e S outra (valores.d)
 GECADPED	ID_GESITUACAOPED	pedido_compra.situacao	inteiro	valores		L7-07 r3: situação pelo código do cadastro de situações (valores.d); sem situação fica o padrão rascunho
@@ -281,7 +288,7 @@ GECADNFS	CONSOL	nota_entrada.situacao	codigo_char	valores		L7-07 r3: consolidada
 GECADNFS	USUARIO	nota_entrada.recebido_por_usuario_id	chave_origem		ref:TBUSERS	L7-07 r3: usuário que lançou o recebimento
 GECADNFS	#data_hora:DATA_GRAV,HORA_GRAV	nota_entrada.recebido_em				L7-07 r3: gravação do recebimento
 GELANNFS	@id:nota_entrada	nota_entrada_item.nota_entrada_id				L7-07 r3: cabeçalho do grupo ANO, MES, DOC
-GELANNFS	SEQ	nota_entrada_item.sequencia	inteiro			L7-07 r3: sequência do item (2 grupos repetidos medidos: 1062 visível)
+GELANNFS	#seq_livre:ANO+MES+DOC:SEQ	nota_entrada_item.sequencia				L7-07 (recusas fase 2, A04 e M3 do C1): sequência do item na nota: o SEQ único no grupo ANO, MES, DOC é preservado; só o repetido (2 medidos) ganha o próximo livre, com pendência que guarda o original
 GELANNFS	ITEM_NOTA_ENTRADA	nota_entrada_item.numero_item_documento	inteiro			L7-07 r3: número do item no documento
 GELANNFS	ITEM	nota_entrada_item.insumo_id	chave_origem		ref:GEITENS	L7-07 r3: insumo
 GELANNFS	ITEM	nota_entrada_item.unidade_medida_id	chave_origem		ref:GEITENS>UNI_ARM>TBUNICON	L7-07 r3: unidade de estoque do insumo
@@ -436,7 +443,7 @@ GERASVALTRANSFLOTE	ARM_ORI		inteiro			L7-07 r3: sem destino: lote de destino, lo
 GERASVALTRANSFLOTE	ARM_DES		inteiro			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
 GERASVALTRANSFLOTE	ID_GERASVALFINAL		chave_origem			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
 GELANPAC	HORA		texto			L7-07 r3: lida pela data e hora do lançamento (#data_hora:DATA,HORA)
-TBPRINC	NOME	principio_ativo_cliente.nome	texto_nome		principio_ativo_cliente;principal	L7-07 r3: princípio próprio do hospital (modelo principio_ativo_cliente, rodada 4: todo princípio do cadastro do hospital, ligado ao oficial quando houver par); sem nome recusa (NOT NULL)
+TBPRINC	NOME	principio_ativo_cliente.nome	texto_nome		principio_ativo_cliente;principal;adotar:nome	L7-07 (recusas fase 2, A04): princípio próprio do hospital; o nome repetido (8) ADOTA o princípio já gravado (adotado_existente): o segundo código liga ao mesmo princípio
 TBPRINC	ATIVO	principio_ativo_cliente.ativo	booleano_sn			L7-07 r3: S/N
 TBPRINC	COD_DCB	principio_ativo_cliente.principio_ativo_id	inteiro_zeros_esquerda:5		cod:principio_ativo.codigo_dcb	L7-07 r3: ligação ao oficial pelo DCB quando houver (vazio na referência); concorrente com o NOME abaixo
 TBPRINC	NOME	principio_ativo_cliente.principio_ativo_id	texto_nome		cod:principio_ativo.descricao	L7-07 r3: ligação ao oficial pelo nome na falta do DCB; sem par fica NULL com codigo_inexistente_destino (o farmacêutico liga depois)

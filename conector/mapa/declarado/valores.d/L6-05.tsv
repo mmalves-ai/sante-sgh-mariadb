@@ -465,3 +465,5 @@ PRCAMPOSLOCALIZACAOPACIENTE	NOME	coluna_painel_paciente.chave_atributo	precaucoe
 GECADANTIMI	TIPO	ficha_antimicrobiano.finalidade_terapeutica_id	P	profilatica	L6-05 r4: tratamento profilático pela inicial (mesmos pares de GEANTIMI.TIPO, L7-08); finalidade nativa
 GECADANTIMI	TIPO	ficha_antimicrobiano.finalidade_terapeutica_id	E	empirica	L6-05 r4: tratamento empírico pela inicial (mesmos pares de GEANTIMI.TIPO, L7-08); finalidade nativa
 GECADANTIMI	TIPO	ficha_antimicrobiano.finalidade_terapeutica_id	T	terapeutica	L6-05 r4: tratamento terapêutico pela inicial (mesmos pares de GEANTIMI.TIPO, L7-08); finalidade nativa
+PRAGRUPBALANCO	NOME	grupo_balanco_hidrico.tipo	Enteral	ganho	recusas-fase2 (P3a): nutrição enteral: entra no balanço como ganho
+PRAGRUPBALANCO	NOME	grupo_balanco_hidrico.tipo	Parenteral	ganho	recusas-fase2 (P3a): nutrição parenteral: entra no balanço como ganho

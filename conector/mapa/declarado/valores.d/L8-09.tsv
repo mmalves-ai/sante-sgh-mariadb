@@ -117,3 +117,6 @@ FCRECIBO	CANCELADO	recibo.cancelado_em			L8-09 r3: emitido sem data de cancelame
 FCRECIBO	CANCELADO	recibo.motivo_cancelamento	S	Cancelado no sistema anterior; motivo e data não informados na origem	L8-09 r3: cancelado sem motivo na origem
 FCRECIBO	CANCELADO	recibo.motivo_cancelamento	N		L8-09 r3: emitido
 FCRECIBO	CANCELADO	recibo.motivo_cancelamento			L8-09 r3: emitido
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.modulo	CONVENIO	faturamento	recusas fase 2 (P7) (A08): faturamento de convênio (descrição provada por contagem de igualdade: 1 linha)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.automatico	CONVENIO	1	recusas fase 2 (P7) (A08): faturamento de convênio (descrição provada por contagem de igualdade: 1 linha)
+COTP_ORIGEM_LANCAMENTO	DESCRICAO	origem_lancamento_contabil.permite_lancamento_manual	CONVENIO	0	recusas fase 2 (P7) (A08): faturamento de convênio (descrição provada por contagem de igualdade: 1 linha)

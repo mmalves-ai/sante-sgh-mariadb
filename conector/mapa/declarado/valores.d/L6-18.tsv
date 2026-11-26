@@ -66,3 +66,31 @@ TBDIETAS	TPDIETA	modalidade_dieta.classe	Dieta zero	jejum	L6-18 r5 (achado; ADR 
 TBDIETAS	TPDIETA	modalidade_dieta.classe	ZERO	jejum	L6-18 r5 (achado; ADR 0007, 18): sinônimo genérico do domínio do tipo de dieta (sigla ou nome usual, não do cliente) -> jejum
 TBDIETAS	TPDIETA	modalidade_dieta.classe	Zero	jejum	L6-18 r5 (achado; ADR 0007, 18): sinônimo genérico do domínio do tipo de dieta (sigla ou nome usual, não do cliente) -> jejum
 TBDIETAS	TPDIETA	modalidade_dieta.classe	NPO	jejum	L6-18 r5 (achado; ADR 0007, 18): sinônimo genérico do domínio do tipo de dieta (sigla ou nome usual, não do cliente) -> jejum
+PRVIAADMIN	NOME	via_dieta.modalidade	Via oral	oral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> oral
+PRVIAADMIN	NOME	via_dieta.modalidade	VIA ORAL	oral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> oral
+PRVIAADMIN	NOME	via_dieta.modalidade	via oral	oral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> oral
+PRVIAADMIN	NOME	via_dieta.modalidade	ORAL	oral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> oral
+PRVIAADMIN	NOME	via_dieta.modalidade	Oral	oral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> oral
+PRVIAADMIN	NOME	via_dieta.modalidade	oral	oral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> oral
+PRVIAADMIN	NOME	via_dieta.modalidade	SNE	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	SNG	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	SOG	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	SNO	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	SOE	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	GTT	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	Gastrostomia	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	GASTROSTOMIA	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	gastrostomia	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	Jejunostomia	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	JEJUNOSTOMIA	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	jejunostomia	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	Enteral	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	ENTERAL	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	enteral	enteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> enteral
+PRVIAADMIN	NOME	via_dieta.modalidade	Parenteral	parenteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> parenteral
+PRVIAADMIN	NOME	via_dieta.modalidade	PARENTERAL	parenteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> parenteral
+PRVIAADMIN	NOME	via_dieta.modalidade	parenteral	parenteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> parenteral
+PRVIAADMIN	NOME	via_dieta.modalidade	NPT	parenteral	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> parenteral
+PRVIAADMIN	NOME	via_dieta.modalidade	Jejum	jejum	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> jejum
+PRVIAADMIN	NOME	via_dieta.modalidade	JEJUM	jejum	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> jejum
+PRVIAADMIN	NOME	via_dieta.modalidade	jejum	jejum	L6-18 r4 (P2b, recusas da carga): nome ou sigla usual da via de administração (genérico do domínio, não do cliente) -> jejum

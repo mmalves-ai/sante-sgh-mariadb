@@ -38,7 +38,7 @@ TBREGUL_TABELAS	=regulacao	sistema_externo.categoria				L8-16 (rodada 3): catego
 TBREGUL_TABELAS	=Tabelas de códigos da regulação sem central indicada na origem	sistema_externo.finalidade				L8-16 (rodada 3): finalidade da central a conferir
 TBREGUL_TABELAS	=0	sistema_externo.ativo				L8-16 (rodada 3): a central a conferir entra INATIVA: nenhuma integração usa as tabelas até o cliente movê-las
 TBREGUL_TABELAS	@id:sistema_externo	tabela_codigo_regulacao.sistema_externo_id				L8-16 (rodada 3): a central da tabela é a central a conferir (secundário gravado antes)
-TBREGUL_TABELAS	TABELA_REFERENCIA	tabela_codigo_regulacao.codigo	texto			L8-16 (rodada 3): nome da tabela na central; repetido na mesma central choca na chave única (1062)
+TBREGUL_TABELAS	#codigo_derivado:TABELA_REFERENCIA+ID:50	tabela_codigo_regulacao.codigo				L8-16 recusas-fase2 P7 (A04): código = nome de referência + ID (9 nomes distintos em 20: o mesmo nome era de centrais diferentes); todas na central a conferir, para o cliente mover
 TBREGUL_TABELAS	DESCRICAO	tabela_codigo_regulacao.codigo	texto_resumo:50			L8-16 (rodada 3): sem nome de referência, a descrição resumida (concorrente) vira o código; sem as duas recusa (1048)
 TBREGUL_TABELAS	DESCRICAO	tabela_codigo_regulacao.descricao	texto			L8-16 (rodada 3): descrição
 TBREGUL_TABELAS	TABELA_REFERENCIA	tabela_codigo_regulacao.descricao	texto			L8-16 (rodada 3): sem descrição, o nome de referência (concorrente)
@@ -88,7 +88,7 @@ TBOPERSCHEMA	=migracao.operacao_servico_web	parametro_definicao.chave			antes;ad
 TBOPERSCHEMA	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
 TBOPERSCHEMA	=Operações do serviço web cadastradas na origem (a conferir na configuração de operacao_ponto_integracao)	parametro_definicao.descricao				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
 TBOPERSCHEMA	=lista	parametro_definicao.tipo				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
-SIMODULO_SIWEBATOS	ID_SIMODULO	parametro_opcao.valor	texto		principal;parametro_opcao	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+SIMODULO_SIWEBATOS	ID_SIMODULO	parametro_opcao.valor	texto		principal;parametro_opcao;adotar:parametro_definicao_id,valor	L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem | recusas-fase2 P7 (A04): módulo publicado duas vezes: adota a opção já gravada
 SIMODULO_SIWEBATOS	ID	parametro_opcao.sequencia	inteiro			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
 SIMODULO_SIWEBATOS	ID_SIMODULO	parametro_opcao.rotulo	texto_nome			L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
 SIMODULO_SIWEBATOS	=migracao	parametro_opcao.origem				L8-16 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)

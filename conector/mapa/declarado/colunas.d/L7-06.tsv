@@ -49,7 +49,7 @@ TBGRUPOUNIDADEMEDIDA	ID	grupo_unidade_medida.codigo	texto			L7-06: chave inteira
 TBGRUPOUNIDADEMEDIDA	NOME	grupo_unidade_medida.descricao	texto_nome			L7-06: descrição; vazia recusa a linha
 TBGRUPOUNIDADEMEDIDA	=~outro	grupo_unidade_medida.grandeza				L7-06: a origem não diz a grandeza (NOT NULL): presumida outro com valor_presumido por linha, para o cliente classificar (massa, volume...) na tela
 TBLABORA	COD		inteiro			L7-06: chave da origem: identidade pelo conector_origem (fabricante não tem código próprio)
-TBLABORA	COD_LAB_BRASINDICE		inteiro			L7-06: não carregada: código do laboratório numa tabela de preços LICENCIADA (regra 7): só entra por cliente que comprove a licença (pedido em saida/L7-06.json); codigo_tabela_referencia fica nulo
+TBLABORA	COD_LAB_BRASINDICE	fabricante.codigo_tabela_referencia	inteiro_zero_nulo			L7-06 (recusas fase 2, ADR 0011): código do laboratório na tabela de preço licenciada do hospital (715 com código); 0 é sem código
 TBLABORA	NOME	fabricante.nome	texto_nome			L7-06: nome do laboratório fabricante (espaços repetidos colapsados); vazio recusa a linha
 TBLABORA	=~regular	fabricante.situacao_sanitaria				L7-06: a origem não diz a situação sanitária (NOT NULL): presumido com valor_presumido por linha, para o cliente revisar (nunca uma afirmação sem origem)
 TBLABORA	=~nacional	fabricante.origem_fabricacao				L7-06: a origem não diz se é nacional ou importado: presumido com valor_presumido por linha, para o cliente revisar
@@ -59,11 +59,17 @@ TBSITUACAOFARMACIA	ATIVO	situacao_farmaceutica.ativo	booleano_sn			L7-06: S/N; v
 TBSITUACAOFARMACIA	=~0	situacao_farmaceutica.permite_dispensacao				L7-06: a origem não diz se a situação permite dispensar: presumido com valor_presumido por linha, para o cliente revisar (revisão antes da virada pedida em saida/L7-06.json)
 TBSITUACAOFARMACIA	=~0	situacao_farmaceutica.encerra_item				L7-06: a origem não diz se a situação encerra o item: presumido com valor_presumido por linha, para o cliente revisar
 GELOCUSU	USUARIO	local_estoque_usuario.usuario_id	chave_origem		ref:TBUSERS	L7-06 (cobertura): login do usuário pela chave de TBUSERS
-GELOCUSU	ARM	local_estoque_usuario.local_estoque_id	chave_origem		ref:GELOCARM;adotar:local_estoque_id,usuario_id	L7-06 (cobertura): local de estoque; uma linha por usuário, local e tipo de movimento: o par (local, usuário) é criado na primeira e ADOTADO nas outras (adotado_existente), sem 1062
+GELOCUSU	@id:local_estoque	local_estoque_usuario.local_estoque_id			adotar:local_estoque_id,usuario_id	L7-06 (recusas fase 2, A08): local de estoque pelo código (secundário local_estoque abaixo); uma linha por usuário, local e tipo de movimento: o par (local, usuário) é criado na primeira e ADOTADO nas outras (adotado_existente), sem 1062
+GELOCUSU	@estabelecimento	local_estoque.estabelecimento_id			local_estoque;antes;adotar:estabelecimento_id,codigo	L7-06 (recusas fase 2, A08): local pelo código: o local cadastrado (GELOCARM, mesmo código como texto) é ADOTADO (adotado_existente, nada sobrescrito); local sem cadastro na origem é criado INATIVO
+GELOCUSU	ARM	local_estoque.codigo	inteiro		local_estoque	L7-06 (recusas fase 2, A08): código do local (número como texto, como a GELOCARM)
+GELOCUSU	=~Local de estoque sem cadastro na origem	local_estoque.nome			local_estoque	L7-06 (recusas fase 2, A08): nome presumido (valor_presumido) do local criado; o cliente renomeia
+GELOCUSU	=~outro	local_estoque.tipo			local_estoque	L7-06 (recusas fase 2, A08): tipo presumido (valor_presumido) do local criado
+GELOCUSU	=0	local_estoque.ativo			local_estoque	L7-06 (recusas fase 2, A08): local sem cadastro entra inativo (não recebe movimento novo)
+GELOCUSU	=migracao	local_estoque.origem			local_estoque	L7-06 (recusas fase 2, A08): local vindo da migração
 GELOCUSU	TIPO_MOV		texto			L7-06 (cobertura): tipo de movimento permitido: as permissões do destino (pode_requisitar, pode_atender...) ficam FALSE (menor privilégio) até o pivô do código em permissão (pedido em saida/L7-06.json); sem evidência do significado de cada código, nenhum par presumido
 GESUBGRU	GRU	subgrupo_insumo.grupo_insumo_id	chave_origem		ref:GEGRUPOS	L7-06 (cobertura): grupo do subgrupo
 GESUBGRU	COD		inteiro			L7-06 (cobertura): chave da origem (só única dentro do grupo); identidade pelo conector_origem; o código composto GRU.COD espera o mecanismo pedido em saida/L7-06.json
-GESUBGRU	#codigo_derivado:NOME:30	subgrupo_insumo.codigo	texto_nome			L7-06 (cobertura): código único na tabela toda derivado do nome (COD só é único no grupo); nome repetido entre grupos recusa com 1062, visível; F4-decisoes-destino.md
+GESUBGRU	#codigo_derivado:GRU+COD:30	subgrupo_insumo.codigo	texto_nome			L7-06 (recusas fase 2, A05): código único na tabela toda derivado do grupo e do código (COD só é único no grupo; o nome repete entre grupos)
 GESUBGRU	NOME	subgrupo_insumo.descricao	texto_nome			L7-06 (cobertura): descrição; vazia recusa a linha (NOT NULL)
 GESUBGRU	COD_QUIM_TISS	subgrupo_insumo.codigo_tabela_tiss	inteiro_zero_nulo			L7-06 (cobertura): tabela TISS de cobrança do subgrupo; 0 é sem valor
 GEUSERS	USUARIO	local_estoque_usuario.usuario_id	chave_origem		ref:TBUSERS	L7-06 (cobertura): login do usuário pela chave de TBUSERS
@@ -72,6 +78,7 @@ GEUSERS	FUNCAO		texto			L7-06 (cobertura): dado do usuário: vem de TBUSERS (cad
 GEUSERS	OLD_SENHA		inteiro			L7-06 (cobertura): senha do módulo antigo: nunca migra (a credencial do usuário vem de TBUSERS; regra 8)
 GEUSERS	ATIVO		booleano_sn			L7-06 (cobertura): dado do usuário: vem de TBUSERS (cadastro único do usuário)
 GEUSERS	LOC_ARM	local_estoque_usuario.local_estoque_id	chave_origem		ref:GELOCARM;adotar:local_estoque_id,usuario_id	L7-06 (cobertura): local padrão do usuário: a linha do par (local, usuário); par já criado por GELOCUSU é ADOTADO (adotado_existente), sem sobrescrever; sem local padrão a linha é recusada (NOT NULL), visível
+GEUSERS	ARM1	local_estoque_usuario.local_estoque_id	chave_origem		ref:GELOCARM	L7-06 (recusas fase 2, A10): LOC_ARM 0 é sem local padrão (a GELOCARM não tem COD 0): a linha do usuário vai ao primeiro outro local dele (ARM1, concorrente), adotando o par já criado pela GELOCUSU, com padrao falso; sem nenhum local, NOT NULL recusa (visível)
 GEUSERS	ARM1		inteiro			L7-06 (cobertura): outros locais do usuário: os pares (local, usuário) vêm de GELOCUSU; o desdobramento num destino que já é o principal espera mecanismo (pedido em saida/L7-06.json)
 GEUSERS	ARM2		inteiro			L7-06 (cobertura): outros locais do usuário: os pares (local, usuário) vêm de GELOCUSU; o desdobramento num destino que já é o principal espera mecanismo (pedido em saida/L7-06.json)
 GEUSERS	ARM3		inteiro			L7-06 (cobertura): outros locais do usuário: os pares (local, usuário) vêm de GELOCUSU; o desdobramento num destino que já é o principal espera mecanismo (pedido em saida/L7-06.json)
@@ -227,10 +234,11 @@ TBFORNECTEL	RAMAL	empresa_fornecedora_contato.ramal	inteiro_zero_nulo			L7-06 (c
 GEBARRAS	ITEM	insumo_codigo_barras.insumo_id	chave_origem		ref:GEITENS	L7-06 (cobertura): insumo; GEITENS carrega depois (dependência GEBARRAS -> GEITENS pedida em saida/L7-06.json)
 GEBARRAS	ITEM	insumo_codigo_barras.unidade_medida_id	chave_origem		ref:GEITENS>UNI_ARM>TBUNICON	L7-06 (cobertura): a origem não diz a embalagem do código: a unidade é a de estoque do insumo (referência encadeada), com quantidade 1; F4-decisoes-destino.md
 GEBARRAS	#seq:ITEM	insumo_codigo_barras.sequencia				L7-06 (cobertura): sequência do código dentro do insumo, na ordem da chave
-GEBARRAS	BARRA	insumo_codigo_barras.codigo_barras	texto			L7-06 (cobertura): código de barras; repetido entre insumos recusa com 1062 (UNIQUE), visível
+GEBARRAS	BARRA	insumo_codigo_barras.codigo_barras	texto			L7-06 (cobertura; recusas fase 2, R6): código de barras; repetido entre insumos recusa com 1062 (UNIQUE): dado inválido da origem, 7 códigos em dois insumos; a pendência fica para o hospital escolher o insumo dono do código (o código continua no insumo já gravado)
 GEBARRAS	FORN	insumo_codigo_barras.empresa_fornecedora_id	chave_origem		ref:TBFORNEC	L7-06 (cobertura): fornecedor do código
 GEBARRAS	LAB	insumo_codigo_barras.fabricante_id	chave_origem		ref:TBLABORA	L7-06 (cobertura): fabricante do código
-GEUSERS	=1	local_estoque_usuario.padrao				L7-06 (cobertura): LOC_ARM é o local padrão do usuário: o indicador é certo, não presumido
+GEUSERS	=1	local_estoque_usuario.padrao			se:LOC_ARM>GELOCARM>COD	L7-06 (cobertura; recusas fase 2): LOC_ARM existente é o local padrão do usuário: o indicador é certo, não presumido
+GEUSERS	=0	local_estoque_usuario.padrao				L7-06 (recusas fase 2, A10): sem local padrão (LOC_ARM 0), a linha do ARM1 não é padrão (concorrente)
 GEREFER	#item	trilha_auditoria.dados_depois	inteiro_zero_nulo		trilha_auditoria;desdobrar:CTA_EMP=conta_contabil_empresa,COD_OPE=operacao_contabil	L7-06: código da conta/operação contábil antiga, uma linha por coluna com valor (0 não gera linha)
 GEREFER	#rotulo	trilha_auditoria.motivo			trilha_auditoria	L7-06: o que o valor é (conta_contabil_empresa ou operacao_contabil)
 GEREFER	@id	trilha_auditoria.entidade_id			trilha_auditoria	L7-06: a categoria contábil gravada

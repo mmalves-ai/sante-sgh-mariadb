@@ -8,3 +8,9 @@ FCGUIAS	TP_GUIA	guia_fonte_pagadora.tipo_guia	R	internacao	L8-01 r3: guia de int
 RPLANEVE	TIPO	lancamento_repasse.tipo_favorecido	M	medico	L8-01 r3: médico (agregado: os 8.102 M têm a inscrição do profissional)
 RPLANEVE	TIPO	lancamento_repasse.tipo_favorecido	E	empresa	L8-01 r3: empresa (agregado: os 573 E não têm inscrição de profissional)
 RPLANEVE	ID_RPLANEVE	lancamento_repasse.situacao	1	aprovado	L8-01 r3: lançamento ligado a RPA emitido (RPLANRPA): fora de nova apuração ou pagamento
+FCREFUND	COD_DESPESA_TISS	item_referencia_matmed.tipo_produto	1	outro	recusas fase 2 (P6): código de despesa TISS (terminologia pública da ANS) gases medicinais
+FCREFUND	COD_DESPESA_TISS	item_referencia_matmed.tipo_produto	2	medicamento	recusas fase 2 (P6): código de despesa TISS (terminologia pública da ANS) medicamentos
+FCREFUND	COD_DESPESA_TISS	item_referencia_matmed.tipo_produto	3	material	recusas fase 2 (P6): código de despesa TISS (terminologia pública da ANS) materiais
+FCREFUND	COD_DESPESA_TISS	item_referencia_matmed.tipo_produto	5	outro	recusas fase 2 (P6): código de despesa TISS (terminologia pública da ANS) diárias
+FCREFUND	COD_DESPESA_TISS	item_referencia_matmed.tipo_produto	7	outro	recusas fase 2 (P6): código de despesa TISS (terminologia pública da ANS) taxas e aluguéis
+FCREFUND	COD_DESPESA_TISS	item_referencia_matmed.tipo_produto	8	opme	recusas fase 2 (P6): código de despesa TISS (terminologia pública da ANS) órteses, próteses e materiais especiais

@@ -34,6 +34,7 @@ GETABFUN	CPF	conta_bancaria_credor.titular_documento	cpf			L5-04: documento do t
 REPACAGN	@estabelecimento	pre_cadastro.estabelecimento_id				L5-04: a origem não traz o estabelecimento com referência: o único do cliente (vários: estabelecimento_indefinido, nunca atribuído a um deles)
 REPACAGN	PACIENTE	pre_cadastro.nome	texto_nome			L5-04: nome de quem marcou sem prontuário
 REPACAGN	DATA_NASCIMENTO	pre_cadastro.data_nascimento	data			L5-04: data sentinela vira NULL e recusa a linha (o destino exige)
+REPACAGN	PRONT	pre_cadastro.data_nascimento	data		ref:RICADPAC.PRONT>NASC	L5-04 recusas-fase2 P1a: concorrente: data sentinela ou vazia na marcação vem do cadastro do paciente pelo prontuário (7.565 convertidos recuperados); sem as duas, a linha segue recusa visível
 REPACAGN	CPF	pre_cadastro.cpf	cpf			L5-04: 
 REPACAGN	CEP	pre_cadastro.cep	inteiro_zeros_esquerda:8			L5-04: CEP em inteiro perde o zero à esquerda: 8 dígitos
 REPACAGN	ENDERECO	pre_cadastro.logradouro	texto			L5-04: 
@@ -123,7 +124,7 @@ TBCBOPRO	ATENDE_SUS	inscricao_conselho.atende_sus	booleano_sn			L5-04 r3: atende
 TBCBOPRO	COMP_INICIAL	inscricao_conselho.competencia_inicio	competencia_aaaamm			L5-04 r3: primeira competência no cadastro nacional (AAAAMM -> 1º dia do mês)
 TBCBOPRO	COMP_FINAL	inscricao_conselho.competencia_fim	competencia_aaaamm			L5-04 r3: última competência (AAAAMM); fim antes do início: restrição do destino recusa a linha
 TBESPPRO	ESP	especialidade_procedimento.especialidade_medica_id	chave_origem		ref:TBESPEC	L5-04 r3: especialidade pela chave de TBESPEC (dependência TBESPPRO>TBESPEC pedida); ausente: pai_inexistente e recusa
-TBESPPRO	PROCTO	especialidade_procedimento.item_faturavel_id	chave_origem		ref:TBPROCTO.COD_PROCEDIMENTO	L5-04 r3: procedimento pelo CÓDIGO no cadastro de procedimentos da origem (chave alternativa; TBPROCTO vira item_faturavel, decisão L8-03); código em mais de uma tabela de honorários: pai_ambiguo e recusa visível (decisão em F4-decisoes-destino.md)
+TBESPPRO	PROCTO	especialidade_procedimento.item_faturavel_id	chave_origem		ref:TBPROCTO.COD_PROCEDIMENTO>min:ID	L5-04 r3: procedimento pelo CÓDIGO no cadastro de procedimentos da origem (chave alternativa; TBPROCTO vira item_faturavel, decisão L8-03); código em mais de uma tabela de honorários: pai_ambiguo e recusa visível (decisão em F4-decisoes-destino.md); recusas-fase2 P1a (R2): código em mais de um procedimento (81): o de menor ID, com pendência escolha_pelo_menor (como L8-02); código sem par em nenhum cadastro (15.702) segue recusa visível pai_inexistente
 TBESPPRO	@vigencia_carga	especialidade_procedimento.vigencia_inicio				L5-04 r3: a origem não guarda vigência: data da carga com pendência baixa vigencia_sem_fonte
 TBFERIAD	NOME	dia_nao_util.descricao	texto_nome			L5-04 r3: nome do feriado; nulo recusa a linha (1048)
 TBFERIAD	DATA	dia_nao_util.recorrencia	ano_recorrente:9999	valores		L5-04 r3: ano-marca 9999 = todo ano (anual); outro ano = data_unica (valores.d)

@@ -81,7 +81,7 @@ TBLEITO	ATIVO	leito_hospitalar.ativo	booleano_sn			L6-15 r3: leito ativo (S/N); 
 TBLEITO	DATA_VIGENCIA	leito_hospitalar.data_ativacao	data			L6-15 r3: início de vigência do leito
 RICADINT	@estabelecimento	internacao.estabelecimento_id				L6-15 r3: o único estabelecimento do cliente
 RICADINT	REG	internacao.numero	inteiro			L6-15 r3: número da internação (chave da origem)
-RICADINT	ID_ATCABECATEND	internacao.atendimento_id				L6-15 r3: o atendimento (L3)
+RICADINT	ID_ATCABECATEND	internacao.atendimento_id	chave_origem		ref:ATCABECATEND	L6-15 r4 (P2b, recusas da carga) (R9): o atendimento pelo ID (9.160 de 9.160 casam ATCABECATEND; 0 no único atendimento recusado); a referência fica declarada aqui, sem depender da gerada
 RICADINT	PRONT	internacao.paciente_id			ref:RICADPAC.PRONT	L6-15 r3: paciente pelo prontuário (chave alternativa de RICADPAC)
 RICADINT	#data_hora:ENTRADA,HORAENT	internacao.data_hora_entrada				L6-15 r3: data + hora HHMM da entrada; sem data recusa (NOT NULL)
 RICADINT	CARINT	internacao.carater_admissao_id	codigo_char	valores	cod:carater_admissao.codigo	L6-15 r3b: caráter de atendimento pelo código da AIH/TISS (1 eletivo, 2 urgência/emergência), medido na referência: 1 (4090), 2 (5070); código do catálogo-base; decisão em F4-decisoes-destino.md, seção L6-15 (rodada 3, achados)

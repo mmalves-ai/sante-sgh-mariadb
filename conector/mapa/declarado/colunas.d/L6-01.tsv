@@ -2,7 +2,7 @@ tabela	coluna	destino	regra	depara	via	motivo
 PNTIPO	ID	tipo_painel.codigo	texto			L6-01: o número do tipo vira o código (único)
 PNTIPO	NOME	tipo_painel.descricao	texto_nome			L6-01: nome do tipo de painel; vazio recusa só a linha (NOT NULL)
 PNTIPO	=~outro	tipo_painel.finalidade				L6-01: a origem não classifica o que o painel exibe: 'outro' presumido (valor_presumido por linha para o cliente revisar)
-REMODFIC	COD	modelo_ficha_impressa.codigo	texto			L6-01: o número do modelo vira o código; o mesmo número nas variantes comum e de formulário pré-impresso colide na chave única (restricao_destino_1062, pendência visível): '#codigo_derivado' tem prefixo fixo e não distingue a variante; a coluna especial '#chave' (chave composta) está pedida no L6-01.json
+REMODFIC	#codigo_derivado:COD+GRAFICA:30	modelo_ficha_impressa.codigo				recusas-fase2 (P2a): o código do modelo é a chave completa COD+GRAFICA ('#codigo_derivado' de várias colunas, valores unidos por '_'): o mesmo número nas variantes comum e de formulário pré-impresso colidia na chave única (restricao_destino_1062); destrava as 6 regras da REUNIFIC
 REMODFIC	COD	modelo_ficha_impressa.titulo	texto_nome		ref:RETITFIC(COD,GRAFICA)>NOME	L6-01: o título impresso do modelo (RETITFIC, mesma chave COD,GRAFICA, lido na origem pela encadeada terminada em coluna) prevalece sobre o nome; concorrente: modelo sem título impresso fica com o nome (a coluna deixa pai_inexistente, sem recusa)
 REMODFIC	NOME	modelo_ficha_impressa.titulo	texto_nome			L6-01: nome do modelo é o título quando não há título impresso; sem nenhum dos dois recusa só a linha (NOT NULL)
 REMODFIC	=~outro	modelo_ficha_impressa.tipo_documento				L6-01: a origem não classifica o documento: 'outro' presumido (valor_presumido) para o cliente revisar

@@ -16,7 +16,7 @@ TBCBOPRO_TBCONVEN	ID_TBCBOPRO	profissional_fonte_pagadora.profissional_id			ref:
 TBCBOPRO_TBCONVEN	ID_TBCBOPRO	profissional_fonte_pagadora.inscricao_conselho_id	chave_origem			inscrição no conselho credenciada (L5 ordem 63)
 TBCBOPRO_TBCONVEN	ID_TBCONVEN	profissional_fonte_pagadora.fonte_pagadora_id	chave_origem			fonte pagadora (mesma fatia)
 TBCBOPRO_TBCONVEN	@vigencia_carga	profissional_fonte_pagadora.vigencia_inicio				a origem não data o credenciamento: vigente desde a carga, com vigencia_sem_fonte
-TBMEDSOL_CODCON	ID_TBMEDSOL	solicitante_externo_fonte_pagadora.solicitante_externo_id	chave_origem			solicitante externo (L5 ordem 76)
+TBMEDSOL_CODCON	ID_TBMEDSOL	solicitante_externo_fonte_pagadora.solicitante_externo_id	chave_origem		adotar:solicitante_externo_id,fonte_pagadora_id,codigo_na_fonte	solicitante externo (L5 ordem 76); recusas-fase2 P1b (R5): vários cadastros do mesmo profissional viram um solicitante; o mesmo código na mesma fonte é adotado (pendência adotado_existente, nada se perde); código divergente e ID_TBCONVEN=0 (convênio sentinela) ficam recusa visível nesta rodada
 TBMEDSOL_CODCON	ID_TBCONVEN	solicitante_externo_fonte_pagadora.fonte_pagadora_id	chave_origem			fonte pagadora (mesma fatia)
 TBMEDSOL_CODCON	CODIGO_CONVENIO	solicitante_externo_fonte_pagadora.codigo_na_fonte	texto			código do solicitante na fonte; vazio recusa (NOT NULL)
 TBPROFIS	@id:pessoa_fisica	profissional.pessoa_fisica_id				rodada 2 (integrador): a pessoa física do profissional é criada pelo nome e documento da própria linha (destino pessoa_fisica gravado antes, adotado pelo CPF se já existir); o índice de identidade da origem (TBPESSOA) é descarte (duplicado, L5-05)
@@ -50,16 +50,16 @@ TBESPEC	NOME	especialidade_medica.descricao	texto_nome			descrição; vazia recu
 TBESPEC	SIGLA	especialidade_medica.sigla	texto			sigla
 TBESPEC	IDADE_INICIAL	especialidade_medica.idade_minima_anos	inteiro_faixa:0,130			faixa etária (C4: fora de 0 a 130, limite do CHECK, vira NULL com valor_fora_do_dominio, linha gravada)
 TBESPEC	IDADE_FINAL	especialidade_medica.idade_maxima_anos	idade_maxima_sem_limite:130			faixa etária (C4: 0 ou acima de 130 é a marca de sem limite: NULL com idade_sem_limite, em vez de recusar pelo CHECK)
-TBCBOSUS_TBESPEC	ID_TBESPEC	especialidade_ocupacao.especialidade_medica_id	chave_origem			especialidade (mesma fatia)
-TBCBOSUS_TBESPEC	ID_TBCBOSUS	especialidade_ocupacao.ocupacao_cbo_id	texto	cbo	ref:TBCBOSUS>COD	o valor é o ID substituto de TBCBOSUS: a referência encadeada lê o COD da linha pai e o de-para oficial cbo acha a ocupação (nunca pelo ID)
+TBCBOSUS_TBESPEC	ID_TBESPEC	especialidade_ocupacao.especialidade_medica_id	chave_origem			especialidade (mesma fatia); recusas-fase2 P1b: ID_TBESPEC=0 é a linha sentinela da origem: dado inválido, fica a pendência, sem zero_e_chave
+TBCBOSUS_TBESPEC	ID_TBCBOSUS	especialidade_ocupacao.ocupacao_cbo_id	texto	cbo	ref:TBCBOSUS>COD	o valor é o ID substituto de TBCBOSUS: a referência encadeada lê o COD da linha pai e o de-para oficial cbo acha a ocupação (nunca pelo ID); recusas-fase2 P1b: o CBO de edição antiga liga pela edição (carregador do C6)
 TBMEDESP	ID_TBCBOPRO	profissional_especialidade.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	profissional pela inscrição no conselho (referência encadeada)
 TBMEDESP	ID_TBCBOPRO	profissional_especialidade.inscricao_conselho_id	chave_origem			inscrição em que a especialidade foi registrada (L5 ordem 63)
-TBMEDESP	ESP	profissional_especialidade.especialidade_medica_id			ref:TBESPEC	especialidade pela chave de TBESPEC (mesma fatia)
+TBMEDESP	ESP	profissional_especialidade.especialidade_medica_id			ref:TBESPEC;adotar:profissional_id,especialidade_medica_id	especialidade pela chave de TBESPEC (mesma fatia); recusas-fase2 P1b: o profissional com duas inscrições e a mesma especialidade grava o par uma vez (adotar; a segunda inscrição fica pendência baixa adotado_existente)
 TBMEDESP	ATIVO	profissional_especialidade.ativo	booleano_sn			S/N; fora do domínio fica com o padrão (ativo) e pendência
 RICADPAC_TBCONVEN	ID_RICADPAC	cobertura_paciente.paciente_id	chave_origem			paciente (L3); nunca visto recusa (NOT NULL)
 RICADPAC_TBCONVEN	ID_TBCONVEN	cobertura_paciente.fonte_pagadora_id	chave_origem			fonte pagadora (mesma fatia)
 RICADPAC_TBCONVEN	@vigencia_carga	cobertura_paciente.vigencia_inicio				a origem não data a cobertura: vigente desde a carga, com vigencia_sem_fonte
-HTCONVEN	ID_TBCONVEN	fonte_pagadora_versao.fonte_pagadora_id	chave_origem			fonte pagadora do retrato (mesma fatia)
+HTCONVEN	ID_TBCONVEN	fonte_pagadora_versao.fonte_pagadora_id	chave_origem			fonte pagadora do retrato (mesma fatia); recusas-fase2 P1b: retrato com ID_TBCONVEN=0 (convênio sentinela) é dado inválido e fica a pendência, sem zero_e_chave
 HTCONVEN	=alteracao	fonte_pagadora_versao.operacao				histórico da origem: cada linha é uma alteração registrada
 HTCONVEN	#retrato	fonte_pagadora_versao.dados				retrato JSON da linha do histórico (todas as colunas da tabela estão declaradas)
 HTCONVEN	DATA_HORA_HISTORICO	fonte_pagadora_versao.ocorrido_em	data_hora			momento do retrato; sentinela recusa (NOT NULL)
@@ -104,6 +104,7 @@ HTPROFIS	=alteracao	profissional_versao.operacao				histórico da origem: cada l
 HTPROFIS	#retrato:*	profissional_versao.dados				rodada 3: retrato JSON de todas as colunas do histórico (sem segredo)
 HTPROFIS	#sha256:#retrato:*	profissional_versao.hash_dados				rodada 3: SHA-256 do mesmo JSON (referência imutável pelo ato clínico)
 HTPROFIS	DATA_HORA_HISTORICO	profissional_versao.ocorrido_em	data_hora			momento do retrato; sentinela recusa (NOT NULL)
+HTPROFIS	@vigencia_carga	profissional_versao.ocorrido_em				recusas-fase2 P1b (ADR 0007, 16): concorrente da DATA_HORA_HISTORICO sentinela: data da carga com a pendência baixa vigencia_sem_fonte; o retrato entra
 HTPROFIS	ID_TBUSERS	profissional_versao.usuario_id			ref:TBUSERS	usuário que alterou, pelo login; nunca visto: NULL com pai_inexistente
 HTATENDRESP	ID_HTATENDIMENTO	trilha_auditoria.ocorrido_em	data_hora		ref:HTATENDIMENTO>DATA_HORA_HISTORICO	rodada 3: o responsável do atendimento no histórico vira trilha do atendimento no instante da versão (como HTATENDIMENTO, L6-02); sentinela recusa (NOT NULL)
 HTATENDRESP	ID_HTATENDIMENTO	trilha_auditoria.entidade_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND	atendimento afetado, pela versão pai; nunca visto: NULL com pai_inexistente

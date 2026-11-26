@@ -16,6 +16,8 @@ PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.tipo_atendimento	E	externo	L6-
 PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.nome	E	Externo	L6-11: nome do favorito = nome do tipo de atendimento (um favorito por usuário e tipo)
 PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.tipo_atendimento	T	todos	L6-11: letra inicial do tipo de atendimento (L5-01, L6-09)
 PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.nome	T	Todos os atendimentos	L6-11: nome do favorito = nome do tipo de atendimento (um favorito por usuário e tipo)
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.tipo_atendimento	P	todos	recusas-fase2 P3b (A09): letra P fora do domínio documentado (16 favoritos): filtro sem restrição de tipo (todos), o favorito não se perde
+PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.nome	P	Favorito P migrado	recusas-fase2 P3b (A09): nome próprio para não colidir com o favorito 'Todos os atendimentos' do mesmo usuário
 PRLOCAL_ASSISTENCIA	TIPO_ATENDIMENTO	local_assistencia.tipo_atendimento	I	internacao	L6-11: letra do tipo de atendimento (mesmo domínio de PRKITMED e PRFAVORITO)
 PRLOCAL_ASSISTENCIA	TIPO_ATENDIMENTO	local_assistencia.tipo_atendimento	A	ambulatorial	L6-11: letra do tipo de atendimento (mesmo domínio de PRKITMED e PRFAVORITO)
 PRLOCAL_ASSISTENCIA	TIPO_ATENDIMENTO	local_assistencia.tipo_atendimento	U	urgencia	L6-11: letra do tipo de atendimento (mesmo domínio de PRKITMED e PRFAVORITO)

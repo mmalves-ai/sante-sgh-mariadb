@@ -26,7 +26,9 @@ FCIRREGULARID	IRREGULARIDADE	pendencia_conta.descricao	texto_longo			L8-06: text
 FCIRREGULARID	DATA_HORA_INICIO	pendencia_conta.inicio_em	data_hora			L8-06: abertura da pendência
 FCIRREGULARID	DATA_HORA_FIM	pendencia_conta.fim_em	data_hora			L8-06: fim da pendência
 FCIRREGULARID	DATA_HORA_FIM	pendencia_conta.resolvido_em	data_hora			L8-06: resolução = fim (o histórico migra como pendência resolvida, motivo do mapa)
-FCIRREGULARID	=~resolvida	pendencia_conta.situacao				L8-06: histórico 2020-2022 (motivo do mapa): resolvida PRESUMIDA (valor_presumido); sem fim o CHECK recusa a linha, visível (pedido: literal condicional pela presença do fim)
+FCIRREGULARID	=~resolvida	pendencia_conta.situacao			se:DATA_HORA_FIM	recusas fase 2 (P6) (A06): resolvida PRESUMIDA só com DATA_HORA_FIM (resolvido_em preenchido)
+FCIRREGULARID	=~aberta	pendencia_conta.situacao				recusas fase 2 (P6) (A06): sem fim (188, todas antes de 2023): aberta PRESUMIDA (valor_presumido), a pendência continua visível na conta para o faturamento decidir; concorrente
+FCIRREGULARID	=0	pendencia_conta.bloqueia_fechamento			se:DATA_HORA_FIM=	recusas fase 2 (P6) (A06): a pendência migrada aberta não bloqueia o fechamento da conta
 TBREPGER	@estabelecimento	regra_repasse.estabelecimento_id				L8-06: o único estabelecimento do cliente
 TBREPGER	ID	regra_repasse.codigo	inteiro			L8-06: código da regra = chave da origem, gravado como texto (único por estabelecimento)
 TBREPGER	=Regra migrada do sistema anterior	regra_repasse.descricao				L8-06: a origem não tem descrição; rótulo fixo verdadeiro (não presume sentido), o cliente renomeia no painel
@@ -51,7 +53,9 @@ TBREPGER	HORA_FIN	regra_repasse_item.hora_fim	hora_hhmm			L8-06: fim da faixa de
 TBREPGER	QTDE	regra_repasse_item.quantidade_inicial	decimal_zero_nulo			L8-06: 0 = sem limite
 TBREPGER	QTDE_FIN	regra_repasse_item.quantidade_final	decimal_zero_nulo			L8-06: 0 = sem limite
 TBREPGER	PERC	regra_repasse_item.percentual	decimal_nao_negativo			L8-06: percentual; o CHECK exige percentual OU valor fixo (os dois ou nenhum recusa, visível)
+TBREPGER	=~0	regra_repasse_item.percentual			se:VALOR=	recusas fase 2 (P6) (A06): regra sem percentual nem valor fixo (183): repasse zero PRESUMIDO (valor_presumido, visível) na regra migrada (CHECK de migração do K1, 12_FAT/99z); concorrente
 TBREPGER	VALOR	regra_repasse_item.valor_fixo	decimal_nao_negativo			L8-06: valor fixo
+TBREPGER	=0	regra_repasse_item.valor_fixo			se:PERC=	recusas fase 2 (P6) (A06): sem percentual nem valor fixo: valor zero, que acompanha o percentual zero presumido; concorrente
 TBREPGER	PERC_FERIADO	regra_repasse_item.percentual_feriado	decimal_nao_negativo			L8-06: acréscimo em feriado
 TBREPGER	PERC_FIM_SEMANA	regra_repasse_item.percentual_fim_semana	decimal_nao_negativo			L8-06: acréscimo no fim de semana
 TBREPGER	INCIDE_FILME	regra_repasse_item.incide_filme	booleano_sn			L8-06: S/N
@@ -98,7 +102,7 @@ FCDIAINT	N_ORDEM	conta_hospitalar_segurado.numero_ordem	texto			L8-06: ordem do 
 FCDIAINT	MESPRO	conta_hospitalar.id	chave_origem		ref:RICONTAS.(ANOPRO,MESPRO,COD)=(ANOPRO,MESPRO,COD);conta_hospitalar;complementa	L8-06: o diagnóstico do formulário do órgão completa a conta de internação (UPDATE da observação; a conta da origem não tem observação própria)
 FCDIAINT	DIAG	conta_hospitalar.observacao	texto_longo		conta_hospitalar	L8-06: diagnóstico informado ao órgão, sem mexer no texto
 RICGUIAS	@estabelecimento	guia_fonte_pagadora.estabelecimento_id				L8-06: o único estabelecimento do cliente
-RICGUIAS	GUIA	guia_fonte_pagadora.numero	texto			L8-06: número da guia (a origem não tem outra numeração); vazio: NOT NULL recusa; repetido: UNIQUE recusa, visível
+RICGUIAS	GUIA	guia_fonte_pagadora.numero	texto		adotar:estabelecimento_id,fonte_pagadora_id,numero	recusas fase 2 (P6) (A05): a mesma guia (fonte, número) em várias contas da internação: a primeira grava, as outras ADOTAM (adotado_existente); 8 sem número: NOT NULL recusa (dado inválido, visível)
 RICGUIAS	GUIA	guia_fonte_pagadora.numero_guia_operadora	texto			L8-06: o mesmo número é o da fonte pagadora
 RICGUIAS	=internacao	guia_fonte_pagadora.tipo_guia				L8-06: guias da internação (RI*); certa, não presumida
 RICGUIAS	REG	guia_fonte_pagadora.paciente_id			ref:RICADINT>PRONT>RICADPAC.PRONT	L8-06: paciente da internação
@@ -122,7 +126,7 @@ FCTISSLOTEPROT	ID_TBCONVEN	lote_tiss.fonte_pagadora_id	chave_origem			L8-06: fon
 FCTISSLOTEPROT	NUM_LOTE	lote_tiss.numero_lote	texto			L8-06: número do lote; repetido na fonte: UNIQUE recusa, visível
 FCTISSLOTEPROT	SEQUENCIAL_LOTE	lote_tiss.sequencial	texto			L8-06: sequencial da transação no cabeçalho da mensagem
 FCTISSLOTEPROT	ID_TBTISSTPGUIA	lote_tiss.tipo_guia	inteiro	valores		L8-06: tipo de guia pelo id do tipo (pares com evidência, os mesmos da numeração de guias TBSEGUIA: 1 consulta, 2 SP/SADT, 3 resumo de internação, 4 honorário individual); sem par: valor_fora_do_dominio e NOT NULL recusa, visível
-FCTISSLOTEPROT	ID_TBCONVEN	lote_tiss.versao_padrao_tiss_id	inteiro_zeros_esquerda:6	versao_tiss	ref:TBTISS>VERSAO_TISS	L8-06: versão do padrão TISS PRESUMIDA: a origem não guarda a versão por lote nem por transação (TBTISSSCHEMA só tem nome e tipo, L8-17); vem da versão configurada HOJE para a fonte pagadora (TBTISS por fonte, VERSAO_TISS; de-para oficial versao_tiss pelo código MMmmpp), e o lote antigo, gerado sob outra versão, recebe a atual. Falta a pendência valor_presumido por linha (opção 'presumido' na via) e a versão pela data do lote (vigência do catálogo oficial): pedidos 14 e 19 do saida/L8-06.json; confirmar por agregado na carga real (F4-decisoes-destino.md)
+FCTISSLOTEPROT	ID_TBCONVEN	lote_tiss.versao_padrao_tiss_id	texto	versao_tiss	ref:TBTISS>VERSAO_TISS>TBVERSAOTISS>COD_VERSAO_TISS	recusas fase 2 (P6) (A03, M7): versão pelo cadastro de versões em dois saltos (o número da TBTISS é o ID da TBVERSAOTISS; o código da versão segue para o de-para versao_tiss, como a TBTISS L8-05). L8-06: versão do padrão TISS PRESUMIDA: a origem não guarda a versão por lote nem por transação (TBTISSSCHEMA só tem nome e tipo, L8-17); vem da versão configurada HOJE para a fonte pagadora (TBTISS por fonte, VERSAO_TISS; de-para oficial versao_tiss pelo código MMmmpp), e o lote antigo, gerado sob outra versão, recebe a atual. Falta a pendência valor_presumido por linha (opção 'presumido' na via) e a versão pela data do lote (vigência do catálogo oficial): pedidos 14 e 19 do saida/L8-06.json; confirmar por agregado na carga real (F4-decisoes-destino.md)
 FCTISSLOTEPROT	DATA_HORA_LOTE	lote_tiss.gerado_em	data_hora			L8-06: geração do lote; vazia: NOT NULL recusa, visível
 FCTISSLOTEPROT	NUM_PROTOCOLO	lote_tiss.numero_protocolo	texto			L8-06: protocolo devolvido pela fonte pagadora (o lote guarda o número; o recebimento não tem data na origem: F4-decisoes-destino.md)
 FCTISSLOTEPROT	NUM_DEMONSTRATIVO_RECURSO_GLOSA	lote_tiss.numero_demonstrativo_recurso	texto			L8-06: demonstrativo do recurso de glosa do lote
@@ -150,22 +154,22 @@ TBHISTTABMM	PERIODO_INICIAL	contrato_fonte_pagadora.vigencia_inicio	data		contra
 TBHISTTABMM	=~vigente	contrato_fonte_pagadora.situacao			contrato_fonte_pagadora	L8-06: PRESUMIDO (valor_presumido): a origem não tem o acordo; em rascunho as tabelas não valeriam na conta
 TBHISTTABTHME	@id:contrato_fonte_pagadora	contrato_tabela_vigencia.contrato_fonte_pagadora_id				L8-06: acordo migrado da fonte pagadora (um por fonte, criado pela primeira vigência e adotado pelas outras; F4-decisoes-destino.md)
 TBHISTTABTHME	=honorario_ambulatorial	contrato_tabela_vigencia.tipo_item				L8-06: a tabela da origem é a vigência da tabela de honorario ambulatorial
-TBHISTTABTHME	ID_TBCTRTHM_ATEND_EXT	contrato_tabela_vigencia.tabela_preco_id	chave_origem		ref:TBCTRTHM	L8-06: tabela de preço vigente no período (TBCTRTHM, L8-03)
+TBHISTTABTHME	ID_TBCTRTHM_ATEND_EXT	contrato_tabela_vigencia.tabela_preco_id	chave_origem		ref:TBCTRTHM;zero_e_chave	L8-06: tabela de preço vigente no período (TBCTRTHM, L8-03); recusas fase 2 (P6) (R4): a chave 0 da TBCTRTHM é registro real: zero_e_chave na via (M5 do C1)
 TBHISTTABTHME	PERIODO_INICIAL	contrato_tabela_vigencia.vigencia_inicio	data			L8-06: início da vigência
 TBHISTTABTHME	PERIODO_FINAL	contrato_tabela_vigencia.vigencia_fim	data			L8-06: fim da vigência; antes do início: CHECK recusa, visível
 TBHISTTABTHME	@estabelecimento	contrato_fonte_pagadora.estabelecimento_id			contrato_fonte_pagadora;antes;adotar:estabelecimento_id,numero	L8-06: acordo da fonte pagadora: criado uma vez e ADOTADO pelas vigências seguintes, de qualquer das quatro tabelas (adotado_existente)
-TBHISTTABTHME	ID_TBCONVEN	contrato_fonte_pagadora.fonte_pagadora_id	chave_origem		contrato_fonte_pagadora	L8-06: fonte pagadora do acordo
+TBHISTTABTHME	ID_TBCONVEN	contrato_fonte_pagadora.fonte_pagadora_id	chave_origem		contrato_fonte_pagadora;ref:TBCONVEN;zero_e_chave	L8-06: fonte pagadora do acordo; recusas fase 2 (P6) (R4): a chave 0 da TBCONVEN é registro real: zero_e_chave na via (M5 do C1)
 TBHISTTABTHME	#codigo_derivado:ID_TBCONVEN:30:acordo_	contrato_fonte_pagadora.numero			contrato_fonte_pagadora	L8-06: número do acordo migrado = 'acordo_' + código da fonte (um por fonte)
 TBHISTTABTHME	=Acordo migrado do sistema anterior	contrato_fonte_pagadora.descricao			contrato_fonte_pagadora	L8-06: rótulo verdadeiro; o cliente renomeia
 TBHISTTABTHME	PERIODO_INICIAL	contrato_fonte_pagadora.vigencia_inicio	data		contrato_fonte_pagadora	L8-06: início do acordo = início da primeira vigência lida da fonte
 TBHISTTABTHME	=~vigente	contrato_fonte_pagadora.situacao			contrato_fonte_pagadora	L8-06: PRESUMIDO (valor_presumido): a origem não tem o acordo; em rascunho as tabelas não valeriam na conta
 TBHISTTABTHMI	@id:contrato_fonte_pagadora	contrato_tabela_vigencia.contrato_fonte_pagadora_id				L8-06: acordo migrado da fonte pagadora (um por fonte, criado pela primeira vigência e adotado pelas outras; F4-decisoes-destino.md)
 TBHISTTABTHMI	=honorario_internacao	contrato_tabela_vigencia.tipo_item				L8-06: a tabela da origem é a vigência da tabela de honorario internacao
-TBHISTTABTHMI	ID_TBCTRTHM_ATEND_INT	contrato_tabela_vigencia.tabela_preco_id	chave_origem		ref:TBCTRTHM	L8-06: tabela de preço vigente no período (TBCTRTHM, L8-03)
+TBHISTTABTHMI	ID_TBCTRTHM_ATEND_INT	contrato_tabela_vigencia.tabela_preco_id	chave_origem		ref:TBCTRTHM;zero_e_chave	L8-06: tabela de preço vigente no período (TBCTRTHM, L8-03); recusas fase 2 (P6) (R4): a chave 0 da TBCTRTHM é registro real: zero_e_chave na via (M5 do C1)
 TBHISTTABTHMI	PERIODO_INICIAL	contrato_tabela_vigencia.vigencia_inicio	data			L8-06: início da vigência
 TBHISTTABTHMI	PERIODO_FINAL	contrato_tabela_vigencia.vigencia_fim	data			L8-06: fim da vigência; antes do início: CHECK recusa, visível
 TBHISTTABTHMI	@estabelecimento	contrato_fonte_pagadora.estabelecimento_id			contrato_fonte_pagadora;antes;adotar:estabelecimento_id,numero	L8-06: acordo da fonte pagadora: criado uma vez e ADOTADO pelas vigências seguintes, de qualquer das quatro tabelas (adotado_existente)
-TBHISTTABTHMI	ID_TBCONVEN	contrato_fonte_pagadora.fonte_pagadora_id	chave_origem		contrato_fonte_pagadora	L8-06: fonte pagadora do acordo
+TBHISTTABTHMI	ID_TBCONVEN	contrato_fonte_pagadora.fonte_pagadora_id	chave_origem		contrato_fonte_pagadora;ref:TBCONVEN;zero_e_chave	L8-06: fonte pagadora do acordo; recusas fase 2 (P6) (R4): a chave 0 da TBCONVEN é registro real: zero_e_chave na via (M5 do C1)
 TBHISTTABTHMI	#codigo_derivado:ID_TBCONVEN:30:acordo_	contrato_fonte_pagadora.numero			contrato_fonte_pagadora	L8-06: número do acordo migrado = 'acordo_' + código da fonte (um por fonte)
 TBHISTTABTHMI	=Acordo migrado do sistema anterior	contrato_fonte_pagadora.descricao			contrato_fonte_pagadora	L8-06: rótulo verdadeiro; o cliente renomeia
 TBHISTTABTHMI	PERIODO_INICIAL	contrato_fonte_pagadora.vigencia_inicio	data		contrato_fonte_pagadora	L8-06: início do acordo = início da primeira vigência lida da fonte

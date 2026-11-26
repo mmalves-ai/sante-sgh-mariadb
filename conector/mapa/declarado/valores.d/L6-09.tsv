@@ -1323,3 +1323,12 @@ TBPROENF	ID_PRTIPONOTIFICACAOIDADE	cuidado_enfermagem.acao_restricao_idade	bloqu
 TBPROENF	ID_PRTIPONOTIFICACAOIDADE	cuidado_enfermagem.acao_restricao_idade	Impedir	bloquear	L6-09: ação da restrição por idade (sem notificação: alertar; justificativa: alertar) pelo nome (evidência: o próprio nome); nome sem par: valor_fora_do_dominio
 TBPROENF	ID_PRTIPONOTIFICACAOIDADE	cuidado_enfermagem.acao_restricao_idade	IMPEDIR	bloquear	L6-09: ação da restrição por idade (sem notificação: alertar; justificativa: alertar) pelo nome (evidência: o próprio nome); nome sem par: valor_fora_do_dominio
 TBPROENF	ID_PRTIPONOTIFICACAOIDADE	cuidado_enfermagem.acao_restricao_idade	impedir	bloquear	L6-09: ação da restrição por idade (sem notificação: alertar; justificativa: alertar) pelo nome (evidência: o próprio nome); nome sem par: valor_fora_do_dominio
+TBLISTADIAGNOSTICOSITUACAO	NOME	situacao_problema.categoria	Recorrente	recidiva	recusas-fase2 (P3a): problema que voltou
+TBLISTADIAGNOSTICOSITUACAO	NOME	situacao_problema.clinicamente_ativo	Recorrente	1	recusas-fase2 (P3a): problema que voltou: ativo
+TBLISTADIAGNOSTICOSITUACAO	NOME	situacao_problema.categoria	Cancelado	descartado	recusas-fase2 (P3a): registro cancelado: descartado
+TBLISTADIAGNOSTICOSITUACAO	NOME	situacao_problema.clinicamente_ativo	Cancelado	0	recusas-fase2 (P3a): registro cancelado: fora da lista ativa
+TBPRINC_VALIDACAO	NOME	tipo_validacao_dose.base_calculo	SC	superficie_corporal	recusas-fase2 (P3a): SC = superfície corporal
+TBSITUACAOMP	NOME	situacao_prescricao.categoria	AUTORIZADO	validada	recusas-fase2 (P3a): autorizada = validada
+TBSITUACAOMP	NOME	situacao_prescricao.vigente	AUTORIZADO	1	recusas-fase2 (P3a): como a validada
+TBSITUACAOMP	NOME	situacao_prescricao.final	AUTORIZADO	0	recusas-fase2 (P3a): como a validada
+TBHORMED	TIPO_ATENDIMENTO	grade_horario_unidade.tipo_atendimento	E	ambulatorio	recusas-fase2 (P3a): E (externo) -> ambulatório; a origem não tem grade A, sem colisão no escopo

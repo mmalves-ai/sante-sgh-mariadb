@@ -289,5 +289,12 @@
       "conta_como_realizado": false,
       "ordem": 8
     }
+  ],
+  "tipo_anexo": [
+    {
+      "codigo": "documento_migrado",
+      "descricao": "Documento importado sem tipo informado",
+      "finalidade": "outro"
+    }
   ]
 }

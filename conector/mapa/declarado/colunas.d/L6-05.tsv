@@ -1,12 +1,12 @@
 tabela	coluna	destino	regra	depara	via	motivo
-GETABVIA	COD	via_de_uso.codigo	codigo_char			código de 2 caracteres, caixa preservada; colisão de caixa na chave única vira codigo_colisao_caixa nas duas linhas
+GETABVIA	COD	via_de_uso.codigo	codigo_char		adotar:codigo	código de 2 caracteres, caixa preservada; colisão de caixa na chave única vira codigo_colisao_caixa nas duas linhas
 GETABVIA	NOME	via_de_uso.descricao	texto_nome			descrição; vazia recusa a linha (NOT NULL)
 GETABVIA	ATIVO	via_de_uso.ativo	booleano_sn			S/N; vazio ou fora do domínio fica com o padrão do destino (ativo)
 GETABVIA	ID_DIGITAL	via_de_uso.codigo_interoperabilidade	texto			código da via na prescrição digital (36 posições, igual ao destino); pedido da L6-08, que descartou TBDIGITAL_VIAACESSO como duplicado por ele
 GETABVIA	ID_TBTISSVIAADMIN		chave_origem			não gravada por ora: via na terminologia TISS vai para via_tiss_termo_terminologia_id pelo termo oficial, mas a terminologia TISS não tem carregador (catalogos.tsv tiss_ans) nem de-para em depara.CATALOGOS; pedido no L6-05.json
 PRAGRAVOTPARQUETIPO	ID	agravo_notificavel.codigo	texto			a origem só tem o id: vira o código de negócio
 PRAGRAVOTPARQUETIPO	NOME	agravo_notificavel.descricao	texto_nome			descrição do agravo; vazia recusa a linha
-PRAGRAVOPERGUNTA	ID_PRAGRAVOTPARQUETIPO	agravo_pergunta.agravo_notificavel_id	chave_origem			agravo pai pelo conector_origem
+PRAGRAVOPERGUNTA	ID_PRAGRAVOTPARQUETIPO	agravo_pergunta.agravo_notificavel_id	chave_origem		adotar:agravo_notificavel_id,codigo_campo,subcodigo	agravo pai pelo conector_origem
 PRAGRAVOPERGUNTA	ID	agravo_pergunta.sequencia	inteiro			a origem não tem ordem: a posição é a chave da origem, que nunca muda nem se repete (ordem da chave preservada; linha apagada ou nova no diferencial não desloca as outras); ID acima de 65535 recusa pela restrição do destino
 PRAGRAVOPERGUNTA	CODIGO	agravo_pergunta.codigo_campo	texto			código do campo na ficha oficial, inteiro gravado como texto
 PRAGRAVOPERGUNTA	SUBCODIGO	agravo_pergunta.subcodigo	inteiro			subdivisão do campo
@@ -28,6 +28,7 @@ PRCAB_IDENTIFIC_PAC	NOME	identificacao_paciente_documento.descricao	texto_nome		
 PRCAB_IDENTIFIC_PAC	ATIVO	identificacao_paciente_documento.ativo	booleano_sn			S/N
 PRCAMPOSLOCALIZACAOPACIENTE	ID	coluna_painel_paciente.codigo	texto			a origem só tem o id: vira o código de negócio
 PRCAMPOSLOCALIZACAOPACIENTE	NOME	coluna_painel_paciente.chave_atributo	texto_nome	valores		L6-05 r3: chave do atributo do produto pelo NOME (valores.d/L6-05.tsv: leito, paciente, idade, atendimento, entrada, dias, convenio, medico, alergias, alertas, as chaves que a tela do painel exibe, COLUNAS_PAINEL do contrato do PEP); nome sem par recusa a linha (valor_fora_do_dominio + NOT NULL) em vez de gravar o id da origem; dois nomes da mesma chave: o segundo recusa pela chave única (1062)
+PRCAMPOSLOCALIZACAOPACIENTE	#codigo_derivado:ID:60:origem_	coluna_painel_paciente.chave_atributo			presumida	recusas-fase2 (P3a): coluna do painel sem atributo do produto pelo nome: chave própria única derivada do id (a chave é única), com valor_presumido; o hospital religa ao atributo pela tela
 PRCAMPOSLOCALIZACAOPACIENTE	NOME	coluna_painel_paciente.descricao	texto_nome			descrição da coluna
 PRFA_UTILIZACAO	ID	utilizacao_item_prescricao.codigo	texto			a origem só tem o id: vira o código de negócio
 PRFA_UTILIZACAO	DESCRICAO	utilizacao_item_prescricao.descricao	texto			descrição (só as pontas aparadas)
@@ -57,11 +58,13 @@ PRAGRUPBALANCO	ID	grupo_balanco_hidrico.ordem	inteiro			ordem de exibição pela
 PRASSINANTE	ID	tipo_assinante.codigo	texto			a origem só tem o id: vira o código de negócio
 PRASSINANTE	NOME	tipo_assinante.descricao	texto_nome			descrição; vazia recusa a linha (NOT NULL)
 PRASSINANTE	NOME	tipo_assinante.papel	texto_nome	valores		papel de quem assina pelo nome (valores.d/L6-05.tsv); nome sem par recusa a linha (valor_fora_do_dominio + NOT NULL) em vez de presumir o papel; o cliente acrescenta o par no painel
+PRASSINANTE	=~responsavel_legal	tipo_assinante.papel				recusas-fase2 (P3a): tipo de assinante sem par no de-para (os nomes sem par citam paciente e responsável) entra como responsável legal presumido (valor_presumido)
 PRASSINANTE	ATIVO	tipo_assinante.ativo	booleano_sn			S/N; vazio fica com o padrão (ativo)
 PRBHTIPOFECHAMENTO	ID	tipo_fechamento_balanco.codigo	texto			a origem só tem o id: vira o código de negócio
 PRBHTIPOFECHAMENTO	NOME	tipo_fechamento_balanco.descricao	texto_nome			descrição; vazia recusa a linha
 PRBHTIPOFECHAMENTO	NOME	tipo_fechamento_balanco.periodo_horas	texto_nome	valores		duração do período pelo nome (24, 12 ou 6 horas; valores.d/L6-05.tsv); nome sem duração (ex.: só 'parcial') recusa a linha em vez de presumir 24 horas
 PRBHTIPOFECHAMENTO	NOME	tipo_fechamento_balanco.parcial	texto_nome	valores		fechamento parcial pelo nome (menos de 24 horas ou 'parcial'); sem par fica o padrão (falso) com valor_fora_do_dominio
+PRBHTIPOFECHAMENTO	=migracao	tipo_fechamento_balanco.origem				recusas-fase2 (P3a): tipo migrado: o período em horas é opcional só no migrado (CHECK periodo_horas IS NOT NULL OR origem='migracao'); o nome sem duração fica sem período
 PRFREQUENCIA	ID	frequencia_administracao.codigo	texto			a origem só tem o id: vira o código de negócio
 PRFREQUENCIA	NOME	frequencia_administracao.descricao	texto_nome			descrição; vazia recusa a linha
 PRFREQUENCIA	NUM_DOSE	frequencia_administracao.tipo	inteiro_zero_nulo	valores		tipo pelo número de doses (valores.d/L6-05.tsv): 1..48 vezes ao dia; acima de 48 recusa (valor_fora_do_dominio + NOT NULL); sem número (nulo ou 0) a critério médico, que reproduz o programa antigo (sem horário calculado) e mantém o nome na descrição; tipo pelo NOME (agora, se necessário, contínuo, dose única) com presumido só no resto aguarda o motor (pedido no L6-05.json)

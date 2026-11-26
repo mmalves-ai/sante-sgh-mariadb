@@ -3,7 +3,7 @@ CHCRITICIDADE	ID	criticidade_area.codigo	texto			L6-17: chave inteira da origem 
 CHCRITICIDADE	NOME	criticidade_area.descricao	texto_nome			L6-17: nome da criticidade
 CHCRITICIDADE	=~critica	criticidade_area.classificacao_sanitaria				L6-17: a origem não traz a classe sanitária; entra 'critica' (a mais exigente) com pendência valor_presumido por linha até o de-para de valores (pedido no L6-17.json)
 CHAREA	@estabelecimento	area_higienizavel.estabelecimento_id				L6-17: a origem não tem coluna de unidade; o único estabelecimento do cliente, ou recusa com estabelecimento_indefinido
-CHAREA	SIGLA	area_higienizavel.sigla	texto			L6-17: sigla nula na origem recusa a linha (NOT NULL no destino)
+CHAREA	#codigo_derivado:SIGLA+ID:10	area_higienizavel.sigla				L6-17 r4 (P2b, recusas da carga): sigla = SIGLA_ID: o hospital reaproveita a sigla em áreas diferentes (medido: 81 siglas distintas em 110 áreas, 29 recusas 1062 na uq por estabelecimento); com a chave a sigla é única e estável, e nome e criticidade da origem ficam como estão; medido: 0 passam de 10 caracteres (acima, o derivado curto com pendência codigo_derivado). DECISÃO (correção do P2b): a troca vale para TODAS as 110 áreas, não só as 29 em colisão: o sufixo só na colisão é o M11 do C1, que não tem opção nomeada; quando o M11 existir, volta a SIGLA com o sufixo só na colisão (pendência baixa)
 CHAREA	NOME	area_higienizavel.nome	texto_nome			L6-17: nome nulo recusa a linha (NOT NULL); nome repetido no estabelecimento recusa (uq nome)
 CHAREA	ID_CHCRITICIDADE	area_higienizavel.criticidade_area_id	chave_origem			L6-17: criticidade pelo conector_origem
 CHAREA	ATIVO	area_higienizavel.ativo	booleano_sn			L6-17: nulo fica com o padrão do destino (TRUE)
@@ -13,6 +13,7 @@ CHOCORRENCIA	=~emergencial	tipo_ocorrencia_limpeza.modalidade				L6-17: a origem
 CHSITUACAO	ID	situacao_limpeza.codigo	texto			L6-17: chave inteira da origem gravada como código (texto)
 CHSITUACAO	NOME	situacao_limpeza.descricao	texto_nome			L6-17: nome nulo recusa a linha (NOT NULL)
 CHSITUACAO	ORDEM	situacao_limpeza.ordem	inteiro			L6-17: ordem nula recusa a linha (NOT NULL, sem padrão); repetida recusa (uq ordem)
+CHSITUACAO	#seq:ORDEM	situacao_limpeza.ordem			presumida	L6-17 r4 (P2b, recusas da carga): concorrente: sem ORDEM (medido: nula nas 4), a ordem é a posição na leitura pela chave entre as situações sem ordem, PRESUMIDA (valor_presumido); ordem repetida com uma situação que tem ordem recusa (uq), visível
 CHSITUACAO	ID_CHSITUACAO_ANTERIOR	situacao_limpeza.anterior_situacao_limpeza_id	chave_origem		ref:CHSITUACAO	L6-17: autorreferência (etapa anterior do fluxo), gravada em duas fases
 CHSITUACAO	COR	situacao_limpeza.cor	texto			L6-17: cor do painel, como está na origem
 CHSITUACAO	ATIVO	situacao_limpeza.ativo	booleano_sn			L6-17: nulo fica com o padrão do destino (TRUE)

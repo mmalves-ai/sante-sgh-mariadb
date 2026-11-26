@@ -10,6 +10,7 @@ RISETOR	SAME		codigo_char			L6-18: sem destino até o de-para do tipo 'arquivo' 
 PRVIAADMIN	ID	via_dieta.codigo	texto			L6-18: chave inteira da origem gravada como código (texto); única alimentadora de via_dieta
 PRVIAADMIN	NOME	via_dieta.descricao	texto_nome			L6-18: nome vazio recusa a linha (NOT NULL)
 PRVIAADMIN	ID_TBTPDIETA	via_dieta.modalidade	texto_nome	valores	ref:TBTPDIETA>NOME	L6-18: modalidade pelo nome do tipo de dieta da via (referência encadeada, de-para genérico por nome em valores.d/L6-18.tsv); tipo sem par: NULL com valor_fora_do_dominio e a via é recusada (NOT NULL), visível na triagem, nunca presumida em coluna clínica
+PRVIAADMIN	NOME	via_dieta.modalidade	texto_nome	valores	senao	L6-18 r4 (P2b, recusas da carga): concorrente: sem tipo de dieta (medido: 5 de 8) ou tipo sem par no de-para (3), a modalidade pelo nome da própria via (de-para genérico de vias em valores.d/L6-18.tsv); sem par nos dois: NULL e a via recusada (NOT NULL), visível, nunca presumida
 TBDIETAS	COD	modalidade_dieta.codigo	texto			L6-18: chave inteira da origem gravada como código (texto); TBDIETAS é a única alimentadora
 TBDIETAS	NOME	modalidade_dieta.descricao	texto_nome			L6-18: sem nome recusa a linha (NOT NULL)
 TBDIETAS	SITUACAO	modalidade_dieta.ativo	booleano_ai			L6-18: A ativo, I inativo; vazio ou fora do domínio fica o padrão (ativo): a classe vem do tipo de dieta, a dieta migra prescritível

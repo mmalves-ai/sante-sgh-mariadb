@@ -13,7 +13,7 @@ TBTPACAOAUDIT	=operacao	tipo_acao_auditavel.acao_trilha				L5-03: ação genéri
 TBUNIUSE	USUARIO	usuario_unidade.usuario_id			ref:TBUSERS	L5-03: login (chave do pai); inexistente recusa (NOT NULL)
 TBUNIUSE	UNID	usuario_unidade.unidade_assistencial_id			ref:TBUNIDAD	L5-03: código da unidade (chave do pai)
 TBUSERCON	USUARIO	usuario_fonte_pagadora.usuario_id			ref:TBUSERS	L5-03: modelo antigo de convênios do usuário
-TBUSERCON	CONV	usuario_fonte_pagadora.fonte_pagadora_id			ref:TBCONVEN	L5-03: código do convênio (chave do pai)
+TBUSERCON	CONV	usuario_fonte_pagadora.fonte_pagadora_id			ref:TBCONVEN;zero_e_chave	L5-03: código do convênio (chave do pai); recusas-fase2 P1a: zero_e_chave: o código 0 da origem liga ao pai de chave 0 quando ele existe (M5 do motor) (48 com CONV=0; a origem tem o convênio de código 0)
 TBUSERS_TBCONVEN	ID_TBUSER	usuario_fonte_pagadora.usuario_id			ref:TBUSERS;adotar:usuario_id,fonte_pagadora_id	L5-03: vínculo atual; o par que o modelo antigo já gravou é adotado (adotado_existente), sem duplicar nem recusar
 TBUSERS_TBCONVEN	ID_TBCONVEN	usuario_fonte_pagadora.fonte_pagadora_id				L5-03: convênio (referência gerada)
 TBUSERSCOMPL	ID_TBUSERS	preferencia_usuario.usuario_id			ref:TBUSERS;adotar:usuario_id	L5-03: uma preferência por usuário (único): a linha já criada por outra origem é adotada. PERMITE_LOGAR_OUTRO_TERMINAL aguarda coluna no modelo (pedido no L5-03.json); CONFIG_TELA_CHAMADA_SENHA é o leiaute da tela do sistema antigo (sem valor no produto)
@@ -49,7 +49,8 @@ PRJUSTIF_IMP_EXPORTACAO	=~outro	exportacao_documento.formato				L5-03: a origem 
 PRJUSTIF_IMP_EXPORTACAO	=~download	exportacao_documento.destino				L5-03: a origem não guarda o destino: presumido
 PRJUSTIF_IMP_EXPORTACAO	ID_PRTIPO_JUSTIF_EXPORTACAO	exportacao_documento.tipo_justificativa_exportacao_id				L5-03
 PRJUSTIF_IMP_EXPORTACAO	ID_TBCBOPRO	exportacao_documento.ocupacao_cbo_id		cbo	ref:TBCBOPRO>ID_TBCBOSUS>TBCBOSUS>COD	L5-03
-PRJUSTIF_IMP_EXPORTACAO	ID_TBCBOPRO	exportacao_documento.usuario_id			ref:TBUSUCPL.ID_TBCBOPRO>USUARIO>TBUSERS	L5-03: usuário pela inscrição no cadastro complementar (chave EMPRESA,USUARIO). O mesmo usuário com a mesma inscrição em duas empresas hoje dá pai_ambiguo e recusa (NOT NULL); a regra que só acusa ambiguidade com usuários DIFERENTES é pedido ao motor (L5-03.json, prioridade alta)
+PRJUSTIF_IMP_EXPORTACAO	ID_TBCBOPRO	exportacao_documento.usuario_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS>ID_TBUSERS>TBUSERS	L5-03 recusas-fase2 P1a: login do profissional da inscrição (encadeada pelo profissional); profissional sem login: NULL, permitido só no registro migrado (ck_exportacao_documento_autor), com o autor em profissional_id
+PRJUSTIF_IMP_EXPORTACAO	ID_TBCBOPRO	exportacao_documento.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L5-03 recusas-fase2 P1a: quem imprimiu ou exportou (o autor é o profissional); a origem=migracao o motor preenche
 PRJUSTIF_IMP_EXPORTACAO	DATA_HORA_IMP_EXPORTACAO	exportacao_documento.ocorrido_em	data_hora			L5-03
 PRJUSTIF_IMP_EXPORTACAO	#retrato	exportacao_documento.dados				L5-03
 CCCADCIR_EXCLUSAO	@estabelecimento	registro_excluido.estabelecimento_id				L5-03
@@ -71,7 +72,8 @@ SIPACAGD_EXCLUSAO	DATA_HORA_EXCLUSAO	registro_excluido.ocorrido_em	data_hora			L
 SIPACAGD_EXCLUSAO	USUARIO	registro_excluido.usuario_id			ref:TBUSERS	L5-03: USUARIO da cópia é o último usuário do registro (sem PSQL do gatilho que prove o autor da exclusão): presumido, marcado pela justificativa (valor_presumido); sem usuário recusa (NOT NULL)
 SIPACAGD_EXCLUSAO	ID_RICADPAC	registro_excluido.paciente_id				L5-03: paciente (L3, referência gerada)
 TBUSUCPL	USUARIO	usuario_vinculo_profissional.usuario_id			ref:TBUSERS	L5-03
-TBUSUCPL	EMPRESA	usuario_vinculo_profissional.estabelecimento_id			ref:TBHOSPIT	L5-03: empresa da linha (chave do estabelecimento)
+TBUSUCPL	@estabelecimento	usuario_vinculo_profissional.estabelecimento_id				L5-03 recusas-fase2 P1a: EMPRESA aponta a empresa (400 de 400 casam com a TBEMPHOS, 0 com a TBHOSPIT), que vira a mantenedora: o vínculo fica no único estabelecimento do cliente (vários: estabelecimento_indefinido)
+TBUSUCPL	EMPRESA		chave_origem			L5-03 recusas-fase2 P1a: a empresa vira @estabelecimento; fica na chave (conector_origem)
 TBUSUCPL	ID_TBCBOPRO	usuario_vinculo_profissional.profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L5-03: profissional da inscrição; sem inscrição não há vínculo a migrar (CHECK do alvo recusa). Indicadores de permissão e senhas secundárias: decisão em F4-decisoes-destino.md
 TBUSUCPL	@vigencia_carga	usuario_vinculo_profissional.vigencia_inicio				L5-03
 TBCABTRILHA	DATA_HORA_ACAO	evento_auditoria.ocorrido_em	data_hora			L5-03
@@ -93,9 +95,9 @@ TBLANTRILHASGH	ID_TABELA	evento_auditoria_registro.entidade_id	inteiro			L5-03: 
 TBLANTRILHASGH	=~alteracao	evento_auditoria_registro.operacao				L5-03: registro por campo; o tipo de ação do cabeçalho é cadastro do cliente (sem código padrão para de-para genérico): alteração presumida (valor_presumido)
 TBHISTSENHA	USUARIO	historico_senha.usuario_id			ref:TBUSERS	r5 ADR 0006/0007: dono da senha (ADR 0007, 17: credencial copiada); login nunca visto recusa (NOT NULL)
 TBHISTSENHA	DATA_HORA	historico_senha.ocorrido_em	data_hora			r5 ADR 0006/0007: data original da troca
-TBHISTSENHA	#senha_hash:SENHA:sha256	historico_senha.hash_senha				r5 ADR 0006/0007: resumo importado como está (hex; base64 vira hex), conferido pelo formato; inválido: senha_hash_invalido e a linha recusada
-TBHISTSENHA	=sha256_sal_externo	historico_senha.algoritmo			se:SALT	r5 (revisão): com SAL na origem o resumo não traz o sal embutido: algoritmo sha256_sal_externo (sal no retrato dados.SALT; composição sal+senha a confirmar no PSQL da origem; a API não compara até confirmar; decisão em F4-decisoes-destino.md)
-TBHISTSENHA	=sha256	historico_senha.algoritmo				r5 (revisão): sem sal, SHA-256 simples da senha (hex; base64 vira hex)
+TBHISTSENHA	#senha_hash:SENHA:sha1	historico_senha.hash_senha				r5 ADR 0006/0007 + recusas-fase2 P1a: resumo SHA-1 (40 hex) importado como está, conferido pelo formato; outro tamanho (23): senha_hash_invalido e recusa visível
+TBHISTSENHA	=sha1_sal_externo	historico_senha.algoritmo			se:SALT	r5 (revisão) + recusas-fase2 P1a: com SAL na origem o resumo não traz o sal embutido: algoritmo sha1_sal_externo (sal no retrato)
+TBHISTSENHA	=sha1	historico_senha.algoritmo				r5 (revisão) + recusas-fase2 P1a: sem sal, SHA-1 simples da senha
 TBHISTSENHA	=alteracao	historico_senha.operacao				r5 ADR 0006/0007: 
 TBHISTSENHA	=migracao	historico_senha.forma_troca				r5 ADR 0006/0007: troca feita no sistema antigo
 TBHISTSENHA	#retrato:SALT	historico_senha.dados				r5 ADR 0006/0007: sal da origem (não é segredo) junto do resumo, para a regra de não reutilizar; a SENHA nunca entra no retrato

@@ -28,6 +28,7 @@ SHMOV	NOME	tipo_movimento_bolsa.descricao	texto_nome			L7-01: nome do movimento;
 SHMOV	BLOQUEADO	tipo_movimento_bolsa.bloqueia_bolsa	booleano_sn			L7-01: indicador S/N de movimento que bloqueia a bolsa; vazio: padrão do destino (FALSE); outro valor: valor_fora_do_dominio
 SHMOV	DEVOLUCAO_PERDA		codigo_char			L7-01: marca de devolução ou perda sem evidência dos códigos; natureza e baixa do estoque vêm do NOME pelo de-para (linhas abaixo), que cobre devolução e perda
 SHMOV	NOME	tipo_movimento_bolsa.natureza	texto_nome	valores		L7-01: natureza do movimento pelo NOME (de-para de valores por grafias comuns em valores.d/L7-01.tsv, como L6-05); nome sem par: valor_fora_do_dominio e recusa (NOT NULL), visível ao cliente; presumir 'entrada' poria bloqueio e devolução de volta no estoque
+SHMOV	=~correcao	tipo_movimento_bolsa.natureza			senao	recusas fase 2 (P4): nome sem par no de-para (8 de 10 na origem): natureza presumida 'correcao' (valor_presumido, visível), sem baixa do estoque; o cliente corrige a natureza no cadastro
 SHMOV	NOME	tipo_movimento_bolsa.baixa_estoque	texto_nome	valores		L7-01: baixa do estoque pela natureza do NOME (de-para de valores, mesmas grafias): transfusão, devolução, descarte, perda e transferência retiram a bolsa do estoque; nome sem par já recusa a linha pela natureza
 SHPERGUN	COD_PERGUNTA	pergunta_triagem_doador.codigo	inteiro			L7-01: pergunta da triagem do doador: código de negócio (número como texto)
 SHPERGUN	DESCRICAO	pergunta_triagem_doador.pergunta	texto			L7-01: texto da pergunta; sem texto a linha é recusada
@@ -130,7 +131,8 @@ SHBOLSA	ANOREF		inteiro			L7-01: ano de referência do faturamento antigo: sem d
 SHBOLSA	COD_DOACAO_FORNECEDOR		inteiro			L7-01: número da doação no serviço fornecedor: o número da bolsa no rótulo já identifica; sem destino
 SHBOLSA	CDE		inteiro			L7-01: marca sem evidência dos códigos: sem destino
 SHBOLSA	SEQUENCIA		inteiro			L7-01: sequência da bolsa dentro do pedido ao fornecedor (descartado): sem destino
-SIASSLAUDO_IMPRESSAO	DATA_HORA_IMPRESSAO	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria	L7-01: impressão de laudo vira evento 'impressao' da trilha de auditoria: o laudo assinado (outra tabela, vazia nesta origem e fora do mapa) não dá o paciente que emissao_laudo exige; sem data a linha é recusada
+SIASSLAUDO_IMPRESSAO	DATA_HORA_IMPRESSAO	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria	L7-01: impressão de laudo vira evento 'impressao' da trilha de auditoria: o laudo assinado (outra tabela, vazia nesta origem e fora do mapa) não dá o paciente que emissao_laudo exige; sem data vale a geração do laudo (concorrente abaixo)
+SIASSLAUDO_IMPRESSAO	DATA_HORA_GERACAO_LAUDO	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria;presumida	recusas fase 2 (P4): impressão sem data (17 na origem, todas com a geração): o instante é a geração do laudo, limite inferior da impressão (valor_presumido); o original nulo segue no retrato
 SIASSLAUDO_IMPRESSAO	=impressao	trilha_auditoria.acao			trilha_auditoria	L7-01: ação da trilha
 SIASSLAUDO_IMPRESSAO	=emissao_laudo	trilha_auditoria.entidade			trilha_auditoria	L7-01: entidade do produto que registra a emissão do laudo
 SIASSLAUDO_IMPRESSAO	ID_TBUSERS	trilha_auditoria.usuario_id			ref:TBUSERS;trilha_auditoria	L7-01: quem imprimiu, pelo login; login inexistente: NULL com pai_inexistente

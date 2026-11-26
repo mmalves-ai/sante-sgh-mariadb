@@ -25,7 +25,7 @@ FPEVENTO	INC_MED_13	rubrica.compoe_media_decimo_terceiro	booleano_sn			L5-12: co
 FPEVENTO	MEDIA_RESCISAO	rubrica.compoe_media_rescisao	booleano_sn			L5-12: compõe a média da rescisão
 FPEVENTO	DEDUTIVEL_IRRF	rubrica.dedutivel_irrf	booleano_sn			L5-12: dedutível do IRRF
 FPEVENTO	#vigencia:DATA_INICIAL_VALIDADE	rubrica.vigencia_inicio				L5-12 r5 (ADR 0007, 16): início da validade da linha; sem ele, a data mais antiga com evidência na tabela e depois a do registro mais antigo da origem (vigencia_sem_fonte, baixa); nunca a data da carga
-FPEVENTO	ID_FPNATRUBRICA	rubrica.natureza_rubrica_id	texto		cod:natureza_rubrica.codigo_esocial	L5-12: natureza da rubrica (tabela 03 do eSocial) pelo código no catálogo oficial do destino (natureza_rubrica.codigo_esocial; nunca gravado, regra 7): a chave de FPNATRUBRICA é o próprio código da natureza (SMALLINT de 4 dígitos); ausente no catálogo: codigo_inexistente_destino; código com mais de uma vigência: pai_ambiguo; nos dois casos o NOT NULL recusa a rubrica (visível). De-para oficial com a vigente vencendo pedido em saida/L5-12.json (pedido 3)
+FPEVENTO	ID_FPNATRUBRICA	rubrica.natureza_rubrica_id	texto		cod:natureza_rubrica.codigo_esocial	L5-12: natureza da rubrica (tabela 03 do eSocial) pelo código no catálogo oficial do destino (natureza_rubrica.codigo_esocial; nunca gravado, regra 7): a chave de FPNATRUBRICA é o próprio código da natureza (SMALLINT de 4 dígitos); ausente no catálogo: codigo_inexistente_destino; código com mais de uma vigência: pai_ambiguo; nos dois casos o NOT NULL recusa a rubrica (visível). De-para oficial com a vigente vencendo pedido em saida/L5-12.json (pedido 3); recusas-fase2 P1b: catálogo da tabela 03 pelo carregador do eSocial (C5); sem natureza na origem fica NULL só na rubrica migrada (CHECK do K1); o domínio barra o envio S-1010 até classificar
 FPEVENTO	SITUACAO	rubrica.ativo	booleano_ai			L5-12: situação da rubrica (A ativa, I inativa; vazio: padrão TRUE); inativa na origem não é candidata no cálculo
 FPEVENTO	DATA_INICIAL_VALIDADE		data			L5-12 r5: lida como evidência da vigência (#vigencia:DATA_INICIAL_VALIDADE em rubrica.vigencia_inicio)
 FPEVENTO	DATA_FINAL_VALIDADE		data			L5-12: fim da validade: entra em rubrica.vigencia_fim junto com o início real (pedido 6); com início = data da carga, o fim passado seria recusado pelo CHECK fim >= início
@@ -65,7 +65,7 @@ FPRESP	VIGENCIA_INICIAL	responsavel_legal_empregador.vigencia_inicio	data			L5-1
 FPRESP	VIGENCIA_FINAL	responsavel_legal_empregador.vigencia_fim	data			L5-12: fim da responsabilidade
 FPRESP	PIS		texto			L5-12: não carregada por ora: nis CHAR(11) pede regra de NIS com verificador (pedido em saida/L5-12.json)
 FPRESP	SITUACAO	responsavel_legal_empregador.ativo	booleano_ai			L5-12: situação do responsável (A ativo, I inativo; vazio: padrão TRUE)
-FPRESP	RESPONS		texto_nome			L5-12: nome no leiaute antigo: fonte alternativa quando NOME está vazio (especial #primeiro:NOME,RESPONS, pedido 7); na imagem de referência NOME está preenchido onde RESPONS está
+FPRESP	RESPONS	responsavel_legal_empregador.nome	texto_nome			L5-12 (recusas-fase2 P1b): concorrente de NOME: o nome no leiaute antigo vale quando NOME está vazio
 FPRUBRICAFGTS_FPEVENTO	ID_FPEVENTO	incidencia_rubrica.rubrica_id				L5-12: rubrica da incidência (FPEVENTO)
 FPRUBRICAINSS_FPEVENTO	ID_FPEVENTO	incidencia_rubrica.rubrica_id				L5-12: rubrica da incidência (FPEVENTO)
 FPRUBRICAIRRF_FPEVENTO	ID_FPEVENTO	incidencia_rubrica.rubrica_id				L5-12: rubrica da incidência (FPEVENTO)

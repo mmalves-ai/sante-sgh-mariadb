@@ -29,8 +29,9 @@ TBTPLANC	=~0	tipo_lancamento.gera_repasse				L8-04: fora da base de repasse PRES
 TBPRESER	@estabelecimento	prestador_terceiro.estabelecimento_id				L8-04: a origem não tem unidade: estabelecimento único do cliente (vários: estabelecimento_indefinido)
 TBPRESER	ID	prestador_terceiro.codigo	inteiro			L8-04: código do prestador = chave da origem gravada como texto (COD repete entre atos e módulos)
 TBPRESER	NOME	prestador_terceiro.nome	texto_nome			L8-04: nome; vazio recusa a linha (NOT NULL)
-TBPRESER	=~juridica	prestador_terceiro.tipo_pessoa				L8-04: PRESUMIDO (valor_presumido) até o pedido 1 (regras genéricas tipo_pessoa_documento, cpf_de_documento e cnpj_de_documento sobre o documento num campo só, e _digitos aceitando DOUBLE de valor inteiro). Hoje o prestador pessoa física cai no CHECK do documento (recusa 4025 visível); não há declaração que contorne sem código no motor
-TBPRESER	CGC_CPF	prestador_terceiro.cnpj	cnpj			L8-04: CNPJ com dígito verificador; inválido: NULL com documento_invalido e a linha cai no CHECK do documento (recusa visível). DOUBLE da origem: pedido 1 (aceitar número de ponto flutuante inteiro)
+TBPRESER	CGC_CPF	prestador_terceiro.tipo_pessoa	tipo_pessoa_documento			recusas fase 2 (P6) (A05): tipo de pessoa pelo documento (11 dígitos física, 14 jurídica; regra genérica)
+TBPRESER	CGC_CPF	prestador_terceiro.cnpj	cnpj_de_documento		adotar:estabelecimento_id,cnpj	recusas fase 2 (P6) (A05, R14): CNPJ só quando o documento é de pessoa jurídica; o mesmo CNPJ do mesmo profissional (mesma pessoa jurídica por ato ou módulo) ADOTA o prestador (adotado_existente)
+TBPRESER	CGC_CPF	prestador_terceiro.cpf	cpf_de_documento			recusas fase 2 (P6) (A05): CPF quando o documento é de pessoa física; inválido: NULL com documento_invalido
 TBPRESER	CNES	prestador_terceiro.cnes	inteiro_zeros_esquerda:7			L8-04: CNES do prestador, 7 dígitos com zeros à esquerda
 TBPRESER	ID_TBRPATPREPASSE	prestador_terceiro.tipo_prestador_repasse_id	chave_origem			L8-04: tipo do prestador no repasse (mesma fatia, antes)
 TBPRESER	CBO_ANS	prestador_terceiro.ocupacao_cbo_id		cbo		L8-04: ocupação pelo catálogo oficial CBO; código ausente: catalogo_codigo_*
