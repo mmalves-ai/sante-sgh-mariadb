@@ -109,7 +109,10 @@ const cliente = useQueryClient();
 const { permissoes } = usarSessao();
 const podeRegras = computed(() => permissoes.value.has('pep.admin.ler'));
 const podeEditar = computed(() => permissoes.value.has('pep.admin.editar'));
-const aba = ref<'pendencias' | 'regras'>('pendencias');
+// O profissional lê as pendências pelo acesso ao prontuário; a administração do PEP (sem permissão clínica) entra
+// direto nas regras.
+const podePendencias = computed(() => permissoes.value.has('pep.prontuario.ler'));
+const aba = ref<'pendencias' | 'regras'>(podePendencias.value ? 'pendencias' : 'regras');
 const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
 const ocupado = ref(false);
@@ -120,6 +123,7 @@ const vencidas = ref(false);
 const pendencias = useQuery({
   queryKey: computed(() => ['pep', 'documentos-exigidos', 'pendencias', setor.value, vencidas.value]),
   queryFn: () => lerPendenciasDocumentos(setor.value ? Number(setor.value) : null, vencidas.value),
+  enabled: podePendencias,
 });
 const dados = computed(() => pendencias.data.value);
 // Os setores vistos na lista ficam no filtro mesmo depois de filtrar (o filtro é do servidor).
@@ -310,6 +314,7 @@ const alternar = (r: RegraDocumentoExigido) => rodar(() => ativarRegraDocumento(
     <h1>{{ t('titulo') }}</h1>
     <nav class="abas" role="tablist">
       <SanteBotao
+        v-if="podePendencias"
         :variante="aba === 'pendencias' ? 'primario' : 'texto'"
         :rotulo="t('abaPendencias')"
         role="tab"

@@ -16,11 +16,11 @@ export const rotasPep: RouteRecordRaw[] = [
   },
   {
     // C2-028 (03-PEP L132): documentos exigidos por diagnóstico, idade ou setor (lista do profissional; a aba das
-    // regras aparece só com pep.admin.ler).
+    // regras aparece só com pep.admin.ler; a administração do PEP, sem permissão clínica, entra só nas regras).
     path: '/pep/documentos-exigidos',
     name: 'pep.documentosExigidos',
     component: () => import('./telas/DocumentosExigidosTela.vue'),
-    meta: { permissao: 'pep.prontuario.ler', menu: 'PEP > Documentos exigidos' },
+    meta: { permissao: 'pep.prontuario.ler', permissaoOu: ['pep.admin.ler'], menu: 'PEP > Documentos exigidos' },
   },
   {
     // Regra 9: relatório agregado das exceções (só contagens), para o arquivo médico e a comissão.
