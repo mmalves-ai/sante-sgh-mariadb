@@ -99,6 +99,13 @@ export const rotasCirurgia: RouteRecordRaw[] = [
     meta: { permissao: 'cirurgia.cme.ler', menu: `${M} > CME: testes dos ciclos e rejeições` },
   },
   {
+    // F7, 04-CME L117: solicitação, entrega ao setor, recolhimento e conferência; permissões da CME por setor.
+    path: '/cirurgia/cme/fluxo',
+    name: 'cirurgia.cme.fluxo',
+    component: () => import('./telas/CmeFluxoTela.vue'),
+    meta: { permissao: 'cirurgia.cme.ler', menu: `${M} > CME: solicitação, entrega e recolhimento` },
+  },
+  {
     // F8, 04-CC L108: projetos e mutirões cirúrgicos do SUS (metas SIGTAP, AIH e APAC marcadas, meta x produção).
     path: '/cirurgia/mutiroes',
     name: 'cirurgia.mutiroes',

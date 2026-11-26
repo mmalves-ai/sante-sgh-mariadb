@@ -50,6 +50,8 @@ import { PORTA_CME, PortaCmePropria } from './cme-propria.js';
 import { CmeCicloController } from './cme-ciclo.controller.js';
 import { PORTA_CME_CICLO, PortaCmeCicloPropria } from './cme-ciclo-propria.js';
 import { CmeCadastroController } from './cme-cadastro.controller.js';
+import { CmeMovimentoController } from './cme-movimento.controller.js';
+import { PORTA_CME_MOVIMENTO, PortaCmeMovimentoPropria } from './cme-movimento-propria.js';
 import { PORTA_CME_CADASTRO, PortaCmeCadastroPropria } from './cme-cadastro-propria.js';
 import { ReservaCirurgiaController } from './reserva-cirurgia.controller.js';
 import { DocumentosCirurgiaController } from './documentos-cirurgia.controller.js';
@@ -151,6 +153,7 @@ export async function moduloCirurgia(
       CmeController,
       CmeCadastroController,
       CmeCicloController,
+      CmeMovimentoController,
       EquipeRealizadaController,
       ReservaCirurgiaController,
       DocumentosCirurgiaController,
@@ -221,6 +224,14 @@ export async function moduloCirurgia(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaCmeCicloPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F7 (04-CME linha 117): solicitação, entrega ao setor, recolhimento e permissões da CME por setor; sem núcleo, 503.
+      {
+        provide: PORTA_CME_MOVIMENTO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCmeMovimentoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F7 (04-CME linha 115): cadastro da CME (produtos reprocessáveis, caixas e kits, fases e foto); sem núcleo, 503.
