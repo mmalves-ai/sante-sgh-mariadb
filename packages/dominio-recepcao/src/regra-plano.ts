@@ -21,6 +21,10 @@ export interface RegraPlano {
   readonly planoId: number | null;
   readonly categoriaId: number | null;
   readonly estabelecimentoId: number | null;
+  /** 02-REC linha 37: a regra pode valer só para uma especialidade, um serviço ou um setor (nulo ou ausente: todos). */
+  readonly especialidadeId?: number | null;
+  readonly servicoId?: number | null;
+  readonly setorId?: number | null;
   readonly exigeCarteira: boolean;
   readonly exigeValidadeCarteira: boolean;
   readonly exigeTitular: boolean;
@@ -102,6 +106,10 @@ export interface ChaveRegraPlano {
   readonly planoSuperiorId: number | null;
   readonly categoriaId: number | null;
   readonly estabelecimentoId: number;
+  /** 02-REC linha 37: especialidade, serviço e setor do atendimento (ausente: o fluxo não sabe). */
+  readonly especialidadeId?: number | null;
+  readonly servicoId?: number | null;
+  readonly setorId?: number | null;
   /** AAAA-MM-DD. */
   readonly data: string;
 }
@@ -111,8 +119,10 @@ const vigente = (r: RegraPlano, d: string) =>
 
 /**
  * A regra mais específica vigente na data. Peso: plano exato > plano superior > regra de toda a fonte; depois a
- * categoria exata sobre a regra de todas as categorias; depois o estabelecimento da sessão sobre o de todos. Empate:
- * o início de vigência mais recente. Regra de outro plano, categoria ou estabelecimento não se aplica.
+ * categoria exata sobre a regra de todas as categorias; depois a especialidade, o serviço e o setor (02-REC linha 37),
+ * nessa ordem; por fim o estabelecimento da sessão sobre o de todos. Cada nível pesa mais que todos os de baixo
+ * somados. Empate: o início de vigência mais recente. Regra de outro plano, categoria, especialidade, serviço, setor
+ * ou estabelecimento não se aplica.
  */
 export function escolherRegraPlano(regras: readonly RegraPlano[], c: ChaveRegraPlano): RegraPlano | null {
   let melhor: { r: RegraPlano; peso: number } | null = null;
@@ -120,14 +130,29 @@ export function escolherRegraPlano(regras: readonly RegraPlano[], c: ChaveRegraP
     if (!vigente(r, c.data)) continue;
     let peso = 0;
     if (r.planoId !== null) {
-      if (c.planoId !== null && r.planoId === c.planoId) peso += 200;
-      else if (c.planoSuperiorId !== null && r.planoId === c.planoSuperiorId) peso += 100;
+      if (c.planoId !== null && r.planoId === c.planoId) peso += 2000;
+      else if (c.planoSuperiorId !== null && r.planoId === c.planoSuperiorId) peso += 1000;
       else continue;
     }
     if (r.categoriaId !== null) {
       if (r.categoriaId !== c.categoriaId) continue;
-      peso += 20;
+      peso += 200;
     }
+    const filtros: [number | null | undefined, number | null | undefined, number][] = [
+      [r.especialidadeId, c.especialidadeId, 40],
+      [r.servicoId, c.servicoId, 20],
+      [r.setorId, c.setorId, 8],
+    ];
+    let fora = false;
+    for (const [daRegra, doAtendimento, p] of filtros) {
+      if (daRegra === null || daRegra === undefined) continue;
+      if (daRegra !== doAtendimento) {
+        fora = true;
+        break;
+      }
+      peso += p;
+    }
+    if (fora) continue;
     if (r.estabelecimentoId !== null) {
       if (r.estabelecimentoId !== c.estabelecimentoId) continue;
       peso += 2;

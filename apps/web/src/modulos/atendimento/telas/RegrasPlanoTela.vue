@@ -40,6 +40,13 @@ const { t } = useI18n({
       vazio: 'Nenhuma regra própria: a abertura segue sem crítica do plano.',
       plano: 'Plano',
       categoria: 'Categoria',
+      especialidade: 'Especialidade',
+      servico: 'Serviço',
+      setor: 'Setor',
+      todasEspecialidades: 'Todas as especialidades',
+      todosServicos: 'Todos os serviços',
+      todosSetores: 'Todos os setores',
+      alcance: 'Especialidade, serviço e setor',
       unidade: 'Unidade',
       estaUnidade: 'Esta unidade',
       todasUnidades: 'Todas as unidades',
@@ -132,6 +139,27 @@ const opcoesPlano = computed(() => [
   { valor: '', rotulo: t('todosPlanos') },
   ...(dados.data.value?.planos ?? []).map((o) => ({ valor: String(o.id), rotulo: o.rotulo })),
 ]);
+const opcoesDe = (l: { id: number; rotulo: string }[] | undefined, vazio: string) => [
+  { valor: '', rotulo: vazio },
+  ...(l ?? []).map((o) => ({ valor: String(o.id), rotulo: o.rotulo })),
+];
+const opcoesEspecialidade = computed(() =>
+  opcoesDe(dados.data.value?.especialidades, t('todasEspecialidades')),
+);
+const opcoesServico = computed(() => opcoesDe(dados.data.value?.servicos, t('todosServicos')));
+const opcoesSetor = computed(() => opcoesDe(dados.data.value?.setores, t('todosSetores')));
+const alcanceDe = (r: {
+  especialidadeId: number | null;
+  servicoId: number | null;
+  setorId: number | null;
+}) => {
+  const d = dados.data.value;
+  return [
+    rotuloDe(d?.especialidades ?? [], r.especialidadeId, t('todasEspecialidades')),
+    rotuloDe(d?.servicos ?? [], r.servicoId, t('todosServicos')),
+    rotuloDe(d?.setores ?? [], r.setorId, t('todosSetores')),
+  ].join(' · ');
+};
 const opcoesCategoria = computed(() => [
   { valor: '', rotulo: t('todasCategorias') },
   ...(dados.data.value?.categorias ?? []).map((o) => ({ valor: String(o.id), rotulo: o.rotulo })),
@@ -164,6 +192,9 @@ const ocupado = ref(false);
 const formVazio = (hoje: string) => ({
   plano: '',
   categoria: '',
+  especialidade: '',
+  servico: '',
+  setor: '',
   todasUnidades: false,
   exigeCarteira: false,
   exigeValidadeCarteira: false,
@@ -266,6 +297,9 @@ async function incluir(): Promise<void> {
     fonteId: fonteId.value,
     planoId: p.planoId,
     categoriaId: p.categoriaId,
+    especialidadeId: f.value.especialidade === '' ? null : Number(f.value.especialidade),
+    servicoId: f.value.servico === '' ? null : Number(f.value.servico),
+    setorId: f.value.setor === '' ? null : Number(f.value.setor),
     todasUnidades: f.value.todasUnidades,
     exigeCarteira: p.exigeCarteira,
     exigeValidadeCarteira: p.exigeValidadeCarteira,
@@ -372,6 +406,7 @@ async function conferir(): Promise<void> {
             <tr>
               <th scope="col">{{ t('plano') }}</th>
               <th scope="col">{{ t('categoria') }}</th>
+              <th scope="col">{{ t('alcance') }}</th>
               <th scope="col">{{ t('unidade') }}</th>
               <th scope="col">{{ t('exigencias') }}</th>
               <th scope="col">{{ t('teto') }}</th>
@@ -384,6 +419,7 @@ async function conferir(): Promise<void> {
             <tr v-for="r in dados.data.value.regras" :key="r.id" :data-testid="`rp-regra-${r.id}`">
               <td>{{ rotuloDe(dados.data.value.planos, r.planoId, t('todosPlanos')) }}</td>
               <td>{{ rotuloDe(dados.data.value.categorias, r.categoriaId, t('todasCategorias')) }}</td>
+              <td>{{ alcanceDe(r) }}</td>
               <td>{{ r.estabelecimentoId === null ? t('todasUnidades') : t('estaUnidade') }}</td>
               <td>
                 {{ exigenciasDe(r) }}
@@ -447,6 +483,19 @@ async function conferir(): Promise<void> {
             :opcoes="opcoesCategoria"
             data-testid="rp-categoria"
           />
+          <SanteSelecao
+            v-model="f.especialidade"
+            :rotulo="t('especialidade')"
+            :opcoes="opcoesEspecialidade"
+            data-testid="rp-especialidade"
+          />
+          <SanteSelecao
+            v-model="f.servico"
+            :rotulo="t('servico')"
+            :opcoes="opcoesServico"
+            data-testid="rp-servico"
+          />
+          <SanteSelecao v-model="f.setor" :rotulo="t('setor')" :opcoes="opcoesSetor" data-testid="rp-setor" />
           <SanteChave
             :ligada="f.todasUnidades"
             :rotulo="t('todasUnidades')"

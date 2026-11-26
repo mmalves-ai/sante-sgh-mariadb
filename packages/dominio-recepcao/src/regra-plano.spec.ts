@@ -208,3 +208,42 @@ describe('validarEncerramentoRegraPlano', () => {
     ).toHaveProperty('vigenciaFim');
   });
 });
+
+describe('escolherRegraPlano por especialidade, serviço e setor (02-REC linha 37)', () => {
+  const c = { planoId: 10, planoSuperiorId: null, categoriaId: 1, estabelecimentoId: 1, data: '2026-11-26' };
+  it('a regra da especialidade do atendimento vence a da fonte inteira; a de outra especialidade não se aplica', () => {
+    const rs = [regra(1), regra(2, { especialidadeId: 7 }), regra(3, { especialidadeId: 8 })];
+    expect(escolherRegraPlano(rs, { ...c, especialidadeId: 7 })?.id).toBe(2);
+    expect(escolherRegraPlano(rs, { ...c, especialidadeId: 9 })?.id).toBe(1);
+    expect(escolherRegraPlano(rs, c)?.id).toBe(1);
+  });
+  it('a ordem é especialidade > serviço > setor, e o plano exato pesa mais que todas', () => {
+    const rs = [
+      regra(1, { setorId: 5 }),
+      regra(2, { servicoId: 4 }),
+      regra(3, { servicoId: 4, setorId: 5 }),
+      regra(4, { especialidadeId: 7 }),
+      regra(5, { planoId: 10 }),
+    ];
+    const k = { ...c, especialidadeId: 7, servicoId: 4, setorId: 5 };
+    expect(escolherRegraPlano(rs, k)?.id).toBe(5);
+    expect(escolherRegraPlano(rs.slice(0, 4), k)?.id).toBe(4);
+    expect(escolherRegraPlano(rs.slice(0, 3), k)?.id).toBe(3);
+    expect(escolherRegraPlano(rs.slice(0, 2), { ...k, servicoId: null })?.id).toBe(1);
+  });
+  it('a senha exigida só no setor vale só nele', () => {
+    const rs = [regra(1), regra(2, { setorId: 5, exigeSenhaAutorizacao: true })];
+    const r = escolherRegraPlano(rs, { ...c, setorId: 5 });
+    const d = {
+      data: c.data,
+      carteira: null,
+      validadeCarteira: null,
+      guia: null,
+      senhaAutorizacao: null,
+      validadeSenha: null,
+      atendimentosNoPeriodo: 0,
+    };
+    expect(criticarAberturaPlano(r, d).bloqueios.map((b) => b.codigo)).toContain('senha-obrigatoria');
+    expect(criticarAberturaPlano(escolherRegraPlano(rs, { ...c, setorId: 6 }), d).bloqueios).toHaveLength(0);
+  });
+});

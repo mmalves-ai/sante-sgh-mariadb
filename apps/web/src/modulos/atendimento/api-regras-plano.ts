@@ -18,6 +18,10 @@ const regra = z.object({
   planoId: z.number().nullable(),
   categoriaId: z.number().nullable(),
   estabelecimentoId: z.number().nullable(),
+  // 02-REC linha 37: a regra pode valer só numa especialidade, num serviço ou num setor.
+  especialidadeId: z.number().nullable().default(null),
+  servicoId: z.number().nullable().default(null),
+  setorId: z.number().nullable().default(null),
   exigeCarteira: z.boolean(),
   exigeValidadeCarteira: z.boolean(),
   exigeTitular: z.boolean(),
@@ -46,6 +50,9 @@ export const esquemaRegrasPlanoDaFonte = z.object({
   hoje: z.string(),
   planos: z.array(opcao),
   categorias: z.array(opcao),
+  especialidades: z.array(opcao).default([]),
+  servicos: z.array(opcao).default([]),
+  setores: z.array(opcao).default([]),
   regras: z.array(regra),
 });
 export type RegrasPlanoDaFonteTela = z.infer<typeof esquemaRegrasPlanoDaFonte>;
@@ -97,6 +104,9 @@ export interface IncluirRegraPlano {
   fonteId: number;
   planoId: number | null;
   categoriaId: number | null;
+  especialidadeId: number | null;
+  servicoId: number | null;
+  setorId: number | null;
   todasUnidades: boolean;
   exigeCarteira: boolean;
   exigeValidadeCarteira: boolean;
@@ -133,6 +143,9 @@ export interface PreviaRegraPlano {
   fonteId: number;
   planoId?: number | null;
   categoriaId?: number | null;
+  especialidadeId?: number | null;
+  servicoId?: number | null;
+  setorId?: number | null;
   pacienteId?: number | null;
   data?: string;
   carteira?: string | null;

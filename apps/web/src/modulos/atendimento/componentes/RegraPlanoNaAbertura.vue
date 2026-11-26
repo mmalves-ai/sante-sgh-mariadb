@@ -15,6 +15,11 @@ const props = defineProps<{
   carteira: string;
   validadeCarteira: string;
   guia: string;
+  /** 02-REC linha 37: a senha de autorização e a chave da regra por especialidade e setor. */
+  senha?: string;
+  validadeSenha?: string;
+  especialidade?: number | null;
+  setor?: number | null;
   /** Avisos que o servidor devolveu na abertura (alertaPlanoMotivo e orientacaoPlano). */
   aberto?: { alerta: string | null; orientacao: string | null } | null;
 }>();
@@ -50,6 +55,10 @@ async function conferir(): Promise<void> {
       carteira: nulo(props.carteira),
       validadeCarteira: nulo(props.validadeCarteira),
       guia: nulo(props.guia),
+      senhaAutorizacao: nulo(props.senha ?? ''),
+      validadeSenha: nulo(props.validadeSenha ?? ''),
+      especialidadeId: props.especialidade ?? null,
+      setorId: props.setor ?? null,
     });
     if (n === pedido) critica.value = r.regraId === null ? null : r;
   } catch {
@@ -59,7 +68,17 @@ async function conferir(): Promise<void> {
 }
 
 watch(
-  () => [props.fonte, props.paciente, props.carteira, props.validadeCarteira, props.guia],
+  () => [
+    props.fonte,
+    props.paciente,
+    props.carteira,
+    props.validadeCarteira,
+    props.guia,
+    props.senha,
+    props.validadeSenha,
+    props.especialidade,
+    props.setor,
+  ],
   () => {
     if (espera) clearTimeout(espera);
     espera = setTimeout(() => void conferir(), 400);

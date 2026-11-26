@@ -47,6 +47,7 @@ import { marcaDasCoberturas, motivoSemCarteira, preenchimentoDaCobertura } from 
 import { preenchimentoDaMarcacao, tipoInicialDaAbertura } from '../regras-tela.js';
 import AvisoAtendimento from '../componentes/AvisoAtendimento.vue';
 import ErroAtendimento from '../componentes/ErroAtendimento.vue';
+import ElegibilidadeNaAbertura from '../componentes/ElegibilidadeNaAbertura.vue';
 import RegraPlanoNaAbertura from '../componentes/RegraPlanoNaAbertura.vue';
 import { usarAtendimento } from '../usar-atendimento.js';
 
@@ -98,6 +99,9 @@ const retorno = ref(false);
 const matricula = ref('');
 const validadeCarteira = ref('');
 const guia = ref('');
+// 02-REC linha 37: a senha de autorização da operadora e a validade dela (a regra do plano pode exigi-la).
+const senhaConvenio = ref('');
+const validadeSenha = ref('');
 const plano = ref('');
 const horarioEspecial = ref(false);
 const comResponsavel = ref(false);
@@ -434,6 +438,8 @@ async function abrir(): Promise<void> {
         ...(matricula.value.trim() ? { matricula: matricula.value } : {}),
         ...(validadeCarteira.value ? { validadeCarteira: validadeCarteira.value } : {}),
         ...(guia.value.trim() ? { guia: guia.value } : {}),
+        ...(senhaConvenio.value.trim() ? { senhaConvenio: senhaConvenio.value.trim() } : {}),
+        ...(validadeSenha.value ? { validadeSenha: validadeSenha.value } : {}),
         ...(plano.value.trim() ? { plano: plano.value } : {}),
         ...(observacao.value.trim() ? { observacao: observacao.value } : {}),
         ...(lab.value && solicitante.value ? { solicitante: solicitante.value.id } : {}),
@@ -793,12 +799,21 @@ async function abrir(): Promise<void> {
         <SanteCampoTexto v-model="guia" :rotulo="t('atendimento.segurado.guia')" :max-bytes="20" />
         <SanteCampoTexto v-model="plano" :rotulo="t('atendimento.segurado.plano')" :max-bytes="40" />
       </div>
+      <ElegibilidadeNaAbertura
+        v-model:senha="senhaConvenio"
+        v-model:validade-senha="validadeSenha"
+        :paciente="paciente?.id ?? null"
+      />
       <RegraPlanoNaAbertura
         :fonte="convenio === '' ? 0 : Number(convenio)"
         :paciente="paciente?.id ?? null"
         :carteira="matricula"
         :validade-carteira="validadeCarteira"
         :guia="guia"
+        :senha="senhaConvenio"
+        :validade-senha="validadeSenha"
+        :especialidade="especialidade === '' ? null : Number(especialidade)"
+        :setor="unidade === '' ? null : Number(unidade)"
         :aberto="avisoPlano"
       />
       <label

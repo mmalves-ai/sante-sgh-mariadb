@@ -35,7 +35,13 @@ describe.skipIf(SEM_BANCO)('regra própria do plano na recepção (MariaDB)', ()
   let m: Massa;
   let paciente = 0;
   let hoje = '';
-  const planos: Record<'p' | 'filho' | 'teto' | 'pend', number> = { p: 0, filho: 0, teto: 0, pend: 0 };
+  const planos: Record<'p' | 'filho' | 'teto' | 'pend' | 'setor', number> = {
+    p: 0,
+    filho: 0,
+    teto: 0,
+    pend: 0,
+    setor: 0,
+  };
   let chave = 0;
 
   const escrever = <T>(fn: Parameters<NucleoProprio['escrever']>[1]) =>
@@ -295,5 +301,79 @@ describe.skipIf(SEM_BANCO)('regra própria do plano na recepção (MariaDB)', ()
       vigente: false,
     });
     expect(lista.planos.some((x) => x.id === planos.pend)).toBe(true);
+  });
+
+  it('02-REC linha 37: a senha exigida só num setor ou numa especialidade vale só neles', async () => {
+    const outra = Number(
+      (
+        await ler<{ id: unknown }>(
+          'SELECT id FROM especialidade_medica WHERE ativo AND id <> ? ORDER BY id LIMIT 1',
+          [m.especialidade],
+        )
+      )?.id ?? 0,
+    );
+    expect(outra).toBeGreaterThan(0);
+    // Regra de outra especialidade: não vale para este atendimento; a abertura sem senha passa.
+    const r1 = await incluir(planos.setor, { especialidadeId: outra, exigeSenhaAutorizacao: true });
+    const antes = await atendimentos();
+    await abrir('setor');
+    expect(await atendimentos()).toBe(antes + 1);
+    // Setor inexistente é recusado; regra do setor com "todas as unidades" também.
+    await expect(
+      incluir(planos.setor, { setorId: 999999999, exigeSenhaAutorizacao: true }),
+    ).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'referencia-inexistente', campos: ['setorId'] }),
+    });
+    await expect(
+      incluir(planos.setor, { setorId: m.unidade, todasUnidades: true, exigeSenhaAutorizacao: true }),
+    ).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'entrada-invalida', campos: ['setorId'] }),
+    });
+    // Regra do setor do atendimento: sem senha a abertura é recusada e nada se grava.
+    const r2 = await incluir(planos.setor, { setorId: m.unidade, exigeSenhaAutorizacao: true });
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM regra_atendimento_fonte_pagadora
+          WHERE id = ? AND unidade_assistencial_id = ? AND especialidade_medica_id IS NULL AND servico_atendimento_id IS NULL
+            AND exige_senha_autorizacao AND criado_por IS NOT NULL`,
+        [r2.resultado.id, m.unidade],
+      ),
+    ).toBe(1);
+    // A regra da outra especialidade (chave diferente) continua vigente: nada encerrado.
+    expect(r2.resultado.encerradas).toBe(0);
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM regra_atendimento_fonte_pagadora WHERE id = ? AND vigencia_fim IS NULL',
+        [r1.resultado.id],
+      ),
+    ).toBe(1);
+    await expect(abrir('setor')).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'senha-obrigatoria' }),
+    });
+    expect(await atendimentos()).toBe(antes + 1);
+    const pv = await regras.previa(
+      { hospital: CODIGO_ESTAB, login: m.login },
+      {
+        fonteId: m.fonte,
+        planoId: planos.setor,
+        categoriaId: null,
+        especialidadeId: null,
+        servicoId: null,
+        setorId: m.unidade,
+        pacienteId: null,
+        carteira: null,
+        validadeCarteira: null,
+        guia: null,
+        senhaAutorizacao: null,
+        validadeSenha: null,
+      },
+    );
+    expect(pv.regraId).toBe(r2.resultado.id);
+    // Com a senha a abertura passa.
+    await abrir('setor', { senhaConvenio: 'SENHA123' });
+    expect(await atendimentos()).toBe(antes + 2);
+    const lista = await regras.regras({ hospital: CODIGO_ESTAB, login: m.login }, m.fonte);
+    expect(lista.setores.some((x) => x.id === m.unidade)).toBe(true);
+    expect(lista.regras.find((x) => x.id === r2.resultado.id)).toMatchObject({ setorId: m.unidade });
   });
 });
