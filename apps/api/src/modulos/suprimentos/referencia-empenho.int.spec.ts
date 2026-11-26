@@ -175,6 +175,13 @@ describe.skipIf(SEM_BANCO)('referência do empenho no pedido e no título (Maria
     expect((await porta.referirPedido(c, emp, { id: pedido, versao: v }, chave)).id).toBe(pedido);
     expect(Number(await ref('pedido_compra', pedido))).toBe(emp);
     expect(await versao('pedido_compra', pedido)).toBe(v + 1);
+    // Já referido: não troca de empenho calado.
+    expect(
+      await codigoDe(
+        porta.referirPedido(c, anulado, { id: pedido, versao: await versao('pedido_compra', pedido) }, k()),
+      ),
+    ).toBe('referencia-de-outro-empenho');
+    expect(Number(await ref('pedido_compra', pedido))).toBe(emp);
     const trilha = await um(
       "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'pedido_compra' AND entidade_id = ?",
       [pedido],
@@ -203,6 +210,10 @@ describe.skipIf(SEM_BANCO)('referência do empenho no pedido e no título (Maria
     expect(await ref('titulo_pagar', t3)).toBeNull();
     expect(Number(await ref('titulo_pagar', t1))).toBe(emp);
     expect(Number(await ref('titulo_pagar', t2))).toBe(emp);
+    expect(
+      await codigoDe(porta.referirTitulo(c, anulado, { id: t1, versao: await versao('titulo_pagar', t1) }, k())),
+    ).toBe('referencia-de-outro-empenho');
+    expect(Number(await ref('titulo_pagar', t1))).toBe(emp);
 
     const visao = await porta.referencias(c, emp);
     expect(visao).toMatchObject({ valorTotal: 150, referido: 150, saldo: 0 });

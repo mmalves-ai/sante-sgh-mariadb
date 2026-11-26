@@ -6,6 +6,7 @@
 // `@sgh/contratos/regras-suprimentos` (referencia-empenho); aqui ficam a gravação (pela PortaAtaEmpenhoPropria, no
 // Executor do núcleo: versão conferida, trilha na mesma transação, Idempotency-Key) e as leituras.
 import {
+  conferirSemOutroEmpenho,
   conferirVinculoPedidoEmpenho,
   conferirVinculoTituloEmpenho,
   type EmpenhoReferido,
@@ -78,6 +79,7 @@ type Leitor = {
 };
 
 const n = (v: unknown) => Number(v ?? 0);
+const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const t = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const tn = (v: unknown) => (v === null || v === undefined || v === '' ? null : String(v));
 const dia = (v: unknown): string =>
@@ -124,11 +126,12 @@ export async function referirPedido(
 ): Promise<ResultadoReferencia> {
   const e = await empenhoTravado(tx, est, empenho);
   const p = await tx.uma<Linha>(
-    `SELECT situacao, empresa_fornecedora_id FROM pedido_compra
+    `SELECT situacao, empresa_fornecedora_id, empenho_id FROM pedido_compra
       WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [x.id, est],
   );
   if (!p) throw naoEncontrado('Pedido');
+  recusar(conferirSemOutroEmpenho(nn(p['empenho_id']), empenho));
   recusar(
     conferirVinculoPedidoEmpenho(e, {
       situacao: t(p['situacao']),
@@ -151,11 +154,12 @@ export async function referirTitulo(
 ): Promise<ResultadoReferencia> {
   const e = await empenhoTravado(tx, est, empenho);
   const ti = await tx.uma<Linha>(
-    `SELECT situacao, empresa_fornecedora_id, valor_liquido FROM titulo_pagar
+    `SELECT situacao, empresa_fornecedora_id, valor_liquido, empenho_id FROM titulo_pagar
       WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
     [x.id, est],
   );
   if (!ti) throw naoEncontrado('Título');
+  recusar(conferirSemOutroEmpenho(nn(ti['empenho_id']), empenho));
   const ja = n((await tx.uma<Linha>(SQL_REFERIDO, [empenho, x.id]))?.['v']);
   const valor = n(ti['valor_liquido']);
   recusar(

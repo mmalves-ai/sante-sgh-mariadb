@@ -4,6 +4,7 @@
 // recebeu e devolve ao ente o que foi pedido e faturado contra ele). Regras puras; a porta própria grava o que decidem.
 //   - O vínculo só vale com empenho em vigor (emitido ou parcial), do mesmo credor do pedido ou do título.
 //   - Pedido cancelado, reprovado ou encerrado não recebe empenho; título cancelado também não.
+//   - O pedido ou o título já ligado a outro empenho não muda de empenho calado: a referência já pode ter ido ao ente.
 //   - A soma dos títulos ligados ao empenho (os cancelados não contam) não passa do valor empenhado.
 //   - A exportação lista, por título ligado, o empenho, o credor, o pedido e o documento, em CSV com ponto e vírgula.
 import { type RecusaSuprimentos, recusa, reais } from './recusa.js';
@@ -22,6 +23,13 @@ function conferirEmpenhoEmVigor(e: EmpenhoReferido, credor: number): RecusaSupri
     return recusa('empenho-fora-de-vigor', 'Só o empenho emitido ou parcial pode ser referido.', ['empenho']);
   if (e.credor !== credor)
     return recusa('empenho-credor-diferente', 'O credor do empenho é outro fornecedor.', ['empenho']);
+  return null;
+}
+
+/** O pedido ou o título já referido a outro empenho não troca de empenho (o mesmo empenho é repetição e passa). */
+export function conferirSemOutroEmpenho(atual: number | null, alvo: number): RecusaSuprimentos | null {
+  if (atual !== null && atual !== alvo)
+    return recusa('referencia-de-outro-empenho', 'Já está referido a outro empenho.', ['empenho']);
   return null;
 }
 

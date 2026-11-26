@@ -1,6 +1,7 @@
 // C3-025 (07-FIN linha 132): só a referência do empenho no pedido e no título, com a exportação para o ente.
 import { describe, expect, it } from 'vitest';
 import {
+  conferirSemOutroEmpenho,
   conferirVinculoPedidoEmpenho,
   conferirVinculoTituloEmpenho,
   exportacaoEmpenhoCsv,
@@ -65,5 +66,10 @@ describe('referência do empenho', () => {
       'NE1;2026-11-02;1.500;;150.00;00000000000191;"Fornecedor; ""Sintético""";2026/12;TP-1;55;2026-11-10;99.50;aberto',
     );
     expect(fim).toBe('');
+  });
+  it('o já referido a outro empenho não troca de empenho; o mesmo empenho passa', () => {
+    expect(conferirSemOutroEmpenho(null, 7)).toBeNull();
+    expect(conferirSemOutroEmpenho(7, 7)).toBeNull();
+    expect(conferirSemOutroEmpenho(8, 7)?.codigo).toBe('referencia-de-outro-empenho');
   });
 });
