@@ -181,8 +181,42 @@ describe('painel dos indicadores orçado × realizado', () => {
       750,
       'abaixo',
     ]);
+    // Média: compara só os meses apurados (janeiro 80 × 70); o orçado médio do período (80 e 60) fica à parte.
     const o = painel[0]!.indicadores[1]!;
-    expect([o.orcadoCent, o.realizadoCent, o.situacao]).toEqual([7_000, 7_000, 'no_orcado']);
+    expect([o.orcadoCent, o.realizadoCent, o.atingimentoDecimos, o.situacao, o.orcadoPeriodoCent]).toEqual([
+      8_000,
+      7_000,
+      875,
+      'abaixo',
+      7_000,
+    ]);
+  });
+  it('acumulado com mês ainda não apurado compara só os meses com realizado', () => {
+    const p = montarPainelIndicadores(
+      indicadores.slice(0, 1),
+      [
+        c(10, 1, '2033-01', 21_000, 21_000),
+        c(10, 1, '2033-02', 18_000, null),
+        c(10, 2, '2033-02', 6_000, null),
+      ],
+      '2033-02',
+      nome,
+    );
+    const d = p[0]!.indicadores[0]!;
+    expect([d.orcadoCent, d.realizadoCent, d.atingimentoDecimos, d.situacao, d.orcadoPeriodoCent]).toEqual([
+      21_000,
+      21_000,
+      1000,
+      'no_orcado',
+      45_000,
+    ]);
+    expect(d.porSetor.map((s) => [s.centroId, s.orcadoCent, s.orcadoPeriodoCent, s.situacao])).toEqual([
+      [1, 21_000, 39_000, 'no_orcado'],
+      [2, 6_000, 6_000, 'sem_realizado'],
+    ]);
+    expect(d.conta).toBe(
+      'orçado 210 = UTI 210; realizado 210 = UTI 210; comparado só nos meses apurados (orçado do período 450 = UTI 390 + Clínica 60)',
+    );
   });
   it('sem realizado e sem orçado no período', () => {
     const p = montarPainelIndicadores(indicadores.slice(0, 1), [c(10, 2, '2033-03', 5_000, null)], '2033-03');

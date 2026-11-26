@@ -310,7 +310,8 @@ describe.skipIf(SEM_BANCO)('orçamento estatístico e indicadores por setor (Mar
       ),
     ).rejects.toMatchObject({ status: 400 });
 
-    // Painel até fevereiro (acumulado): orçado UTI 210 + 180 e clínica 60; realizado UTI 210 e clínica 50.
+    // Painel até fevereiro (acumulado): fevereiro ainda não apurado. A comparação usa só os meses com realizado
+    // (UTI 210 × 210, no orçado; clínica 60 × 50); o orçado do período (UTI 210 + 180) segue visível à parte.
     const g = await servico.grade(sessao(), ids.versao, '2033-02');
     expect(g.meses).toHaveLength(12);
     expect(g.editavel).toBe(true);
@@ -318,15 +319,23 @@ describe.skipIf(SEM_BANCO)('orçamento estatístico e indicadores por setor (Mar
     expect(linhaUti.celulas['2033-01']).toMatchObject({ orcadoCent: 21_000, versao: 2 });
     expect(linhaUti.realizado['2033-01']).toBe(21_000);
     const ind = g.painel.flatMap((x) => x.indicadores).find((i) => i.indicador.id === diarias)!;
-    expect([ind.orcadoCent, ind.realizadoCent, ind.atingimentoDecimos, ind.situacao]).toEqual([
-      45_000,
-      26_000,
-      578,
-      'abaixo',
+    expect([ind.orcadoCent, ind.realizadoCent, ind.atingimentoDecimos, ind.orcadoPeriodoCent]).toEqual([
+      27_000, 26_000, 963, 45_000,
+    ]);
+    const utiNoPainel = ind.porSetor.find((x) => x.centroId === ids.uti)!;
+    expect([utiNoPainel.orcadoCent, utiNoPainel.realizadoCent, utiNoPainel.situacao]).toEqual([
+      21_000,
+      21_000,
+      'no_orcado',
     ]);
     expect(ind.conta).toBe(
-      'orçado 450 = UTI SINTETICA C1129 390 + CLINICA SINTETICA C1129 60; realizado 260 = UTI SINTETICA C1129 210 + CLINICA SINTETICA C1129 50',
+      'orçado 270 = UTI SINTETICA C1129 210 + CLINICA SINTETICA C1129 60; realizado 260 = UTI SINTETICA C1129 210 + CLINICA SINTETICA C1129 50; comparado só nos meses apurados (orçado do período 450 = UTI SINTETICA C1129 390 + CLINICA SINTETICA C1129 60)',
     );
+    // Sem `ate`, o padrão é o mês corrente (fevereiro, sem apuração) e o painel não cai para "abaixo" por isso.
+    const padrao = await servico.grade(sessao(), ids.versao, undefined);
+    expect(padrao.ate).toBe('2033-02');
+    const indPadrao = padrao.painel.flatMap((x) => x.indicadores).find((i) => i.indicador.id === diarias)!;
+    expect(indPadrao.porSetor.find((x) => x.centroId === ids.uti)!.situacao).toBe('no_orcado');
 
     // Retirada lógica (célula esvaziada) e volta pela mesma chave.
     const r3 = await servico.gravarLinha(

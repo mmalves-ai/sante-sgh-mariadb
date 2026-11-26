@@ -249,7 +249,12 @@ export interface ValorIndicadorOrcamentario {
 
 export interface LinhaPainelIndicador extends ValorIndicadorOrcamentario {
   readonly indicador: IndicadorDoPainel;
-  readonly porSetor: (ValorIndicadorOrcamentario & { readonly centroId: number })[];
+  /** O orçado do período inteiro (até `ate`), inclusive os meses ainda sem apuração; não entra na comparação. */
+  readonly orcadoPeriodoCent: number;
+  readonly porSetor: (ValorIndicadorOrcamentario & {
+    readonly centroId: number;
+    readonly orcadoPeriodoCent: number;
+  })[];
   /** A conta impressa: o total com as parcelas por setor. */
   readonly conta: string;
 }
@@ -302,22 +307,32 @@ function valor(orc: number, real: number | null, temOrcado: boolean): ValorIndic
 /**
  * Consolida a célula do setor no período pela visão do indicador, até a competência `ate` (inclusive):
  * mensal = só o mês `ate`; acumulado = a soma do primeiro mês até `ate`; media = a média dos meses com orçado.
- * O realizado só conta os meses em que houve estatística apurada.
+ * A comparação é justa: havendo algum mês apurado, o orçado comparado (`orc`) é só o dos meses com realizado,
+ * para que um mês ainda não apurado não entre como zero e puxe o indicador para "abaixo". O orçado do período
+ * inteiro segue visível em `orcPeriodo`. Sem nenhum mês apurado, `orc` é o do período (situação sem realizado).
  */
 function consolidar(
   visao: VisaoIndicadorOrcamentario,
   cs: readonly CelulaDoPainel[],
   ate: string,
-): { orc: number; real: number | null; tem: boolean } {
+): { orc: number; orcPeriodo: number; real: number | null; tem: boolean } {
   const doPeriodo = cs.filter((c) => (visao === 'mensal' ? c.competencia === ate : c.competencia <= ate));
-  if (doPeriodo.length === 0) return { orc: 0, real: null, tem: false };
-  const orc = doPeriodo.reduce((s, c) => s + c.orcadoCent, 0);
+  if (doPeriodo.length === 0) return { orc: 0, orcPeriodo: 0, real: null, tem: false };
+  const soma = (xs: readonly CelulaDoPainel[], f: (c: CelulaDoPainel) => number) =>
+    xs.reduce((s, c) => s + f(c), 0);
   const comReal = doPeriodo.filter((c) => c.realizadoCent !== null);
-  const real = comReal.length === 0 ? null : comReal.reduce((s, c) => s + (c.realizadoCent ?? 0), 0);
-  if (visao !== 'media') return { orc, real, tem: true };
+  const orcPeriodoSoma = soma(doPeriodo, (c) => c.orcadoCent);
+  if (comReal.length === 0) {
+    const o = visao === 'media' ? Math.round(orcPeriodoSoma / doPeriodo.length) : orcPeriodoSoma;
+    return { orc: o, orcPeriodo: o, real: null, tem: true };
+  }
+  const orcComparavel = soma(comReal, (c) => c.orcadoCent);
+  const real = soma(comReal, (c) => c.realizadoCent ?? 0);
+  if (visao !== 'media') return { orc: orcComparavel, orcPeriodo: orcPeriodoSoma, real, tem: true };
   return {
-    orc: Math.round(orc / doPeriodo.length),
-    real: real === null ? null : Math.round(real / comReal.length),
+    orc: Math.round(orcComparavel / comReal.length),
+    orcPeriodo: Math.round(orcPeriodoSoma / doPeriodo.length),
+    real: Math.round(real / comReal.length),
     tem: true,
   };
 }
@@ -343,14 +358,17 @@ export function montarPainelIndicadores(
         doInd.filter((c) => c.centroId === centroId),
         ate,
       );
-      return { centroId, ...valor(k.orc, k.real, k.tem) };
+      return { centroId, ...valor(k.orc, k.real, k.tem), orcadoPeriodoCent: k.orcPeriodo };
     });
     const comOrcado = porSetor.filter((s) => s.situacao !== 'sem_orcado');
-    const orc = comOrcado.reduce((s, x) => s + x.orcadoCent, 0);
-    const reais = porSetor.filter((s) => s.realizadoCent !== null);
+    const reais = comOrcado.filter((s) => s.realizadoCent !== null);
+    // A comparação do total usa só os setores apurados; sem nenhum, o orçado de todos (sem realizado).
+    const comparados = reais.length > 0 ? reais : comOrcado;
+    const orc = comparados.reduce((s, x) => s + x.orcadoCent, 0);
+    const orcPeriodo = comOrcado.reduce((s, x) => s + x.orcadoPeriodoCent, 0);
     const real = reais.length === 0 ? null : reais.reduce((s, x) => s + (x.realizadoCent ?? 0), 0);
     const total = valor(orc, real, comOrcado.length > 0);
-    const parcelas = comOrcado.map((s) => `${nomeSetor(s.centroId)} ${quantidadeTexto(s.orcadoCent)}`);
+    const parcelas = comparados.map((s) => `${nomeSetor(s.centroId)} ${quantidadeTexto(s.orcadoCent)}`);
     const conta =
       comOrcado.length === 0
         ? 'sem orçado no período'
@@ -359,10 +377,15 @@ export function montarPainelIndicadores(
             ? '; sem realizado'
             : `; realizado ${quantidadeTexto(real)} = ${reais
                 .map((s) => `${nomeSetor(s.centroId)} ${quantidadeTexto(s.realizadoCent ?? 0)}`)
-                .join(' + ')}`);
+                .join(' + ')}`) +
+          (orcPeriodo !== orc
+            ? `; comparado só nos meses apurados (orçado do período ${quantidadeTexto(orcPeriodo)} = ${comOrcado
+                .map((s) => `${nomeSetor(s.centroId)} ${quantidadeTexto(s.orcadoPeriodoCent)}`)
+                .join(' + ')})`
+            : '');
     const chave = ind.grupo ? String(ind.grupo.id) : '-';
     const g = grupos.get(chave) ?? { grupo: ind.grupo, indicadores: [] };
-    g.indicadores.push({ indicador: ind, ...total, porSetor, conta });
+    g.indicadores.push({ indicador: ind, ...total, orcadoPeriodoCent: orcPeriodo, porSetor, conta });
     grupos.set(chave, g);
   }
   return [...grupos.values()];
