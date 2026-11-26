@@ -11,6 +11,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo); a contagem acompanha.
 // C2-086 (06-FAT L30, F3): o item "Apresentação TISS por fonte pagadora" dos convênios entrou à mão (mesmo motivo); a
 // contagem acompanha.
+// C3-020 (03-PEP L144): o item "Pesquisa clínica" do PEP entrou à mão (mesmo motivo; F8); a contagem acompanha.
 // C1-110 (05-SADT L24, F8): o item "Busca ativa de resultados" do laboratório entrou à mão (mesmo motivo); a
 // contagem acompanha.
 // C2-067 (02-AGE L50, F8): o item "Grupos e turmas" da agenda entrou à mão (mesmo motivo); a contagem acompanha.
@@ -27,6 +28,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C2-070 (06-FAT L26, F7): o item "Elegibilidade e autorização prévia" da recepção ganhou à mão a rota da tela de
 // elegibilidade do hospital (/faturamento/elegibilidade, leitura do atendimento); a contagem não muda.
 
+// C3-022 (06-SUS L62): o item "Repasse da produção SUS" do faturamento SUS entrou à mão (mesmo motivo; F7); a
+// contagem acompanha.
 // C2-114 (06-SUS L54): o item "Programação, tetos e cotas" do faturamento SUS entrou à mão (mesmo motivo; F7); a
 // contagem acompanha.
 // C2-102 (08-SGO L115): o item "Promoção da saúde e crônicos" da operadora própria entrou à mão (mesmo motivo; F7);
@@ -162,8 +165,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // sadt.lancamento.ler) entrou junto.
 // C1-135 (06-FAT linha 38, F3): o item "Preferências do faturista" das contas do paciente entrou à mão (mesmo motivo); a
 // contagem acompanha.
-// C3-020 (03-PEP L144): o item "Pesquisa clínica" do PEP entrou à mão (mesmo motivo; F8); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":519,"M":198,"P":57,"N":264};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":520,"M":198,"P":57,"N":265};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -441,6 +443,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.faturamento-sus.medicos-solicitantes-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Médicos solicitantes SUS"],"titulo":"Médicos solicitantes SUS","selo":"P","fase":5,"rota":"/faturamento/sus/solicitantes","permissao":"faturamento.susSolicitante.ler"},
   {"id":"faturamento.faturamento-sus.transplantes-central-estadual","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Transplantes para a central estadual"],"titulo":"Transplantes para a central estadual","selo":"N","fase":7,"rota":"/faturamento/sus/transplantes","permissao":"faturamento.susTransplante.ler"},
   {"id":"faturamento.faturamento-sus.habilitacoes-e-servicos-do-estabelecimento","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Habilitações e serviços do estabelecimento"],"titulo":"Habilitações e serviços do estabelecimento","selo":"N","fase":7,"rota":"/faturamento/sus/cadastros/estabelecimento","permissao":"faturamento.sus.ler"},
+  {"id":"faturamento.faturamento-sus.repasse-da-producao-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Repasse da produção SUS"],"titulo":"Repasse da produção SUS","selo":"N","fase":7,"rota":"/faturamento/sus/repasse","permissao":"repasse.apuracao.ler"},
   {"id":"faturamento.repasse-medico.regras-de-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Regras de repasse"],"titulo":"Regras de repasse","selo":"M","fase":3,"rota":"/repasse/regras","permissao":"repasse.regra.ler"},
   {"id":"faturamento.repasse-medico.remuneracao-variavel","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Remuneração variável"],"titulo":"Remuneração variável","selo":"N","fase":7,"rota":"/repasse/remuneracao-variavel","permissao":"repasse.regra.ler"},
   {"id":"faturamento.repasse-medico.apuracao-faturamento-x-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Apuração"],"titulo":"Apuração","selo":"M","fase":3,"rota":"/repasse/apuracao","permissao":"repasse.apuracao.ler"},
