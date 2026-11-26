@@ -28,7 +28,7 @@ import {
   type PermissaoSetorSusLida,
 } from '@sgh/contratos';
 import type { z } from 'zod';
-import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { sessaoDe } from '../cadastro/comum.js';
@@ -83,6 +83,7 @@ export class ConfiguracaoSusController {
 
   @Get()
   @Permissao('faturamento.sus.ler')
+  @PermissaoOu(ACAO_EDITAR_CONFIGURACAO_SUS)
   tela(@Req() req: RequisicaoAutorizada): Promise<ConfiguracaoSusTela> {
     const { sv, s } = this.sessao(req);
     return sv.tela(s);

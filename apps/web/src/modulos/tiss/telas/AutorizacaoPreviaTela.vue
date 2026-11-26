@@ -176,7 +176,8 @@ async function recarregar(): Promise<void> {
       senha: '',
       guia: '',
       qtd: Object.fromEntries(p.itens.map((i) => [i.sequencia, String(i.quantidade)])),
-      motivo: {},
+      // O campo do motivo aparece na negativa e exige texto (nunca undefined), senão a linha não se desenha.
+      motivo: Object.fromEntries(p.itens.map((i) => [i.sequencia, ''])),
     };
     entregas[p.id] ??= 'portal';
     cancelamentos[p.id] ??= '';
