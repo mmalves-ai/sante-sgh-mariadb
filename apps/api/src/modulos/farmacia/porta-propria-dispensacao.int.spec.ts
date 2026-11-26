@@ -1294,6 +1294,27 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
     expect(codigoDe(await dispensar({ quantidade: 999 }).catch((e: unknown) => e))).toBe(
       'saldo-insuficiente',
     );
+    // A reserva da separação (C1-118) protege o saldo: a dispensação só usa o livre, no local e no lote.
+    const reservar = (tabela: 'saldo_estoque' | 'saldo_lote', quantidade: number) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-f24pf' }, (e) =>
+        tabela === 'saldo_estoque'
+          ? e.executar(
+              'UPDATE saldo_estoque SET quantidade_reservada = ? WHERE insumo_id = ? AND estabelecimento_id = ?',
+              [quantidade, ids.amoxicilina, ids.est],
+            )
+          : e.executar(
+              `UPDATE saldo_lote SET quantidade_reservada = ? WHERE estabelecimento_id = ? AND lote_insumo_id IN
+                 (SELECT id FROM lote_insumo WHERE insumo_id = ? AND numero_lote = 'AX-1' AND estabelecimento_id = ?)`,
+              [quantidade, ids.est, ids.amoxicilina, ids.est],
+            ),
+      );
+    await reservar('saldo_estoque', 29);
+    expect(codigoDe(await dispensar().catch((e: unknown) => e))).toBe('saldo-insuficiente');
+    await reservar('saldo_estoque', 0);
+    await reservar('saldo_lote', 29);
+    expect(codigoDe(await dispensar().catch((e: unknown) => e))).toBe('lote-sem-saldo');
+    await reservar('saldo_lote', 0);
+    expect(await saldo(ids.amoxicilina)).toBe(30);
     const r = await dispensar();
     expect(await saldo(ids.amoxicilina)).toBe(28);
     expect(

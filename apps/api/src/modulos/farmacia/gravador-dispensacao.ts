@@ -306,17 +306,22 @@ export function gravadorDispensacao(
     const tipo = await tipoMovimento(m.natureza, m.sentido);
     const q = q4(m.quantidade);
     const [s] = await tx.consultarParaAtualizar<Linha>(
-      `SELECT id, versao, quantidade, custo_medio FROM saldo_estoque
+      `SELECT id, versao, quantidade, quantidade_reservada, custo_medio FROM saldo_estoque
         WHERE local_estoque_id = ? AND insumo_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
       [m.local, m.insumo.id, est],
     );
     const custo = n(s?.['custo_medio']);
+    // A reserva da separação (requisição atendida por endereço) protege o saldo: a dispensação só usa o livre.
+    // A perda é física e baixa o que sumiu, como o acerto do inventário.
+    const fisica = m.natureza === 'perda';
+    const livre = (linha: Linha | undefined): number =>
+      q4(n(linha?.['quantidade']) - (fisica ? 0 : n(linha?.['quantidade_reservada'])));
     let saldoApos: number;
     if (m.sentido === 'saida') {
-      if (!s || n(s['quantidade']) + 1e-9 < q)
+      if (!s || livre(s) + 1e-9 < q)
         throw recusa(
           'saldo-insuficiente',
-          `Saldo insuficiente de ${m.insumo.nome}: há ${n(s?.['quantidade'])} no local e a saída pede ${q}.`,
+          `Saldo insuficiente de ${m.insumo.nome}: há ${livre(s)} livre no local e a saída pede ${q}.`,
           { campos: ['quantidade'] },
         );
       saldoApos = q4(n(s['quantidade']) - q);
@@ -342,12 +347,12 @@ export function gravadorDispensacao(
     }
     if (m.lote !== null) {
       const [sl] = await tx.consultarParaAtualizar<Linha>(
-        `SELECT id, versao, quantidade, bloqueado FROM saldo_lote
+        `SELECT id, versao, quantidade, quantidade_reservada, bloqueado FROM saldo_lote
           WHERE local_estoque_id = ? AND lote_insumo_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
         [m.local, m.lote, est],
       );
       if (m.sentido === 'saida') {
-        if (!sl || verdadeiro(sl['bloqueado']) || n(sl['quantidade']) + 1e-9 < q)
+        if (!sl || verdadeiro(sl['bloqueado']) || livre(sl) + 1e-9 < q)
           throw recusa('lote-sem-saldo', 'O lote não tem saldo livre neste local para a quantidade pedida.', {
             campos: ['lotes'],
           });
