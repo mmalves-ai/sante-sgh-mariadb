@@ -40,7 +40,9 @@ const TELA_COBRANCA = {
 };
 
 test.describe('C3-028 desconto em folha da mensalidade @C3-028', () => {
-  test('prévia com críticas, gerar, enviar, ler o retorno, conferir; cancelar outra remessa', async ({ page }) => {
+  test('prévia com críticas, gerar, enviar, ler o retorno, conferir; cancelar outra remessa', async ({
+    page,
+  }) => {
     const pedidos: { metodo: string; caminho: string; corpo: Record<string, unknown> }[] = [];
     let situacao: 'gerada' | 'enviada' | 'retorno_recebido' | 'conferida' = 'gerada';
     let versao = 1;
@@ -78,8 +80,7 @@ test.describe('C3-028 desconto em folha da mensalidade @C3-028', () => {
         if (caminho.endsWith('/contratantes'))
           return json(r, [{ id: 41, codigo: 'C-SINT', nome: 'Órgão Sintético' }]);
         if (caminho.endsWith('/remessas')) return json(r, gerou ? [remessa(), outra] : [outra]);
-        if (caminho.endsWith('/remessas/302'))
-          return json(r, { ...outra, detalhe: [] });
+        if (caminho.endsWith('/remessas/302')) return json(r, { ...outra, detalhe: [] });
         if (caminho.endsWith('/remessas/301'))
           return json(r, {
             ...remessa(),
@@ -112,7 +113,14 @@ test.describe('C3-028 desconto em folha da mensalidade @C3-028', () => {
               valorAtrasado: 50,
             },
           ],
-          criticas: [{ fatura: 9, numero: 'MF-SINT-9', codigo: 'sem-matricula', mensagem: 'Titular sem matrícula funcional.' }],
+          criticas: [
+            {
+              fatura: 9,
+              numero: 'MF-SINT-9',
+              codigo: 'sem-matricula',
+              mensagem: 'Titular sem matrícula funcional.',
+            },
+          ],
           valorTotal: 300,
           valorAtrasado: 50,
         });
@@ -161,7 +169,10 @@ test.describe('C3-028 desconto em folha da mensalidade @C3-028', () => {
 
     await page.getByTestId('desconto-folha-enviar').click();
     await expect(page.getByTestId('desconto-folha-retorno-texto')).toBeVisible();
-    expect(pedidos[2]).toMatchObject({ caminho: '/api/operadora/desconto-folha/remessas/301/envio', corpo: { versao: 1 } });
+    expect(pedidos[2]).toMatchObject({
+      caminho: '/api/operadora/desconto-folha/remessas/301/envio',
+      corpo: { versao: 1 },
+    });
 
     await page.getByTestId('desconto-folha-retorno-texto').fill('MAT-001;300,00');
     await page.getByTestId('desconto-folha-credito').fill('2026-11-05');
@@ -174,7 +185,10 @@ test.describe('C3-028 desconto em folha da mensalidade @C3-028', () => {
 
     await page.getByTestId('desconto-folha-conferir').click();
     await expect(page.getByTestId('desconto-folha-ficha')).toContainText('Conferida');
-    expect(pedidos[4]).toMatchObject({ caminho: '/api/operadora/desconto-folha/remessas/301/conferencia', corpo: { versao: 3 } });
+    expect(pedidos[4]).toMatchObject({
+      caminho: '/api/operadora/desconto-folha/remessas/301/conferencia',
+      corpo: { versao: 3 },
+    });
 
     await page.getByTestId('desconto-folha-abrir-302').click();
     await expect(page.getByTestId('desconto-folha-cancelar')).toBeDisabled();
