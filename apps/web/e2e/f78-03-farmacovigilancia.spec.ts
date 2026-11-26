@@ -19,6 +19,8 @@ const ITEM = 801;
 async function entrar(page: Page, login: string): Promise<void> {
   await page.context().clearCookies();
   await page.goto('/entrar');
+  // A porta de entrada tem de mostrar o formulário (sem ele, falha aqui com o retrato da tela, não no tempo do teste).
+  await expect(page.getByTestId('campo-login')).toBeVisible({ timeout: 15_000 });
   await page.getByTestId('campo-login').fill(login);
   await page.getByTestId('campo-senha').fill(SENHA);
   await page.getByTestId('botao-entrar').click();

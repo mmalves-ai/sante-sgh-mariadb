@@ -154,10 +154,11 @@ export class ProntuarioRestritoController {
   async decidir(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const r = await this.exigirBanco().decidir(this.gravacao(req, 'pep.decidirAcessoProntuarioRestrito'), b);
     const sit = r.resultado.situacao;
-    // A senha errada fica contada no banco (a operação grava), mas a resposta é 403.
+    // A senha errada fica contada no banco (a operação grava), mas a resposta é 403. É recusa de negócio: a tela
+    // mostra o motivo (senha que não confere ou bloqueada), não o aviso genérico de perfil sem permissão.
     if (sit === 'senha-recusada' || sit === 'senha-bloqueada')
       throw new ErroProblema(
-        'sem-permissao',
+        'recusa-de-negocio',
         403,
         'Senha do paciente',
         sit === 'senha-recusada'
