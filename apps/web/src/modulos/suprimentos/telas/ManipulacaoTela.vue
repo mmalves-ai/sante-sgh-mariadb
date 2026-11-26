@@ -23,6 +23,7 @@ import {
 } from '../api-consignado.js';
 import BuscaCodigoNome from '../componentes/BuscaCodigoNome.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
+import { mensagensProducaoInterna as MP } from '../i18n-producao-interna.js';
 import './estilo-opme.css';
 
 type Aba = 'itens' | 'ordens' | 'capelas';
@@ -204,6 +205,9 @@ const consultaCapelas = '/consultas/item/suprimentos.farmacia-hospitalar.manipul
 <template>
   <section class="tela-opme" aria-labelledby="manip-titulo" data-testid="tela-manipulacao">
     <h1 id="manip-titulo">{{ t('manipulacao.titulo') }}</h1>
+    <RouterLink to="/farmacia/producao-interna" data-testid="manip-producao-interna">{{
+      MP.acesso
+    }}</RouterLink>
     <div class="abas" role="tablist">
       <SanteBotao
         v-for="a in abas"

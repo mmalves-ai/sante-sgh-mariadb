@@ -44,6 +44,13 @@ export const rotasSuprimentos: RouteRecordRaw[] = [
     component: () => import('./telas/ManipulacaoTela.vue'),
     meta: { permissao: 'suprimentos.manipulacao.ler' },
   },
+  // C1-124 (05-SUP linha 12): produção interna (o lote produzido da ordem baixada e o kit montado), aberta pela manipulação.
+  {
+    path: '/farmacia/producao-interna',
+    name: 'farmacia.producao-interna',
+    component: () => import('./telas/ProducaoInternaTela.vue'),
+    meta: { permissao: 'suprimentos.manipulacao.ler' },
+  },
   // C2-092 (05-SUP linha 11): fracionamento e unitarização de dose, com o rastreio dose → lote de origem.
   {
     path: '/farmacia/unitarizacao',
