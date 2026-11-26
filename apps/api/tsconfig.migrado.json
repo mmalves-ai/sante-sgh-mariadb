@@ -146,6 +146,7 @@
     "src/modulos/cadastro/teste.spec-util.ts",
     "src/modulos/cadastro/tipos.ts",
     "src/modulos/cadastro/unificacao-como.spec.ts",
+    "src/modulos/cadastro/cadastro-memoria-processo.spec.ts",
     "src/modulos/plataforma-onboarding/porta.ts",
     "src/modulos/plataforma-onboarding/execucao.ts",
     "src/modulos/plataforma-onboarding/repositorio-plataforma.ts",

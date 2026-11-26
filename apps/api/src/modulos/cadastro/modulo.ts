@@ -60,7 +60,9 @@ export async function portaDoCadastro(ctx: ContextoModulo): Promise<PortaCadastr
     await ligarMapaEstabelecimentos(cliente, ctx.nucleo);
     return new PortaCadastroPropria(ctx.nucleo, cliente);
   }
-  if (!ctx.nucleo && fontesSinteticas(ctx.env)) return lembrarCadastroMemoria(new PortaCadastroMemoria());
+  // X-01: só o módulo cadastro registra a instância do processo (em modulo()); os outros módulos que pedem a porta
+  // não sobrescrevem a que a ficha do usuário lê.
+  if (!ctx.nucleo && fontesSinteticas(ctx.env)) return new PortaCadastroMemoria();
   return portaCadastroIndisponivel();
 }
 
@@ -69,6 +71,7 @@ export class ModuloCadastro {}
 
 export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro = {}): Promise<DynamicModule> {
   const porta = opcoes.porta ?? (await portaDoCadastro(ctx));
+  if (porta instanceof PortaCadastroMemoria) lembrarCadastroMemoria(porta);
   // Coberturas, pré-cadastro e captação (F3.1): só sobre o banco do cliente; sem ele, 503 nas rotas.
   const cliente = ctx.configuracao.clientePadrao;
   const vinculos = ctx.nucleo && cliente ? new CadastroVinculosProprio(ctx.nucleo, cliente) : null;
