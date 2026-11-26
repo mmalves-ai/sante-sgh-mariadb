@@ -11,8 +11,10 @@
 import {
   type AcaoTipoAuditoria,
   type AdequacaoAuditoria,
+  atendimentoDaAuditoria,
   avaliarAuditoriaAntimicrobiano,
   type IndicacaoAuditoria,
+  MENSAGEM_FICHA_SEM_ATENDIMENTO,
   MENSAGENS_AUDITORIA_ANTIMICROBIANO,
   type ParecerAuditoriaAntimicrobiano,
 } from '@sgh/dominio-qualidade';
@@ -48,7 +50,8 @@ export interface FichaParaAuditoria {
   readonly nome: string;
   /** Atendimento da ficha; nulo só na ficha migrada sem atendimento ligado na origem. */
   readonly atendimento: number | null;
-  readonly item: number;
+  /** Item da prescrição; nulo só na ficha migrada sem item ligado na origem. */
+  readonly item: number | null;
   readonly antimicrobiano: string;
   readonly finalidade: string;
   readonly finalidadeCodigo: string;
@@ -121,7 +124,11 @@ export interface NovaAuditoria {
   readonly parecerPadrao: number | null;
 }
 
-const SQL_FICHA = `SELECT f.id, f.versao, f.paciente_id, pf.nome, f.atendimento_id, f.prescricao_item_id,
+// A ficha migrada pode vir sem item de prescrição, antimicrobiano, finalidade ou prescritor (a CHECK da ficha só exige
+// tudo fora da migração): LEFT JOIN, para ela aparecer na fila. O atendimento da ficha sem atendimento próprio vem da
+// prescrição do item, quando há.
+const SQL_FICHA = `SELECT f.id, f.versao, f.paciente_id, pf.nome, COALESCE(f.atendimento_id, pi_p.atendimento_id) AS atendimento_id,
+       f.prescricao_item_id,
        a.descricao AS antimicrobiano, ft.descricao AS finalidade, ft.codigo AS finalidade_codigo,
        si.descricao AS sitio, f.justificativa, f.cultura_coletada, f.data_inicio, f.data_fim_prevista,
        f.dias_previstos, COALESCE(pr.nome_exibicao, ppf.nome) AS prescritor, f.avaliacao_situacao, f.avaliado_em,
@@ -131,10 +138,12 @@ const SQL_FICHA = `SELECT f.id, f.versao, f.paciente_id, pf.nome, f.atendimento_
   FROM ficha_antimicrobiano f
   JOIN paciente p ON p.id = f.paciente_id
   JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
-  JOIN antimicrobiano a ON a.id = f.antimicrobiano_id
-  JOIN finalidade_terapeutica ft ON ft.id = f.finalidade_terapeutica_id
+  LEFT JOIN prescricao_item pi_i ON pi_i.id = f.prescricao_item_id
+  LEFT JOIN prescricao pi_p ON pi_p.id = pi_i.prescricao_id
+  LEFT JOIN antimicrobiano a ON a.id = f.antimicrobiano_id
+  LEFT JOIN finalidade_terapeutica ft ON ft.id = f.finalidade_terapeutica_id
   LEFT JOIN sitio_infeccao si ON si.id = f.sitio_infeccao_id
-  JOIN profissional pr ON pr.id = f.prescritor_profissional_id
+  LEFT JOIN profissional pr ON pr.id = f.prescritor_profissional_id
   LEFT JOIN pessoa_fisica ppf ON ppf.id = pr.pessoa_fisica_id
  WHERE f.estabelecimento_id = ? AND f.excluido_em IS NULL`;
 
@@ -151,7 +160,7 @@ export function fichaDe(x: Linha): FichaParaAuditoria {
     paciente: n(x['paciente_id']),
     nome: texto(x['nome']),
     atendimento: nn(x['atendimento_id']),
-    item: n(x['prescricao_item_id']),
+    item: nn(x['prescricao_item_id']),
     antimicrobiano: texto(x['antimicrobiano']),
     finalidade: texto(x['finalidade']),
     finalidadeCodigo: texto(x['finalidade_codigo']),
@@ -319,11 +328,12 @@ export class PortaAuditoriaAntimicrobianoPropria {
         'O parecer na ficha é assinado por um profissional: a conta não tem vínculo vigente com profissional.',
       );
     const [fi] = await tx.consultarParaAtualizar<Linha>(
-      `SELECT f.id, f.versao, f.paciente_id, f.atendimento_id, f.prescricao_item_id, f.antimicrobiano_id,
-              i.item_prescritivel_id, ft.codigo AS finalidade
+      `SELECT f.id, f.versao, f.paciente_id, COALESCE(f.atendimento_id, p.atendimento_id) AS atendimento_id, f.origem,
+              f.prescricao_item_id, f.antimicrobiano_id, i.item_prescritivel_id, ft.codigo AS finalidade
          FROM ficha_antimicrobiano f
-         JOIN prescricao_item i ON i.id = f.prescricao_item_id
-         JOIN finalidade_terapeutica ft ON ft.id = f.finalidade_terapeutica_id
+         LEFT JOIN prescricao_item i ON i.id = f.prescricao_item_id
+         LEFT JOIN prescricao p ON p.id = i.prescricao_id
+         LEFT JOIN finalidade_terapeutica ft ON ft.id = f.finalidade_terapeutica_id
         WHERE f.id = ? AND f.estabelecimento_id = ? AND f.excluido_em IS NULL`,
       [ficha, est],
     );
@@ -361,7 +371,7 @@ export class PortaAuditoriaAntimicrobianoPropria {
             permiteProrrogacao: verdadeiro(padrao['permite_prorrogacao']),
           }
         : null,
-      finalidade: texto(fi['finalidade']),
+      finalidade: textoN(fi['finalidade']),
     });
     if (!r.ok) {
       const cod = r.recusas[0] ?? 'parecer-obrigatorio';
@@ -375,22 +385,21 @@ export class PortaAuditoriaAntimicrobianoPropria {
     );
     for (const a of anteriores)
       await tx.alterar('auditoria_prescricao_ccih', n(a['id']), n(a['versao']), { situacao: 'encerrada' });
-    const atendimento = nn(fi['atendimento_id']);
-    // A auditoria se liga ao atendimento: a ficha migrada sem atendimento ligado na origem é lida na fila, mas a auditoria
-    // pede o atendimento (a recusa diz o que falta, nunca o atendimento 0).
-    if (atendimento === null)
-      throw recusar(
-        409,
-        'ficha-sem-atendimento',
-        'A ficha veio da migração sem atendimento ligado na origem: a auditoria precisa do atendimento da ficha.',
-      );
+    // O atendimento é o da ficha ou, sem ele, o da prescrição do item. A ficha migrada sem nenhum dos dois é auditada
+    // com o atendimento nulo (D2); a do sistema sem atendimento é recusada pelo domínio (nunca o atendimento 0).
+    const at = atendimentoDaAuditoria({
+      atendimento: nn(fi['atendimento_id']),
+      migrada: texto(fi['origem']) === 'migracao',
+    });
+    if (!at.ok) throw recusar(409, at.recusa, MENSAGEM_FICHA_SEM_ATENDIMENTO);
+    const atendimento = at.atendimento;
     const agora = new Date();
     const id = await tx.incluir('auditoria_prescricao_ccih', {
       estabelecimento_id: est,
       atendimento_id: atendimento,
       paciente_id: n(fi['paciente_id']),
-      prescricao_item_id: n(fi['prescricao_item_id']),
-      item_prescritivel_id: n(fi['item_prescritivel_id']),
+      prescricao_item_id: nn(fi['prescricao_item_id']),
+      item_prescritivel_id: nn(fi['item_prescritivel_id']),
       ficha_antimicrobiano_id: ficha,
       tipo_auditoria_ccih_id: e.tipo,
       parecer_padrao_auditoria_antimicrobiano_id: e.parecerPadrao,

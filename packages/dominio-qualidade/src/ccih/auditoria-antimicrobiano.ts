@@ -113,6 +113,27 @@ export type ResultadoAuditoria =
   | { readonly ok: true; readonly gravar: AuditoriaParaGravar }
   | { readonly ok: false; readonly recusas: readonly RecusaAuditoriaAntimicrobiano[] };
 
+/** A ficha migrada sem atendimento ligado na origem (D2 das recusas da carga): a auditoria grava o atendimento nulo. */
+export const MENSAGEM_FICHA_SEM_ATENDIMENTO =
+  'A ficha não tem atendimento ligado: só a ficha migrada da origem pode ser auditada sem o atendimento.';
+
+export type AtendimentoDaAuditoria =
+  | { readonly ok: true; readonly atendimento: number | null }
+  | { readonly ok: false; readonly recusa: 'ficha-sem-atendimento' };
+
+/**
+ * O atendimento que a auditoria grava: o da ficha. Nulo só na ficha migrada sem atendimento ligado na origem (a
+ * auditoria é gravável e a tela mostra "atendimento não registrado na origem"); a ficha do sistema sem atendimento é
+ * recusada (nunca o atendimento 0).
+ */
+export function atendimentoDaAuditoria(ficha: {
+  readonly atendimento: number | null;
+  readonly migrada: boolean;
+}): AtendimentoDaAuditoria {
+  if (ficha.atendimento !== null) return { ok: true, atendimento: ficha.atendimento };
+  return ficha.migrada ? { ok: true, atendimento: null } : { ok: false, recusa: 'ficha-sem-atendimento' };
+}
+
 /** Decide o que a auditoria grava, ou as recusas (todas de uma vez, para a tela mostrar o que falta). */
 export function avaliarAuditoriaAntimicrobiano(
   e: EntradaAuditoriaAntimicrobiano,

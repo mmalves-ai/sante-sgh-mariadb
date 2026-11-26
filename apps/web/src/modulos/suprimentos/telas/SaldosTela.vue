@@ -137,7 +137,7 @@ const ALERTA: Record<string, string> = {
                     v-if="l.alerta === 'sem-validade'"
                     :data-testid="`sal-sem-validade-${x.item}-${l.lote}`"
                   >
-                    · {{ t('suprimentos.alertas.semValidade', 'validade não informada na origem') }}</strong
+                    · {{ t('suprimentos.alertas.semValidade') }}</strong
                   >
                   <strong v-else-if="ALERTA[l.alerta]"> · {{ t(`suprimentos.${ALERTA[l.alerta]}`) }}</strong>
                   <SanteBotao

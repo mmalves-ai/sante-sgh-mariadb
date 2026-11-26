@@ -229,7 +229,10 @@ async function anexar() {
           @click="escolhida = g.id"
         >
           <td>
-            {{ g.paciente ?? '—' }}
+            <template v-if="g.paciente !== null">{{ g.paciente }}</template>
+            <em v-else class="secundario" data-testid="guia-sem-paciente">{{
+              t('auditoriaTramite.guia.pacienteNaoRegistrado')
+            }}</em>
             <span v-if="g.prontuario !== null" class="secundario"
               >· {{ t('auditoriaTramite.guia.prontuario', { n: g.prontuario }) }}</span
             >

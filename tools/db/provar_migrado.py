@@ -46,6 +46,10 @@ CASOS = [
     ("documento_emitido", "ck_documento_emitido_texto", {"texto": None}, [(S, "4025"), (M, "ok")]),
     ("ficha_antimicrobiano", "ck_ficha_antimicrobiano_atendimento", {"atendimento_id": None},
      [(S, "4025"), (M, "ok")]),
+    # D2: a auditoria da ficha migrada sem atendimento grava o atendimento nulo, sempre ligada à ficha.
+    ("auditoria_prescricao_ccih", "ck_auditoria_prescricao_ccih_atendimento", {"atendimento_id": None},
+     [({**S, "ficha_antimicrobiano_id": None}, "4025"), ({**S, "ficha_antimicrobiano_id": 1}, "ok"),
+      ({**S, "atendimento_id": 1, "ficha_antimicrobiano_id": None}, "ok")]),
     ("tipo_fechamento_balanco", "ck_tipo_fechamento_balanco_periodo_obrigatorio", {"periodo_horas": None},
      [(S, "4025"), (M, "ok")]),
     ("tipo_fechamento_balanco", "ck_tipo_fechamento_balanco_origem", {},

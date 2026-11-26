@@ -14,6 +14,7 @@ export const mensagensAuditoriaAntimicrobiano = {
   culturaColetada: 'Cultura colhida',
   semCultura: 'Sem cultura',
   prescritor: 'Prescritor: {nome}',
+  atendimentoNaoRegistrado: 'atendimento não registrado na origem',
   sitio: 'Sítio: {sitio}',
   avaliacoes: {
     pendente: 'Pendente',

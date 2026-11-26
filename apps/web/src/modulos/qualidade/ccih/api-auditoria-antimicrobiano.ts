@@ -17,7 +17,8 @@ const esquemaFicha = z.object({
   paciente: z.number(),
   nome: z.string(),
   atendimento: z.number().nullable(),
-  item: z.number(),
+  /** Nulo só na ficha migrada sem item de prescrição ligado na origem. */
+  item: z.number().nullable(),
   antimicrobiano: z.string(),
   finalidade: z.string(),
   finalidadeCodigo: z.string(),

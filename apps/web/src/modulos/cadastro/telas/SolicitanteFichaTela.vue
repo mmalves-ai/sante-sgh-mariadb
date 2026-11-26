@@ -121,7 +121,7 @@ const gravarDados = () =>
         {{ t('ligacoes.solicitante.registro') }}: {{ f.conselho }} {{ f.numero
         }}<template v-if="f.uf">/{{ f.uf }}</template
         ><span v-else data-testid="solicitante-sem-uf">
-          ({{ t('ligacoes.solicitante.ufNaoInformada', 'UF não informada na origem') }})</span
+          ({{ t('ligacoes.solicitante.ufNaoInformada') }})</span
         >
         <span v-if="!f.ativo" class="pilula pilula--neutra" data-testid="solicitante-inativo">
           {{ t('ligacoes.solicitante.inativo', { data: f.dataInativacao ?? '' }) }}

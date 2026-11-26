@@ -1279,25 +1279,48 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda contra o MariaDB (cliente f
     });
     const id = Number(m.resultado['marcacao']);
     const antes = (await porta.indicadores(ctx(), DIA, DIA)).funil.marcados;
-    // Simula a carga: a marcação vira migrada, com a situação "não informada na origem".
-    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-l0104-migrada' }, async (e) => {
+    const futurosDoConvenio = async (): Promise<number> =>
+      (await porta.conveniosDaAgenda(ctx(), ids.agenda)).find((x) => x.codigo === 9141)?.marcadosFuturos ??
+      -1;
+    // O convênio da marcação aceito pela agenda (a massa não o liga; o teste liga só a do 9141 e a desliga no finally).
+    const SO_9141 = `agenda_servico_id = ? AND fonte_pagadora_id IN (SELECT id FROM fonte_pagadora WHERE codigo = '9141')`;
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-l0104-convenio' }, async (e) => {
       await e.executar(
-        `INSERT INTO situacao_marcacao (codigo, descricao, significado, criado_em)
-           SELECT 'l0104-nao-informada', 'Não informada na origem (sintético)', 'nao_informada', UTC_TIMESTAMP(3) FROM DUAL
-           WHERE NOT EXISTS (SELECT 1 FROM situacao_marcacao WHERE significado = 'nao_informada' AND ativo)`,
-        [],
-      );
-      await e.executar(
-        `UPDATE marcacao_horario SET origem = 'migracao', situacao_marcacao_id =
-           (SELECT id FROM situacao_marcacao WHERE significado = 'nao_informada' AND ativo ORDER BY id LIMIT 1)
-         WHERE id = ?`,
-        [id],
+        `INSERT INTO agenda_fonte_pagadora (agenda_servico_id, fonte_pagadora_id, criado_em)
+           SELECT ?, f.id, UTC_TIMESTAMP(3) FROM fonte_pagadora f WHERE f.codigo = '9141'
+              AND NOT EXISTS (SELECT 1 FROM agenda_fonte_pagadora x WHERE x.agenda_servico_id = ? AND x.fonte_pagadora_id = f.id)`,
+        [ids.agenda, ids.agenda],
       );
     });
-    const lida = await porta.marcacao(ctx(), id);
-    expect(lida?.marcacao.situacao).toBe('nao_informada');
-    // Fora do absenteísmo: a migrada encerrada não conta como marcada nos indicadores.
-    expect((await porta.indicadores(ctx(), DIA, DIA)).funil.marcados).toBe(antes - 1);
+    try {
+      const futurosAntes = await futurosDoConvenio();
+      expect(futurosAntes).toBeGreaterThan(0);
+      // Simula a carga: a marcação vira migrada, com a situação "não informada na origem".
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-l0104-migrada' }, async (e) => {
+        await e.executar(
+          `INSERT INTO situacao_marcacao (codigo, descricao, significado, criado_em)
+           SELECT 'l0104-nao-informada', 'Não informada na origem (sintético)', 'nao_informada', UTC_TIMESTAMP(3) FROM DUAL
+           WHERE NOT EXISTS (SELECT 1 FROM situacao_marcacao WHERE significado = 'nao_informada' AND ativo)`,
+          [],
+        );
+        await e.executar(
+          `UPDATE marcacao_horario SET origem = 'migracao', situacao_marcacao_id =
+           (SELECT id FROM situacao_marcacao WHERE significado = 'nao_informada' AND ativo ORDER BY id LIMIT 1)
+         WHERE id = ?`,
+          [id],
+        );
+      });
+      const lida = await porta.marcacao(ctx(), id);
+      expect(lida?.marcacao.situacao).toBe('nao_informada');
+      // Fora do absenteísmo: a migrada encerrada não conta como marcada nos indicadores.
+      expect((await porta.indicadores(ctx(), DIA, DIA)).funil.marcados).toBe(antes - 1);
+      // Nem nos marcados futuros do convênio da agenda (a migrada encerrada não segura o convênio).
+      expect(await futurosDoConvenio()).toBe(futurosAntes - 1);
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-l0104-convenio' }, async (e) => {
+        await e.executar(`DELETE FROM agenda_fonte_pagadora WHERE ${SO_9141}`, [ids.agenda]);
+      });
+    }
     await expect(
       porta.executar(ctx(), 'agenda.cancelarConsulta', {
         marcacao: id,

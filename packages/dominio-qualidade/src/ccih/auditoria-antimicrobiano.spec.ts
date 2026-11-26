@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  atendimentoDaAuditoria,
   avaliacaoDaFicha,
   avaliarAuditoriaAntimicrobiano,
   type ContextoAuditoria,
@@ -131,5 +132,18 @@ describe('auditoria da prescrição de antimicrobiano', () => {
     ]);
     expect(avaliacaoDaFicha('reprovado')).toBe('reprovada');
     expect(avaliacaoDaFicha('suspenso')).toBe('suspensa');
+  });
+
+  it('atendimento da auditoria: o da ficha; nulo só na ficha migrada sem atendimento; a do sistema sem ele recusa', () => {
+    expect(atendimentoDaAuditoria({ atendimento: 5, migrada: false })).toEqual({ ok: true, atendimento: 5 });
+    expect(atendimentoDaAuditoria({ atendimento: 5, migrada: true })).toEqual({ ok: true, atendimento: 5 });
+    expect(atendimentoDaAuditoria({ atendimento: null, migrada: true })).toEqual({
+      ok: true,
+      atendimento: null,
+    });
+    expect(atendimentoDaAuditoria({ atendimento: null, migrada: false })).toEqual({
+      ok: false,
+      recusa: 'ficha-sem-atendimento',
+    });
   });
 });

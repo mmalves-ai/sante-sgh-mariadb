@@ -62,6 +62,7 @@ export const mensagensSuprimentos = {
     vencido: 'vencido',
     vence: 'vence em breve',
     suspeita: 'validade suspeita',
+    semValidade: 'validade não informada na origem',
   },
   tipos: {
     saida: 'Saída',

@@ -297,6 +297,9 @@ const adequacoesDe = (a: {
                 : t('ccih.auditoriaAntimicrobiano.semCultura')
             }}
             · {{ t('ccih.auditoriaAntimicrobiano.prescritor', { nome: x.prescritor }) }}
+            <span v-if="x.atendimento === null" :data-testid="`auditoria-sem-atendimento-${x.id}`">
+              · {{ t('ccih.auditoriaAntimicrobiano.atendimentoNaoRegistrado') }}</span
+            >
           </div>
           <SanteBotao
             v-if="podeAuditar && f.ficha !== x.id"

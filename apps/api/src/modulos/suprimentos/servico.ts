@@ -200,18 +200,9 @@ export class ServicoSuprimentos {
       const r = e.recebidos.find((y) => y.item === i.item);
       const q = r ? r.quantidade : 0;
       if (q <= 0) return [];
-      const lotes: { lote: string; validade: string; quantidade: number }[] = i.lotes
-        ? JSON.parse(i.lotes)
-        : [];
-      // Recebido a menos: os lotes do envio na ordem até a quantidade recebida.
-      let falta = q;
-      const usados = lotes.flatMap((l) => {
-        if (falta <= 0) return [];
-        const u = Math.min(falta, l.quantidade);
-        falta -= u;
-        return [{ ...l, quantidade: u }];
-      });
-      return [{ item: i.item, quantidade: q, lotes: usados }];
+      // Os lotes vêm do próprio envio, pelo id do lote no item (a porta os toma na ordem do envio até o recebido),
+      // inclusive o lote migrado sem validade, que não cabe no lote mandado da tela.
+      return [{ item: i.item, quantidade: q }];
     });
     const divergente = x.itens.some(
       (i) => (e.recebidos.find((y) => y.item === i.item)?.quantidade ?? 0) !== i.quantidade,

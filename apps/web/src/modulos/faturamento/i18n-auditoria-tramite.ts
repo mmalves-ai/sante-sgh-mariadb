@@ -111,6 +111,7 @@ export const mensagensAuditoriaTramite = {
     titulo: 'Guias do convênio',
     paciente: 'Paciente',
     prontuario: 'prontuário {n}',
+    pacienteNaoRegistrado: 'paciente não registrado na origem',
     abrirConta: 'Abrir a conta',
     filaCirurgia: 'Fila do centro cirúrgico (pela data da cirurgia)',
     cirurgiaPrevista: 'Cirurgia prevista',

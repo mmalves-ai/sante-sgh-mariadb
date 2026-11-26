@@ -424,6 +424,18 @@ export class PortaTelemedicinaPropria implements PortaTelemedicina {
 const TABELAS = [TABELA, PARTICIPANTE] as const;
 const PREFIXO_RECUSA = 'telemedicina-';
 const MARCACAO_SEM_VALIDADE: ReadonlySet<string> = new Set(['cancelada', 'falta', 'nao_informada']);
+/** A recusa da marcação sem validade, com o motivo certo: a migrada sem situação na origem não está cancelada. */
+export const MENSAGEM_MARCACAO_NAO_INFORMADA =
+  'A marcação veio da migração sem situação na origem: confirme a marcação antes da teleconsulta.';
+const recusaMarcacaoInvalida = (naoInformada: boolean, nova: boolean): ErroTelemedicina =>
+  new ErroTelemedicina(
+    'situacao',
+    naoInformada
+      ? MENSAGEM_MARCACAO_NAO_INFORMADA
+      : nova
+        ? 'A nova marcação está cancelada ou com falta.'
+        : 'A marcação está cancelada ou com falta: a teleconsulta não foi criada.',
+  );
 const VIVAS = ['agendada', 'aguardando', 'sala_aberta', 'em_andamento'] as const;
 
 /** A recusa de negócio atravessa o executor como ErroOperacao (409) e volta a ErroTelemedicina do lado de cá. */
@@ -518,6 +530,8 @@ interface MarcacaoDaAgenda {
   readonly inicio: Date;
   readonly paciente: number | null;
   readonly valida: boolean;
+  /** Migrada sem situação na origem (sem validade para a teleconsulta, mas não cancelada). */
+  readonly naoInformada: boolean;
 }
 
 /**
@@ -550,6 +564,7 @@ async function marcacaoDaAgenda(
     inicio: comoData(m['inicio_em']) ?? new Date(0),
     paciente: numOuNulo(m['paciente_id']),
     valida: !MARCACAO_SEM_VALIDADE.has(String(m['significado'])),
+    naoInformada: m['significado'] === 'nao_informada',
   };
 }
 
@@ -584,11 +599,7 @@ export const OPERACOES_TELEMEDICINA = {
             'nao-encontrado',
             'A marcação da teleconsulta não existe neste estabelecimento.',
           );
-        if (!m.valida)
-          throw new ErroTelemedicina(
-            'situacao',
-            'A marcação está cancelada ou com falta: a teleconsulta não foi criada.',
-          );
+        if (!m.valida) throw recusaMarcacaoInvalida(m.naoInformada, false);
         if (m.paciente !== en.paciente)
           throw new ErroTelemedicina(
             'situacao',
@@ -839,7 +850,7 @@ export const OPERACOES_TELEMEDICINA = {
       const m = await marcacaoDaAgenda(tx, est, en.para);
       if (!m)
         throw new ErroTelemedicina('nao-encontrado', 'A nova marcação não existe neste estabelecimento.');
-      if (!m.valida) throw new ErroTelemedicina('situacao', 'A nova marcação está cancelada ou com falta.');
+      if (!m.valida) throw recusaMarcacaoInvalida(m.naoInformada, true);
       if ((await vivasDaMarcacao(tx, est, en.para, [...VIVAS, 'encerrada'])).length)
         throw new ErroTelemedicina('situacao', 'A nova marcação já tem teleconsulta.');
       for (const r of rs) {

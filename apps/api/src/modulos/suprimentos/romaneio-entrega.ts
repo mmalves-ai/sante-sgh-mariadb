@@ -1067,7 +1067,17 @@ export class PortaRomaneioEntregaPropria implements PortaRomaneioEntrega {
         for (const it of e.itens) {
           const insumo = await insumoAtivo(tx, it.item);
           await exigirLivre(tx, est, e.origem, it.item, it.quantidade, String(insumo['nome']));
-          const lotes = await lotesDaSaida(tx, est, e.origem, insumo, it.quantidade, [], hoje);
+          const lotes = await lotesDaSaida(
+            tx,
+            est,
+            e.origem,
+            insumo,
+            it.quantidade,
+            [],
+            hoje,
+            undefined,
+            'libera',
+          );
           const partes = lotes.length ? lotes : [{ id: null, quantidade: it.quantidade }];
           for (const l of partes) {
             const li = l.id

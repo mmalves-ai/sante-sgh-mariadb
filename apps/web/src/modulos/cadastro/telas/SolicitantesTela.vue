@@ -274,7 +274,7 @@ function buscarRegistro(): void {
             <td>
               {{ [s.conselho, s.numero, s.uf].filter((x) => x !== null && x !== '').join(' ')
               }}<template v-if="s.conselho && !s.uf">
-                ({{ t('ligacoes.solicitante.ufNaoInformada', 'UF não informada na origem') }})</template
+                ({{ t('ligacoes.solicitante.ufNaoInformada') }})</template
               >
             </td>
             <td>{{ s.cbo ?? '' }}</td>

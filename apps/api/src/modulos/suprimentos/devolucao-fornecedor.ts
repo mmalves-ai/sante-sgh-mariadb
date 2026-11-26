@@ -218,7 +218,7 @@ async function lotesDaNota(
        FROM movimento_estoque me JOIN movimento_lote ml ON ml.movimento_estoque_id = me.id
        JOIN lote_insumo li ON li.id = ml.lote_insumo_id
       WHERE me.nota_entrada_item_id = ? AND me.natureza = 'entrada'
-      GROUP BY li.id, li.numero_lote, li.validade ORDER BY li.validade, li.id`,
+      GROUP BY li.id, li.numero_lote, li.validade ORDER BY li.validade IS NULL, li.validade, li.id`,
     [notaItem],
   );
   if (!entrou.length) return [];
@@ -390,6 +390,8 @@ async function registrarDevolucao(
       quantidade,
       await lotesDaNota(tx, est, local, i.notaItem, quantidade),
       hoje,
+      undefined,
+      'libera',
     );
     const mov = await movimentar(tx, est, {
       local,

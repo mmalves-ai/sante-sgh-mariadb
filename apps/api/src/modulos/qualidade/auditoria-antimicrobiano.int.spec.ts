@@ -4,7 +4,10 @@
 // tipo de auditoria e pareceres padrão. As chaves ficam desligadas SÓ na transação do preparo; a gravação da porta roda
 // com todas as chaves e CHECKs. Prova o que fica no banco: a fila com a ficha pendente, as recusas sem escrita (regra
 // do domínio, versão vista, parecer padrão de outro estabelecimento, auditor sem profissional), a auditoria com o
-// parecer na ficha, a segunda auditoria que encerra a primeira (nada apagado) e o histórico por paciente.
+// parecer na ficha, a segunda auditoria que encerra a primeira (nada apagado) e o histórico por paciente. Por fim, a
+// ficha migrada sem atendimento ligado na origem (D2 das recusas da carga): sem item de prescrição, finalidade nem
+// prescritor, aparece na fila e a auditoria grava com o atendimento nulo; com item de prescrição, o atendimento vem da
+// prescrição.
 import { randomUUID } from 'node:crypto';
 import { ErroOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -29,6 +32,12 @@ interface Massa {
   tipoSuspender: number;
   parecerPadrao: number;
   parecerOutro: number;
+  /** Para a ficha migrada sem atendimento (criada nos últimos casos). */
+  atd: number;
+  item: number;
+  am: number;
+  prescritor: number;
+  fin: number;
 }
 
 async function limpar(e: Escritor): Promise<void> {
@@ -161,6 +170,11 @@ async function montar(nucleo: NucleoProprio): Promise<Massa> {
         tipoSuspender,
         parecerPadrao: await pp(est, true),
         parecerOutro: await pp(est2, false),
+        atd,
+        item,
+        am,
+        prescritor,
+        fin: Number(fin?.['id']),
       };
     } finally {
       await e.executar('SET FOREIGN_KEY_CHECKS = 1');
@@ -357,5 +371,67 @@ describe.skipIf(SEM_BANCO)('auditoria da prescrição de antimicrobiano (porta p
       [m.est],
     );
     expect(Number(trilhas[0]?.['n'])).toBeGreaterThanOrEqual(2);
+  });
+
+  const fichaMigrada = (item: number | null, comPrescricao: boolean) =>
+    nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}-mig` }, (e) =>
+      e.inserir(
+        `INSERT INTO ficha_antimicrobiano (estabelecimento_id, paciente_id, atendimento_id, prescricao_item_id,
+           antimicrobiano_id, prescritor_profissional_id, finalidade_terapeutica_id, origem_infeccao, cultura_coletada,
+           justificativa, data_inicio, dias_previstos, data_fim_prevista, avaliacao_situacao, origem, criado_em)
+         VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, FALSE, NULL, '2026-11-20', NULL, NULL, 'pendente', 'migracao', ?)`,
+        [
+          m.est,
+          m.pac,
+          item,
+          comPrescricao ? m.am : null,
+          comPrescricao ? m.prescritor : null,
+          comPrescricao ? m.fin : null,
+          new Date(),
+        ],
+      ),
+    );
+  const daFicha = async (ficha: number) =>
+    ler(
+      `SELECT atendimento_id, ficha_antimicrobiano_id, paciente_id, prescricao_item_id, item_prescritivel_id, origem,
+              situacao FROM auditoria_prescricao_ccih WHERE ficha_antimicrobiano_id = ?`,
+      [ficha],
+    );
+
+  it('ficha migrada sem atendimento nem item de prescrição: aparece na fila e a auditoria grava com o atendimento nulo', async () => {
+    const migrada = await fichaMigrada(null, false);
+    const f = await porta.fila(c(), { soPendentes: true, paciente: null });
+    expect(f.filter((x) => x.id === migrada).map((x) => [x.atendimento, x.item, x.finalidadeCodigo])).toEqual(
+      [[null, null, '']],
+    );
+    const r = await porta.registrar(c(), `${P}aud`, migrada, base, trilha);
+    expect(r).toMatchObject({ ficha: migrada, avaliacao: 'aprovada', encerradas: 0 });
+    const a = await daFicha(migrada);
+    expect(a).toHaveLength(1);
+    expect(a[0]).toMatchObject({
+      atendimento_id: null,
+      ficha_antimicrobiano_id: migrada,
+      paciente_id: m.pac,
+      prescricao_item_id: null,
+      item_prescritivel_id: null,
+      origem: 'sistema',
+      situacao: 'ativa',
+    });
+  });
+
+  it('ficha migrada sem atendimento com item de prescrição: a auditoria grava o atendimento da prescrição', async () => {
+    const migrada = await fichaMigrada(m.item, true);
+    const f = await porta.fila(c(), { soPendentes: true, paciente: null });
+    expect(f.filter((x) => x.id === migrada).map((x) => [x.atendimento, x.item])).toEqual([[m.atd, m.item]]);
+    const r = await porta.registrar(c(), `${P}aud`, migrada, base, trilha);
+    expect(r).toMatchObject({ ficha: migrada, avaliacao: 'aprovada', encerradas: 0 });
+    const a = await daFicha(migrada);
+    expect(a).toHaveLength(1);
+    expect(a[0]).toMatchObject({
+      atendimento_id: m.atd,
+      ficha_antimicrobiano_id: migrada,
+      prescricao_item_id: m.item,
+      situacao: 'ativa',
+    });
   });
 });

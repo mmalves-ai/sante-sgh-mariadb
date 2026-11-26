@@ -52,6 +52,7 @@ export const mensagensLigacoes = {
     cns: 'Cartão Nacional de Saúde',
     conselho: 'Conselho (sigla)',
     uf: 'UF do conselho',
+    ufNaoInformada: 'UF não informada na origem',
     numero: 'Número no conselho',
     instituicao: 'Instituição de origem',
     cnes: 'CNES da instituição',

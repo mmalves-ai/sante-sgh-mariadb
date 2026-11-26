@@ -472,7 +472,8 @@ export class PortaAgendaPropria implements PortaAgenda {
              (SELECT COUNT(*) FROM marcacao_horario m JOIN horario_agenda h ON h.id = m.horario_agenda_id
                JOIN situacao_marcacao s ON s.id = m.situacao_marcacao_id
                WHERE h.agenda_servico_id = f.agenda_servico_id AND m.fonte_pagadora_id = fp.id
-                 AND m.excluido_em IS NULL AND s.significado <> 'cancelada' AND h.data_referencia >= ?) AS futuros
+                 AND m.excluido_em IS NULL AND s.significado NOT IN ('cancelada', 'nao_informada')
+                 AND h.data_referencia >= ?) AS futuros
            FROM agenda_fonte_pagadora f JOIN fonte_pagadora fp ON fp.id = f.fonte_pagadora_id
            JOIN agenda_servico a ON a.id = f.agenda_servico_id
            WHERE f.agenda_servico_id = ? AND a.estabelecimento_id = ? AND f.excluido_em IS NULL ORDER BY fp.nome`,

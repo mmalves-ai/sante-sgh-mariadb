@@ -440,7 +440,17 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSuprimentos {
             { campos: ['itens'] },
           );
         // O envio reserva os lotes escolhidos (conferidos agora); o saldo só sai da origem no recebimento.
-        const lotes = await lotesDaSaida(tx, est, t.origem, insumo, it.quantidade, it.lotes, hoje);
+        const lotes = await lotesDaSaida(
+          tx,
+          est,
+          t.origem,
+          insumo,
+          it.quantidade,
+          it.lotes,
+          hoje,
+          SO_LIVRE,
+          'libera',
+        );
         if (!lotes.length) await itemDoDocumento(tx, doc.id, ++seq, insumo, it.quantidade);
         for (const l of lotes) {
           const li = await tx.uma<Linha>('SELECT validade FROM lote_insumo WHERE id = ?', [l.id]);
@@ -1726,7 +1736,20 @@ export async function movimentar(
  * lote; 0 = sem lote); o acerto do inventário (`fisico`) mexe no saldo contado, reservado ou não.
  */
 export type ReservaNaSaida = { readonly proprias: ReadonlyMap<number, number> } | 'fisico';
+/**
+ * O lote migrado sem validade na saída (D1): 'libera' no movimento entre locais ou de volta ao fornecedor
+ * (transferência, devolução ao fornecedor, romaneio; o ajuste do saldo físico também libera, pela reserva 'fisico');
+ * 'recusa' em toda saída que leva o insumo ao uso: paciente, setor e terceiro (doação, venda ou empréstimo podem chegar
+ * a um paciente fora do hospital). A transferência pode levar o lote ao estoque de um setor assistencial: lá ele
+ * continua com o alerta `sem-validade` no saldo e toda saída para uso volta a passar por aqui com 'recusa'.
+ */
+export type UsoSemValidade = 'libera' | 'recusa';
 const SO_LIVRE: ReservaNaSaida = { proprias: new Map() };
+/**
+ * Só na conferência dos lotes mandados do movimento liberado: o lote sem validade casa pelo número com esta validade de
+ * comparação, que nunca vence. Não é gravada nem devolvida: o lote sai pelo id, com a validade nula.
+ */
+const VALIDADE_DE_CONFERENCIA = '9999-12-31';
 
 /** A quantidade do saldo que a saída pode usar (nunca negativa). */
 function usavel(quantidade: number, reservada: number, propria: number, reserva: ReservaNaSaida): number {
@@ -1738,7 +1761,9 @@ function usavel(quantidade: number, reservada: number, propria: number, reserva:
  * Os lotes da saída: os mandados pela tela (conferidos pela regra do lote) ou, sem lote mandado no item rastreável,
  * primeiro os reservados para a própria requisição e depois os que vencem primeiro (nunca vencido nem bloqueado),
  * sempre pelo saldo que a saída pode usar: o lote reservado para outra requisição não sai. Item sem controle de lote
- * sai sem lote.
+ * sai sem lote. O lote migrado sem validade vem por último e só sai no movimento liberado (`usoSemValidade =
+ * 'libera'`: transferência, devolução ao fornecedor, romaneio; ou o ajuste do saldo físico); na saída para uso (o
+ * padrão) a falta que ele cobriria, ou o lote mandado sem validade, vira a recusa "lote sem validade".
  */
 export async function lotesDaSaida(
   tx: TxOperacao,
@@ -1749,8 +1774,10 @@ export async function lotesDaSaida(
   mandados: readonly LoteMandado[],
   hoje: string,
   reserva: ReservaNaSaida = SO_LIVRE,
+  usoSemValidade: UsoSemValidade = 'recusa',
 ): Promise<LoteUsado[]> {
   if (!verdadeiro(insumo['controla_lote']) && !mandados.length) return [];
+  const liberaSemValidade = usoSemValidade === 'libera' || reserva === 'fisico';
   const disponiveis = await lotesTravados(tx, est, local, n(insumo['id']));
   const propria = (r: Linha) =>
     reserva === 'fisico' ? 0 : (reserva.proprias.get(n(r['lote_insumo_id'])) ?? 0);
@@ -1765,43 +1792,47 @@ export async function lotesDaSaida(
     // A ordem é estável: dentro de cada grupo segue a validade.
     .sort((a, b) => Number(b['propria']) - Number(a['propria']));
   if (mandados.length) {
-    const semData = mandados.find(
-      (m) =>
-        !livres.some(
-          (r) =>
-            !semValidade(r) && String(r['numero_lote']) === m.lote && dataIso(r['validade']) === m.validade,
-        ) && livres.some((r) => semValidade(r) && String(r['numero_lote']) === m.lote),
-    );
-    if (semData) throw recusaLoteSemValidade(semData.lote);
+    // O mandado casa com o lote sem validade pelo número (validade vazia ou sem lote datado igual): no uso recusa; no
+    // movimento liberado é conferido e sai pelo id do lote (nunca pela validade, que não existe).
+    const loteSemValidadeDe = (m: LoteMandado): Linha | undefined =>
+      livres.some(
+        (r) =>
+          !semValidade(r) && String(r['numero_lote']) === m.lote && dataIso(r['validade']) === m.validade,
+      )
+        ? undefined
+        : livres.find((r) => semValidade(r) && String(r['numero_lote']) === m.lote);
+    const casados = mandados.map((m) => ({ m, sem: loteSemValidadeDe(m) }));
+    const semData = casados.find((x) => x.sem);
+    if (semData && !liberaSemValidade) throw recusaLoteSemValidade(semData.m.lote);
     recusar(
       conferirLotesSaida(
         quantidade,
-        mandados,
+        casados.map(({ m, sem }) => (sem ? { ...m, validade: VALIDADE_DE_CONFERENCIA } : m)),
         livres.map((r) => ({
           id: n(r['lote_insumo_id']),
           lote: String(r['numero_lote']),
-          validade: dataIso(r['validade']),
+          validade: semValidade(r) && liberaSemValidade ? VALIDADE_DE_CONFERENCIA : dataIso(r['validade']),
           saldo: n(r['quantidade']),
         })),
         hoje,
       )[0] ?? null,
     );
     return Promise.all(
-      mandados.map(async (l) => ({
-        id: await loteDoItem(tx, est, n(insumo['id']), l, false),
+      casados.map(async ({ m: l, sem }) => ({
+        id: sem ? n(sem['lote_insumo_id']) : await loteDoItem(tx, est, n(insumo['id']), l, false),
         quantidade: l.quantidade,
       })),
     );
   }
   const usados: LoteUsado[] = [];
   let falta = quantidade;
-  // O lote migrado sem validade vem por último (a consulta o põe no fim) e só sai no ajuste do saldo físico; no uso,
-  // a falta que ele cobriria vira a recusa "lote sem validade".
+  // O lote migrado sem validade vem por último (a consulta o põe no fim) e só sai no movimento que não chega ao
+  // paciente; no uso, a falta que ele cobriria vira a recusa "lote sem validade".
   let retidoSemValidade: string | null = null;
   for (const r of livres) {
     if (falta <= 0) break;
     if (semValidade(r)) {
-      if (reserva !== 'fisico') {
+      if (!liberaSemValidade) {
         retidoSemValidade ??= String(r['numero_lote']);
         continue;
       }
@@ -2158,6 +2189,8 @@ export async function registrarSaida(
       proprias: ri ? await reservasDoItemNoLocal(tx, n(ri['id']), e.local, it.item) : new Map(),
     };
     await exigirSaldo(tx, est, e.local, insumo, it.quantidade, reserva);
+    // Toda saída para uso recusa o lote sem validade (D1), inclusive a terceiro: doação, venda ou empréstimo podem
+    // chegar a um paciente fora do hospital. A perda e o descarte saem pelo ajuste do saldo físico, que o usa.
     const lotes = await lotesDaSaida(tx, est, e.local, insumo, it.quantidade, it.lotes, hoje, reserva);
     const item = await itemDoDocumento(tx, doc.id, k + 1, insumo, it.quantidade, {
       lote_insumo_id: lotes.length === 1 ? lotes[0]!.id : null,
@@ -2610,6 +2643,33 @@ async function devolverConsumoOpme(
  * A transferência entre locais do estabelecimento: sai da origem pelo custo médio e entra no destino pelo mesmo
  * valor. Com o envio, o recebimento conclui o documento do envio (o que não chegou fica na origem: divergente).
  */
+/**
+ * Os lotes do envio do item (lote e validade do item do envio; vazia no lote migrado sem validade), na ordem do envio,
+ * até a quantidade recebida (recebido a menos: os primeiros). O recebido além do enviado fica para a conferência da soma.
+ */
+async function lotesDoEnvio(
+  tx: TxOperacao,
+  envio: number,
+  item: number,
+  recebido: number,
+): Promise<LoteMandado[]> {
+  const linhas = await tx.consultar<Linha>(
+    `SELECT li.numero_lote, li.validade, di.quantidade FROM documento_estoque_item di
+       JOIN lote_insumo li ON li.id = di.lote_insumo_id
+      WHERE di.documento_estoque_id = ? AND di.insumo_id = ? AND di.excluido_em IS NULL ORDER BY di.sequencia`,
+    [envio, item],
+  );
+  const out: LoteMandado[] = [];
+  let falta = qtd(recebido);
+  for (const r of linhas) {
+    if (falta <= 0) break;
+    const q = qtd(Math.min(falta, n(r['quantidade'])));
+    out.push({ lote: String(r['numero_lote']), validade: dataIso(r['validade']), quantidade: q });
+    falta = qtd(falta - q);
+  }
+  return out;
+}
+
 async function transferir(tx: TxOperacao, est: number, e: TransferirEntrada, hoje: string): Promise<Ids> {
   await exigirMesAberto(tx, est, hoje);
   await localDoEstabelecimento(tx, est, e.origem, 'origem');
@@ -2672,7 +2732,20 @@ async function transferir(tx: TxOperacao, est: number, e: TransferirEntrada, hoj
   for (const it of e.itens) {
     const insumo = await insumoAtivo(tx, it.item);
     await exigirSaldo(tx, est, e.origem, insumo, it.quantidade);
-    const lotes = await lotesDaSaida(tx, est, e.origem, insumo, it.quantidade, it.lotes, hoje);
+    // No recebimento, os lotes são os que o envio reservou (pelo id do lote no item do envio, inclusive o lote migrado
+    // sem validade), na ordem do envio até a quantidade recebida; sem lote no envio, valem os mandados.
+    const doEnvioComLote = e.envio ? await lotesDoEnvio(tx, doc.id, it.item, it.quantidade) : [];
+    const lotes = await lotesDaSaida(
+      tx,
+      est,
+      e.origem,
+      insumo,
+      it.quantidade,
+      doEnvioComLote.length ? doEnvioComLote : it.lotes,
+      hoje,
+      SO_LIVRE,
+      'libera',
+    );
     const doEnvio = envioItens.filter((r) => n(r['insumo_id']) === it.item);
     const item = doEnvio[0]
       ? n(doEnvio[0]['id'])

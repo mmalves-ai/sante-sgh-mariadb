@@ -7,6 +7,7 @@
 import type { ItemBusca, LoteSaldo } from '@sgh/contratos';
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import {
   emitirEtiquetas,
   type LeituraCodigo as Leitura,
@@ -24,6 +25,7 @@ const { locais } = usarSuprimentos();
 const item = ref<{ codigo: number; nome: string; rastreavel: boolean } | null>(null);
 const local = ref('');
 const lote = ref('');
+const { t } = useI18n();
 const lotes = ref<LoteSaldo[]>([]);
 const quantidade = ref('1');
 const etiquetas = ref('1');
@@ -46,6 +48,10 @@ const opcoesLotes = computed(() => [
       rotulo: `${l.lote} · ${l.validade.split('-').reverse().join('/')}`,
     })),
 ]);
+// O lote migrado sem validade não recebe etiqueta (o DataMatrix leva a validade): a tela diz quais ficaram de fora.
+const lotesSemValidade = computed(() =>
+  lotes.value.filter((l) => l.alerta === 'sem-validade').map((l) => l.lote),
+);
 const opcoesTipos = (Object.keys(M.tipos) as TipoEtiqueta[]).map((k) => ({ valor: k, rotulo: M.tipos[k] }));
 
 async function carregarLotes(): Promise<void> {
@@ -113,6 +119,9 @@ async function copiar(): Promise<void> {
       <div class="filtros">
         <SanteSelecao v-model="local" :rotulo="M.local" :opcoes="opcoesLocais" data-testid="etq-local" />
         <SanteSelecao v-model="lote" :rotulo="M.lote" :opcoes="opcoesLotes" data-testid="etq-lote" />
+        <p v-if="lotesSemValidade.length" class="secundario" data-testid="etq-sem-validade">
+          {{ lotesSemValidade.join(', ') }}: {{ t('suprimentos.alertas.semValidade') }}
+        </p>
         <SanteSelecao v-model="tipo" :rotulo="M.tipo" :opcoes="opcoesTipos" data-testid="etq-tipo" />
         <span class="campo">
           <label for="etq-quantidade">{{ M.quantidade }}</label>
