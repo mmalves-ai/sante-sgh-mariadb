@@ -45,3 +45,48 @@
   - lote vazio;
   - trilhas adiadas.
 - **Defeito de conferência:** a conciliação antiga dizia "0 divergentes" com recusas.
+
+## Recusas da carga, fase 2 (fechada em 26/11/2026, noite)
+
+- **Commits no branch `conector-autor-registro`:** de `e5749bb1` a `5d9e1ad4`.
+  - Lote R (decisões por item).
+  - K1, K1b e K2: modelo e catálogos.
+  - P0 a P7: mapa.
+  - C1: motor.
+  - T, T2 e V: suíte do conector e conciliação.
+  - Lotes A, AF e AT: API, telas e testes.
+  - Merge da `origin/main` 5ffc5dbf.
+- **Prova:**
+  - suíte do conector com 1471 testes OK (12 pulados, 2 falhas esperadas);
+  - `verificar_mapa` ok;
+  - `provar_migrado` ok, com 70 casos;
+  - specs de domínio e de integração das API tocadas verdes;
+  - a esteira (ci-sim) vai no sha entregue à Sessão de Construção.
+- **A execução 24 da ProntoCardio continua PAUSADA.** Nada foi aplicado no `cliente_prontocardio`. O reprocessamento é pela tela "Carga e sincronismo" (diferencial com "reprocessar recusadas"), na ordem do plano §8, com a TBCABTRILHA (~2,7 h) sozinha.
+  - Primeira execução com `CONECTOR_RESSEMEAR=brasindice:0`.
+
+### Pendências escritas (não fechadas nesta fase)
+1. **Conciliação de fatias sintéticas:** 41 de 68 conciliam. As 27 restantes já divergiam antes da fase 2 (lista e erros em `sante-sgh-dados/obra/recusas/construcao/V-conciliacao.txt`). Exemplos: L5-02, L5-04, L6-01..04, L6-10/11/13/14, L7-02/04/08, L8-01/02/04/05 (KeyError 'NOME' em `leitor.py:144`), exemplo_l9, exemplo_r5.
+2. **`fatiar_conector --conferir`:** acusa L8-16, L8-17 e `indice.tsv` diferentes do gerado. Já acusava antes.
+3. **Decisões clínicas a revisar:**
+   - PRSITUACAOCHECAGEM 'Salvo' (1 de 14 rótulos) segue sem par e é recusado;
+   - PRSITDOCUMENTOASSINADO 'Não verificado' e 'Indeterminado' foram para 'assinado';
+   - L6-17 CHSITUACAO '=~aguardando', CHOCORRENCIA '=~emergencial' e CHCRITICIDADE '=~critica' ainda não passaram pela regra do pedido 67;
+   - PRTPTCLE: 'final' e 'autoriza_procedimento' pelo nome.
+4. **Agenda cirúrgica 'nao_informada' sem sala, início ou duração:** continua recusada (4025) pelo `ck_agendamento_cirurgico_sala`. Para decidir: isentar a 'nao_informada'.
+5. **Ruído de pendências:**
+   - SIRESPAD: 6 `pai_inexistente` por linha;
+   - GELANPAC: `valor_presumido` do local adotado;
+   - concorrente `senao` sem apagar `catalogo_codigo_inexistente`.
+6. **Lote sem validade:**
+   - o lote mandado pela tela nos movimentos liberados passa pela conferência com uma validade de comparação (`VALIDADE_DE_CONFERENCIA`);
+   - a transferência para setor assistencial libera o lote;
+   - o uso no setor é recusado.
+7. **Medição completa do R9** (vias `ref:` anuláveis com pai pendente): parcial em `construcao/T-correcao/medicao-R9-parcial.tsv`.
+8. **Leitura de rótulos de domínio da origem:** a V4 usou um isql próprio (só NOME/DESCRICAO de tabela de situação). Falta criar um modo de rótulos no `origem-contagem.sh`.
+9. **Fica visível como recusa:**
+   - R7 e R11 (não provados);
+   - CBO por edição, DCB e TUSS 18/19/20/22 (sem arquivo oficial no cache);
+   - contas externas sem atendimento;
+   - TBMEDSOL divergentes.
+10. **`01_SIS/95_kit_implantacao_tabelas.sql`:** 60 erros no `validar_migracoes`. Vêm da main e são da Sessão de Construção.
