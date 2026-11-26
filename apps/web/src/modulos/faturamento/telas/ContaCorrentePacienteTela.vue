@@ -7,8 +7,9 @@ import { SanteSelecao } from '@sgh/ui';
 // enquanto se digita; o servidor confere de novo e as recusas aparecem com o texto dele. Sem paciente na rota, a tela
 // abre pela busca do paciente (entrada pelo menu). O atendimento é escolhido da lista do paciente e a urgência vem do
 // caráter dele (nunca de uma marca solta). Devolver com conta aberta devendo pede a confirmação explícita.
-// F7 (07-FIN linha 92): a devolução é um pedido que reserva o saldo; outra pessoa (financeiro.adiantamento.aprovar)
-// aprova e o valor sai; quem pediu não vê o botão de aprovar e o servidor recusa se tentar.
+// F7 (07-FIN linha 92): a devolução é um pedido que reserva o saldo; outra pessoa
+// (faturamento.devolucaoAdiantamento.aprovar) aprova e o valor sai; quem pediu não vê o botão de aprovar e o servidor
+// recusa se tentar. Fora do dinheiro, a aprovação pede o identificador da transação (validação na hora).
 import { FORMAS_ADIANTAMENTO, validarAdiantamento, validarDevolucao } from '@sgh/dominio-faturamento';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
@@ -186,11 +187,24 @@ const devolver = () =>
 
 // ── Aprovação da devolução por outra pessoa ──
 const { sessao, permissoes } = usarSessao();
-const podeAprovar = computed(() => permissoes.value.has('financeiro.adiantamento.aprovar'));
+const podeAprovar = computed(() => permissoes.value.has('faturamento.devolucaoAdiantamento.aprovar'));
+// O cancelamento do pedido é do caixa (a mesma permissão de pedir), com motivo.
+const podeCancelar = computed(() => permissoes.value.has('faturamento.recibo.emitir'));
 const meuPedido = (solicitante: number | null) =>
   solicitante !== null && String(solicitante) === String(sessao.value?.usuario.id ?? '');
+// Fora do dinheiro, o identificador da transação (do pedido ou digitado aqui) prova que o valor saiu.
+const comprovanteAprovacao = reactive<Record<number, string>>({});
+const pedeComprovante = (p: { forma: string; comprovante: string | null }) =>
+  p.forma !== 'dinheiro' && !p.comprovante;
+const faltaComprovante = (p: { id: number; forma: string; comprovante: string | null }) =>
+  pedeComprovante(p) && !comprovanteAprovacao[p.id]?.trim();
 const aprovar = (devolucao: number) =>
-  rodar(() => aprovarDevolucao(devolucao, chave()), t('particular.cc.aprovada'));
+  rodar(
+    () => aprovarDevolucao(devolucao, comprovanteAprovacao[devolucao]?.trim() || null, chave()),
+    t('particular.cc.aprovada'),
+  ).then((ok) => {
+    if (ok) comprovanteAprovacao[devolucao] = '';
+  });
 const cancelarPedido = (devolucao: number) => {
   const motivo = window.prompt(t('particular.cc.motivoCancelamento'));
   if (motivo?.trim())
@@ -393,18 +407,45 @@ const cancelarPedido = (devolucao: number) => {
                 motivo: p.motivo,
               })
             }}
-            <span v-if="meuPedido(p.solicitanteId)" class="secundario">{{
-              t('particular.cc.seuPedido')
-            }}</span>
-            <button
-              v-else-if="podeAprovar"
-              type="button"
-              :data-testid="`cc-aprovar-${p.id}`"
-              @click="aprovar(p.id)"
+            <span
+              v-if="meuPedido(p.solicitanteId)"
+              class="secundario"
+              :data-testid="`cc-seu-pedido-${p.id}`"
+              >{{ t('particular.cc.seuPedido') }}</span
             >
-              {{ t('particular.cc.aprovar') }}
-            </button>
-            <button type="button" :data-testid="`cc-cancelar-pedido-${p.id}`" @click="cancelarPedido(p.id)">
+            <template v-else-if="podeAprovar">
+              <label v-if="pedeComprovante(p)">
+                {{ t('particular.cc.comprovanteDevolucao') }}
+                <input
+                  v-model="comprovanteAprovacao[p.id]"
+                  maxlength="60"
+                  :aria-invalid="faltaComprovante(p)"
+                  :aria-describedby="`cc-comprovante-aviso-${p.id}`"
+                  :data-testid="`cc-comprovante-${p.id}`"
+                />
+              </label>
+              <small
+                v-if="faltaComprovante(p)"
+                :id="`cc-comprovante-aviso-${p.id}`"
+                class="secundario"
+                :data-testid="`cc-comprovante-aviso-${p.id}`"
+                >{{ t('particular.cc.comprovanteObrigatorio') }}</small
+              >
+              <button
+                type="button"
+                :disabled="faltaComprovante(p)"
+                :data-testid="`cc-aprovar-${p.id}`"
+                @click="aprovar(p.id)"
+              >
+                {{ t('particular.cc.aprovar') }}
+              </button>
+            </template>
+            <button
+              v-if="podeCancelar"
+              type="button"
+              :data-testid="`cc-cancelar-pedido-${p.id}`"
+              @click="cancelarPedido(p.id)"
+            >
               {{ t('particular.cc.cancelarPedido') }}
             </button>
           </li>

@@ -255,5 +255,11 @@ export const PERFIS_COMPLEMENTARES = [
    * protocolo do lote da operadora. Só por concessão nominal da gestão de acessos ou pelo mapa aprovado.
    */
   'protocolo-documentos',
+  /**
+   * C1-084 (07-FIN linha 92): aprovador da devolução do adiantamento ao paciente (tesouraria ou supervisão do caixa):
+   * aprova o pedido feito no caixa por outra pessoa e registra o identificador da transação, separado de quem aprova
+   * adiantamento a fornecedor ou médico (segregação de funções). Só por concessão nominal ou pelo mapa aprovado.
+   */
+  'aprovador-devolucao-paciente',
 ] as const;
 export type PerfilComplementar = (typeof PERFIS_COMPLEMENTARES)[number];

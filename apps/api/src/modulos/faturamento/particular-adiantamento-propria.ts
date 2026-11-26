@@ -12,7 +12,8 @@
 // - adiantamento.devolver: o PEDIDO, devolucao_adiantamento_paciente "solicitada" (sequência, favorecido, motivo; em
 //   dinheiro, a sessão aberta de quem pede), que reserva o valor (o disponível é o saldo menos os pedidos em aberto);
 //   nada de caixa nem de saldo ainda.
-// - adiantamento.aprovarDevolucao: só outra pessoa aprova (quem pediu é recusado); a linha vira "devolvida" (aprovador,
+// - adiantamento.aprovarDevolucao: só outra pessoa aprova (quem pediu é recusado); fora do dinheiro, só com o
+//   identificador da transação (do pedido ou da aprovação); a linha vira "devolvida" (aprovador,
 //   aprovado_em, devolvido_em); em dinheiro, o movimento_caixa de saída na sessão de quem pediu (aberta) e o total em
 //   dinheiro dela abatido; saldo e situação do adiantamento refeitos.
 // - adiantamento.cancelarDevolucao: o pedido fica "cancelado" com o motivo na observação (nunca apagado); a reserva
@@ -560,12 +561,19 @@ async function pedidoDeDevolucao(tx: TxOperacao, est: number, devolucao: number)
     throw recusa('devolucao-inexistente', 'O pedido de devolução não existe.', { campos: ['devolucaoId'] });
   return d;
 }
-function exigirDecisao(d: Linha, decisor: number, decisao: 'aprovar' | 'cancelar') {
+function exigirDecisao(
+  d: Linha,
+  decisor: number,
+  decisao: 'aprovar' | 'cancelar',
+  comprovante: string | null = null,
+) {
   const r = conferirDecisaoDevolucao({
     situacao: txt(d['situacao']) as SituacaoDevolucao,
     solicitante: nn(d['criado_por']),
     decisor,
     decisao,
+    // Na aprovação, fora do dinheiro, a saída só é efetivada com o identificador da transação (domínio).
+    ...(decisao === 'aprovar' ? { meio: txt(d['meio']), comprovante } : {}),
   });
   if (r) throw recusa(r.codigo, r.mensagem, { campos: ['devolucaoId'] });
 }
@@ -585,7 +593,8 @@ export const opAprovarDevolucao = definirOperacao({
     const est = estDe(ctx);
     const usuario = usuarioDe(ctx);
     const d = await pedidoDeDevolucao(tx, est, e.devolucaoId);
-    exigirDecisao(d, usuario, 'aprovar');
+    const comprovante = e.comprovante || (d['identificador_transacao'] as string | null) || null;
+    exigirDecisao(d, usuario, 'aprovar', comprovante);
     const adiantamento = n(d['adiantamento_paciente_id']);
     const valor = n(d['valor']);
     const [a] = await tx.consultarParaAtualizar<Linha>(
@@ -651,7 +660,7 @@ export const opAprovarDevolucao = definirOperacao({
       aprovado_em: agora,
       devolvido_em: agora,
       movimento_caixa_id: mov,
-      identificador_transacao: e.comprovante ?? (d['identificador_transacao'] as string | null),
+      identificador_transacao: comprovante,
     });
     const saldo = await refazerSaldo(tx, adiantamento, -valor, true);
     return { id: e.devolucaoId, saldo, movimento: mov };
@@ -713,7 +722,7 @@ export async function contaCorrentePaciente(l: Consulta, est: number, pacienteId
   // Os pedidos de devolução ainda não decididos: reservam o saldo e esperam a aprovação de outra pessoa.
   const pedidos = await l.consultar<Linha>(
     `SELECT d.id, d.adiantamento_paciente_id, a.numero, d.valor, d.favorecido_nome, d.motivo, d.criado_em,
-            d.criado_por, COALESCE(u.nome, u.login) AS solicitante, f.meio
+            d.criado_por, COALESCE(u.nome, u.login) AS solicitante, f.meio, d.identificador_transacao
        FROM devolucao_adiantamento_paciente d JOIN adiantamento_paciente a ON a.id = d.adiantamento_paciente_id
        JOIN forma_recebimento f ON f.id = d.forma_recebimento_id
        LEFT JOIN usuario u ON u.id = d.criado_por
@@ -812,6 +821,8 @@ export async function contaCorrentePaciente(l: Consulta, est: number, pacienteId
       solicitadoEm: new Date(d['criado_em'] as Date).toISOString(),
       solicitanteId: nn(d['criado_por']),
       solicitante: txt(d['solicitante']),
+      // Identificador da transação já trazido no pedido (fora do dinheiro, sem ele a aprovação o pede).
+      comprovante: d['identificador_transacao'] === null ? null : txt(d['identificador_transacao']),
     })),
     aplicacoes: apl.map((x) => ({
       id: n(x['id']),

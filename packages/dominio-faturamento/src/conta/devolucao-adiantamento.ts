@@ -4,6 +4,9 @@
 //   que já está pedido e não decidido.
 // - Decisão: a aprovação (por outra pessoa) efetiva a devolução; o cancelamento (pelo próprio ou por outro, com motivo)
 //   libera a reserva. Só a solicitada é decidida; a decidida fica como está (nada é apagado).
+// - Prova da saída: fora do dinheiro (que sai da gaveta com movimento de caixa), a devolução só é efetivada com o
+//   identificador da transação (Pix, transferência, estorno no cartão, número do cheque), trazido no pedido ou na
+//   aprovação; sem ele, a situação diria que o dinheiro saiu sem nenhum registro disso.
 
 export type SituacaoDevolucao = 'solicitada' | 'aprovada' | 'devolvida' | 'cancelada';
 export type DecisaoDevolucao = 'aprovar' | 'cancelar';
@@ -26,6 +29,10 @@ export function conferirDecisaoDevolucao(e: {
   readonly solicitante: number | null;
   readonly decisor: number;
   readonly decisao: DecisaoDevolucao;
+  /** Meio da devolução (dinheiro, pix, transferência, cartão, cheque); só conferido na aprovação. */
+  readonly meio?: string;
+  /** Identificador da transação: o do pedido ou o informado na aprovação. */
+  readonly comprovante?: string | null;
 }): RecusaDevolucao | null {
   if (e.situacao !== 'solicitada')
     return {
@@ -36,6 +43,12 @@ export function conferirDecisaoDevolucao(e: {
     return {
       codigo: 'aprovacao-pelo-solicitante',
       mensagem: 'A devolução é aprovada por outra pessoa, não por quem a pediu.',
+    };
+  if (e.decisao === 'aprovar' && e.meio !== undefined && e.meio !== 'dinheiro' && !e.comprovante?.trim())
+    return {
+      codigo: 'comprovante-obrigatorio',
+      mensagem:
+        'Informe o identificador da transação (Pix, transferência, estorno no cartão ou número do cheque) para efetivar a devolução.',
     };
   return null;
 }

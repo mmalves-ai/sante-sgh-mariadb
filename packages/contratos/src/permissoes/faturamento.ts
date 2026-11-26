@@ -173,6 +173,18 @@ export const PERMISSOES_FATURAMENTO_M30: readonly DeclaracaoPermissao[] = [
     categoria: 'administrativa',
     criticidade: 'normal',
   },
+  // Devolução do adiantamento ao paciente (07-FIN L92, C1-084): a aprovação por outra pessoa tem permissão própria,
+  // separada da aprovação do adiantamento a fornecedor ou médico (financeiro.adiantamento.aprovar), pelo perfil
+  // aprovador-devolucao-paciente (o dinheiro sai do caixa para o paciente).
+  {
+    codigo: 'faturamento.devolucaoAdiantamento.aprovar',
+    descricao:
+      'Aprovar a devolução do adiantamento ao paciente pedida por outra pessoa no caixa (fora do dinheiro, com o identificador da transação)',
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ['aprovador-devolucao-paciente', 'administrador-sistema'],
+    categoria: 'financeira',
+    criticidade: 'sensivel',
+  },
 ];
 
 /** Os códigos (para as rotas e os testes). */

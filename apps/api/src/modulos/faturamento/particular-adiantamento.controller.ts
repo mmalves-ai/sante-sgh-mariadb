@@ -6,8 +6,9 @@
 //   POST /api/faturamento/contas/:id/adiantamentos           faturamento.recibo.emitir (aplica o saldo na conta)
 //   POST /api/faturamento/aplicacoes-adiantamento/:id/estorno faturamento.recibo.emitir (com motivo)
 //   POST /api/faturamento/adiantamentos/:id/devolucoes       faturamento.recibo.emitir (pede a devolução do saldo)
-//   POST /api/faturamento/devolucoes-adiantamento/:id/aprovacao     financeiro.adiantamento.aprovar (outra pessoa
-//                                                             aprova e efetiva; quem pediu é recusado)
+//   POST /api/faturamento/devolucoes-adiantamento/:id/aprovacao     faturamento.devolucaoAdiantamento.aprovar (outra
+//                                                             pessoa aprova e efetiva; quem pediu é recusado; fora
+//                                                             do dinheiro, com o comprovante da transação)
 //   POST /api/faturamento/devolucoes-adiantamento/:id/cancelamento  faturamento.recibo.emitir (com motivo)
 //   GET  /api/faturamento/modelos-orcamento                  faturamento.orcamento.ler
 //   GET  /api/faturamento/modelos-orcamento/:id/previa       faturamento.orcamento.ler (montagem antes de gravar;
@@ -142,7 +143,7 @@ export class ParticularAdiantamentoController {
 
   @Post('faturamento/devolucoes-adiantamento/:id/aprovacao')
   @HttpCode(200)
-  @Permissao('financeiro.adiantamento.aprovar')
+  @Permissao('faturamento.devolucaoAdiantamento.aprovar')
   @AuditadoNoHandler(EXECUTOR)
   aprovarDevolucao(@Param('id') id: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     return this.g('adiantamento.aprovarDevolucao', req, { ...objeto(corpo), devolucaoId: inteiro(id, 'id') });

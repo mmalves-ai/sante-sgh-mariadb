@@ -1558,7 +1558,8 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     senhaAlteradaEm: new Date(),
     concessoes: {
       grupo: 'FINAPROVA',
-      // F7 (07-FIN linha 92): vê a conta corrente do paciente para aprovar a devolução do adiantamento pedida no caixa.
+      // F7 (07-FIN linha 92): vê a conta corrente do paciente para aprovar a devolução do adiantamento pedida no caixa
+      // (a aprovação vem do perfil aprovador-devolucao-paciente, abaixo).
       opcoesGrupo: [
         ...new Set([
           ...opcoesFinanceiro(
@@ -1573,6 +1574,8 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
         ]),
       ].sort((a, b) => a - b),
     },
+    // C1-084: aprova a devolução do adiantamento ao paciente pelo perfil próprio (não pela aprovação a fornecedor).
+    perfisConcedidos: ['aprovador-devolucao-paciente'],
   },
   'SINT.FIN.PAGA': {
     senha: SENHA_SINTETICA,

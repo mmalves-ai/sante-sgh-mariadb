@@ -73,6 +73,8 @@ export const mensagensParticular = {
     aprovar: 'Aprovar e devolver',
     aprovada: 'Devolução aprovada e registrada.',
     seuPedido: 'Seu pedido: outra pessoa aprova.',
+    comprovanteDevolucao: 'Identificador da transação (Pix, transferência, estorno no cartão ou cheque)',
+    comprovanteObrigatorio: 'Informe o identificador da transação para aprovar: ele prova que o valor saiu.',
     cancelarPedido: 'Cancelar pedido',
     motivoCancelamento: 'Motivo do cancelamento do pedido de devolução',
     pedidoCancelado: 'Pedido de devolução cancelado.',

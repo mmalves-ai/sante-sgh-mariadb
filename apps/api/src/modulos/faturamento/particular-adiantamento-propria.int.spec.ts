@@ -483,8 +483,8 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
         motivo: 'alta',
         confirmarContaAberta: confirmar,
       });
-    const aprovar = (devolucaoId: unknown, usuario = ids['aprovador']) =>
-      s.gravar('adiantamento.aprovarDevolucao', op(undefined, usuario), { devolucaoId });
+    const aprovar = (devolucaoId: unknown, usuario = ids['aprovador'], comprovante: string | null = null) =>
+      s.gravar('adiantamento.aprovarDevolucao', op(undefined, usuario), { devolucaoId, comprovante });
     // A conta ainda deve 300: devolver sem a confirmação é recusado.
     expect(await codigoDo(devolver(300, 'dinheiro', null, false))).toBe('conta-em-aberto');
     // Na gaveta: fundo 50 + dinheiro 400 = 450; 500 em dinheiro não sai.
@@ -558,8 +558,29 @@ describe.skipIf(SEM_BANCO)('adiantamento do paciente e modelo de orçamento (Mar
       [2, 100, 0],
     ]);
     const pix = await devolver(100, 'pix', 'chave-sintetica');
-    const pixOk = await aprovar(pix['id']);
+    // Fora do dinheiro, sem o identificador da transação a devolução não é efetivada: o pedido segue em aberto.
+    expect(await codigoDo(aprovar(pix['id']))).toBe('comprovante-obrigatorio');
+    const semProva = await uma(
+      'SELECT situacao, aprovado_por_usuario_id, devolvido_em, identificador_transacao FROM devolucao_adiantamento_paciente WHERE id = ?',
+      [pix['id']],
+    );
+    expect([
+      semProva!['situacao'],
+      semProva!['aprovado_por_usuario_id'],
+      semProva!['devolvido_em'],
+      semProva!['identificador_transacao'],
+    ]).toEqual(['solicitada', null, null, null]);
+    const pixOk = await aprovar(pix['id'], ids['aprovador'], 'PIX-SINT-F3710-0001');
     expect([pixOk['saldo'], pixOk['movimento']]).toEqual([0, null]);
+    const pixDev = await uma(
+      'SELECT situacao, identificador_transacao, devolvido_em FROM devolucao_adiantamento_paciente WHERE id = ?',
+      [pix['id']],
+    );
+    expect([
+      pixDev!['situacao'],
+      pixDev!['identificador_transacao'],
+      pixDev!['devolvido_em'] !== null,
+    ]).toEqual(['devolvida', 'PIX-SINT-F3710-0001', true]);
     const dev = await uma(
       `SELECT situacao, sequencia, movimento_caixa_id, devolvido_em, aprovado_por_usuario_id, aprovado_em
          FROM devolucao_adiantamento_paciente WHERE id = ?`,

@@ -37,6 +37,8 @@ const esquemaContaCorrente = z.object({
       solicitadoEm: z.string(),
       solicitanteId: z.number().nullable(),
       solicitante: z.string(),
+      /** Identificador da transação já trazido no pedido (fora do dinheiro, sem ele a aprovação o pede). */
+      comprovante: z.string().nullable().default(null),
     }),
   ),
   aplicacoes: z.array(
@@ -98,8 +100,9 @@ export const estornarAplicacao = (aplicacao: number, motivo: string, chave: stri
 export const devolverAdiantamento = (adiantamento: number, corpo: Record<string, unknown>, chave: string) =>
   enviar(`${F}/adiantamentos/${adiantamento}/devolucoes`, corpo, qualquer, chave);
 /** A aprovação do pedido de devolução por outra pessoa (quem pediu é recusado pelo servidor). */
-export const aprovarDevolucao = (devolucao: number, chave: string) =>
-  enviar(`${F}/devolucoes-adiantamento/${devolucao}/aprovacao`, {}, qualquer, chave);
+/** Aprova a devolução pedida por outra pessoa; fora do dinheiro, com o identificador da transação (Pix, TED etc.). */
+export const aprovarDevolucao = (devolucao: number, comprovante: string | null, chave: string) =>
+  enviar(`${F}/devolucoes-adiantamento/${devolucao}/aprovacao`, { comprovante }, qualquer, chave);
 export const cancelarDevolucao = (devolucao: number, motivo: string, chave: string) =>
   enviar(`${F}/devolucoes-adiantamento/${devolucao}/cancelamento`, { motivo }, qualquer, chave);
 

@@ -27,4 +27,22 @@ describe('devolução do adiantamento por duas pessoas', () => {
           'devolucao-decidida',
         );
   });
+
+  it('fora do dinheiro, a aprovação exige o identificador da transação (do pedido ou da aprovação)', () => {
+    const base = { situacao: 'solicitada' as const, solicitante: 7, decisor: 8, decisao: 'aprovar' as const };
+    for (const meio of ['pix', 'transferencia', 'cartao_credito', 'cheque']) {
+      expect(conferirDecisaoDevolucao({ ...base, meio, comprovante: null })?.codigo).toBe(
+        'comprovante-obrigatorio',
+      );
+      expect(conferirDecisaoDevolucao({ ...base, meio, comprovante: '   ' })?.codigo).toBe(
+        'comprovante-obrigatorio',
+      );
+      expect(conferirDecisaoDevolucao({ ...base, meio, comprovante: 'E2E-SINT-0001' })).toBeNull();
+    }
+    expect(conferirDecisaoDevolucao({ ...base, meio: 'dinheiro', comprovante: null })).toBeNull();
+    // O cancelamento não pede comprovante.
+    expect(
+      conferirDecisaoDevolucao({ ...base, decisao: 'cancelar', meio: 'pix', comprovante: null }),
+    ).toBeNull();
+  });
 });
