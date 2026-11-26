@@ -114,7 +114,7 @@ test.describe('Perfil epidemiológico pela CID-10: capítulo, grupo e subgrupo @
     await semViolacaoAxe(page, '/qualidade/vigilancia/perfil-cid (capítulo aberto)');
 
     // Só o diagnóstico principal: a consulta sai com o filtro.
-    await escolher(page.getByTestId('perfil-tipo'), 'Só o principal');
+    await escolher(page.getByTestId('perfil-tipo'), 'principal');
     await expect(page.getByTestId('perfil-total')).toHaveText('1');
     expect(consultas.at(-1)!.searchParams.get('principal')).toBe('true');
 
