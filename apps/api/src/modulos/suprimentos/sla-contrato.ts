@@ -11,10 +11,13 @@ import {
   type ApuracaoSla,
   apurarSla,
   conferirFaturaApuracaoSla,
+  conferirFechamentoSla,
+  conferirMedicaoForaDeApuracao,
   conferirMedicaoSla,
   conferirPeriodoApuracaoSla,
   conferirSlaContrato,
   type FaixaSlaEntrada,
+  type HistoricoSlaGravado,
   type MedicaoSla,
   type MedicaoSlaEntrada,
   type PenalidadeSla,
@@ -42,6 +45,8 @@ import { lerFeriadosDoPeriodo } from '../agenda/dias-sem-expediente-leitor.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 
 export const PORTA_SLA_CONTRATO = Symbol('PORTA_SLA_CONTRATO');
+const INSTANTE_MEDICAO = /^\d{4}-\d{2}-\d{2}T/;
+
 export const TABELAS_SLA_CONTRATO = ['sla_contrato', 'faixa_sla_contrato', 'ocorrencia_contrato'] as const;
 export const OPERACOES_SLA_CONTRATO = {
   gravar: 'suprimentos.contrato.gravar-sla',
@@ -292,6 +297,48 @@ async function apuracoesDe(l: Pick<Leitor, 'consultar'>, sla: number): Promise<A
   });
 }
 
+/** Os períodos apurados (sem teto) e os dias medidos do SLA depois de `fim`: o que impede fechar a vigência ali. */
+async function historicoDepoisDe(
+  l: Pick<Leitor, 'consultar'>,
+  sla: number,
+  fim: string,
+): Promise<HistoricoSlaGravado> {
+  const apuracoes = await l.consultar<Linha>(
+    `SELECT JSON_UNQUOTE(JSON_EXTRACT(dados, '$.inicio')) AS inicio, JSON_UNQUOTE(JSON_EXTRACT(dados, '$.fim')) AS fim
+       FROM ocorrencia_contrato WHERE sla_contrato_id = ? AND operacao = 'inclusao'
+        AND JSON_UNQUOTE(JSON_EXTRACT(dados, '$.evento')) = 'sla-apuracao'
+        AND JSON_UNQUOTE(JSON_EXTRACT(dados, '$.fim')) > ?`,
+    [sla, fim],
+  );
+  const medicoes = await l.consultar<Linha>(
+    `SELECT DATE_FORMAT(ocorrido_em, '%Y-%m-%d') AS dia
+       FROM ocorrencia_contrato WHERE sla_contrato_id = ? AND operacao = 'inclusao'
+        AND JSON_UNQUOTE(JSON_EXTRACT(dados, '$.evento')) = 'sla-medicao'
+        AND ocorrido_em >= DATE_ADD(?, INTERVAL 1 DAY)`,
+    [sla, fim],
+  );
+  return {
+    apuracoes: apuracoes.map((r) => ({ inicio: String(r['inicio']), fim: String(r['fim']) })),
+    medicoes: medicoes.map((r) => String(r['dia'])),
+  };
+}
+
+/** Os períodos apurados do SLA que contêm o dia (a medição nesse dia mudaria uma apuração já gravada). */
+async function apuracoesDoDia(
+  l: Pick<Leitor, 'consultar'>,
+  sla: number,
+  dia: string,
+): Promise<{ inicio: string; fim: string }[]> {
+  const rs = await l.consultar<Linha>(
+    `SELECT JSON_UNQUOTE(JSON_EXTRACT(dados, '$.inicio')) AS inicio, JSON_UNQUOTE(JSON_EXTRACT(dados, '$.fim')) AS fim
+       FROM ocorrencia_contrato WHERE sla_contrato_id = ? AND operacao = 'inclusao'
+        AND JSON_UNQUOTE(JSON_EXTRACT(dados, '$.evento')) = 'sla-apuracao'
+        AND JSON_UNQUOTE(JSON_EXTRACT(dados, '$.inicio')) <= ? AND JSON_UNQUOTE(JSON_EXTRACT(dados, '$.fim')) >= ?`,
+    [sla, dia, dia],
+  );
+  return rs.map((r) => ({ inicio: String(r['inicio']), fim: String(r['fim']) }));
+}
+
 /**
  * Os feriados do estabelecimento no período, pelo leitor comum do Calendário (cadastro único `dia_nao_util` e os
  * nacionais calculados; nacional, da UF, do município e do estabelecimento): o que o SLA em dias úteis pula. O meio
@@ -489,6 +536,11 @@ export class PortaSlaContratoPropria implements PortaSlaContrato {
         }));
         const plano = planejarSlaContrato(e, existentes);
         recusarTodas(plano.recusas);
+        // O SLA fechado na véspera do novo não pode ter apuração nem medição depois dela (a mesma regra do encerrar).
+        for (const id of plano.fechar)
+          recusarTodas(
+            conferirFechamentoSla(plano.fim, await historicoDepoisDe(tx, id, plano.fim), 'vigenciaInicio'),
+          );
         for (const id of plano.fechar) {
           const x = existentes.find((y) => y.id === id)!;
           await tx.alterar('sla_contrato', id, x.versao, { vigencia_fim: plano.fim });
@@ -548,16 +600,7 @@ export class PortaSlaContratoPropria implements PortaSlaContrato {
             'O encerramento fica entre o início e o fim atual da vigência do SLA.',
             { campos: ['fim'] },
           );
-        const apurada = await tx.uma<Linha>(
-          `SELECT id FROM ocorrencia_contrato WHERE sla_contrato_id = ? AND operacao = 'inclusao'
-              AND JSON_UNQUOTE(JSON_EXTRACT(dados, '$.evento')) = 'sla-apuracao'
-              AND JSON_UNQUOTE(JSON_EXTRACT(dados, '$.fim')) > ? LIMIT 1`,
-          [sla, fim],
-        );
-        if (apurada)
-          throw recusa('sla-apurado', 'Já há apuração depois dessa data: encerre a partir do fim dela.', {
-            campos: ['fim'],
-          });
+        recusarTodas(conferirFechamentoSla(fim, await historicoDepoisDe(tx, sla, fim)));
         await tx.alterar('sla_contrato', sla, versao, { vigencia_fim: fim });
         return { id: sla };
       },
@@ -572,12 +615,17 @@ export class PortaSlaContratoPropria implements PortaSlaContrato {
       { contrato, sla, ...m },
       chave,
       async (tx, est) => {
+        // Trava o SLA como a apuração e o encerramento: a medição não entra em paralelo com eles.
         await contratoDe(tx, est, contrato, false);
-        const s = await this.slaDoContrato(tx, contrato, sla, false);
+        const s = await this.slaDoContrato(tx, contrato, sla, true);
         const { agora } = await agoraDe(tx);
         recusarTodas(
           conferirMedicaoSla(s.tipoRegra, m, agora, { inicio: s.vigenciaInicio, fim: s.vigenciaFim }),
         );
+        if (INSTANTE_MEDICAO.test(m.inicio))
+          recusarTodas(
+            conferirMedicaoForaDeApuracao(m, await apuracoesDoDia(tx, sla, m.inicio.slice(0, 10))),
+          );
         // O tempo coberto do chamado ou da parada, na unidade do SLA (o histórico guarda também as horas).
         const feriados = await feriadosDe(tx, est, m.inicio.slice(0, 10), (m.fim ?? m.inicio).slice(0, 10));
         const a = apurarSla(

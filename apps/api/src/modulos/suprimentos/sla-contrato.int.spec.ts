@@ -307,6 +307,41 @@ describe.skipIf(SEM_DB)('SLA do contrato com fornecedor contra o MariaDB (client
       [slaNovo],
     );
     expect(Number(n?.['n'])).toBe(1);
+    // A medição dentro do período apurado é recusada sem gravar ocorrência (a apuração gravada não muda em silêncio).
+    const contar = async () =>
+      Number(
+        (
+          await ler('SELECT COUNT(*) AS n FROM ocorrencia_contrato WHERE sla_contrato_id = ?', [slaNovo])
+        )[0]?.['n'],
+      );
+    const ocorrenciasAntes = await contar();
+    await expect(
+      porta.medir(
+        ctxA,
+        contrato,
+        slaNovo,
+        {
+          inicio: '2026-11-18T09:00',
+          fim: '2026-11-18T15:00',
+          quantidade: null,
+          descricao: 'Chamado tardio',
+        },
+        `c1053-m4-${sufixo}`,
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'medicao-em-periodo-apurado' } });
+    expect(await contar()).toBe(ocorrenciasAntes);
+    // O SLA novo do mesmo modelo começando antes do fim da apuração fecharia o apurado antes dela: recusado, nada muda.
+    const [v0] = await ler('SELECT versao FROM sla_contrato WHERE id = ?', [slaNovo]);
+    await expect(
+      porta.gravar(ctxA, contrato, { ...SLA, vigenciaInicio: '2026-11-15' }, `c1053-sla4-${sufixo}`),
+    ).rejects.toMatchObject({ problema: { codigo: 'sla-apurado' } });
+    const [v1] = await ler(
+      'SELECT versao, vigencia_fim, (SELECT COUNT(*) FROM sla_contrato WHERE contrato_fornecedor_id = ?) AS n FROM sla_contrato WHERE id = ?',
+      [contrato, slaNovo],
+    );
+    expect(Number(v1!['versao'])).toBe(Number(v0!['versao']));
+    expect(v1!['vigencia_fim']).toBeNull();
+    expect(Number(v1!['n'])).toBe(2);
     // O encerramento antes do fim da apuração é recusado; depois dela, fecha a vigência (versão sobe, nada apagado).
     const painel = await porta.painel(ctxA, contrato);
     const s = painel.slas.find((x) => x.id === slaNovo)!;

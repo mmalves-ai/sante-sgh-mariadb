@@ -244,6 +244,65 @@ export function planejarSlaContrato(
   return { recusas, fechar, fim };
 }
 
+/** O que já ficou gravado contra um SLA e prende a vigência dele: os períodos apurados e os dias medidos. */
+export interface HistoricoSlaGravado {
+  readonly apuracoes: readonly { readonly inicio: string; readonly fim: string }[];
+  /** Dia (AAAA-MM-DD) de início de cada medição registrada. */
+  readonly medicoes: readonly string[];
+}
+
+/**
+ * O fechamento da vigência de um SLA em `fim` (pelo encerramento ou pelo SLA novo do mesmo modelo e serviço): nada
+ * apurado nem medido depois dessa data, senão a apuração e as medições ficariam fora da vigência do próprio SLA.
+ */
+export function conferirFechamentoSla(
+  fim: string,
+  h: HistoricoSlaGravado,
+  campo: 'fim' | 'vigenciaInicio' = 'fim',
+): RecusaSuprimentos[] {
+  const r: RecusaSuprimentos[] = [];
+  const apurada = h.apuracoes.filter((a) => a.fim > fim).map((a) => a.fim);
+  if (apurada.length > 0)
+    r.push(
+      recusa(
+        'sla-apurado',
+        `Já há apuração depois de ${fim} (até ${apurada.reduce((a, b) => (a > b ? a : b))}): o fim da vigência fica a partir do fim dela.`,
+        [campo],
+      ),
+    );
+  const medida = h.medicoes.filter((d) => d > fim);
+  if (medida.length > 0)
+    r.push(
+      recusa(
+        'sla-com-medicao',
+        `Há ${medida.length} medição(ões) registrada(s) depois de ${fim}: o fim da vigência fica a partir da última delas.`,
+        [campo],
+      ),
+    );
+  return r;
+}
+
+/**
+ * A medição nova não cai num período já apurado: a apuração gravada (desempenho, glosa e multa) não muda em silêncio.
+ * A correção de um período apurado é uma ocorrência de revisão registrada, nunca uma medição a mais.
+ */
+export function conferirMedicaoForaDeApuracao(
+  m: Pick<MedicaoSlaEntrada, 'inicio'>,
+  apuracoes: readonly { readonly inicio: string; readonly fim: string }[],
+): RecusaSuprimentos[] {
+  const dia = m.inicio.slice(0, 10);
+  const a = apuracoes.find((x) => x.inicio <= dia && dia <= x.fim);
+  return a
+    ? [
+        recusa(
+          'medicao-em-periodo-apurado',
+          `O período de ${a.inicio} a ${a.fim} já foi apurado neste SLA: a medição não entra depois da apuração.`,
+          ['inicio'],
+        ),
+      ]
+    : [];
+}
+
 // ── Cobertura (horário e dias) ──────────────────────────────────────────────────────────────────────────────────
 
 export interface CoberturaSla {

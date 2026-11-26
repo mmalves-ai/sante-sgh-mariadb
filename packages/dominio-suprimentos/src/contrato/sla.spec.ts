@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import {
   apurarSla,
   conferirFaturaApuracaoSla,
+  conferirFechamentoSla,
+  conferirMedicaoForaDeApuracao,
   conferirFaixasSla,
   conferirMedicaoSla,
   conferirPeriodoApuracaoSla,
@@ -132,6 +134,26 @@ describe('cadastro do SLA', () => {
       { id: 9, servico: null, tipoRegra: 'tempo_atendimento' as const, inicio: '2026-11-01', fim: null },
     ];
     expect(codigos(planejarSlaContrato(SLA, futuro).recusas)).toEqual(['sla-sobreposto']);
+  });
+
+  it('fechar a vigência (encerrar ou SLA novo) não deixa apuração nem medição depois do fim; medição não entra em período apurado', () => {
+    const h = { apuracoes: [{ inicio: '2026-11-01', fim: '2026-11-30' }], medicoes: ['2026-11-20'] };
+    expect(codigos(conferirFechamentoSla('2026-11-14', h))).toEqual(['sla-apurado', 'sla-com-medicao']);
+    expect(conferirFechamentoSla('2026-11-14', h, 'vigenciaInicio')[0]?.campos).toEqual(['vigenciaInicio']);
+    expect(codigos(conferirFechamentoSla('2026-11-14', { apuracoes: [], medicoes: ['2026-11-15'] }))).toEqual(
+      ['sla-com-medicao'],
+    );
+    expect(conferirFechamentoSla('2026-11-30', h)).toEqual([]);
+    expect(conferirFechamentoSla('2026-11-14', { apuracoes: [], medicoes: ['2026-11-14'] })).toEqual([]);
+    const ap = [{ inicio: '2026-11-01', fim: '2026-11-30' }];
+    expect(codigos(conferirMedicaoForaDeApuracao({ inicio: '2026-11-01T00:00' }, ap))).toEqual([
+      'medicao-em-periodo-apurado',
+    ]);
+    expect(codigos(conferirMedicaoForaDeApuracao({ inicio: '2026-11-30T23:59' }, ap))).toEqual([
+      'medicao-em-periodo-apurado',
+    ]);
+    expect(conferirMedicaoForaDeApuracao({ inicio: '2026-12-01T00:00' }, ap)).toEqual([]);
+    expect(conferirMedicaoForaDeApuracao({ inicio: '2026-10-31T23:59' }, ap)).toEqual([]);
   });
 });
 
