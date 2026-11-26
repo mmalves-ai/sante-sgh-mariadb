@@ -106,6 +106,14 @@ export const rotasCadastro: RouteRecordRaw[] = [
     meta: { permissao: 'cadastro.paciente.ler' },
   },
   {
+    // F3.1 (02-CAD linha 5): foto do paciente para a identificação positiva e a conferência na recepção.
+    path: `/cadastros/pacientes/:id${id}/identificacao`,
+    name: 'cadastro.paciente.identificacao',
+    component: () => import('./telas/FotoIdentificacaoTela.vue'),
+    props: true,
+    meta: { permissao: 'cadastro.paciente.ler' },
+  },
+  {
     path: `/cadastros/pacientes/:id${id}/historico`,
     name: 'cadastro.paciente.historico',
     component: () => import('./telas/HistoricoPacienteTela.vue'),

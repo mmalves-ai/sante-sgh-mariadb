@@ -66,6 +66,7 @@ import { mensagensVinculos } from '../modulos/cadastro/i18n-vinculos.js';
 import { mensagensLinhasCuidado } from '../modulos/cadastro/i18n-linhas-cuidado.js';
 import { mensagensAcessoRestrito } from '../modulos/cadastro/i18n-acesso-restrito.js';
 import { mensagensDemografia } from '../modulos/cadastro/i18n-demografia.js';
+import { mensagensFotoIdentificacao } from '../modulos/cadastro/i18n-foto-identificacao.js';
 import { mensagensComplementoProfissional } from '../modulos/cadastro/i18n-complemento-profissional.js';
 import { mensagensSesmt } from '../modulos/pessoas/sesmt/i18n.js';
 import { mensagensPonto } from '../modulos/pessoas/ponto/i18n.js';
@@ -2488,6 +2489,8 @@ export const mensagensWeb = {
   linhasCuidado: mensagensLinhasCuidado,
   acessoRestrito: mensagensAcessoRestrito,
   demografia: mensagensDemografia,
+  // F3.1 (02-CAD linha 5): foto do paciente para a identificação positiva.
+  fotoIdentificacao: mensagensFotoIdentificacao,
   ligacoes: mensagensLigacoes,
   calendario: mensagensCalendario,
   profissionalProvisorio: mensagensProfissionalProvisorio,

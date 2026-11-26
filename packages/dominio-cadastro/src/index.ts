@@ -28,3 +28,4 @@ export * from './linha-cuidado/linha-cuidado.js';
 export * from './profissional/provisorio.js';
 export * from './profissional/equipe.js';
 export * from './acesso-restrito/acesso-restrito.js';
+export * from './identificacao/foto-identificacao.js';

@@ -27,6 +27,8 @@ import { FICHA_COMPLEMENTAR, FichaComplementarPropria } from './ficha-complement
 import { DemografiaPacienteController } from './demografia-paciente.controller.js';
 import { DEMOGRAFIA_PACIENTE, DemografiaPacientePropria } from './demografia-paciente-propria.js';
 import { RepresentacaoPacienteController } from './representacao-paciente.controller.js';
+import { FotoIdentificacaoController } from './foto-identificacao.controller.js';
+import { FOTO_IDENTIFICACAO, FotoIdentificacaoPropria } from './foto-identificacao-propria.js';
 import { REPRESENTACAO_PACIENTE, RepresentacaoPacientePropria } from './representacao-paciente-propria.js';
 import { CadastroVinculosProprio } from './paciente-vinculos-proprio.js';
 import { PacienteVinculosController, VINCULOS_CADASTRO } from './paciente-vinculos.controller.js';
@@ -79,6 +81,8 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
   const ficha = ctx.nucleo && cliente ? new FichaComplementarPropria(ctx.nucleo, cliente) : null;
   // F3.1 (02-CAD linha 4): incapacidade do paciente e comprovante da representação, só no banco do cliente.
   const representacao = ctx.nucleo && cliente ? new RepresentacaoPacientePropria(ctx.nucleo, cliente) : null;
+  // F3.1 (02-CAD linha 5): foto do paciente para a identificação positiva e a conferência, só no banco do cliente.
+  const fotos = ctx.nucleo && cliente ? new FotoIdentificacaoPropria(ctx.nucleo, cliente) : null;
   // F3.1 (02-CAD linha 15): dados demográficos e vulnerabilidades do paciente, só no banco do cliente.
   const demografia = ctx.nucleo && cliente ? new DemografiaPacientePropria(ctx.nucleo, cliente) : null;
   // F3.1 (02-CAD linha 16): complemento do profissional (fiscal, conta, RQE e assinatura), só no banco do cliente.
@@ -110,6 +114,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       PacienteVinculosController,
       FichaComplementarController,
       RepresentacaoPacienteController,
+      FotoIdentificacaoController,
       DemografiaPacienteController,
       ProfissionalComplementoController,
       CadastroLigacoesController,
@@ -126,6 +131,7 @@ export async function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloCadastro =
       { provide: VINCULOS_CADASTRO, useValue: vinculos },
       { provide: FICHA_COMPLEMENTAR, useValue: ficha },
       { provide: REPRESENTACAO_PACIENTE, useValue: representacao },
+      { provide: FOTO_IDENTIFICACAO, useValue: fotos },
       { provide: DEMOGRAFIA_PACIENTE, useValue: demografia },
       { provide: COMPLEMENTO_PROFISSIONAL, useValue: complemento },
       { provide: LIGACOES_CADASTRO, useValue: ligacoes },

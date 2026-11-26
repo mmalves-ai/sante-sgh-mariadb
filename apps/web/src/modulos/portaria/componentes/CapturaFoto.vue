@@ -7,6 +7,8 @@ import { onBeforeUnmount, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const foto = defineModel<{ tipo: 'image/jpeg'; base64: string } | null>({ required: true });
+/** Título, ajuda e texto alternativo de quem reaproveita a captura (02-CAD linha 5: a foto do paciente na ficha). */
+const props = defineProps<{ titulo?: string; ajuda?: string; previa?: string }>();
 const { t } = useI18n();
 const video = ref<HTMLVideoElement | null>(null);
 const ligada = ref(false);
@@ -70,8 +72,8 @@ function arquivo(ev: Event): void {
 
 <template>
   <fieldset class="foto" data-testid="pt-foto">
-    <legend>{{ t('portaria.foto.titulo') }}</legend>
-    <p class="secundario">{{ t('portaria.foto.ajuda') }}</p>
+    <legend>{{ props.titulo ?? t('portaria.foto.titulo') }}</legend>
+    <p class="secundario">{{ props.ajuda ?? t('portaria.foto.ajuda') }}</p>
     <div class="barra">
       <SanteBotao
         v-if="!ligada"
@@ -115,7 +117,7 @@ function arquivo(ev: Event): void {
       v-if="foto"
       class="previa"
       :src="`data:${foto.tipo};base64,${foto.base64}`"
-      :alt="t('portaria.foto.previa')"
+      :alt="props.previa ?? t('portaria.foto.previa')"
       data-testid="pt-foto-previa"
     />
     <p v-if="erro" role="alert">{{ erro }}</p>
