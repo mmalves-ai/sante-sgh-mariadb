@@ -14,6 +14,7 @@ import {
   type BaseMetodologiaAns,
   calcularProvisoesTecnicas,
   conferirAcaoProvisao,
+  conferirContabilizacaoProvisao,
   type ContaPadraoAns,
   grauDaContaAns,
   type ItemInformado,
@@ -701,6 +702,34 @@ export class PortaProvisaoTecnicaPropria {
       async (tx, est) => {
         const p = await PortaProvisaoTecnicaPropria.travar(tx, est, id, e.versao);
         exigir(conferirAcaoProvisao(p.situacao, 'contabilizar'));
+        // A variação é sobre o saldo já lançado: a última competência contabilizada antes desta (qualquer método).
+        const ordem = await tx.uma(
+          `SELECT
+             (SELECT COUNT(*) FROM provisao_tecnica_competencia WHERE estabelecimento_id = ? AND competencia = ?
+                 AND id <> ? AND situacao = 'contabilizada' AND excluido_em IS NULL) AS mesma,
+             (SELECT COUNT(*) FROM provisao_tecnica_competencia WHERE estabelecimento_id = ? AND competencia > ?
+                 AND situacao = 'contabilizada' AND excluido_em IS NULL) AS posterior`,
+          [est, p.competencia, id, est, p.competencia],
+        );
+        exigir(
+          conferirContabilizacaoProvisao({
+            outroMetodoContabilizadoNaCompetencia: Number(ordem?.['mesma'] ?? 0) > 0,
+            competenciaPosteriorContabilizada: Number(ordem?.['posterior'] ?? 0) > 0,
+          }),
+        );
+        const lancadas = await tx.consultar(
+          `SELECT i.tipo_provisao, SUM(i.valor) AS v FROM provisao_tecnica_item i
+            WHERE i.excluido_em IS NULL AND i.provisao_tecnica_competencia_id = (
+                  SELECT q.id FROM provisao_tecnica_competencia q
+                   WHERE q.estabelecimento_id = ? AND q.competencia < ? AND q.situacao = 'contabilizada'
+                     AND q.excluido_em IS NULL ORDER BY q.competencia DESC LIMIT 1)
+            GROUP BY i.tipo_provisao`,
+          [est, p.competencia],
+          { teto: 20 },
+        );
+        const saldoLancado = new Map(
+          lancadas.map((r) => [textoObrigatorio(r['tipo_provisao']), centavos(r['v'])]),
+        );
         const ids = [e.contaDespesa, ...(e.contaReversao ? [e.contaReversao] : [])];
         const cs = await tx.consultar(
           `SELECT id, classificacao FROM conta_contabil WHERE id IN (${ids.map(() => '?').join(', ')}) AND tipo = 'analitica' AND ativo = TRUE AND excluido_em IS NULL`,
@@ -713,7 +742,7 @@ export class PortaProvisaoTecnicaPropria {
             campos: ['contaDespesa'],
           });
         const itens = await tx.consultar(
-          `SELECT i.tipo_provisao, i.valor, i.valor_anterior, c.classificacao FROM provisao_tecnica_item i
+          `SELECT i.tipo_provisao, i.valor, c.classificacao FROM provisao_tecnica_item i
            JOIN conta_contabil c ON c.id = i.conta_contabil_id
           WHERE i.provisao_tecnica_competencia_id = ? AND i.excluido_em IS NULL ORDER BY i.sequencia`,
           [id],
@@ -726,7 +755,7 @@ export class PortaProvisaoTecnicaPropria {
             tipo: textoObrigatorio(i['tipo_provisao']),
             contaClassificacao: textoObrigatorio(i['classificacao']),
             valorCentavos: centavos(i['valor']),
-            anteriorCentavos: i['valor_anterior'] === null ? null : centavos(i['valor_anterior']),
+            anteriorCentavos: saldoLancado.get(textoObrigatorio(i['tipo_provisao'])) ?? null,
           })),
           classe.get(e.contaDespesa) ?? '',
           e.contaReversao ? (classe.get(e.contaReversao) ?? null) : null,

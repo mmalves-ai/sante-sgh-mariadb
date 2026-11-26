@@ -412,6 +412,35 @@ export function conferirAcaoProvisao(
     : [prob('situacao-nao-permite', 'situacao', `A provisão ${situacao} não permite ${acao}.`)];
 }
 
+/**
+ * A contabilização lança a variação sobre o saldo já lançado: a base é a última competência contabilizada (de qualquer
+ * método), nunca uma só calculada. Por isso recusa a competência que já tem outro método contabilizado (lançaria a
+ * provisão duas vezes) e a que fica antes de uma competência já contabilizada (a variação desta já foi absorvida lá).
+ */
+export function conferirContabilizacaoProvisao(e: {
+  readonly outroMetodoContabilizadoNaCompetencia: boolean;
+  readonly competenciaPosteriorContabilizada: boolean;
+}): ProblemaProvisaoTecnica[] {
+  const p: ProblemaProvisaoTecnica[] = [];
+  if (e.outroMetodoContabilizadoNaCompetencia)
+    p.push(
+      prob(
+        'provisao-ja-contabilizada',
+        'competencia',
+        'A competência já tem provisão contabilizada por outro método.',
+      ),
+    );
+  if (e.competenciaPosteriorContabilizada)
+    p.push(
+      prob(
+        'contabilizacao-fora-de-ordem',
+        'competencia',
+        'Há competência posterior já contabilizada; contabilize as provisões em ordem.',
+      ),
+    );
+  return p;
+}
+
 export interface PartidaProvisao {
   readonly lado: 'D' | 'C';
   readonly conta: string;

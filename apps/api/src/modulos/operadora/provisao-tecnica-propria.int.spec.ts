@@ -319,15 +319,41 @@ describe.skipIf(!PODE)('contabilidade regulatória da operadora no banco (C3-026
     expect(b.semMapa.some((s) => s.contaContabil === conta['DESPESA'] && s.saldoCentavos === 2132100)).toBe(
       true,
     );
+    // Janeiro calculado depois de fevereiro contabilizado: a contabilização fora de ordem é recusada, sem lançamento.
+    const jan = await porta!.calcular(
+      c,
+      { ...recalc, competencia: '2031-01-01', versao: null },
+      trilha('calculo'),
+    );
+    const [antes] = await q(
+      "SELECT COUNT(*) AS n FROM lancamento_contabil WHERE historico = 'Provisões técnicas da operadora 01/2031'",
+    );
+    expect(
+      await codigoDe(
+        porta!.contabilizar(
+          c,
+          jan.id,
+          { versao: jan.versao, contaDespesa: conta['DESPESA']!, contaReversao: null },
+          trilha('contab'),
+        ),
+      ),
+    ).toBe('contabilizacao-fora-de-ordem');
+    const [depois] = await q(
+      "SELECT COUNT(*) AS n FROM lancamento_contabil WHERE historico = 'Provisões técnicas da operadora 01/2031'",
+    );
+    expect(Number(depois?.['n'])).toBe(Number(antes?.['n']));
+    await porta!.cancelar(c, jan.id, { versao: jan.versao, motivo: 'Teste sintético' }, trilha('cancelar'));
     // Cancelamento de março; a contabilizada não cancela.
     await porta!.cancelar(c, mar.id, { versao: 1, motivo: 'Teste sintético' }, trilha('cancelar'));
     expect(await codigoDe(porta!.cancelar(c, fev.id, { versao: 3, motivo: 'x' }, trilha('cancelar')))).toBe(
       'situacao-nao-permite',
     );
     const lidas = await porta!.provisoes(c);
-    expect(lidas.map((p) => [p.competencia, p.situacao, p.total, p.itens.length])).toEqual([
-      ['2031-03-01', 'cancelada', 0, 2],
-      ['2031-02-01', 'contabilizada', 21321, 2],
+    expect(lidas.map((p) => [p.competencia, p.situacao, p.itens.length])).toEqual([
+      ['2031-03-01', 'cancelada', 2],
+      ['2031-02-01', 'contabilizada', 2],
+      ['2031-01-01', 'cancelada', 2],
     ]);
+    expect(lidas.slice(0, 2).map((p) => p.total)).toEqual([0, 21321]);
   });
 });

@@ -4,6 +4,7 @@ import {
   baseDaCompetencia,
   calcularProvisoesTecnicas,
   conferirAcaoProvisao,
+  conferirContabilizacaoProvisao,
   type ContaPadraoAns,
   type EntradaProvisaoTecnica,
   type MapaContaAns,
@@ -194,6 +195,18 @@ describe('provisões técnicas', () => {
   it('ciclo e partidas da variação', () => {
     expect(conferirAcaoProvisao('calculada', 'contabilizar')).toEqual([]);
     expect(conferirAcaoProvisao('contabilizada', 'calcular')[0]?.codigo).toBe('situacao-nao-permite');
+    expect(
+      conferirContabilizacaoProvisao({
+        outroMetodoContabilizadoNaCompetencia: false,
+        competenciaPosteriorContabilizada: false,
+      }),
+    ).toEqual([]);
+    expect(
+      conferirContabilizacaoProvisao({
+        outroMetodoContabilizadoNaCompetencia: true,
+        competenciaPosteriorContabilizada: true,
+      }).map((x) => x.codigo),
+    ).toEqual(['provisao-ja-contabilizada', 'contabilizacao-fora-de-ordem']);
     const p = partidasDaProvisao(
       [
         { tipo: 'peona', contaClassificacao: '2.1.1', valorCentavos: 10_200_00, anteriorCentavos: 9_000_00 },
