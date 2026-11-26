@@ -358,11 +358,12 @@ export class PesquisaClinicaPropria extends PortaEstabelecimentoPropria {
 
   /** Anexos do prontuário do paciente (o TCLE assinado é anexado no prontuário e indicado na inclusão). */
   anexos(c: ContextoPortaPropria, paciente: number) {
-    return this.ler(c, 'anexos', async (l) => {
+    return this.ler(c, 'anexos', async (l, est) => {
       const r = (await l.consultar(
         `SELECT id, titulo, criado_em FROM anexo_prontuario
-          WHERE paciente_id = ? AND excluido_em IS NULL AND suspenso_em IS NULL ORDER BY id DESC LIMIT 50`,
-        [paciente],
+          WHERE paciente_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND suspenso_em IS NULL
+          ORDER BY id DESC LIMIT 50`,
+        [paciente, est.id],
       )) as Linha[];
       return r.map((x) => ({ id: num(x['id']), nome: txtOuNull(x['titulo']), em: instante(x['criado_em']) }));
     });
@@ -658,8 +659,9 @@ export class PesquisaClinicaPropria extends PortaEstabelecimentoPropria {
               { campo: 'decisao', mensagem: 'Só o estudo que recruta inclui participantes.' },
             ]);
           const anexo = await tx.uma(
-            'SELECT arquivo_id FROM anexo_prontuario WHERE id = ? AND paciente_id = ? AND excluido_em IS NULL AND suspenso_em IS NULL',
-            [e.anexo, t['paciente_id']],
+            `SELECT arquivo_id FROM anexo_prontuario
+              WHERE id = ? AND paciente_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND suspenso_em IS NULL`,
+            [e.anexo, t['paciente_id'], est.id],
           );
           if (!anexo?.['arquivo_id'])
             throw recusaRegra('Inclusão recusada', [

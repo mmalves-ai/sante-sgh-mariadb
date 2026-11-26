@@ -66,6 +66,7 @@ describe.skipIf(SEM_BANCO)('PesquisaClinicaPropria contra o MariaDB (contrato de
     pacB: number;
     anexoA: number;
     anexoB: number;
+    anexoAOutroEst: number;
   };
   const ctx = (hospital = P) => ({ cliente: CLIENTE, hospital, usuario: m.usuario, correlacao: P });
   const ler = (sql: string, p: unknown[] = []) =>
@@ -101,7 +102,7 @@ describe.skipIf(SEM_BANCO)('PesquisaClinicaPropria contra o MariaDB (contrato de
           [codigo, `Hospital sintético ${codigo}`, `Hospital sintético ${codigo} (fictício)`, agora],
         );
       const est = await novoEst(P);
-      await novoEst(P2);
+      const est2 = await novoEst(P2);
       const min = (t: string, v: Record<string, unknown>) => inserirMinimo(e, t, v, P);
       const termo = await min('termo_terminologia', {
         terminologia_id: terminologia,
@@ -148,11 +149,28 @@ describe.skipIf(SEM_BANCO)('PesquisaClinicaPropria contra o MariaDB (contrato de
           arquivo_id: arq,
           titulo: `TCLE ${n}`,
         });
-        return { pac, anexo };
+        return { pac, anexo, arq };
       };
       const a = await paciente('A', termo);
       const b = await paciente('B', null);
-      return { usuario, est, prof, pacA: a.pac, pacB: b.pac, anexoA: a.anexo, anexoB: b.anexo };
+      // o mesmo paciente A com um anexo no prontuário do outro estabelecimento: não serve de TCLE aqui
+      const anexoAOutroEst = await min('anexo_prontuario', {
+        estabelecimento_id: est2,
+        paciente_id: a.pac,
+        tipo_anexo_id: tipoAnexo,
+        arquivo_id: a.arq,
+        titulo: 'TCLE A OUTRO',
+      });
+      return {
+        usuario,
+        est,
+        prof,
+        pacA: a.pac,
+        pacB: b.pac,
+        anexoA: a.anexo,
+        anexoB: b.anexo,
+        anexoAOutroEst,
+      };
     });
   }, 60_000);
 
@@ -298,6 +316,15 @@ describe.skipIf(SEM_BANCO)('PesquisaClinicaPropria contra o MariaDB (contrato de
         anexo: m.anexoB,
       }),
     ).rejects.toMatchObject(r422);
+    await expect(
+      porta.avaliar(ctx(), triagemA, {
+        versao: 1,
+        decisao: 'incluido',
+        consentimentoEm: '2026-02-01T10:00',
+        anexo: m.anexoAOutroEst,
+      }),
+    ).rejects.toMatchObject(r422);
+    expect((await porta.anexos(ctx(), m.pacA)).map((x) => x.id)).toEqual([m.anexoA]);
     expect(
       (
         await ler('SELECT COUNT(*) AS n FROM participante_pesquisa WHERE pesquisa_clinica_id = ?', [estudo])
