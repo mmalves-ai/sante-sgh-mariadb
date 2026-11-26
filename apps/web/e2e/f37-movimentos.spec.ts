@@ -245,6 +245,9 @@ test.describe('equipe, kit e transferência da conta @F3.7', () => {
       contaDestinoId: DESTINO,
       itens: [802],
       motivo: 'Troca de convênio sintética',
+      // Sem cobertura a aceitar: a transferência segue a regra e não leva justificativa.
+      aceitarSemCobertura: false,
+      justificativaCobertura: null,
     });
     await expect(page.getByTestId('mov-historico')).toContainText('Saiu para a conta 7402');
     await expect(page.getByTestId('mov-item-2')).toContainText('transferido');

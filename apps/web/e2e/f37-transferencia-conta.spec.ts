@@ -62,7 +62,9 @@ const movimentos = {
     },
   ],
   funcoes: [],
+  graus: [],
   kits: [],
+  profissionais: [],
   destinos: [],
   transferencias: [],
 };

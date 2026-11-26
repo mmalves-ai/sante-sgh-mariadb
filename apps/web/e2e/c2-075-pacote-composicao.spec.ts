@@ -6,8 +6,9 @@
 // - Conta: "Reclassificar itens" vai à rota que reconhece o pacote de lançamento automático e reclassifica os itens; a
 //   diária além das incluídas já lançada pela apuração aparece no alerta.
 // As rotas exigem o banco próprio; o E2E roda com a fonte sintética, e as respostas destas rotas são simuladas com massa
-// SINTÉTICA. O efeito no banco (pacote automático, limite partido, item lançado depois) está no contrato de efeito
-// apps/api/src/modulos/faturamento/conta-ajustes-propria.int.spec.ts.
+// SINTÉTICA. Quem cadastra o pacote e reclassifica a conta é o faturista das contas (SINT.CONTAS: faturamento.pacote.* e
+// faturamento.item.lancar). O efeito no banco (pacote automático, limite partido, item lançado depois) está no contrato
+// de efeito apps/api/src/modulos/faturamento/conta-ajustes-propria.int.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -152,7 +153,7 @@ test.describe('pacote: composição, versões e reclassificação @C2-075', () =
     page,
   }) => {
     const enviados: Record<string, unknown>[] = [];
-    await entrar(page, 'SINT.TISS');
+    await entrar(page, 'SINT.CONTAS');
     await simular(page, enviados);
 
     await page.goto('/faturamento/pacotes');
