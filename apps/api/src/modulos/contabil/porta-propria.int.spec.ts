@@ -772,4 +772,69 @@ describe.skipIf(SEM_BANCO)('porta própria da contabilidade contra o MariaDB (cl
     expect((await porta.empresaSped(ctxA, estA))?.nome).toBe('Hospital fictício f2204a (teste)');
     expect(await porta.empresaSped(ctxB, estA)).toBeNull();
   });
+
+  it('signatário da escrituração: contador sem CRC recusa sem escrita; guarda com a pessoa pelo CPF, atualiza o mesmo e lê os vigentes', async () => {
+    const cpf = `9${String(Date.now()).slice(-10)}`;
+    const contador = {
+      nome: 'Contador Fictício (teste)',
+      cpf,
+      qualificacao: '900' as const,
+      crc: null,
+      email: null,
+      telefone: null,
+    };
+    const deles = (sql: string) => contar(sql, [cpf]);
+    const SQL_SIG = `SELECT COUNT(*) AS n FROM signatario_escrituracao s JOIN pessoa_fisica p ON p.id = s.pessoa_fisica_id WHERE p.cpf = ?`;
+    expect(
+      await codigo(gravar(ctxA, (g) => g.guardarSignatarioSped({ empresa: estA, signatario: contador }))),
+    ).toBe('contador-sem-crc');
+    expect(await deles('SELECT COUNT(*) AS n FROM pessoa_fisica WHERE cpf = ?')).toBe(0);
+    const comCrc = { ...contador, crc: 'SP-000001/O' };
+    // Sem a pessoa no cadastro pelo CPF, nada é guardado.
+    expect(await gravar(ctxA, (g) => g.guardarSignatarioSped({ empresa: estA, signatario: comCrc }))).toEqual(
+      {
+        id: null,
+        novo: false,
+      },
+    );
+    expect(await deles(SQL_SIG)).toBe(0);
+    await escrever('INSERT INTO pessoa_fisica (nome, cpf, criado_em) VALUES (?, ?, NOW(3))', [
+      contador.nome,
+      cpf,
+    ]);
+    const a = await gravar(ctxA, (g) => g.guardarSignatarioSped({ empresa: estA, signatario: comCrc }));
+    expect(a.novo).toBe(true);
+    expect(await deles(SQL_SIG)).toBe(1);
+    const b = await gravar(ctxA, (g) =>
+      g.guardarSignatarioSped({
+        empresa: estA,
+        signatario: { ...contador, crc: 'SP-000001/O', email: 'contador@exemplo.invalid' },
+      }),
+    );
+    expect(b).toEqual({ id: a.id, novo: false });
+    const linha = await uma<{
+      papel: string;
+      versao: number;
+      email: string;
+      estabelecimento_id: number;
+      vigencia_fim: unknown;
+    }>(
+      'SELECT papel, versao, email, estabelecimento_id, vigencia_fim FROM signatario_escrituracao WHERE id = ?',
+      [a.id ?? 0],
+    );
+    expect(linha).toMatchObject({
+      papel: 'contador',
+      versao: 2,
+      email: 'contador@exemplo.invalid',
+      vigencia_fim: null,
+    });
+    expect(Number(linha?.estabelecimento_id)).toBe(estA);
+    const vigentes = await porta.signatariosSped(ctxA, estA);
+    expect(vigentes.find((x) => x.cpf === cpf)).toMatchObject({ qualificacao: '900', crc: 'SP-000001/O' });
+    expect(await porta.signatariosSped(ctxB, estA)).toEqual([]);
+    expect(await porta.apuracoesLucroRealSped(ctxA, estA, 2099)).toEqual([]);
+    expect(await porta.empresaSped(ctxA, estA)).toHaveProperty('nire');
+    await escrever('DELETE FROM signatario_escrituracao WHERE id = ?', [a.id ?? 0]);
+    await escrever('DELETE FROM pessoa_fisica WHERE cpf = ?', [cpf]);
+  });
 });

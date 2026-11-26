@@ -4,6 +4,7 @@
 // Idempotency-Key (uma por intenção); as respostas são os tipos de @sgh/contratos (ROTAS_CONTABIL_F3), conferidos só na
 // forma.
 import {
+  type SignatariosSped,
   type ApoioDemonstracoes,
   type ApoioSped,
   type ArquivoSpedBaixado,
@@ -151,3 +152,7 @@ export function salvarArquivo(a: { nome: string; conteudo: Blob }): void {
   link.remove();
   URL.revokeObjectURL(u);
 }
+
+/** Os signatários vigentes no cadastro da empresa (para preencher a geração). */
+export const lerSignatariosSped = (empresa: number) =>
+  ler(`${url(R.spedSignatarios)}${qs({ empresa })}`, confiar<SignatariosSped>());

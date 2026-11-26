@@ -8,7 +8,11 @@ import {
   dataSped,
   planejarEnvioSped,
   type EmpresaSped,
+  type ApuracaoLucroRealEcf,
+  conferirApuracoesEcf,
   type EntradaSped,
+  linhasBlocoNEcf,
+  periodoApuracaoEcf,
   gerarEcd,
   gerarEcf,
   type LancamentoSped,
@@ -260,10 +264,10 @@ describe('ECF', () => {
     expect(r.avisos.at(-1)).toContain('Bloco U');
   });
 
-  it('lucro real ou presumido não é gerado; aviso sem natureza jurídica', () => {
+  it('presumido não é gerado; aviso sem natureza jurídica', () => {
     const r = gerarEcf({
       ...entrada({ empresa: { ...EMPRESA, naturezaJuridica: null } }),
-      formaTributacao: '1',
+      formaTributacao: '5',
       tipoEntidade: '00',
     });
     expect(r.impedimentos.map((i) => i.codigo)).toEqual(['forma-nao-gerada']);
@@ -316,5 +320,87 @@ describe('planejarEnvioSped', () => {
       substituidoId: 1,
       substituiPendente: false,
     });
+  });
+});
+
+describe('ECF do lucro real', () => {
+  const trimestre = (q: number, extra: Partial<ApuracaoLucroRealEcf> = {}): ApuracaoLucroRealEcf => {
+    const ini = `2027-${String(q * 3 - 2).padStart(2, '0')}-01`;
+    const fim = ['2027-03-31', '2027-06-30', '2027-09-30', '2027-12-31'][q - 1]!;
+    return {
+      inicio: ini,
+      fim,
+      forma: 'trimestral',
+      fechada: true,
+      lucroAntes: 100_000,
+      compensacaoPrejuizo: 30_000,
+      baseIrpj: 70_000,
+      baseCsll: 70_000,
+      irpj: 10_500,
+      adicional: 0,
+      deducoesIrpj: 500,
+      irpjRecolher: 10_000,
+      csll: 6_300,
+      deducoesCsll: 0,
+      csllRecolher: 6_300,
+      blocoM: [
+        '|M010|PB1|Prejuízo fiscal|01012020|||I|300,00|D|',
+        `|M300|93|Adição ${q}|A|1|10,00|Adição ${q}|`,
+      ],
+      ...extra,
+    };
+  };
+  const quatro = [1, 2, 3, 4].map((q) => trimestre(q));
+
+  it('períodos e conferência das apurações: cobertura, forma única e fechadas', () => {
+    expect(periodoApuracaoEcf({ inicio: '2027-07-01', forma: 'trimestral' })).toBe('T03');
+    expect(periodoApuracaoEcf({ inicio: '2027-01-01', forma: 'anual' })).toBe('A00');
+    expect(periodoApuracaoEcf({ inicio: '2027-11-01', forma: 'estimativa_mensal' })).toBe('A11');
+    expect(conferirApuracoesEcf(2027, quatro)).toEqual([]);
+    expect(conferirApuracoesEcf(2027, []).map((i) => i.codigo)).toEqual(['lucro-real-sem-apuracao']);
+    expect(conferirApuracoesEcf(2027, quatro.slice(0, 3)).map((i) => i.codigo)).toEqual([
+      'apuracao-incompleta',
+    ]);
+    const aberta = [...quatro.slice(0, 3), trimestre(4, { fechada: false })];
+    expect(conferirApuracoesEcf(2027, aberta).map((i) => [i.codigo, i.quantidade])).toEqual([
+      ['apuracao-nao-fechada', 1],
+    ]);
+    const anual = { ...trimestre(1), forma: 'anual' as const, fim: '2027-12-31' };
+    expect(conferirApuracoesEcf(2027, [anual])).toEqual([]);
+    expect(conferirApuracoesEcf(2027, [anual, trimestre(1)]).map((i) => i.codigo)).toEqual([
+      'apuracao-incompleta',
+    ]);
+  });
+
+  it('bloco N com as parcelas do IRPJ e da CSLL (N630 e N670; estimativa em N620 e N660)', () => {
+    const n = linhasBlocoNEcf(trimestre(1));
+    expect(n.find((x) => x[0] === 'N500' && x[1] === '1')?.[3]).toBe(100_000);
+    expect(n.filter((x) => x[0] === 'N630').map((x) => x[3])).toEqual([70_000, 10_500, 0, 500, 10_000]);
+    expect(n.filter((x) => x[0] === 'N670').map((x) => x[3])).toEqual([70_000, 6_300, 0, 6_300]);
+    const est = linhasBlocoNEcf(trimestre(1, { forma: 'estimativa_mensal' })).map((x) => x[0]);
+    expect(est).toContain('N620');
+    expect(est).toContain('N660');
+  });
+
+  it('forma 1: 0010 trimestral, blocos L, M e N por trimestre, sem bloco U; impedida sem as apurações', () => {
+    const r = gerarEcf({ ...entrada(), formaTributacao: '1', tipoEntidade: '00', lucroReal: quatro });
+    expect(r.impedimentos).toEqual([]);
+    const t = r.conteudo;
+    expect(reg(t, '0010')[0]).toBe('|0010||N|1|T|01|RRRR|||||T||');
+    expect(reg(t, 'L030')).toHaveLength(4);
+    expect(reg(t, 'M030').map((x) => x.split('|')[4])).toEqual(['T01', 'T02', 'T03', 'T04']);
+    expect(reg(t, 'M010')).toHaveLength(1);
+    expect(reg(t, 'M300')).toHaveLength(4);
+    expect(reg(t, 'N030')).toHaveLength(4);
+    expect(reg(t, 'N630')).toContain('|N630|6|IRPJ a pagar|100,00|');
+    expect(reg(t, 'U100')).toEqual([]);
+    expect(reg(t, 'L100').length).toBeGreaterThan(0);
+    // O resultado do 1º trimestre (receita 500,00 em fevereiro e despesa 20,00 em março) fica no L300 dele.
+    expect(reg(t, 'L300').some((x) => x.startsWith('|L300|R.4.1.01|'))).toBe(true);
+    const n9900 = reg(t, '9900').find((x) => x.startsWith('|9900|M300|'));
+    expect(n9900).toBe('|9900|M300|4|');
+    const sem = gerarEcf({ ...entrada(), formaTributacao: '1', tipoEntidade: '00' });
+    expect(sem.impedimentos.map((i) => i.codigo)).toEqual(['lucro-real-sem-apuracao']);
+    expect(sem.conteudo).toBe('');
   });
 });

@@ -407,12 +407,14 @@ describe('contabilidade, etapa 3 (demonstrações, apuração e SPED)', () => {
     expect(porta.f3.gravar({ ...novo, substituta: true })).toMatchObject({ numero: 2, substituidos: 1 });
   });
 
-  it('ECF: lucro real recusado com o motivo; a da isenta gerada; sem signatário contador, 400', async () => {
+  it('ECF: presumido recusado com o motivo; lucro real sem as apurações do LALUR recusado; a da isenta gerada; sem signatário contador, 400', async () => {
     const c = await entrar('SINT.CONTADOR');
     const g = { empresa: 1, tipo: 'ecf', exercicio: 2025, signatarios: SIGNATARIOS, tipoEntidadeEcf: '05' };
-    const real = await post(c, `${C}/sped/gerar`, { ...g, formaTributacao: '1' });
+    const real = await post(c, `${C}/sped/gerar`, { ...g, formaTributacao: '5' });
     expect(real.statusCode).toBe(409);
     expect(real.json().codigo).toBe('forma-nao-gerada');
+    const lucroReal = await post(c, `${C}/sped/gerar`, { ...g, formaTributacao: '1' });
+    expect(lucroReal.json().codigo).toBe('lucro-real-sem-apuracao');
     const isenta = await post(c, `${C}/sped/gerar`, { ...g, formaTributacao: '9' });
     expect(isenta.statusCode, isenta.body).toBe(200);
     expect(isenta.json().numero).toBe(1);

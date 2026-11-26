@@ -33,6 +33,7 @@ import {
   type ApoioSped,
   type ArquivoSpedBaixado,
   type ArquivosSped,
+  type SignatariosSped,
   type Balancete,
   type Balanco,
   CHAVE_CONTABIL,
@@ -476,6 +477,17 @@ export class DemonstracoesContabilController {
     return { empresa, itens: await this.servico.arquivos(s.porta, empresa) };
   }
 
+  @Get(R.spedSignatarios.caminho)
+  @Permissao(R.spedSignatarios.permissao)
+  async spedSignatarios(
+    @Query() q: Record<string, string | undefined>,
+    @Req() req: RequisicaoAutorizada,
+  ): Promise<SignatariosSped> {
+    const { empresa } = filtro(esquemaEmpresa, q);
+    const s = await this.exigirSped(req);
+    return this.servico.signatarios(s.porta, empresa);
+  }
+
   @Get(R.spedPrevia.caminho)
   @Permissao(R.spedPrevia.permissao)
   async spedPrevia(
@@ -507,8 +519,8 @@ export class DemonstracoesContabilController {
         id: String(x.id),
         diferenca: `tipo=${g.tipo};exercicio=${g.exercicio};numero=${x.numero};linhas=${p.gerado.linhas};hash=${p.hash}`,
       }),
-      (w) =>
-        w.gravarArquivoSped({
+      async (w) => {
+        const arquivo = await w.gravarArquivoSped({
           empresa: g.empresa,
           tipo: g.tipo,
           exercicio: g.exercicio,
@@ -521,7 +533,15 @@ export class DemonstracoesContabilController {
           hash: p.hash,
           parametros: p.parametros,
           usuario: s.login,
-        }),
+        });
+        // Os signatários vão ao cadastro da empresa na mesma transação (a próxima geração já os traz).
+        let semCadastro = 0;
+        if (g.guardarSignatarios)
+          for (const signatario of g.signatarios)
+            if ((await w.guardarSignatarioSped({ empresa: g.empresa, signatario })).id === null)
+              semCadastro++;
+        return { ...arquivo, semCadastro };
+      },
     );
     return {
       ok: true,
@@ -529,7 +549,7 @@ export class DemonstracoesContabilController {
       numero: r.numero,
       hash: p.hash,
       linhas: p.gerado.linhas,
-      mensagem: `${TIPOS_ARQUIVO_SPED[g.tipo]} de ${g.exercicio} gerada (arquivo ${r.numero}, ${p.gerado.linhas} linhas)${r.substituidos > 0 ? '; a anterior não transmitida ficou substituída' : ''}. Valide e transmita no programa oficial e registre o recibo aqui.`,
+      mensagem: `${TIPOS_ARQUIVO_SPED[g.tipo]} de ${g.exercicio} gerada (arquivo ${r.numero}, ${p.gerado.linhas} linhas)${r.substituidos > 0 ? '; a anterior não transmitida ficou substituída' : ''}${r.semCadastro > 0 ? `; ${r.semCadastro} signatário(s) sem cadastro de pessoa pelo CPF não ficaram guardados` : ''}. Valide e transmita no programa oficial e registre o recibo aqui.`,
     };
   }
 

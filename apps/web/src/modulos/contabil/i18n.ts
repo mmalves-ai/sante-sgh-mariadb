@@ -395,6 +395,9 @@ export const mensagensContabil = {
     email: 'E-mail',
     telefone: 'Telefone (com DDD)',
     incluirSignatario: 'Incluir signatário',
+    doCadastro: 'Signatários trazidos do cadastro da empresa ({n}). Confira antes de gerar.',
+    guardarSignatarios:
+      'Os signatários ficam guardados no cadastro da empresa (a pessoa precisa estar no cadastro de pessoas pelo CPF).',
     removerSignatario: 'Remover',
     doSignatario: 'Signatário {n}: {problema}',
     problemas: {

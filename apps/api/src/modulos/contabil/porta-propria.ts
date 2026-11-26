@@ -30,7 +30,14 @@
 // (armazem-indisponivel): nunca um arquivo gerado sem guarda. Ainda fora do modelo: a observação do encerramento (só na
 // trilha) e o NIRE do estabelecimento.
 import { createHash, randomUUID } from 'node:crypto';
-import { planejarEnvioSped } from '@sgh/dominio-contabil';
+import {
+  type ApuracaoLucroRealEcf,
+  conferirSignatarioCadastro,
+  papelDoSignatario,
+  planejarEnvioSped,
+} from '@sgh/dominio-contabil';
+import type { SignatarioSped } from '@sgh/contratos';
+import { apuracoesParaEcf } from './lalur-propria.js';
 import {
   bool,
   CENTAVOS,
@@ -141,6 +148,7 @@ const TABELAS_GRAVACAO = [
   'periodo_contabil',
   'conciliacao_conta_contabil',
   'arquivo_sped_contabil',
+  'signatario_escrituracao',
   'arquivo',
   'versao_regra_contabil',
   'evento_contabil',
@@ -976,8 +984,12 @@ export class PortaContabilPropria implements PortaContabil {
     return this.lerEmpresa(c, empresa, null as EmpresaSped | null, async (l, est) => {
       const r = await l.uma(
         `SELECT e.id, e.razao_social, e.cnpj, e.inscricao_estadual, e.inscricao_municipal, e.logradouro, e.numero,
-                e.complemento, e.bairro_nome, e.cep, e.telefone, e.email, m.codigo_ibge, m.nome AS municipio, uf.sigla AS uf
+                e.complemento, e.bairro_nome, e.cep, e.telefone, e.email, m.codigo_ibge, m.nome AS municipio, uf.sigla AS uf,
+                mt.nire, mt.data_registro_nire, mt.cnae_principal, COALESCE(nj.codigo_concla, njm.codigo_concla) AS natureza
            FROM estabelecimento e
+           LEFT JOIN mantenedora mt ON mt.id = e.mantenedora_id AND mt.excluido_em IS NULL
+           LEFT JOIN natureza_juridica nj ON nj.id = e.natureza_juridica_id
+           LEFT JOIN natureza_juridica njm ON njm.id = mt.natureza_juridica_id
            LEFT JOIN municipio_ibge m ON m.id = e.municipio_ibge_id
            LEFT JOIN unidade_federativa uf ON uf.id = m.unidade_federativa_id
           WHERE e.id = ? AND e.excluido_em IS NULL`,
@@ -993,8 +1005,10 @@ export class PortaContabilPropria implements PortaContabil {
         codigoMunicipio: textoOuNulo(r['codigo_ibge']),
         municipio: textoOuNulo(r['municipio']),
         inscricaoMunicipal: textoOuNulo(r['inscricao_municipal']),
-        nire: null,
-        dataNire: null,
+        // O registro na junta comercial (NIRE) é da mantenedora (a pessoa jurídica do estabelecimento).
+        nire: textoOuNulo(r['nire']),
+        dataNire:
+          r['data_registro_nire'] instanceof Date ? r['data_registro_nire'].toISOString().slice(0, 10) : null,
         endereco: textoOuNulo(r['logradouro']),
         numero: textoOuNulo(r['numero']),
         complemento: textoOuNulo(r['complemento']),
@@ -1002,9 +1016,39 @@ export class PortaContabilPropria implements PortaContabil {
         cep: textoOuNulo(r['cep']),
         telefone: textoOuNulo(r['telefone']),
         email: textoOuNulo(r['email']),
-        cnae: null,
+        cnae: textoOuNulo(r['cnae_principal']),
+        naturezaJuridica: textoOuNulo(r['natureza'])?.replace(/\D/g, '') || null,
       };
     });
+  }
+
+  signatariosSped(c: ContextoContabil, empresa: number): Promise<SignatarioSped[]> {
+    return this.lerEmpresa(c, empresa, [] as SignatarioSped[], async (l, est) =>
+      (
+        await l.consultar(
+          `SELECT p.nome, p.cpf, s.codigo_qualificacao, s.numero_crc, s.email, s.telefone
+             FROM signatario_escrituracao s JOIN pessoa_fisica p ON p.id = s.pessoa_fisica_id
+            WHERE s.estabelecimento_id = ? AND s.excluido_em IS NULL AND s.vigencia_inicio <= CURRENT_DATE
+              AND (s.vigencia_fim IS NULL OR s.vigencia_fim >= CURRENT_DATE) AND p.cpf IS NOT NULL
+            ORDER BY s.codigo_qualificacao = '900' DESC, s.id`,
+          [est],
+          { teto: 10 },
+        )
+      ).map((r) => ({
+        nome: texto(r['nome']),
+        cpf: texto(r['cpf']),
+        qualificacao: texto(r['codigo_qualificacao']) as SignatarioSped['qualificacao'],
+        crc: textoOuNulo(r['numero_crc']),
+        email: textoOuNulo(r['email']),
+        telefone: textoOuNulo(r['telefone']),
+      })),
+    );
+  }
+
+  apuracoesLucroRealSped(c: ContextoContabil, empresa: number, exercicio: number) {
+    return this.lerEmpresa(c, empresa, [] as ApuracaoLucroRealEcf[], (l, est) =>
+      apuracoesParaEcf(l, est, exercicio),
+    );
   }
 
   arquivosSped(c: ContextoContabil, empresa: number, teto: number) {
@@ -1489,6 +1533,46 @@ function gravadorSobre(
       });
       await tx.executar('UPDATE arquivo_sped_contabil SET arquivo_id = ? WHERE id = ?', [arquivo, id]);
       return { id, numero, substituidos: plano.substituiPendente ? 1 : 0 };
+    },
+    async guardarSignatarioSped(x) {
+      exigirEmpresa(x.empresa);
+      exigirUsuario();
+      const s = x.signatario;
+      const falha = conferirSignatarioCadastro(s);
+      if (falha) throw recusa(falha.codigo, falha.mensagem);
+      // A pessoa pelo CPF no cadastro de pessoas (a contabilidade não cria pessoa): sem cadastro, não guarda.
+      const p = await tx.uma(
+        'SELECT id FROM pessoa_fisica WHERE cpf = ? AND excluido_em IS NULL ORDER BY id LIMIT 1',
+        [s.cpf],
+      );
+      if (!p) return { id: null, novo: false };
+      const pessoa = num(p['id']);
+      const valores = {
+        papel: papelDoSignatario(s.qualificacao),
+        numero_crc: s.crc,
+        email: s.email,
+        telefone: s.telefone,
+        responsavel_legal: papelDoSignatario(s.qualificacao) === 'responsavel_legal',
+      };
+      const [atual] = await tx.consultarParaAtualizar(
+        `SELECT id, versao FROM signatario_escrituracao WHERE estabelecimento_id = ? AND pessoa_fisica_id = ?
+            AND codigo_qualificacao = ? AND excluido_em IS NULL AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)
+          ORDER BY vigencia_inicio DESC`,
+        [est, pessoa, s.qualificacao],
+        { teto: 1 },
+      );
+      if (atual) {
+        await tx.alterar('signatario_escrituracao', num(atual['id']), num(atual['versao']), valores);
+        return { id: num(atual['id']), novo: false };
+      }
+      const id = await tx.incluir('signatario_escrituracao', {
+        estabelecimento_id: est,
+        pessoa_fisica_id: pessoa,
+        codigo_qualificacao: s.qualificacao,
+        vigencia_inicio: new Date().toISOString().slice(0, 10),
+        ...valores,
+      });
+      return { id, novo: true };
     },
     async situacaoArquivoSped(x) {
       exigirEmpresa(x.empresa);
