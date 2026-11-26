@@ -1312,7 +1312,11 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
     expect(codigoDe(await dispensar().catch((e: unknown) => e))).toBe('saldo-insuficiente');
     await reservar('saldo_estoque', 0);
     await reservar('saldo_lote', 29);
-    expect(codigoDe(await dispensar().catch((e: unknown) => e))).toBe('lote-sem-saldo');
+    // Nenhuma farmácia tem o lote livre: a escolha do local já recusa, e a tela não oferece o lote.
+    expect(codigoDe(await dispensar().catch((e: unknown) => e))).toBe('saldo-insuficiente');
+    expect((await porta.lotes(ctx, ids.amoxicilina, ids.farmacia)).map((x) => x.quantidade)).toEqual([1]);
+    await reservar('saldo_lote', 30);
+    expect(await porta.lotes(ctx, ids.amoxicilina, ids.farmacia)).toEqual([]);
     await reservar('saldo_lote', 0);
     expect(await saldo(ids.amoxicilina)).toBe(30);
     const r = await dispensar();
@@ -1360,6 +1364,49 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
           .catch((e: unknown) => e),
       ),
     ).toBe('nada-a-escriturar');
+    // Duas farmácias: o lote todo reservado na central e livre na satélite; a dispensação sai pela satélite.
+    const lugar = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-f24pf' }, async (e) => {
+      const agora = new Date();
+      const satelite = await garantir(
+        e,
+        'SELECT id FROM local_estoque WHERE estabelecimento_id = ? AND codigo = ?',
+        [ids.est, `${P}-FS`],
+        'INSERT INTO local_estoque (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, ?, ?, ?)',
+        [ids.est, `${P}-FS`, 'FARMACIA SATELITE SINTETICA F24PF', 'farmacia_satelite', agora],
+      );
+      const lote = await e.uma<{ id: number }>(
+        "SELECT id FROM lote_insumo WHERE insumo_id = ? AND numero_lote = 'AX-1' AND estabelecimento_id = ?",
+        [ids.amoxicilina, ids.est],
+      );
+      await e.inserir(
+        `INSERT INTO saldo_lote (estabelecimento_id, local_estoque_id, lote_insumo_id, quantidade, competencia, criado_em)
+         VALUES (?, ?, ?, 5, '2026-11-01', ?)`,
+        [ids.est, satelite, lote?.id, agora],
+      );
+      await e.inserir(
+        'INSERT INTO saldo_estoque (estabelecimento_id, local_estoque_id, insumo_id, quantidade, custo_medio, criado_em) VALUES (?, ?, ?, 5, 1, ?)',
+        [ids.est, satelite, ids.amoxicilina, agora],
+      );
+      await e.executar(
+        'UPDATE saldo_lote SET quantidade_reservada = quantidade WHERE local_estoque_id = ? AND lote_insumo_id = ?',
+        [ids.farmacia, lote?.id],
+      );
+      return { satelite, lote: Number(lote?.id) };
+    });
+    const saldoLote = async (local: number) =>
+      ler(
+        'SELECT quantidade, quantidade_reservada FROM saldo_lote WHERE local_estoque_id = ? AND lote_insumo_id = ?',
+        [local, lugar.lote],
+      );
+    const r2 = await dispensar({ receitaNumero: 'RX-F24PF-2' });
+    expect(
+      Number(
+        (await ler('SELECT local_estoque_id FROM dispensacao WHERE id = ?', [r2.id]))?.['local_estoque_id'],
+      ),
+    ).toBe(lugar.satelite);
+    expect(Number((await saldoLote(ids.farmacia))?.['quantidade'])).toBe(28);
+    expect(Number((await saldoLote(ids.farmacia))?.['quantidade_reservada'])).toBe(28);
+    expect(Number((await saldoLote(lugar.satelite))?.['quantidade'])).toBe(3);
   });
 
   it('avaliação pelo horário: a decisão vale para o item prescrito do horário e a fila a mostra validada', async () => {

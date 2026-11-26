@@ -362,10 +362,11 @@ export class PortaUnitarizacaoDosePropria implements PortaUnitarizacaoDose {
       const origens = [...new Set(regras.filter((r) => r.ativa).map((r) => r.origem))];
       const lotes = origens.length
         ? await l.consultar<Linha>(
-            `SELECT li.id, li.insumo_id, sl.local_estoque_id, li.numero_lote, li.validade, sl.quantidade
+            `SELECT li.id, li.insumo_id, sl.local_estoque_id, li.numero_lote, li.validade,
+                    sl.quantidade - sl.quantidade_reservada AS quantidade
                FROM saldo_lote sl JOIN lote_insumo li ON li.id = sl.lote_insumo_id
               WHERE sl.estabelecimento_id = ? AND li.insumo_id IN (${origens.map(() => '?').join(', ')})
-                AND sl.quantidade > 0 AND sl.bloqueado = FALSE AND li.situacao = 'liberado' AND li.validade >= ?
+                AND sl.quantidade - sl.quantidade_reservada > 0 AND sl.bloqueado = FALSE AND li.situacao = 'liberado' AND li.validade >= ?
                 AND li.excluido_em IS NULL
               ORDER BY li.validade, li.id LIMIT 500`,
             [est, ...origens, hoje],
@@ -526,10 +527,15 @@ export class PortaUnitarizacaoDosePropria implements PortaUnitarizacaoDose {
               campos: ['capela'],
             });
         }
+        // O saldo que a ordem pode abrir é o LIVRE, no lote e no item do local: o reservado para a separação de uma
+        // requisição não sai (C1-118), a mesma regra das outras saídas de suprimentos.
         const [lote] = await tx.consultarParaAtualizar<Linha>(
           `SELECT li.id, li.numero_lote, DATE_FORMAT(li.validade, '%Y-%m-%d') AS validade, li.situacao, li.fabricante_id,
-                sl.quantidade, sl.bloqueado
+                LEAST(sl.quantidade - sl.quantidade_reservada,
+                      COALESCE(se.quantidade - se.quantidade_reservada, 0)) AS quantidade, sl.bloqueado
            FROM saldo_lote sl JOIN lote_insumo li ON li.id = sl.lote_insumo_id
+           LEFT JOIN saldo_estoque se ON se.local_estoque_id = sl.local_estoque_id AND se.insumo_id = li.insumo_id
+            AND se.estabelecimento_id = sl.estabelecimento_id AND se.excluido_em IS NULL
           WHERE sl.lote_insumo_id = ? AND sl.local_estoque_id = ? AND sl.estabelecimento_id = ? AND li.insumo_id = ?
             AND li.excluido_em IS NULL`,
           [e.lote, e.local, est, regra?.origem ?? 0],

@@ -1333,19 +1333,23 @@ export function gravadorDispensacao(
       throw recusa('lote-indisponivel', `O lote ${lote.numero} está vencido ou não liberado.`, {
         campos: ['lote'],
       });
-    // A farmácia que dispensa é a que tem o lote com saldo (a central primeiro).
+    // A farmácia que dispensa é a que tem o lote com saldo LIVRE (a central primeiro): a mesma regra do `movimentar`,
+    // no lote e no item do local; o reservado para a separação de uma requisição não sai (C1-118).
     const local = await tx.uma<Linha>(
       `SELECT sl.local_estoque_id FROM saldo_lote sl JOIN local_estoque le ON le.id = sl.local_estoque_id
-        WHERE sl.lote_insumo_id = ? AND sl.estabelecimento_id = ? AND le.estabelecimento_id = ? AND sl.quantidade >= ?
+         JOIN saldo_estoque se ON se.local_estoque_id = sl.local_estoque_id AND se.insumo_id = ?
+          AND se.estabelecimento_id = sl.estabelecimento_id AND se.excluido_em IS NULL
+        WHERE sl.lote_insumo_id = ? AND sl.estabelecimento_id = ? AND le.estabelecimento_id = ?
+          AND sl.quantidade - sl.quantidade_reservada >= ? AND se.quantidade - se.quantidade_reservada >= ?
           AND NOT sl.bloqueado AND sl.excluido_em IS NULL AND le.ativo AND le.excluido_em IS NULL
           AND le.tipo IN ('farmacia_central','farmacia_satelite')
         ORDER BY le.tipo = 'farmacia_central' DESC, le.id LIMIT 1`,
-      [lote.id, est, est, d.quantidade],
+      [d.item, lote.id, est, est, d.quantidade, d.quantidade],
     );
     if (!local)
       throw recusa(
         'saldo-insuficiente',
-        `Nenhuma farmácia tem saldo do lote ${lote.numero} para a quantidade.`,
+        `Nenhuma farmácia tem saldo livre do lote ${lote.numero} para a quantidade (o reservado para a separação não sai).`,
         {
           campos: ['quantidade'],
         },

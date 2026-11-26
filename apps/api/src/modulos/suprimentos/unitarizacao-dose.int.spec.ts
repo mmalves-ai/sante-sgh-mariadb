@@ -339,6 +339,44 @@ describe.skipIf(SEM_BANCO)('fracionamento e unitarização de dose na porta pró
     expect(await codigoDe(porta.executarOrdem(c, ordem({ quantidadeOrigem: 9, doses: 30 }), chave()))).toBe(
       'saldo-insuficiente',
     );
+    // A reserva da separação (C1-118): o lote ou o item do local reservado para uma requisição não abre ordem.
+    const reservar = (tabela: 'saldo_lote' | 'saldo_estoque', q: number) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 't-c2092-massa' }, (e) =>
+        tabela === 'saldo_lote'
+          ? e.executar(
+              'UPDATE saldo_lote SET quantidade_reservada = ? WHERE local_estoque_id = ? AND lote_insumo_id = ?',
+              [q, m.localA, m.lote],
+            )
+          : e.executar(
+              'UPDATE saldo_estoque SET quantidade_reservada = ? WHERE local_estoque_id = ? AND insumo_id = ?',
+              [q, m.localA, m.insumo],
+            ),
+      );
+    const fisico = await ler(
+      'SELECT quantidade FROM saldo_lote WHERE local_estoque_id = ? AND lote_insumo_id = ?',
+      [m.localA, m.lote],
+    );
+    const total = Number(fisico[0]?.['quantidade']);
+    await reservar('saldo_lote', total - 1);
+    expect(await codigoDe(porta.executarOrdem(c, ordem(), chave()))).toBe('saldo-insuficiente');
+    await reservar('saldo_lote', 0);
+    const doItem = await ler(
+      'SELECT quantidade FROM saldo_estoque WHERE local_estoque_id = ? AND insumo_id = ?',
+      [m.localA, m.insumo],
+    );
+    await reservar('saldo_estoque', Number(doItem[0]?.['quantidade']) - 1);
+    expect(await codigoDe(porta.executarOrdem(c, ordem(), chave()))).toBe('saldo-insuficiente');
+    await reservar('saldo_estoque', 0);
+    expect(
+      Number(
+        (
+          await ler('SELECT quantidade FROM saldo_lote WHERE local_estoque_id = ? AND lote_insumo_id = ?', [
+            m.localA,
+            m.lote,
+          ])
+        )[0]?.['quantidade'],
+      ),
+    ).toBe(total);
     expect(await codigoDe(porta.executarOrdem(c, ordem({ percentualEstabilidade: 60 }), chave()))).toBe(
       'estabilidade-sem-justificativa',
     );

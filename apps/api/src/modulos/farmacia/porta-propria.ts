@@ -403,17 +403,20 @@ export class PortaFarmaciaPropria implements PortaFarmacia {
     );
   }
 
-  /** Os lotes com saldo do insumo no local (validade primeiro), sem os bloqueados nem os vencidos. */
+  /**
+   * Os lotes com saldo LIVRE do insumo no local (validade primeiro), sem os bloqueados nem os vencidos: `quantidade` é o
+   * que a dispensação pode usar; o reservado para a separação de uma requisição não aparece (C1-118).
+   */
   lotes(c: ContextoFarmacia, item: number, local: number) {
     return this.ler(c, async (l, est) =>
       (
         await l.consultar(
-          `SELECT li.id, li.numero_lote, li.validade, sl.quantidade
+          `SELECT li.id, li.numero_lote, li.validade, sl.quantidade - sl.quantidade_reservada AS quantidade
              FROM saldo_lote sl
              JOIN lote_insumo li ON li.id = sl.lote_insumo_id AND li.excluido_em IS NULL
              JOIN local_estoque le ON le.id = sl.local_estoque_id
             WHERE sl.estabelecimento_id = ? AND le.estabelecimento_id = ? AND sl.local_estoque_id = ?
-              AND li.insumo_id = ? AND sl.excluido_em IS NULL AND sl.quantidade > 0 AND NOT sl.bloqueado
+              AND li.insumo_id = ? AND sl.excluido_em IS NULL AND sl.quantidade - sl.quantidade_reservada > 0 AND NOT sl.bloqueado
               AND li.situacao = 'liberado' AND li.validade >= CURRENT_DATE
             ORDER BY li.validade, li.numero_lote LIMIT 100`,
           [est, est, local, item],
