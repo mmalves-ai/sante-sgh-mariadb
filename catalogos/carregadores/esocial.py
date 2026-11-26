@@ -11,6 +11,7 @@ o carregador lê as tabelas de id 03 e 10 do arquivo e recusa o arquivo sem elas
 Idempotente. natureza_rubrica pela chave única (código, início da vigência); codigo_esocial pelo código dentro da
 tabela 10 (uma linha por código, atualizada a cada versão; a tabela_esocial do '10' é uma só, para o de-para
 codigo_esocial:10 do conector achar o pai). Nada é apagado: código que sai da tabela 10 ganha fim de vigência.
+O item próprio do hospital (item_hospital, trazido pelo conector) nunca é alterado nem encerrado aqui.
 """
 import json
 import re
@@ -157,17 +158,17 @@ INSERT INTO tmp_lotacao_tributaria VALUES
 {lot};
 UPDATE codigo_esocial c JOIN tmp_lotacao_tributaria t ON t.codigo = c.codigo_esocial
   SET c.descricao = t.descricao, c.atributos = t.atributos, c.vigencia_fim = NULL, c.versao_fonte = {_q(v)}
-  WHERE c.tabela_esocial_id = @t;
+  WHERE c.tabela_esocial_id = @t AND NOT c.item_hospital;
 INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, atributos, versao_fonte, criado_em, versao)
   SELECT @t, t.codigo, t.descricao, t.atributos, {_q(v)}, UTC_TIMESTAMP(3), 1 FROM tmp_lotacao_tributaria t
   WHERE NOT EXISTS (SELECT 1 FROM codigo_esocial c WHERE c.tabela_esocial_id = @t AND c.codigo_esocial = t.codigo);
 UPDATE codigo_esocial SET vigencia_fim = COALESCE(vigencia_fim, UTC_DATE()), versao_fonte = {_q(v)}
-  WHERE tabela_esocial_id = @t AND codigo_esocial NOT IN ({cods}) AND vigencia_fim IS NULL
+  WHERE tabela_esocial_id = @t AND NOT item_hospital AND codigo_esocial NOT IN ({cods}) AND vigencia_fim IS NULL
     AND (vigencia_inicio IS NULL OR vigencia_inicio <= UTC_DATE());
 DROP TEMPORARY TABLE tmp_lotacao_tributaria;
 COMMIT;
 SELECT (SELECT COUNT(*) FROM natureza_rubrica WHERE versao_fonte = {_q(v)}),
-  (SELECT COUNT(*) FROM codigo_esocial WHERE tabela_esocial_id = @t AND vigencia_fim IS NULL);
+  (SELECT COUNT(*) FROM codigo_esocial WHERE tabela_esocial_id = @t AND vigencia_fim IS NULL AND codigo_esocial IN ({cods}));
 """
 
 

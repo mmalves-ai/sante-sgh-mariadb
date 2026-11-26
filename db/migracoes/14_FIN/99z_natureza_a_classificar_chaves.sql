@@ -1,5 +1,5 @@
 -- Recusas da carga (fase 2, K2, C9): natureza financeira nativa 'a classificar', para o título migrado sem rateio na
--- origem (MFCONPAG 413, MFCTAREC 194) entrar vivo, com pendência visível, em vez de ser recusado pelo NOT NULL. O
+-- origem (títulos a pagar e a receber migrados sem rateio) entrar vivo, com pendência visível, em vez de ser recusado pelo NOT NULL. O
 -- hospital reclassifica depois. 'a_classificar' é de despesa (título a pagar) e 'a_classificar_receita' de receita
 -- (título a receber), cada uma no seu subgrupo, sob o grupo 'a_classificar'. Fora do custo e do REINF.
 -- Semente idempotente e válida em qualquer ordem (ADR 0002): só inclui o que falta.

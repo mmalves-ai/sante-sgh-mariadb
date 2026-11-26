@@ -51,6 +51,13 @@ class CarregadorEsocial(unittest.TestCase):
         self.assertIn("NOT IN ('01', '04')", sql)
         self.assertIn('"preenchimento_numero_inscricao": "CNPJ"', sql)
 
+    def test_item_do_hospital_nao_e_alterado_nem_encerrado(self):
+        sql = self.mod.gerar_sql(self.mod.ler(self.html), "esocial-s-1.3")
+        updates = [u for u in sql.split(";") if u.lstrip().startswith("UPDATE codigo_esocial")]
+        self.assertEqual(len(updates), 2)
+        for u in updates:
+            self.assertRegex(u, r"NOT (c\.)?item_hospital")
+
     def test_recusa_arquivo_sem_a_tabela_ou_fora_da_forma(self):
         with self.assertRaises(RuntimeError):
             self.mod.ler(self.html.replace('id="10"', 'id="11"'))

@@ -1,6 +1,7 @@
 // Recusas da carga (fase 2, K2, C7): parâmetros que a importação usa para continuar a configuração do hospital
 // (ADR 0006). As listas têm as opções do próprio hospital em parametro_opcao (sem `opcoes` fixas aqui); os demais
-// guardam o valor trazido da origem, interpretado pelo tipo. A semente nativa no banco é
+// guardam o valor no tipo neutro do produto (booleano, minutos, data); a conversão do formato da origem é do
+// mapa do conector. A semente nativa no banco é
 // db/migracoes/02_ADM/99za_parametros_continuidade_chaves.sql (mesmas chaves e tipos).
 import type { DefinicaoParametro } from './definicoes.js';
 
@@ -8,10 +9,9 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'agenda.cadeira.agendamentoAutomaticoPlanejamento',
     modulo: 'agenda',
-    descricao:
-      'Agendamento automático pelo planejamento (S ou N da origem) - aguarda regra por item para booleano',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Agendamento automático pelo planejamento',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'agenda',
@@ -44,9 +44,9 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'agenda.cadeira.digitarEnfermeiroResponsavel',
     modulo: 'agenda',
-    descricao: 'Digitar o enfermeiro responsável (S ou N da origem) - aguarda regra por item para booleano',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Digitar o enfermeiro responsável',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'agenda',
@@ -55,9 +55,10 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'agenda.cadeira.duracaoCurta',
     modulo: 'agenda',
-    descricao: 'Duração da sessão curta (hora da origem) - aguarda regra por item para minutos',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Duração da sessão curta (minutos)',
+    tipo: 'inteiro',
+    padrao: '0',
+    minimo: 0,
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'agenda',
@@ -66,9 +67,10 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'agenda.cadeira.duracaoLonga',
     modulo: 'agenda',
-    descricao: 'Duração da sessão longa (hora da origem) - aguarda regra por item para minutos',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Duração da sessão longa (minutos)',
+    tipo: 'inteiro',
+    padrao: '0',
+    minimo: 0,
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'agenda',
@@ -77,9 +79,10 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'agenda.cadeira.duracaoMedia',
     modulo: 'agenda',
-    descricao: 'Duração da sessão média (hora da origem) - aguarda regra por item para minutos',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Duração da sessão média (minutos)',
+    tipo: 'inteiro',
+    padrao: '0',
+    minimo: 0,
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'agenda',
@@ -88,9 +91,9 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'agenda.cadeira.exibirEspecialidadeCbo',
     modulo: 'agenda',
-    descricao: 'Exibe a especialidade pelo CBO (S ou N da origem) - aguarda regra por item para booleano',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Exibe a especialidade pelo CBO',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'agenda',
@@ -147,10 +150,9 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'agenda.cadeira.preferenciaAgenda',
     modulo: 'agenda',
-    descricao:
-      'Preferência pela agenda de cadeiras (S ou N da origem) - aguarda regra por item para booleano',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Preferência pela agenda de cadeiras',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'agenda',
@@ -226,7 +228,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'hotelaria.higienizacao.materialLimpezaPadrao',
     modulo: 'hotelaria',
-    descricao: 'Hotelaria, higienização: material limpeza padrao (configuração do hospital migrado)',
+    descricao: 'Hotelaria, higienização: material de limpeza padrão (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -237,7 +239,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'hotelaria.higienizacao.situacaoLeitoAposAlta',
     modulo: 'hotelaria',
-    descricao: 'Hotelaria, higienização: situacao leito apos alta (configuração do hospital migrado)',
+    descricao: 'Hotelaria, higienização: situação do leito após a alta (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -259,7 +261,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'hotelaria.visita.corSaidaPendente',
     modulo: 'hotelaria',
-    descricao: 'Hotelaria, controle de visitas: cor saida pendente (configuração do hospital migrado)',
+    descricao: 'Hotelaria, controle de visitas: cor saída pendente (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -292,7 +294,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'hotelaria.visita.diretorioFotos',
     modulo: 'hotelaria',
-    descricao: 'Hotelaria, controle de visitas: diretorio fotos (configuração do hospital migrado)',
+    descricao: 'Hotelaria, controle de visitas: diretório fotos (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -304,8 +306,8 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
     chave: 'hotelaria.visita.exigeCelular',
     modulo: 'hotelaria',
     descricao: 'Hotelaria, controle de visitas: exige celular (configuração do hospital migrado)',
-    tipo: 'texto',
-    padrao: '',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'hotelaria',
@@ -314,9 +316,9 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'hotelaria.visita.exigeDataNascimento',
     modulo: 'hotelaria',
-    descricao: 'Hotelaria, controle de visitas: exige data nascimento (configuração do hospital migrado)',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Hotelaria, controle de visitas: exige data de nascimento (configuração do hospital migrado)',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'hotelaria',
@@ -326,8 +328,8 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
     chave: 'hotelaria.visita.exigeDocumento',
     modulo: 'hotelaria',
     descricao: 'Hotelaria, controle de visitas: exige documento (configuração do hospital migrado)',
-    tipo: 'texto',
-    padrao: '',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'hotelaria',
@@ -337,8 +339,8 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
     chave: 'hotelaria.visita.gravarFotoNoBanco',
     modulo: 'hotelaria',
     descricao: 'Hotelaria, controle de visitas: gravar foto no banco (configuração do hospital migrado)',
-    tipo: 'texto',
-    padrao: '',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'hotelaria',
@@ -349,8 +351,8 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
     modulo: 'hotelaria',
     descricao:
       'Hotelaria, controle de visitas: imprimir etiqueta sem visualizar (configuração do hospital migrado)',
-    tipo: 'texto',
-    padrao: '',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'hotelaria',
@@ -370,7 +372,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'hotelaria.visita.situacaoAcessoPadrao',
     modulo: 'hotelaria',
-    descricao: 'Hotelaria, controle de visitas: situacao acesso padrao (configuração do hospital migrado)',
+    descricao: 'Hotelaria, controle de visitas: situação acesso padrão (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -403,11 +405,9 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'oftalmologia.lancarAdicao',
     modulo: 'oftalmologia',
-    descricao: 'Lança a adição na prescrição ocular (1 sim, 0 não) - aguarda regra por item para booleano',
-    tipo: 'inteiro',
-    padrao: '0',
-    minimo: 0,
-    maximo: 1,
+    descricao: 'Lança a adição na prescrição ocular',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'pep',
@@ -423,6 +423,54 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'pep',
+    origem: 'continuidade do hospital migrado (ADR 0006; recusas da carga, fase 2, K2)',
+  },
+  {
+    chave: 'orcamento.anoCompetencia',
+    modulo: 'financeiro',
+    descricao: 'Orçamento: ano da competência em uso',
+    tipo: 'inteiro',
+    padrao: '0',
+    minimo: 0,
+    maximo: 9999,
+    niveis: ['estabelecimento', 'rede'],
+    critico: false,
+    dono: 'financeiro',
+    origem: 'continuidade do hospital migrado (ADR 0006; recusas da carga, fase 2, K2)',
+  },
+  {
+    chave: 'orcamento.digitaCentroCusto',
+    modulo: 'financeiro',
+    descricao: 'Orçamento: digita o centro de custo no lançamento',
+    tipo: 'booleano',
+    padrao: 'false',
+    niveis: ['estabelecimento', 'rede'],
+    critico: false,
+    dono: 'financeiro',
+    origem: 'continuidade do hospital migrado (ADR 0006; recusas da carga, fase 2, K2)',
+  },
+  {
+    chave: 'orcamento.mesCompetencia',
+    modulo: 'financeiro',
+    descricao: 'Orçamento: mês da competência em uso',
+    tipo: 'inteiro',
+    padrao: '0',
+    minimo: 0,
+    maximo: 12,
+    niveis: ['estabelecimento', 'rede'],
+    critico: false,
+    dono: 'financeiro',
+    origem: 'continuidade do hospital migrado (ADR 0006; recusas da carga, fase 2, K2)',
+  },
+  {
+    chave: 'orcamento.regime',
+    modulo: 'financeiro',
+    descricao: 'Orçamento: regime de apuração',
+    tipo: 'lista',
+    padrao: '',
+    niveis: ['estabelecimento', 'rede'],
+    critico: false,
+    dono: 'financeiro',
     origem: 'continuidade do hospital migrado (ADR 0006; recusas da carga, fase 2, K2)',
   },
   {
@@ -472,7 +520,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.assinatura.tempoExibicaoPendente',
     modulo: 'pep',
-    descricao: 'Prontuário (assinatura): tempo exibicao pendente',
+    descricao: 'Prontuário (assinatura): tempo exibição pendente',
     tipo: 'inteiro',
     padrao: '0',
     niveis: ['estabelecimento', 'rede'],
@@ -483,7 +531,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.assinatura.textoEmailDocumentoAssinado',
     modulo: 'pep',
-    descricao: 'Prontuário (assinatura): texto email documento assinado',
+    descricao: 'Prontuário (assinatura): texto e-mail documento assinado',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -494,7 +542,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.checagem.antecedenciaPermitida',
     modulo: 'pep',
-    descricao: 'Prontuário (checagem): antecedencia permitida',
+    descricao: 'Prontuário (checagem): antecedência permitida',
     tipo: 'inteiro',
     padrao: '0',
     minimo: 0,
@@ -506,9 +554,10 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.checagem.dataInicioPendencias',
     modulo: 'pep',
-    descricao: 'Prontuário (checagem): data inicio pendencias',
+    descricao: 'Prontuário (checagem): data início pendências',
     tipo: 'texto',
     padrao: '',
+    formato: { expressao: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$', mensagem: 'Data no formato AAAA-MM-DD' },
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'pep',
@@ -528,7 +577,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.checagem.exigeChecagemLaboratorio',
     modulo: 'pep',
-    descricao: 'Prontuário (checagem): exige checagem laboratorio',
+    descricao: 'Prontuário (checagem): exige checagem laboratório',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -561,7 +610,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.checagem.memorizaNaoAdministrado',
     modulo: 'pep',
-    descricao: 'Prontuário (checagem): memoriza nao administrado',
+    descricao: 'Prontuário (checagem): memoriza não administrado',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -616,7 +665,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.checagem.toleranciaHorario',
     modulo: 'pep',
-    descricao: 'Prontuário (checagem): tolerancia horario',
+    descricao: 'Prontuário (checagem): tolerância horário',
     tipo: 'inteiro',
     padrao: '0',
     niveis: ['estabelecimento', 'rede'],
@@ -660,7 +709,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.documentos.integracaoArquivoPor',
     modulo: 'pep',
-    descricao: 'Prontuário (documentos): integracao arquivo por',
+    descricao: 'Prontuário (documentos): integração arquivo por',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -682,7 +731,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.documentos.usaServicoArmazenamento',
     modulo: 'pep',
-    descricao: 'Prontuário (documentos): usa servico armazenamento',
+    descricao: 'Prontuário (documentos): usa serviço armazenamento',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -715,7 +764,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.antimicrobiano.exibeFrequencia',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.antimicrobiano): exibe frequencia',
+    descricao: 'Prontuário (impress o antimicrobiano): exibe frequência',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -726,7 +775,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.duplex',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao): duplex',
+    descricao: 'Prontuário (impress o): duplex',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -737,7 +786,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.exibeParametros',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao): exibe parametros',
+    descricao: 'Prontuário (impress o): exibe parâmetros',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -748,7 +797,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.mantemLancamentoMesmaPagina',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao): mantem lancamento mesma pagina',
+    descricao: 'Prontuário (impress o): mantém lançamento mesma página',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -759,7 +808,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.agrupaAtendimentoPsiquiatria',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): agrupa atendimento psiquiatria',
+    descricao: 'Prontuário (impress o prescri o): agrupa atendimento psiquiatria',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -770,7 +819,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.agrupaPorTipoLancamento',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): agrupa por tipo lancamento',
+    descricao: 'Prontuário (impress o prescri o): agrupa por tipo lançamento',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -781,7 +830,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.agrupamento',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): agrupamento',
+    descricao: 'Prontuário (impress o prescri o): agrupamento',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -792,7 +841,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.assinatura',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): assinatura',
+    descricao: 'Prontuário (impress o prescri o): assinatura',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -803,7 +852,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.cabecalhoMedico',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): cabecalho medico',
+    descricao: 'Prontuário (impress o prescri o): cabeçalho médico',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -814,7 +863,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.codigoRegional',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): codigo regional',
+    descricao: 'Prontuário (impress o prescri o): código regional',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -825,7 +874,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.colunaData',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): coluna data',
+    descricao: 'Prontuário (impress o prescri o): coluna data',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -836,7 +885,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.digitoConselho',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): digito conselho',
+    descricao: 'Prontuário (impress o prescri o): dígito conselho',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -847,7 +896,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.duplex',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): duplex',
+    descricao: 'Prontuário (impress o prescri o): duplex',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -858,7 +907,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.exibeNomeComercial',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): exibe nome comercial',
+    descricao: 'Prontuário (impress o prescri o): exibe nome comercial',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -869,7 +918,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.frenteVerso',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): frente verso',
+    descricao: 'Prontuário (impress o prescri o): frente verso',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -880,7 +929,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.horarioMedicacao',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): horario medicacao',
+    descricao: 'Prontuário (impress o prescri o): horário medicacao',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -891,7 +940,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.horariosPreCadastrados',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): horarios pre cadastrados',
+    descricao: 'Prontuário (impress o prescri o): horários pré-cadastrados',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -902,7 +951,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeBombaInfusao',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime bomba infusao',
+    descricao: 'Prontuário (impress o prescri o): imprime bomba infusão',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -913,7 +962,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeDatas',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime datas',
+    descricao: 'Prontuário (impress o prescri o): imprime datas',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -924,7 +973,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeDescricaoProtocolo',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime descricao protocolo',
+    descricao: 'Prontuário (impress o prescri o): imprime descrição protocolo',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -935,7 +984,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeDoseTotal',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime dose total',
+    descricao: 'Prontuário (impress o prescri o): imprime dose total',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -946,7 +995,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeEmitidoEm',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime emitido em',
+    descricao: 'Prontuário (impress o prescri o): imprime emitido em',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -957,7 +1006,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeEvolucaoEnfermagem',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime evolucao enfermagem',
+    descricao: 'Prontuário (impress o prescri o): imprime evolução enfermagem',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -968,7 +1017,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeHorarios',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime horarios',
+    descricao: 'Prontuário (impress o prescri o): imprime horários',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -979,7 +1028,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeMateriais',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime materiais',
+    descricao: 'Prontuário (impress o prescri o): imprime materiais',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -990,7 +1039,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeNumeroDoses',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime numero doses',
+    descricao: 'Prontuário (impress o prescri o): imprime número doses',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1001,7 +1050,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeQuantidade',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime quantidade',
+    descricao: 'Prontuário (impress o prescri o): imprime quantidade',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1012,7 +1061,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeQuantidadePadrao',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime quantidade padrao',
+    descricao: 'Prontuário (impress o prescri o): imprime quantidade padrão',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1023,7 +1072,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeRegistro',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime registro',
+    descricao: 'Prontuário (impress o prescri o): imprime registro',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1034,7 +1083,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeRelacaoMedicamentos',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime relacao medicamentos',
+    descricao: 'Prontuário (impress o prescri o): imprime relação medicamentos',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1045,7 +1094,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.imprimeRequisicao',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): imprime requisicao',
+    descricao: 'Prontuário (impress o prescri o): imprime requisição',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1056,7 +1105,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.medicoNoRodape',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): medico no rodape',
+    descricao: 'Prontuário (impress o prescri o): médico no rodapé',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1067,7 +1116,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.modelo',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): modelo',
+    descricao: 'Prontuário (impress o prescri o): modelo',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1078,7 +1127,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.paginasPadrao',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): paginas padrao',
+    descricao: 'Prontuário (impress o prescri o): paginas padrão',
     tipo: 'inteiro',
     padrao: '0',
     niveis: ['estabelecimento', 'rede'],
@@ -1089,7 +1138,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.referenciaBibliografica',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): referencia bibliografica',
+    descricao: 'Prontuário (impress o prescri o): referência bibliográfica',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1100,7 +1149,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricao.zebrado',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricao): zebrado',
+    descricao: 'Prontuário (impress o prescri o): zebrado',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1111,7 +1160,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricaoOncologica.assinatura',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricaoOncologica): assinatura',
+    descricao: 'Prontuário (impress o prescri o oncol gica): assinatura',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1122,7 +1171,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricaoOncologica.data',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricaoOncologica): data',
+    descricao: 'Prontuário (impress o prescri o oncol gica): data',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1133,7 +1182,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.prescricaoOncologica.nomeCidade',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.prescricaoOncologica): nome cidade',
+    descricao: 'Prontuário (impress o prescri o oncol gica): nome cidade',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1144,7 +1193,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.impressao.solicitacaoExame.porConvenio',
     modulo: 'pep',
-    descricao: 'Prontuário (impressao.solicitacaoExame): por convenio',
+    descricao: 'Prontuário (impress o solicita o exame): por convênio',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1177,7 +1226,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.integracao.laboratorio.endereco',
     modulo: 'pep',
-    descricao: 'Prontuário (integracao.laboratorio): endereco',
+    descricao: 'Prontuário (integra o laborat rio): endereço',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1188,7 +1237,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.integracao.laboratorio.modo',
     modulo: 'pep',
-    descricao: 'Prontuário (integracao.laboratorio): modo',
+    descricao: 'Prontuário (integra o laborat rio): modo',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1199,7 +1248,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.internacao.exigeLaudoApos48Horas',
     modulo: 'pep',
-    descricao: 'Prontuário (internacao): exige laudo apos48horas',
+    descricao: 'Prontuário (internacao): exige laudo após 48 horas',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1243,7 +1292,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.painel.colunaEsperaUltimaMovimentacao',
     modulo: 'pep',
-    descricao: 'Prontuário (painel): coluna espera ultima movimentacao',
+    descricao: 'Prontuário (painel): coluna espera última movimentação',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1276,7 +1325,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.painel.telaAuxiliarLocalizacao',
     modulo: 'pep',
-    descricao: 'Prontuário (painel): tela auxiliar localizacao',
+    descricao: 'Prontuário (painel): tela auxiliar localização',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1287,7 +1336,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.alertaExameRepetido',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): alerta exame repetido',
+    descricao: 'Prontuário (prescri o): alerta exame repetido',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1298,7 +1347,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.antimicrobiano.complementoPedido',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao.antimicrobiano): complemento pedido',
+    descricao: 'Prontuário (prescri o antimicrobiano): complemento pedido',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1309,7 +1358,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.antimicrobiano.tipoLancamento',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao.antimicrobiano): tipo lancamento',
+    descricao: 'Prontuário (prescri o antimicrobiano): tipo lançamento',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1320,7 +1369,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.aprazamentoPelaEnfermagem',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): aprazamento pela enfermagem',
+    descricao: 'Prontuário (prescri o): aprazamento pela enfermagem',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1331,7 +1380,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.avaliacaoFarmaceuticaForaPadrao',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): avaliacao farmaceutica fora padrao',
+    descricao: 'Prontuário (prescri o): avaliação farmacêutica fora padrão',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1342,7 +1391,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.cabecalhoHistorico',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): cabecalho historico',
+    descricao: 'Prontuário (prescri o): cabeçalho histórico',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1353,7 +1402,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.calculaVelocidadeInfusao',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): calcula velocidade infusao',
+    descricao: 'Prontuário (prescri o): calcula velocidade infusão',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1364,7 +1413,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.consideraImpressa',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): considera impressa',
+    descricao: 'Prontuário (prescri o): considera impressa',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1375,7 +1424,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.consisteFrequenciaUnica',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): consiste frequencia unica',
+    descricao: 'Prontuário (prescri o): consiste frequência única',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1386,7 +1435,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.consisteItemDuplicado',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): consiste item duplicado',
+    descricao: 'Prontuário (prescri o): consiste item duplicado',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1397,7 +1446,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.controlaCateter',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): controla cateter',
+    descricao: 'Prontuário (prescri o): controla cateter',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1408,7 +1457,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.diasPrescricaoAnterior',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): dias prescricao anterior',
+    descricao: 'Prontuário (prescri o): dias prescrição anterior',
     tipo: 'inteiro',
     padrao: '0',
     niveis: ['estabelecimento', 'rede'],
@@ -1419,7 +1468,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.documentoSeparadoConsignado',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): documento separado consignado',
+    descricao: 'Prontuário (prescri o): documento separado consignado',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1430,7 +1479,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.especialidadePsiquiatria',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): especialidade psiquiatria',
+    descricao: 'Prontuário (prescri o): especialidade psiquiatria',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1441,7 +1490,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.exameForaPadrao',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): exame fora padrao',
+    descricao: 'Prontuário (prescri o): exame fora padrão',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1452,7 +1501,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.exibeMateriais',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): exibe materiais',
+    descricao: 'Prontuário (prescri o): exibe materiais',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1463,7 +1512,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.exibeNomeKit',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): exibe nome kit',
+    descricao: 'Prontuário (prescri o): exibe nome kit',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1474,7 +1523,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.exibeProtocoloItemNaoPadronizado',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): exibe protocolo item nao padronizado',
+    descricao: 'Prontuário (prescri o): exibe protocolo item não padronizado',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1485,7 +1534,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.exibeReferenciaComercial',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): exibe referencia comercial',
+    descricao: 'Prontuário (prescri o): exibe referência comercial',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1496,7 +1545,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.exibeReferenciaDiluente',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): exibe referencia diluente',
+    descricao: 'Prontuário (prescri o): exibe referência diluente',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1507,7 +1556,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.exigeValidacaoAntimicrobiano',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): exige validacao antimicrobiano',
+    descricao: 'Prontuário (prescri o): exige validação antimicrobiano',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1518,7 +1567,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.exigeValidacaoFarmaceutica',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): exige validacao farmaceutica',
+    descricao: 'Prontuário (prescri o): exige validação farmacêutica',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1529,9 +1578,10 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.fatorDietaBlend',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): fator dieta blend',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Prontuário (prescri o): fator dieta blend',
+    tipo: 'inteiro',
+    padrao: '0',
+    minimo: 0,
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'pep',
@@ -1540,7 +1590,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.geraDocumentoDevolucaoEstoque',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): gera documento devolucao estoque',
+    descricao: 'Prontuário (prescri o): gera documento devolução estoque',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1551,7 +1601,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.geraFolhaSala',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): gera folha sala',
+    descricao: 'Prontuário (prescri o): gera folha sala',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1562,7 +1612,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.geraRequisicaoEstoque',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): gera requisicao estoque',
+    descricao: 'Prontuário (prescri o): gera requisição estoque',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1573,7 +1623,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.incluiDieta',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): inclui dieta',
+    descricao: 'Prontuário (prescri o): inclui dieta',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1584,7 +1634,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.incluiKitMateriais',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): inclui kit materiais',
+    descricao: 'Prontuário (prescri o): inclui kit materiais',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1595,7 +1645,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.incluiKitNaPrescricaoMedica',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): inclui kit na prescricao medica',
+    descricao: 'Prontuário (prescri o): inclui kit na prescrição médica',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1606,7 +1656,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.lancaKit',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): lanca kit',
+    descricao: 'Prontuário (prescri o): lança kit',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1617,7 +1667,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.lancaNaConta',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): lanca na conta',
+    descricao: 'Prontuário (prescri o): lança na conta',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1628,7 +1678,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.lembraViaAcessoItem',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): lembra via acesso item',
+    descricao: 'Prontuário (prescri o): lembra via acesso item',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1639,7 +1689,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.observacaoMedicaLonga',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): observacao medica longa',
+    descricao: 'Prontuário (prescri o): observação médica longa',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1650,7 +1700,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.percentualExigeJustificativa',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): percentual exige justificativa',
+    descricao: 'Prontuário (prescri o): percentual exige justificativa',
     tipo: 'inteiro',
     padrao: '0',
     niveis: ['estabelecimento', 'rede'],
@@ -1661,7 +1711,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.permiteCorrigirPrescricaoValidada',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): permite corrigir prescricao validada',
+    descricao: 'Prontuário (prescri o): permite corrigir prescrição validada',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1672,7 +1722,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.permiteIncluirItensPrescricao',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): permite incluir itens prescricao',
+    descricao: 'Prontuário (prescri o): permite incluir itens prescrição',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1683,7 +1733,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.permitePercentualAcimaLimite',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): permite percentual acima limite',
+    descricao: 'Prontuário (prescri o): permite percentual acima limite',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1694,7 +1744,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.permitePrescricaoUrgencia',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): permite prescricao urgencia',
+    descricao: 'Prontuário (prescri o): permite prescrição urgência',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1705,7 +1755,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.planejamento.alertaPendente',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao.planejamento): alerta pendente',
+    descricao: 'Prontuário (prescri o planejamento): alerta pendente',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1716,7 +1766,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.planejamento.diasAlertaPendente',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao.planejamento): dias alerta pendente',
+    descricao: 'Prontuário (prescri o planejamento): dias alerta pendente',
     tipo: 'inteiro',
     padrao: '0',
     niveis: ['estabelecimento', 'rede'],
@@ -1727,7 +1777,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.planejamento.exigeSenhaAlteracao',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao.planejamento): exige senha alteracao',
+    descricao: 'Prontuário (prescri o planejamento): exige senha alteração',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1738,7 +1788,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.protocoloOncologicoConvertido',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): protocolo oncologico convertido',
+    descricao: 'Prontuário (prescri o): protocolo oncológico convertido',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1749,7 +1799,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.protocoloSequencial',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): protocolo sequencial',
+    descricao: 'Prontuário (prescri o): protocolo sequencial',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1760,7 +1810,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.registraTrilhaMinima',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): registra trilha minima',
+    descricao: 'Prontuário (prescri o): registra trilha mínima',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1771,7 +1821,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.requisicaoACriterioMedico',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): requisicao acriterio medico',
+    descricao: 'Prontuário (prescri o): requisição a critério médico',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1782,7 +1832,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.requisicaoSeNecessario',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): requisicao se necessario',
+    descricao: 'Prontuário (prescri o): requisição se necessário',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1793,7 +1843,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.solucao.iniciaAdministracaoAgora',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao.solucao): inicia administracao agora',
+    descricao: 'Prontuário (prescri o solu o): inicia administração agora',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1804,7 +1854,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.suprimeItensManipulacao',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): suprime itens manipulacao',
+    descricao: 'Prontuário (prescri o): suprime itens manipulação',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1815,7 +1865,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.unidadeConsumoGotas',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): unidade consumo gotas',
+    descricao: 'Prontuário (prescri o): unidade consumo gotas',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1826,7 +1876,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.unidadeConsumoMililitro',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): unidade consumo mililitro',
+    descricao: 'Prontuário (prescri o): unidade consumo mililitro',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1837,7 +1887,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.validaDose24Horas',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): valida dose24horas',
+    descricao: 'Prontuário (prescri o): valida dose em 24 horas',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1848,7 +1898,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.validaLancamentoDuplicado',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): valida lancamento duplicado',
+    descricao: 'Prontuário (prescri o): valida lançamento duplicado',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1859,7 +1909,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.validaLancamentoIndicadorProgramado',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): valida lancamento indicador programado',
+    descricao: 'Prontuário (prescri o): valida lançamento indicador programado',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1870,7 +1920,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.validaPeriodoVigencia',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): valida periodo vigencia',
+    descricao: 'Prontuário (prescri o): valida periodo vigência',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1881,7 +1931,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.verificaFatorConversao',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): verifica fator conversao',
+    descricao: 'Prontuário (prescri o): verifica fator conversão',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1892,7 +1942,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.viaAcessoVenosoCentral',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): via acesso venoso central',
+    descricao: 'Prontuário (prescri o): via acesso venoso central',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1903,7 +1953,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.viaAcessoVenosoPeriferico',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): via acesso venoso periferico',
+    descricao: 'Prontuário (prescri o): via acesso venoso periférico',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1914,7 +1964,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.viaHipodermoclise',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): via hipodermoclise',
+    descricao: 'Prontuário (prescri o): via hipodermoclise',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1925,7 +1975,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.viaOralPadrao',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): via oral padrao',
+    descricao: 'Prontuário (prescri o): via oral padrão',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1936,7 +1986,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.viaVenosaPadrao',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): via venosa padrao',
+    descricao: 'Prontuário (prescri o): via venosa padrão',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1947,7 +1997,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prescricao.visualizacaoPrevisto',
     modulo: 'pep',
-    descricao: 'Prontuário (prescricao): visualizacao previsto',
+    descricao: 'Prontuário (prescri o): visualização previsto',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -1958,7 +2008,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.alertaPrevisaoAlta',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario): alerta previsao alta',
+    descricao: 'Prontuário (prontu rio): alerta previsão alta',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1969,7 +2019,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.corrigeHoraRespostaRascunho',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario): corrige hora resposta rascunho',
+    descricao: 'Prontuário (prontu rio): corrige hora resposta rascunho',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1980,7 +2030,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.exame.envioBateriaAgrupado',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario.exame): envio bateria agrupado',
+    descricao: 'Prontuário (prontu rio exame): envio bateria agrupado',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -1991,7 +2041,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.exigeInformacaoComplementarClinica',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario): exige informacao complementar clinica',
+    descricao: 'Prontuário (prontu rio): exige informação complementar clínica',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -2002,7 +2052,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.exportacao.comSenha',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario.exportacao): com senha',
+    descricao: 'Prontuário (prontu rio exporta o): com senha',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -2013,7 +2063,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.exportacao.exigeJustificativa',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario.exportacao): exige justificativa',
+    descricao: 'Prontuário (prontu rio exporta o): exige justificativa',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -2024,7 +2074,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.historicoExame.separaBateria',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario.historicoExame): separa bateria',
+    descricao: 'Prontuário (prontu rio hist rico exame): separa bateria',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -2035,7 +2085,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.instrucaoRegistroProducaoPublica',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario): instrucao registro producao publica',
+    descricao: 'Prontuário (prontu rio): instrucao registro produção pública',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2046,7 +2096,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.intercorrencia.notificaResponsavel',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario.intercorrencia): notifica responsavel',
+    descricao: 'Prontuário (prontu rio intercorr ncia): notifica responsável',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -2057,7 +2107,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.locaisPorUsuario',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario): locais por usuario',
+    descricao: 'Prontuário (prontu rio): locais por usuário',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -2068,7 +2118,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.permiteConsentimentoNoLancamento',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario): permite consentimento no lancamento',
+    descricao: 'Prontuário (prontu rio): permite consentimento no lançamento',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -2079,7 +2129,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.restringeAcessoForaDoAtendimento',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario): restringe acesso fora do atendimento',
+    descricao: 'Prontuário (prontu rio): restringe acesso fora do atendimento',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -2090,7 +2140,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.toleranciaLancamentoRascunho',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario): tolerancia lancamento rascunho',
+    descricao: 'Prontuário (prontu rio): tolerância lançamento rascunho',
     tipo: 'inteiro',
     padrao: '0',
     minimo: 0,
@@ -2102,7 +2152,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.prontuario.validaAposConfirmar',
     modulo: 'pep',
-    descricao: 'Prontuário (prontuario): valida apos confirmar',
+    descricao: 'Prontuário (prontu rio): valida após confirmar',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -2113,7 +2163,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.receita.psicotropicoPadrao',
     modulo: 'pep',
-    descricao: 'Prontuário (receita): psicotropico padrao',
+    descricao: 'Prontuário (receita): psicotrópico padrão',
     tipo: 'lista',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2135,7 +2185,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.receitaDigital.ambienteProducao',
     modulo: 'pep',
-    descricao: 'Prontuário (receitaDigital): ambiente producao',
+    descricao: 'Prontuário (receita digital): ambiente produção',
     tipo: 'booleano',
     padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
@@ -2146,7 +2196,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.receitaDigital.enderecoLogotipo',
     modulo: 'pep',
-    descricao: 'Prontuário (receitaDigital): endereco logotipo',
+    descricao: 'Prontuário (receita digital): endereço logotipo',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2157,7 +2207,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'pep.sinaisVitais.toleranciaLancamentoAtrasado',
     modulo: 'pep',
-    descricao: 'Prontuário (sinaisVitais): tolerancia lancamento atrasado',
+    descricao: 'Prontuário (sinais vitais): tolerância lançamento atrasado',
     tipo: 'inteiro',
     padrao: '0',
     minimo: 0,
@@ -2226,7 +2276,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.codigoCevs',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: codigo cevs (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: código CEVS (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2237,7 +2287,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.codigoRegionalSaude',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: codigo regional saude (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: código regional saúde (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2248,7 +2298,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.diretorioImagens',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: diretorio imagens (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: diretório imagens (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2259,9 +2309,9 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.exigeCpfDoador',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: exige cpf doador (configuração do hospital migrado)',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Hemoterapia: exige CPF doador (configuração do hospital migrado)',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'sadt',
@@ -2270,7 +2320,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.formulaSuperficieCorporal',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: formula superficie corporal (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: fórmula superfície corporal (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2282,8 +2332,8 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
     chave: 'sadt.hemoterapia.gravarImagemNoBanco',
     modulo: 'sadt',
     descricao: 'Hemoterapia: gravar imagem no banco (configuração do hospital migrado)',
-    tipo: 'texto',
-    padrao: '',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'sadt',
@@ -2292,9 +2342,9 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.lancarTransfusaoApos24h',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: lancar transfusao apos24h (configuração do hospital migrado)',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Hemoterapia: lançar transfusão após 24 horas (configuração do hospital migrado)',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'sadt',
@@ -2303,9 +2353,9 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.lancarTransfusaoNaPreTransfusao',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: lancar transfusao na pre transfusao (configuração do hospital migrado)',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Hemoterapia: lançar transfusão na pré-transfusão (configuração do hospital migrado)',
+    tipo: 'booleano',
+    padrao: 'false',
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'sadt',
@@ -2314,7 +2364,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.modeloImpressaoBolsa',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: modelo impressao bolsa (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: modelo impressão bolsa (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2325,7 +2375,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.modeloImpressaoDoacao',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: modelo impressao doacao (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: modelo impressão doação (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2336,7 +2386,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.modeloImpressaoPreTransfusao',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: modelo impressao pre transfusao (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: modelo impressão pré-transfusão (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2347,7 +2397,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.modeloImpressaoRequisicaoHemocentro',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: modelo impressao requisicao hemocentro (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: modelo impressão requisição hemocentro (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2358,7 +2408,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.modeloImpressaoRequisicaoPaciente',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: modelo impressao requisicao paciente (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: modelo impressão requisição paciente (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2369,7 +2419,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.modeloImpressaoTransferencia',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: modelo impressao transferencia (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: modelo impressão transferência (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2380,7 +2430,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.modeloImpressaoTransfusao',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: modelo impressao transfusao (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: modelo impressão transfusão (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
@@ -2391,9 +2441,10 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.prazoDias',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: prazo dias (configuração do hospital migrado)',
-    tipo: 'texto',
-    padrao: '',
+    descricao: 'Hemoterapia: prazo em dias (configuração do hospital migrado)',
+    tipo: 'inteiro',
+    padrao: '0',
+    minimo: 0,
     niveis: ['estabelecimento', 'rede'],
     critico: false,
     dono: 'sadt',
@@ -2402,7 +2453,7 @@ export const PARAMETROS_CONTINUIDADE: readonly DefinicaoParametro[] = [
   {
     chave: 'sadt.hemoterapia.sexoPadrao',
     modulo: 'sadt',
-    descricao: 'Hemoterapia: sexo padrao (configuração do hospital migrado)',
+    descricao: 'Hemoterapia: sexo padrão (configuração do hospital migrado)',
     tipo: 'texto',
     padrao: '',
     niveis: ['estabelecimento', 'rede'],
