@@ -175,6 +175,11 @@ test.describe('Pesquisa clínica: triagem que só sugere, inclusão com TCLE e v
     await page.getByRole('searchbox').last().fill('PACIENTE');
     await page.getByRole('option', { name: 'PACIENTE SINTETICO A' }).click();
     await expect(page.getByTestId('pesquisa-indicados')).toContainText('PACIENTE SINTETICO A');
+    // Indicado o paciente, a seleção volta ao vazio (pronta para o próximo) e a lista dela fecha.
+    await expect(page.getByTestId('pesquisa-paciente').getByRole('combobox')).not.toContainText(
+      'PACIENTE SINTETICO A',
+    );
+    await expect(page.getByRole('listbox')).toHaveCount(0);
     await page.getByTestId('pesquisa-triar').click();
     await expect(page.getByTestId('pesquisa-aviso')).toContainText('1 sugerido');
     expect(posts.at(-1)).toEqual({

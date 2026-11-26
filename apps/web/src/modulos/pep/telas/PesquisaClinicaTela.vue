@@ -163,11 +163,17 @@ const incluirCriterio = () =>
 // Pacientes indicados à triagem (obrigatórios com a automática desligada).
 const indicado = ref<number | null>(null);
 const indicados = ref<{ id: number; nome: string }[]>([]);
-watch(indicado, (v) => {
-  const p = (pacientes.data.value ?? []).find((x) => x.id === v);
-  if (p && !indicados.value.some((x) => x.id === p.id)) indicados.value.push({ id: p.id, nome: p.nome });
-  if (v !== null) indicado.value = null;
-});
+// A seleção volta ao vazio depois de renderizar o paciente escolhido (flush 'post'): zerada no mesmo ciclo, a
+// SanteSelecao não via a troca do valor, seguia mostrando o paciente como escolhido e a lista dela ficava instável.
+watch(
+  indicado,
+  (v) => {
+    const p = (pacientes.data.value ?? []).find((x) => x.id === v);
+    if (p && !indicados.value.some((x) => x.id === p.id)) indicados.value.push({ id: p.id, nome: p.nome });
+    if (v !== null) indicado.value = null;
+  },
+  { flush: 'post' },
+);
 const triar = () =>
   fazer(
     () =>
