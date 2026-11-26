@@ -57,7 +57,10 @@ class Plano(unittest.TestCase):
         self.assertEqual(p["tipo_lancamento_id"]["referencia"], "TBTPLANC")  # o período é de um tipo, não de todos
         self.assertEqual(p["conta_hospitalar_id"]["referencia"], "FCCTAEXT")
         q = self.cols("FCIRREGULARID", "pendencia_conta")
-        self.assertEqual(q["situacao"]["coluna"], "=~resolvida")
+        # recusas fase 2 (P6, A06): resolvida PRESUMIDA só com fim; sem fim, aberta PRESUMIDA (concorrente)
+        sit = [(x["coluna"], x.get("via")) for x in self.mapa["colunas_decl"]
+               if x["tabela"] == "FCIRREGULARID" and x["destino"] == "pendencia_conta.situacao"]
+        self.assertEqual(sit, [("=~resolvida", "se:DATA_HORA_FIM"), ("=~aberta", "")])
         self.assertEqual(q["resolvido_em"]["coluna"], "DATA_HORA_FIM")
         self.assertEqual(q["tipo_pendencia_conta_id"]["referencia"], "TBIRREGULARID")
 

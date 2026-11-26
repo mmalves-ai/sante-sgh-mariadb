@@ -22,6 +22,8 @@ CARREGADAS = {"SHCONDUTA": "conduta_reacao_transfusional", "SHESTFINAL": "destin
               # r5 (ADR 0006): parâmetros do estabelecimento e pedido ao fornecedor na trilha, com retrato
               "SHPARAM": "parametro_valor", "SHREQUISICAO": "trilha_auditoria"}
 DESCARTADAS = {}
+# prefixos de motivo aceitos nas declarações da fatia: a fatia original e as correções das recusas da carga (fase 2)
+PREFIXOS = ("L7-01: ", "recusas fase 2 (P4): ", "recusas-fase2 C1c (pedido 2 do K2): ")
 
 
 def _decl():
@@ -38,6 +40,10 @@ class L701(unittest.TestCase):
     def cols(self, t):
         return {c["destino"]: c for c in self.plano[t]["colunas"][CARREGADAS[t]]}
 
+    def decl(self, t, d):
+        """Declarações do destino `d` da tabela `t`, na ordem do mapa (a primeira e as concorrentes)."""
+        return [c for c in self.plano[t]["colunas"][CARREGADAS[t]] if c["destino"] == d]
+
     def test_cobertura_total_carrega_ou_descarta(self):
         self.assertEqual(set(self.plano), set(CARREGADAS))
         self.assertEqual(set(CARREGADAS) | set(DESCARTADAS), set(FATIA))
@@ -52,20 +58,35 @@ class L701(unittest.TestCase):
         self.assertFalse(any(l.startswith("#--- ") for l in _decl()))
         self.assertFalse({"SHPARAM", "SHREQUISICAO"} & set(sc))
         # r6 (ADR 0006/0003): um valor por chave do produto (desdobrado), definição pela chave do catálogo do produto
-        c = {x["destino"]: x for x in self.m["colunas_decl"] if x["tabela"] == "SHPARAM"}
+        c = {}
+        for x in self.m["colunas_decl"]:  # a primeira declarada de cada destino
+            if x["tabela"] == "SHPARAM":
+                c.setdefault(x["destino"], x)
         self.assertEqual(c["parametro_valor.valor"]["coluna"], "#item")
+        # recusas-fase2 C1c (pedido 2 do K2): as 4 marcações S/N viram o booleano do contrato pelo de-para de valores
+        sn = {x["coluna"]: x for x in self.plano["SHPARAM"]["colunas"]["parametro_valor"]
+              if x["coluna"].startswith("#item@")}
+        self.assertEqual(set(sn), {"#item@DIGITACAO_OBR_CPF", "#item@GRAVARIMGBANCO", "#item@LANCAR_TRANSFUSAO_APOS24H",
+                                   "#item@LANCTRANSPRETRANS"})
+        for k, x in sn.items():
+            self.assertEqual((x["depara"], x["valores"]), ("valores", {"S": "true", "s": "true", "N": "false",
+                                                                        "n": "false"}), k)
         self.assertIn("desdobrar:CEVS=sadt.hemoterapia.codigoCevs", c["parametro_valor.valor"]["via"])
         self.assertEqual(c["parametro_valor.parametro_definicao_id"]["coluna"], "#rotulo")
         self.assertEqual(c["parametro_valor.parametro_definicao_id"]["via"], "cod:parametro_definicao.chave")
         self.assertEqual(c["credencial_integracao.referencia_cofre"]["coluna"], "#cofre:SENHA_MASTER")
 
     def test_literais_e_presumidos(self):
-        # nada presumido que mexa no estoque: situação e natureza pelo de-para do NOME; sem par, recusa visível
+        # nada presumido que mexa no estoque: situação e natureza pelo de-para do NOME (a primeira declarada)
         for t, d in (("SHESTFINAL", "situacao_bolsa"), ("SHMOV", "natureza")):
-            self.assertEqual(self.cols(t)[d]["depara"], "valores", t)
+            self.assertEqual(self.decl(t, d)[0]["depara"], "valores", t)
         self.assertEqual(self.cols("SHESTFINAL")["situacao_bolsa"]["valores"]["DESCARTE"], "descartada")
-        self.assertEqual(self.cols("SHMOV")["natureza"]["valores"]["Transfusão"], "transfusao")
-        self.assertNotIn("Estranho exemplo", self.cols("SHMOV")["natureza"]["valores"])
+        nat = self.decl("SHMOV", "natureza")
+        self.assertEqual(nat[0]["valores"]["Transfusão"], "transfusao")
+        self.assertNotIn("Estranho exemplo", nat[0]["valores"])
+        # recusas fase 2 (P4, pedido 83 do mapa): nome sem par -> natureza 'correcao' presumida (sem baixa do
+        # estoque), concorrente `senao` que tira a recusa de domínio da primeira; o cliente corrige no cadastro
+        self.assertEqual([(x["coluna"], bool(x.get("senao"))) for x in nat], [("NOME", False), ("=~correcao", True)])
         self.assertEqual(self.cols("PRHEMOTLAN")["validade_dias"]["coluna"], "=~1")
         self.assertEqual(self.cols("PRHEMOTLAN")["faturavel"]["coluna"], "=~0")
         self.assertEqual(self.cols("SHLOCAL")["temperatura_minima"]["coluna"], "=~2")
@@ -158,7 +179,7 @@ class L701(unittest.TestCase):
         for r in rows:
             self.assertIn(r["tabela"], CARREGADAS)
             self.assertNotIn(r["tabela"], DESCARTADAS)
-            self.assertTrue(r["motivo"].startswith("L7-01: "))
+            self.assertTrue(r["motivo"].startswith(PREFIXOS), (r["tabela"], r["coluna"]))
 
     def test_imagem_sintetica_cobre_as_carregadas(self):
         lidas = []

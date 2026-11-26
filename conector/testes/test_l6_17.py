@@ -95,6 +95,10 @@ class Plano(unittest.TestCase):
         # nenhuma coluna da origem das tabelas da fatia some em silêncio: ou tem destino, ou fica registrada sem
         # destino com o motivo (pedido ou descarte); a chave entra pelo conector_origem
         decl = {(c["tabela"], c["coluna"]): c for c in self.mapa["colunas_decl"]}
+        # coluna lida por uma coluna especial (P2b: CHAREA.SIGLA em '#codigo_derivado:SIGLA+ID') tem destino por ela
+        for c in self.mapa["colunas_decl"]:
+            for f in (carga_mapa.fontes_especial(c["coluna"]) or []) if c["coluna"].startswith("#") else []:
+                decl.setdefault((c["tabela"], f), c)
         chaves = {t: set((r.get("chave") or "").split(",")) for t in TABELAS for r in self.mapa["tabelas"]
                   if r["tabela"] == t}
         for c in self.mapa["colunas"]:

@@ -92,13 +92,16 @@ class PlanoL601(unittest.TestCase):
         self.assertNotIn("Reconhecido", v)
 
     def test_codigos_numericos_viram_texto(self):
-        for t, dt, col in [("PNTIPO", "tipo_painel", "ID"), ("REMODFIC", "modelo_ficha_impressa", "COD"),
+        for t, dt, col in [("PNTIPO", "tipo_painel", "ID"),
                            ("RETPINDATEND", "tipo_indicacao", "ID"), ("TBACAOFLUXOSENHA", "acao_fluxo_senha", "ID"),
                            ("TBCADGRUPOATEN", "grupo_atendimento", "ID"),
                            ("TBGRUPOPRIORIDADE", "grupo_prioridade_legal", "ID"),
                            ("TBMODULO_RECEPCAO", "modulo_recepcao", "ID"), ("TBPROCED", "procedencia", "COD")]:
             c = self.cols(t, dt)["codigo"]
             self.assertEqual((c["coluna"], c["regra"]), (col, "texto"), t)
+        # recusas-fase2 P2a: o modelo é a chave completa COD+GRAFICA (as variantes comum e pré-impressa não colidem)
+        c = self.cols("REMODFIC", "modelo_ficha_impressa")["codigo"]
+        self.assertEqual((c["coluna"], c["regra"]), ("#codigo_derivado:COD+GRAFICA:30", ""))
 
     def test_classificacao_sem_fonte_e_presumida(self):
         for t, dt, dc in [("PNTIPO", "tipo_painel", "finalidade"), ("RETPINDATEND", "tipo_indicacao", "categoria"),

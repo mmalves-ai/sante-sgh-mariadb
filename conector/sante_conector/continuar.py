@@ -322,8 +322,9 @@ def _propria(conn, ctl, anterior, grupo, contagens, sha256, contadores_de):
         r = c.fetchone()
         if not r or not r[0] or r[0] not in _aceitos(sha256):
             return {}
-        for t in grupo:
-            c.execute("SELECT COUNT(*) FROM `%s`.conector_origem WHERE tabela_origem=%%s" % ctl, (t,))
+        for t in grupo:  # M14 (R18): `<REG>/cobertura_*` são registros derivados da ficha, não linhas da origem
+            c.execute("SELECT COUNT(*) FROM `%s`.conector_origem WHERE tabela_origem=%%s"
+                      " AND INSTR(chave_original, '/')=0" % ctl, (t,))
             if int(c.fetchone()[0]) != int(contagens.get(t, -1)):
                 return {}
         marcas = ",".join(["%s"] * len(grupo))

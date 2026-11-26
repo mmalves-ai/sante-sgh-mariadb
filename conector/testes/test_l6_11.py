@@ -255,11 +255,9 @@ class FatiaL611(unittest.TestCase):
         sit = ordem["documento_prontuario.situacao_documento_prontuario_id"]
         self.assertIn(">max:ID>ID_PRSITDOCUMENTO>", sit[0][1])
         self.assertNotIn("max:DATA_HORA_EVENTO", sit[0][1])
-        # situação nativa de migração: pronta e comentada até a semente da F2.2 (o cod: concorrente é avaliado em toda
-        # linha); até lá o cabeçalho sem evento é recusado com pendência visível
-        self.assertEqual(len(sit), 1)
-        self.assertIn("#PRASSINATURA_CAB\t=~migrado_sem_assinatura\tdocumento_prontuario.situacao_documento_prontuario_id",
-                      (_DIR / "declarado/colunas.d/L6-11.tsv").read_text(encoding="utf-8"))
+        # R12 (lote R, P3b): o cabeçalho sem evento entra como documento lançado à espera de assinatura, presumido
+        # (concorrente pelo código da situação nativa, com valor_presumido)
+        self.assertEqual(sit[1:], [("=~lancado", "cod:situacao_documento_prontuario.codigo")])
         prof = ordem["documento_prontuario.profissional_id"]
         self.assertIn("min:DATA_HORA_EVENTO", prof[0][1])
         self.assertEqual(prof[1], ("ID_HTATENDIMENTO", "ref:HTATENDIMENTO>ID_TBCBOPRO_ASSISTENTE>TBCBOPRO>ID_TBPROFIS>TBPROFIS"))

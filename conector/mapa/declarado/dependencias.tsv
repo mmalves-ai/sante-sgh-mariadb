@@ -220,3 +220,7 @@ FCCTAEXT	RICADINT	recusas fase 2 (R9): a conta externa liga à internação pela
 RICGUIAS	FCGUIAS	recusas fase 2 (A05): guia da internação depois da guia da conta externa, para a adoção pela chave da guia não colidir na ordem inversa
 RPRPA	RPLANEVE_TBCBOPRO	recusas fase 2 (L8-02): concorrente de rpa.profissional_id pelo lançamento (RPA > lançamento do RPA > evento > inscrição > profissional); a aresta RPRPA -> RPLANRPA não é declarada porque RPLANRPA depende de RPRPA (ciclo) e a corrente só lê a origem até o profissional
 RESEGUR	RECADATE	recusas fase 2 (R18): a cobertura do titular vem da ficha do atendimento (cobertura do par paciente e convênio criada pela carga do atendimento)
+CCCADCIR	RICADINT	recusas fase 2 (P2b, pedido 45): concorrentes do ato pela internação (ref:CCCADCIR>REG>RICADINT) acham a internação já gravada
+FCLANAUD	FCCTAAUD	recusas fase 2 (L8-06): trilha da auditoria pela conta auditada (ref:FCCTAAUD por chave composta); o pai vinha depois do filho
+GEITENS	TBCTRMEM	recusas fase 2 (L7-07, ADR 0011): condição se:TIPO_REF>TBCTRMEM decide o catálogo do espelho; o fecho do recorte puxa a tabela de preço
+GEUSERS	GELOCARM	recusas fase 2 (L7-06): condição se:LOC_ARM>GELOCARM do local padrão do usuário; o fecho do recorte puxa o local de estoque

@@ -82,7 +82,7 @@ def linhas(r, ins):
         grupo, dt, hhmm, banco, usuario = 1 + i % 2, datetime.date(2026, 1, i), 830, (1, 237)[i % 2], 1 + i % 2
         descr = "Item ação %d" % i
         if i == 3:
-            grupo = 3            # pai recusado: pai_pendente (recusa)
+            grupo = 3            # pai recusado, coluna anulável: grava NULL com pai_pendente (M15, recusas fase 2)
         if i == 4:
             grupo = 99           # pai inexistente: NULL com pendência
         if i == 5:
@@ -104,8 +104,9 @@ def linhas(r, ins):
         ins(N, [item, texto])
     return {
         G: {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "valor_fora_do_dominio": 1, "pai_pendente": 1}},
-        I: {"gravados": 18, "pendencias": {"pai_pendente": 1, "restricao_destino_1406": 1, "data_sentinela": 1,
+        I: {"gravados": 19, "pendencias": {"pai_pendente": 1, "restricao_destino_1406": 1, "data_sentinela": 1,
                                            "hora_invalida": 1, "catalogo_codigo_inexistente": 1,
                                            "pai_inexistente": 2}},
-        N: {"gravados": 4, "pendencias": {"pai_pendente": 2}},
+        # notas: a do item 3 acha o pai (gravado pelo M15); a do item 8 (recusado pelo tamanho) grava NULL com aviso
+        N: {"gravados": 6, "pendencias": {"pai_pendente": 1}},
     }

@@ -14,6 +14,11 @@ BLOQUEADAS = set(l6_18.NAO_CARREGADAS)
 DESCARTADAS = set(l6_18.DESCARTADAS)
 
 
+# recusas-fase2 C1c (pedido 2 do K2): S/N e 1/0 viram o booleano do contrato por chave
+ITEM_ESPECIFICO = {"CVPARAM": ["#item@GRAVAR_FOTO_BANCO", "#item@IMPRIME_ETIQ_SEM_PRE_VIZUALIZAR",
+                               "#item@DIGITAR_DATA_NASCIMENTO", "#item@DIGITAR_CELULAR", "#item@DIGITAR_DOCUMENTO"]}
+
+
 class Plano(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -63,8 +68,12 @@ class Plano(unittest.TestCase):
         # modalidade e classe vêm do nome do tipo de dieta (TBTPDIETA lida pela ref encadeada), nunca presumidas
         for t, dt, dc, col in [("PRVIAADMIN", "via_dieta", "modalidade", "ID_TBTPDIETA"),
                                ("TBDIETAS", "modalidade_dieta", "classe", "TPDIETA")]:
-            c = self.cols(t, dt)[dc]
+            todas = [x for x in self.plano[t]["colunas"][dt] if x["destino"] == dc]
+            c = todas[0]
             self.assertEqual((c["coluna"], c["referencia"], c["depara"]), (col, "TBTPDIETA>NOME", "valores"), t)
+            # P2b: na via, sem tipo de dieta (ou sem par), a concorrente pelo NOME da própria via; na modalidade, nenhuma
+            self.assertEqual([(x["coluna"], x["depara"]) for x in todas[1:]],
+                             [("NOME", "valores")] if t == "PRVIAADMIN" else [], t)
             self.assertEqual(c["valores"].get("ENTERAL"), "enteral", t)
             self.assertEqual(c["valores"].get("Parenteral"), "parenteral", t)
             self.assertNotIn("Especial exemplo", c["valores"], t)
@@ -122,8 +131,15 @@ class Plano(unittest.TestCase):
         self.assertEqual(c["parametro_definicao.chave"]["coluna"], "=nutricao.tipoDieta")
         for t in ("CHPARAM", "CVPARAM"):
             self.assertEqual(self.plano[t]["destinos"][0], "parametro_valor", t)
-            c = {x["destino"]: x for x in self.mapa["colunas_decl"] if x["tabela"] == t}
+            c = {}
+            for x in self.mapa["colunas_decl"]:
+                if x["tabela"] == t:
+                    c.setdefault(x["destino"], x)  # a primeira declarada do destino: o desdobrar geral
             self.assertEqual(c["parametro_valor.valor"]["coluna"], "#item", t)
+            # recusas-fase2 C1c (pedido 2 do K2): as chaves booleanas têm declaração própria (#item@CHAVE) depois
+            especificas = [x["coluna"] for x in self.mapa["colunas_decl"]
+                           if x["tabela"] == t and x["destino"] == "parametro_valor.valor"][1:]
+            self.assertEqual(especificas, ITEM_ESPECIFICO.get(t, []), t)
             self.assertIn("desdobrar:", c["parametro_valor.valor"]["via"], t)
             self.assertEqual(c["parametro_valor.parametro_definicao_id"]["coluna"], "#rotulo", t)
             self.assertIn("cod:parametro_definicao.chave", c["parametro_valor.parametro_definicao_id"]["via"], t)

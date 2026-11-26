@@ -48,7 +48,8 @@ class PlanoL707(unittest.TestCase):
                     "GELANBAL": ["inventario_estoque_item"], "GECADPED": ["pedido_compra"],
                     "GELANNFS": ["nota_entrada_item", "nota_entrada", "movimento_estoque"],
                     "GECADNFS": ["nota_entrada"], "GERASVALNFS": ["movimento_lote"],
-                    "GERASVALTRANSFLOTE": ["movimento_lote"], "GELANPAC": ["movimento_estoque"],
+                    # recusas fase 2 (A08): o local que forneceu pelo código, adotado ou criado inativo de migração
+                    "GERASVALTRANSFLOTE": ["movimento_lote"], "GELANPAC": ["movimento_estoque", "local_estoque"],
                     "GEITENS_TBPRINC": ["insumo_principio_ativo"], "TBPRINC": ["principio_ativo_cliente"]}
         for t, dts in esperado.items():
             self.assertEqual(self.plano[t]["destinos"], dts, t)
@@ -129,12 +130,15 @@ class PlanoL707(unittest.TestCase):
 
     def test_toda_coluna_da_origem_declarada_nas_carregadas(self):
         lidas = {(c["tabela"], c["coluna"]) for c in self.m["colunas_decl"]}
+        # recusas fase 2 (M3 do C1): `#seq_livre:<grupo>:<COL>` lê a coluna COL (preservada quando única no grupo)
+        numeradas = {(c["tabela"], c["coluna"].rsplit(":", 1)[1]) for c in self.m["colunas_decl"]
+                     if c["coluna"].startswith("#seq_livre:")}
         chave = {r["tabela"]: r["chave"].split(",") for r in self.m["tabelas"]}
         for t in self.plano:
             for c in [x for x in self.m["colunas"] if x["tabela"] == t]:
                 if c["coluna"] in chave[t] or c["coluna"] == "BRASIN":
                     continue
-                self.assertIn((t, c["coluna"]), lidas, (t, c["coluna"]))
+                self.assertIn((t, c["coluna"]), lidas | numeradas, (t, c["coluna"]))
 
     def test_curvas_por_de_para_de_valores(self):
         i = self.cols("GEITENS", "insumo")
@@ -173,9 +177,15 @@ class PlanoL707(unittest.TestCase):
         self.assertEqual(self.cols("GEVALMEM", "lote_insumo")["validade"]["regra"], "data")
 
     def test_licenciado_nunca_migrado(self):
-        for c in self.m["colunas_decl"]:
-            if c["tabela"] in FATIA and c["coluna"] == "BRASIN":
-                self.assertEqual(c.get("destino") or "", "", c["tabela"])
+        # ADR 0011 (recusas fase 2): o código da tabela licenciada é dado do hospital. No insumo, liga ao espelho
+        # licenciado do cliente (nunca copia o espelho); na apresentação comercial, fica como código de referência
+        br = {c["tabela"]: (c.get("destino"), c["regra"], c["via"]) for c in self.m["colunas_decl"]
+              if c["tabela"] in FATIA and c["coluna"] == "BRASIN"}
+        self.assertEqual(br, {"GEITENS": ("insumo.item_referencia_matmed_id", "inteiro_zero_nulo", "espelho:brasindice"),
+                              "GENOMCOM": ("apresentacao_comercial.codigo_referencia_preco", "inteiro_zero_nulo", "")})
+        # nenhuma tabela da fatia grava o próprio catálogo licenciado
+        self.assertFalse({p["tabela"] for p in carga_mapa.planejar(self.m, FATIA)
+                          if "item_referencia_matmed" in p["destinos"]})
 
     def test_nada_de_destino_oficial(self):
         por = {r["tabela"]: r for r in self.m["tabelas"]}

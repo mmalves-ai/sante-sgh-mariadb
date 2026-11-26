@@ -9,7 +9,8 @@ from sante_conector import carga, carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_05
 
 TABELAS = set(l8_05.CARREGADAS)
-DESTINOS = {"TBTIPPLANO": ["plano_fonte_pagadora"], "TBTABDTH": ["preco_diaria_taxa"],
+# recusas fase 2 (P6, A03): a diária ou taxa é cobrável: item faturável e grupo de faturamento de migração
+DESTINOS = {"TBTIPPLANO": ["plano_fonte_pagadora"], "TBTABDTH": ["preco_diaria_taxa", "item_faturavel", "grupo_faturamento"],
             "TBTPPROFPROC": ["funcao_equipe_cobranca"], "TBCODATI": ["codigo_prestador_fonte_pagadora"],
             "TBCODATI_TBUSERS": ["usuario_codigo_prestador"], "TBCONVEN_TBTISSPARDEF": ["valor_padrao_campo_tiss"],
             "TBEMIREF": ["referencia_emissao_matmed"], "TBENTCON": ["calendario_entrega_fatura"],
@@ -144,7 +145,8 @@ class Plano(unittest.TestCase):
         # conferidor r4: acordo de mat/med carrega pelo item de referência (modelo 12_FAT/13), nunca descarte
         pm = {d["destino"]: d.get("via") for d in self.mapa["colunas_decl"] if d["tabela"] == "TBPERMEM" and d["destino"]
               and d["coluna"] != "COD"}
-        self.assertEqual(pm["preco_negociado_matmed.item_referencia_matmed_id"], "ref:TBMATMED;se:TAB>TBCTRMEM>REF_BRA=N,F,")  # F4: domínio real T/F
+        # recusas fase 2 (P6, A02): sem filtro de tabela, depois da linha do espelho (senao)
+        self.assertEqual(pm["preco_negociado_matmed.item_referencia_matmed_id"], "ref:TBMATMED;senao")
         self.assertNotIn("TBPERMEM", sc)
         self.assertEqual(pm["preco_negociado_matmed.fonte_pagadora_id"], "ref:TBCONVEN")
         self.assertTrue({"preco_negociado_matmed.valor_unitario", "preco_negociado_matmed.percentual_ajuste",
@@ -180,7 +182,10 @@ class Plano(unittest.TestCase):
 
     def test_descartes_com_causa_de_produto(self):
         sc = {r["tabela"]: r for r in mapa.ler_tsv(Path(mapa.DIR_PACOTE) / "declarado/sem_carga.tsv")}
-        for t in l8_05.DESCARTES:
+        # ADR 0011: a edição do espelho do cliente sai do descarte e fica bloqueada até a semente gravá-la (M13)
+        self.assertEqual((sc["TBVERSAOBRASIN"]["situacao"], sc["TBVERSAOBRASIN"]["causa"]),
+                         ("bloqueada", "espelho_do_cliente"))
+        for t in set(l8_05.DESCARTES) - {"TBVERSAOBRASIN"}:
             self.assertEqual(sc[t]["situacao"], "descarte", t)
             self.assertIn(sc[t]["causa"], {"sem_valor", "duplicado", "licenciado", "catalogo_oficial",
                                            "mecanismo_do_produto"}, t)
@@ -215,8 +220,14 @@ class Plano(unittest.TestCase):
                          {"A": "ambulatorial", "E": "externa", "U": "urgencia", "I": "internacao"})
         self.assertEqual(set(c["natureza"]["valores"].values()) - {"ambulatorial", "externo", "pronto_atendimento",
                                                                    "internacao", "domiciliar"}, set())
-        self.assertEqual(c["paciente_id"]["passos"][0].get("coluna_destino"), "paciente_id")
-        self.assertEqual(c["atendimento_id"]["referencia"], "RECADATE")
+        # paciente do atendimento gravado; lote R (R9): na conta de internação, o da internação (concorrente)
+        pac = [x for x in self.plano["FCCTAEXT"]["colunas"]["conta_hospitalar"] if x["destino"] == "paciente_id"]
+        self.assertEqual([(x["coluna"], x["referencia"]) for x in pac],
+                         [("REG_ATE", "RECADATE@paciente_id"), ("ID", "FCCTAEXT>REG_ATE>RICADINT@paciente_id")])
+        self.assertEqual([x["passos"][-1].get("coluna_destino") for x in pac], ["paciente_id", "paciente_id"])
+        ate = [x for x in self.plano["FCCTAEXT"]["colunas"]["conta_hospitalar"] if x["destino"] == "atendimento_id"]
+        self.assertEqual([(x["coluna"], x["referencia"]) for x in ate],
+                         [("REG_ATE", "RECADATE"), ("ID", "FCCTAEXT>REG_ATE>RICADINT@atendimento_id")])  # R9
         s = self.cols("FCDIAEXT")
         self.assertEqual(s["numero_carteira"]["passos"][-1], {"coluna": "MATRICULA"})
         self.assertEqual(s["conta_hospitalar_id"]["passos"][0]["arg"], ["ANOPRO", "MESPRO", "COD"])
@@ -291,7 +302,9 @@ class ContinuidadeR5(unittest.TestCase):
                and c["destino"] == "preco_negociado_matmed.item_referencia_matmed_id"]
         por = {c["coluna"]: c["via"] for c in dec}
         self.assertEqual(por["COD"], "espelho:brasindice;se:TAB>TBCTRMEM>REF_BRA=S,T")  # F4: domínio real T/F
-        self.assertEqual(por["ID_TBMATMED"], "ref:TBMATMED;se:TAB>TBCTRMEM>REF_BRA=N,F,")  # F4: domínio real T/F
+        # recusas fase 2 (P6, A02): sem par no espelho, o item da TBMATMED (concorrente senao, na ordem do arquivo)
+        self.assertEqual([c["coluna"] for c in dec], ["COD", "ID_TBMATMED"])
+        self.assertEqual(por["ID_TBMATMED"], "ref:TBMATMED;senao")
         self.assertEqual(mapa.espelho_spec("espelho:brasindice")["catalogo"], "brasindice")
         from sante_conector import semente_espelho
         self.assertEqual(semente_espelho.ler_declaracao()["brasindice"]["tabela"], "TBVLRMEM")

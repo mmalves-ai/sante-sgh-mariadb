@@ -323,12 +323,17 @@ def linhas(r, ins):
         "TBSITUACAOFARMACIA": {"gravados": 4, "pendencias": {"valor_presumido": 8, "valor_fora_do_dominio": 1}},
         # rodada 2: com a aresta GELOCUSU -> GEUSERS (pedida pela fatia), GEUSERS grava antes e o local por usuário
         # adota as duas linhas de usuário_local que já existem
-        "GELOCUSU": {"gravados": 4, "pendencias": {"adotado_existente": 2, "pai_inexistente": 2,
-                                                   "restricao_destino_1048": 2}},
-        "GEUSERS": {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1,
-                                                  "restricao_destino_1048": 1}},
-        "GESUBGRU": {"gravados": 3, "pendencias": {"restricao_destino_1062": 1, "codigo_derivado": 1,
-                                                   "pai_inexistente": 1, "restricao_destino_1048": 2}},
+        # recusas fase 2 (A08): o local 9 nunca visto é criado inativo (secundário) e a linha grava; sobra o usuário
+        # nunca visto (pai_inexistente + 1048). valor_presumido: as 2 presumidas do local secundário em cada linha (6)
+        "GELOCUSU": {"gravados": 5, "pendencias": {"adotado_existente": 3, "pai_inexistente": 1,
+                                                   "restricao_destino_1048": 1, "valor_presumido": 12}},
+        # recusas fase 2 (A10): sem LOC_ARM o usuário 3 vai ao ARM1 (concorrente, padrão falso) e grava; a condição
+        # se:LOC_ARM>GELOCARM>COD lê o local na origem, que esta imagem não tem (pai externo): pai_inexistente nas 2
+        # linhas com LOC_ARM
+        "GEUSERS": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2}},
+        # recusas fase 2 (A05): o código vem de GRU+COD (único na tabela toda): o nome repetido entre grupos e o nome
+        # comprido gravam (sem 1062 nem codigo_derivado)
+        "GESUBGRU": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
         "PRPARVARUNIRESP": {"gravados": 2, "pendencias": {"texto_resumido": 1, "restricao_destino_1048": 1}},
         # documento_invalido: a regra cruzada CPF x CNPJ da mesma coluna (6) + o CNPJ errado da linha 5 na empresa e
         # no titular da conta (2); catálogo: município da linha 6 e banco 999 da linha 6 (sem conta: nada gravado)

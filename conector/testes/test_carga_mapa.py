@@ -106,9 +106,9 @@ class ConferenciaExemplo(unittest.TestCase):
         self.assertTrue(r["ok"])
         ent = r["entidades"]
         self.assertEqual((ent["ex_grupo"]["registros_destino"], ent["ex_grupo"]["recusados"]), (5, 1))
-        self.assertEqual((ent["ex_item"]["registros_destino"], ent["ex_item"]["recusados"]), (18, 2))
-        self.assertEqual(ent["ex_item_extra"]["registros_destino"], 18)
-        self.assertEqual((ent["ex_nota"]["registros_destino"], ent["ex_nota"]["recusados"]), (4, 2))
+        self.assertEqual((ent["ex_item"]["registros_destino"], ent["ex_item"]["recusados"]), (19, 1))
+        self.assertEqual(ent["ex_item_extra"]["registros_destino"], 19)
+        self.assertEqual((ent["ex_nota"]["registros_destino"], ent["ex_nota"]["recusados"]), (6, 0))
         self.assertEqual(r["fase2"], {"fase2_gravadas": 3, "fase2_pendentes": 1})
         self.assertEqual(r["segunda"]["puladas_iguais"], 6 + 20 + 6)
         self.assertEqual(r["segunda"]["pendencias_por_regra"].get("ex_item:edicao_no_destino:media"), 1)

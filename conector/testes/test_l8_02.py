@@ -87,7 +87,8 @@ class FatiaL802(unittest.TestCase):
             self.assertEqual(self._col("RPRPA", dc)["coluna"], "=0")
         for dc in ("pessoa_juridica", "retem_irrf", "retem_inss", "categoria"):
             self.assertTrue(self._col("RPTIPOPRESTADOR", dc)["coluna"].startswith("=~"), dc)
-        self.assertEqual(self._col("SIORCAME", "numero")["coluna"], "#codigo_derivado:NOME:1")
+        # recusas fase 2 (P6, A05): código estável SEMPRE pelo hash do interessado e do setor, nunca o nome em claro
+        self.assertEqual(self._col("SIORCAME", "numero")["coluna"], "#codigo_derivado:NOME+ATO:10:S_HASH_SEMPRE")
         self.assertEqual(self._via("SIEXAORC", "orcamento_particular_item.orcamento_particular_id"),
                          "ref:SIORCAME(NOME,ATO)")
         self.assertEqual(self._via("SIEXAORC", "orcamento_particular_item.descricao"), "ref:SITABPRO(ATO,EXAME)>NOME")
@@ -157,7 +158,9 @@ class FatiaL802(unittest.TestCase):
         self.assertEqual(self._col("TBCOOPER", "banco_id")["depara"], "banco")
         self.assertEqual(self._col("TBCOOPER", "tipo_conta_bancaria")["valores"], {"C": "corrente", "P": "poupanca"})
         # índice por procedimento: fonte e item faturável (principal de TBPROCTO) pela chave
-        self.assertEqual(self._via("TBINDPRO", "valor_indice_item.item_faturavel_id"), "ref:TBPROCTO.COD_PROCEDIMENTO")
+        # lote R (R3): procedimento pela tabela de honorários do convênio
+        self.assertEqual(self._via("TBINDPRO", "valor_indice_item.item_faturavel_id"),
+                         "ref:TBPROCTO.(ID_TBCTRTHM,COD_PROCEDIMENTO)=(CONV>TBCONVEN>THM,PROCTO)")
         self.assertEqual(self._via("TBINDPRO", "valor_indice_item.fonte_pagadora_id"), "ref:TBCONVEN")
         # porte anestésico: data DATE em DATETIME (tipar) e retrato completo da linha no JSON
         self.assertEqual(self._col("FCPORANE", "ocorrido_em")["coluna"], "DATA_PORTE")

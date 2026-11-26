@@ -100,7 +100,9 @@ class Plano(unittest.TestCase):
         """A chave do atributo vem do NOME por de-para para as chaves que a tela exibe (nunca o id da origem), e a
         preferência do usuário copia a chave que a coluna do painel gravou."""
         c = self._col("PRCAMPOSLOCALIZACAOPACIENTE", "chave_atributo")
-        self.assertEqual([(x["coluna"], x["regra"]) for x in c], [("NOME", "texto_nome")])
+        # recusas-fase2 P3a: nome sem atributo do produto: chave própria derivada do id, presumida (pedido 65)
+        self.assertEqual([(x["coluna"], x["regra"]) for x in c],
+                         [("NOME", "texto_nome"), ("#codigo_derivado:ID:60:origem_", "")])
         self.assertTrue(c[0]["valores"])
         self.assertLessEqual(set(c[0]["valores"].values()), COLUNAS_PAINEL)
         self.assertEqual(c[0]["valores"].get("Dias de internação"), "dias")
@@ -209,9 +211,13 @@ class Plano(unittest.TestCase):
     def test_sem_presumido_que_muda_o_sentido_clinico(self):
         """Lado do balanço, papel de quem assina, período do fechamento e tipo da frequência vêm do de-para de valores:
         valor sem par vira NULL com valor_fora_do_dominio e a linha é recusada pelo NOT NULL (nada presumido)."""
+        # recusas-fase2 P3a (pedido 67, decisão clínica pendente): o tipo de assinante sem par entra como responsável
+        # legal presumido, sempre depois do de-para e com valor_presumido
+        concorrente = {("PRASSINANTE", "papel"): "=~responsavel_legal"}
         for t, d in POR_VALORES:
             c = self._col(t, d)
-            self.assertEqual(len(c), 1, (t, d))
+            self.assertEqual([x["coluna"] for x in c[1:]], [concorrente[(t, d)]] if (t, d) in concorrente else [], (t, d))
+            c = c[:1]
             self.assertIsNotNone(c[0]["valores"], (t, d))
             self.assertFalse(c[0]["coluna"].startswith("="), (t, d))
         tipo = self._col("PRFREQUENCIA", "tipo")[0]["valores"]

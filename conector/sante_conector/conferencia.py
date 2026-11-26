@@ -28,8 +28,10 @@ def _sem_fk(create):
     return re.sub(r",\s*\n(\s*\))", r"\n\1", txt)
 
 
-ESPELHO_CONSULTA = {"brasindice": ["item_referencia_matmed", "preco_referencia_matmed", "edicao_referencia_matmed"],
-                    "simpro": ["item_referencia_matmed", "preco_referencia_matmed", "edicao_referencia_matmed"],
+# mat/med: as quatro tabelas do espelho do cliente (semente_espelho.CLIENTE_MATMED, ADR 0011); sem a da fonte, o passo
+# M13 da execução (semear o espelho do cliente) não reconhecia o banco da fatia como cliente e parava a carga
+_MATMED = ["item_referencia_matmed", "preco_referencia_matmed", "edicao_referencia_matmed", "fonte_referencia_matmed"]
+ESPELHO_CONSULTA = {"brasindice": _MATMED, "simpro": _MATMED,
                     "cbhpm": ["tabela_referencia_procedimento", "tabela_referencia_procedimento_item"],
                     "cep": ["logradouro_cep"]}
 
@@ -65,6 +67,10 @@ def ddl_destino(plano, raiz=RAIZ_APP, preparo="", provas=()):
         alvo += [t for t in re.findall(r"(?i)\b(?:FROM|JOIN)\s+`?(\w+)`?(?!\s*\.)", sql) if t in ddl]
         alvo += [t for t in re.findall(r"(?i)\bTABLE_NAME\s*=\s*'(\w+)'", sql) if t in ddl]
     for p in plano:
+        # `ligar_espelho:` (ligação da linha ao espelho): o passo M13 semeia o espelho do cliente também por ela
+        # (carga_mapa._semear_espelho_cliente), então o banco da fatia precisa das tabelas que a ligação consulta
+        for lg in p.get("ligacoes") or ():
+            alvo += ESPELHO_CONSULTA.get(lg["espelho"]["catalogo"], [])
         for dt in p["destinos"]:
             alvo.append(dt)
             for c in p["colunas"][dt]:

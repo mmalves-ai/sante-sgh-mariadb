@@ -76,8 +76,14 @@ class Plano(unittest.TestCase):
         c = self.cols("TBUSERS_TBPAPEL", "usuario_papel_seguranca")["ocupacao_cbo_id"]
         self.assertEqual((c["depara"], [p.get("tabela") or p.get("coluna") for p in c["passos"]]),
                          ("cbo", ["TBCBOPRO", "ID_TBCBOSUS", "TBCBOSUS", "COD"]))
-        e = self.cols("PRJUSTIF_IMP_EXPORTACAO", "exportacao_documento")["usuario_id"]
-        self.assertEqual((e["passos"][0]["modo"], e["passos"][0]["arg"]), ("alt", "ID_TBCBOPRO"))
+        # recusas-fase2 P1a: login e autor pelo profissional da inscrição (encadeada pela chave), não pelo cadastro
+        # complementar (que dava pai_ambiguo com a mesma inscrição em duas empresas)
+        e = self.cols("PRJUSTIF_IMP_EXPORTACAO", "exportacao_documento")
+        self.assertEqual(e["usuario_id"]["passos"],
+                         [{"tabela": "TBCBOPRO", "modo": "chave", "arg": None}, {"coluna": "ID_TBPROFIS"},
+                          {"tabela": "TBPROFIS", "modo": "chave", "arg": None}, {"coluna": "ID_TBUSERS"},
+                          {"tabela": "TBUSERS", "modo": "chave", "arg": None}])
+        self.assertEqual(e["profissional_id"]["passos"], e["usuario_id"]["passos"][:3])
         self.assertEqual(self.cols("TBCABTRILHA", "evento_auditoria")["paciente_id"]["passos"][-1]["tabela"], "RICADPAC")
         self.assertEqual(self.cols("TBUSUCPL", "usuario_vinculo_profissional")["profissional_id"]["passos"][-1]["tabela"],
                          "TBPROFIS")

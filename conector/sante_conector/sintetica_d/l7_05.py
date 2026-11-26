@@ -237,8 +237,9 @@ def linhas(r, ins):
               (4, "Entrega quatro", "Travessa Exemplo", 0, None, None, None, "RJ", None, 12345678000199)]:
         ins("GEDESCOM", list(x))
 
-    # --- recálculo de saldo: 3 sem mês (competência vazia: 1048), 4 mês 13 (valor_fora_do_dominio nas duas
-    # competências + 1048), 5 marca de término fora do domínio (padrão + pendência), 6 login sem usuário
+    # --- recálculo de saldo: 3 sem mês e 4 mês 13 (valor_fora_do_dominio nas duas competências): recusas fase 2
+    # (A09), a competência é o mês do início do recálculo, presumida nas duas colunas (valor_presumido, gravada);
+    # 5 marca de término fora do domínio (padrão + pendência), 6 login sem usuário
     di, df = datetime.datetime(2025, 4, 1, 22, 0), datetime.datetime(2025, 4, 1, 23, 15)
     for x in [(1, di, "almox.exemplo", 5, 7, "S", df, 3, 2025, "10.0.0.1"),
               (2, di, None, 5, 8, "N", df, 4, 2025, None),
@@ -329,8 +330,9 @@ def linhas(r, ins):
     ins("GEHORMED", [2575] + [None] * 35)
 
     # --- lote dispensado por documento (ANO, MES, DOC, ITEM, DATA, QTDE, LOTE): o movimento de saída (GELANSAI) e o
-    # lote (GEVALMEM) são de outras fatias e não estão nesta imagem: movimento e validade pai_inexistente, o lote não
-    # existe para adotar e a criação recusa por validade nula (1048); insumo 77 nunca visto (mais um pai_inexistente)
+    # lote (GEVALMEM) são de outras fatias e não estão nesta imagem: movimento e lote pai_inexistente em cada linha
+    # (recusas fase 2, A04: o lote é o da GEVALMEM no local do documento, nunca criado aqui) e o movimento NOT NULL
+    # recusa (1048); o insumo 77 entra só na chave das duas referências
     dd = datetime.date(2025, 5, 2)
     for x in [(2025, 5, 10, 1, dd, D("3.000"), "LOTE-A1"), (2025, 5, 10, 2, dd, D("1.000"), "LOTE-B1"),
               (2025, 5, 11, 77, dd, D("2.000"), "LOTE-C1")]:
@@ -339,14 +341,16 @@ def linhas(r, ins):
     loc_doc, loc_inv, loc_rep = _local_antes("GECADTRA"), _local_antes("GEESTINI"), _local_antes("GELIMLOC")
     loc_sal = _local_antes("GEARMLOC")
     esp = {
-        "GEATUALIZASALDO": {"gravados": 4, "pendencias": {"restricao_destino_1048": 2, "valor_fora_do_dominio": 3,
+        "GEATUALIZASALDO": {"gravados": 6, "pendencias": {"valor_presumido": 4, "valor_fora_do_dominio": 3,
                                                           "pai_inexistente": 1}},
         "GEGERSEQ": {"gravados": 3, "pendencias": {"valor_elevado_ao_minimo": 1, "restricao_destino_4025": 1,
                                                    "pai_inexistente": 1, "restricao_destino_1048": 1}},
     }
     if loc_doc:
+        # recusas fase 2 (C1, R9): o destino recusado (14) é coluna anulável: pai_pendente não recusa mais, a linha vai
+        # à gravação sem o destino e cai no CHECK de origem e destino (4025)
         esp["GECADTRA"] = {"gravados": 3, "pendencias": {"restricao_destino_1048": 1,
-                                                         "restricao_destino_4025": 2, "pai_pendente": 1,
+                                                         "restricao_destino_4025": 3, "pai_pendente": 1,
                                                          "pai_inexistente": 2, "valor_fora_do_dominio": 2}}
         # o movimento de saída (secundário) repete as referências pelo documento e pela unidade: 2 na linha 100 e
         # 9 na linha 102 (documento nunca visto: documento, locais, data, competência, usuário e as duas unidades)
@@ -398,7 +402,7 @@ def linhas(r, ins):
         ins("GEKONCDC", list(x))
     # "gravados" conta as linhas da origem gravadas (4, em 3 grupos: test_l7_05 confere as somas)
     esp["GEKONCDC"] = {"gravados": 4, "pendencias": {"pai_inexistente": 5, "restricao_destino_1048": 1}}
-    esp["GECTRVMM"] = {"gravados": 0, "pendencias": {"pai_inexistente": 7, "restricao_destino_1048": 3}}
+    esp["GECTRVMM"] = {"gravados": 0, "pendencias": {"pai_inexistente": 6, "restricao_destino_1048": 3}}
 
     # --- rodada 5 (ADR 0006): terceiros só com nome e nascimento e histórico de compra na trilha (retrato completo);
     # compra do insumo 9 (nunca visto): entidade_id NULL com pai_inexistente, a linha fica
@@ -426,7 +430,8 @@ def linhas(r, ins):
         "GELOCARM": {"gravados": 7, "pendencias": {"valor_presumido": 8, "restricao_destino_1048": 1,
                                                    "pai_pendente": 1, "pai_inexistente": 1,
                                                    "valor_fora_do_dominio": 1}},
-        "GEKITRAS": {"gravados": 4, "pendencias": {"pai_pendente": 2, "pai_inexistente": 2,
+        # recusas fase 2 (C1, R9): o kit padrão recusado (5) é coluna anulável: grava sem o padrão (pai_pendente fica)
+        "GEKITRAS": {"gravados": 5, "pendencias": {"pai_pendente": 2, "pai_inexistente": 2,
                                                    "restricao_destino_1048": 1, "valor_fora_do_dominio": 1}},
         "GEDESCOM": {"gravados": 3, "pendencias": {"catalogo_codigo_inexistente": 1, "restricao_destino_1048": 1,
                                                    "valor_fora_do_dominio": 1, "documento_invalido": 1}},

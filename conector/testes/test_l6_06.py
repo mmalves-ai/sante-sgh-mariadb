@@ -42,7 +42,7 @@ class L6_06(unittest.TestCase):
         cls.plano = {x["tabela"]: x for x in carga_mapa.planejar(cls.m, cls.todas)}
         cls.val = {}
         for v in mapa.ler_valores(mapa.DIR_PACOTE):
-            if v["motivo"].startswith("L6-06"):
+            if v["tabela"] in l6_06.CARREGADAS:  # da fatia, também as linhas da fase 2 das recusas
                 cls.val.setdefault((v["tabela"], v["coluna"], v["destino"]), {})[v["valor_origem"]] = v["valor_destino"]
 
     def test_fatia_tem_as_23_tabelas_e_a_imagem_tambem(self):
@@ -73,7 +73,10 @@ class L6_06(unittest.TestCase):
 
     def test_sem_literal_presumido_e_fixos(self):
         lit = {(c["tabela"], c["destino"]): c["coluna"] for c in self.decl if c["coluna"].startswith("=")}
-        self.assertFalse({k for k, v in lit.items() if v.startswith("=~")})
+        # recusas-fase2 P3a (pedido 67, decisão clínica pendente): só as duas concorrentes do nome sem par
+        self.assertEqual({k: v for k, v in lit.items() if v.startswith("=~")},
+                         {("PROPCAOPERIODO", "periodo_consulta_sumario_alta.atendimento_inteiro"): "=~1",
+                          ("PRSITAPRAZAM", "situacao_aprazamento.categoria"): "=~pendente"})
         self.assertEqual(lit[("PRPADRECEITA", "modelo_receita.formato")], "=livre")
         self.assertEqual(lit[("PRSAE_LIKERT", "escala_resultado_enfermagem.tipo_escala")], "=likert_1_a_5")
         for t in self.esp:
@@ -86,7 +89,7 @@ class L6_06(unittest.TestCase):
         self.assertEqual(self.val[("PRPROTGERAL", "SEXO", "protocolo_prescricao.sexo")],
                          {"A": "todos", "F": "feminino", "M": "masculino", "": "todos"})
         self.assertEqual(self.val[("PRPADRECEITA", "GERAL", "modelo_receita.abrangencia")],
-                         {"S": "geral", "N": "profissional"})
+                         {"S": "geral", "N": "profissional", "T": "geral", "F": "profissional"})  # P3a: T/F também
         pt = self.val[("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.ponto")]
         self.assertEqual(pt, {str(i): str(i) for i in range(1, 6)})
         ds = self.val[("PRSAE_LIKERT", "PONTO_LIKERT", "escala_resultado_enfermagem.descricao")]
@@ -112,7 +115,9 @@ class L6_06(unittest.TestCase):
         self.assertEqual(via, {("PROFTEXAME", "ID_OFTGRUPO", "tipo_exame_oftalmologico.grupo_exame_oftalmologico_id",
                                 "ref:PROFTGRUPEXAME"),
                                ("PRPADRECEITA", "USUARIO", "modelo_receita.criado_por", "ref:TBUSERS"),
-                               ("PRPADRECEITA", "USUARIO", "modelo_receita.profissional_id", "ref:TBPROFIS.ID_TBUSERS")})
+                               ("PRPADRECEITA", "USUARIO", "modelo_receita.profissional_id", "ref:TBPROFIS.ID_TBUSERS"),
+                               # P3a: a concorrente presumida só preenche quando o de-para não deu valor (senao)
+                               ("PROPCAOPERIODO", "=~1", "periodo_consulta_sumario_alta.atendimento_inteiro", "senao")})
         self.assertEqual(set(l6_06.PAIS_EXTERNOS), {"TBUSERS", "TBPESSOA"})
 
     def test_vigencia_do_protocolo_suspensa_ate_o_pedido(self):

@@ -62,7 +62,7 @@ class Plano(unittest.TestCase):
         self.assertIn("adotar:item_faturavel_id,instrumento", via)
         self.assertFalse(any("procedimento_sigtap_id" in x for x in via if x.startswith("adotar:")))
         p = decl["procedimento_sigtap_id"]
-        self.assertEqual((p["coluna"], p["depara"], p["via"]), ("ID_TBPROSUS", "sigtap", "ref:TBPROSUS>COD"))
+        self.assertEqual((p["coluna"], p["depara"], p["via"]), ("ID_TBPROSUS", "sigtap", "ref:TBPROSUS>CODSUS"))  # P6 (A03, R17)
         self.assertEqual(decl["instrumento"]["coluna"], "=ciha")
         self.assertEqual(decl["vigencia_inicio"]["coluna"], "@vigencia_carga")
         ddl = mapa.ler_ddl(conferencia.RAIZ_APP)["equivalencia_sigtap_item"]["create"]

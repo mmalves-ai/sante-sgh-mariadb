@@ -56,9 +56,12 @@ class Plano(unittest.TestCase):
                             ("TBTPLANC", "tipo_lancamento", "natureza", "=~servico_hospitalar"),
                             ("TBTPLANC", "tipo_lancamento", "gera_repasse", "=~0"),
                             ("TBGRAUPARTPROC", "funcao_equipe_cobranca", "tipo_funcao", "=~outro"),
-                            ("TBPRESER", "prestador_terceiro", "tipo_pessoa", "=~juridica"),
                             ("TBFORMULAPAGTO", "regra_via_acesso", "vigencia_inicio", "@vigencia_carga")]:
             self.assertEqual(self.cols(t, dt)[c]["coluna"], v, (t, c))
+        # recusas fase 2 (P6, A05): o tipo de pessoa do prestador sai do documento (11 dígitos física, 14 jurídica),
+        # nunca mais presumido jurídica
+        tp = self.cols("TBPRESER", "prestador_terceiro")["tipo_pessoa"]
+        self.assertEqual((tp["coluna"], tp["regra"]), ("CGC_CPF", "tipo_pessoa_documento"))
 
     def test_regras_das_colunas(self):
         g = self.cols("TBTABATO", "grupo_ato")
@@ -103,7 +106,9 @@ class Plano(unittest.TestCase):
         self.assertEqual((f["ordem_procedimento"]["regra"], f["percentual"]["regra"]), ("piso:1", "faixa:0,999"))
         pr = self.cols("TBPRESER", "prestador_terceiro")
         self.assertEqual((pr["cnpj"]["regra"], pr["cep"]["regra"], pr["cnes"]["regra"]),
-                         ("cnpj", "inteiro_zeros_esquerda:8", "inteiro_zeros_esquerda:7"))
+                         ("cnpj_de_documento", "inteiro_zeros_esquerda:8", "inteiro_zeros_esquerda:7"))  # P6 (A05, R14)
+        self.assertEqual((pr["cnpj"]["coluna"], pr["cpf"]["coluna"], pr["cpf"]["regra"]),
+                         ("CGC_CPF", "CGC_CPF", "cpf_de_documento"))
         self.assertEqual(pr["aceita_cessao_credito"]["valores"], {"S": "0", "N": "1"})
 
     def test_achados_da_revisao(self):

@@ -104,8 +104,9 @@ class Plano(unittest.TestCase):
         self.assertEqual([v["Leve"], v["Moderada"], v["Grave"], v["Fatal"], v["GRAVE"]], ["1", "2", "3", "4", "3"])
 
     def test_tipo_da_pergunta_e_categoria_pelo_depara(self):
-        c = self.cols("PRTPPERGUNTA")["tipo_dado"]
-        self.assertEqual((c["coluna"], c["depara"]), ("NOME", "valores"))
+        # recusas-fase2 P3a (pedido 67): o tipo sem par cai na concorrente texto presumida (valor_presumido)
+        self.assertEqual([(c["coluna"], c["depara"]) for c in self.plano["PRTPPERGUNTA"]["colunas"][DESTINOS["PRTPPERGUNTA"]]
+                          if c["destino"] == "tipo_dado"], [("NOME", "valores"), ("=~texto", "")])
         v = self.valores("PRTPPERGUNTA", "NOME", "tipo_campo_modelo.tipo_dado")
         self.assertEqual((v["Texto"], v["DATA"], v["Número"]), ("texto", "data", "numero"))
         ck = {'titulo', 'texto', 'texto_longo', 'numero', 'data', 'hora', 'data_hora', 'booleano', 'lista',

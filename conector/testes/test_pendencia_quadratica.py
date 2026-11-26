@@ -264,6 +264,10 @@ class ContinuacaoCargaPropria(unittest.TestCase):
                 ("ATCABECATEND", "3", "atendimento", None, h, None, "numero_duplicado", "critica"),
                 ("RECADATE", "f1", "atendimento", 11, h, b"\x0c" * 16, None, None),
                 ("RECADATE", "f2", "atendimento", 12, h, b"\x0d" * 16, None, None),
+                # M14 (recusas fase 2, R18): a cobertura do par já nasceu na execução anterior; sem estes registros
+                # a ficha é "carga anterior ao M14" e o grupo do atendimento é refeito (test_cargas_recusas_c1b)
+                ("RECADATE", "f1/cobertura_paciente", "cobertura_paciente", 21, h, None, None, None),
+                ("RECADATE", "f2/cobertura_paciente", "cobertura_paciente", 22, h, None, None, None),
                 ("REALTA", "a1", "atendimento", 11, h, b"\x0e" * 16, None, None)]
         pend = [(1, "ATCABECATEND", "1", "carater_estimado", "baixa"),
                 (1, "ATCABECATEND", "2", "carater_estimado", "baixa"),

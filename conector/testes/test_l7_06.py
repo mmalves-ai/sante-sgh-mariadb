@@ -23,7 +23,9 @@ DESTINOS = {
 # destinos secundários (rodada 2 da cobertura): conta do credor e trilha da entidade (um valor da origem por linha)
 TRILHA = "trilha_auditoria"
 SECUNDARIOS = {"TBFORNEC": ["conta_bancaria_credor", TRILHA], "GEREFER": [TRILHA], "GESALDOS": [TRILHA],
-               "GESALCON": [TRILHA]}
+               "GESALCON": [TRILHA],
+               # recusas fase 2 (A08): o local pelo código, adotado do cadastro ou criado inativo de migração
+               "GELOCUSU": ["local_estoque"]}
 # âncora no insumo sem coluna alterada (`complementa`): insumo nunca visto recusa a linha com pai_inexistente
 COMPLEMENTA = {"GESALDOS", "GESALCON"}
 # cadastros simples da primeira rodada: código pela chave (texto)
@@ -38,6 +40,7 @@ OBRIGATORIAS = {
     "categoria_fornecimento": {"codigo", "descricao"}, "fabricante": {"nome"},
     "grupo_unidade_medida": {"codigo", "descricao", "grandeza"}, "situacao_farmaceutica": {"codigo", "descricao"},
     "local_estoque_usuario": {"local_estoque_id", "usuario_id"},
+    "local_estoque": {"estabelecimento_id", "codigo", "nome", "tipo"},
     "subgrupo_insumo": {"grupo_insumo_id", "codigo", "descricao"}, "unidade_resposta": {"codigo", "descricao", "sigla"},
     "empresa_fornecedora": {"tipo_pessoa", "razao_social"},
     "empresa_fornecedora_categoria": {"empresa_fornecedora_id", "categoria_fornecimento_id"},
@@ -98,13 +101,23 @@ class Plano(unittest.TestCase):
         return next(c for c in self.decl if c["tabela"] == t and c["destino"] == DESTINOS[t] + "." + dc)["via"]
 
     def test_par_local_usuario_adotado_entre_as_duas_origens(self):
-        for t, col in (("GELOCUSU", "ARM"), ("GEUSERS", "LOC_ARM")):
-            self.assertEqual(self.cols(t)["local_estoque_id"]["coluna"], col)
+        def todas(t, dc):
+            return [c["coluna"] for c in self.plano[t]["colunas"][DESTINOS[t]] if c["destino"] == dc]
+        # recusas fase 2: GELOCUSU pelo secundário local_estoque (A08); GEUSERS com LOC_ARM 0 vai ao ARM1 (A10)
+        for t, cols in (("GELOCUSU", ["@id:local_estoque"]), ("GEUSERS", ["LOC_ARM", "ARM1"])):
+            self.assertEqual(todas(t, "local_estoque_id"), cols, t)
             self.assertIn("adotar:local_estoque_id,usuario_id", self.via(t, "local_estoque_id"))
             self.assertEqual(self.cols(t)["usuario_id"]["referencia"], "TBUSERS")
-        self.assertEqual(self.plano["GEUSERS"]["opcoes"]["local_estoque_usuario"]["adotar"],
-                         ["local_estoque_id", "usuario_id"])
-        self.assertEqual(self.cols("GEUSERS")["padrao"]["coluna"], "=1")
+            self.assertEqual(self.plano[t]["opcoes"]["local_estoque_usuario"]["adotar"],
+                             ["local_estoque_id", "usuario_id"], t)
+        self.assertEqual(self.plano["GELOCUSU"]["opcoes"]["local_estoque"]["adotar"], ["estabelecimento_id", "codigo"])
+        le = {c["destino"]: c["coluna"] for c in self.plano["GELOCUSU"]["colunas"]["local_estoque"]}
+        self.assertEqual((le["codigo"], le["ativo"], le["origem"]), ("ARM", "=0", "=migracao"))
+        # padrão só com LOC_ARM existente; a concorrente do ARM1 não é padrão
+        self.assertEqual(todas("GEUSERS", "padrao"), ["=1", "=0"])
+        pd = [c for c in self.plano["GEUSERS"]["colunas"]["local_estoque_usuario"] if c["destino"] == "padrao"]
+        self.assertEqual((pd[0]["se"]["coluna"], [x.get("tabela") or x.get("coluna") for x in pd[0]["se"]["passos"]]),
+                         ("LOC_ARM", ["GELOCARM", "COD"]))
 
     def test_fornecedor(self):
         c = self.cols("TBFORNEC")
@@ -154,7 +167,8 @@ class Plano(unittest.TestCase):
         self.assertEqual([p.get("tabela") or p.get("coluna") for p in cb["unidade_medida_id"]["passos"]],
                          ["GEITENS", "UNI_ARM", "TBUNICON"])
         self.assertEqual(cb["sequencia"]["coluna"], "#seq:ITEM")
-        self.assertEqual(self.cols("GESUBGRU")["codigo"]["coluna"], "#codigo_derivado:NOME:30")
+        # recusas fase 2 (A05): pelo grupo e código (o nome repete entre grupos)
+        self.assertEqual(self.cols("GESUBGRU")["codigo"]["coluna"], "#codigo_derivado:GRU+COD:30")
         self.assertEqual(self.cols("GESUBGRU")["grupo_insumo_id"]["referencia"], "GEGRUPOS")
         u = self.cols("PRPARVARUNIRESP")
         self.assertEqual(u["codigo"]["coluna"], "#codigo_derivado:ID:30:var_")
@@ -165,11 +179,14 @@ class Plano(unittest.TestCase):
 
     def test_credenciais_e_licenciado_nunca_carregados(self):
         fora = {("GEUSERS", "SENHA"), ("GEUSERS", "OLD_SENHA"), ("GEUSERS", "EMAIL_SERV"), ("GEUSERS", "PORTA_SMTP"),
-                ("TBLABORA", "COD_LAB_BRASINDICE"), ("GEUSERS", "EMAIL_USER"), ("GEUSERS", "ASSINATURA")}
+                ("GEUSERS", "EMAIL_USER"), ("GEUSERS", "ASSINATURA")}
         for c in self.decl:
             if (c["tabela"], c["coluna"]) in fora:
                 self.assertFalse(c["destino"], c["coluna"])
-        self.assertNotIn("codigo_tabela_referencia", self.cols("TBLABORA"))
+        # ADR 0011 (recusas fase 2): o código do laboratório na tabela licenciada do hospital é dado do cliente e
+        # carrega (0 é sem código); o espelho licenciado em si nunca vem do conector
+        lab = self.cols("TBLABORA")["codigo_tabela_referencia"]
+        self.assertEqual((lab["coluna"], lab["regra"]), ("COD_LAB_BRASINDICE", "inteiro_zero_nulo"))
         # integração L7: CNPJ do fabricante pela regra de documento (zeros à esquerda e dígito verificador)
         self.assertEqual(self.cols("TBFABOPM")["cnpj"]["regra"], "cnpj")
 

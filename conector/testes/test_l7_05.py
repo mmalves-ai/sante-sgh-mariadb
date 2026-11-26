@@ -16,6 +16,9 @@ TABELAS = set(l7_05.CARREGADAS)
 FASE2 = {"GELOCARM"}
 # complementa: sem a linha do pai a recusa é pai_inexistente (UPDATE sem alvo)
 COMPLEMENTA = {"GECONITL", "GEDESPDS"}
+# recusas fase 2 (C1, R9): pai_pendente em coluna anulável não recusa a linha (GEKITRAS 5: kit padrão; GECADTRA 14:
+# destino, que depois cai no CHECK 4025 e já conta como restrição)
+PAI_PENDENTE_ANULAVEL = {"GEKITRAS": 1, "GECADTRA": 1}
 
 
 class Plano(unittest.TestCase):
@@ -101,11 +104,16 @@ class Plano(unittest.TestCase):
         # competência composta de ANO+MES; documento: número único pelo ID, tipo transferência (fato), situação pela
         # consolidação (nunca concluído com consolidado falso)
         r = self.cols("GEATUALIZASALDO", "recalculo_saldo_estoque")
-        self.assertEqual(r["competencia_inicio"]["coluna"], "#data:ANO_PROC,MES_PROC")
+        # recusas fase 2 (A09): sem ANO_PROC e MES_PROC válidos, concorrente presumida pelo mês do início
+        for dc in ("competencia_inicio", "competencia_fim"):
+            cc = [c for c in self.plano["GEATUALIZASALDO"]["colunas"]["recalculo_saldo_estoque"] if c["destino"] == dc]
+            self.assertEqual([(c["coluna"], c["regra"]) for c in cc],
+                             [("#data:ANO_PROC,MES_PROC", ""), ("DATA_INICIO", "data_primeiro_dia_mes")], dc)
         self.assertEqual(r["situacao"]["valores"], {"S": "concluido", "N": "falhou", "": "falhou"})
         d = self.cols("GECADTRA", "documento_estoque")
+        # recusas fase 2 (A05): número = prefixo de domínio 3 (transferência) + ID, disjunto de saída e devolução
         self.assertEqual((d["numero"]["coluna"], d["tipo"]["coluna"], d["situacao"]["coluna"]),
-                         ("ID", "=transferencia", "CONSOL"))
+                         ("#codigo_derivado:ID:18:3", "=transferencia", "CONSOL"))
         self.assertEqual((d["situacao"]["depara"], d["situacao"]["valores"]),
                          ("valores", {"S": "concluido", "N": "aberto", "": "aberto"}))
         self.assertEqual(d["consolidado"]["coluna"], "CONSOL")
@@ -206,9 +214,14 @@ class Plano(unittest.TestCase):
                   if c["tabela"] == "GEKONCDC" and c["destino"] == "consumo_centro_custo.local_estoque_id"]
         self.assertEqual(locais, ["CDC", "DOC"])
         self.assertIn("GEKONCDC", self.plano)
-        # o lote por documento carrega desde a rodada 3 (conferidor): declaração ativa, não comentada
-        self.assertIn("\nGECTRVMM\tLOTE\tlote_insumo.numero_lote", pronta)
+        # o lote por documento carrega desde a rodada 3 (conferidor): declaração ativa, não comentada. Recusas fase 2
+        # (A04, M12 do C1): o lote é o da GEVALMEM no local do documento de saída (sem criar lote próprio)
+        self.assertIn("\nGECTRVMM\tLOTE\tmovimento_lote.lote_insumo_id\t", pronta)
         self.assertNotIn("\n#GECTRVMM\t", pronta)
+        self.assertEqual(self.plano["GECTRVMM"]["destinos"], ["movimento_lote"])
+        self.assertEqual(decl[("GECTRVMM", "LOTE", "movimento_lote.lote_insumo_id")]["via"],
+                         "ref:GEVALMEM.(ITEM,LOTE,LOCAL)=(ITEM,LOTE,DOC>GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>ARM)>min:DATA"
+                         ";so_se:LOTE!movimento_sem_lote")
 
     def test_bloqueadas_sem_destino(self):
         com_destino = {c["tabela"] for c in self.mapa["colunas_decl"] if c["destino"]}
@@ -248,6 +261,7 @@ class Sintetica(unittest.TestCase):
             pref = ("restricao_destino_",) if t in FASE2 else ("restricao_destino_", "pai_pendente")
             pref += ("pai_inexistente",) if t in COMPLEMENTA else ()
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(pref))
+            recusas -= PAI_PENDENTE_ANULAVEL.get(t, 0) if "pai_pendente" in pref else 0
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
         for t in l7_05.BLOQUEADAS:  # presença na imagem, nada esperado no destino
             self.assertEqual(cont[t], 2, t)

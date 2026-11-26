@@ -113,7 +113,13 @@ class Plano(unittest.TestCase):
         self.assertEqual(self._via("SILANEXA", "exame_id"), ("ATO", "SITABPRO(ATO,EXAME)"))
         self.assertEqual(self._via("SILANEXA", "setor_diagnostico_id"), ("ATO", "SIMODULO"))
         self.assertEqual(self._col("SILANEXA", "quantidade")[0]["regra"], "piso:1")
-        self.assertEqual(self._via("SIKITHISTITE", "exame_id"), ("ATO", "SITABPRO(ATO,EXAME)"))
+        # recusas fase 2 (P4): o exame do item da versão vem do secundário exame, pela chave composta (ATO,EXAME)
+        # copiando o código do exame real e adotando-o; o exame excluído da origem é criado com código derivado
+        self.assertEqual(self._via("SIKITHISTITE", "exame_id"), ("@id:exame", ""))
+        self.assertEqual(self.por["SIKITHISTITE"]["destinos"], ["kit_exame_versao_item", "exame"])
+        self.assertEqual(self.por["SIKITHISTITE"]["opcoes"]["exame"].get("adotar"), ["codigo"])
+        self.assertEqual([(c["coluna"], c["referencia"]) for c in self._col("SIKITHISTITE", "codigo", "exame")],
+                         [("ATO", "SITABPRO(ATO,EXAME)@codigo"), ("#codigo_derivado:ATO+EXAME:30:exame_excluido_", "")])
         self.assertEqual(self._col("SIKITHISTITE", "sequencia")[0]["coluna"], "#seq:ID_SIKITHISTEXA")
 
     def test_resultado_adotado_por_exame_e_analito_por_linha(self):

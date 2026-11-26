@@ -114,8 +114,10 @@ class PlanoL504(unittest.TestCase):
 
     def test_titular_pela_cobertura_encadeada_e_adotado(self):
         c = self.cols("RESEGUR")["cobertura_paciente_id"]
-        self.assertEqual([s.get("tabela") or s.get("coluna") for s in c["passos"]],
-                         ["RECADATE", "PRONT", "RICADPAC", "ID", "RICADPAC_TBCONVEN"])
+        # R18 (lote R): a cobertura do par (paciente, convênio) gravada pela carga do atendimento; a corrente pelo
+        # paciente saiu (ligava o titular à cobertura de outro convênio)
+        self.assertEqual(c["referencia"], "RECADATE/cobertura_paciente")
+        self.assertEqual(c["passos"], [{"tabela": "RECADATE", "modo": "chave", "arg": None, "destino": "cobertura_paciente"}])
         self.assertEqual(self.plano["RESEGUR"]["opcoes"]["titular_cobertura"]["adotar"], ["cobertura_paciente_id"])
         r = self.cols("RESEGUR")
         self.assertEqual(r["tipo_titular"]["valores"], {"F": "pessoa_fisica", "f": "pessoa_fisica",
@@ -163,7 +165,9 @@ class PlanoL504(unittest.TestCase):
 
     def test_especialidade_procedimento_pelo_codigo(self):
         c = self.cols("TBESPPRO")
-        self.assertEqual(c["item_faturavel_id"]["passos"], [{"tabela": "TBPROCTO", "modo": "alt", "arg": "COD_PROCEDIMENTO"}])
+        # recusas-fase2 P1a (R2): código em mais de uma tabela de honorários escolhe o de menor ID (>min:ID)
+        self.assertEqual(c["item_faturavel_id"]["passos"], [{"tabela": "TBPROCTO", "modo": "alt", "arg": "COD_PROCEDIMENTO",
+                                                             "escolha": ("min", "ID")}])
         self.assertEqual(c["especialidade_medica_id"]["referencia"], "TBESPEC")
         self.assertEqual(c["vigencia_inicio"]["coluna"], "@vigencia_carga")
 

@@ -24,7 +24,9 @@ SIGNIFICADOS = {"aguardando", "confirmada", "chegou", "em_atendimento", "realiza
 DESCARTES = {}
 BLOQUEADAS = set(PRONTAS)
 # a agenda de exames é identificada por NOME e CRM, a junção do próprio sistema antigo (o EXAME é atributo)
-AGENDA_EXAME = [{"tabela": "SIAGENDA", "modo": "alt_composta", "arg": ["NOME", "CRM"], "cols": ["NOME", "CRM"]}]
+# recusas-fase2 P2a: a agenda de exames é achada por nome, conselho e EXAME (a chave da origem inclui o EXAME)
+AGENDA_EXAME = [{"tabela": "SIAGENDA", "modo": "alt_composta", "arg": ["NOME", "CRM", "EXAME"],
+                 "cols": ["NOME", "CRM", "EXAME"]}]
 
 
 def _tsv(nome):
@@ -139,9 +141,10 @@ class L604(unittest.TestCase):
         # causa da recusa 1048 em todas as marcações da carga real: o cliente novo não tem tipo de marcação; a linha
         # cria ou adota pelo código o seu ANTES do principal, e o principal aponta para ele (@id:tipo_marcacao)
         for t in ("SIPACAGD", "REPACAGD"):
+            # recusas-fase2 P2a: a agenda de exames cria (ou adota) o seu canal de marcação pelo TP_AGE
             self.assertEqual(set(self.plano[t]["destinos"]),
                              {"marcacao_horario", "pre_cadastro", "marcacao_horario_item", "trilha_auditoria",
-                              "tipo_marcacao"})
+                              "tipo_marcacao"} | ({"canal_marcacao"} if t == "SIPACAGD" else set()))
             op = self.plano[t]["opcoes"]["tipo_marcacao"]
             self.assertTrue(op["antes"])
             self.assertEqual(op["adotar"], ["codigo"])
@@ -154,11 +157,12 @@ class L604(unittest.TestCase):
         fim = self.todas("SIPACAGI", "fim_em")[0]
         self.assertEqual((fim["coluna"], fim["regra"]), ("#data_hora_mais:DATA,HORA,DATA", "data_fim_aberta:1801"))
         dc = [c for c in self.m["colunas_decl"] if (c["tabela"], c["destino"]) == ("SIPACAGI", "horario_agenda.fim_em")]
-        self.assertEqual(dc[0]["via"], "ref:SIAGENDA.(NOME,CRM)=(NOME,CRM)@duracao_horario_minutos")
+        self.assertEqual(dc[0]["via"], "ref:SIAGENDA.(NOME,CRM,EXAME)=(NOME,CRM,EXAME)@duracao_horario_minutos")
         # a coluna de minutos anulada sem pendência: a duração vem da agenda
         self.assertEqual(sentinela.aplicar("data_fim_aberta:1801", datetime.date(2026, 3, 2)), (None, None))
         via = {(c["tabela"], c["destino"]): c["via"] for c in self.m["colunas_decl"] if c["destino"]}
-        self.assertEqual(via[("SIPACAGI", "horario_agenda.agenda_servico_id")], "ref:SIAGENDA.(NOME,CRM)=(NOME,CRM)")
+        self.assertEqual(via[("SIPACAGI", "horario_agenda.agenda_servico_id")],
+                         "ref:SIAGENDA.(NOME,CRM,EXAME)=(NOME,CRM,EXAME)")
         # a marcação não traz EXAME e acha o horário como o sistema antigo: NOME, CRM, DATA e HORA
         self.assertEqual(via[("SIPACAGD", "marcacao_horario.horario_agenda_id")],
                          "ref:SIPACAGI.(NOME,CRM,DATA,HORA)=(NOME,CRM,DATA,HORA)")
@@ -196,8 +200,10 @@ class L604(unittest.TestCase):
         self.assertEqual((vs["S"], vs["N"]), ("livre", "cancelado"))
 
     def test_significado_pelo_de_para_de_valores(self):
-        c = self.cols("TBSITAGE")["significado"]
-        self.assertEqual((c["coluna"], c["depara"]), ("COD", "valores"))
+        # recusas-fase2 P2a (decisão 3): a situação de COD em branco entra como não informada, presumida
+        self.assertEqual([(x["coluna"], x["depara"]) for x in self.todas("TBSITAGE", "significado")],
+                         [("COD", "valores"), ("=~nao_informada", "")])
+        c = self.todas("TBSITAGE", "significado")[0]
         v = c["valores"]
         self.assertEqual(len(v), 15)   # as 16 situações menos a de código vazio (recusada pela chave)
         self.assertTrue(set(v.values()) <= SIGNIFICADOS)
@@ -231,8 +237,9 @@ class L604(unittest.TestCase):
         self.assertEqual(e["paciente_id"]["referencia"], "RICADPAC")
 
     def test_codigo_da_situacao_tem_prefixo_do_dominio_de_exame(self):
-        c = self.cols("TBSITAGE")["codigo"]
-        self.assertEqual((c["coluna"], c["regra"]), ("#codigo_derivado:COD:30:exame_", "codigo_char"))
+        # recusas-fase2 P2a: a situação com COD em branco entra pela concorrente de código fixo
+        self.assertEqual([(x["coluna"], x["regra"]) for x in self.todas("TBSITAGE", "codigo")],
+                         [("#codigo_derivado:COD:30:exame_", "codigo_char"), ("=exame_sem_codigo", "")])
         self.assertEqual(carga_mapa.codigo_derivado("C", 30, "exame_"), ("exame_C", False))
         self.assertEqual(carga_mapa.codigo_derivado("HR", 30, "exame_"), ("exame_HR", False))
         self.assertEqual(sentinela.aplicar("codigo_char", "a "), ("a", None))

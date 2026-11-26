@@ -42,6 +42,9 @@ CREATE TABLE ex6_rascunho (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, autor_
   CONSTRAINT ck_ex6_rascunho_autor CHECK (autor_usuario_id IS NOT NULL OR origem = 'migracao'));
 CREATE TABLE item_referencia_matmed (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, fonte_referencia VARCHAR(20) NOT NULL,
   codigo_referencia VARCHAR(20) NOT NULL, UNIQUE KEY uq_irm (fonte_referencia, codigo_referencia));
+-- as quatro tabelas do espelho de mat/med do cliente (ADR 0011): sem a da fonte, o passo M13 (semente do espelho do
+-- cliente) não reconhece o banco como cliente e para a carga; a semente real não acha as tabelas na origem sintética
+CREATE TABLE fonte_referencia_matmed (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo VARCHAR(20) NOT NULL);
 CREATE TABLE edicao_referencia_matmed (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, numero_edicao VARCHAR(30) NOT NULL);
 CREATE TABLE preco_referencia_matmed (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   item_referencia_matmed_id BIGINT UNSIGNED NOT NULL, edicao_referencia_matmed_id BIGINT UNSIGNED NOT NULL);

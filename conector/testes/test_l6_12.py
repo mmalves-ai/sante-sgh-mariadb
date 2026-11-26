@@ -59,6 +59,17 @@ def _not_null_sem_padrao(create):
     return cols - AUDITORIA
 
 
+def _afrouxadas(alters):
+    """Colunas que um ALTER posterior deixou anuláveis (MODIFY COLUMN ... NULL, sem NOT NULL)."""
+    cols = set()
+    for a in alters:
+        for m in re.finditer(r"\bMODIFY COLUMN (?:IF EXISTS )?`?(\w+)`?([^,;]*)", a):
+            corpo = m.group(2).split("COMMENT")[0]
+            if re.search(r"\bNULL\b", corpo) and "NOT NULL" not in corpo:
+                cols.add(m.group(1))
+    return cols
+
+
 class FatiaL612(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -104,7 +115,8 @@ class FatiaL612(unittest.TestCase):
                 dt, dc = c["destino"].split(".")
                 por_dt.setdefault((c["tabela"], dt), set()).add(dc)
         self.assertIn(("PRALERGIAPAC", "alergia_paciente_evento"), por_dt)
-        faltas = {k: _not_null_sem_padrao(self.ddl[k[1]]["create"]) - cols for k, cols in por_dt.items()}
+        faltas = {k: _not_null_sem_padrao(self.ddl[k[1]]["create"]) - _afrouxadas(self.ddl[k[1]]["alter"]) - cols
+                  for k, cols in por_dt.items()}
         self.assertEqual({k: v for k, v in faltas.items() if v}, {})
 
     def test_complemento_aponta_o_id_do_pai(self):
@@ -205,10 +217,14 @@ class FatiaL612(unittest.TestCase):
     def test_principio_ativo_pelo_catalogo_oficial(self):
         d = {c["coluna"]: c for c in self.decl if c["tabela"] == "PRALERGIAPAC_TBPRINC"}
         c = d["ID_TBPRINC"]
-        self.assertEqual(c["destino"], "alergia_paciente_principio.principio_ativo_id")
-        self.assertEqual(set(c["via"].split(";")), {"ref:TBPRINC>COD_DCB", "cod:principio_ativo.codigo_dcb"})
-        self.assertEqual(sentinela.aplicar(c["regra"], "1234")[0], "01234")
-        self.assertEqual(sentinela.aplicar(c["regra"], "00777")[0], "00777")
+        # recusas-fase2 P3b (A06): o DCB está vazio em todos os princípios da origem; o princípio vai para o cadastro
+        # próprio do hospital (principio_ativo_cliente), e o CHECK do destino aceita o oficial OU o do cliente
+        self.assertEqual((c["destino"], c["regra"], c["via"]),
+                         ("alergia_paciente_principio.principio_ativo_cliente_id", "chave_origem", "ref:TBPRINC"))
+        t = {x["coluna"]: x for x in self.decl if x["tabela"] == "PRALERGIAPACTMP_TBPRINC"}["ID_TBPRINC"]
+        self.assertEqual((t["destino"], t["via"]),
+                         ("alergia_paciente_principio.principio_ativo_cliente_id", "ref:TBPRINC;alergia_paciente_principio"))
+        self.assertIn("principio_ativo_id", _afrouxadas(self.ddl["alergia_paciente_principio"]["alter"]))
         # o catálogo oficial nunca é destino declarado (regra 7)
         self.assertFalse([x for x in self.decl if x["destino"].startswith("principio_ativo.")])
 

@@ -136,7 +136,7 @@ class FatiaL603(unittest.TestCase):
         self.assertEqual(self._d("RECTRAGE", "AGENDA", "agenda_escala.agenda_servico_id")["via"],
                          "ref:REAGENDA.(NOME,CRM)=(AGENDA,CRM)")
         self.assertEqual(self._d("SICTRAGE", "AGENDA", "agenda_escala.agenda_servico_id")["via"],
-                         "ref:SIAGENDA.(NOME,CRM)=(AGENDA,CRM)")
+                         "ref:SIAGENDA.(NOME,CRM,EXAME)=(AGENDA,CRM,EXAME)")  # recusas-fase2 P2a: com o EXAME
         self._d("REAGECRI", "#data_hora:DT_CRIACAO,HR_CRIACAO", "geracao_grade.solicitada_em")
         self._d("REAGECRI", "#retrato:*", "geracao_grade.mensagem_processo")
         for t in ("RECTRAGE", "SICTRAGE"):

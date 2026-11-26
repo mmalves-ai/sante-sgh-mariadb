@@ -89,8 +89,10 @@ class Plano(unittest.TestCase):
         """Rodada 4 (medição só de contagens): TP_LAN 0 = a pagar; DT_PGTO sentinela = aberta; a compensação liga à
         baixa da própria parcela (sem baixa em dobro); a natureza do ajuste é o próprio TPDES_ACR."""
         nat = self._decl("MFCONPAG", "titulo_pagar.natureza_financeira_id")
-        self.assertEqual(len(nat), 1)
+        self.assertEqual(len(nat), 2)
         self.assertIn("=0)>max:VALOR", nat[0][2])
+        # recusas fase 2 (P7, A07): título sem rateio: natureza a_classificar PRESUMIDA (concorrente), nunca recusa
+        self.assertEqual((nat[1][0], nat[1][2]), ("=~a_classificar", "cod:natureza_financeira.codigo"))
         sit = self._decl("MFCONPAG", "parcela_pagar.situacao")
         self.assertEqual([c[0] for c in sit], ["=aberta", "=paga"])
         self.assertIn("se:DT_PGTO=1899-12-30", sit[0][2])
@@ -116,7 +118,10 @@ class Plano(unittest.TestCase):
         for p in self.plano:
             for c in p["colunas"][p["destinos"][0]]:
                 if c["destino"] == "codigo":
-                    self.assertIn(c["regra"], ("texto", "codigo_char"), p["tabela"])
+                    if c["coluna"].startswith("#codigo_derivado:"):  # P7 (A05): o código derivado já sai texto
+                        self.assertEqual(c["regra"], "", p["tabela"])
+                    else:
+                        self.assertIn(c["regra"], ("texto", "codigo_char"), p["tabela"])
 
     def test_banco_pelo_catalogo_oficial(self):
         c = [x for x in self.por["TBTPOCORBANCOPGTO"]["colunas"]["ocorrencia_bancaria"] if x["destino"] == "banco_id"]
@@ -166,7 +171,10 @@ class Plano(unittest.TestCase):
         self.assertTrue(op.get("desdobrar"))
         cs = {c["destino"]: c for c in p["colunas"]["contrato_cobranca_bancaria"]}
         self.assertEqual(cs["conta_bancaria_id"]["passos"][0]["tabela"], "TBCTABAN")
-        self.assertEqual(cs["conta_bancaria_id"]["passos"][0]["arg"], ["EMPRESA", "BANCO", "AGENCIA", "COD"])
+        # recusas fase 2 (P7, A08): agência e conta em branco -> a única conta do banco na empresa (concorrente)
+        conta = [c for c in p["colunas"]["contrato_cobranca_bancaria"] if c["destino"] == "conta_bancaria_id"]
+        self.assertEqual([c["passos"][0]["arg"] for c in conta], [["EMPRESA", "BANCO", "AGENCIA", "COD"],
+                                                                 ["EMPRESA", "BANCO"]])
         self.assertEqual(cs["situacao"]["depara"], "valores")
         pares = {(r["tabela"], r["coluna"], r["valor_origem"]): r["valor_destino"] for r in mapa.ler_tsv(VALORES)}
         self.assertEqual(pares[("TBBANCOS", "SITUACAO", "I")], "suspenso")

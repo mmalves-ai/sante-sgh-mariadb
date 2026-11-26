@@ -436,7 +436,9 @@ def linhas(r, ins):
                                                    "valor_presumido": 2}},
         # complementa: o código repetido (pai_ambiguo na chave alternativa) recusa a linha como pai_inexistente
         "TBLEITO": {"gravados": 1, "pendencias": {"pai_inexistente": 2}},
-        "HTLEITO": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1}},
+        # recusas fase 2 (C1, R9): o histórico do leito recusado (2) grava sem a ligação (entidade anulável); a
+        # pendência pai_pendente fica
+        "HTLEITO": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1}},
         # 5 gravadas: 7005 (alta médica sem motivo) e 7007 (médico pelo CPF) deixaram de ser recusadas; caráter 'Z' e
         # regime 0 sem par (valor_fora_do_dominio); modalidade presumida em cada linha (9) e eletiva só onde o
         # caráter não deu o valor (2; resíduo r4: a presumida concorrente só pende quando é a gravada)
@@ -448,7 +450,8 @@ def linhas(r, ins):
         # valor_presumido: solicitado_em e nao_compareceu em cada linha (2 x 4); eletiva só quando gravada (resíduo r4: 0)
         "RIPREINT": {"gravados": 2, "pendencias": {"hora_invalida": 1, "pai_inexistente": 10,
                                                    "restricao_destino_1048": 2, "valor_presumido": 8}},
-        "RIALTA_EXCLUSAO": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
+        # recusas fase 2 (C1, R9): a alta desfeita da internação recusada (3) grava sem a ligação; pai_pendente fica
+        "RIALTA_EXCLUSAO": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
                                                           "restricao_destino_1048": 1}},
         "RIEXCINT": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}},
         "RITRANSF": {"gravados": 1, "pendencias": {"hora_invalida": 1, "pai_ambiguo": 1, "pai_inexistente": 1,

@@ -146,7 +146,9 @@ class Plano(unittest.TestCase):
             for c in p["colunas"][p["destinos"][0]]:
                 if c["destino"] == "codigo":
                     if c["coluna"].startswith("#codigo_derivado:"):
-                        self.assertEqual(c["regra"], "texto_nome", p["tabela"])
+                        # recusas-fase2 P1b: o grau de instrução ganha o prefixo G e mantém a caixa (codigo_char)
+                        self.assertEqual(c["regra"], "codigo_char" if p["tabela"] == "TBGRAU_INST" else "texto_nome",
+                                         p["tabela"])
                     else:
                         self.assertIn(c["regra"], ("texto", "codigo_char"), p["tabela"])
 

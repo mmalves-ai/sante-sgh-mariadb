@@ -16,6 +16,11 @@ FATIA = ["TBGRAUGRAVINT", "TBHORMED", "TBHORMED_TBUNIDAD", "TBLANC_DIAG_MANTER",
          "TBSITUACAOMP", "TBSTATUSPROCEDIMENTO", "TBTABELA_CAMPO"]
 
 
+# recusas-fase2 P3a (pedido 67, decisão clínica pendente): concorrentes presumidas do nome sem par
+CONCORRENTES = {("TBLISTADIAGNOSTICOSITUACAO", "categoria"): ["=~ativo"], ("TBSITUACAOMP", "categoria"): ["=~suspensa"],
+                ("TBSTATUSPROCEDIMENTO", "etapa"): ["=~pedido"]}
+
+
 class L609(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -37,7 +42,7 @@ class L609(unittest.TestCase):
             self.assertIn(sc[t]["causa"], {"sem_valor", "duplicado", "mecanismo_do_produto", "derivado"}, t)
             self.assertNotIn(t, {d["tabela"] for d in self.decl})
         for d in self.decl:
-            self.assertTrue(d["motivo"].startswith("L6-09"))
+            self.assertTrue(d["motivo"].startswith(("L6-09", "recusas-fase2")), d["tabela"])
 
     def test_um_destino_por_tabela(self):
         # princípio de validação = tipo de validação (a L6-10 liga as unidades a ele); referência = base da dose
@@ -65,11 +70,15 @@ class L609(unittest.TestCase):
                            ("TBSITUACAOMP", "situacao_prescricao", ["categoria", "vigente", "final"]),
                            ("TBSTATUSPROCEDIMENTO", "situacao_procedimento_prescrito", ["etapa", "final"])]:
             for dc in dcs:
-                c = self.cols(t, dt)[dc]
-                self.assertEqual((c["coluna"], c["depara"]), ("NOME", "valores"), (t, dc))
+                c = [(x["coluna"], x["depara"]) for x in self.plano[t]["colunas"][dt] if x["destino"] == dc]
+                # recusas-fase2 P3a (pedido 67): o nome sem par cai na concorrente presumida, sempre depois do de-para
+                self.assertEqual(c, [("NOME", "valores")] + [(x, "") for x in CONCORRENTES.get((t, dc), [])], (t, dc))
         presumidas = [d for d in self.decl if d["coluna"].startswith("=~")]
-        self.assertEqual([(d["tabela"], d["destino"]) for d in presumidas], [("TBPROENF", "cuidado_enfermagem.tipo"),
-                                                                     ("PRSINAIS", "parametro_vital.tipo_resposta")])
+        self.assertEqual([(d["tabela"], d["destino"]) for d in presumidas],
+                         [("TBLISTADIAGNOSTICOSITUACAO", "situacao_problema.categoria"),
+                          ("TBPROENF", "cuidado_enfermagem.tipo"), ("PRSINAIS", "parametro_vital.tipo_resposta"),
+                          ("TBSITUACAOMP", "situacao_prescricao.categoria"),
+                          ("TBSTATUSPROCEDIMENTO", "situacao_procedimento_prescrito.etapa")])
         v = {(x["tabela"], x["destino"], x["valor_origem"]): x["valor_destino"] for x in self.m["valores"]}
         self.assertEqual(v[("TBLISTADIAGNOSTICOESTADO", "certeza_diagnostico.grau", "Confirmado")], "3")
         self.assertEqual(v[("TBLISTADIAGNOSTICOESTADO", "certeza_diagnostico.confirmado", "Confirmado")], "1")

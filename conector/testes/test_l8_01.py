@@ -26,7 +26,8 @@ DESCARTES = {}  # r6: FCPROCUNIBHMED carrega como opções de parâmetro de list
 # r4: FCREFUND carrega (preço das tabelas próprias; as de referência comercial são puladas pelo filtro de linha)
 BLOQUEADAS = set()
 EXTRAS = {"RPLANEVE": ["favorecido_repasse"],
-          "FCREFUND": ["fonte_referencia_matmed", "edicao_referencia_matmed"],  # destino secundário declarado pela via
+          "FCREFUND": ["fonte_referencia_matmed", "edicao_referencia_matmed",  # destinos secundários declarados pela via
+                       "item_referencia_matmed"],  # recusas fase 2 (P6): o preço cria ou adota o item de referência
           "FCEMPAUDPLANSERV": ["modulo_sistema", "parametro_definicao"],
           "FCPROCUNIBHMED": ["modulo_sistema", "parametro_definicao"]}  # r6: lista de opções (módulo e parâmetro adotados)
 CONTA = "FCCTAEXT.(ANOPRO,MESPRO,TIPO_CTA,COD)=(ANOPRO,MESPRO,TIPO_CTA,CONTA)"
@@ -79,7 +80,14 @@ class L801(unittest.TestCase):
         self.assertNotIn("FCTPPGTONFSE", sc)
         self.assertNotIn("RECONTAS", sc)
         pronta = [l for l in _decl() if l.startswith("FCREFUND\t")]
-        self.assertTrue(any("ref:TBMATMED.(TAB,COD,CLASSIF,COD_ALFA)=(TAB,COD,CLASSIF,COD_ALFA)" in l for l in pronta))
+        # recusas fase 2 (P6, A02): o preço cria ou ADOTA o item de referência pela identidade TAB+COD+CLASSIF (antes,
+        # só o filtro de linha das tabelas licenciadas) e o preço liga pelo @id do item da mesma linha
+        item = [l.split("\t") for l in pronta if "\titem_referencia_matmed.codigo_referencia\t" in l]
+        self.assertEqual([x[1] for x in item], ["#codigo_derivado:TAB+COD+CLASSIF:20"])
+        self.assertTrue(item[0][5].startswith("item_referencia_matmed;antes;adotar:fonte_referencia,codigo_referencia;"))
+        preco = [l.split("\t") for l in pronta if "\tpreco_referencia_matmed.item_referencia_matmed_id\t" in l]
+        self.assertEqual([x[1] for x in preco], ["@id:item_referencia_matmed"])
+        self.assertFalse([l for l in pronta if "ref:TBMATMED" in l])  # o item não depende mais da TBMATMED
         self.assertTrue(any("preco_referencia_matmed.vigencia_inicio" in l for l in pronta))
         self.assertTrue(any("so_se:TAB>TBCTRMEM>REF_BRA=" in l and "!licenca_nao_comprovada" in l for l in pronta))
 
@@ -125,9 +133,15 @@ class L801(unittest.TestCase):
 
     def test_guia_pela_conta_composta(self):
         decl = [r for r in csv.DictReader(_decl(), delimiter="\t") if r["tabela"] == "FCGUIAS"]
-        via = {r["destino"].split(".")[1]: r["via"] for r in decl if r["destino"]}
-        self.assertEqual(via["conta_hospitalar_id"], "ref:" + CONTA)  # nunca só o número da conta
-        self.assertTrue(via["paciente_id"].startswith("ref:" + CONTA + ">REG_ATE>RECADATE>PRONT>RICADPAC"))
+        via = {}
+        for r in decl:
+            if r["destino"]:
+                via.setdefault(r["destino"].split(".")[1], []).append(r["via"])
+        # nunca só o número da conta; recusas fase 2 (P6, A10): a guia de internação sem conta externa liga a conta de
+        # internação pelo número (concorrente, só TIPO_CTA I)
+        self.assertEqual(via["conta_hospitalar_id"], ["ref:" + CONTA, "ref:RICONTAS.COD;se:TIPO_CTA=I"])
+        self.assertEqual(via["paciente_id"], ["ref:" + CONTA + ">REG_ATE>RECADATE>PRONT>RICADPAC.PRONT",
+                                              "ref:" + CONTA + ">REG_ATE>RICADINT>PRONT>RICADPAC.PRONT;se:TIPO_CTA=I"])
         for r in decl:
             if r["via"].startswith("ref:"):
                 self.assertIsNotNone(mapa.passos_ref(r["via"][4:].split(";")[0]), r["coluna"])
@@ -141,8 +155,9 @@ class L801(unittest.TestCase):
 
     def test_modelo_e_item_do_orcamento(self):
         decl = {(r["tabela"], r["destino"]): r for r in csv.DictReader(_decl(), delimiter="\t")}
+        # lote R (R3): o procedimento pela tabela de honorários do convênio, nunca só pelo código (repete entre tabelas)
         self.assertEqual(decl[("FCORCPAD", "modelo_orcamento.item_faturavel_id")]["via"],
-                         "ref:TBPROCTO.COD_PROCEDIMENTO")
+                         "ref:TBPROCTO.(ID_TBCTRTHM,COD_PROCEDIMENTO)=(CONV>TBCONVEN>THM,PROCTO)")
         self.assertIn("ref:FCORCAME", decl[("FCORLAME", "orcamento_particular_item.orcamento_particular_id")]["via"])
         self.assertEqual(self.cols("FCORLAME")["sequencia"]["coluna"], "#seq:COD")
 
@@ -184,7 +199,11 @@ class L801(unittest.TestCase):
         self.assertEqual(p["codigo"]["coluna"], "#codigo_derivado:ID:30:nfse_")
         self.assertEqual((p["descricao"]["coluna"], p["finalidade"]["coluna"]), ("NOME", "=contas_receber"))
         e = self.cols("RECONTAS")
-        self.assertEqual(e["conta_hospitalar_id"]["referencia"], "FCCTAEXT.(REG_ATE,COD)=(REG,CONTA)")  # adota a conta
+        # adota a conta; lote R (R19): par (registro, número) repetido em duas competências -> concorrente pela competência
+        refs = [c["referencia"] for c in self.plano["RECONTAS"]["colunas"]["conta_hospitalar_etapa"]
+                if c["destino"] == "conta_hospitalar_id"]
+        self.assertEqual(refs, ["FCCTAEXT.(REG_ATE,COD)=(REG,CONTA)",
+                                "FCCTAEXT.(REG_ATE,COD,ANOPRO,MESPRO)=(REG,CONTA,ANOPRO,MESPRO)"])
         self.assertEqual((e["situacao_nova"]["coluna"], e["operacao"]["coluna"]), ("=aberta", "=inclusao"))
         self.assertEqual(e["dados"]["coluna"], "#retrato:*")
 
@@ -216,7 +235,8 @@ class L801(unittest.TestCase):
         rows = [r for r in csv.DictReader(_decl(), delimiter="\t") if not r["tabela"].startswith("#")]
         for r in rows:
             self.assertIn(r["tabela"], CARREGADAS)
-            self.assertTrue(r["motivo"].startswith("L8-01"))
+            # a origem de cada linha fica no motivo: a fatia (L8-01) ou a rodada das recusas da carga (P6)
+            self.assertTrue(r["motivo"].startswith(("L8-01", "recusas fase 2 (P6)")), (r["tabela"], r["coluna"]))
 
     def test_imagem_sintetica_cobre_as_carregadas(self):
         lidas = []

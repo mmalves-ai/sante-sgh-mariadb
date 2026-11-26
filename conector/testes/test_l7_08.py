@@ -87,10 +87,14 @@ class FatiaL708(unittest.TestCase):
             faltam = {c for c, _, _ in l7_08.COLUNAS[t]} - chaves[t] - usadas
             self.assertFalse(faltam, (t, sorted(faltam)))
 
-    def test_centro_de_custo_pela_coluna_id_e_pelo_codigo(self):
-        for t in ("GEUSERS_TBCENCUS", "PRPARINTEGEST"):
-            for c in self._d(t, "ID_TBCENCUS"):
-                self.assertTrue(c["via"].startswith("ref:TBCENCUS.ID"), (t, c["destino"]))
+    def test_centro_de_custo_pelo_codigo(self):
+        # recusas fase 2 (A07): ID_TBCENCUS casa pela chave do pai (COD), não pela coluna ID (66 de 66 pelo COD)
+        vias = {(t, c["destino"]): c["via"] for t in ("GEUSERS_TBCENCUS", "PRPARINTEGEST")
+                for c in self._d(t, "ID_TBCENCUS")}
+        self.assertEqual(vias, {
+            ("GEUSERS_TBCENCUS", "usuario_estoque_centro_custo.centro_custo_id"): "ref:TBCENCUS",
+            ("PRPARINTEGEST", "regra_integracao_prescricao.centro_custo_id"): "ref:TBCENCUS",
+            ("PRPARINTEGEST", "regra_integracao_prescricao.atendente_local_estoque_id"): "ref:TBCENCUS>LOCARM>GELOCARM"})
         for t in ("GECADSAI", "GECADDEV"):
             self.assertEqual(self._d(t, "CDC")[0]["via"], "ref:TBCENCUS")
 

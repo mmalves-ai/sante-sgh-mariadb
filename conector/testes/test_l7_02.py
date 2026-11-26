@@ -92,10 +92,12 @@ class Plano(unittest.TestCase):
             self.assertTrue(sentinela.aplicar("texto", cod)[0].isdigit())
         self.assertFalse(carga_mapa.codigo_derivado("12", 30, pre)[0].isdigit())
 
-    def test_texto_padrao_por_codigo_derivado_do_texto(self):
+    def test_texto_padrao_por_codigo_derivado_da_chave(self):
+        # recusas fase 2 (P4): o código deriva da chave da origem (setor e código); pelo texto, dois textos padrão
+        # iguais com chaves diferentes colidiam na chave única (1062)
         c = self.cols("SIOBSERV")
-        self.assertEqual(c["codigo"]["coluna"], "#codigo_derivado:OBS:30")
-        self.assertEqual(c["codigo"]["regra"], "texto_longo")
+        self.assertEqual(c["codigo"]["coluna"], "#codigo_derivado:ATO+COD:30")
+        self.assertEqual(c["codigo"]["regra"], "")
         self.assertEqual(c["texto"]["regra"], "texto_longo")
         via = {x["destino"]: x["via"] for x in self.mapa["colunas_decl"] if x["tabela"] == "SIOBSERV"}
         self.assertEqual(via["texto_padrao_resultado.setor_diagnostico_id"], "ref:SIMODULO")
@@ -130,9 +132,14 @@ class Plano(unittest.TestCase):
 
     def test_item_do_kit(self):
         c = self.cols("SIKITITE")
-        via = {x["destino"]: x["via"] for x in self.mapa["colunas_decl"] if x["tabela"] == "SIKITITE"}
-        self.assertEqual(via["kit_exame_item.kit_exame_id"], "ref:SIKITEXA")
-        self.assertEqual(via["kit_exame_item.exame_id"], "ref:SITABPRO(ATO,EXAME)")
+        via = {}
+        for x in self.mapa["colunas_decl"]:
+            if x["tabela"] == "SIKITITE":
+                via.setdefault(x["destino"], []).append((x["coluna"], x["via"]))
+        self.assertEqual(via["kit_exame_item.kit_exame_id"], [("KIT", "ref:SIKITEXA")])
+        # pela chave composta (ATO, mnemônico) e, sem par, concorrente pelo mnemônico único (recusas fase 2, P4)
+        self.assertEqual(via["kit_exame_item.exame_id"], [("ATO", "ref:SITABPRO(ATO,EXAME)"),
+                                                          ("EXAME", "ref:SITABPRO.CODALF;presumida")])
         self.assertEqual(c["sequencia"]["coluna"], "#seq:KIT")
         self.assertEqual(c["quantidade"]["regra"], "piso:1")
         # o exame (SITABPRO) vem antes do item pela dependência declarada (o gerador do mapa a põe na ordem)

@@ -21,6 +21,9 @@ class PlanoL502(unittest.TestCase):
     def cols(self, t, dt):
         return {c["destino"]: c for c in self.plano[t]["colunas"][dt]}
 
+    def todas(self, t, dt, dc):
+        return [(c["coluna"], c["depara"]) for c in self.plano[t]["colunas"][dt] if c["destino"] == dc]
+
     def test_so_as_declaradas_entram_na_carga(self):
         self.assertEqual(set(self.plano), set(l5_02.CARREGADAS))
         self.assertEqual(len(FATIA), 20)
@@ -36,7 +39,8 @@ class PlanoL502(unittest.TestCase):
         self.assertEqual((c["ultimo_acesso_em"]["coluna"], c["ultimo_acesso_em"]["regra"]), ("DATA_ULTIMA_CONEXAO", "data"))
         self.assertEqual(c["origem"]["coluna"], "=migracao")
         decl = {c["coluna"]: c["via"] for c in self.m["colunas_decl"] if c["tabela"] == "TBSGHCONEXAO"}
-        self.assertEqual((decl["USUARIO"], decl["MODULO"]), ("ref:TBUSERS", "ref:TBMODULO"))
+        # recusas-fase2 P1a: o código 0 da origem liga ao módulo de chave 0 (M5 do motor)
+        self.assertEqual((decl["USUARIO"], decl["MODULO"]), ("ref:TBUSERS", "ref:TBMODULO;zero_e_chave"))
         sem = mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv"
         self.assertFalse([x for x in sem.read_text(encoding="utf-8").splitlines() if x.startswith("TBSGHCONEXAO\t")])
 
@@ -124,15 +128,19 @@ class PlanoL502(unittest.TestCase):
 
     def test_nivel_de_criticidade_pelo_nome(self):
         # a severidade sai do NOME do nível, nunca da chave substituta
-        c = self.cols("TBNVLCRITICID", "nivel_criticidade_auditoria")
-        self.assertEqual((c["severidade"]["coluna"], c["severidade"]["depara"]), ("NOME", "valores"))
+        # recusas-fase2 P1a: o nome fora da escala cai na concorrente presumida (5, notificação, com valor_presumido)
+        self.assertEqual(self.todas("TBNVLCRITICID", "nivel_criticidade_auditoria", "severidade"),
+                         [("NOME", "valores"), ("=~5", "")])
         v = self.valores("TBNVLCRITICID", "nivel_criticidade_auditoria.severidade")
         self.assertEqual({int(x) for x in v.values()}, set(range(8)))
         self.assertEqual((v["Emergência"], v["Erro"], v["Depuração"]), ("0", "3", "7"))
 
     def test_tipo_de_certificado_pelo_nome(self):
-        c = self.cols("TBTIPOCERTIFICADO", "tipo_certificado")
-        self.assertEqual((c["modalidade"]["coluna"], c["repositorio"]["coluna"]), ("NOME", "NOME"))
+        # recusas-fase2 P1a: o nome sem par cai na concorrente presumida coerente (a1 em arquivo, com valor_presumido)
+        self.assertEqual(self.todas("TBTIPOCERTIFICADO", "tipo_certificado", "modalidade"),
+                         [("NOME", "valores"), ("=~a1", "")])
+        self.assertEqual(self.todas("TBTIPOCERTIFICADO", "tipo_certificado", "repositorio"),
+                         [("NOME", "valores"), ("=~arquivo", "")])
         mo = self.valores("TBTIPOCERTIFICADO", "tipo_certificado.modalidade")
         rp = self.valores("TBTIPOCERTIFICADO", "tipo_certificado.repositorio")
         self.assertEqual((mo["A1"], rp["A1"], mo["A3"], mo["Em nuvem"], rp["Em nuvem"]),

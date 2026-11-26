@@ -22,11 +22,20 @@ class Plano(unittest.TestCase):
     def cols(self, t, dt):
         return {c["destino"]: c for c in self.plano[t]["colunas"][dt]}
 
+    def prim(self, t, dt, dc):
+        """A primeira declaração do destino `dt.dc` (as concorrentes vêm depois, na ordem do mapa)."""
+        return next(c for c in self.plano[t]["colunas"][dt] if c["destino"] == dc)
+
     def test_tabelas_e_destinos(self):
         self.assertEqual(set(self.plano), TABELAS)
         esperado = {"SIPOSRES": ["resposta_padrao"], "SIRECIPI": ["recipiente_coleta"],
-                    "SISTATUS_AMOSTRA": ["situacao_amostra"], "SITABELE": ["analito", "exame_analito", "unidade_resultado"], "SITABPRO": ["exame"],
-                    "SIRESPAD": ["modelo_resultado"],
+                    "SISTATUS_AMOSTRA": ["situacao_amostra"],
+                    # a faixa de referência do analito no exame entrou (pedido 15 atendido no verificador)
+                    "SITABELE": ["analito", "exame_analito", "faixa_referencia", "unidade_resultado"],
+                    "SITABPRO": ["exame"],
+                    # recusas fase 2 (P4): o exame do resultado padrão vem do secundário exame (real adotado ou
+                    # o excluído da origem, criado de migração)
+                    "SIRESPAD": ["modelo_resultado", "exame"],
                     "SITPEQVMODELO": ["modelo_comunicacao"], "SIWEBCADPERFIL": ["perfil_portal_resultado"],
                     "SIWEBCADPERFIL_SIPACSMODALID": ["perfil_portal_modalidade"],
                     "SIWEBCADPERFIL_TBUSERS": ["perfil_portal_usuario"], "SIWEBPARLAUDO": ["modelo_impressao_laudo"],
@@ -158,7 +167,10 @@ class Plano(unittest.TestCase):
         self.assertEqual(ex["desativado_em"]["valores"], {"1": "", "0": "@data_carga", "": ""})
         self.assertEqual(ex["tipo_resultado"]["coluna"], "=~misto")
         # sigla em chave única sem caixa: codigo_char passa pela detecção de colisão de caixa
-        self.assertEqual(ex["sigla"]["regra"], "codigo_char")
+        self.assertEqual(self.prim("SITABPRO", "exame", "sigla")["regra"], "codigo_char")
+        # recusas fase 2 (P4): concorrente presumida para o exame sem mnemônico (sigla derivada do código)
+        self.assertEqual([c["coluna"] for c in self.plano["SITABPRO"]["colunas"]["exame"] if c["destino"] == "sigla"],
+                         ["CODALF", "#codigo_derivado:ID:10:s"])
         self.assertEqual(sentinela.colisoes_caixa({"VDR": 1, "Vdr": 1, "GLI": 1}), [["VDR", "Vdr"]])
         self.assertEqual(self.plano["SITABELE"]["destinos"][0], "analito")
 
@@ -185,7 +197,14 @@ class Plano(unittest.TestCase):
         self.assertEqual(mapa.passos_ref("SITABPRO(ATO,EXAME)"),
                          [{"tabela": "SITABPRO", "modo": "composta", "arg": ["ATO", "EXAME"]}])
         self.assertEqual(decl[("SIWEBPARPERFIL", "perfil_portal_resultado.id")]["via"], "ref:SIWEBCADPERFIL;complementa")
-        self.assertEqual(decl[("SIRESPAD", "modelo_resultado.exame_id")]["via"], "ref:SITABPRO(ATO,EXAME)")
+        # recusas fase 2 (P4): o exame do resultado padrão é o do secundário exame, que pela chave composta
+        # (ATO,EXAME) copia o código do exame real e o adota
+        self.assertEqual(decl[("SIRESPAD", "modelo_resultado.exame_id")]["coluna"], "@id:exame")
+        ec = [c for c in self.mapa["colunas_decl"] if c["tabela"] == "SIRESPAD" and c["destino"] == "exame.codigo"]
+        self.assertEqual([(c["coluna"], c["via"]) for c in ec],
+                         [("ATO", "ref:SITABPRO(ATO,EXAME)@codigo;antes;adotar:codigo"),
+                          ("#codigo_derivado:ATO+EXAME:30:exame_excluido_", "presumida")])
+        self.assertEqual(self.plano["SIRESPAD"]["opcoes"]["exame"]["adotar"], ["codigo"])
         self.assertTrue(self.plano["SIWEBPARPERFIL"]["opcoes"]["perfil_portal_resultado"]["complementa"])
         # r5 (ADR 0006): a ligação interface x modelo entra na trilha da interface (retrato); o modelo ESCOLHIDO
         # continua vindo de uma só fonte (a SITPEQV), sem gravar por cima da interface
@@ -210,15 +229,16 @@ class Plano(unittest.TestCase):
         self.assertEqual(v["formula_calculo_id"]["passos"][0]["tabela"], "SIFORMUL")
         self.assertEqual(v["fonte"]["coluna"], "=~digitado")
         self.assertEqual(v["sequencia"]["coluna"], "#seq:EXAME")
-        # faixa de referência: declaração pronta (comentada) até o verificador aceitar @id:exame_analito
-        pronta = [l[1:].split("\t") for l in (mapa.DIR_PACOTE / "declarado/colunas.d/L7-03.tsv").read_text(
-            encoding="utf-8").splitlines() if l.startswith("#SITABELE\t")]
-        dest = {c[2]: c for c in pronta}
-        self.assertEqual(dest["faixa_referencia.exame_analito_id"][1], "@id:exame_analito")
-        self.assertEqual(dest["faixa_referencia.referencia_minima"][3], "decimal_zero_nulo")
-        self.assertIn("opcional", dest["faixa_referencia.referencia_minima"][5])
-        self.assertEqual(dest["faixa_referencia.referencia_texto"][3], "texto_resumo:300")
-        self.assertEqual(dest["faixa_referencia.vigencia_inicio"][1], "@vigencia_carga")
+        # faixa de referência: a declaração pronta entrou ativa (o verificador aceita @id:exame_analito)
+        texto = (mapa.DIR_PACOTE / "declarado/colunas.d/L7-03.tsv").read_text(encoding="utf-8")
+        self.assertNotIn("\n#SITABELE\t", texto)
+        f = self.cols("SITABELE", "faixa_referencia")
+        self.assertEqual(f["exame_analito_id"]["coluna"], "@id:exame_analito")
+        self.assertEqual(f["referencia_minima"]["regra"], "decimal_zero_nulo")
+        self.assertTrue(self.plano["SITABELE"]["opcoes"]["faixa_referencia"]["opcional"])
+        self.assertEqual(f["referencia_maxima"]["regra"], "decimal_zero_nulo")
+        self.assertEqual(f["referencia_texto"]["regra"], "texto_resumo:300")
+        self.assertEqual(f["vigencia_inicio"]["coluna"], "@vigencia_carga")
 
     def test_visualizador_inativo_ate_ter_endereco(self):
         v = self.cols("SIWEBVISULIMG", "visualizador_imagem")
