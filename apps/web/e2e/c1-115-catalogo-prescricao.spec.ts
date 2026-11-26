@@ -127,4 +127,47 @@ test.describe('@C1-115 cadastro editável do catálogo da prescrição', () => {
     await semViolacaoAxe(page, 'c1-115 catálogo da prescrição');
     expect(externas).toEqual([]);
   });
+
+  test('perfil só de leitura consulta o catálogo sem os formulários de gravação', async ({ page }) => {
+    const externas = vigiarExternas(page);
+    const corpos = simular(page);
+    // A sessão do administrador é reduzida às permissões de leitura das três seções (a tela esconde; o servidor recusa).
+    await page.route(/\/api\/sessao(\?.*)?$/, async (r) => {
+      if (r.request().method() !== 'GET') return r.continue();
+      const real = await r.fetch();
+      const sessao = (await real.json()) as Record<string, unknown>;
+      return json(r, {
+        ...sessao,
+        permissoes: [
+          'pep.cadastroPrescricao.ler',
+          'pep.frequenciaDose.ler',
+          'pep.itemNaoPadronizado.ler',
+          'pep.parametroClinicoItem.ler',
+        ],
+      });
+    });
+    await entrar(page, 'SINT.ADMIN');
+
+    await page.goto('/cadastros/prescricao/frequencias');
+    await expect(page.getByTestId('catalogo-somente-leitura')).toBeVisible();
+    await expect(page.getByTestId('form-frequencia')).toHaveCount(0);
+    await expect(page.getByTestId('form-condicao')).toHaveCount(0);
+
+    await page.goto('/cadastros/prescricao/itens-nao-padronizados');
+    await expect(page.getByTestId('catalogo-somente-leitura')).toBeVisible();
+    await expect(page.getByTestId('form-nao-padronizado')).toHaveCount(0);
+
+    await page.goto('/cadastros/prescricao/parametros-item');
+    await page.getByTestId('cp-item').getByRole('textbox').fill('71');
+    await page.getByTestId('cp-abrir').click();
+    const painel = page.getByTestId('complementos-item');
+    await expect(painel).toContainText('apelido sintético');
+    await expect(painel.getByTestId('cp-incluir-frequencia')).toHaveCount(0);
+    await expect(painel.getByTestId('cp-incluir-sinonimo')).toHaveCount(0);
+    await expect(painel.getByRole('button', { name: /Retirar/ })).toHaveCount(0);
+    await expect(page.getByTestId('catalogo-somente-leitura')).toBeVisible();
+    await semViolacaoAxe(page, 'c1-115 catálogo da prescrição só leitura');
+    expect(corpos).toEqual([]);
+    expect(externas).toEqual([]);
+  });
 });

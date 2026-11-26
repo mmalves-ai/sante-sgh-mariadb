@@ -24,6 +24,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../../casca/MensagemErro.vue';
+import { pode } from '../../../../casca/sessao/pode.js';
 import {
   type FrequenciaCadastrada,
   gravarCondicao,
@@ -98,6 +99,22 @@ const f = reactive({
   dias: [] as string[],
   setores: [] as number[],
 });
+// Cada formulário aparece só para quem pode gravar pela rota dele (a leitura do catálogo continua para todos).
+const podeFreq = computed(() => pode('pep.frequenciaPrescricao.editar'));
+const podeCond = computed(
+  () => pode('pep.condicaoSeNecessario.editar') || pode('pep.condicaoSeNecessario.criar'),
+);
+const podeNpCriar = computed(() => pode('pep.itemNaoPadronizado.criar'));
+const podeNpInativar = computed(() => pode('pep.itemNaoPadronizado.inativar'));
+const podeComp = computed(() => pode('pep.parametroClinicoItem.editar'));
+const somenteLeitura = computed(() =>
+  props.secao === 'frequencias'
+    ? !podeFreq.value || !podeCond.value
+    : props.secao === 'naoPadronizados'
+      ? !podeNpCriar.value
+      : !podeComp.value,
+);
+
 const entradaFrequencia = computed(() => {
   const h = inteiro(f.intervaloHoras);
   return {
@@ -314,9 +331,15 @@ async function trocarSituacao(): Promise<void> {
   <section class="edicao" data-testid="edicao-catalogo" :aria-label="t('pep.catalogo.rotuloSecao')">
     <SanteAlerta v-if="aviso" variante="info" :texto="aviso" data-testid="catalogo-aviso" />
     <MensagemErro v-if="erro" :erro="erro" />
+    <SanteAlerta
+      v-if="somenteLeitura"
+      variante="info"
+      :texto="t('pep.catalogo.somenteLeitura')"
+      data-testid="catalogo-somente-leitura"
+    />
 
     <template v-if="secao === 'frequencias'">
-      <form class="painel" data-testid="form-frequencia" @submit.prevent="salvarFrequencia">
+      <form v-if="podeFreq" class="painel" data-testid="form-frequencia" @submit.prevent="salvarFrequencia">
         <h2>{{ f.id ? t('pep.catalogo.freq.alterar') : t('pep.catalogo.freq.nova') }}</h2>
         <div class="linha">
           <SanteCampoTexto
@@ -434,6 +457,7 @@ async function trocarSituacao(): Promise<void> {
             <td>{{ ROTULO_TIPO(x.tipo) }}</td>
             <td>
               <SanteBotao
+                v-if="podeFreq"
                 :rotulo="t('pep.catalogo.freq.alterarItem', { nome: x.descricao })"
                 variante="texto"
                 @acionar="editarFrequencia(x)"
@@ -443,7 +467,7 @@ async function trocarSituacao(): Promise<void> {
         </tbody>
       </table>
 
-      <form class="painel" data-testid="form-condicao" @submit.prevent="salvarCondicao">
+      <form v-if="podeCond" class="painel" data-testid="form-condicao" @submit.prevent="salvarCondicao">
         <h2>{{ c.id ? t('pep.catalogo.cond.alterar') : t('pep.catalogo.cond.nova') }}</h2>
         <div class="linha">
           <SanteCampoTexto
@@ -492,6 +516,7 @@ async function trocarSituacao(): Promise<void> {
             t('pep.catalogo.cond.disparo', { parametro: x.parametro, limiar: x.limiar })
           }}</template>
           <SanteBotao
+            v-if="podeCond"
             :rotulo="
               x.ativo
                 ? t('pep.catalogo.cond.tirar', { nome: x.descricao })
@@ -520,7 +545,7 @@ async function trocarSituacao(): Promise<void> {
     </template>
 
     <form
-      v-else-if="secao === 'naoPadronizados'"
+      v-else-if="secao === 'naoPadronizados' && podeNpCriar"
       class="painel"
       data-testid="form-nao-padronizado"
       @submit.prevent="salvarNp"
@@ -590,7 +615,7 @@ async function trocarSituacao(): Promise<void> {
       />
     </form>
 
-    <template v-else>
+    <template v-else-if="secao === 'parametrosItem'">
       <form class="linha" data-testid="form-item-complementos" @submit.prevent="item = inteiro(itemTexto)">
         <SanteCampoTexto
           id="cp-item"
@@ -610,7 +635,7 @@ async function trocarSituacao(): Promise<void> {
       <section v-else-if="comp.data.value" class="painel" data-testid="complementos-item">
         <h2>{{ comp.data.value.item.descricao }}</h2>
         <SanteBotao
-          v-if="!comp.data.value.item.padronizado"
+          v-if="!comp.data.value.item.padronizado && podeNpInativar"
           :rotulo="
             comp.data.value.item.ativo
               ? t('pep.catalogo.comp.tirarDeUso')
@@ -625,13 +650,14 @@ async function trocarSituacao(): Promise<void> {
           <li v-for="x in comp.data.value.frequencias" :key="x.id">
             {{ x.nome }}
             <SanteBotao
+              v-if="podeComp"
               :rotulo="t('pep.catalogo.comp.retirar', { nome: x.nome })"
               variante="texto"
               @acionar="retirar('frequencia', x.id, x.versao)"
             />
           </li>
         </ul>
-        <div class="linha">
+        <div v-if="podeComp" class="linha">
           <SanteSelecao
             id="cp-frequencia"
             v-model="k.frequencia"
@@ -658,6 +684,7 @@ async function trocarSituacao(): Promise<void> {
             }}{{ x.usoRestrito ? t('pep.catalogo.comp.usoRestritoMarca') : ''
             }}{{ x.bloqueado ? t('pep.catalogo.comp.bloqueadoMarca', { motivo: x.motivoBloqueio }) : '' }}
             <SanteBotao
+              v-if="podeComp"
               :rotulo="
                 t('pep.catalogo.comp.retirarRegra', {
                   nome: x.nome ?? t('pep.catalogo.comp.estabelecimento'),
@@ -668,7 +695,7 @@ async function trocarSituacao(): Promise<void> {
             />
           </li>
         </ul>
-        <div class="linha">
+        <div v-if="podeComp" class="linha">
           <SanteSelecao
             id="cp-setor"
             v-model="k.setor"
@@ -716,13 +743,14 @@ async function trocarSituacao(): Promise<void> {
           <li v-for="x in comp.data.value.sinonimos" :key="x.id">
             {{ x.termo }}
             <SanteBotao
+              v-if="podeComp"
               :rotulo="t('pep.catalogo.comp.retirar', { nome: x.termo })"
               variante="texto"
               @acionar="retirar('sinonimo', x.id, x.versao)"
             />
           </li>
         </ul>
-        <div class="linha">
+        <div v-if="podeComp" class="linha">
           <SanteCampoTexto
             id="cp-termo"
             v-model="k.termo"
@@ -745,13 +773,14 @@ async function trocarSituacao(): Promise<void> {
           <li v-for="x in comp.data.value.conflitos" :key="x.id">
             {{ x.nome }} · {{ x.gravidade }}{{ x.motivo ? ` · ${x.motivo}` : '' }}
             <SanteBotao
+              v-if="podeComp"
               :rotulo="t('pep.catalogo.comp.retirarConflito', { nome: x.nome })"
               variante="texto"
               @acionar="retirar('conflito', x.id, x.versao)"
             />
           </li>
         </ul>
-        <div class="linha">
+        <div v-if="podeComp" class="linha">
           <SanteCampoTexto
             id="cp-conflitante"
             v-model="k.conflitante"

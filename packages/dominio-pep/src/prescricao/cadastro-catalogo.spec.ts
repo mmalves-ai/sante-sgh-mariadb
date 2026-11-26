@@ -5,7 +5,9 @@ import {
   type EntradaFrequencia,
   normalizarCodigoCatalogo,
   problemasDaCondicao,
+  problemasDaCondicaoEmUso,
   problemasDaFrequencia,
+  problemasDaFrequenciaEmUso,
   problemasDaRegraSetor,
   problemasDoConflito,
   problemasDoNaoPadronizado,
@@ -145,5 +147,47 @@ describe('cadastro do catálogo da prescrição (03-PEP L106)', () => {
     expect(cods(problemasDoConflito(1, 2, 'alerta', null, [[2, 1]]))).toEqual(['conflito-repetido']);
     expect(cods(problemasDoConflito(1, 2, 'impeditivo', ' ', []))).toEqual(['motivo-obrigatorio']);
     expect(problemasDoConflito(1, 2, 'impeditivo', 'Duplicidade terapêutica', [[1, 3]])).toEqual([]);
+  });
+
+  it('frequência em uso não muda o que define a dose; só o que é operação', () => {
+    const antes = freq();
+    expect(problemasDaFrequenciaEmUso(false, antes, freq({ intervaloMinutos: 480 }))).toEqual([]);
+    expect(problemasDaFrequenciaEmUso(true, antes, freq({ intervaloMinutos: 480 }))).toEqual([
+      { codigo: 'frequencia-em-uso', campo: 'intervaloMinutos' },
+    ]);
+    expect(cods(problemasDaFrequenciaEmUso(true, antes, freq({ descricao: 'De 8 em 8 horas' })))).toEqual([
+      'frequencia-em-uso',
+    ]);
+    expect(cods(problemasDaFrequenciaEmUso(true, antes, freq({ codigo: '8/8H' })))).toEqual([
+      'frequencia-em-uso',
+    ]);
+    expect(
+      cods(problemasDaFrequenciaEmUso(true, antes, freq({ tipo: 'continuo', intervaloMinutos: null }))),
+    ).toEqual(['frequencia-em-uso']);
+    // código normalizado igual, espaços nas pontas, horário fixo, uso e setores não definem a dose
+    expect(
+      problemasDaFrequenciaEmUso(
+        true,
+        antes,
+        freq({ codigo: '6/6h', descricao: ' De 6 em 6 horas ', horarioFixo: false, uso: 'medicamento' }),
+      ),
+    ).toEqual([]);
+    const dias = freq({ tipo: 'dias_semana', intervaloMinutos: null, dias: ['segunda', 'quarta'] });
+    expect(problemasDaFrequenciaEmUso(true, dias, { ...dias, dias: ['quarta', 'segunda'] })).toEqual([]);
+    expect(problemasDaFrequenciaEmUso(true, dias, { ...dias, dias: ['segunda'] })).toEqual([
+      { codigo: 'frequencia-em-uso', campo: 'dias' },
+    ]);
+  });
+
+  it('condição se necessário em uso só sai de uso', () => {
+    const c = { codigo: 'FEBRE', descricao: 'Se febre', parametroVital: 3, limiar: 37.8 };
+    expect(problemasDaCondicaoEmUso(true, c, { ...c, codigo: 'febre' })).toEqual([]);
+    expect(problemasDaCondicaoEmUso(false, c, { ...c, limiar: 38.5 })).toEqual([]);
+    expect(problemasDaCondicaoEmUso(true, c, { ...c, limiar: 38.5 })).toEqual([
+      { codigo: 'condicao-em-uso', campo: 'limiar' },
+    ]);
+    expect(cods(problemasDaCondicaoEmUso(true, c, { ...c, parametroVital: null, limiar: null }))).toEqual([
+      'condicao-em-uso',
+    ]);
   });
 });

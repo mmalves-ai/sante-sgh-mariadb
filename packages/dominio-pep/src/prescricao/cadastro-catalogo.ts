@@ -114,6 +114,49 @@ export function problemasDaFrequencia(e: EntradaFrequencia): ProblemaCadastro[] 
   return p;
 }
 
+/** O que define a dose de uma frequência: é o que a prescrição já feita mostra e o que gerou os horários dela. */
+export const CAMPOS_DEFINIDORES_FREQUENCIA = [
+  'codigo',
+  'descricao',
+  'descricaoResumida',
+  'tipo',
+  'intervaloMinutos',
+  'dosesPorDia',
+  'limiteHoras',
+  'dias',
+] as const;
+export type DefinicaoFrequencia = Pick<EntradaFrequencia, (typeof CAMPOS_DEFINIDORES_FREQUENCIA)[number]>;
+
+const igualDefinicao = (a: unknown, b: unknown): boolean =>
+  Array.isArray(a) && Array.isArray(b)
+    ? [...a].sort().join('|') === [...b].sort().join('|')
+    : typeof a === 'string' && typeof b === 'string'
+      ? a.trim() === b.trim()
+      : (a ?? null) === (b ?? null);
+
+/**
+ * Frequência já usada (em prescrição, receita, ficha de antimicrobiano, uso prévio ou na posologia de um item) não muda
+ * o que define a dose: o registro clínico guarda só a referência, e mudar "6/6h" para "8/8h" reescreveria o que foi
+ * prescrito. Em uso, só o que é operação (tirar de uso, horário fixo, uso, setores) muda; para outra dose, cadastra-se
+ * uma frequência nova e a antiga sai de uso. Os dias só contam no tipo por dias da semana (nos outros valem todos).
+ */
+export function problemasDaFrequenciaEmUso(
+  emUso: boolean,
+  antes: DefinicaoFrequencia,
+  depois: DefinicaoFrequencia,
+): ProblemaCadastro[] {
+  if (!emUso) return [];
+  const norm = (d: DefinicaoFrequencia): DefinicaoFrequencia => ({
+    ...d,
+    codigo: normalizarCodigoCatalogo(d.codigo),
+    dias: d.tipo === 'dias_semana' ? d.dias : [],
+  });
+  const a = norm(antes);
+  const b = norm(depois);
+  const campo = CAMPOS_DEFINIDORES_FREQUENCIA.find((k) => !igualDefinicao(a[k], b[k]));
+  return campo ? [{ codigo: 'frequencia-em-uso', campo }] : [];
+}
+
 /** Doses no dia derivadas do intervalo (24 h / intervalo, quando divide o dia), para a grade de horários. */
 export function dosesDaFrequencia(e: Pick<EntradaFrequencia, 'tipo' | 'intervaloMinutos' | 'dosesPorDia'>) {
   if (e.tipo === 'vezes_ao_dia') return e.dosesPorDia;
@@ -137,6 +180,24 @@ export function problemasDaCondicao(e: EntradaCondicaoSeNecessario): ProblemaCad
   if ((e.parametroVital === null) !== (e.limiar === null))
     p.push({ codigo: 'disparo-incompleto', campo: e.parametroVital === null ? 'parametroVital' : 'limiar' });
   return p;
+}
+
+/**
+ * Condição "se necessário" já ligada a item de prescrição não muda o código, a descrição nem o disparo (o que foi
+ * prescrito continua dizendo a mesma coisa); em uso, só sai de uso, e a condição nova é outro cadastro.
+ */
+export function problemasDaCondicaoEmUso(
+  emUso: boolean,
+  antes: EntradaCondicaoSeNecessario,
+  depois: EntradaCondicaoSeNecessario,
+): ProblemaCadastro[] {
+  if (!emUso) return [];
+  const a = { ...antes, codigo: normalizarCodigoCatalogo(antes.codigo) };
+  const b = { ...depois, codigo: normalizarCodigoCatalogo(depois.codigo) };
+  const campo = (['codigo', 'descricao', 'parametroVital', 'limiar'] as const).find(
+    (k) => !igualDefinicao(a[k], b[k]),
+  );
+  return campo ? [{ codigo: 'condicao-em-uso', campo }] : [];
 }
 
 export interface EntradaNaoPadronizado {
@@ -266,4 +327,7 @@ export const MENSAGENS_CADASTRO_CATALOGO: Readonly<Record<string, string>> = {
   'motivo-obrigatorio': 'Informe o motivo do conflito impeditivo.',
   'regra-repetida': 'Já existe uma regra do item para este setor.',
   'frequencia-repetida': 'A frequência já está aceita para o item.',
+  'frequencia-em-uso':
+    'A frequência já está em uso: o que define a dose não muda. Cadastre uma frequência nova e tire esta de uso.',
+  'condicao-em-uso': 'A condição já está em prescrições: cadastre uma condição nova e tire esta de uso.',
 };

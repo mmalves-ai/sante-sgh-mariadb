@@ -426,4 +426,54 @@ describe.skipIf(SEM_BANCO)('cadastro editável do catálogo da prescrição (ban
       cad.retirarComplemento(ctx(), ids.itemB, { tipo: 'sinonimo', id: s1.id, versao: 1 }),
     ).rejects.toMatchObject(recusada('registro-inexistente', 404));
   });
+
+  it('frequência em uso: o que define a dose não muda (409); tirar de uso e setores mudam', async () => {
+    const base = {
+      codigo: 'C1115_8/8H',
+      descricao: 'C1115 de 8 em 8 horas',
+      tipo: 'intervalo' as const,
+      intervaloMinutos: 480,
+    };
+    const f = await cad.gravarFrequencia(ctx(), base);
+    // sem uso, a definição ainda muda livremente
+    const f2 = await cad.gravarFrequencia(ctx(), {
+      ...base,
+      id: f.id,
+      versao: 1,
+      descricao: 'C1115 8 em 8 horas',
+    });
+    expect(f2.versao).toBe(2);
+    await cad.incluirComplemento(ctx(), ids.itemB, { tipo: 'frequencia', frequencia: f.id });
+    await expect(
+      cad.gravarFrequencia(ctx(), {
+        ...base,
+        id: f.id,
+        versao: 2,
+        descricao: 'C1115 8 em 8 horas',
+        intervaloMinutos: 360,
+      }),
+    ).rejects.toMatchObject(recusada('frequencia-em-uso', 409));
+    expect(
+      await um('SELECT intervalo_minutos, versao FROM frequencia_administracao WHERE id = ?', [f.id]),
+    ).toMatchObject({ intervalo_minutos: 480, versao: 2 });
+    const f3 = await cad.gravarFrequencia(ctx(), {
+      ...base,
+      id: f.id,
+      versao: 2,
+      descricao: 'C1115 8 em 8 horas',
+      horarioFixo: true,
+      escopoSetor: 'somente_listados',
+      setores: [ids.setorA],
+      ativo: false,
+    });
+    expect(f3.versao).toBe(3);
+    expect(
+      await um('SELECT intervalo_minutos, ativo, horario_fixo FROM frequencia_administracao WHERE id = ?', [
+        f.id,
+      ]),
+    ).toMatchObject({ intervalo_minutos: 480 });
+    expect(
+      Number((await um('SELECT ativo FROM frequencia_administracao WHERE id = ?', [f.id]))!['ativo']),
+    ).toBe(0);
+  });
 });

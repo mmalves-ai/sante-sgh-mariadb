@@ -2,6 +2,7 @@
 // itens não padronizados e complementos do item.
 export const mensagensCatalogoPrescricao = {
   rotuloSecao: 'Edição do catálogo da prescrição',
+  somenteLeitura: 'Você pode consultar esta parte do catálogo, mas a alteração pede permissão de cadastro.',
   escolha: 'Escolha',
   tipo: {
     intervalo: 'A cada intervalo',

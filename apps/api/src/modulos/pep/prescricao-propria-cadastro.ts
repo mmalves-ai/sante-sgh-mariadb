@@ -16,7 +16,9 @@ import {
   ORIGENS_SINONIMO,
   type ProblemaCadastro,
   problemasDaCondicao,
+  problemasDaCondicaoEmUso,
   problemasDaFrequencia,
+  problemasDaFrequenciaEmUso,
   problemasDaRegraSetor,
   problemasDoConflito,
   problemasDoNaoPadronizado,
@@ -53,6 +55,7 @@ const num = (v: unknown): number => Number(v);
 const numOuNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 const txt = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
 const bool = (v: unknown): boolean => Boolean(Number(v));
+const COLUNAS_DIAS = DIAS_SEMANA_FREQUENCIA.join(', ');
 const id = z.number().int().positive();
 const versao = z.number().int().positive();
 const nulo = <T extends z.ZodTypeAny>(t: T) => t.nullable().default(null);
@@ -177,6 +180,11 @@ export interface NucleoCadastroCatalogo {
   criarExecutor(): Executor;
 }
 
+/** Recusa com 409 (conflito com o que já foi prescrito) quando a alteração mexe no que define um cadastro em uso. */
+const recusarEmUso = (ps: readonly ProblemaCadastro[]): true => {
+  if (ps.length) recusar(ps, 409);
+  return true;
+};
 const recusar = (ps: readonly ProblemaCadastro[], status = 422): never => {
   const p = ps[0]!;
   throw new ErroOperacao(
@@ -443,6 +451,24 @@ export class CadastroCatalogoPrescricaoPropria {
   }
 
   /** Marca a linha como excluída (autor e hora), sem apagar. */
+  /**
+   * A frequência está em uso quando um registro clínico a cita (prescrição, receita, uso prévio, ficha e liberação de
+   * antimicrobiano; feitos ou não, valem para sempre) ou quando é posologia aceita de um item ativo no complemento.
+   */
+  private static async frequenciaEmUso(tx: TxOperacao, id: number): Promise<boolean> {
+    const r = await tx.uma(
+      `SELECT EXISTS(SELECT 1 FROM prescricao_item WHERE frequencia_administracao_id = ?)
+           OR EXISTS(SELECT 1 FROM receita_medica_item WHERE frequencia_administracao_id = ?)
+           OR EXISTS(SELECT 1 FROM medicamento_uso_previo WHERE frequencia_administracao_id = ?)
+           OR EXISTS(SELECT 1 FROM ficha_antimicrobiano WHERE frequencia_administracao_id = ?)
+           OR EXISTS(SELECT 1 FROM liberacao_antimicrobiano WHERE frequencia_administracao_id = ?)
+           OR EXISTS(SELECT 1 FROM item_prescritivel_frequencia
+                      WHERE frequencia_administracao_id = ? AND excluido_em IS NULL) AS em_uso`,
+      [id, id, id, id, id, id],
+    );
+    return bool(r?.['em_uso']);
+  }
+
   private static async retirar(tx: TxOperacao, tabela: string, linha: number, v: number): Promise<Gravado> {
     return {
       id: linha,
@@ -497,8 +523,29 @@ export class CadastroCatalogoPrescricaoPropria {
         let r: Gravado;
         if (e.id) {
           if (!e.versao) recusar([{ codigo: 'versao-obrigatoria', campo: 'versao' }], 400);
-          const f = await tx.uma('SELECT id FROM frequencia_administracao WHERE id = ?', [e.id]);
+          const f = await tx.uma(
+            `SELECT id, codigo, descricao, descricao_resumida, tipo, intervalo_minutos, doses_por_dia, limite_horas,
+                    ${COLUNAS_DIAS}
+               FROM frequencia_administracao WHERE id = ?`,
+            [e.id],
+          );
           if (!f) throw inexistente('A frequência');
+          recusarEmUso(
+            problemasDaFrequenciaEmUso(
+              await CadastroCatalogoPrescricaoPropria.frequenciaEmUso(tx, e.id),
+              {
+                codigo: String(f['codigo']),
+                descricao: String(f['descricao']),
+                descricaoResumida: (f['descricao_resumida'] as string | null) ?? null,
+                tipo: f['tipo'] as EntradaFrequenciaApi['tipo'],
+                intervaloMinutos: numOuNull(f['intervalo_minutos']),
+                dosesPorDia: numOuNull(f['doses_por_dia']),
+                limiteHoras: numOuNull(f['limite_horas']),
+                dias: DIAS_SEMANA_FREQUENCIA.filter((d) => bool(f[d])),
+              },
+              e,
+            ),
+          );
           r = { id: e.id, versao: await tx.alterar('frequencia_administracao', e.id, e.versao!, valores) };
         } else r = { id: await tx.incluir('frequencia_administracao', valores), versao: 1 };
         const atuais = await tx.consultarParaAtualizar(
@@ -563,8 +610,27 @@ export class CadastroCatalogoPrescricaoPropria {
         };
         if (!e.id) return { id: await tx.incluir('condicao_se_necessario', valores), versao: 1 };
         if (!e.versao) recusar([{ codigo: 'versao-obrigatoria', campo: 'versao' }], 400);
-        if (!(await tx.uma('SELECT id FROM condicao_se_necessario WHERE id = ?', [e.id])))
-          throw inexistente('A condição');
+        const atual = await tx.uma(
+          'SELECT id, codigo, descricao, parametro_vital_id, limiar FROM condicao_se_necessario WHERE id = ?',
+          [e.id],
+        );
+        if (!atual) throw inexistente('A condição');
+        const usada = await tx.uma(
+          'SELECT id FROM prescricao_item_se_necessario WHERE condicao_se_necessario_id = ? LIMIT 1',
+          [e.id],
+        );
+        recusarEmUso(
+          problemasDaCondicaoEmUso(
+            Boolean(usada),
+            {
+              codigo: String(atual['codigo']),
+              descricao: String(atual['descricao']),
+              parametroVital: atual['parametro_vital_id'] === null ? null : num(atual['parametro_vital_id']),
+              limiar: atual['limiar'] === null ? null : num(atual['limiar']),
+            },
+            e,
+          ),
+        );
         return { id: e.id, versao: await tx.alterar('condicao_se_necessario', e.id, e.versao!, valores) };
       },
     );
