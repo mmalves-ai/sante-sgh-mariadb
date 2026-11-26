@@ -647,7 +647,44 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
     expect(docsIcp.every((d) => Number(d['pac']) === Number(m!.base.paciente))).toBe(true);
     expect(String(docsIcp[1]!['titulo'])).toContain('(retificação, versão 2)');
     expect(tela.versoes.every((v) => v.documento !== null)).toBe(true);
-    expect(tela.versoes.every((v) => v.assinaturaIcp === 'na-fila' || v.assinaturaIcp === 'nao-exigida')).toBe(true);
+    // Sem política ICP-Brasil do estabelecimento para o tipo, fica a assinatura eletrônica avançada do clique; com a
+    // política vigente (nível icp-brasil, destino interno), as três versões entram na fila do laudista.
+    const tipoLaudo = Number((await um("SELECT id FROM tipo_documento_clinico WHERE codigo = 'registro-clinico'", []))!['id']);
+    const politicaAntes = await um(
+      `SELECT COUNT(*) AS n FROM regra_politica_assinatura r JOIN politica_assinatura p ON p.id = r.politica_assinatura_id
+        WHERE p.estabelecimento_id = ? AND p.tipo_documento_clinico_id = ? AND p.ativo AND r.vigente = 1
+          AND r.nivel = 'icp-brasil' AND r.destino = 'interno'`,
+      [m!.base.est, tipoLaudo],
+    );
+    if (Number(politicaAntes!['n']) === 0) {
+      expect(tela.versoes.map((v) => v.assinaturaIcp)).toEqual(['nao-exigida', 'nao-exigida', 'nao-exigida']);
+      const politica = await nucleo.escrever(ctxT, (e) =>
+        e.inserir(
+          `INSERT INTO politica_assinatura (estabelecimento_id, tipo_documento_clinico_id, vigencia_inicio, criado_em)
+           VALUES (?, ?, '2000-01-01', ?)`,
+          [m!.base.est, tipoLaudo, new Date()],
+        ),
+      );
+      try {
+        await nucleo.escrever(ctxT, (e) =>
+          e.inserir(
+            `INSERT INTO regra_politica_assinatura (politica_assinatura_id, destino, nivel, justificativa, vigencia_inicio,
+                                                    criado_em)
+             VALUES (?, 'interno', 'icp-brasil', 'Teste C3-005', '2000-01-01', ?)`,
+            [politica, new Date()],
+          ),
+        );
+        const naFila = await servico.abrir(c, item);
+        expect(naFila.versoes.map((v) => v.assinaturaIcp)).toEqual(['na-fila', 'na-fila', 'na-fila']);
+      } finally {
+        await nucleo.escrever(ctxT, async (e) => {
+          await e.executar('DELETE FROM regra_politica_assinatura WHERE politica_assinatura_id = ?', [politica]);
+          await e.executar('DELETE FROM politica_assinatura WHERE id = ?', [politica]);
+        });
+      }
+    } else {
+      expect(tela.versoes.map((v) => v.assinaturaIcp)).toEqual(['na-fila', 'na-fila', 'na-fila']);
+    }
     expect(tela.valores.map((v) => v.grandeza)).toEqual([ids.fe]);
     expect(tela.modelos[0]?.id).toBe(modelo.id);
     expect(tela.pode).toEqual({ salvar: false, assinar: false, retificar: true });
