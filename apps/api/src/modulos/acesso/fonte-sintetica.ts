@@ -705,6 +705,9 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
           'suprimentos.requisicao.criar',
         ),
         ...opcoesDasPermissoes('acesso.escopo.editar'),
+        // C1-090 (06-FAT linha 16): o administrador consulta o lançamento automático e mantém as regras e as exceções
+        // (o recorte global, faturamento.regra.editarGlobal, ele já tinha; sem a consulta, nem chegava à tela).
+        ...opcoesFaturamento('faturamento.lancamento.ler', 'faturamento.regra.ler', 'faturamento.regra.editar'),
         // C2-097: os padrões da prescrição (kits de medicamentos e de soluções, protocolos e receitas padrão).
         ...opcoesDasPermissoes(
           'pep.kitPrescricao.ler',
