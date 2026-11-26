@@ -124,7 +124,7 @@ test.describe('C3-022 repasse da produção SUS @C3-022', () => {
       return json(r, { tipo: 'nao-encontrado' }, 404);
     });
 
-    await // O repasse é do analista do repasse (segregação do M33): o SINT.ADMIN não tem as permissões repasse.* e a rota
+    // O repasse é do analista do repasse (segregação do M33): o SINT.ADMIN não tem as permissões repasse.* e a rota
     // (repasse.apuracao.ler) não abria a tela.
     await entrar(page, 'SINT.REP.ANALISTA');
     await page.goto('/faturamento/sus/repasse');
