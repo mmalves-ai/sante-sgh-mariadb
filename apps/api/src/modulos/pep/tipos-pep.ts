@@ -5,6 +5,7 @@
 import {
   esquemaItemReceita,
   GRAVIDADES_ALERGIA,
+  esquemaEstadoLidoAlergia,
   ORIGENS_ALERGIA,
   textoCp1252,
   type LinhaCadastroPrescricao,
@@ -174,6 +175,7 @@ export const esquemaAlteracaoAlergia = z
     manifestacoes: z.array(ID).max(10),
     motivo: textoCp1252(500).optional(),
     versao: z.string().max(200),
+    lido: esquemaEstadoLidoAlergia,
   })
   .strict();
 

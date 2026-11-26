@@ -5,6 +5,7 @@
 // adaptador gravaria, por estabelecimento; nada vai à cópia. Marca "SINTETICO".
 import {
   alteracaoDaAlergia,
+  conferirEstadoLido,
   conferirReativacao,
   linhaDoTempoDaAlergia,
   manifestacoesDoPedido,
@@ -1412,6 +1413,13 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
             );
             e.alergias[i] = { ...a, ativa: true, inativadaEm: null, motivoInativacao: null };
           } else if ('manifestacoes' in x) {
+            conferirEstadoLido(alvo, {
+              gravidade: x.lido.gravidade,
+              reacao: x.lido.reacao,
+              fonte: null,
+              observacao: x.lido.observacao,
+              manifestacoes: x.lido.manifestacoes,
+            });
             const m = alteracaoDaAlergia(alvo, {
               gravidade: x.gravidade,
               reacao: x.reacao,

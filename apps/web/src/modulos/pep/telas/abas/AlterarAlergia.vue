@@ -6,6 +6,7 @@ import {
   GRAVIDADES_ALERGIA,
   ORIGENS_ALERGIA,
   type AlergiaPep,
+  type EstadoLidoAlergia,
   type GravidadeAlergia,
   type ManifestacaoAlergica,
   type OrigemAlergia,
@@ -34,6 +35,8 @@ const observacao = ref('');
 const manifestacoes = ref<number[]>([]);
 const motivo = ref('');
 const erro = ref<unknown>(null);
+/** O estado lido ao abrir: vai no pedido para o servidor recusar (409) se outra pessoa alterou depois. */
+const lido = ref<EstadoLidoAlergia | null>(null);
 const opcoesGravidade = computed<{ valor: GravidadeAlergia | ''; rotulo: string }[]>(() => [
   { valor: '', rotulo: '-' },
   ...GRAVIDADES_ALERGIA.map((g) => ({ valor: g, rotulo: t(`pep.doc.alergias.gravidades.${g}`) })),
@@ -54,6 +57,13 @@ async function abrir(ev: Event): Promise<void> {
   try {
     const h = await lerHistoricoAlergia(props.paciente, props.alergia.id);
     manifestacoes.value = h.manifestacoes.map((m) => m.id);
+    lido.value = {
+      gravidade: props.alergia.gravidade,
+      reacao: props.alergia.reacao,
+      origem: props.alergia.origem,
+      observacao: props.alergia.observacao,
+      manifestacoes: [...manifestacoes.value],
+    };
     pronto.value = true;
   } catch (e) {
     erro.value = e;
@@ -61,6 +71,7 @@ async function abrir(ev: Event): Promise<void> {
 }
 async function gravar(): Promise<void> {
   erro.value = null;
+  if (!lido.value) return;
   try {
     await alterarAlergia(props.paciente, props.alergia.id, {
       gravidade: gravidade.value || null,
@@ -70,7 +81,9 @@ async function gravar(): Promise<void> {
       manifestacoes: manifestacoes.value,
       ...(motivo.value.trim() ? { motivo: motivo.value.trim() } : {}),
       versao: props.versao,
+      lido: lido.value,
     });
+    lido.value = null;
     motivo.value = '';
     pronto.value = false;
     aberto.value = false;

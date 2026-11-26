@@ -24,6 +24,7 @@ import {
 } from '@sgh/nucleo';
 import {
   alteracaoDaAlergia,
+  conferirEstadoLido,
   conferirReativacao,
   type AlergiaParaMudanca,
   type EstadoAlergia,
@@ -33,6 +34,7 @@ import {
   RecusaHistoricoAlergia,
   RecusaMudancaAlergia,
 } from '@sgh/dominio-pep';
+import { GRAVIDADES_ALERGIA, ORIGENS_ALERGIA } from '@sgh/contratos';
 import { z } from 'zod';
 import type { ContextoDocs } from './documentos-porta.js';
 import type { NucleoDocumentosPep } from './documentos-porta-propria.js';
@@ -813,6 +815,26 @@ export function operacoesDocumentosPropria(
         const { linha, alvo, principios } = await alergiaTravada(tx, x.paciente, x.alergia);
         const { versao } = await versaoTravada(tx, x.paciente);
         if (versao !== x.versao) throw conflitoAlergias();
+        // Concorrência da linha: o estado lido pela tela tem de ser o atual (a lista ativa não muda numa alteração).
+        // Gravidade e origem fora do vocabulário do contrato chegam à tela como nulo; aqui também.
+        regraAlergia(() =>
+          conferirEstadoLido(
+            {
+              ...alvo,
+              gravidade: (GRAVIDADES_ALERGIA as readonly string[]).includes(alvo.gravidade ?? '')
+                ? alvo.gravidade
+                : null,
+              fonte: ORIGENS_ALERGIA.map((o) => fonteDaOrigem(o)).includes(alvo.fonte) ? alvo.fonte : null,
+            },
+            {
+              gravidade: x.lido.gravidade,
+              reacao: x.lido.reacao,
+              fonte: fonteDaOrigem(x.lido.origem ?? undefined),
+              observacao: x.lido.observacao,
+              manifestacoes: x.lido.manifestacoes,
+            },
+          ),
+        );
         const mud = regraAlergia(() =>
           alteracaoDaAlergia(alvo, {
             gravidade: x.gravidade,

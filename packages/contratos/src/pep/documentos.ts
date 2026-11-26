@@ -415,6 +415,18 @@ export type InativarAlergia = z.infer<typeof esquemaInativarAlergia>;
 export const esquemaReativarAlergia = esquemaInativarAlergia;
 export type ReativarAlergia = InativarAlergia;
 
+/** O estado da alergia como a tela o leu (gravidade, reação, origem, observação e manifestações). */
+export const esquemaEstadoLidoAlergia = z
+  .object({
+    gravidade: z.enum(GRAVIDADES_ALERGIA).nullable(),
+    reacao: z.string().max(2000).nullable(),
+    origem: z.enum(ORIGENS_ALERGIA).nullable(),
+    observacao: z.string().max(2000).nullable(),
+    manifestacoes: z.array(id).max(50),
+  })
+  .strict();
+export type EstadoLidoAlergia = z.infer<typeof esquemaEstadoLidoAlergia>;
+
 /**
  * Alteração da alergia ativa: o estado completo dos campos editáveis (nulo apaga). O agente não muda (agente
  * diferente é outra alergia). Motivo opcional; a versão é a da lista lida.
@@ -428,6 +440,11 @@ export const esquemaAlterarAlergia = z
     manifestacoes: z.array(id).max(10).default([]),
     motivo: textoCp1252(500).optional(),
     versao: z.string().max(200),
+    /**
+     * O estado que o profissional leu antes de alterar (controle de concorrência da linha): se outra pessoa mudou a
+     * alergia depois da leitura, a gravação é recusada com 409 em vez de desfazer a mudança dela.
+     */
+    lido: esquemaEstadoLidoAlergia,
   })
   .strict();
 export type AlterarAlergia = z.infer<typeof esquemaAlterarAlergia>;

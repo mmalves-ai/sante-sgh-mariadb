@@ -3,6 +3,7 @@ import {
   type AlergiaParaMudanca,
   RecusaMudancaAlergia,
   alteracaoDaAlergia,
+  conferirEstadoLido,
   conferirReativacao,
   descricaoComparavel,
 } from './alergia-mudanca.js';
@@ -61,5 +62,26 @@ describe('alteração da alergia', () => {
     const igual = { gravidade: 'leve', reacao: ' ', fonte: null, observacao: null, manifestacoes: [3] };
     expect(codigo(() => alteracaoDaAlergia(base, igual))).toBe('ja-retirada');
     expect(codigo(() => alteracaoDaAlergia(ativa, igual))).toBe('sem-mudanca');
+  });
+});
+
+describe('estado lido na alteração (concorrência)', () => {
+  const ativa = { ...base, ativa: true, reacao: 'urticária', manifestacoes: [4, 3] };
+  const lido = {
+    gravidade: 'leve',
+    reacao: ' urticária',
+    fonte: null,
+    observacao: '',
+    manifestacoes: [3, 4, 4],
+  };
+  it('aceita o mesmo estado (ordem das manifestações e espaços não contam)', () => {
+    expect(codigo(() => conferirEstadoLido(ativa, lido))).toBe('ok');
+  });
+  it('recusa quando outra pessoa mudou a gravidade ou uma manifestação depois da leitura', () => {
+    expect(codigo(() => conferirEstadoLido({ ...ativa, gravidade: 'grave' }, lido))).toBe('estado-mudou');
+    expect(codigo(() => conferirEstadoLido({ ...ativa, manifestacoes: [3] }, lido))).toBe('estado-mudou');
+    expect(codigo(() => conferirEstadoLido({ ...ativa, fonte: 'relato_paciente' }, lido))).toBe(
+      'estado-mudou',
+    );
   });
 });

@@ -705,7 +705,23 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       manifestacoes: [] as number[],
       motivo: 'Reação observada na enfermaria',
     };
-    await ops()['pep.alterarAlergia']!(C(), { ...pedido, versao: await versao() }, ctx('al'));
+    // O estado lido pela tela antes de cada alteração (controle de concorrência da linha).
+    const lido0 = {
+      gravidade: null,
+      reacao: null,
+      origem: null,
+      observacao: null,
+      manifestacoes: [ids.manifestacao],
+    };
+    const lido1 = {
+      ...lido0,
+      gravidade: 'grave',
+      reacao: 'Edema de glote',
+      origem: 'reacao-observada',
+      manifestacoes: [],
+    };
+    const lido2 = { ...lido1, manifestacoes: [ids.manifestacao] };
+    await ops()['pep.alterarAlergia']!(C(), { ...pedido, lido: lido0, versao: await versao() }, ctx('al'));
     const l = await uma(
       `SELECT gravidade, reacao, fonte_informacao, ativa, versao,
               (SELECT COUNT(*) FROM alergia_paciente_manifestacao m WHERE m.alergia_paciente_id = ?
@@ -737,7 +753,13 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
     // A manifestação que volta é restaurada (a mesma linha), sem segunda linha.
     await ops()['pep.alterarAlergia']!(
       C(),
-      { ...pedido, manifestacoes: [ids.manifestacao], motivo: undefined, versao: await versao() },
+      {
+        ...pedido,
+        manifestacoes: [ids.manifestacao],
+        motivo: undefined,
+        lido: lido1,
+        versao: await versao(),
+      },
       ctx('al2'),
     );
     const m = await consultar(
@@ -749,16 +771,65 @@ describe.skipIf(SEM_BANCO)('documentos-propria-operacoes contra o MariaDB (clien
       await codigo(
         ops()['pep.alterarAlergia']!(
           C(),
-          { ...pedido, manifestacoes: [ids.manifestacao], versao: await versao() },
+          { ...pedido, manifestacoes: [ids.manifestacao], lido: lido2, versao: await versao() },
           ctx('al3'),
         ),
       ),
     ).toBe('sem-mudanca');
     expect(
       await codigo(
-        ops()['pep.alterarAlergia']!(C(), { ...pedido, gravidade: 'leve', versao: '' }, ctx('al4')),
+        ops()['pep.alterarAlergia']!(
+          C(),
+          { ...pedido, gravidade: 'leve', lido: lido2, versao: '' },
+          ctx('al4'),
+        ),
       ),
     ).toBe('conflito-versao');
+    // Duas alterações a partir da mesma leitura (lido2): a primeira grava; a segunda, com a tela antiga, é recusada
+    // com 409 e não desfaz a gravidade nem a manifestação retirada pela primeira.
+    await ops()['pep.alterarAlergia']!(
+      C(),
+      {
+        ...pedido,
+        gravidade: 'leve',
+        manifestacoes: [],
+        motivo: undefined,
+        lido: lido2,
+        versao: await versao(),
+      },
+      ctx('al5'),
+    );
+    const segunda = ops()['pep.alterarAlergia']!(
+      C(),
+      {
+        ...pedido,
+        manifestacoes: [ids.manifestacao],
+        reacao: 'Urticária',
+        lido: lido2,
+        versao: await versao(),
+      },
+      ctx('al6'),
+    );
+    const erro = await segunda.then(
+      () => null,
+      (e: unknown) => (e instanceof ErroOperacao ? e.problema : null),
+    );
+    expect([erro?.status, erro?.codigo]).toEqual([409, 'estado-mudou']);
+    const fim = await uma(
+      `SELECT gravidade, reacao,
+              (SELECT COUNT(*) FROM alergia_paciente_manifestacao m WHERE m.alergia_paciente_id = ?
+                 AND m.excluido_em IS NULL) AS mv,
+              (SELECT COUNT(*) FROM alergia_paciente_evento e WHERE e.alergia_paciente_id = ?
+                 AND e.evento = 'alteracao') AS ne
+         FROM alergia_paciente WHERE id = ?`,
+      [alvo, alvo, alvo],
+    );
+    expect([fim?.['gravidade'], fim?.['reacao'], Number(fim?.['mv']), Number(fim?.['ne'])]).toEqual([
+      'leve',
+      'Edema de glote',
+      0,
+      3,
+    ]);
   });
 
   it('receita: número da sequência, conteúdo na linha e documento do prontuário', async () => {

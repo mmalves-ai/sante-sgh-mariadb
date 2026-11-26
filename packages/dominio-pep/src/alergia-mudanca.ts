@@ -45,7 +45,7 @@ export interface AlteracaoAlergia {
 
 export class RecusaMudancaAlergia extends Error {
   constructor(
-    readonly codigo: 'ja-ativa' | 'ja-retirada' | 'duplicada' | 'sem-mudanca',
+    readonly codigo: 'ja-ativa' | 'ja-retirada' | 'duplicada' | 'sem-mudanca' | 'estado-mudou',
     mensagem: string,
   ) {
     super(mensagem);
@@ -119,4 +119,24 @@ export function alteracaoDaAlergia(
   if (Object.keys(campos).length === 0 && incluir.length === 0 && retirar.length === 0)
     throw new RecusaMudancaAlergia('sem-mudanca', 'Nada mudou na alergia.');
   return { campos: campos as AlteracaoAlergia['campos'], incluir, retirar, manifestacoes: depois };
+}
+
+/**
+ * Controle de concorrência da alteração: o estado que o profissional leu (gravidade, reação, origem, observação e
+ * manifestações) tem de ser o estado atual da linha travada. A alteração manda o estado completo dos campos, então
+ * gravar sobre um estado que outro profissional já mudou desfaria a mudança dele sem aviso (perda de atualização num
+ * dado de segurança da medicação). A lista de alergias ativas não muda numa alteração e não serve de versão.
+ */
+export function conferirEstadoLido(alvo: AlergiaParaMudanca, lido: PedidoAlteracaoAlergia): void {
+  const igual =
+    limpo(alvo.gravidade) === limpo(lido.gravidade) &&
+    limpo(alvo.reacao) === limpo(lido.reacao) &&
+    limpo(alvo.fonte) === limpo(lido.fonte) &&
+    limpo(alvo.observacao) === limpo(lido.observacao) &&
+    ordenados(alvo.manifestacoes).join(',') === ordenados(lido.manifestacoes).join(',');
+  if (!igual)
+    throw new RecusaMudancaAlergia(
+      'estado-mudou',
+      'A alergia foi alterada por outra pessoa desde a leitura: abra de novo e confira.',
+    );
 }

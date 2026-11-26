@@ -878,6 +878,7 @@ export class DocumentosPepController {
         manifestacoes: e.manifestacoes,
         ...(e.motivo?.trim() ? { motivo: e.motivo.trim() } : {}),
         versao: e.versao,
+        lido: e.lido,
       },
       'alergia',
     );
