@@ -3,6 +3,7 @@
 // de cada item. Pela NBC TG 07 (subvenção e assistência governamentais, aplicada à doação recebida), o bem doado entra
 // pelo valor justo; sem o valor justo do termo, usa-se o último preço de compra do item como referência. A doação não
 // gera título a pagar nem muda o último preço de compra; a parte doada do saldo fica marcada (quantidade doada).
+import { cpfValido } from '../../validacao/cpf.js';
 import { type RecusaSuprimentos, reais } from './recusa.js';
 
 export const TIPOS_DOADOR = ['pessoa', 'empresa'] as const;
@@ -130,8 +131,9 @@ export function avisosValorJusto(itens: readonly ItemDoacaoParaConferir[]): numb
 }
 
 /**
- * A parte doada do saldo depois de um movimento: a entrada doada soma; a saída consome primeiro o que não é doado e a
- * parte doada nunca passa do saldo que fica.
+ * A parte doada do saldo depois de um movimento: a entrada doada soma; a saída doada (o estorno de uma doação
+ * desfeita) subtrai da parte doada; a saída comum consome primeiro o que não é doado e a parte doada nunca passa do
+ * saldo que fica.
  */
 export function quantidadeDoadaApos(
   doadaAntes: number,
@@ -143,8 +145,27 @@ export function quantidadeDoadaApos(
   },
 ): number {
   const q = Math.round(
-    (movimento.natureza === 'entrada' && movimento.doacao ? doadaAntes + movimento.quantidade : doadaAntes) *
-      10_000,
+    (movimento.doacao
+      ? movimento.natureza === 'entrada'
+        ? doadaAntes + movimento.quantidade
+        : doadaAntes - movimento.quantidade
+      : doadaAntes) * 10_000,
   );
   return Math.max(0, Math.min(q / 10_000, saldoApos));
+}
+
+/** Tamanho mínimo do nome para procurar entre os doadores já registrados. */
+export const MINIMO_BUSCA_DOADOR = 2;
+
+/**
+ * Como a busca do doador pessoa é feita (LGPD, minimização): pelo nome, só entre as pessoas que já doaram ao
+ * estabelecimento; uma pessoa nova do cadastro só pelo CPF completo e válido, sem listagem por nome. A empresa é
+ * procurada pelo nome ou pelo CNPJ.
+ */
+export function buscaDoDoador(termo: string): { readonly nome: string | null; readonly cpf: string | null } {
+  const t = termo.trim().slice(0, 60);
+  const digitos = t.replace(/\D/g, '');
+  const soDocumento = /^[\d.\-\s/]+$/.test(t);
+  if (soDocumento) return { nome: null, cpf: digitos.length === 11 && cpfValido(digitos) ? digitos : null };
+  return { nome: t.length >= MINIMO_BUSCA_DOADOR ? t : null, cpf: null };
 }

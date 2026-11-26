@@ -7,6 +7,7 @@
 // doada do saldo (quantidade_doada). O último preço de compra do item não muda. Nada é apagado.
 import {
   avisosValorJusto,
+  buscaDoDoador,
   conferirEntradaDoacao,
   CRITERIOS_CUSTO_DOACAO,
   type CriterioCustoDoacao,
@@ -337,6 +338,8 @@ export class PortaEntradaDoacaoPropria implements PortaEntradaDoacao {
     if (busca.length < 2) return Promise.resolve([]);
     const ctx = this.contexto(c);
     const like = `%${busca.replace(/[%_\\]/g, '\\$&')}%`;
+    // LGPD (minimização): a pessoa nova do cadastro só pelo CPF completo e válido; pelo nome, só quem já doou aqui.
+    const pessoa = buscaDoDoador(busca);
     return this.nucleo.lerSomente(ctx, async (l) => {
       const empresas = await l.consultar<Linha>(
         `SELECT id, COALESCE(nome_fantasia, razao_social) AS nome, COALESCE(cnpj, cpf) AS doc FROM empresa_fornecedora
@@ -344,11 +347,22 @@ export class PortaEntradaDoacaoPropria implements PortaEntradaDoacao {
           ORDER BY razao_social LIMIT 15`,
         [like, like, busca.replace(/\D/g, '')],
       );
-      const pessoas = await l.consultar<Linha>(
-        `SELECT id, nome, cpf AS doc FROM pessoa_fisica
-          WHERE excluido_em IS NULL AND (nome LIKE ? OR cpf = ?) ORDER BY nome LIMIT 15`,
-        [like, busca.replace(/\D/g, '')],
-      );
+      const pessoas = pessoa.cpf
+        ? await l.consultar<Linha>(
+            'SELECT id, nome, cpf AS doc FROM pessoa_fisica WHERE excluido_em IS NULL AND cpf = ? LIMIT 1',
+            [pessoa.cpf],
+          )
+        : pessoa.nome
+          ? await l.consultar<Linha>(
+              `SELECT pf.id, pf.nome, pf.cpf AS doc FROM pessoa_fisica pf
+                WHERE pf.excluido_em IS NULL AND pf.nome LIKE ?
+                  AND EXISTS (SELECT 1 FROM nota_entrada ne
+                               WHERE ne.doador_pessoa_fisica_id = pf.id AND ne.estabelecimento_id = ?
+                                 AND ne.doacao = TRUE AND ne.excluido_em IS NULL)
+                ORDER BY pf.nome LIMIT 15`,
+              [`%${pessoa.nome.replace(/[%_\\]/g, '\\$&')}%`, ctx.estabelecimento],
+            )
+          : [];
       return [
         ...empresas.map((r) => ({
           tipo: 'empresa' as const,

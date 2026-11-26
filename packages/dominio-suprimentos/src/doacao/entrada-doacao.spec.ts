@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   avisosValorJusto,
+  buscaDoDoador,
   conferirEntradaDoacao,
   custoDaDoacao,
   custoUnitarioDoacao,
@@ -92,5 +93,19 @@ describe('entrada por doação (C1-126)', () => {
     expect(quantidadeDoadaApos(10, 15, { natureza: 'saida', quantidade: 5, doacao: false })).toBe(10);
     expect(quantidadeDoadaApos(10, 6, { natureza: 'saida', quantidade: 14, doacao: false })).toBe(6);
     expect(quantidadeDoadaApos(2, 0, { natureza: 'saida', quantidade: 2, doacao: false })).toBe(0);
+  });
+  it('estorno de uma doação desfeita tira a quantidade da parte doada', () => {
+    expect(quantidadeDoadaApos(10, 100, { natureza: 'saida', quantidade: 10, doacao: true })).toBe(0);
+    expect(quantidadeDoadaApos(10, 5, { natureza: 'saida', quantidade: 5, doacao: true })).toBe(5);
+    expect(quantidadeDoadaApos(3, 0, { natureza: 'saida', quantidade: 10, doacao: true })).toBe(0);
+  });
+
+  it('a pessoa nova só é achada pelo CPF completo e válido; pelo nome, só entre os doadores', () => {
+    expect(buscaDoDoador('Maria')).toEqual({ nome: 'Maria', cpf: null });
+    expect(buscaDoDoador('M')).toEqual({ nome: null, cpf: null });
+    expect(buscaDoDoador('529.982.247-25')).toEqual({ nome: null, cpf: '52998224725' });
+    expect(buscaDoDoador('529982247')).toEqual({ nome: null, cpf: null });
+    expect(buscaDoDoador('11111111111')).toEqual({ nome: null, cpf: null });
+    expect(buscaDoDoador('529.982.247-24')).toEqual({ nome: null, cpf: null });
   });
 });

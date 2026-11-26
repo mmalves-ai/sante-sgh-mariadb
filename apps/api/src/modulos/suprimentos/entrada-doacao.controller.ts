@@ -5,7 +5,7 @@
 //   POST /api/suprimentos/doacoes                    registrar a doação (sem pedido; doador, termo, custo por item)
 // A gravação exige a Idempotency-Key: a repetição do mesmo pedido devolve o resultado da primeira.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
-import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
+import { Auditar, AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { idDaRota, sessaoDe } from '../cadastro/comum.js';
@@ -40,6 +40,8 @@ export class EntradaDoacaoController {
 
   @Get('doadores')
   @Permissao('suprimentos.nota.ler')
+  // LGPD: a consulta de pessoa do cadastro vai à trilha de acesso (quantidade; nunca o documento).
+  @Auditar('cadastro.pessoa.buscada')
   doadores(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
     return this.porta.doadores(sessaoDe(req).porta, termo ?? '');
   }

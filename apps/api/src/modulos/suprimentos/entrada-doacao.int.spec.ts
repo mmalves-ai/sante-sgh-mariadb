@@ -23,7 +23,8 @@ import {
   montarMassa,
   SEM_BANCO,
 } from './massa-propria.spec-util.js';
-import { movimentar, tipoMovimentoId } from './porta-propria.js';
+import type { ContextoSuprimentos } from './porta.js';
+import { movimentar, PortaSuprimentosPropria, tipoMovimentoId } from './porta-propria.js';
 
 const k = () => `t-doa-${randomUUID()}`;
 const TERMO = `TD${Date.now().toString(36).toUpperCase()}`.slice(0, 14);
@@ -35,6 +36,7 @@ describe.skipIf(SEM_BANCO)('entrada por doação (MariaDB)', () => {
   let m: MassaSuprimentos;
   let c: ContextoPortaM18;
   let pessoa = 0;
+  let naoDoador = 0;
   let notaCompra = 0;
   const um = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-c1126' }, (l) => l.uma<L>(sql, p));
@@ -79,6 +81,9 @@ describe.skipIf(SEM_BANCO)('entrada por doação (MariaDB)', () => {
     pessoa = await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-c1126-pessoa' }, (e) =>
       inserirMinimo(e, 'pessoa_fisica', { nome: `Doador Sintetico ${TERMO}` }, 'c1126'),
     );
+    naoDoador = await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-c1126-pessoa' }, (e) =>
+      inserirMinimo(e, 'pessoa_fisica', { nome: `Doador Sintetico ${TERMO} Novo` }, 'c1126'),
+    );
   }, 120_000);
 
   afterAll(async () => {
@@ -90,7 +95,7 @@ describe.skipIf(SEM_BANCO)('entrada por doação (MariaDB)', () => {
     await limparMassa(nucleo, m);
     if (pessoa)
       await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-c1126-limpa' }, (e) =>
-        e.executar('DELETE FROM pessoa_fisica WHERE id = ?', [pessoa]),
+        e.executar('DELETE FROM pessoa_fisica WHERE id IN (?, ?)', [pessoa, naoDoador]),
       );
     await nucleo.encerrar?.();
   }, 120_000);
@@ -322,5 +327,63 @@ describe.skipIf(SEM_BANCO)('entrada por doação (MariaDB)', () => {
     const s2 = await saldo();
     expect(s2.doada).toBe(Math.min(s1.doada, s2.q));
     expect(s2.doada).toBeLessThanOrEqual(s2.q);
+  });
+
+  it('pelo nome, a pessoa só aparece se já doou; a pessoa nova pede o CPF completo', async () => {
+    const achados = await porta.doadores(c, `Doador Sintetico ${TERMO}`);
+    const pessoas = achados.filter((d) => d.tipo === 'pessoa').map((d) => d.id);
+    expect(pessoas).toContain(pessoa);
+    expect(pessoas).not.toContain(naoDoador);
+    // Parte do CPF não lista ninguém (sem listagem por documento parcial).
+    expect((await porta.doadores(c, '123456')).filter((d) => d.tipo === 'pessoa')).toEqual([]);
+  });
+
+  it('a doação desfeita tira a parte doada do saldo e não entra no histórico de compras', async () => {
+    const cs = contexto(m, m.estA, 't-c1126-desfaz') as ContextoSuprimentos;
+    const sup = new PortaSuprimentosPropria(nucleo);
+    const compras0 = (await sup.historicoCompras(cs, m.insumo)).compras.length;
+    const s0 = await saldo();
+    const r = await porta.registrar(
+      c,
+      base({
+        termo: `${TERMO}X`,
+        itens: [
+          {
+            item: m.insumo,
+            quantidade: 5,
+            criterio: 'valor_justo',
+            valorJusto: 7,
+            lotes: [{ lote: `${TERMO}D`, validade: '2030-12-31', quantidade: 5 }],
+          },
+        ],
+      }),
+      k(),
+    );
+    const s1 = await saldo();
+    expect(s1.q).toBe(s0.q + 5);
+    expect(s1.doada).toBe(s0.doada + 5);
+    // A doação de empresa não é compra: o último custo e o menor unitário do comprador não mudam.
+    expect((await sup.historicoCompras(cs, m.insumo)).compras.length).toBe(compras0);
+    await sup.executar(
+      cs,
+      'suprimentos.desconsolidarDocumento',
+      { tipo: 'nota', documento: r.id, motivo: 'Doação lançada no local errado' },
+      { ...cs, chaveIdempotencia: k() },
+    );
+    const s2 = await saldo();
+    expect(s2.q).toBe(s0.q);
+    expect(s2.doada).toBe(s0.doada);
+    const estorno = await um(
+      `SELECT m.natureza, m.propriedade, m.quantidade FROM movimento_estoque m
+         JOIN movimento_estoque o ON o.id = m.estorno_movimento_estoque_id
+         JOIN nota_entrada_item ni ON ni.id = o.nota_entrada_item_id
+        WHERE ni.nota_entrada_id = ?`,
+      [r.id],
+    );
+    expect(estorno).toMatchObject({ natureza: 'saida', propriedade: 'doacao' });
+    expect(Number(estorno?.['quantidade'])).toBe(5);
+    expect((await um('SELECT situacao FROM nota_entrada WHERE id = ?', [r.id]))?.['situacao']).toBe(
+      'conferencia',
+    );
   });
 });

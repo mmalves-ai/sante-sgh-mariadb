@@ -258,6 +258,7 @@ const gravacao = useMutation({
           {{ M.doador.buscar }}
         </button>
       </div>
+      <p data-testid="doa-doador-dica">{{ M.doador.dica }}</p>
       <p v-if="achados && achados.length === 0" data-testid="doa-doador-nenhum">{{ M.doador.nenhum }}</p>
       <ul v-else-if="achados" data-testid="doa-doadores">
         <li v-for="d in achados" :key="`${d.tipo}-${d.id}`">

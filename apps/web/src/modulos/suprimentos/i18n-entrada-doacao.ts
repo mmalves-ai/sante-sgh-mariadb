@@ -10,9 +10,10 @@ export const mensagensEntradaDoacao = {
   semPermissao: 'O seu cargo não registra entradas no estoque: a tela mostra só as doações recebidas.',
   doador: {
     titulo: 'Doador',
-    busca: 'Nome ou documento do doador',
+    busca: 'Empresa pelo nome ou CNPJ; pessoa pelo CPF completo',
+    dica: 'Pela proteção de dados, a pessoa só aparece pelo nome se já doou aqui; uma pessoa nova é achada pelo CPF completo.',
     buscar: 'Buscar',
-    nenhum: 'Nenhuma pessoa ou empresa do cadastro com esse nome ou documento.',
+    nenhum: 'Nenhuma empresa do cadastro, nem pessoa com esse CPF ou que já tenha doado com esse nome.',
     escolher: 'Escolher',
     escolhido: 'Doador: {nome} ({tipo})',
     trocar: 'Trocar o doador',
