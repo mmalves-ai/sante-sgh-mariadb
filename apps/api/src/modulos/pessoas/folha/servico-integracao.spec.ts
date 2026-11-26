@@ -52,7 +52,7 @@ function sessao(pode: (p: string) => boolean = () => true): SessaoCadastro {
     req: {
       headers: { 'idempotency-key': `m53-integracao-${++k}` },
       ip: '127.0.0.1',
-      sgh: { sessao: { unidadeAtiva: null } },
+      sgh: { sessao: { unidadeAtiva: null, usuario: { id: '1', login: 'sintetico', ator: 'cliente' } } },
     } as never,
     hospital: 'pc',
     rede: 'rede-sintetica',

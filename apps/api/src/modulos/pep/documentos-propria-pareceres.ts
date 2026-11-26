@@ -719,7 +719,7 @@ export class DocumentosPropriaPareceres {
         sequencia: num(x['sequencia']),
         decisao: x['situacao'] === 'ajuste_solicitado' ? 'ajuste_solicitado' : 'recusado',
         motivo: textoOuNull(x['motivo']) ?? '',
-        decididoEm: dataHora(x['decidido_em'], est.fuso),
+        decididoEm: dataHora(x['decidido_em'], est.fuso) ?? '', // decidido (recusa ou ajuste) sempre tem a data
         preceptor: num(x['preceptor_profissional_id']),
         paciente: num(x['paciente_id']),
         atendimento: numOuNull(x['atendimento_id']),

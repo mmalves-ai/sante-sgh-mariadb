@@ -337,7 +337,7 @@ const emitirBoletos = definirOperacao<z.infer<typeof esquemaEmitirBoletos>, Resu
       quantidade: emitidos.length,
       parcelasValor,
       total: centavos(parcelasValor.reduce((s, v) => s + v, 0)),
-    };
+    } as unknown as ResultadoOperacao; // listas: o JSON da idempotência guarda e devolve igual
   },
   alvo: (e) => ({ tabela: 'carteira_cobranca', id: e.carteira }),
   eventos: (e, r) => [
@@ -522,7 +522,7 @@ const gerarRemessa = definirOperacao<z.infer<typeof esquemaGerarRemessaCobranca>
       total: arquivo.total,
       nomeArquivo: `cobranca-${e.carteira}-${sequencia}.rem`,
       conteudo: arquivo.conteudo,
-    };
+    } as unknown as ResultadoOperacao; // listas: o JSON da idempotência guarda e devolve igual
   },
   alvo: (_e, r) => ({ tabela: 'remessa_cobranca', id: numero(r['remessa']) || null }),
   eventos: (e, r) => [
@@ -818,7 +818,7 @@ const processarRetorno = definirOperacao<z.infer<typeof esquemaProcessarRetornoC
       parcelasTarifa: plano.parcelasTarifa,
       recebimentos,
       movimentoTarifa,
-    };
+    } as unknown as ResultadoOperacao; // listas: o JSON da idempotência guarda e devolve igual
   },
   alvo: (_e, r) => ({ tabela: 'retorno_cobranca', id: numero(r['retorno']) || null }),
   eventos: (e, r) => [

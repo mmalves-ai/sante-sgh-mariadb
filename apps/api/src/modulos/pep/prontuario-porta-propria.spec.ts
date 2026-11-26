@@ -108,7 +108,8 @@ describe('PortaProntuarioPropria (dublê)', () => {
       2,
       2,
     );
-    const q = d.chamadas[1]!;
+    expect(d.chamadas[1]?.sql).toMatch(/FROM restricao_prontuario/); // a restrição do prontuário vem antes da leitura
+    const q = d.chamadas[2]!;
     expect(q.sql).toMatch(
       /r\.estabelecimento_id = \? AND r\.excluido_em IS NULL AND r\.confidencial = FALSE/,
     );
@@ -160,7 +161,8 @@ describe('PortaProntuarioPropria (dublê)', () => {
   it('registro de outro paciente ou invisível: null', async () => {
     const d = duble((sql) => (sql.includes('FROM estabelecimento') ? [EST] : []));
     expect(await new PortaProntuarioPropria(d.nucleo, 'x').registro(C, 10, 99)).toBeNull();
-    expect(d.chamadas[1]?.parametros).toEqual([99, 10, 7]);
+    expect(d.chamadas[1]?.sql).toMatch(/FROM restricao_prontuario/);
+    expect(d.chamadas[2]?.parametros).toEqual([99, 10, 7]);
   });
 
   it('conteúdo: texto simples vira texto formatado legível pelo domínio; formatado passa intacto', async () => {
@@ -199,7 +201,8 @@ describe('PortaProntuarioPropria (dublê)', () => {
           })),
     );
     const t = await new PortaProntuarioPropria(d.nucleo, 'x').textos(C, 10, {}, 2);
-    expect(d.chamadas[1]?.sql).toMatch(/LIMIT 3$/);
+    expect(d.chamadas[1]?.sql).toMatch(/FROM restricao_prontuario/);
+    expect(d.chamadas[2]?.sql).toMatch(/LIMIT 3$/);
     expect(t.truncado).toBe(true);
     expect(t.registros.map((r) => [r.id, r.rtf === null])).toEqual([
       [1, false],

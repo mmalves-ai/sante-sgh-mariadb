@@ -782,9 +782,12 @@ export class PortaProgramaSaudePropria {
   }
 
   // ======== acompanhamento ========
-  agenda(c: ContextoPorta, filtro: { programa?: number }) {
+  agenda(c: ContextoPorta, filtro: { programa?: number | undefined }) {
     return this.ler(c, async (l, est, hoje) => {
-      const itens = await lerContatos(l, est, { programa: filtro.programa, somenteAgendados: true });
+      const itens = await lerContatos(l, est, {
+        ...(filtro.programa === undefined ? {} : { programa: filtro.programa }),
+        somenteAgendados: true,
+      });
       return agendaDeVisitas(itens, hoje);
     });
   }

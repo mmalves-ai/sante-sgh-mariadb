@@ -48,7 +48,7 @@ const ACOES_VISITA = ['confirmar', 'iniciar', 'realizar', 'cancelar', 'nao_reali
 
 function acaoValida<T extends string>(acao: string, validas: readonly T[]): T {
   if (!(validas as readonly string[]).includes(acao))
-    throw new ErroProblema('registro-inexistente', 404, `Ação ${acao} desconhecida`);
+    throw new ErroProblema('nao-encontrado', 404, `Ação ${acao} desconhecida`);
   return acao as T;
 }
 

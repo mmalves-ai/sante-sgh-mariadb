@@ -121,7 +121,7 @@ export class ProgramacaoSusController {
     @Body() corpo: unknown,
   ) {
     if (tipo !== 'teto' && tipo !== 'cota')
-      throw new ErroProblema('registro-inexistente', 404, 'Limite inexistente');
+      throw new ErroProblema('nao-encontrado', 404, 'Limite inexistente');
     return this.com(req, (p, c) => p.inativarLimite(c, tipo, id, corpo));
   }
 

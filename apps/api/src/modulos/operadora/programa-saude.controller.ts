@@ -44,6 +44,7 @@ import {
   sessaoDe,
 } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
+import { semIndefinidos } from '../../entrada-exata.js';
 import {
   type Gravado,
   PORTA_PROGRAMA_SAUDE,
@@ -238,7 +239,7 @@ export class ProgramaSaudeOperadoraController {
     return this.ok(
       this.porta.gravarQuestionario(
         s.porta,
-        corpo(esquemaQuestionario, b),
+        semIndefinidos(corpo(esquemaQuestionario, b)),
         this.trilha(s, 'operadora.programa-saude.questionario-incluido', 'modelo_questionario_saude'),
       ),
     );
@@ -328,7 +329,7 @@ export class ProgramaSaudeOperadoraController {
       this.porta.aplicarQuestionario(
         s.porta,
         idDaRota(p),
-        corpo(esquemaAvaliacao, b),
+        semIndefinidos(corpo(esquemaAvaliacao, b)),
         this.trilha(s, 'operadora.programa-saude.avaliacao-aplicada', 'avaliacao_risco_participante'),
       ),
     );

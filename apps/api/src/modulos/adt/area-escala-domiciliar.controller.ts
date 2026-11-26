@@ -40,7 +40,7 @@ const TRILHA = 'área e escala da atenção domiciliar pelo executor (trilha na 
 
 function acaoValida<T extends string>(acao: string, validas: readonly T[]): T {
   if (!(validas as readonly string[]).includes(acao))
-    throw new ErroProblema('registro-inexistente', 404, `Ação ${acao} desconhecida`);
+    throw new ErroProblema('nao-encontrado', 404, `Ação ${acao} desconhecida`);
   return acao as T;
 }
 

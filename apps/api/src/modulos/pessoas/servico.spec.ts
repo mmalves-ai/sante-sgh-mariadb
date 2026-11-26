@@ -74,7 +74,13 @@ function sessao(
     req: {
       headers: { 'idempotency-key': `m52-servico-${++k}` },
       ip: '127.0.0.1',
-      sgh: { sessao: { unidadeAtiva: null, ...(perfil ? { perfil } : {}) } },
+      sgh: {
+        sessao: {
+          unidadeAtiva: null,
+          usuario: { id: '1', login: 'sintetico', ator: 'cliente' },
+          ...(perfil ? { perfil } : {}),
+        },
+      },
     } as never,
     hospital,
     rede: 'rede-sintetica',

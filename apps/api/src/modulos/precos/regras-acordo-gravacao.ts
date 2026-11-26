@@ -208,7 +208,7 @@ export const opIncluirPercentual = definirOperacao({
     return { id: novo, encerradas };
   },
   alvo: (_e, s) => ({ tabela: 'regra_percentual_cobranca', id: s.id }),
-  trilha: trilhaMotivo,
+  trilha: (e) => trilhaMotivo(e), // a entrada sai do esquema (a função solta inferiria só o motivo)
 });
 
 // ── 2) Desconto ou acréscimo por grupo de despesa ────────────────────────────────────────────────────
@@ -264,7 +264,7 @@ export const opIncluirDesconto = definirOperacao({
     return { id: novo, encerradas };
   },
   alvo: (_e, s) => ({ tabela: 'regra_desconto_grupo', id: s.id }),
-  trilha: trilhaMotivo,
+  trilha: (e) => trilhaMotivo(e), // a entrada sai do esquema (a função solta inferiria só o motivo)
 });
 
 // ── 3) Via de acesso na cirurgia múltipla ────────────────────────────────────────────────────────────
@@ -311,7 +311,7 @@ export const opIncluirVia = definirOperacao({
     return { id: novo, encerradas };
   },
   alvo: (_e, s) => ({ tabela: 'regra_via_acesso', id: s.id }),
-  trilha: trilhaMotivo,
+  trilha: (e) => trilhaMotivo(e), // a entrada sai do esquema (a função solta inferiria só o motivo)
 });
 
 // ── 4) Item isento ───────────────────────────────────────────────────────────────────────────────────
@@ -357,7 +357,7 @@ export const opIncluirIsento = definirOperacao({
     return { id: novo, encerradas };
   },
   alvo: (_e, s) => ({ tabela: 'item_isento_cobranca', id: s.id }),
-  trilha: trilhaMotivo,
+  trilha: (e) => trilhaMotivo(e), // a entrada sai do esquema (a função solta inferiria só o motivo)
 });
 
 // ── 5) Teto de cobrança ──────────────────────────────────────────────────────────────────────────────
@@ -413,7 +413,7 @@ export const opIncluirTeto = definirOperacao({
     return { id: novo, encerradas };
   },
   alvo: (_e, s) => ({ tabela: 'teto_cobranca', id: s.id }),
-  trilha: trilhaMotivo,
+  trilha: (e) => trilhaMotivo(e), // a entrada sai do esquema (a função solta inferiria só o motivo)
 });
 
 // ── 6) Alto custo ────────────────────────────────────────────────────────────────────────────────────
@@ -458,7 +458,7 @@ export const opIncluirAltoCusto = definirOperacao({
     return { id: novo, encerradas };
   },
   alvo: (_e, s) => ({ tabela: 'item_alto_custo_contrato', id: s.id }),
-  trilha: trilhaMotivo,
+  trilha: (e) => trilhaMotivo(e), // a entrada sai do esquema (a função solta inferiria só o motivo)
 });
 
 // ── Encerrar a vigência ──────────────────────────────────────────────────────────────────────────────
@@ -531,7 +531,7 @@ function opEncerrarRegra(nome: string, tipo: keyof typeof ESCOPO_REGRA) {
       return { id: e.id, versao };
     },
     alvo: (e) => ({ tabela, id: e.id }),
-    trilha: trilhaMotivo,
+    trilha: (e) => trilhaMotivo(e), // a entrada sai do esquema (a função solta inferiria só o motivo)
   });
 }
 

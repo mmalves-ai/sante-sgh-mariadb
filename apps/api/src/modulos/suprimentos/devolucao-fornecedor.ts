@@ -138,7 +138,7 @@ export interface DevolucaoRegistrada {
   readonly creditoPendente: number;
   readonly situacao: string;
 }
-export interface ResultadoDevolucao {
+export type ResultadoDevolucao = {
   readonly id: number;
   readonly numero: string;
   readonly tipo: 'total' | 'parcial';
@@ -147,7 +147,7 @@ export interface ResultadoDevolucao {
   readonly creditoPendente: number;
   /** Ids das notas de crédito aplicadas (uma por parcela abatida), separados por vírgula. */
   readonly notasCredito: string;
-}
+};
 
 export interface PortaDevolucaoFornecedor {
   readonly destino: 'banco' | 'indisponivel';

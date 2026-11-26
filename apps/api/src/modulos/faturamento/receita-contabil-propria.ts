@@ -201,12 +201,12 @@ async function fatosDaConta(
   return { fatos, reaberturas };
 }
 
-export interface ResultadoApuracaoReceita {
+export type ResultadoApuracaoReceita = {
   readonly incluidos: number;
   readonly cancelados: number;
   readonly pendencias: number;
   readonly divergencias: number;
-}
+};
 
 /** Apura a receita contábil da conta e grava o resultado (chamada dentro da transação da operação). */
 export async function apurarReceitaContabilDaConta(
@@ -367,7 +367,10 @@ export async function apurarReceitaContabilDosItens(
 }
 
 /** Apuração à mão de uma conta (tela de receita contábil): refaz pelos fatos de hoje, sem duplicar. */
-export const apurarReceitaContabil = definirOperacao<{ conta: number }, Record<string, unknown>>({
+export const apurarReceitaContabil = definirOperacao<
+  { conta: number },
+  { readonly conta: number } & ResultadoApuracaoReceita
+>({
   nome: 'faturamento.apurar-receita-contabil',
   tabelas: [...TABELAS_RECEITA_CONTABIL],
   entrada: z.object({ conta: z.number().int().positive() }).strict(),

@@ -6,7 +6,9 @@
   "tags": ["tipo:api", "modulo:plataforma"],
   "targets": {
     "lint": { "command": "eslint apps/api" },
-    "typecheck": { "command": "tsc -p apps/api/tsconfig.login.json --noEmit" },
+    "typecheck": {
+      "command": "node --max-old-space-size=8192 node_modules/typescript/bin/tsc -p apps/api/tsconfig.login.json --noEmit"
+    },
     "typecheck:pendente": { "command": "tsc -p apps/api/tsconfig.json --noEmit" },
     "test": { "command": "vitest run --config apps/api/vitest.config.ts" },
     "test:pendente": { "command": "vitest run --config apps/api/vitest.pendente.config.ts" },
