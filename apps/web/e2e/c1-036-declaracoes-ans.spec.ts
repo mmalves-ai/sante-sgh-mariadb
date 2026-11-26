@@ -105,7 +105,7 @@ test.describe('Declarações periódicas da operadora @C1-036 @fase7', () => {
     // TPS: o botão só libera com o trimestre; a conta de cada plano aparece.
     await expect(page.getByTestId('tps-apurar')).toBeDisabled();
     await page.getByTestId('tps-ano').locator('input, textarea').first().fill('2026');
-    await escolher(page.getByTestId('tps-trimestre'), '2º trimestre');
+    await escolher(page.getByTestId('tps-trimestre'), { rotulo: '2º trimestre' });
     await page.getByTestId('tps-apurar').click();
     await expect(page.getByTestId('tps-conta')).toContainText('PLANO SINTETICO');
     await expect(page.getByTestId('tps-conta')).toContainText('10/06/2026');
@@ -123,7 +123,7 @@ test.describe('Declarações periódicas da operadora @C1-036 @fase7', () => {
     });
     await page.getByTestId('conf-importar').click();
     await expect(page.getByTestId('div-1')).toContainText('Campo diferente');
-    await escolher(page.getByTestId('div-tratamento-1'), 'Corrigir o cadastro');
+    await escolher(page.getByTestId('div-tratamento-1'), { rotulo: 'Corrigir o cadastro' });
     await page.getByTestId('div-aplicar-1').click();
     expect(pedidos.find((p) => p.caminho === '/divergencias/9/tratar')?.corpo).toMatchObject({
       versao: 1,
