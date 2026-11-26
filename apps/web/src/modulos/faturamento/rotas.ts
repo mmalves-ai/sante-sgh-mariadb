@@ -414,4 +414,14 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     component: () => import('./telas/ModelosOrcamentoTela.vue'),
     meta: { permissao: 'faturamento.orcamento.ler', menu: 'Faturamento > Particular > Modelos de orçamento' },
   },
+  // C1-135 (06-FAT linha 38): preferências do faturista (própria conta) e os parâmetros vigentes do faturamento.
+  {
+    path: '/faturamento/preferencias',
+    name: 'faturamento.preferencias',
+    component: () => import('./telas/PreferenciasFaturistaTela.vue'),
+    meta: {
+      permissao: 'faturamento.conta.ler',
+      menu: 'Faturamento > Contas do paciente > Preferências do faturista',
+    },
+  },
 ];

@@ -41,6 +41,7 @@ import { mensagensContratualizacao } from '../modulos/faturamento/i18n-contratua
 import { mensagensAuditoriaTramite } from '../modulos/faturamento/i18n-auditoria-tramite.js';
 import { mensagensMovimentosConta } from '../modulos/faturamento/i18n-movimentos.js';
 import { mensagensTransferenciaConta } from '../modulos/faturamento/i18n-transferencia-conta.js';
+import { mensagensParametrosFaturamento } from '../modulos/faturamento/i18n-parametros-faturamento.js';
 import { mensagensOpmeLiberacao } from '../modulos/faturamento/i18n-opme-liberacao.js';
 import { mensagensCobertura } from '../modulos/faturamento/i18n-cobertura.js';
 import { mensagensExcecaoRegra } from '../modulos/faturamento/i18n-excecao-regra.js';
@@ -2452,6 +2453,7 @@ export const mensagensWeb = {
   contratualizacaoSus: mensagensContratualizacao,
   movimentosConta: mensagensMovimentosConta,
   transferenciaConta: mensagensTransferenciaConta,
+  parametrosFaturamento: mensagensParametrosFaturamento,
   opmeLiberacao: mensagensOpmeLiberacao,
   cobertura: mensagensCobertura,
   excecaoRegra: mensagensExcecaoRegra,

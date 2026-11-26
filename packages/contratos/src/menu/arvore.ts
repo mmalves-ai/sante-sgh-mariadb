@@ -158,7 +158,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C1-097 (05-SADT linha 22, F8): o item "Consumo padrão do exame" do diagnóstico entrou à mão (mesmo motivo); a
 // contagem acompanha. A "Baixa do consumo do exame" (o mesmo, na aba de realização, para quem só lança no setor com
 // sadt.lancamento.ler) entrou junto.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":516,"M":198,"P":57,"N":261};
+// C1-135 (06-FAT linha 38, F3): o item "Preferências do faturista" das contas do paciente entrou à mão (mesmo motivo); a
+// contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":517,"M":198,"P":57,"N":262};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -398,6 +400,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.contas-do-paciente.auditoria-de-contas-enfermeiro-e-medico-auditor","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Auditoria de contas"],"titulo":"Auditoria de contas","selo":"M","fase":3,"rota":"/faturamento/auditoria","permissao":"faturamento.auditoria.ler"},
   {"id":"faturamento.contas-do-paciente.protocolo-de-documentos-entre-setores","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Protocolo de documentos entre setores"],"titulo":"Protocolo de documentos entre setores","selo":"N","fase":3,"rota":"/faturamento/protocolos","permissao":"faturamento.tramite.ler"},
   {"id":"faturamento.contas-do-paciente.pacotes-e-orcamentos-padrao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Pacotes e orçamentos-padrão"],"titulo":"Pacotes e orçamentos-padrão","selo":"M","fase":3,"rota":"/faturamento/pacotes","permissao":"faturamento.pacote.ler"},
+  {"id":"faturamento.contas-do-paciente.preferencias-do-faturista","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Contas do paciente","Preferências do faturista"],"titulo":"Preferências do faturista","selo":"N","fase":3,"rota":"/faturamento/preferencias","permissao":"faturamento.conta.ler"},
   {"id":"faturamento.particular.orcamento-de-particular","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Orçamento de particular"],"titulo":"Orçamento de particular","selo":"P","fase":3,"rota":"/faturamento/particular/orcamentos","permissao":"faturamento.orcamento.ler"},
   {"id":"faturamento.particular.modelos-de-orcamento","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Modelos de orçamento"],"titulo":"Modelos de orçamento","selo":"N","fase":3,"rota":"/faturamento/modelos-orcamento","permissao":"faturamento.orcamento.ler"},
   {"id":"faturamento.particular.recibos-e-caixa","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Particular","Recibos e caixa"],"titulo":"Recibos e caixa","selo":"P","fase":3,"rota":"/faturamento/particular/caixa","permissao":"faturamento.recibo.ler"},
