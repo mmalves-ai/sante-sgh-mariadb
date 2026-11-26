@@ -976,11 +976,14 @@ async function consultarDocumentos(
     return (
       await l.consultar<Linha>(
         `SELECT d.id, d.numero, d.data_entrada, d.recebido_em, d.local_estoque_id, le.nome AS local_nome, d.situacao,
-                d.valor_total, d.empresa_fornecedora_id, fo.razao_social, d.numero_documento, d.serie, d.observacao,
+                d.valor_total, d.empresa_fornecedora_id, COALESCE(fo.razao_social, pf.nome) AS razao_social,
+                d.numero_documento, d.serie, d.observacao,
                 u.login, (SELECT COUNT(*) FROM nota_entrada_item i WHERE i.nota_entrada_id = d.id AND i.excluido_em IS NULL) AS itens
            FROM nota_entrada d
            JOIN local_estoque le ON le.id = d.local_estoque_id
-           JOIN empresa_fornecedora fo ON fo.id = d.empresa_fornecedora_id
+           -- C1-126: a doação de pessoa não tem emitente; o doador do cadastro entra no lugar dele.
+           LEFT JOIN empresa_fornecedora fo ON fo.id = d.empresa_fornecedora_id
+           LEFT JOIN pessoa_fisica pf ON pf.id = d.doador_pessoa_fisica_id
            LEFT JOIN usuario u ON u.id = COALESCE(d.recebido_por_usuario_id, d.criado_por)
           WHERE d.estabelecimento_id = ? AND d.excluido_em IS NULL AND d.situacao IN ('conferencia', 'confirmada') ${f.sql}
           ORDER BY d.data_entrada DESC, d.id DESC ${pagina}`,
@@ -3425,7 +3428,8 @@ async function desconsolidarDocumento(
   if (!nota) throw recusa('documento-inexistente', 'O documento não existe.');
   if (nota['situacao'] !== 'confirmada') throw recusa('nao-consolidado', 'O documento não está consolidado.');
   const movs = await tx.consultar<Linha>(
-    `SELECT m.id, m.insumo_id, m.quantidade_estoque, m.tipo_movimento_estoque_id, m.valor_total FROM movimento_estoque m
+    `SELECT m.id, m.insumo_id, m.quantidade_estoque, m.tipo_movimento_estoque_id, m.valor_total, m.propriedade
+       FROM movimento_estoque m
        JOIN nota_entrada_item ni ON ni.id = m.nota_entrada_item_id AND ni.nota_entrada_id = ?
       WHERE m.natureza = 'entrada' AND m.excluido_em IS NULL AND m.estorno_movimento_estoque_id IS NULL
         AND NOT EXISTS (SELECT 1 FROM movimento_estoque x
@@ -3449,8 +3453,10 @@ async function desconsolidarDocumento(
       valorSaida: n(m['valor_total']),
       lotes,
       hoje,
-      fornecedor: n(nota['empresa_fornecedora_id']),
+      fornecedor: nota['empresa_fornecedora_id'] == null ? null : n(nota['empresa_fornecedora_id']),
       estorno: n(m['id']),
+      // C1-126: o estorno da doação tira a quantidade também da parte doada do saldo (regra do domínio).
+      doacao: m['propriedade'] === 'doacao',
     });
   }
   // O pedido de compra volta a esperar o que a nota tinha recebido (na unidade de compra, como a nota somou).
@@ -4653,7 +4659,7 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
                 ni.valor_unitario, ni.custo_unitario, ni.marca
            FROM nota_entrada_item ni
            JOIN nota_entrada ne ON ne.id = ni.nota_entrada_id AND ne.estabelecimento_id = ? AND ne.excluido_em IS NULL
-                AND ne.situacao = 'confirmada'
+                AND ne.situacao = 'confirmada' AND ne.doacao = FALSE
            JOIN empresa_fornecedora f ON f.id = ne.empresa_fornecedora_id
           WHERE ni.insumo_id = ? AND ni.excluido_em IS NULL
           ORDER BY ne.data_entrada DESC, ni.id DESC
