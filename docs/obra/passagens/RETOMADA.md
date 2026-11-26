@@ -629,3 +629,15 @@ corrente de CronCreate morre com a sessão; ao retomar, recriar (formato na mem�
   suprimentos, agenda, financeiro, rh, hotelaria (só os pontos com colunas anuláveis do migrado) com lista exata de
   arquivos em ~1h30; até lá não toca apps/. Eu fecho a rodada de E2E vermelhos e mando o sha antes dos lotes A dela.
 - Pendências: docs/obra/pendencias-2026-11-26.md (133 Parciais: 121 construção, 5 decisão, 3 dependência, 3 externas, 1 E2E).
+
+## Passagem de 26/11 18h00 (Sessão de Construção)
+- Push: origin/main = 5ffc5dbf (ci-sim VERDE). Fichas 368/467 (79%): F3 200/254, F7 77/109, F8 91/104.
+- Rodadas do dia: integrar-4 (E2E das Parciais, 38 cobertas, ~24 M, teto 22 M estourado em ~10%, causa no consumo.md) e
+  completar-5 (C2-064, C2-063, C2-091, C2-004 cobertas e 5 decisões de produto, ~2,6 M).
+- Painel de Injeção: merge 50be4d2e (5ffc5dbf + lotes A) no branch conector-autor-registro; rodadas V e AT abertas; sha
+  VERDE previsto para o fim da noite. Reservas dela: os 58 arquivos (A-arquivos.txt + 8), apps/api/src/modulos/cirurgia
+  (menos gasto-sala*), apps/web/src/modulos/cirurgia, listas de situação da cirurgia em packages/contratos, migrações
+  novas em 06_PEP e na cirurgia. Combinado: até o sha dela, só commit meu em docs/.
+- Depois do sha dela: push; painel 5310 a partir de sante-sgh-wt/painel (worktree próprio; o ci-sim é comum às sessões);
+  renumerar decisoes-tomadas.md (há 13 e 14 em dobro; as dela viraram 39 a 43); C2-024 e C2-057 (arquivos dela).
+- Pendências: docs/obra/pendencias-2026-11-26.md (35 Parciais da integrar-4 com o motivo real, mais C2-103 com E2E vermelho).
