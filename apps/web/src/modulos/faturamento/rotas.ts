@@ -171,6 +171,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     component: () => import('./telas/LancamentoAutomaticoTela.vue'),
     meta: { permissao: 'faturamento.lancamento.ler' },
   },
+  // C1-090 (06-FAT linha 16): exceções das regras de lançamento automático (a partir da tela do lançamento automático).
+  {
+    path: '/faturamento/lancamento-automatico/excecoes',
+    name: 'faturamento.excecoesRegraLancamento',
+    component: () => import('./telas/ExcecoesRegraLancamentoTela.vue'),
+    meta: { permissao: 'faturamento.regra.ler' },
+  },
   {
     path: '/faturamento/pendencias-tipos',
     name: 'faturamento.pendenciasTipos',

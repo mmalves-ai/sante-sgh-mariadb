@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
+import { usarSessao } from '../../../casca/sessao/sessao.js';
 import { decidirTardio, lerPainel, novaChave } from '../api-faturamento.js';
 import AvisoFaturamento from '../componentes/AvisoFaturamento.vue';
 import ErroFaturamento from '../componentes/ErroFaturamento.vue';
@@ -16,6 +17,8 @@ import { competenciaAtual, data, reais, usarFaturamento } from '../usar-faturame
 const { t } = useI18n();
 const qc = useQueryClient();
 const { pode, motivoFuncionalidade, apoio } = usarFaturamento();
+const { permissoes } = usarSessao();
+const podeVerExcecoes = computed(() => permissoes.value.has('faturamento.regra.ler'));
 const competencia = ref('');
 const comp = computed(() => competencia.value || competenciaAtual(apoio.data.value?.hoje));
 const p = useQuery({
@@ -56,6 +59,11 @@ async function decidir(r: number) {
     <h1 id="aut-titulo">{{ t('faturamento.automatico.titulo') }}</h1>
     <p>{{ t('faturamento.automatico.texto') }}</p>
     <p class="secundario">{{ t('faturamento.regua') }}</p>
+    <p v-if="podeVerExcecoes">
+      <RouterLink to="/faturamento/lancamento-automatico/excecoes" data-testid="aut-excecoes">{{
+        t('excecaoRegra.titulo')
+      }}</RouterLink>
+    </p>
     <div class="filtros">
       <span class="campo"
         ><label for="aut-comp">{{ t('faturamento.competencia') }}</label
