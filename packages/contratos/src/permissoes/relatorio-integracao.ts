@@ -368,8 +368,9 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     codigo: C.prescricaoDigitalLer,
     descricao:
       'Consultar a prescrição digital externa (registro de integração; sem o conteúdo da prescrição)',
-
-    concessaoPorPerfil: null,
+    // Recurso só do novo (08-INTG L132): sem opção de origem para mapear, a leitura também é concedida por perfil.
+    concessaoPorPerfil: 'por-perfil',
+    perfis: [...ADMIN],
     categoria: 'clinica',
     criticidade: 'normal',
   },

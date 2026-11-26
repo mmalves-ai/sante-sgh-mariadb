@@ -60,7 +60,8 @@ const envio = (id: number, registro: number, tipo: string, extra: Record<string,
 async function simularBusca(page: Page): Promise<void> {
   await page.route(
     (u) => u.pathname === '/api/cadastros/pacientes',
-    (r) => json(r, { tipo: 'nome', itens: [pacienteSintetico], sugestoes: [], truncado: false, total: 1 }),
+    (r) =>
+      json(r, { tipo: 'nome', itens: [pacienteSintetico], sugestoes: [], truncado: false, duracaoMs: 1 }),
   );
 }
 

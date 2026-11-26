@@ -215,6 +215,28 @@ test.describe('Comercial da operadora @C2-095 @fase8', () => {
       return json(r, painel());
     });
 
+    // A lista de operadoras vem da tela da cobrança (banco próprio): simulada com duas operadoras SINTÉTICAS, para que
+    // a escolha no combo seja feita pela pessoa (com uma só, a tela já a escolhe).
+    await page.route('**/api/operadora/cobranca/tela', (r) =>
+      json(r, {
+        liberacao: { ligada: true, motivo: null },
+        acoes: { gerar: true, motivo: null },
+        operadoras: [
+          { id: 7, razaoSocial: 'OPERADORA SINTETICA', registroAns: '410361' },
+          { id: 8, razaoSocial: 'OPERADORA SINTETICA DOIS', registroAns: '410362' },
+        ],
+        hoje: '2026-11-25',
+        mensagens: { enviar: false, motivo: 'fora de produção' },
+        parametros: {
+          multaPercentual: 2,
+          jurosPercentualMes: 1,
+          diasLimiteNotificacao: 50,
+          diasInadimplencia: 60,
+          diasPrazoNotificacao: 10,
+          parcelasMaximas: 12,
+        },
+      }),
+    );
     await entrar(page, 'SINT.OPERADORA');
     await page.goto('/operadora/cobranca');
     await page.getByTestId('link-comercial').click();

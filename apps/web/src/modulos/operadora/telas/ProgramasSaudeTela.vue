@@ -67,7 +67,8 @@ const numeroBr = (v: string): number | null => {
 
 async function tentar<T>(fn: () => Promise<T>, ok?: string): Promise<T | null> {
   erro.value = null;
-  aviso.value = null;
+  // Só a gravação (com a mensagem de sucesso) troca o aviso: a leitura que vem logo depois (lista, aba) não o apaga.
+  if (ok) aviso.value = null;
   try {
     const r = await fn();
     if (ok) aviso.value = ok;

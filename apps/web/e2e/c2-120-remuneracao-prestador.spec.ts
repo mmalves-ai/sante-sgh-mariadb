@@ -7,13 +7,39 @@ import { escolher, esperarSemSelectNativo } from './combos.js';
 // Os tributos vêm do cadastro (alíquota vazia); a alíquota digitada é exceção e só segue com o motivo. Pacotes: o
 // principal, os itens dentro e fora, a validação na hora (ambulatorial sem diárias) e a inclusão.
 const A = '**/api/operadora/remuneracao-rede';
+const SENHA = 'Sintetico#2026';
+
+// O gestor da operadora (sintético) lê e grava a remuneração da rede (operadora.prestador.ler/editar, conta.pagar).
+async function entrar(page: Page): Promise<void> {
+  await page.context().clearCookies();
+  await page.goto('/entrar');
+  await page.getByTestId('campo-login').fill('SINT.OPERADORA');
+  await page.getByTestId('campo-senha').fill(SENHA);
+  await page.getByTestId('botao-entrar').click();
+  await expect(page).toHaveURL(/\/inicio/);
+}
 const op = (id: number, rotulo: string) => ({ id, rotulo });
 
 async function prepararApi(page: Page) {
   const corpos: Record<string, unknown> = {};
   await page.route('**/api/operadora/cobranca/tela**', (r) =>
     r.fulfill({
-      json: { operadoras: [{ id: 1, razaoSocial: 'OPERADORA SINTETICA', registroAns: '999999' }] },
+      // Resposta completa da tela da cobrança (o cliente confere o formato inteiro).
+      json: {
+        liberacao: { ligada: true, motivo: null },
+        acoes: { gerar: true, motivo: null },
+        operadoras: [{ id: 1, razaoSocial: 'OPERADORA SINTETICA', registroAns: '999999' }],
+        hoje: '2026-11-25',
+        mensagens: { enviar: false, motivo: 'fora de produção' },
+        parametros: {
+          multaPercentual: 2,
+          jurosPercentualMes: 1,
+          diasLimiteNotificacao: 50,
+          diasInadimplencia: 60,
+          diasPrazoNotificacao: 10,
+          parcelasMaximas: 12,
+        },
+      },
     }),
   );
   await page.route(`${A}/1/opcoes`, (r) =>
@@ -174,6 +200,7 @@ async function prepararApi(page: Page) {
 test.describe('remuneração e pagamento do prestador @C2-120', () => {
   test('tabela em unidades com valor calculado; lote com tributo e título gerado', async ({ page }) => {
     const corpos = await prepararApi(page);
+    await entrar(page);
     await page.goto('/operadora/remuneracao-rede');
     await expect(
       page.getByRole('heading', { level: 1, name: 'Remuneração e pagamento do prestador' }),
@@ -218,6 +245,7 @@ test.describe('remuneração e pagamento do prestador @C2-120', () => {
 
   test('pacote: principal, itens dentro e fora, validação na hora e inclusão', async ({ page }) => {
     const corpos = await prepararApi(page);
+    await entrar(page);
     await page.goto('/operadora/remuneracao-rede');
     await escolher(page.getByTestId('remun-aba'), { rotulo: 'Pacotes' });
     await expect(page.getByTestId('remun-pacotes')).toBeVisible();
