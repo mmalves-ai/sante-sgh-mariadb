@@ -324,9 +324,10 @@ test.describe('C2-119 laudo de internação SUS: devolução, reenvio, especial,
       });
       await expect(detalhe.getByTestId('aih-situacao')).toContainText('Solicitada');
 
-      // Autorização com o próximo número da faixa (porta em memória).
+      // Autorização com o próximo número da faixa (porta em memória). A internação 7402 entra no dia 20 e o laudo leva
+      // essa data: a autorização não pode ser anterior ao laudo (recusa autorizacao-antes-do-laudo).
       await digitar(detalhe.getByTestId('autorizar-autorizador'), cnsSintetico(772));
-      await digitarData(detalhe.getByTestId('autorizar-data'), dia(3));
+      await digitarData(detalhe.getByTestId('autorizar-data'), dia(21));
       await detalhe.getByTestId('botao-autorizar').click();
       await expect(page.getByTestId('mensagem-aih')).toContainText(`AIH autorizada com o número ${inicial}`);
 
