@@ -127,6 +127,11 @@ export interface ProvisaoLida {
   itens: ItemProvisaoLido[];
 }
 
+export interface ContaContabilBuscada {
+  id: number;
+  classificacao: string;
+  descricao: string;
+}
 export type EntradaContaPadrao = ContaPadraoAns;
 export interface EntradaMapa {
   contaContabil: number;
@@ -322,6 +327,26 @@ export class PortaProvisaoTecnicaPropria {
     });
   }
 
+  /** Contas contábeis analíticas e ativas para a busca da tela (classificação, código reduzido ou descrição). */
+  contasContabeis(c: ContextoPorta, busca: string): Promise<ContaContabilBuscada[]> {
+    const termo = `%${busca.trim().replace(/[\\%_]/g, (x) => `\\${x}`)}%`;
+    return this.ler(c, async (l) =>
+      (
+        await l.consultar(
+          `SELECT id, classificacao, descricao FROM conta_contabil
+            WHERE tipo = 'analitica' AND ativo = TRUE AND excluido_em IS NULL
+              AND (classificacao LIKE ? OR codigo_reduzido LIKE ? OR descricao LIKE ?)
+            ORDER BY classificacao LIMIT 30`,
+          [termo, termo, termo],
+          { teto: 30 },
+        )
+      ).map((r) => ({
+        id: Number(r['id']),
+        classificacao: textoObrigatorio(r['classificacao']),
+        descricao: textoObrigatorio(r['descricao']),
+      })),
+    );
+  }
   gravarMapa(c: ContextoPorta, op: number, e: EntradaMapa, trilha: Trilha): Promise<Gravado> {
     return this.gravar(
       c,

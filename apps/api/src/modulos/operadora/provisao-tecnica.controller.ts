@@ -116,6 +116,13 @@ export class ProvisaoTecnicaOperadoraController {
     );
   }
 
+  @Get('operadora/provisoes-tecnicas/contas-contabeis')
+  @Permissao(LER)
+  contasContabeis(@Query('busca') busca: string | undefined, @Req() req: RequisicaoAutorizada) {
+    const d = corpo(z.object({ busca: z.string().trim().min(1).max(60) }), { busca: busca ?? '' });
+    return this.ok(this.porta.contasContabeis(sessaoDe(req).porta, d.busca));
+  }
+
   @Get('operadora/provisoes-tecnicas/:op/mapa')
   @Permissao(LER)
   mapa(@Param('op') op: string, @Req() req: RequisicaoAutorizada) {

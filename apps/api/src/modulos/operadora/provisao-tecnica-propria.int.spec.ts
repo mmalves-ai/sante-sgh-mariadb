@@ -304,6 +304,12 @@ describe.skipIf(!PODE)('contabilidade regulatória da operadora no banco (C3-026
     expect(await codigoDe(porta!.calcular(c, { ...recalc, versao: 3 }, trilha('calculo')))).toBe(
       'situacao-nao-permite',
     );
+    // Busca das contas contábeis da tela: só analíticas e ativas, pela classificação ou pela descrição.
+    const achadas = await porta!.contasContabeis(c, '2.9.26');
+    expect(achadas.map((x) => x.id)).toEqual(expect.arrayContaining([conta['PEONA'], conta['PESL']]));
+    expect((await porta!.contasContabeis(c, 'DESPESA SINTETICA C3026')).map((x) => x.id)).toEqual([
+      conta['DESPESA'],
+    ]);
     // Balancete no padrão da ANS no fim de fevereiro: provisões no ramo 8; a despesa não mapeada fica de fora.
     const b = await porta!.balancete(c, op, '2031-02-28');
     const linha = (cod: string) => b.linhas.find((l) => l.codigo === cod)?.saldoCentavos;
