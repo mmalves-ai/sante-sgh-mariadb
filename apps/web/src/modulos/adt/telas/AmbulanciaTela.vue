@@ -204,12 +204,19 @@ const kmFinal = ref<number | null>(null);
 const motivoReprovacao = ref('');
 const motivoCancelamento = ref<Id>('');
 const maqueiro = ref<Id>('');
+// As habilitações de transporte do profissional: uma linha por habilitação ativa nas opções do estabelecimento.
+const habilitacoesDe = (id: number) =>
+  (op.value?.profissionais ?? [])
+    .filter((y) => y.id === id)
+    .map((y) => ({ funcao: y.funcao, tipo: y.tipo, ativo: true }));
+const membroDe = (profissional: Id, funcao: string) =>
+  profissional === '' ? null : { profissional, funcao, habilitacoes: habilitacoesDe(profissional) };
 const equipe = computed(() =>
   [
-    condutor.value !== '' ? { profissional: condutor.value, funcao: 'condutor' } : null,
-    membro.value !== '' ? { profissional: membro.value, funcao: funcaoMembro.value } : null,
-    membro2.value !== '' ? { profissional: membro2.value, funcao: funcaoMembro2.value } : null,
-  ].filter((m): m is { profissional: number; funcao: string } => m !== null),
+    membroDe(condutor.value, 'condutor'),
+    membroDe(membro.value, funcaoMembro.value),
+    membroDe(membro2.value, funcaoMembro2.value),
+  ].filter((m) => m !== null),
 );
 const opAmbulancias = computed(() => comVazio(t('adt.ambulancia.escolha'), op.value?.ambulancias ?? []));
 function regra(x: Chamado, a: AcaoChamadoAmbulancia) {

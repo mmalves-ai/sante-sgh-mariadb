@@ -247,7 +247,7 @@ test.describe('valor fixo mensal e mínimo garantido do repasse @C2-100', () => 
     await expect(page.getByTestId('rp-exemplo-util')).toContainText('1.440,00');
     await expect(page.getByTestId('rp-exemplo-fim_semana')).toContainText('1.800,00');
     await expect(page.getByTestId('rp-exemplo-feriado')).toContainText('2.880,00');
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, '/repasse/regras');
     await page.getByTestId('rp-incluir').click();
     await expect(page.getByTestId('rp-mensagem')).toContainText('Regra de plantão incluída');
 

@@ -290,6 +290,22 @@ function simular(rota: (url: string, metodo: string) => Resposta | null = () => 
 }
 function base(u: string, a: ApoioManutencao): Resposta {
   if (u === '/api/manutencao/apoio') return { corpo: a };
+  // O detalhe da corretiva embute a parte externa (C2-089): sem oficina, orçamento nem remessa.
+  if (/\/os\/\d+\/corretiva-externa$/.test(u)) {
+    const d = detalhe();
+    return {
+      corpo: {
+        os: d.id,
+        versaoOs: d.versao,
+        situacaoOs: d.situacao,
+        oficina: null,
+        oficinaNome: null,
+        equipamento: null,
+        orcamentos: [],
+        remessas: [],
+      },
+    };
+  }
   if (u.startsWith('/api/manutencao/os/')) return { corpo: detalhe() };
   if (u.startsWith('/api/manutencao/os')) return { corpo: { itens: [OS], proxima: null } };
   if (u.startsWith('/api/manutencao/equipamentos/busca')) return { corpo: [EQ_QR] };

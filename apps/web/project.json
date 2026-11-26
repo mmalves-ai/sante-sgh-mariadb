@@ -9,7 +9,7 @@
       "command": "eslint apps/web && stylelint \"apps/web/**/*.{css,vue}\" --allow-empty-input"
     },
     "typecheck": {
-      "command": "node --max-old-space-size=8192 node_modules/vue-tsc/bin/vue-tsc.js -p apps/web/tsconfig.json --noEmit"
+      "command": "node --max-old-space-size=14336 node_modules/vue-tsc/bin/vue-tsc.js -p apps/web/tsconfig.json --noEmit"
     },
     "test": {
       "command": "vitest run --config apps/web/vitest.config.ts"

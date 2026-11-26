@@ -154,7 +154,7 @@ describe('menu × rota', () => {
         i.id.startsWith('hotelaria-e-apoio.same-e-arquivo.movimentacao') ||
         i.id.endsWith('higienizacao-fila-por-prazo-celular'),
     );
-    expect(doMarco.filter((i) => i.rota && i.permissao).length).toBe(17);
+    expect(doMarco.filter((i) => i.rota && i.permissao).length).toBe(20);
     expect(itensComPermissaoDiferente(doMarco, permissaoDaRota)).toEqual([]);
   });
 });

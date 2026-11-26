@@ -47,7 +47,6 @@ export const mensagensExcecaoRegra = {
   ate: 'a',
   semFim: 'sem término',
   situacoes: { cancelada: 'Cancelada', futura: 'Futura', vigente: 'Vigente', encerrada: 'Encerrada' },
-  cancelar: 'Cancelar',
   cancelarTitulo: 'Cancelar antes de valer',
   motivoCancelamento: 'Por que cancelar (gravada errada)',
   confirmarCancelar: 'Confirmar o cancelamento',

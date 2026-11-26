@@ -290,7 +290,7 @@ const desligar = (tipo: 'ajustes-renais' | 'posologia' | 'configuracoes', linha:
       {{ t('x32') }}
     </p>
     <MensagemErro v-if="erro" :erro="erro" />
-    <SanteAlerta v-if="ok" variante="info" data-testid="rp-ok">{{ ok }}</SanteAlerta>
+    <SanteAlerta v-if="ok" variante="info" :texto="ok" data-testid="rp-ok" />
 
     <form v-if="podeEditar" class="bloco" data-testid="rp-alvo" @submit.prevent="buscar">
       <h2>{{ t('x33') }}</h2>

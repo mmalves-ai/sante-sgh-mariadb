@@ -245,6 +245,6 @@ test.describe('@C2-055 cadastro da CME (04-CME linha 115)', () => {
     await expect(page.getByTestId('cme-foto-erro')).toContainText('PNG, JPEG ou WebP');
     expect(enviados.some((e) => e['rota'] === 'foto')).toBe(false);
 
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, '/cirurgia/cme/cadastro');
   });
 });

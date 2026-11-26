@@ -28,6 +28,7 @@ describe('textos da CCIH', () => {
   it('as telas da navegação e as origens da precaução têm texto', () => {
     expect(Object.keys(mensagensCcih.telas).sort()).toEqual([
       'antimicrobianos',
+      'auditoriaAntimicrobiano',
       'culturas',
       'iras',
       'maosSurtos',

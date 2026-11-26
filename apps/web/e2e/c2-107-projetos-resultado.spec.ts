@@ -157,7 +157,7 @@ test.describe('projeto como centro de resultado @C2-107', () => {
     await page.getByTestId('orc-ir-projetos').click();
     await expect(page).toHaveURL(/\/financeiro\/orcamento\/projetos/);
     await expect(page.getByTestId('tela-projetos-resultado')).toBeVisible();
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, 'projetos (lista)');
 
     // Cadastro: etapa acima da verba aparece na hora e trava o botão.
     await page.getByTestId('prj-novo').click();
@@ -175,7 +175,7 @@ test.describe('projeto como centro de resultado @C2-107', () => {
     await escolher(page.getByTestId('prj-centro-0'), '7');
     await page.getByTestId('prj-centro-0-percentual').fill('100');
     await expect(page.getByTestId('prj-problemas')).toHaveCount(0);
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, 'projetos (cadastro)');
     await page.getByTestId('prj-gravar').click();
     await expect(page.getByTestId('prj-aviso')).toBeVisible();
     expect(corpos['projeto']).toMatchObject({
@@ -197,7 +197,7 @@ test.describe('projeto como centro de resultado @C2-107', () => {
     await expect(page.getByTestId('prj-apr-gravar')).toBeDisabled();
     await page.getByTestId('prj-apr-percentual').fill('40');
     await expect(page.getByTestId('prj-apr-previa')).toContainText('200,00');
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, 'projetos (apropriação)');
     await page.getByTestId('prj-apr-gravar').click();
     expect(corpos['apropriacao']).toMatchObject({
       origem: 'titulo',
@@ -215,6 +215,6 @@ test.describe('projeto como centro de resultado @C2-107', () => {
     await page.getByTestId('confirmacao').getByRole('button', { name: 'Confirmar' }).click();
     await expect(page.getByTestId('prj-apr-linha-21')).toContainText('Estornada');
     expect(corpos['estorno']).toMatchObject({ versao: 1, motivo: 'Lançado no projeto errado' });
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, 'projetos (estorno)');
   });
 });

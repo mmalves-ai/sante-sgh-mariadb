@@ -136,7 +136,9 @@ const hhmm = (iso: string) => iso.slice(11, 16);
 const etiquetasDose = ref<Record<number, string[]>>({});
 const leituraPaciente = ref<{ atendimento: number; texto: string } | null>(null);
 function lido(p: PacienteFila, r: Leitura): void {
-  const avisar = (texto: string) => (leituraPaciente.value = { atendimento: p.atendimento, texto });
+  const avisar = (texto: string): void => {
+    leituraPaciente.value = { atendimento: p.atendimento, texto };
+  };
   const id = r.identificador?.toUpperCase() ?? null;
   if (id && Object.values(etiquetasDose.value).some((ls) => ls.includes(id)))
     return avisar(ME.etiquetaJaLida);

@@ -145,7 +145,7 @@ test.describe('@C2-115 custo-padrão por procedimento', () => {
 
     await page.getByTestId('cp-nova').click();
     await campo(page.getByTestId('cp-nova-busca')).fill('E2E');
-    await escolher(page.getByTestId('cp-nova-procedimento'), /E2E-PROC/);
+    await escolher(page.getByTestId('cp-nova-procedimento'), { rotulo: /E2E-PROC/ });
     await expect(campo(page.getByTestId('cp-nova-descricao'))).toHaveValue(PROC.descricao);
     await page.getByTestId('cp-nova-criar').click();
     await expect(page.getByTestId('cp-detalhe')).toBeVisible();
@@ -159,7 +159,7 @@ test.describe('@C2-115 custo-padrão por procedimento', () => {
     // Insumo: o custo de referência vem preenchido e a prévia aparece.
     await escolher(page.getByTestId('cp-item-tipo'), 'Insumo');
     await campo(page.getByTestId('cp-item-busca')).fill('E2E');
-    await escolher(page.getByTestId('cp-item-referencia'), /E2E-INS/);
+    await escolher(page.getByTestId('cp-item-referencia'), { rotulo: /E2E-INS/ });
     await expect(page.getByTestId('cp-item-unitario')).toHaveValue('5,5');
     await page.getByTestId('cp-item-quantidade').fill('2');
     await expect(page.getByTestId('cp-item-previa')).toContainText('R$ 11,00');

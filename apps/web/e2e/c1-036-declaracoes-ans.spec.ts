@@ -142,6 +142,6 @@ test.describe('Declarações periódicas da operadora @C1-036 @fase7', () => {
       responsavelCpf: '52998224725',
       retifica: null,
     });
-    await semViolacaoAxe(page);
+    await semViolacaoAxe(page, '/operadora/ans');
   });
 });

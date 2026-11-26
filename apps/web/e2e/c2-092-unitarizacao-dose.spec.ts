@@ -189,12 +189,12 @@ test.describe('@C2-092 Fracionamento e unitarização de dose', () => {
     const tela = page.getByTestId('tela-farmacia-unitarizacao');
     await expect(tela.getByTestId('unit-regra-7')).toContainText('Dose sintética 2 mL');
 
-    await escolher(tela.getByTestId('unit-ordem-regra'), /Ampola sintética/);
+    await escolher(tela.getByTestId('unit-ordem-regra'), { rotulo: /Ampola sintética/ });
     await escolher(tela.getByTestId('unit-ordem-local'), 'Farmácia satélite sintética');
     // O lote é filtrado pelo local: na satélite só o L-SINT-B.
-    await escolher(tela.getByTestId('unit-ordem-lote'), /L-SINT-B/);
+    await escolher(tela.getByTestId('unit-ordem-lote'), { rotulo: /L-SINT-B/ });
     await escolher(tela.getByTestId('unit-ordem-local'), 'Farmácia central sintética');
-    await escolher(tela.getByTestId('unit-ordem-lote'), /L-SINT-A/);
+    await escolher(tela.getByTestId('unit-ordem-lote'), { rotulo: /L-SINT-A/ });
 
     // Validação na hora: 6 doses passam do rendimento (5 para 1 ampola).
     await tela.getByTestId('unit-ordem-doses').fill('6');
