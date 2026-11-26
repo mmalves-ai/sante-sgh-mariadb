@@ -84,7 +84,7 @@ test.describe('Equipe assistencial: equipe padrão e fila de pendências @C2-064
     const externas = vigiarExternas(page);
     const estado = { aplicada: false };
     const posts: { url: string; corpo: unknown }[] = [];
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.COORD.EQUIPE');
     await page.route('**/api/pep/equipe/**', async (route: Route) => {
       const req = route.request();
       const url = req.url();

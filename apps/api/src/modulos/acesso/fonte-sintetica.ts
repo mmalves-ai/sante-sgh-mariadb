@@ -3478,6 +3478,39 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       opcoesGrupo: opcoesDasPermissoes('convenio.contrato.ler', 'atendimento.atendimento.abrir'),
     },
   },
+  /**
+   * C2-036 (03-PEP L131; no fim da lista para não mudar o ID sintético das outras contas): o balcão do serviço de
+   * arquivo que atende o pedido de cópia do prontuário (lê o prontuário e registra pedido, decisão e entrega). Nenhuma
+   * conta tinha as duas permissões; o administrador não tem permissão clínica.
+   */
+  'SINT.SAME.COPIA': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'SAME_COPIA',
+      opcoesGrupo: opcoesDasPermissoes('pep.prontuario.ler', 'pep.prontuario.exportar'),
+    },
+  },
+  /**
+   * C2-064 (03-PEP L94; no fim da lista): o coordenador assistencial com conselho que monta a equipe do atendimento
+   * pelo painel, aplica a equipe padrão do setor e salva a equipe atual como padrão (administração do PEP). O
+   * administrador não tem o painel clínico, e o médico assistente não mexe no padrão do setor.
+   */
+  'SINT.COORD.EQUIPE': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'COORD_EQUIPE',
+      opcoesGrupo: opcoesDasPermissoes('pep.painel.ler', 'pep.admin.editar'),
+      conselho: true,
+    },
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */

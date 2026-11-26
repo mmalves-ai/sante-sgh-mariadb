@@ -523,9 +523,12 @@ async function alternarColuna(c: ColunaPainel): Promise<void> {
           />
         </label>
       </fieldset>
-      <ul v-if="errosEdicao.length" class="erros" role="alert" data-testid="painel-filtro-erros">
-        <li v-for="e in errosEdicao" :key="`${e.campo}-${e.codigo}`">{{ e.mensagem }}</li>
-      </ul>
+      <!-- O papel de alerta fica no invólucro: na própria <ul> ele apaga a semântica de lista (axe: listitem). -->
+      <div v-if="errosEdicao.length" class="erros" role="alert" data-testid="painel-filtro-erros">
+        <ul>
+          <li v-for="e in errosEdicao" :key="`${e.campo}-${e.codigo}`">{{ e.mensagem }}</li>
+        </ul>
+      </div>
       <SanteBotao
         tipo="submit"
         :desabilitado="errosEdicao.length > 0"
@@ -671,6 +674,9 @@ async function alternarColuna(c: ColunaPainel): Promise<void> {
   flex-basis: 100%;
   margin: 0;
   color: var(--sgh-alerta);
+}
+.erros ul {
+  margin: 0;
 }
 .colunas {
   display: flex;
