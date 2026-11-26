@@ -7,6 +7,7 @@ import { IMPRESSAO_IDENTIFICACAO } from '../administracao/impressao-identificaca
 import { ImpressaoIdentificacaoPropria } from '../administracao/impressao-identificacao-propria.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import { cadastroMemoriaAtual, PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { recepcaoMemoriaAtual } from '../recepcao/porta-memoria.js';
 import type { ContextoModulo } from '../registro.js';
 import { AtendimentoController } from './atendimento.controller.js';
 import { AVISOS_ATENDIMENTO, AvisosAtendimento } from './avisos.js';
@@ -15,7 +16,7 @@ import { LocaisAtendimentoPropria } from './locais-atendimento.js';
 import { LOCAIS_ATENDIMENTO, LocaisAtendimentoController } from './locais-atendimento.controller.js';
 import { PaController } from './pa.controller.js';
 import { PORTA_ATENDIMENTO, type PortaAtendimento, portaAtendimentoIndisponivel } from './porta.js';
-import { PortaAtendimentoMemoria } from './porta-memoria.js';
+import { lembrarAtendimentoMemoria, PortaAtendimentoMemoria } from './porta-memoria.js';
 import { PortaAtendimentoPropria } from './porta-propria.js';
 import { RegrasImpressaoPropria } from './regras-impressao.js';
 import { REGRAS_IMPRESSAO, RegrasImpressaoController } from './regras-impressao.controller.js';
@@ -36,11 +37,19 @@ export async function portaDoAtendimento(ctx: ContextoModulo): Promise<PortaAten
   }
   if (!ctx.nucleo && fontesSinteticas(ctx.env)) {
     // A abertura confere o paciente no cadastro: o mesmo cadastro em memória do processo (o que a busca da recepção lê),
-    // ou um próprio quando o módulo do cadastro não está montado.
+    // ou um próprio quando o módulo do cadastro não está montado. A senha chamada no guichê vem da recepção em memória
+    // do processo (lida na hora: o módulo da recepção pode ser montado depois deste).
     const proprio = new PortaCadastroMemoria();
-    return new PortaAtendimentoMemoria(
-      { estado: () => 'verde' },
-      { lerPacientes: (c, ids) => (cadastroMemoriaAtual() ?? proprio).lerPacientes(c, ids) },
+    return lembrarAtendimentoMemoria(
+      new PortaAtendimentoMemoria(
+        { estado: () => 'verde' },
+        {
+          lerPacientes: (c, ids) => (cadastroMemoriaAtual() ?? proprio).lerPacientes(c, ids),
+          get recepcao() {
+            return recepcaoMemoriaAtual();
+          },
+        },
+      ),
     );
   }
   return portaAtendimentoIndisponivel();

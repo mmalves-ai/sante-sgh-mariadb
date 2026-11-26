@@ -203,7 +203,7 @@ test.describe('Atendimento: corrigir a ficha, estornar o extra, excluir; fichas 
   }) => {
     const externas = vigiarExternas(page);
     await entrar(page, 'SINT.ATENDIMENTO');
-    await page.goto('/recepcao/atendimento/novo?marcacao=880001');
+    await page.goto('/recepcao/atendimento/novo?marcacao=880002');
     await expect(page.getByTestId('abrir-atd-do-agendamento')).toContainText('08:00');
     const ficha = page.getByRole('region', { name: 'Dados do atendimento' });
     await escolher(ficha.getByLabel('Profissional', { exact: true }), '7101');
@@ -237,7 +237,7 @@ test.describe('Atendimento: corrigir a ficha, estornar o extra, excluir; fichas 
     await entrar(page, 'SINT.SUPERVISOR.ATD');
     await excluirFicha(page, reg, true);
     await entrar(page, 'SINT.ATENDIMENTO');
-    await page.goto('/recepcao/atendimento/novo?marcacao=880001');
+    await page.goto('/recepcao/atendimento/novo?marcacao=880002');
     await expect(page.getByTestId('abrir-atd-do-agendamento')).toContainText('08:00');
     await expect(page.getByTestId('abrir-atd-paciente-escolhido')).toContainText('LETÍCIA ROCHA');
     await expect(page.getByTestId('tela-impressos')).toHaveCount(0);

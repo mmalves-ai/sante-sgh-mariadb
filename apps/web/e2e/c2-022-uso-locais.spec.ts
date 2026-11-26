@@ -26,28 +26,28 @@ const json = (rota: Route, corpo: unknown) =>
 
 type Horario = { aberto: boolean; semHorario: boolean; abreAs: string | null; fechaAs: string | null };
 
-// Locais que o usuário vê: o consultório dele (3) e a observação que ele consulta (13). O consultório 02 (12) não é
-// dele nem é consultado, e não vem.
+// Locais que o usuário vê: os consultórios dele (3 e 14) e a observação que ele consulta (13). O consultório 02 (12)
+// não é dele nem é consultado, e não vem. O 14 já fechou e não abre mais hoje. Cada situação de horário fica num local
+// próprio: a tela guarda a fila lida por 15 s (staleTime do cliente), e trocar a resposta do mesmo local no meio do
+// teste provaria o cache, não o aviso.
 const LOCAIS = [
   { id: 3, descricao: 'CONSULTORIO SINTETICO 01' },
   { id: 13, descricao: 'OBSERVACAO SINTETICA' },
+  { id: 14, descricao: 'CONSULTORIO SINTETICO 03' },
 ];
 const HORARIO: Record<number, Horario> = {
   3: { aberto: false, semHorario: false, abreAs: '13:00', fechaAs: null },
   13: { aberto: true, semHorario: false, abreAs: null, fechaAs: '18:00' },
+  14: { aberto: false, semHorario: false, abreAs: null, fechaAs: null },
 };
 
 test.describe('C2-022 fila do consultório com a configuração dos locais @C2-022 @F3.2', () => {
   test('locais visíveis, aviso de fora do horário e horário de fechamento; axe', async ({ page }) => {
     const externas = vigiarExternas(page);
-    let fechadoHoje = false;
     await page.route(/\/api\/atendimento\/fila(\?.*)?$/, (rota) => {
       const local = Number(new URL(rota.request().url()).searchParams.get('local') ?? 0);
       const doLocal = LOCAIS.find((l) => l.id === local) ?? null;
-      const horario =
-        local === 3 && fechadoHoje
-          ? { aberto: false, semHorario: false, abreAs: null, fechaAs: null }
-          : (HORARIO[local] ?? null);
+      const horario = HORARIO[local] ?? null;
       return json(rota, {
         local: doLocal ? { ...doLocal, horario } : null,
         locais: LOCAIS,
@@ -68,6 +68,7 @@ test.describe('C2-022 fila do consultório com a configuração dos locais @C2-0
       /^Escolha…$/,
       /CONSULTORIO SINTETICO 01/,
       /OBSERVACAO SINTETICA/,
+      /CONSULTORIO SINTETICO 03/,
     ]);
     await fecharCombo(combo, lista);
     // Fora do horário: aviso com a hora em que abre; a fila continua utilizável (aviso, não trava).
@@ -81,8 +82,7 @@ test.describe('C2-022 fila do consultório com a configuração dos locais @C2-0
     await expect(page.getByTestId('fila-local-fechado')).toHaveCount(0);
 
     // O local que não abre mais hoje diz isso.
-    fechadoHoje = true;
-    await escolher(combo, '3');
+    await escolher(combo, '14');
     await expect(page.getByTestId('fila-local-fechado')).toContainText('não abre mais hoje');
     expect(externas).toEqual([]);
   });

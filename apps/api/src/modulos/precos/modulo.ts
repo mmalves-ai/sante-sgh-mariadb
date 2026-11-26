@@ -5,7 +5,13 @@ import type { DynamicModule } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import type { ContextoModulo } from '../registro.js';
-import { AgendaPrecoController, SERVICO_AGENDA_PRECO } from './agenda-preco.controller.js';
+import { atendimentoMemoriaAtual } from '../atendimento/porta-memoria.js';
+import {
+  AgendaPrecoController,
+  PREVIA_PRECO_ATENDIMENTO,
+  type PreviaPrecoAtendimento,
+  SERVICO_AGENDA_PRECO,
+} from './agenda-preco.controller.js';
 import { ServicoAgendaPreco } from './agenda-preco.servico.js';
 import { CobrancaController, SERVICO_COBRANCA, ServicoCobranca } from './cobranca.controller.js';
 import { ConveniosController } from './convenios.controller.js';
@@ -85,6 +91,17 @@ export async function moduloPrecos(
       {
         provide: SERVICO_AGENDA_PRECO,
         useValue: ctx.nucleo && ctx.configuracao.clientePadrao ? new ServicoAgendaPreco(ctx.nucleo) : null,
+      },
+      // Sem o banco próprio, na fonte sintética: a prévia do preço do extra vem do atendimento em memória do processo.
+      {
+        provide: PREVIA_PRECO_ATENDIMENTO,
+        useValue:
+          !ctx.nucleo && fontesSinteticas(ctx.env)
+            ? ({
+                precoDoAtendimento: async (c, reg, item) =>
+                  atendimentoMemoriaAtual()?.previaPrecoExtra(c, reg, item) ?? null,
+              } satisfies PreviaPrecoAtendimento)
+            : null,
       },
       // 06-FAT linhas 6, 8 e 9: de-para, credenciamento de cobrança e equivalências de mat/med (só com o banco próprio).
       {

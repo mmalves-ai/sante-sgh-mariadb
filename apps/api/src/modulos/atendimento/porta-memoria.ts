@@ -43,6 +43,7 @@ import {
   termoDoDia,
 } from './tipos.js';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
+import type { ResultadoCalculoPreco } from '@sgh/contratos';
 import type { PortaRecepcaoMemoria } from '../recepcao/porta-memoria.js';
 import type {
   ContextoAtendimento,
@@ -242,6 +243,19 @@ const somarMin = (iso: string, m: number) => {
 const minutosEntre = (a: string, b: string) =>
   Math.max(0, Math.floor((Date.parse(`${b}Z`) - Date.parse(`${a}Z`)) / 60_000));
 
+/**
+ * A porta em memória que o módulo do atendimento do processo usa (dev e E2E sobre a fonte sintética). A prévia do preço
+ * do extra (módulo de preços, sem o banco próprio) lê dela a ficha e a tabela sintética do convênio.
+ */
+let atendimentoMemoriaDoProcesso: PortaAtendimentoMemoria | null = null;
+export function lembrarAtendimentoMemoria(porta: PortaAtendimentoMemoria): PortaAtendimentoMemoria {
+  atendimentoMemoriaDoProcesso = porta;
+  return porta;
+}
+export function atendimentoMemoriaAtual(): PortaAtendimentoMemoria | null {
+  return atendimentoMemoriaDoProcesso;
+}
+
 export class PortaAtendimentoMemoria implements PortaAtendimento {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();
@@ -284,22 +298,22 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
       naoIdentificados: [],
       // Um agendamento SINTÉTICO do dia (consulta de clínica médica): a abertura o preenche. Como na cópia (0 de 1.931
       // marcações atendidas com o conselho do profissional), o agendamento não traz o profissional: a recepção escolhe.
-      marcacoes: [
-        {
-          id: 880_001,
-          data: r.hoje,
-          hora: '08:00',
-          paciente: 1007,
-          convenio: 306,
-          crm: 0,
-          especialidade: 15,
-          unidade: 1,
-          cdc: 300600,
-          procedimento: 10101012,
-          retorno: false,
-          registro: 0,
-        },
-      ],
+      // Duas marcações iguais (880001 e 880002): o processo do E2E é um só, e cada spec que abre pelo agendamento usa a
+      // sua, para a abertura de um não deixar o agendamento do outro já atendido.
+      marcacoes: [880_001, 880_002].map((id) => ({
+        id,
+        data: r.hoje,
+        hora: '08:00',
+        paciente: 1007,
+        convenio: 306,
+        crm: 0,
+        especialidade: 15,
+        unidade: 1,
+        cdc: 300600,
+        procedimento: 10101012,
+        retorno: false,
+        registro: 0,
+      })),
       seqReg: 900_100,
       seqCab: 5_000,
       seq: 1,
@@ -438,6 +452,30 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     if (estado === null || estado === 'bloqueada')
       return { pode: false, codigo: 'operacao-bloqueada', motivo: 'A operação está bloqueada.' };
     return { pode: true, codigo: null, motivo: null };
+  }
+
+  /**
+   * Prévia do preço e do credenciamento do extra antes de lançar (a mesma tabela sintética que o lançamento usa). Nulo
+   * quando o atendimento não existe; procedimento fora da tabela sai sem preço (item-sem-preco). A fonte sintética não
+   * tem cadastro de credenciamento: a prévia não o confere (credenciamento nulo), como o convênio sem regra.
+   */
+  previaPrecoExtra(c: ContextoAtendimento, reg: number, procedimento: number): ResultadoCalculoPreco | null {
+    const s = this.e(c);
+    if (!s.fichas.some((x) => x.reg === reg && x.ativo)) return null;
+    const proc = PROCEDIMENTOS.find((x) => x.codigo === procedimento);
+    return {
+      valor: proc ? proc.valor : null,
+      origem: proc ? 'tabela_convenio' : null,
+      regraPrecoParticularId: null,
+      tabelaPrecoId: null,
+      textoOrigemId: null,
+      estimada: false,
+      credenciamento: null,
+      explicacao: proc
+        ? 'Tabela do convênio do atendimento.'
+        : 'O procedimento não tem preço na tabela do convênio.',
+      recusa: proc ? null : 'item-sem-preco',
+    };
   }
 
   private ficha(s: Estado, reg: number): FichaM {
