@@ -3415,6 +3415,21 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     senhaAlteradaEm: new Date(),
     concessoes: { grupo: 'MEDICOS_INTERNACAO', opcoesGrupo: [2342, 6059, 6070, 6764], conselho: true },
   },
+  /**
+   * C2-055 (F7, 04-CME linha 115; no fim da lista para não mudar o ID sintético das outras contas): a enfermeira da
+   * central de material esterilizado, com conselho e o perfil complementar `central-material-esteril` concedido
+   * nominalmente: consulta e opera a CME (cirurgia.cme.ler e cirurgia.cme.operar, permissões clínicas por perfil que a
+   * segregação de funções tira do administrador sem perfil assistencial). Nenhuma conta tinha o perfil da CME.
+   */
+  'SINT.CME': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: { grupo: 'ENFERMAGEM', opcoesGrupo: [2582], conselho: true },
+    perfisConcedidos: ['central-material-esteril'],
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */
