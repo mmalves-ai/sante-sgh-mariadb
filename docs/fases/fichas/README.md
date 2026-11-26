@@ -7,16 +7,16 @@ e o motivo), o E2E verde e a revisão sem achado alto aberto (ficha da fase, `do
 
 | Marco | Funções | Cobertas | Parciais | Faltam | E2E | Revisão (alta?) | Aceito? |
 | --- | ---: | ---: | ---: | ---: | --- | --- | --- |
-| [F3.1 Cadastros](F3.1-cadastros.md) | 21 | 19 | 2 | 0 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 0 de 1 funções Parciais com E2E verde viraram Coberta | Não: o caso vermelho de E2E da linha 2 está na ficha | Não |
+| [F3.1 Cadastros](F3.1-cadastros.md) | 21 | 20 | 1 | 0 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 0 de 1 funções Parciais com E2E verde viraram Coberta | Não: o caso vermelho de E2E da linha 2 está na ficha | Não |
 | [F3.2 Recepção e agenda](F3.2-recepcao-agenda.md) | 15 | 9 | 6 | 0 | integrar-3 (26/11, lotes 1 e 2 do grupo B): 3 de 6 arquivos de E2E verdes; vermelhos: f32-atendimento-correcao-indicadores, w1-05; não rodados: c1-101-sem-prontuario; 1 de 3 funções da construir-2 passaram a cobertas | Sim: manutenção de feriado e dia não útil (02-AGE 41) | Não |
-| [F3.3 Prontuário](F3.3-prontuario.md) | 35 | 28 | 7 | 0 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 1 de 4 funções Parciais com E2E verde viraram Coberta | Sim: receita sem itens estruturados (03-PEP L121) | Não |
+| [F3.3 Prontuário](F3.3-prontuario.md) | 35 | 29 | 6 | 0 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 1 de 4 funções Parciais com E2E verde viraram Coberta | Sim: receita sem itens estruturados (03-PEP L121) | Não |
 | [F3.4 Internação e centro cirúrgico](F3.4-internacao-cc.md) | 21 | 18 | 3 | 0 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 4 de 5 funções Parciais com E2E verde viraram Coberta | Sim: equipe cirúrgica por função (04-CC 95) e clínica por letra nos contratos | Não |
 | [F3.5 SADT](F3.5-sadt.md) | 17 | 11 | 6 | 0 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 1 de 4 funções Parciais com E2E verde viraram Coberta | Não: o alto da 2ª via foi corrigido (migração 10_SADT/40) | Não |
 | [F3.6 Suprimentos](F3.6-suprimentos.md) | 19 | 17 | 2 | 0 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 2 de 3 funções Parciais com E2E verde viraram Coberta | Sim: os dois altos da linha 7 (regra de integração ligada à prescrição; horários padrão unificados) | Não |
-| [F3.7 Faturamento](F3.7-faturamento.md) | 40 | 29 | 11 | 0 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 6 de 11 funções Parciais com E2E verde viraram Coberta | Sim: marcas de texto no contrato da tela (FALTA 5) | Não |
+| [F3.7 Faturamento](F3.7-faturamento.md) | 40 | 30 | 10 | 0 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 6 de 11 funções Parciais com E2E verde viraram Coberta | Sim: marcas de texto no contrato da tela (FALTA 5) | Não |
 | [F3.8 Financeiro](F3.8-financeiro.md) | 19 | 16 | 3 | 0 | integrar-3 (26/11, lote 1 do grupo A; o lote 2 não gerou resultado): 1 de 3 arquivos de E2E verdes; não rodados: c1-026-conta-credor-profissional, f38-pagamento-eletronico; 1 de 2 funções da construir-2 passaram a cobertas | Não | Não |
 | [F3.9 Apoio](F3.9-apoio.md) | 67 | 50 | 17 | 0 | integrar-3 (26/11, grupo C, funções da construir-3 e E2E do lote final, commit e8a7bd44): 5 de 6 arquivos de E2E verdes; não rodados: c3-007-elegibilidade-do-atendimento; 4 de 5 funções da construir-2 e da construir-3 cobertas | Sim: corrigidos só na ficha (01-ADM L57/L59, 04-HOT L126 a L128, permissões por letra, gravações da qualidade) | Não |
-| **Total** | **254** | **197** | **57** | **0** | 1 marco com E2E verde | 7 marcos com achado alto aberto | **0 de 9** |
+| **Total** | **254** | **200** | **54** | **0** | 1 marco com E2E verde | 7 marcos com achado alto aberto | **0 de 9** |
 
 ## Fichas F7 e F8 (F78)
 
@@ -29,11 +29,11 @@ Situação recontada por script na integrar-1, grupo C (25/11), pelas linhas de 
 | [03 Prontuário](F78-03-prontuario.md) | 23 | 6/2/0 | 15/0/0 | 21 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 2 de 4 funções Parciais com E2E verde viraram Coberta |
 | [04 Internação, centro cirúrgico e hotelaria](F78-04-internacao-cc-hotelaria.md) | 33 | 15/2/0 | 16/0/0 | 31 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 3 de 4 funções Parciais com E2E verde viraram Coberta |
 | [05 Diagnóstico e suprimentos](F78-05-diagnostico-suprimentos.md) | 19 | 8/2/0 | 7/2/0 | 15 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 3 de 5 funções Parciais com E2E verde viraram Coberta |
-| [06 Faturamento](F78-06-faturamento.md) | 24 | 9/6/0 | 7/2/0 | 16 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 0 de 5 funções Parciais com E2E verde viraram Coberta |
+| [06 Faturamento](F78-06-faturamento.md) | 24 | 10/5/0 | 7/2/0 | 17 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 0 de 5 funções Parciais com E2E verde viraram Coberta |
 | [07 Financeiro e pessoas](F78-07-financeiro-pessoas.md) | 42 | 23/3/0 | 14/2/0 | 37 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 8 de 10 funções Parciais com E2E verde viraram Coberta |
 | [08 Operadora e integrações](F78-08-operadora-integracoes.md) | 25 | 8/11/0 | 5/1/0 | 13 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 3 de 7 funções Parciais com E2E verde viraram Coberta |
 | [09 Completude](F78-09-completude.md) | 18 | 4/3/0 | 9/2/0 | 13 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 1 de 5 funções Parciais com E2E verde viraram Coberta |
-| **Total** | **213** | **76/33/0** | **91/12/1** | **167** | |
+| **Total** | **213** | **77/32/0** | **91/12/1** | **168** | |
 
 ## Integração (24/11)
 
