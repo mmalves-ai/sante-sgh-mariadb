@@ -149,6 +149,12 @@ export const simular = (f: {
   codigo: string;
   quantidade: string;
   data: string;
+  setor?: string;
+  horarioEspecial?: string;
+  reajusteIndice?: string;
+  reajustePorte?: string;
+  reajustePorteAnestesico?: string;
+  reajusteTabela?: string;
 }) =>
   ler(
     `${F}/simulador${qs(f)}`,
@@ -166,6 +172,20 @@ export const simular = (f: {
         })
         .nullable(),
       vigencia: z.string().nullable(),
+      origem: z.enum(['indice', 'vigencia']).nullable().optional(),
+      passos: z.array(z.string()).optional(),
+      falta: z.string().nullable().optional(),
+      impacto: z
+        .object({
+          atual: z.number().nullable(),
+          novo: z.number().nullable(),
+          diferenca: z.number().nullable(),
+          percentual: z.number().nullable(),
+          afetadoPor: z.array(z.string()),
+          passos: z.array(z.string()),
+        })
+        .nullable()
+        .optional(),
     }),
   );
 

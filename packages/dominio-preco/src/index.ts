@@ -15,3 +15,4 @@ export * from './cobranca-fonte.js';
 export * from './regras-acordo.js';
 export * from './regras-acordo-calculo.js';
 export * from './indice-cobranca.js';
+export * from './simulacao-reajuste-item.js';

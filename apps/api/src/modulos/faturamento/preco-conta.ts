@@ -5,7 +5,12 @@
 // acordo na data × a quantidade (o do procedimento vence o do setor do lançamento, que vence o do acordo), mais o porte
 // anestésico do acordo no regime da conta; nunca pela soma dos componentes da vigência. Faltando índice, recusa com a
 // falta dita (nunca um preço em silêncio). A regra é do @sgh/dominio-preco (totalDoHonorario, resolverIndices).
-import { regimesDoAtendimento, resolverIndices, totalDoHonorario } from '@sgh/dominio-preco';
+import {
+  type EntradaTotalHonorario,
+  regimesDoAtendimento,
+  resolverIndices,
+  totalDoHonorario,
+} from '@sgh/dominio-preco';
 import { type Leitor, recusa } from '@sgh/nucleo';
 import {
   indicesDiferenciadosNaDataPropria,
@@ -56,6 +61,8 @@ export interface PrecoVigente {
   readonly origem?: 'indice' | 'vigencia';
   /** Os passos do cálculo pelo índice (para a memória do item). */
   readonly passos?: readonly string[];
+  /** A entrada do cálculo pelo índice (índices, portes e regime), para o simulador medir um reajuste sobre ela. */
+  readonly entrada?: EntradaTotalHonorario;
 }
 
 /** Onde o item é lançado: o acordo da conta, o setor do lançamento, o regime da conta e o horário especial. */
@@ -68,6 +75,8 @@ export interface AlvoPrecoConta {
   readonly setor?: number | null;
   /** Horário especial: o porte anestésico pelo valor do horário especial do acordo. */
   readonly horarioEspecial?: boolean;
+  /** Regime do porte anestésico quando não há conta (simulador: o tipo de conta escolhido). */
+  readonly regime?: 'internacao' | 'ambulatorial';
 }
 
 const MODELOS_POR_INDICE = new Set(['indice', 'porte']);
@@ -79,7 +88,7 @@ async function precoPeloIndice(
   item: number,
   data: string,
   alvo: AlvoPrecoConta | null,
-): Promise<{ unitario: number; passos: readonly string[] }> {
+): Promise<{ unitario: number; passos: readonly string[]; entrada: EntradaTotalHonorario }> {
   const est = alvo?.est ?? (v['t_est'] == null ? null : n(v['t_est']));
   const fonte = alvo?.fonte ?? (v['t_fonte'] == null ? null : n(v['t_fonte']));
   if (est === null || fonte === null)
@@ -89,7 +98,7 @@ async function precoPeloIndice(
       { campos: ['codigo'] },
     );
   let regimeId: number | null = null;
-  let regimePorte: 'internacao' | 'ambulatorial' = 'ambulatorial';
+  let regimePorte: 'internacao' | 'ambulatorial' = alvo?.regime ?? 'ambulatorial';
   if (alvo?.conta) {
     const c = await l.uma<Linha>(
       `SELECT c.natureza, a.regime_atendimento_id, ra.codigo_tiss AS regime, ct.urgencia
@@ -120,7 +129,7 @@ async function precoPeloIndice(
   const indices = resolverIndices({ acordo, setor: dif.setor, item: dif.item });
   const porte = v['porte'] == null ? null : texto(v['porte']);
   const porteAnest = v['porte_anestesico'] == null ? null : texto(v['porte_anestesico']);
-  const t = totalDoHonorario({
+  const entrada: EntradaTotalHonorario = {
     item: {
       ch: texto(v['modelo_valor']) === 'indice' ? n(v['quantidade_indice']) : 0,
       porte,
@@ -136,14 +145,15 @@ async function precoPeloIndice(
       ? await porteAnestesicoNaDataPropria(l, est, fonte, regimePorte, porteAnest, data)
       : null,
     horarioEspecial: alvo?.horarioEspecial === true,
-  });
+  };
+  const t = totalDoHonorario(entrada);
   if (t.origem !== 'indice' || t.total === null)
     throw recusa(
       'item-sem-indice',
       `O item é cobrado pelo índice do acordo e falta ${t.falta.join(', ') || 'o valor do índice na data'}: registre o valor na aba Tabelas e índices do contrato.`,
       { campos: ['codigo'] },
     );
-  return { unitario: t.total, passos: t.passos };
+  return { unitario: t.total, passos: t.passos, entrada };
 }
 
 /**
@@ -190,6 +200,7 @@ export async function precoVigente(
         tabela: t,
         origem: 'indice',
         passos: x.passos,
+        entrada: x.entrada,
       };
     }
     const honorario = n(v['valor_honorario']);

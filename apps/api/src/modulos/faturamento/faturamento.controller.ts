@@ -53,6 +53,7 @@ import {
   SITUACOES_FILTRAVEIS,
   type SituacaoDerivada,
 } from '@sgh/dominio-faturamento';
+import { type ReajusteSimulado, validarReajusteSimulado } from '@sgh/dominio-preco';
 import { z } from 'zod';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -96,6 +97,13 @@ const esquemaSimular = z
     codigo: z.coerce.number().int().positive(),
     quantidade: z.coerce.number().positive().max(99_999).default(1),
     data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    setor: z.coerce.number().int().positive().optional(),
+    horarioEspecial: z.enum(['true', 'false']).optional(),
+    // Reajuste a medir, em % por alvo (06-FAT linha 11).
+    reajusteIndice: z.coerce.number().optional(),
+    reajustePorte: z.coerce.number().optional(),
+    reajustePorteAnestesico: z.coerce.number().optional(),
+    reajusteTabela: z.coerce.number().optional(),
   })
   .strict();
 
@@ -481,8 +489,31 @@ export class FaturamentoController {
         'Dados inválidos',
         'Informe convênio, grupo, código e data.',
       );
+    const d = r.data;
+    const reajuste: ReajusteSimulado = {
+      indice: d.reajusteIndice ?? null,
+      porte: d.reajustePorte ?? null,
+      porteAnestesico: d.reajustePorteAnestesico ?? null,
+      tabela: d.reajusteTabela ?? null,
+    };
+    const pedido = Object.values(reajuste).some((p) => p !== null);
+    if (pedido) {
+      const erros = validarReajusteSimulado(reajuste);
+      if (Object.keys(erros).length > 0)
+        throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', Object.values(erros).join(' '));
+    }
     const s = sessaoDe(req);
-    return this.porta.simular(ctx(s), { ...r.data, tipo: r.data.tipo as 1 | 2 | 3 | 4 });
+    return this.porta.simular(ctx(s), {
+      convenio: d.convenio,
+      tipoConta: d.tipoConta,
+      tipo: d.tipo as 1 | 2 | 3 | 4,
+      codigo: d.codigo,
+      quantidade: d.quantidade,
+      data: d.data,
+      setor: d.setor ?? null,
+      horarioEspecial: d.horarioEspecial === 'true',
+      reajuste: pedido ? reajuste : null,
+    });
   }
 
   // ── Lançamentos (o que os gatilhos lançaram e a fila tardia) ─────────────────────────────────────────
