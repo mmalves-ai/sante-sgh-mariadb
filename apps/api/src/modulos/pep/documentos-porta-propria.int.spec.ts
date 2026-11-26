@@ -403,6 +403,19 @@ describe.skipIf(SEM_BANCO)('PortaDocumentosPropria contra o MariaDB (cliente f22
         [id],
       ),
     ).toBe(1);
+    // O evento leva a assinatura do cadastro vigente no dia (assinaturaNoDia; a massa não tem imagem: null) e os RQE.
+    const dadosEv = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conferencia` }, (l) =>
+      l.uma<{ dados: unknown }>(
+        "SELECT dados FROM documento_prontuario_evento WHERE documento_prontuario_id = ? AND acao = 'assinatura'",
+        [id],
+      ),
+    );
+    const dj = (typeof dadosEv?.dados === 'string' ? JSON.parse(dadosEv.dados) : dadosEv?.dados) as Record<
+      string,
+      unknown
+    >;
+    expect(dj['assinaturaProfissional']).toBeNull();
+    expect(Array.isArray(dj['rqes'])).toBe(true);
   });
 
   it('autoria fixada no documento: outra conta do mesmo profissional não vê nem assina; vínculo vencido mantém autor e categoria', async () => {

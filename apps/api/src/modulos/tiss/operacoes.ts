@@ -166,17 +166,26 @@ const TIPO_GUIA_TISS: Readonly<Record<TipoGuiaLote, string>> = {
   4: 'honorario',
 };
 
+/**
+ * A assinatura do cadastro do profissional (02-CAD linha 16) que vale no dia do ato: ProfissionalComplementoProprio
+ * .assinaturaNoDia, ligada pela porta. Sem ela (memória, testes de unidade), a guia não confere a assinatura.
+ */
+export type AssinaturaDoExecutante = (
+  profissional: number,
+  dia: string,
+) => Promise<{ assinatura: { id: number } | null; rqes: readonly unknown[] }>;
+
 /** O executante (ou, na SP/SADT, o solicitante): a equipe da guia montada; senão o cadastro dos candidatos, em ordem. */
 async function executanteDaConta(
   tx: TxOperacao,
   guia: Linha | null,
   candidatos: readonly unknown[],
   atendimento: Linha | null,
-): Promise<ExecutanteGuia | null> {
+): Promise<(ExecutanteGuia & { readonly id: number }) | null> {
   if (guia) {
     const equipe = await tx.consultar<Linha>(
       `SELECT cc.codigo_tiss AS conselho, gp.numero_conselho AS numero, COALESCE(uf.codigo_tiss, uf.codigo_ibge) AS uf,
-              cbo.codigo_cbo AS cbo, pf.nome, gp.codigo_prestador_operadora AS codigo
+              cbo.codigo_cbo AS cbo, pf.nome, gp.codigo_prestador_operadora AS codigo, gp.profissional_id AS pid
          FROM guia_tiss_profissional gp
          JOIN profissional p ON p.id = gp.profissional_id
          JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
@@ -196,7 +205,7 @@ async function executanteDaConta(
         nome: texto(r['nome']),
         codigoOperadora: texto(r['codigo']),
       });
-      if (e) return e;
+      if (e) return { ...e, id: n(r['pid']) };
     }
   }
   const vistos = new Set<number>();
@@ -215,7 +224,7 @@ async function executanteDaConta(
         cbo: texto(r['cbo']),
         nome: texto(r['nome']),
       });
-      if (e) return e;
+      if (e) return { ...e, id };
     }
   }
   return null;
@@ -231,6 +240,7 @@ async function contaTiss(
   ct: Linha,
   tipoGuia: TipoGuiaLote,
   est: number,
+  assinaturaNoDia: AssinaturaDoExecutante | null = null,
 ): Promise<{ conta: ContaTiss; avisos: string[]; informados: Set<CampoPadraoTiss> }> {
   const rotulo = texto(ct['numero']) || String(n(ct['id']));
   const itens = await tx.consultar<Linha>(
@@ -390,6 +400,15 @@ async function contaTiss(
     );
   if (tipoGuia === 3 && !dataAutorizacao)
     avisos.push(`a conta ${rotulo} não tem a data da autorização (vai a data de início do atendimento)`);
+  // A guia que leva o profissional confere a assinatura do cadastro vigente na data do ato (início da conta).
+  const diaDoAto = dataIso(ct['inicio_em'] ?? null);
+  if (executante && executante.id > 0 && tipoGuia !== 3 && assinaturaNoDia && diaDoAto) {
+    const doCadastro = await assinaturaNoDia(executante.id, diaDoAto);
+    if (!doCadastro.assinatura)
+      avisos.push(
+        `o profissional ${executante.nome} da conta ${rotulo} não tem assinatura cadastrada vigente em ${diaDoAto}`,
+      );
+  }
   const inicio = ct['inicio_em'];
   const fim = ct['fim_em'] ?? ct['inicio_em'];
   const recemNascido = guia
@@ -445,7 +464,7 @@ async function contaTiss(
 }
 
 /** Gera o lote TISS: confere cada conta sob a trava, monta e valida o XML, guarda, e grava o lote e as contas. */
-function gerarLote(montador: MontadorLoteTiss | null) {
+function gerarLote(montador: MontadorLoteTiss | null, assinaturaNoDia: AssinaturaDoExecutante | null = null) {
   return definirOperacao<GerarLoteEntrada, ResultadoOperacao>({
     nome: 'faturamento.gerar-lote',
     tabelas: [
@@ -544,7 +563,7 @@ function gerarLote(montador: MontadorLoteTiss | null) {
       const avisos: string[] = [];
       const lidas = [];
       for (const ct of contas) {
-        const g = await contaTiss(tx, ct, tipoGuia, est);
+        const g = await contaTiss(tx, ct, tipoGuia, est, assinaturaNoDia);
         lidas.push({ linha: ct, conta: g.conta, informados: g.informados });
         avisos.push(...g.avisos);
       }
@@ -960,9 +979,13 @@ export const nomeNaTrilha = (op: string): string => op.replace(/([A-Z])/g, '-$1'
 /** As operações do executor pelo nome (o montador do lote guarda o XML; sem ele, gerar o lote recusa). */
 export function operacoesTiss(
   montador: MontadorLoteTiss | null,
+  assinaturaNoDia: AssinaturaDoExecutante | null = null,
 ): Readonly<Record<string, Operacao<never, ResultadoOperacao>>> {
   return {
-    'faturamento.gerarLote': gerarLote(montador) as unknown as Operacao<never, ResultadoOperacao>,
+    'faturamento.gerarLote': gerarLote(montador, assinaturaNoDia) as unknown as Operacao<
+      never,
+      ResultadoOperacao
+    >,
     'faturamento.registrarProtocolo': registrarProtocolo as unknown as Operacao<never, ResultadoOperacao>,
     'faturamento.fecharCompetencia': fecharCompetencia as unknown as Operacao<never, ResultadoOperacao>,
     'faturamento.reabrirCompetencia': reabrirCompetencia as unknown as Operacao<never, ResultadoOperacao>,

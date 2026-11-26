@@ -68,6 +68,7 @@ import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from
 import { civil } from '../exames/relogio.js';
 import { versaoTexto } from '../faturamento/esquemas.js';
 import { sincronizarGlosaDoItem, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
+import { ProfissionalComplementoProprio } from '../cadastro/profissional-complemento-proprio.js';
 import type { ArmazemXmlTiss } from './armazem-xml.js';
 import {
   importarDemonstrativoNoBanco,
@@ -270,7 +271,15 @@ export class PortaTissPropria implements PortaTiss {
     executorPronto?: Executor,
   ) {
     this.executor = executorPronto ?? nucleo.criarExecutor();
-    this.operacoes = operacoesTiss(armazem ? criarMontadorLote(armazem.guardar) : null);
+    const complemento = new ProfissionalComplementoProprio(nucleo, cliente, this.executor);
+    this.operacoes = operacoesTiss(armazem ? criarMontadorLote(armazem.guardar) : null, (profissional, dia) =>
+      complemento.assinaturaNoDia(
+        { cliente, correlacao: 'tiss', estabelecimento: null, usuario: null, rede: '', hospital: '' },
+        profissional,
+        'imagem',
+        dia,
+      ),
+    );
   }
 
   private contexto(c: ContextoTiss) {
