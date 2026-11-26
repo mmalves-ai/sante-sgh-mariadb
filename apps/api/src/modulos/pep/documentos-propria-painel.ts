@@ -353,7 +353,9 @@ export function episodio(
       [atendimento, est.id],
     );
     // Exames do atendimento: os resultados liberados (laboratório e imagem do próprio hospital, sem exclusão lógica)
-    // e os exames externos lançados no prontuário (ativos).
+    // e os exames externos lançados no prontuário (ativos). O corte é pelo momento clínico, do mais recente para o mais
+    // antigo (as janelas das seções contam para trás a partir da alta), e cada ocorrência ocupa uma linha, por isso o
+    // corte é maior que o dos nomes; a ordem alfabética é da apresentação, depois do corte.
     const exames = await l.consultar(
       `SELECT nome, em FROM (
          SELECT ex.nome AS nome, re.resultado_em AS em
@@ -366,7 +368,7 @@ export function episodio(
          UNION
          SELECT COALESCE(e.nome_exame, 'Exame externo') AS nome, e.realizado_em AS em FROM exame_lancado_prontuario e
           WHERE e.atendimento_id = ? AND e.estabelecimento_id = ? AND e.excluido_em IS NULL AND e.situacao = 'ativo'
-       ) x ORDER BY nome, em LIMIT 50`,
+       ) x ORDER BY em IS NULL, em DESC, nome LIMIT 500`,
       [atendimento, est.id, atendimento, est.id],
     );
     const quando = (v: unknown): Date | null =>
@@ -376,7 +378,11 @@ export function episodio(
       const texto = cid ? `${String(x['descricao'])} (${cid})` : String(x['descricao']);
       return { texto, em: quando(x['em']) };
     });
-    const exDatados = exames.map((e) => ({ texto: String(e['nome']), em: quando(e['em']) }));
+    const exDatados = exames
+      .map((e) => ({ texto: String(e['nome']), em: quando(e['em']) }))
+      .sort(
+        (a, b) => a.texto.localeCompare(b.texto, 'pt-BR') || (a.em?.getTime() ?? 0) - (b.em?.getTime() ?? 0),
+      );
     return {
       motivoInternacao: codigo ? `${codigo} - ${String(i['descricao'] ?? '')}`.trim() : null,
       procedimentos: [...new Set(procDatados.map((p) => p.texto))],

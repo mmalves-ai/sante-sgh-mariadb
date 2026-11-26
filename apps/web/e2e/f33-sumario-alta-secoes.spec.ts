@@ -88,7 +88,7 @@ test.describe('sumário de alta com seções configuráveis (03-PEP L124) @F33 @
     await semViolacaoAxe(page, '/pep/sumario-alta/secoes');
   });
 
-  test('a alta mostra as seções do estabelecimento, recusa o sumário incompleto e finaliza com o texto da seção', async ({
+  test('a alta mostra as seções do estabelecimento, barra na hora a seção obrigatória vazia, mostra a recusa do servidor e finaliza com o texto da seção', async ({
     page,
   }) => {
     const finalizacoes: Record<string, unknown>[] = [];
@@ -99,8 +99,8 @@ test.describe('sumário de alta com seções configuráveis (03-PEP L124) @F33 @
     await page.route('**/api/pep/paciente/*/alta/finalizar', (r) => {
       const corpo = r.request().postDataJSON() as Record<string, unknown>;
       finalizacoes.push(corpo);
-      const sumario = corpo['sumario'] as { plano?: string };
-      if (!sumario.plano)
+      // A primeira finalização (tela já preenchida) volta com a recusa do servidor; a segunda é aceita.
+      if (finalizacoes.length === 1)
         return r.fulfill({
           status: 400,
           contentType: 'application/problem+json',
@@ -108,9 +108,9 @@ test.describe('sumário de alta com seções configuráveis (03-PEP L124) @F33 @
             type: 'urn:sgh:erro:entrada-invalida',
             title: 'Sumário incompleto',
             status: 400,
-            detail: 'Preencha a seção Plano terapêutico.',
+            detail: 'Informe ao menos um diagnóstico com CID.',
             codigo: 'sumario-incompleto',
-            campos: ['plano'],
+            campos: ['diagnosticos'],
           }),
         });
       return json(r, { id: 9901, documento: 9902, versao: 1 }, 201);
@@ -131,16 +131,24 @@ test.describe('sumário de alta com seções configuráveis (03-PEP L124) @F33 @
     await page.getByTestId('sumario-finalizar').click();
     expect(finalizacoes).toHaveLength(0);
 
-    // Com a orientação escrita e o plano vazio, a API recusa o sumário incompleto e a tela mostra a recusa.
+    // A seção estruturada obrigatória (plano terapêutico) também é barrada na hora: com o plano vazio, nada vai à API.
+    const plano = page.getByTestId('sumario-plano');
+    await expect(plano).toHaveAttribute('required', '');
+    await expect(page.getByTestId('sumario-diagnosticos')).toHaveAttribute('required', '');
     await orientacoes.fill('Retorno ao ambulatório em 7 dias.');
     await page.getByTestId('sumario-condicao').fill('Estável');
+    await page.getByTestId('sumario-finalizar').click();
+    expect(await plano.evaluate((el) => (el as HTMLTextAreaElement).validity.valueMissing)).toBe(true);
+    expect(finalizacoes).toHaveLength(0);
+
+    // Com a tela preenchida, a recusa do servidor (sumário incompleto) aparece na tela.
+    await plano.fill('Manter antibiótico por 5 dias.');
     await page.getByTestId('sumario-finalizar').click();
     await expect(page.getByTestId('mensagem-erro')).toBeVisible();
     expect(finalizacoes).toHaveLength(1);
     expect(finalizacoes[0]).toMatchObject({ sumario: { secoes: [{ codigo: 'orientacoes_alta' }] } });
 
-    // Com o plano preenchido, a finalização leva o texto da seção pelo código.
-    await page.getByTestId('sumario-plano').fill('Manter antibiótico por 5 dias.');
+    // A segunda finalização é aceita e leva o texto da seção pelo código.
     await page.getByTestId('sumario-finalizar').click();
     await expect.poll(() => finalizacoes.length).toBe(2);
     await expect(page.getByTestId('mensagem-erro')).toHaveCount(0);

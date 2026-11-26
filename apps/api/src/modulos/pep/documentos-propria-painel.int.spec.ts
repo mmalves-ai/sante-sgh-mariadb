@@ -7,6 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { episodioNasJanelas } from '@sgh/dominio-pep';
 import * as F from './documentos-propria-painel.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE_DOCS_PAINEL']?.trim() || 'f22_o2';
@@ -93,6 +94,7 @@ describe.skipIf(SEM_BANCO)('documentos-propria-painel contra o MariaDB (cliente 
         'interconsulta',
         'registro_tempo_evento',
         'alergia_paciente',
+        'exame_lancado_prontuario',
       ])
         await e.executar(`DELETE FROM ${t} WHERE estabelecimento_id IN ${est}`, ests);
       await e.executar(
@@ -734,6 +736,70 @@ describe.skipIf(SEM_BANCO)('documentos-propria-painel contra o MariaDB (cliente 
       procedimentos: [],
       exames: [],
     });
+  });
+
+  it('episódio com mais de 50 exames: o corte é pelo momento clínico e o exame recente entra na janela', async () => {
+    // 55 exames externos antigos (nomes no começo do alfabeto, dez dias antes) e uma troponina de uma hora atrás, com
+    // o nome no fim do alfabeto. O corte por nome deixaria a troponina de fora antes da janela da seção.
+    const agora = Date.now();
+    const antigo = new Date(agora - 10 * 86_400_000);
+    const recente = new Date(agora - 3_600_000);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-exames-muitos` }, async (e) => {
+      for (let n = 0; n < 55; n++)
+        await e.inserir(
+          `INSERT INTO exame_lancado_prontuario (estabelecimento_id, paciente_id, atendimento_id, nome_exame,
+             realizado_em, lancado_em, profissional_id, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            ids.est,
+            ids.pacienteInt,
+            ids.atendInt,
+            `AAA SINT ${P} ${String(n).padStart(2, '0')}`,
+            antigo,
+            antigo,
+            ids.prof,
+            antigo,
+          ],
+        );
+      await e.inserir(
+        `INSERT INTO exame_lancado_prontuario (estabelecimento_id, paciente_id, atendimento_id, nome_exame,
+           realizado_em, lancado_em, profissional_id, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ids.est,
+          ids.pacienteInt,
+          ids.atendInt,
+          `ZZ TROPONINA SINT ${P}`,
+          recente,
+          recente,
+          ids.prof,
+          recente,
+        ],
+      );
+    });
+    try {
+      const ep = await F.episodio(nucleo, CLIENTE, C(), ids.atendInt);
+      const nomes = ep.datados?.exames.map((x) => x.texto) ?? [];
+      expect(nomes).toContain(`ZZ TROPONINA SINT ${P}`);
+      expect(nomes).toContain(`HEMOGRAMA SINTETICO ${P}`);
+      expect(nomes.filter((x) => x.startsWith(`AAA SINT ${P}`))).toHaveLength(55);
+      // A apresentação segue em ordem alfabética depois do corte.
+      expect([...nomes].sort((a, b) => a.localeCompare(b, 'pt-BR'))).toEqual(nomes);
+      // A janela "últimas 72 horas" da seção de exames (regra do domínio) mantém a troponina e tira os antigos.
+      const { exames } = episodioNasJanelas(ep.datados!, [
+        {
+          tipoConteudo: 'exames',
+          janela: { desde: new Date(agora - 72 * 3_600_000), ate: new Date(agora + 60_000), ultimo: false },
+        },
+      ]);
+      expect(exames).toContain(`ZZ TROPONINA SINT ${P}`);
+      expect(exames.some((x) => x.startsWith(`AAA SINT ${P}`))).toBe(false);
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-exames-limpar` }, (e) =>
+        e.executar(
+          `DELETE FROM exame_lancado_prontuario WHERE atendimento_id = ? AND estabelecimento_id = ?`,
+          [ids.atendInt, ids.est],
+        ),
+      );
+    }
   });
 
   it('equipe: a especialidade da internação ou, sem internação, a do atendimento', async () => {

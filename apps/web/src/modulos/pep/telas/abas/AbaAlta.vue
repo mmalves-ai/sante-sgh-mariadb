@@ -68,6 +68,9 @@ const mostraMotivo = computed(
 const rotulo = (tipo: string, chave: string) => achar(tipo)?.descricao ?? t(chave);
 const ordem = (tipo: string) => ({ order: (achar(tipo)?.ordem ?? 0) + 1 });
 const obrigatoria = (tipo: string) => achar(tipo)?.obrigatorio === true;
+// Validação na hora: a seção estruturada obrigatória (e o diagnóstico, piso legal do sumário) marca o campo dela como
+// obrigatório no formulário, e a finalização vazia é barrada antes de ir à API (o rascunho não passa pelo submit).
+const exigida = (tipo: string) => tipo === 'diagnosticos' || obrigatoria(tipo);
 watch(
   () => dados.data.value?.sumario,
   (s) => {
@@ -255,38 +258,49 @@ async function cancelar(): Promise<void> {
         <label :style="ordem('diagnosticos')"
           ><span
             >{{ rotulo('diagnosticos', 'pep.doc.alta.diagnosticos')
-            }}<template v-if="obrigatoria('diagnosticos')"> *</template></span
-          ><textarea v-model="f.diagnosticos" rows="3" data-testid="sumario-diagnosticos" />
+            }}<template v-if="exigida('diagnosticos')"> *</template></span
+          ><textarea
+            v-model="f.diagnosticos"
+            rows="3"
+            :required="exigida('diagnosticos')"
+            data-testid="sumario-diagnosticos"
+          />
         </label>
         <label v-if="mostra('procedimentos')" :style="ordem('procedimentos')"
           ><span
             >{{ rotulo('procedimentos', 'pep.doc.alta.procedimentos')
             }}<template v-if="obrigatoria('procedimentos')"> *</template></span
-          ><textarea v-model="f.procedimentos" rows="2" />
+          ><textarea v-model="f.procedimentos" rows="2" :required="exigida('procedimentos')" />
         </label>
         <label v-if="mostra('evolucao_clinica')" :style="ordem('evolucao_clinica')"
           ><span
             >{{ rotulo('evolucao_clinica', 'pep.doc.alta.evolucao')
             }}<template v-if="obrigatoria('evolucao_clinica')"> *</template></span
-          ><textarea v-model="f.evolucao" rows="3" maxlength="4000" />
+          ><textarea v-model="f.evolucao" rows="3" maxlength="4000" :required="exigida('evolucao_clinica')" />
         </label>
         <label v-if="mostra('medicamentos')" :style="ordem('medicamentos')"
           ><span
             >{{ rotulo('medicamentos', 'pep.doc.alta.medicamentos')
             }}<template v-if="obrigatoria('medicamentos')"> *</template></span
-          ><textarea v-model="f.medicamentos" rows="2" />
+          ><textarea v-model="f.medicamentos" rows="2" :required="exigida('medicamentos')" />
         </label>
         <label v-if="mostra('alergias')" :style="ordem('alergias')"
           ><span
             >{{ rotulo('alergias', 'pep.doc.alta.alergias')
             }}<template v-if="obrigatoria('alergias')"> *</template></span
-          ><textarea v-model="f.alergias" rows="2" />
+          ><textarea v-model="f.alergias" rows="2" :required="exigida('alergias')" />
         </label>
         <label v-if="mostra('plano_terapeutico')" :style="ordem('plano_terapeutico')"
           ><span
             >{{ rotulo('plano_terapeutico', 'pep.doc.alta.plano')
             }}<template v-if="obrigatoria('plano_terapeutico')"> *</template></span
-          ><textarea v-model="f.plano" rows="2" maxlength="2000" data-testid="sumario-plano" />
+          ><textarea
+            v-model="f.plano"
+            rows="2"
+            maxlength="2000"
+            :required="exigida('plano_terapeutico') && !f.encaminhamentos.trim()"
+            data-testid="sumario-plano"
+          />
         </label>
         <label v-if="mostra('plano_terapeutico')" :style="ordem('plano_terapeutico')"
           ><span>{{ t('pep.doc.alta.encaminhamentos') }}</span
@@ -296,7 +310,11 @@ async function cancelar(): Promise<void> {
           ><span
             >{{ rotulo('condicao_alta', 'pep.doc.alta.condicao')
             }}<template v-if="obrigatoria('condicao_alta')"> *</template></span
-          ><input v-model="f.condicao" maxlength="200" data-testid="sumario-condicao"
+          ><input
+            v-model="f.condicao"
+            maxlength="200"
+            :required="exigida('condicao_alta')"
+            data-testid="sumario-condicao"
         /></label>
         <SecoesSumarioAlta
           class="ultimo"
