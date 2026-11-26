@@ -4,7 +4,7 @@
 //   - a escolha do segundo fator da própria conta (aplicativo ou código no e-mail), com a senha conferida há pouco e o
 //     CSRF, para o usuário do cliente e para o administrador da plataforma.
 // O token, o código e a senha nunca vão a log nem a trilha; a senha provisória volta só a quem tem o link.
-import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Req } from '@nestjs/common';
 import { PERMISSOES_ACESSO } from '@sgh/contratos';
 import { z } from 'zod';
 import { AuditadoNoHandler, Permissao, Publica } from '../../autorizacao/decoradores.js';
@@ -28,6 +28,22 @@ interface Req {
 const esquemaPedidoPlataforma = z.object({ email: z.string().trim().min(3).max(254) });
 const esquemaUsarPlataforma = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) });
 const esquemaEscolherMetodo = z.object({ metodo: z.enum(METODOS_SEGUNDO_FATOR) });
+const B64URL = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]+$/)
+  .max(16_384);
+const esquemaCadastroDispositivo = z.object({
+  nome: z.string().trim().min(1).max(60),
+  resposta: z.object({ idCredencial: B64URL.max(1400), dadosCliente: B64URL, objetoAtestado: B64URL }),
+});
+const esquemaValidacaoDispositivo = z.object({
+  resposta: z.object({
+    idCredencial: B64URL.max(1400),
+    dadosCliente: B64URL,
+    dadosAutenticador: B64URL,
+    assinatura: B64URL,
+  }),
+});
 
 export interface MetodoSegundoFatorTela {
   readonly metodo: MetodoSegundoFator;
@@ -256,6 +272,135 @@ export class AcessoEmailController {
           r.data.metodo,
         );
       return { metodo: r.data.metodo, emailDisponivel: this.emailDisponivel(reg) };
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  // ── A chave do dispositivo (WebAuthn com biometria local; 01-ADM L62): só contas do cliente ──
+
+  private dispositivo(r: Registro, req: Req) {
+    const d = this.servicos?.dispositivo;
+    if (!d) throw new ErroProblema('indisponivel', 503, 'Serviço indisponível');
+    if (r.plataforma)
+      throw new ErroProblema(
+        'recusa-de-negocio',
+        409,
+        'Não disponível',
+        'A conta da plataforma usa o aplicativo.',
+        {
+          codigo: 'dispositivo-so-cliente',
+        },
+      );
+    const ator = {
+      rede: r.rede,
+      hospital: r.estabelecimento,
+      login: r.login,
+      estacao: estacaoDaRequisicao(req),
+      correlacao: correlacaoDaRequisicao(req, 'dispositivo'),
+    };
+    return { d, ator };
+  }
+
+  private async lerRegistro(id: string, rede: string | null): Promise<Registro> {
+    const lido = await this.sessao!.ler(id, rede);
+    if (!lido) throw new ErroProblema('nao-autenticado', 401, 'Sessão necessária');
+    return lido.registro;
+  }
+
+  /** GET /api/sessao/segundo-fator/dispositivos: os dispositivos ativos da própria conta. */
+  @Get('sessao/segundo-fator/dispositivos')
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  async listarDispositivos(@Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, false);
+    try {
+      const { d, ator } = this.dispositivo(await this.lerRegistro(id, rede), req);
+      return { dispositivos: await d.listar(ator) };
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /** POST .../dispositivos/opcoes-cadastro: o desafio do cadastro (senha conferida há pouco; CSRF). */
+  @Post('sessao/segundo-fator/dispositivos/opcoes-cadastro')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  async opcoesCadastroDispositivo(@Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    try {
+      const reg = await this.sessao!.exigirReautenticacaoRecente(id, rede);
+      const { d, ator } = this.dispositivo(reg, req);
+      return await d.iniciarCadastro(id, ator, reg.nome);
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /** POST .../dispositivos: grava a credencial conferida (só a chave pública). */
+  @Post('sessao/segundo-fator/dispositivos')
+  @HttpCode(201)
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  @AuditadoNoHandler('acesso.dispositivo.cadastrado na mesma transação')
+  async cadastrarDispositivo(@Body() corpo: unknown, @Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    const r = esquemaCadastroDispositivo.safeParse(corpo);
+    if (!r.success)
+      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Resposta do dispositivo inválida.');
+    try {
+      const reg = await this.sessao!.exigirReautenticacaoRecente(id, rede);
+      const { d, ator } = this.dispositivo(reg, req);
+      return await d.concluirCadastro(id, ator, r.data.resposta, r.data.nome);
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /** POST .../dispositivos/:id/revogar: remove o dispositivo (senha conferida há pouco; CSRF). */
+  @Post('sessao/segundo-fator/dispositivos/:id/revogar')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  @AuditadoNoHandler('acesso.dispositivo.revogado na mesma transação')
+  async revogarDispositivo(@Param('id') alvo: string, @Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    const n = Number(alvo);
+    if (!Number.isSafeInteger(n) || n < 1) throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos');
+    try {
+      const reg = await this.sessao!.exigirReautenticacaoRecente(id, rede);
+      const { d, ator } = this.dispositivo(reg, req);
+      await d.revogar(ator, n);
+      return { dispositivos: await d.listar(ator) };
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /** POST .../dispositivos/opcoes-validacao: o desafio para conferir o dispositivo (CSRF). */
+  @Post('sessao/segundo-fator/dispositivos/opcoes-validacao')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  async opcoesValidacaoDispositivo(@Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    try {
+      const { d, ator } = this.dispositivo(await this.lerRegistro(id, rede), req);
+      return await d.iniciarValidacao(id, ator);
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /** POST .../dispositivos/validar: confere a assinatura do dispositivo e grava o uso (contador). */
+  @Post('sessao/segundo-fator/dispositivos/validar')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  @AuditadoNoHandler('acesso.dispositivo.usado na mesma transação')
+  async validarDispositivo(@Body() corpo: unknown, @Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    const r = esquemaValidacaoDispositivo.safeParse(corpo);
+    if (!r.success)
+      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Resposta do dispositivo inválida.');
+    try {
+      const { d, ator } = this.dispositivo(await this.lerRegistro(id, rede), req);
+      return { conferido: true, ...(await d.concluirValidacao(id, ator, r.data.resposta)) };
     } catch (e) {
       this.erro(e);
     }
