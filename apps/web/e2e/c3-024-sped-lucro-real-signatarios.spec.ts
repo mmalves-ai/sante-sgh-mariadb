@@ -1,5 +1,5 @@
 // E2E C3-024 (07-FIN linha 126): SPED contábil com a ECF do lucro real e os signatários do cadastro. Com o SPED ligado
-// (o administrador liga a chave, se outro cenário ainda não ligou), o contador abre a geração da ECF, vê o lucro real
+// (o administrador liga a contabilidade e a chave do SPED, se outro cenário ainda não ligou), o contador abre a geração da ECF, vê o lucro real
 // entre as formas geradas (a opção vem do apoio do servidor sem a marca de não gerada, e o formulário não mostra o aviso
 // de forma não gerada), confere que os signatários do cadastro da empresa preenchem o formulário quando existem e o
 // aviso de que ficam guardados no cadastro. Axe sem violação séria. Sessão e empresa SINTÉTICAS (nenhuma pessoa real).
@@ -51,6 +51,7 @@ test.describe('@C3-024 SPED: ECF do lucro real e signatários do cadastro', () =
     vigiarExternas(page);
     await entrar(page, 'SINT.ADMIN');
     await page.goto('/administracao/liberacao');
+    await ligar(page, 'contabil', 'Competência sintética conferida com o escritório (E2E C3-024)');
     await ligar(page, 'contabil.sped', 'Decisão sintética da controladoria (E2E C3-024)');
 
     await entrar(page, 'SINT.CONTADOR');
