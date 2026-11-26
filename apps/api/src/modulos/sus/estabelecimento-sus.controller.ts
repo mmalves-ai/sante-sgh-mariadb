@@ -5,6 +5,9 @@
 //   POST /api/sus/estabelecimento/habilitacoes                  inclui (vigência por competência; catálogo oficial)
 //   POST /api/sus/estabelecimento/habilitacoes/:id/encerrar     { vigenciaFim, versao } (nada apagado)
 //   POST /api/sus/estabelecimento/habilitacoes/conciliar        { competencia, habilitacoes, aplicar } (cadastro nacional)
+//   GET  /api/sus/estabelecimento/cnes/conferencias             conferências com a base oficial do cadastro nacional
+//   POST /api/sus/estabelecimento/cnes/conferir                 { competencia } grava remessa e críticas (C3-011)
+//   POST /api/sus/estabelecimento/cnes/criticas/:id/resolver    { versao }
 //   POST /api/sus/estabelecimento/servicos                      inclui serviço e classificação
 //   POST /api/sus/estabelecimento/servicos/:id/encerrar         { vigenciaFim, versao }
 //   POST /api/sus/estabelecimento/regras-prestador              inclui regra por tipo de prestador
@@ -79,6 +82,32 @@ export class EstabelecimentoSusController {
   @AuditadoNoHandler(TRILHA)
   incluirHabilitacao(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
     return this.com(req, (p, c) => p.incluirHabilitacao(c, corpo));
+  }
+
+  @Get('cnes/conferencias')
+  @Permissao(PERMISSOES_ESTABELECIMENTO_SUS.ler)
+  conferenciasCnes(@Req() req: RequisicaoAutorizada) {
+    return this.com(req, (p, c) => p.conferenciasCnes(c));
+  }
+
+  @Post('cnes/conferir')
+  @HttpCode(201)
+  @Permissao(PERMISSOES_ESTABELECIMENTO_SUS.editar)
+  @AuditadoNoHandler(TRILHA)
+  conferirCnes(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+    return this.com(req, (p, c) => p.conferirComCnes(c, corpo));
+  }
+
+  @Post('cnes/criticas/:id/resolver')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_ESTABELECIMENTO_SUS.editar)
+  @AuditadoNoHandler(TRILHA)
+  resolverCriticaCnes(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    return this.com(req, (p, c) => p.resolverCriticaCnes(c, id, corpo));
   }
 
   @Post('habilitacoes/conciliar')
