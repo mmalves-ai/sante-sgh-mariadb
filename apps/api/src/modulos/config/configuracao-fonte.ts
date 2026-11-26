@@ -1699,7 +1699,8 @@ export function prerequisitosIniciaisSinteticos(): PrerequisitoRecurso[] {
 
 /**
  * Parâmetros que a sessão sintética já encontra definidos no estabelecimento: os modelos do pedido e da resposta de
- * parecer (MED09, MED10) junto dos liberados por padrão, para o E2E @M23 pedir o parecer pela tela. Fora de dev/ci,
+ * parecer (MED09, MED10) e o modelo sintético com o componente de alergia (ALERG, E2E @C1-104) junto dos liberados
+ * por padrão, para o E2E @M23 pedir o parecer pela tela. Fora de dev/ci,
  * nada é pré-definido (a liberação de cada modelo é da comissão de prontuário).
  */
 export function parametrosIniciaisSinteticos(hospital: string): ValorParametro[] {
@@ -1709,7 +1710,7 @@ export function parametrosIniciaisSinteticos(hospital: string): ValorParametro[]
       chave: 'pep.evolucao.modelosLiberados',
       nivel: 'estabelecimento',
       alvo: hospital,
-      valor: 'EVAM,M9,M10,MED09,MED10',
+      valor: 'EVAM,M9,M10,MED09,MED10,ALERG',
       vigenteDesde: '2026-10-21T00:00:00.000Z',
       vigenteAte: null,
       justificativa: 'Sessão sintética de desenvolvimento e testes',

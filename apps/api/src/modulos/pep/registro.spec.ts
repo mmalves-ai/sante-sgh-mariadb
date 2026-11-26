@@ -104,6 +104,8 @@ describe('registro clínico nos modelos do formulário (M22)', () => {
       // M23: os modelos do pedido e da resposta de parecer (liberados na sessão sintética).
       ['MED09', 'liberado'],
       ['MED10', 'liberado'],
+      // C1-104: o modelo com o componente de alergia (D-ALE-2: grava a alergia na hora, não desliga o modelo).
+      ['ALERG', 'liberado'],
     ]);
     const f = await get(medico, '/api/pep/registro/1003/formulario/61');
     expect(f.statusCode).toBe(200);
@@ -360,6 +362,7 @@ describe('registro clínico nos modelos do formulário (M22)', () => {
       ['M10', true],
       ['MED09', true],
       ['MED10', true],
+      ['ALERG', true],
     ]);
     const d = await get(admin, '/api/pep/admin/modelos/62');
     expect(d.json().expressoesDetalhe).toEqual([

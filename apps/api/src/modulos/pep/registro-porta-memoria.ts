@@ -182,6 +182,23 @@ const MODELOS: Readonly<
       },
     ],
   },
+  // C1-104 (D-ALE-2): modelo com o componente de alergia, para o E2E registrar a alergia de dentro do formulário.
+  65: {
+    codigo: 'ALERG',
+    nome: `ANAMNESE COM ALERGIAS ${M}`,
+    tipo: 'Evolução',
+    perguntas: [
+      {
+        ordem: '01',
+        classe: 'TGroupBoxPep',
+        componente: 'cmp951',
+        titulo: `ANAMNESE COM ALERGIAS ${M}`,
+        tipo: '1',
+      },
+      { ordem: '0101', classe: 'TfRespTexto', componente: 'cmp952', titulo: 'História clínica', tipo: '5' },
+      { ordem: '0102', classe: 'TfRespAlergia', componente: 'cmp953', titulo: 'Alergias', tipo: '19' },
+    ],
+  },
 };
 
 function dfm(p: PerguntaSintetica, idResposta: number, ids: readonly number[]): string {
