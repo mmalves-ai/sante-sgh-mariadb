@@ -7,8 +7,12 @@
 // Avisos na mesma transação: o valor crítico digitado gera o aviso pendente com prazo (sem repetir ao regravar nem ao
 // liberar), a correção que tira o crítico cancela o aviso pendente (o registro fica) e o crítico que volta ganha aviso
 // novo; a retificação avisa quem já tinha aberto o resultado (aviso clínico com destinatário), menos quem retifica.
+// A ponta do destinatário (C1-077): o aviso da retificação chega à central de avisos de quem o recebe
+// (PortaAvisosClinicosPropria.listar), com o link para os exames do paciente; quem retificou não o vê; a ciência grava
+// no destinatário sem apagar.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PortaAvisosClinicosPropria } from '../../acesso/avisos-clinicos-propria.js';
 import { ServicoResultadoSadt } from './resultado-propria.js';
 import {
   CLIENTE,
@@ -281,7 +285,7 @@ describe.skipIf(SEM_BANCO)('resultado: digitar, liberar e retificar (MariaDB, cl
     // Quem já tinha visto (menos quem retificou) recebe o aviso da retificação, ligado à versão guardada.
     const ac = await nucleo.lerSomente(COR, (l) =>
       l.consultar(
-        `SELECT a.prioridade, a.situacao, a.entidade_origem, a.entidade_origem_chave, a.paciente_id, a.atendimento_id,
+        `SELECT a.id AS aviso_id, a.prioridade, a.situacao, a.entidade_origem, a.entidade_origem_chave, a.paciente_id, a.atendimento_id,
                 d.usuario_id, d.situacao AS situacao_destinatario,
                 (SELECT id FROM resultado_exame_versao WHERE resultado_exame_id = a.resultado_exame_id) AS versao_guardada
            FROM aviso_clinico a JOIN aviso_clinico_destinatario d ON d.aviso_clinico_id = a.id
@@ -305,6 +309,43 @@ describe.skipIf(SEM_BANCO)('resultado: digitar, liberar e retificar (MariaDB, cl
     expect(depois!['justificativa_alteracao']).toBe('Erro de transcrição do valor');
     // A retificação usa a faixa vigente agora (mínimo 1).
     expect(Number(depois!['referencia_minimo'])).toBe(1);
+
+    // O aviso da retificação chega à central de avisos do destinatário, como ele a lê (GET /api/acesso/avisos-clinicos).
+    const caixa = new PortaAvisosClinicosPropria(nucleo, CLIENTE);
+    const codigoEst = String(
+      (await um('SELECT codigo FROM estabelecimento WHERE id = ?', [m!.base.est]))!['codigo'],
+    );
+    const sessao = (usuario: number) => ({
+      cliente: CLIENTE,
+      hospital: codigoEst,
+      usuario,
+      correlacao: 't-s35res',
+    });
+    const pac = Number(
+      (await um('SELECT paciente_id FROM resultado_exame WHERE id = ?', [r.resultado]))!['paciente_id'],
+    );
+    const doResultado = (cx: Awaited<ReturnType<typeof caixa.listar>>) =>
+      cx.avisos.filter((a) => a.aviso === Number(ac[0]!['aviso_id']));
+    const doDestinatario = await caixa.listar(sessao(m!.base.usuario2));
+    expect(doResultado(doDestinatario)).toHaveLength(1);
+    expect(doResultado(doDestinatario)[0]).toMatchObject({
+      estado: 'novo',
+      gravidade: 'atencao',
+      link: `/pep/paciente/${pac}/exames`,
+    });
+    expect(doDestinatario.novos).toBeGreaterThanOrEqual(1);
+    // Quem retificou não recebe o próprio aviso.
+    expect(doResultado(await caixa.listar(sessao(m!.base.usuario)))).toHaveLength(0);
+    // A ciência do destinatário grava no destinatário (nada apagado) e o aviso segue na caixa como ciente.
+    const idDest = doResultado(doDestinatario)[0]!.id;
+    expect(await caixa.ciente(sessao(m!.base.usuario2), idDest)).toEqual({ id: idDest, gravou: true });
+    expect(
+      await um(
+        'SELECT situacao, ciente_em IS NOT NULL AS ciente, lido_usuario_id, excluido_em IS NULL AS vivo FROM aviso_clinico_destinatario WHERE id = ?',
+        [idDest],
+      ),
+    ).toMatchObject({ situacao: 'ciente', ciente: 1, vivo: 1 });
+    expect(doResultado(await caixa.listar(sessao(m!.base.usuario2)))[0]).toMatchObject({ estado: 'ciente' });
     expect(
       Number(
         (await um(

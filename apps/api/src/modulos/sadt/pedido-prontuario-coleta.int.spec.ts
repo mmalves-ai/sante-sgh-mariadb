@@ -2,6 +2,9 @@
 // (as portas em MEMÓRIA do prontuário e do SADT ligadas pela mesma trilha, com todos os módulos, como no servidor do
 // E2E). Prova a passagem que os E2E @F3.5-06 e M26 percorrem: o pedido novo vira um grupo a coletar no tubo do exame;
 // o pedido repetido em 24 horas não grava sem os avisos conferidos e, conferido, entra no mesmo grupo. Dados SINTÉTICOS.
+// NÃO é contrato de efeito: não toca o MariaDB (é o teste da sessão sintética que os E2E usam). Roda pela config de
+// integração só porque sobe a app inteira com todos os módulos. O contrato de efeito do ciclo do resultado (digitar,
+// liberar, valor crítico, retificar e o aviso ao destinatário na central de avisos) é sadt/aplicacao/resultado-banco.int.spec.ts.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
