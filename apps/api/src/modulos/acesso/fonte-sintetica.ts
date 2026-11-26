@@ -3443,6 +3443,21 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: { grupo: 'ENFERMAGEM', opcoesGrupo: [2582], conselho: true },
     perfisConcedidos: ['central-material-esteril'],
   },
+  /**
+   * C3-020 (F8, 03-PEP L144; no fim da lista para não mudar o ID sintético das outras contas): o médico da equipe do
+   * centro de pesquisa clínica, com conselho e o perfil complementar `pesquisa-clinica` concedido nominalmente:
+   * consulta, cadastra e tria os estudos (pep.pesquisa.ler, gerir e triar, permissões clínicas por perfil que a
+   * segregação de funções tira do administrador sem perfil assistencial). Nenhuma conta tinha o perfil da pesquisa.
+   */
+  'SINT.PESQUISA': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: { grupo: 'MEDICOS', opcoesGrupo: [], conselho: true },
+    perfisConcedidos: ['pesquisa-clinica'],
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */

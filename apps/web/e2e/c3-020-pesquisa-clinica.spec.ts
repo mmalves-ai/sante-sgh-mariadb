@@ -1,5 +1,6 @@
 // E2E @C3-020 (F8, 03-PEP L144): pesquisa clínica. Com a API do estudo simulada (page.route, massa sintética, nenhuma
-// pessoa real), o administrador abre /pep/pesquisa, vê o estudo sintético recrutando, o aviso de triagem automática
+// pessoa real), o médico da equipe de pesquisa (SINT.PESQUISA, perfil `pesquisa-clinica`) abre
+// /pep/pesquisa, vê o estudo sintético recrutando, o aviso de triagem automática
 // desligada (o botão Triar só libera com paciente indicado pela busca remota), indica o paciente e tria; escolhe o
 // candidato, inclui com o TCLE anexado ao prontuário dele e a data da assinatura; registra a visita do participante.
 // Confere o corpo de cada POST. Axe sem violação na lista e no estudo aberto.
@@ -155,7 +156,7 @@ test.describe('Pesquisa clínica: triagem que só sugere, inclusão com TCLE e v
       );
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.PESQUISA');
     await page.goto('/pep/pesquisa');
     const tela = page.getByTestId('pesquisa-clinica');
     await expect(tela).toBeVisible();
