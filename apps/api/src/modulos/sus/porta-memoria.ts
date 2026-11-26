@@ -553,6 +553,7 @@ export class PortaSusMemoria implements PortaSus {
               (!f.situacao || x.situacao === f.situacao) &&
               (!f.numero || (x.numero ?? '').startsWith(f.numero)) &&
               (!f.prontuario || x.prontuario === f.prontuario) &&
+              (!f.setores || f.setores.includes(setorSinteticoApac(x.registro))) &&
               (!f.competencia ||
                 ((x.situacao === 'autorizada' || x.situacao === 'encerrada') &&
                   (x.competenciaInicial ?? '999999') <= f.competencia &&
@@ -586,6 +587,8 @@ export class PortaSusMemoria implements PortaSus {
           setor: setorSinteticoApac(registro),
         };
       },
+      setorSus: async (ref) => ({ setor: setorSinteticoApac(ref.id) }),
+      setoresProducaoSus: async () => [1, 2],
       dominiosApac: async () => DOMINIOS_APAC_SINTETICOS,
       buscarSolicitantesApac: async (termo) => {
         const t = normal(termo.trim());

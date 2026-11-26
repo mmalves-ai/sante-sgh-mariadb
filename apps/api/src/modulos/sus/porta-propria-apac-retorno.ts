@@ -237,6 +237,13 @@ export class LeituraApacRetorno {
       );
       p.push(f.competencia, f.competencia);
     }
+    if (f.setores) {
+      // C1-051: só os atendimentos dos setores permitidos (lista vazia: nenhum).
+      cond.push(
+        f.setores.length ? `at.setor_funcional_id IN (${f.setores.map(() => '?').join(', ')})` : 'FALSE',
+      );
+      p.push(...f.setores);
+    }
     const onde = cond.length ? ` AND ${cond.join(' AND ')}` : '';
     const t = await this.l.uma(`SELECT COUNT(*) AS n FROM (${SQL_APAC}${onde}) q`, p);
     const ls = await this.l.consultar(`${SQL_APAC}${onde} ORDER BY la.id DESC LIMIT ? OFFSET ?`, [

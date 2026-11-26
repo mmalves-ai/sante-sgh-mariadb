@@ -245,7 +245,9 @@ export function leituraAihMemoria(b: BaseMemoriaAih): LeituraSusAih {
             (!f.situacao || a.situacao === f.situacao) &&
             (!f.numero || (a.numero ?? '').startsWith(f.numero)) &&
             (!f.prontuario || a.prontuario === f.prontuario) &&
-            (!f.registro || a.registro === f.registro),
+            (!f.registro || a.registro === f.registro) &&
+            // C1-051: o setor sintético da internação (par: 1; ímpar: 2), o mesmo de setorSinteticoApac.
+            (!f.setores || f.setores.includes(a.registro % 2 === 0 ? 1 : 2)),
         )
         .sort((x, y) => y.id - x.id);
       const porSituacao: Record<string, number> = {};

@@ -12,7 +12,10 @@ import { type ApoioMontagemSus, MontagensSusPropria } from './porta-propria-mont
 import { LeituraSusPropria, PortaSusPropria } from './porta-propria.js';
 import { armazemSusMemoria } from './armazem.js';
 import { SeloSolicitanteApac } from './selo-solicitante.js';
+import { PortaConfiguracaoSusPropria } from './porta-configuracao-propria.js';
+import { ServicoConfiguracaoSus } from './servico-configuracao.js';
 import { ServicoSus, type SessaoSus } from './servico.js';
+import type { LinhaTrilhaSus } from './tipos.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -597,8 +600,11 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
     const apacs = () =>
       nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conta`, estabelecimento: ids.est }, async (l) =>
         Number(
-          (await l.uma<{ n: number }>('SELECT COUNT(*) AS n FROM apac WHERE atendimento_id = ?', [ids.atSus]))
-            ?.n ?? 0,
+          (
+            await l.uma<{ n: number }>('SELECT COUNT(*) AS n FROM laudo_apac WHERE atendimento_id = ?', [
+              ids.atSus,
+            ])
+          )?.n ?? 0,
         ),
       );
     try {
@@ -625,7 +631,7 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
           fontePorConvenio: new Map(),
           habilitacoes: new Set<string>(),
           apac: { uf: '33' },
-        },
+        } as unknown as SessaoSus['parametros'],
         pode: () => true,
         trilha: () => {
           throw new Error('A recusa não grava trilha.');
@@ -646,7 +652,7 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
           solicitante: selo.selar(CPF_MED),
           dataSolicitacao: '2026-03-15',
           justificativa: 'Justificativa sintética do laudo.',
-          laudoEspecifico: null,
+          laudoEspecifico: 'nenhum' as const,
           nefrologia: null,
         },
       };
@@ -679,6 +685,230 @@ describe.skipIf(SEM_BANCO)('montagens do faturamento SUS na porta própria (clie
     } finally {
       await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-setor-fim` }, (e) =>
         e.executar('UPDATE atendimento SET setor_funcional_id = NULL WHERE id = ?', [ids.atSus]),
+      );
+    }
+  });
+  it('C1-051: a permissão gravada no banco entra na sessão pelo caminho do controlador; recusa sem gravar e grava no setor certo', async () => {
+    const LOGIN = `${P}.FATSETOR`;
+    const { setores, usuario } = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: `${P}-setor2` },
+      async (e) => {
+        const setor = (codigo: string) =>
+          garantir(
+            e,
+            'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
+            [ids.est, codigo],
+            "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, ?, 'assistencial', ?)",
+            [ids.est, codigo, `Setor sintético ${codigo}`, new Date()],
+          );
+        const a = await setor(`${P}-S1`);
+        const b = await setor(`${P}-S2`);
+        const u = await garantir(
+          e,
+          'SELECT id FROM usuario WHERE login = ?',
+          [LOGIN],
+          "INSERT INTO usuario (login, nome, tipo_conta, situacao, dispensa_cpf, criado_em) VALUES (?, 'Faturista fictício', 'pessoa', 'ativo', TRUE, ?)",
+          [LOGIN, new Date()],
+        );
+        await e.executar('DELETE FROM permissao_setor_sus WHERE usuario_id = ?', [u]);
+        await e.executar('UPDATE atendimento SET setor_funcional_id = ? WHERE id = ?', [a, ids.atSus]);
+        return { setores: { a, b }, usuario: u };
+      },
+    );
+    const contar = (sql: string, p: unknown[]) =>
+      nucleo.lerSomente(
+        { cliente: CLIENTE, correlacao: `${P}-conta2`, estabelecimento: ids.est },
+        async (l) => Number((await l.uma<{ n: number }>(sql, p))?.n ?? 0),
+      );
+    const laudos = () => contar('SELECT COUNT(*) AS n FROM laudo_apac WHERE atendimento_id = ?', [ids.atSus]);
+    const criados: number[] = [];
+    try {
+      const config = new ServicoConfiguracaoSus(new PortaConfiguracaoSusPropria(nucleo, CLIENTE));
+      const ctx = {
+        rede: 'rede-teste',
+        hospital: 'f22',
+        estabelecimento: ids.est,
+        usuario: null,
+        correlacao: `${P}-c1051-cfg`,
+      };
+      const sessaoCfg = { ...ctx, hoje: '2026-03-20', pode: () => true };
+      // A configuração grava a permissão só no setor B (digitação) para o usuário.
+      await config.incluirPermissao(sessaoCfg, {
+        usuario,
+        setor: setores.b,
+        tipo: 'digitacao',
+        vigenciaInicio: '2026-01-01',
+        vigenciaFim: null,
+      });
+      expect(
+        await contar('SELECT COUNT(*) AS n FROM permissao_setor_sus WHERE usuario_id = ?', [usuario]),
+      ).toBe(1);
+      const selo = new SeloSolicitanteApac();
+      const sv = new ServicoSus(new PortaSusPropria(nucleo, CLIENTE), armazemSusMemoria(), undefined, selo);
+      // A sessão monta as permissões pelo mesmo caminho do SusController.sessao.
+      const sessao = async (u: number | null): Promise<SessaoSus> => ({
+        rede: 'rede-teste',
+        hospital: 'f22',
+        login: LOGIN,
+        estabelecimento: ids.est,
+        usuario: u,
+        permissoesSetor: await ServicoConfiguracaoSus.daSessao(config, { ...ctx, usuario: u }, u),
+        correlacao: `${P}-c1051-sus`,
+        hoje: '2026-03-20',
+        convenios: null,
+        parametros: {
+          cnes: '9999991',
+          conveniosSus: [ids.sus],
+          conveniosParticular: [],
+          fontePadrao: null,
+          fontePorConvenio: new Map(),
+          habilitacoes: new Set<string>(),
+          apac: { uf: '33' },
+        } as unknown as SessaoSus['parametros'],
+        pode: () => true,
+        trilha: (evento, operacao, alvo): LinhaTrilhaSus => ({
+          rede: 'rede-teste',
+          hospital: 'f22',
+          usuario: LOGIN,
+          evento,
+          recurso: 'faturamento.sus',
+          operacao,
+          tabelaAlvo: alvo.tabela,
+          idAlvo: alvo.id,
+          chaveNaturalAlvo: null,
+          resultado: 'sucesso',
+          estacao: 'TESTE',
+          correlacao: `${P}-c1051-sus`,
+          diferenca: alvo.diferenca ?? null,
+        }),
+      });
+      const restrita = await sessao(usuario);
+      expect(restrita.permissoesSetor).toEqual([
+        { setor: setores.b, tipo: 'digitacao', vigenciaInicio: '2026-01-01', vigenciaFim: null },
+      ]);
+      expect((await sessao(null)).permissoesSetor).toEqual([]);
+      const laudo = {
+        acao: 'laudo' as const,
+        laudo: {
+          registro: ids.atSus,
+          procedimento: SIG,
+          cidPrincipal: 'N18.0',
+          cidSecundario: null,
+          cidAssociado: null,
+          solicitante: selo.selar(CPF_MED),
+          dataSolicitacao: '2026-03-15',
+          justificativa: 'Justificativa sintética do laudo.',
+          laudoEspecifico: 'nenhum' as const,
+          nefrologia: null,
+        },
+      };
+      const recusa = (codigo: string) =>
+        expect.objectContaining({ extras: expect.objectContaining({ codigo }) });
+      const antes = await laudos();
+      // Só no setor B: o laudo do atendimento do setor A é recusado e nada é gravado.
+      await expect(sv.registrarApac(restrita, laudo)).rejects.toEqual(recusa('sus-setor-sem-permissao'));
+      expect(await laudos()).toBe(antes);
+      // A listagem do usuário restrito não mostra as APACs do setor A; a do administrador mostra.
+      const tudo = await sv.listarApacs(await sessao(null), { pagina: 0, porPagina: 500 });
+      const doA = tudo.itens.filter((x) => x.registro === ids.atSus).length;
+      const soB = await sv.listarApacs(restrita, { pagina: 0, porPagina: 500 });
+      expect(soB.itens.filter((x) => x.registro === ids.atSus)).toEqual([]);
+      expect(soB.total).toBeLessThanOrEqual(tudo.total - doA);
+      // A competência inteira (gerar, fechar, criticar) exige 'faturamento' em todos os setores com produção.
+      // (a massa tem atendimento SUS sem setor na competência: a recusa é 'sus-setor-nao-informado' ou 'sem-permissao').
+      await expect(sv.criticar(restrita, { instrumento: 'apac', competencia: '202603' })).rejects.toEqual(
+        expect.objectContaining({
+          status: 403,
+          extras: expect.objectContaining({
+            codigo: expect.stringMatching(/^sus-setor-(sem-permissao|nao-informado)$/),
+          }),
+        }),
+      );
+      // Com a permissão também no setor A, a digitação grava a APAC (uma linha a mais em laudo_apac).
+      await config.incluirPermissao(sessaoCfg, {
+        usuario,
+        setor: setores.a,
+        tipo: 'digitacao',
+        vigenciaInicio: '2026-01-01',
+        vigenciaFim: null,
+      });
+      const liberada = await sessao(usuario);
+      expect(liberada.permissoesSetor?.map((p) => p.setor).sort()).toEqual([setores.a, setores.b].sort());
+      const gravada = await sv.registrarApac(liberada, laudo);
+      criados.push(gravada.id);
+      expect(await laudos()).toBe(antes + 1);
+      expect(gravada).toMatchObject({ registro: ids.atSus, situacao: 'solicitada' });
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-setor2-fim` }, async (e) => {
+        for (const id of criados) {
+          await e.executar('DELETE FROM autorizacao_apac WHERE laudo_apac_id = ?', [id]);
+          await e.executar('DELETE FROM laudo_apac WHERE id = ?', [id]);
+        }
+        await e.executar('DELETE FROM permissao_setor_sus WHERE usuario_id = ?', [usuario]);
+        await e.executar('UPDATE atendimento SET setor_funcional_id = NULL WHERE id = ?', [ids.atSus]);
+      });
+    }
+  });
+  it('C1-051: o setor da internação (AIH), o filtro por setor das listagens de AIH e APAC e os setores da produção', async () => {
+    const leitura = <T>(fn: (l: LeituraSusPropria) => Promise<T>) =>
+      nucleo.lerSomente(
+        { cliente: CLIENTE, correlacao: `${P}-setor3`, estabelecimento: ids.est },
+        (l: Leitor) => fn(new LeituraSusPropria(l, ids.est)),
+      );
+    const s1 = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-setor3-m` }, async (e) => {
+      const a = await garantir(
+        e,
+        'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?',
+        [ids.est, `${P}-S1`],
+        "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, tipo, criado_em) VALUES (?, ?, ?, 'assistencial', ?)",
+        [ids.est, `${P}-S1`, `Setor sintético ${P}-S1`, new Date()],
+      );
+      await e.executar(
+        'UPDATE atendimento SET setor_funcional_id = ? WHERE id = (SELECT atendimento_id FROM internacao WHERE id = ?)',
+        [a, ids.internacao],
+      );
+      return a;
+    });
+    try {
+      expect(await leitura((l) => l.setorSus({ tipo: 'internacao', id: ids.internacao }))).toEqual({
+        setor: s1,
+      });
+      expect(await leitura((l) => l.setorSus({ tipo: 'internacao', id: -1 }))).toBeNull();
+      // Outro estabelecimento não enxerga a internação.
+      expect(
+        await nucleo.lerSomente(
+          { cliente: CLIENTE, correlacao: `${P}-setor3b`, estabelecimento: ids.estB },
+          (l) => new LeituraSusPropria(l, ids.estB).setorSus({ tipo: 'internacao', id: ids.internacao }),
+        ),
+      ).toBeNull();
+      const aihs = (setores?: number[]) =>
+        leitura((l) =>
+          l.paginaAihs({
+            registro: ids.internacao,
+            pagina: 0,
+            porPagina: 50,
+            ...(setores ? { setores } : {}),
+          }),
+        );
+      const todas = (await aihs()).total;
+      expect((await aihs([s1])).total).toBe(todas);
+      expect((await aihs([])).total).toBe(0);
+      expect((await aihs([s1 + 1_000_000])).total).toBe(0);
+      const apacs = (setores?: number[]) =>
+        leitura((l) => l.paginaApacs({ pagina: 0, porPagina: 500, ...(setores ? { setores } : {}) }));
+      expect((await apacs([])).total).toBe(0);
+      expect((await apacs()).total).toBeGreaterThanOrEqual((await apacs([s1])).total);
+      // Os setores da produção SUS de março/2026 trazem o da internação com alta no mês, quando houver conta SUS.
+      const prod = await leitura((l) => l.setoresProducaoSus(INTERVALO, '202603', [ids.sus]));
+      expect(Array.isArray(prod)).toBe(true);
+      expect(new Set(prod).size).toBe(prod.length);
+      expect(await leitura((l) => l.setoresProducaoSus(INTERVALO, '202603', []))).toEqual([]);
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-setor3-fim` }, (e) =>
+        e.executar(
+          'UPDATE atendimento SET setor_funcional_id = NULL WHERE id = (SELECT atendimento_id FROM internacao WHERE id = ?)',
+          [ids.internacao],
+        ),
       );
     }
   });

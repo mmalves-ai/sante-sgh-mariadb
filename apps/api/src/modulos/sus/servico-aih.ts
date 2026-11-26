@@ -362,8 +362,10 @@ export class ServicoSusAih {
 
   async listar(s: SessaoSus, f: FiltroAihs): Promise<PaginaAihs> {
     this.exigirSus(s);
+    const setores = this.sus.setoresSus(s, 'digitacao');
     return this.porta.ler(this.ctx(s), async (l) => {
       const p = await l.paginaAihs({
+        ...(setores ? { setores } : {}),
         ...(f.situacao ? { situacao: f.situacao } : {}),
         ...(f.numero ? { numero: f.numero } : {}),
         ...(f.prontuario ? { prontuario: f.prontuario } : {}),
@@ -381,6 +383,7 @@ export class ServicoSusAih {
     return this.porta.ler(this.ctx(s), async (l) => {
       const i = await l.internacaoAih(registro, s.parametros.conveniosSus);
       if (!i) throw recusa('internacao-inexistente');
+      await this.sus.exigirSetorDe(s, l, { tipo: 'internacao', id: i.registro }, 'digitacao');
       // O convênio da internação tem de estar no escopo da pessoa (o exigirSus só confere os convênios SUS).
       if (s.convenios !== null && !s.convenios.includes(i.convenio)) throw recusa('fora-do-escopo-sus');
       const vivas = await l.aihsDasInternacoes([registro]);
@@ -458,11 +461,20 @@ export class ServicoSusAih {
     const pAih = await this.parametrosAih(s);
     // O fechamento monta antes da transação (a leitura da produção é longa); a transação confere a versão.
     let fechamento: { itens: ItemAihParaGravar[]; m: AihMontada } | null = null;
+    // C1-051: o setor da internação antes de montar o fechamento (a montagem lê a produção dela); a transação confere de novo.
+    const acaoSetor = e.acao === 'fechar' ? 'faturamento' : 'digitacao';
+    if (e.acao !== 'laudo' && this.sus.setoresSus(s, acaoSetor) !== null)
+      await this.porta.ler(this.ctx(s), async (l) => {
+        const a = await l.aih(e.aih);
+        if (a) await this.sus.exigirSetorDe(s, l, { tipo: 'internacao', id: a.registro }, acaoSetor);
+      });
     if (e.acao === 'fechar') fechamento = await this.prepararFechamento(s, e, pAih);
     const id = await this.gravar(s, async (g) => {
       if (e.acao === 'laudo') return this.laudo(s, g, e.laudo);
       const a = await g.aih(e.aih, true);
       if (!a) throw naoEncontrada();
+      // C1-051: o fechamento da conta é faturamento; as demais ações, digitação.
+      await this.sus.exigirSetorDe(s, g, { tipo: 'internacao', id: a.registro }, acaoSetor);
       if (versaoSus(a.versao) !== e.versao) throw recusa('versao-alterada');
       if (!acaoPermitida(e.acao, a.situacao)) throw recusa('situacao-nao-permite', { situacao: a.situacao });
       let diferenca = `acao=${e.acao};registro=${a.registro}`;
@@ -536,6 +548,7 @@ export class ServicoSusAih {
   ): Promise<number> {
     const i = await g.internacaoAih(laudo.registro, s.parametros.conveniosSus);
     if (!i) throw recusa('internacao-inexistente');
+    await this.sus.exigirSetorDe(s, g, { tipo: 'internacao', id: i.registro }, 'digitacao');
     if (!s.parametros.conveniosSus.includes(i.convenio)) throw recusa('internacao-nao-sus');
     if ((await g.aihsDasInternacoes([i.registro])).length > 0) throw recusa('aih-ja-registrada');
     if (!(await g.solicitanteAih(laudo.solicitante))) throw recusa('solicitante-inexistente');
@@ -656,6 +669,7 @@ export class ServicoSusAih {
     return this.porta.ler(this.ctx(s), async (l) => {
       const a = await l.aih(id);
       if (!a) throw naoEncontrada();
+      await this.sus.exigirSetorDe(s, l, { tipo: 'internacao', id: a.registro }, 'digitacao');
       const { montadas } = await this.montar(l, s, pAih, [a]);
       const m = montadas[0] as AihMontada;
       const gravado = a.fechamento > 0 && !['solicitada', 'autorizada', 'negada'].includes(a.situacao);
@@ -787,6 +801,7 @@ export class ServicoSusAih {
    */
   async gerarSisaih(s: SessaoSus, e: GerarSisaihEntrada): Promise<ArquivoSusGerado> {
     this.exigirEscopoTotal(s);
+    await this.sus.exigirFaturamentoDaCompetencia(s, e.competencia);
     const t0 = Date.now();
     const { comp, m, pAih } = await this.montarCompetencia(s, e.competencia);
     if (comp.situacao !== 'aberta') throw recusa('competencia-ja-fechada');

@@ -1671,6 +1671,7 @@
     "src/modulos/enfermagem/sae-porta-propria-receita.int.spec.ts",
     "src/modulos/sus/porta-propria-resto.ts",
     "src/modulos/sus/porta-propria-resto.spec.ts",
+    "src/modulos/sus/servico-setor.spec.ts",
     "src/modulos/sus/porta-propria-resto.int.spec.ts",
     "src/modulos/qualidade/porta-propria-complemento-q5.ts",
     "src/modulos/qualidade/porta-propria-complemento-q5.spec.ts",

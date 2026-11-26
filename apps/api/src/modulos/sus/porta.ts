@@ -156,6 +156,22 @@ export interface LeituraSus extends LeituraSusAih {
     conveniosSus: readonly number[],
   ): Promise<AtendimentoLaudoApacDados | null>;
   dominiosApac(): Promise<DominiosApacDados>;
+  /**
+   * C1-051: o setor do atendimento (ou da internação, pelo atendimento dela) do estabelecimento; null quando não existe
+   * (`setor` null: o atendimento sem setor informado).
+   */
+  setorSus(ref: { readonly tipo: 'atendimento' | 'internacao'; readonly id: number }): Promise<{
+    setor: number | null;
+  } | null>;
+  /**
+   * C1-051: os setores com produção SUS na competência (as contas SUS com entrada, ou alta da internação, no intervalo,
+   * e as APACs vigentes nela); null entra quando há atendimento sem setor.
+   */
+  setoresProducaoSus(
+    intervalo: { readonly inicio: string; readonly fim: string },
+    competencia: string,
+    conveniosSus: readonly number[],
+  ): Promise<(number | null)[]>;
   buscarSolicitantesApac(termo: string): Promise<SolicitanteApacCadastro[]>;
   solicitantesApacPorChave(chaves: readonly string[]): Promise<SolicitanteApacCadastro[]>;
   nomesSigtap(ids: readonly number[]): Promise<Map<number, string>>;

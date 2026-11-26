@@ -56,6 +56,42 @@ export function decidirSetorSus(
     : 'sus-setor-sem-permissao';
 }
 
+/**
+ * Os setores em que o usuário pode a ação (o filtro das listagens por atendimento). null: sem restrição (o administrador
+ * da plataforma, ou nenhuma permissão vigente, quando vale só o cargo). Lista vazia: nenhum setor (nada a listar).
+ */
+export function setoresPermitidosSus(
+  permissoes: readonly PermissaoSetorSusVigencia[],
+  pedido: { readonly usuario: number | null; readonly acao: AcaoSetorSus; readonly hoje: string },
+): readonly number[] | null {
+  if (pedido.usuario === null) return null;
+  const vigentes = permissoes.filter((p) => permissaoSetorVigente(p, pedido.hoje));
+  if (vigentes.length === 0) return null;
+  return [...new Set(vigentes.filter((p) => tipoCobre(p.tipo, pedido.acao)).map((p) => p.setor))].sort(
+    (a, b) => a - b,
+  );
+}
+
+/**
+ * As operações da competência inteira (criticar, fechar, gerar e baixar o arquivo, ver as linhas dele) levam a produção
+ * de todos os setores: com restrição por setor, o usuário precisa da ação em cada setor com produção na competência (o
+ * setor não informado também recusa). Sem restrição (administrador ou só o cargo), passa.
+ */
+export function decidirSetoresProducaoSus(
+  permissoes: readonly PermissaoSetorSusVigencia[],
+  pedido: {
+    readonly usuario: number | null;
+    readonly setores: readonly (number | null)[];
+    readonly acao: AcaoSetorSus;
+    readonly hoje: string;
+  },
+): RecusaSetorSus | null {
+  const permitidos = setoresPermitidosSus(permissoes, pedido);
+  if (permitidos === null) return null;
+  if (pedido.setores.some((s) => s === null)) return 'sus-setor-nao-informado';
+  return pedido.setores.every((s) => s !== null && permitidos.includes(s)) ? null : 'sus-setor-sem-permissao';
+}
+
 export type RecusaPermissaoSetorSus = 'sus-permissao-vigencia-invalida' | 'sus-permissao-sobreposta';
 
 /**

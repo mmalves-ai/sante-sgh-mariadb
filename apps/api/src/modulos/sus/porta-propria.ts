@@ -707,6 +707,54 @@ export class LeituraSusPropria implements LeituraSus {
     return this.apacR().apacsDaCompetencia(...a);
   }
 
+  async setorSus(ref: { readonly tipo: 'atendimento' | 'internacao'; readonly id: number }) {
+    const x =
+      ref.tipo === 'atendimento'
+        ? await this.l.uma(
+            `SELECT at.setor_funcional_id FROM atendimento at
+              WHERE at.id = ? AND at.estabelecimento_id = ? AND at.excluido_em IS NULL`,
+            [ref.id, this.est],
+          )
+        : await this.l.uma(
+            `SELECT at.setor_funcional_id FROM internacao i
+               JOIN atendimento at ON at.id = i.atendimento_id
+              WHERE i.id = ? AND i.estabelecimento_id = ? AND i.excluido_em IS NULL`,
+            [ref.id, this.est],
+          );
+    if (!x) return null;
+    const v = x['setor_funcional_id'];
+    return { setor: v === null || v === undefined ? null : Number(v) };
+  }
+
+  async setoresProducaoSus(
+    intervalo: { readonly inicio: string; readonly fim: string },
+    competencia: string,
+    conveniosSus: readonly number[],
+  ): Promise<(number | null)[]> {
+    if (conveniosSus.length === 0) return [];
+    const momento = 'CASE WHEN i.id IS NOT NULL THEN i.data_hora_alta ELSE at.entrada_em END';
+    const ls = await this.l.consultar(
+      `SELECT DISTINCT at.setor_funcional_id FROM conta_hospitalar c
+         JOIN atendimento at ON at.id = c.atendimento_id AND at.excluido_em IS NULL AND at.situacao <> 'cancelado'
+         LEFT JOIN internacao i ON i.atendimento_id = at.id AND i.excluido_em IS NULL
+        WHERE c.estabelecimento_id = ? AND c.excluido_em IS NULL AND c.situacao <> 'cancelada'
+          AND c.fonte_pagadora_id IN (${marcadores(conveniosSus.length)})
+          AND ${momento} >= ? AND ${momento} < DATE_ADD(?, INTERVAL 1 DAY)
+       UNION
+       SELECT DISTINCT at.setor_funcional_id FROM laudo_apac la
+         JOIN autorizacao_apac aa ON aa.laudo_apac_id = la.id AND aa.excluido_em IS NULL
+         JOIN atendimento at ON at.id = la.atendimento_id
+        WHERE la.estabelecimento_id = ? AND la.excluido_em IS NULL AND aa.situacao IN ('autorizada','encerrada')
+          AND DATE_FORMAT(aa.validade_inicio, '%Y%m') <= ? AND aa.ultima_competencia >= ?`,
+      [this.est, ...conveniosSus, intervalo.inicio, intervalo.fim, this.est, competencia, competencia],
+      { teto: 100_000 },
+    );
+    return ls.map((x) => {
+      const v = x['setor_funcional_id'];
+      return v === null || v === undefined ? null : Number(v);
+    });
+  }
+
   atendimentoLaudoApac(...a: Parameters<MontagensSusPropria['atendimentoLaudoApac']>) {
     return this.mont().atendimentoLaudoApac(...a);
   }

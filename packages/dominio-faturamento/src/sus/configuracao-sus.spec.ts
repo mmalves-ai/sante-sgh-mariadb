@@ -3,10 +3,12 @@ import type { CamposParametroSus } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import {
   decidirSetorSus,
+  decidirSetoresProducaoSus,
   normalizarParametrosSus,
   type PermissaoSetorSusVigencia,
   recusaEncerrarPermissaoSetorSus,
   recusaIncluirPermissaoSetorSus,
+  setoresPermitidosSus,
 } from './configuracao-sus.js';
 import { cnsSintetico } from './massa.spec-util.js';
 
@@ -141,5 +143,36 @@ describe('parâmetros próprios de cada instrumento SUS', () => {
       { campo: 'uf', regra: 'fora-do-instrumento' },
     ]);
     expect(normalizarParametrosSus('apac', { ...VAZIO, uf: '  ' }).campos.uf).toBeNull();
+  });
+});
+
+describe('setores do faturamento SUS: listagens e competência inteira', () => {
+  const ps = [
+    p(10, 'digitacao'),
+    p(11, 'digitacao_faturamento'),
+    p(12, 'faturamento'),
+    p(13, 'faturamento', '2025-01-01', '2025-12-31'),
+  ];
+  it('lista os setores vigentes que cobrem a ação; sem restrição devolve null', () => {
+    expect(setoresPermitidosSus(ps, { usuario: 7, acao: 'digitacao', hoje: HOJE })).toEqual([10, 11]);
+    expect(setoresPermitidosSus(ps, { usuario: 7, acao: 'faturamento', hoje: HOJE })).toEqual([11, 12]);
+    expect(setoresPermitidosSus(ps, { usuario: null, acao: 'digitacao', hoje: HOJE })).toBeNull();
+    expect(setoresPermitidosSus([], { usuario: 7, acao: 'digitacao', hoje: HOJE })).toBeNull();
+    expect(
+      setoresPermitidosSus([p(10, 'digitacao')], { usuario: 7, acao: 'faturamento', hoje: HOJE }),
+    ).toEqual([]);
+  });
+  it('a competência inteira exige a ação em todos os setores com produção', () => {
+    const d = (setores: (number | null)[], usuario: number | null = 7) =>
+      decidirSetoresProducaoSus(ps, { usuario, setores, acao: 'faturamento', hoje: HOJE });
+    expect(d([11, 12])).toBeNull();
+    expect(d([])).toBeNull();
+    expect(d([11, 10])).toBe('sus-setor-sem-permissao');
+    expect(d([13])).toBe('sus-setor-sem-permissao');
+    expect(d([11, null])).toBe('sus-setor-nao-informado');
+    expect(d([10, 99, null], null)).toBeNull();
+    expect(
+      decidirSetoresProducaoSus([], { usuario: 7, setores: [1, 2], acao: 'faturamento', hoje: HOJE }),
+    ).toBeNull();
   });
 });

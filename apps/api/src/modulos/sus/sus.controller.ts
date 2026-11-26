@@ -333,10 +333,11 @@ export class SusController {
     const s = sessaoDe(req);
     const escopo = escopoConvenios(s);
     // C1-051: as permissões do usuário por setor (o administrador da plataforma, sem id, passa sempre).
-    const permissoesSetor =
-      this.configuracaoSus && s.porta.usuario != null
-        ? await this.configuracaoSus.permissoesDoUsuario(this.contextoSus(s), s.porta.usuario)
-        : [];
+    const permissoesSetor = await ServicoConfiguracaoSus.daSessao(
+      this.configuracaoSus,
+      this.contextoSus(s),
+      s.porta.usuario,
+    );
     return {
       permissoesSetor,
       rede: s.rede,

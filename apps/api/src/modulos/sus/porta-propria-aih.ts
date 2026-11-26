@@ -301,6 +301,16 @@ export class LeiturasAihPropria {
       conds.push('t.internacao_id = ?');
       ps.push(f.registro);
     }
+    if (f.setores) {
+      // C1-051: só as internações dos setores permitidos, pelo atendimento (lista vazia: nenhuma).
+      conds.push(
+        f.setores.length
+          ? `t.internacao_id IN (SELECT i.id FROM internacao i JOIN atendimento at ON at.id = i.atendimento_id
+              WHERE at.setor_funcional_id IN (${f.setores.map(() => '?').join(', ')}))`
+          : 'FALSE',
+      );
+      ps.push(...f.setores);
+    }
     const onde = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
     const base = `FROM (${SQL_AIH}) t ${onde}`;
     const porPagina = Math.max(1, Math.min(500, Math.trunc(f.porPagina)));

@@ -79,7 +79,9 @@ import {
   resumoCriticas,
   type AcaoSetorSus,
   decidirSetorSus,
+  decidirSetoresProducaoSus,
   type PermissaoSetorSusVigencia,
+  setoresPermitidosSus,
 } from '@sgh/dominio-faturamento';
 import { ErroProblema } from '../../problema.filter.js';
 import { recusaConfiguracaoSus } from './servico-configuracao.js';
@@ -487,6 +489,7 @@ export class ServicoSus {
 
   /** `faturamento.criticarSus`: lê a produção da competência, monta pela SIGTAP dela e grava as críticas. */
   async criticar(s: SessaoSus, e: CriticarSusEntrada): Promise<ResultadoCriticaSus> {
+    await this.exigirFaturamentoDaCompetencia(s, e.competencia);
     const t0 = Date.now();
     // Etapa 2: o BPA tem a própria montagem (a produção SUS com o validador de compatibilidade); a etapa 3, a da APAC;
     // a etapa 4 registra a da AIH (registrarMontagem); os demais, a CIHA.
@@ -677,6 +680,7 @@ export class ServicoSus {
 
   async fechar(s: SessaoSus, e: FecharCompetenciaSusEntrada): Promise<CompetenciaSusResumo> {
     this.exigirEscopoTotal(s);
+    await this.exigirFaturamentoDaCompetencia(s, e.competencia);
     return this.gravar(s, async (g) => {
       const c = await this.exigirCompetencia(g, e.instrumento, e.competencia, true);
       // As críticas abertas da competência inteira (sem o escopo: o fechamento já exige todos os convênios).
@@ -751,6 +755,7 @@ export class ServicoSus {
     e: { competencia: CompetenciaSus; versao: string },
   ): Promise<ArquivoSusGerado> {
     this.exigirEscopoTotal(s);
+    await this.exigirFaturamentoDaCompetencia(s, e.competencia);
     const t0 = Date.now();
     const { m, comp } = await this.montar(s, 'ciha', e.competencia);
     if (comp.situacao !== 'aberta') throw recusa('competencia-ja-fechada');
@@ -848,6 +853,7 @@ export class ServicoSus {
    */
   async gerarBpa(s: SessaoSus, e: GerarBpaEntrada): Promise<ArquivoSusGerado> {
     this.exigirEscopoTotal(s);
+    await this.exigirFaturamentoDaCompetencia(s, e.competencia);
     const t0 = Date.now();
     const { m, comp } = await this.montarBpa(s, e.competencia);
     if (comp.situacao !== 'aberta') throw recusa('competencia-ja-fechada');
@@ -969,6 +975,7 @@ export class ServicoSus {
       const a = await l.arquivo(f.arquivo);
       if (!a || a.instrumento !== 'bpa')
         throw new ErroProblema('nao-encontrado', 404, 'Arquivo BPA não encontrado');
+      await this.exigirFaturamentoNa(s, l, a.competencia);
       return l.linhasBpa({
         arquivo: f.arquivo,
         ...(f.tipo ? { tipo: f.tipo } : {}),
@@ -1013,6 +1020,7 @@ export class ServicoSus {
     // A rota de cada instrumento tem a permissão dele: o arquivo de outro instrumento não é entregue por ela.
     if (!a || a.instrumento !== instrumento)
       throw new ErroProblema('nao-encontrado', 404, 'Arquivo não encontrado');
+    await this.exigirFaturamentoDaCompetencia(s, a.competencia);
     const conteudo = await this.armazem.ler(a.chaveObjeto);
     if (!conteudo || sha256(conteudo) !== a.hash)
       throw new ErroProblema(
@@ -1094,8 +1102,10 @@ export class ServicoSus {
   /** As APACs do estabelecimento (sem documento: o paciente pelo prontuário). */
   async listarApacs(s: SessaoSus, f: FiltroApacs): Promise<PaginaApacs> {
     this.exigirEscopoSus(s);
+    const setores = this.setoresSus(s, 'digitacao');
     return this.porta.ler(this.ctx(s), async (l) => {
       const r = await l.paginaApacs({
+        ...(setores ? { setores } : {}),
         ...(f.situacao ? { situacao: f.situacao } : {}),
         ...(f.numero ? { numero: f.numero } : {}),
         ...(f.prontuario ? { prontuario: f.prontuario } : {}),
@@ -1121,7 +1131,7 @@ export class ServicoSus {
    * C1-051: a permissão por usuário e setor além do cargo (a regra é do domínio, decidirSetorSus). O administrador da
    * plataforma (usuário sem id) passa sempre; sem permissão vigente cadastrada, vale o cargo.
    */
-  private exigirSetorSus(s: SessaoSus, setor: number | null, acao: AcaoSetorSus): void {
+  exigirSetorSus(s: SessaoSus, setor: number | null, acao: AcaoSetorSus): void {
     const r = decidirSetorSus(s.permissoesSetor ?? [], {
       usuario: s.usuario ?? null,
       setor,
@@ -1129,6 +1139,48 @@ export class ServicoSus {
       hoje: s.hoje,
     });
     if (r) throw recusaConfiguracaoSus(r);
+  }
+
+  /** C1-051: os setores em que a sessão pode a ação (o filtro das listagens); null, sem restrição. */
+  setoresSus(s: SessaoSus, acao: AcaoSetorSus): readonly number[] | null {
+    return setoresPermitidosSus(s.permissoesSetor ?? [], { usuario: s.usuario ?? null, acao, hoje: s.hoje });
+  }
+
+  /** C1-051: confere o setor do atendimento (ou da internação) antes de ler ou gravar o registro dele. */
+  async exigirSetorDe(
+    s: SessaoSus,
+    l: LeituraSus,
+    ref: { readonly tipo: 'atendimento' | 'internacao'; readonly id: number },
+    acao: AcaoSetorSus,
+  ): Promise<void> {
+    if (this.setoresSus(s, acao) === null) return;
+    const x = await l.setorSus(ref);
+    this.exigirSetorSus(s, x?.setor ?? null, acao);
+  }
+
+  /**
+   * C1-051: as operações da competência inteira (criticar, fechar, gerar, baixar e ver as linhas do arquivo) exigem a
+   * ação 'faturamento' em todos os setores com produção SUS na competência (regra do domínio).
+   */
+  async exigirFaturamentoNa(s: SessaoSus, l: LeituraSus, competencia: CompetenciaSus): Promise<void> {
+    if (this.setoresSus(s, 'faturamento') === null) return;
+    const setores = await l.setoresProducaoSus(
+      intervaloDaCompetencia(competencia),
+      competencia,
+      s.parametros.conveniosSus,
+    );
+    const r = decidirSetoresProducaoSus(s.permissoesSetor ?? [], {
+      usuario: s.usuario ?? null,
+      setores,
+      acao: 'faturamento',
+      hoje: s.hoje,
+    });
+    if (r) throw recusaConfiguracaoSus(r);
+  }
+
+  async exigirFaturamentoDaCompetencia(s: SessaoSus, competencia: CompetenciaSus): Promise<void> {
+    if (this.setoresSus(s, 'faturamento') === null) return;
+    await this.porta.ler(this.ctx(s), (l) => this.exigirFaturamentoNa(s, l, competencia));
   }
 
   async atendimentoLaudoApac(s: SessaoSus, registro: number): Promise<AtendimentoLaudoApac> {
@@ -1256,6 +1308,7 @@ export class ServicoSus {
     return this.gravar(s, async (g) => {
       const antes = await g.apac(e.apac);
       if (!antes) throw new ErroProblema('nao-encontrado', 404, 'APAC não encontrada');
+      await this.exigirSetorDe(s, g, { tipo: 'atendimento', id: antes.registro }, 'digitacao');
       if (versaoSus(antes.versao) !== e.versao) throw recusa('apac-alterada');
       let mudanca: MudancaApac;
       let r: RecusaApac | null;
@@ -1353,6 +1406,7 @@ export class ServicoSus {
    */
   async gerarApac(s: SessaoSus, e: GerarApacEntrada): Promise<ArquivoSusGerado> {
     this.exigirEscopoTotal(s);
+    await this.exigirFaturamentoDaCompetencia(s, e.competencia);
     const t0 = Date.now();
     const { m, comp } = await this.montarApac(s, e.competencia);
     if (comp.situacao !== 'aberta') throw recusa('competencia-ja-fechada');
@@ -1466,6 +1520,7 @@ export class ServicoSus {
       const a = await l.arquivo(f.arquivo);
       if (!a || a.instrumento !== 'apac')
         throw new ErroProblema('nao-encontrado', 404, 'Arquivo APAC não encontrado');
+      await this.exigirFaturamentoNa(s, l, a.competencia);
       return l.linhasApac({ arquivo: f.arquivo, pagina: f.pagina, porPagina: f.porPagina });
     });
   }

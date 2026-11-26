@@ -510,6 +510,8 @@ export interface FiltroAihsPorta {
   readonly numero?: string;
   readonly prontuario?: number;
   readonly registro?: number;
+  /** C1-051: só os atendimentos destes setores (a permissão por usuário e setor); ausente, todos. */
+  readonly setores?: readonly number[];
   readonly pagina: number;
   readonly porPagina: number;
 }
@@ -638,6 +640,8 @@ export interface FiltroApacsPorta {
   readonly numero?: string;
   readonly prontuario?: number;
   readonly competencia?: string;
+  /** C1-051: só os atendimentos destes setores (a permissão por usuário e setor); ausente, todos. */
+  readonly setores?: readonly number[];
   readonly pagina: number;
   readonly porPagina: number;
 }

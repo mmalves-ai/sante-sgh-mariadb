@@ -151,6 +151,18 @@ export class ServicoConfiguracaoSus {
     return this.porta.ler(c, async (l) => (await l.permissoes(usuario)).map(vigencia));
   }
 
+  /**
+   * C1-051: as permissões por setor que entram na sessão do faturamento SUS (o caminho do controlador). O administrador
+   * da plataforma (usuário sem id) não tem restrição; sem configuração, nenhuma.
+   */
+  static async daSessao(
+    c: ServicoConfiguracaoSus | null,
+    contexto: ContextoSus,
+    usuario: number | null | undefined,
+  ): Promise<PermissaoSetorSusVigencia[]> {
+    return c && usuario != null ? c.permissoesDoUsuario(contexto, usuario) : [];
+  }
+
   /** Os parâmetros cadastrados por instrumento (o que não tem cadastro fica de fora: vale o parâmetro geral). */
   async parametrosCadastrados(c: ContextoSus): Promise<ParametroInstrumentoSusRegistro[]> {
     return this.porta.ler(c, (l) => l.parametros());
