@@ -20,7 +20,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
@@ -66,6 +66,7 @@ export class ConsumoPadraoExameController {
 
   @Get('apoio')
   @Permissao(PERMISSOES_CONSUMO_PADRAO.ler)
+  @PermissaoOu(PERMISSOES_CONSUMO_PADRAO.lerRealizacao)
   apoio(@Req() req: RequisicaoAutorizada, @Query('busca') busca?: string) {
     return this.com(req, (p, c) => p.apoio(c, busca ?? null));
   }

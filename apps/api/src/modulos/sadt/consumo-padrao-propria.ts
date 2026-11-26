@@ -129,10 +129,20 @@ export class PortaConsumoPadraoExamePropria extends PortaEstabelecimentoPropria 
 
   // ── Leituras ─────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Locais de estoque e kits vivos do estabelecimento e, com a busca (3+ letras ou o código), os produtos ativos. */
+  /**
+   * Locais de estoque, setores executantes e kits vivos do estabelecimento e, com a busca (3+ letras ou o código), os
+   * produtos ativos. Serve às duas abas: quem só realiza (sem o catálogo) escolhe o setor e o local por aqui.
+   */
   apoio(c: ContextoPortaPropria, busca: string | null) {
     const termo = (busca ?? '').trim();
     return this.ler(c, 'apoio', async (l, est) => ({
+      setores: (
+        await l.consultar<Linha>(
+          `SELECT id, nome FROM setor_diagnostico WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL
+            ORDER BY nome LIMIT 500`,
+          [est.id],
+        )
+      ).map((x) => ({ id: num(x['id']), nome: String(x['nome']) })),
       locais: (
         await l.consultar<Linha>(
           `SELECT id, nome FROM local_estoque WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY nome LIMIT 500`,
@@ -569,6 +579,21 @@ export class PortaConsumoPadraoExamePropria extends PortaEstabelecimentoPropria 
             WHERE di.documento_estoque_id = ? ORDER BY di.sequencia, m.id`,
           [num(saida['id'])],
         );
+        // O cobrável que o motor não lançou (conta fechada, faturada ou sem item de cobrança) nunca baixa calado: a
+        // transação desfaz a baixa e o executor decide (reabrir a conta, cadastrar a cobrança ou tirar da cobrança).
+        const semConta = cobrar
+          ? grupo.filter((_, k) => {
+              const m = movs.find((v) => num(v['sequencia']) === k + 1);
+              return numOuNull(m?.['conta_hospitalar_item_id']) === null;
+            })
+          : [];
+        if (semConta.length)
+          throw new ErroOperacao(
+            409,
+            'conta-nao-lancavel',
+            'Conta não lançável',
+            `${semConta.length} produto(s) cobrável(is) não entraram na conta: a conta do atendimento não está aberta ou o produto não tem item de cobrança. Reabra a conta, cadastre a cobrança ou tire o produto da cobrança.`,
+          );
         for (const [k, b] of grupo.entries()) {
           const m = movs.find((v) => num(v['sequencia']) === k + 1);
           const itemConta = numOuNull(m?.['conta_hospitalar_item_id']);

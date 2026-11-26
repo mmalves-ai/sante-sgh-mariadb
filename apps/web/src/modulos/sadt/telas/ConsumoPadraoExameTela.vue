@@ -11,6 +11,8 @@ import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
+import { usarSessao } from '../../../casca/sessao/sessao.js';
 import {
   type ConsumoPadrao,
   lerApoioConsumo,
@@ -26,17 +28,37 @@ import ErroSadt from '../componentes/ErroSadt.vue';
 
 const { t } = useI18n();
 const cliente = useQueryClient();
-const aba = ref<'cadastro' | 'realizacao'>('cadastro');
+// Cada aba só para quem tem a permissão dela: o cadastro com o catálogo, a realização com o lançamento no setor.
+const { permissoes } = usarSessao();
+const podeCatalogo = computed(() => permissoes.value.has('sadt.catalogo.ler'));
+const podeEditarCatalogo = computed(() => permissoes.value.has('sadt.catalogo.editar'));
+const podeRealizacao = computed(() => permissoes.value.has('sadt.lancamento.ler'));
+const podeLancar = computed(() => permissoes.value.has('sadt.lancamento.lancar'));
+const rota = useRoute();
+const aba = ref<'cadastro' | 'realizacao'>(rota.path.endsWith('/realizacao') ? 'realizacao' : 'cadastro');
+watch(
+  [podeCatalogo, podeRealizacao],
+  ([cat, real]) => {
+    if (aba.value === 'cadastro' && !cat && real) aba.value = 'realizacao';
+    if (aba.value === 'realizacao' && !real && cat) aba.value = 'cadastro';
+  },
+  { immediate: true },
+);
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 
-const opcoes = useQuery({ queryKey: ['sadt', 'catalogo', 'opcoes'], queryFn: lerOpcoesCatalogo });
+const opcoes = useQuery({
+  queryKey: ['sadt', 'catalogo', 'opcoes'],
+  queryFn: lerOpcoesCatalogo,
+  enabled: podeCatalogo,
+});
 const de = (xs: readonly { id: number; nome: string }[] | undefined, vazio: string) => [
   { valor: '', rotulo: vazio },
   ...(xs ?? []).map((x) => ({ valor: String(x.id), rotulo: x.nome })),
 ];
 const exames = computed(() => de(opcoes.data.value?.exames, t('sadt.consumoPadrao.escolha')));
-const setores = computed(() => de(opcoes.data.value?.setores, t('sadt.consumoPadrao.todosSetores')));
+// Os setores vêm da leitura de apoio, que abre também a quem só realiza.
+const setores = computed(() => de(apoio.data.value?.setores, t('sadt.consumoPadrao.todosSetores')));
 const idOuNulo = (v: string) => (v ? Number(v) : null);
 const numero = (v: string) => Number(v.trim().replace(',', '.'));
 
@@ -139,7 +161,7 @@ const exameEscolhido = computed(() => idOuNulo(form.value.exame));
 const consumos = useQuery({
   queryKey: computed(() => ['sadt', 'consumo-padrao', 'lista', exameEscolhido.value]),
   queryFn: () => listarConsumosPadrao(exameEscolhido.value),
-  enabled: computed(() => exameEscolhido.value !== null),
+  enabled: computed(() => podeCatalogo.value && exameEscolhido.value !== null),
 });
 
 function limpar(): void {
@@ -247,7 +269,7 @@ const setorRealizacao = ref('');
 const pendentes = useQuery({
   queryKey: computed(() => ['sadt', 'consumo-padrao', 'pendentes', setorRealizacao.value]),
   queryFn: () => listarPendentesConsumo(idOuNulo(setorRealizacao.value)),
-  enabled: computed(() => aba.value === 'realizacao'),
+  enabled: computed(() => podeRealizacao.value && aba.value === 'realizacao'),
 });
 const itemAberto = ref<number | null>(null);
 const sugestao = useQuery({
@@ -311,6 +333,7 @@ async function realizar(): Promise<void> {
     <p>{{ t('sadt.consumoPadrao.explicacao') }}</p>
     <div role="tablist" class="abas">
       <button
+        v-if="podeCatalogo"
         role="tab"
         type="button"
         :aria-selected="aba === 'cadastro'"
@@ -320,6 +343,7 @@ async function realizar(): Promise<void> {
         {{ t('sadt.consumoPadrao.abaCadastro') }}
       </button>
       <button
+        v-if="podeRealizacao"
         role="tab"
         type="button"
         :aria-selected="aba === 'realizacao'"
@@ -332,7 +356,10 @@ async function realizar(): Promise<void> {
     <p v-if="mensagem" role="status" data-testid="consumo-mensagem">{{ mensagem }}</p>
     <ErroSadt v-if="erro" :erro="erro" />
 
-    <div v-if="aba === 'cadastro'" role="tabpanel" data-testid="consumo-cadastro">
+    <div v-if="aba === 'cadastro' && podeCatalogo" role="tabpanel" data-testid="consumo-cadastro">
+      <p v-if="!podeEditarCatalogo" role="note" data-testid="consumo-so-leitura">
+        {{ t('sadt.consumoPadrao.semPermissaoCadastro') }}
+      </p>
       <div class="linha">
         <SanteSelecao
           v-model="form.exame"
@@ -445,6 +472,7 @@ async function realizar(): Promise<void> {
       </p>
       <div class="linha">
         <SanteBotao
+          v-if="podeEditarCatalogo"
           :rotulo="t('sadt.consumoPadrao.gravar')"
           :desabilitado="!cadastroValido"
           data-testid="consumo-gravar"
@@ -487,6 +515,7 @@ async function realizar(): Promise<void> {
               @acionar="editar(c)"
             />
             <SanteBotao
+              v-if="podeEditarCatalogo"
               :rotulo="c.ativo ? t('sadt.consumoPadrao.desativar') : t('sadt.consumoPadrao.reativar')"
               variante="texto"
               @acionar="alternarAtivo(c)"
@@ -496,7 +525,7 @@ async function realizar(): Promise<void> {
       </section>
     </div>
 
-    <div v-else role="tabpanel" data-testid="consumo-realizacao">
+    <div v-else-if="aba === 'realizacao' && podeRealizacao" role="tabpanel" data-testid="consumo-realizacao">
       <div class="linha">
         <SanteSelecao
           v-model="setorRealizacao"
@@ -591,8 +620,11 @@ async function realizar(): Promise<void> {
             </tr>
           </tbody>
         </table>
+        <p v-if="!podeLancar" role="note" data-testid="consumo-sem-lancar">
+          {{ t('sadt.consumoPadrao.semPermissaoRealizar') }}
+        </p>
         <SanteBotao
-          v-if="!sugestao.data.value.baixados.length"
+          v-if="!sugestao.data.value.baixados.length && podeLancar"
           :rotulo="t('sadt.consumoPadrao.realizar')"
           :desabilitado="!podeRealizar"
           data-testid="consumo-realizar"

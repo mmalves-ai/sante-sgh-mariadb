@@ -6,6 +6,8 @@ export const mensagensConsumoPadrao = {
     'O que cada exame gasta (contraste, seringa, filme, kit), por setor executante ou para todos. Na realização, o executante confere a sugestão, ajusta o que for ajustável e o estoque baixa na hora; na conta vai só o item cobrável fora do pacote.',
   abaCadastro: 'Cadastro',
   abaRealizacao: 'Realização',
+  semPermissaoCadastro: 'O cadastro do consumo padrão fica com quem edita o catálogo de exames.',
+  semPermissaoRealizar: 'A baixa do consumo fica com quem lança no setor executante.',
   exame: 'Exame',
   setor: 'Setor executante',
   todosSetores: 'Todos os setores',
@@ -63,4 +65,6 @@ export const recusasConsumoPadrao = {
   'sem-consumo-padrao': 'O exame não tem consumo padrão ativo para o setor.',
   'baixa-manual': 'Este consumo padrão não baixa na realização: use a saída manual ao paciente.',
   'exame-cancelado': 'O exame cancelado ou recusado não baixa consumo.',
+  'conta-nao-lancavel':
+    'Há produto cobrável que não entraria na conta (conta do atendimento fechada ou produto sem cobrança): nada foi baixado. Reabra a conta, cadastre a cobrança ou tire o produto da cobrança.',
 } as const;

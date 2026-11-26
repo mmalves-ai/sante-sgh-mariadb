@@ -102,11 +102,19 @@ export const rotasSadt: RouteRecordRaw[] = [
     meta: { permissao: 'sadt.catalogo.ler' },
   },
   {
-    // F8 (05-SADT linha 22): consumo padrão de insumos por exame (cadastro e realização).
+    // F8 (05-SADT linha 22): consumo padrão de insumos por exame (cadastro e realização). Abre com o catálogo ou com o
+    // lançamento: a tela mostra só a aba que a permissão da sessão alcança.
     path: '/sadt/consumo-padrao',
     name: 'sadt.consumo-padrao',
     component: () => import('./telas/ConsumoPadraoExameTela.vue'),
-    meta: { permissao: 'sadt.catalogo.ler' },
+    meta: { permissao: 'sadt.catalogo.ler', permissaoOu: ['sadt.lancamento.ler'] },
+  },
+  {
+    // A mesma tela aberta na realização, item do menu de quem só lança no setor executante.
+    path: '/sadt/consumo-padrao/realizacao',
+    name: 'sadt.consumo-padrao.realizacao',
+    component: () => import('./telas/ConsumoPadraoExameTela.vue'),
+    meta: { permissao: 'sadt.lancamento.ler', permissaoOu: ['sadt.catalogo.ler'] },
   },
   {
     path: '/sadt/autoliberacao',

@@ -3,7 +3,8 @@
 // produto ajustável, achado pela busca de 3 letras, e um kit): o botão só libera com o exame e ao menos um item, e o item
 // repetido é recusado na hora. Na aba de realização, o exame pendente abre a sugestão; só o produto ajustável aceita
 // outra quantidade, o executante tira um item da cobrança e a baixa vai com o local de estoque escolhido; depois, o
-// consumo aparece como baixado. As rotas /api/sadt/consumo-padrao exigem o banco próprio e o E2E roda com a fonte
+// consumo aparece como baixado. Quem só lança no setor (sem o catálogo) entra pelo item "Baixa do consumo do exame", não
+// vê o cadastro e recebe a recusa da conta não lançável sem nada baixado. As rotas /api/sadt/consumo-padrao exigem o banco próprio e o E2E roda com a fonte
 // sintética (sem núcleo): as respostas são simuladas pelo Playwright com massa SINTÉTICA. O efeito no banco (baixa pelo
 // motor do estoque, lançamento na conta só do cobrável fora do pacote, nada baixado duas vezes) está em
 // apps/api/src/modulos/sadt/consumo-padrao.int.spec.ts.
@@ -91,6 +92,7 @@ test.describe('Consumo padrão do exame @C1-097 @fase7', () => {
       if (req.method() === 'GET') {
         if (caminho === 'apoio')
           return json(rota, {
+            setores: [{ id: 601, nome: 'IMAGEM SINTETICA' }],
             locais: [{ id: 41, nome: 'ESTOQUE SINTETICO DA IMAGEM' }],
             kits: [{ id: 51, nome: 'KIT SINTETICO DE PUNCAO' }],
             produtos: (url.searchParams.get('busca') ?? '').length >= 3 ? [PRODUTO] : [],
@@ -230,5 +232,80 @@ test.describe('Consumo padrão do exame @C1-097 @fase7', () => {
     });
     await expect(page.getByTestId('consumo-baixados')).toContainText(PRODUTO.nome);
     await expect(page.getByTestId('consumo-pendente-9001')).toHaveCount(0);
+  });
+
+  test('quem só lança no setor entra pela baixa, não vê o cadastro e vê a recusa da conta não lançável', async ({
+    page,
+  }) => {
+    // A sessão do laboratório sem as permissões do catálogo: sobra o lançamento do setor (sadt.lancamento.*).
+    await page.route('**/api/sessao', async (rota) => {
+      const resposta = await rota.fetch();
+      const corpo = (await resposta.json()) as { permissoes?: string[] };
+      if (Array.isArray(corpo.permissoes))
+        corpo.permissoes = corpo.permissoes.filter((p) => !p.startsWith('sadt.catalogo.'));
+      await rota.fulfill({ response: resposta, json: corpo });
+    });
+    let tentativas = 0;
+    await page.route('**/api/sadt/catalogo/opcoes**', (rota) => json(rota, { codigo: 'sem-permissao' }, 403));
+    await page.route('**/api/sadt/consumo-padrao**', (rota) => {
+      const req = rota.request();
+      const url = new URL(req.url());
+      const caminho = url.pathname.replace(/^\/api\/sadt\/consumo-padrao\/?/, '');
+      if (req.method() === 'GET') {
+        if (caminho === 'apoio')
+          return json(rota, {
+            setores: [{ id: 601, nome: 'IMAGEM SINTETICA' }],
+            locais: [{ id: 41, nome: 'ESTOQUE SINTETICO DA IMAGEM' }],
+            kits: [],
+            produtos: [],
+          });
+        if (caminho === 'pendentes')
+          return json(rota, {
+            itens: [
+              {
+                item: 9001,
+                situacao: 'em_execucao',
+                exame: 'TOMOGRAFIA SINTETICA',
+                requisicao: 'REQ-SINT-1',
+                solicitadoEm: '2026-03-15T10:00:00.000Z',
+                paciente: 'PACIENTE SINTETICO',
+                setor: 'IMAGEM SINTETICA',
+                comAtendimento: true,
+              },
+            ],
+          });
+        if (caminho === 'exames/9001') return json(rota, sugestao(false));
+        if (caminho === '') return json(rota, { codigo: 'sem-permissao' }, 403);
+        return json(rota, { codigo: 'nao-simulado' }, 500);
+      }
+      if (caminho === 'exames/9001/realizar') {
+        tentativas += 1;
+        return json(
+          rota,
+          { codigo: 'conta-nao-lancavel', status: 409, titulo: 'Conta não lançável', detalhe: 'sintético' },
+          409,
+        );
+      }
+      return json(rota, { codigo: 'nao-simulado' }, 500);
+    });
+
+    await entrar(page, 'SINT.LABORATORIO');
+    await abrirMenuInteiro(page);
+    const menu = menuPrincipal(page);
+    await expect(menu.getByRole('link', { name: 'Consumo padrão do exame', exact: true })).toHaveCount(0);
+    await menu.getByRole('link', { name: 'Baixa do consumo do exame', exact: true }).click();
+    await expect(page).toHaveURL(/\/sadt\/consumo-padrao\/realizacao$/);
+    await expect(page.getByTestId('consumo-aba-cadastro')).toHaveCount(0);
+    await expect(page.getByTestId('consumo-cadastro')).toHaveCount(0);
+    await expect(page.getByTestId('consumo-realizacao')).toBeVisible();
+    await escolher(page.getByTestId('consumo-realizacao-setor'), { rotulo: 'IMAGEM SINTETICA' });
+    await escolher(page.getByTestId('consumo-local'), { rotulo: 'ESTOQUE SINTETICO DA IMAGEM' });
+    await page.getByTestId('consumo-conferir-9001').click();
+    await expect(page.getByTestId('consumo-sugestao')).toBeVisible();
+    await page.getByTestId('consumo-realizar').click();
+    await expect(page.getByTestId('recusa-sadt')).toContainText('nada foi baixado');
+    expect(tentativas).toBe(1);
+    await expect(page.getByTestId('consumo-pendente-9001')).toBeVisible();
+    await semViolacaoAxe(page, '/sadt/consumo-padrao/realizacao');
   });
 });

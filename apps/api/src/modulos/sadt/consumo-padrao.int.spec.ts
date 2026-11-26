@@ -5,7 +5,13 @@
 //   - realização: o produto cobrável sai ao paciente e vira item da conta aberta (o movimento aponta o item), o não
 //     cobrável sai ao setor, o saldo baixa, cada produto vira `item_exame_insumo` com o movimento, o lote e o item da
 //     conta, e o exame fica realizado; a segunda realização é recusada; o ajuste do produto não ajustável é recusado
-//     sem gravar nada; o exame realizado sai da lista de pendentes.
+//     sem gravar nada; o exame realizado sai da lista de pendentes;
+//   - conta fechada: o cobrável que não entraria na conta recusa a realização inteira (conta-nao-lancavel), sem baixa
+//     nem item_exame_insumo;
+//   - pacote (lancamentoConta=false): o estoque baixa, nada vai à conta e o item fica cobravel=0;
+//   - kit: o kit abre em produtos com a quantidade do kit vezes a do consumo, no movimento e no item_exame_insumo;
+//   - setor contra o geral: o consumo do setor vale no setor dele e o geral (setor vazio) nos demais.
+// O exame sem atendimento não existe no modelo (requisicao_exame.atendimento_id é NOT NULL): não há caso a provar.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -30,6 +36,13 @@ interface Massa {
   itemA: number;
   itemB: number;
   insumoSetor: number;
+  setor2: number;
+  examePacote: number;
+  exameKit: number;
+  kit: number;
+  itemGeral: number;
+  itemPacote: number;
+  itemKit: number;
 }
 
 const nucleo = new NucleoProprio();
@@ -79,6 +92,11 @@ async function limpar(e: Escritor) {
     [`${P}%`],
   );
   await e.executar(`DELETE FROM consumo_padrao_exame WHERE exame_id IN (${exames})`, [`${P}%`]);
+  const kits = `SELECT id FROM kit_material WHERE codigo LIKE ? AND estabelecimento_id IN (${ESTS})`;
+  await e.executar(`DELETE FROM kit_material_item WHERE kit_material_id IN (${kits})`, [`${P}%`]);
+  await e.executar(`DELETE FROM kit_material WHERE codigo LIKE ? AND estabelecimento_id IN (${ESTS})`, [
+    `${P}%`,
+  ]);
   await e.executar('DELETE FROM exame WHERE codigo LIKE ?', [`${P}%`]);
   await e.executar(`DELETE FROM setor_diagnostico WHERE codigo LIKE ? AND estabelecimento_id IN (${ESTS})`, [
     `${P}%`,
@@ -263,13 +281,70 @@ async function montar(s: MassaSuprimentos, e: Escritor): Promise<Massa> {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     [est, `${P}-R1`, paciente, atendimento, setor, convenio, medico, agora, agora],
   );
-  const item = (seq: number) =>
+  const item = (seq: number, req = requisicao, ex = exame) =>
     e.inserir(
       `INSERT INTO exame_item (requisicao_exame_id, sequencia, exame_id, situacao, criado_em, versao)
        VALUES (?, ?, ?, 'solicitado', ?, 1)`,
-      [requisicao, seq, exame, agora],
+      [req, seq, ex, agora],
     );
-  return { s, hospital, exame, setor, conta, itemA: await item(1), itemB: await item(2), insumoSetor };
+  const itemA = await item(1);
+  const itemB = await item(2);
+  // O segundo setor (sem consumo próprio: vale o geral), o exame de pacote e o exame do kit.
+  const setor2 = await e.inserir(
+    `INSERT INTO setor_diagnostico (estabelecimento_id, codigo, nome, tipo, criado_em, versao)
+     VALUES (?, ?, 'IMAGEM SINTETICA DOIS', 'imagem', ?, 1)`,
+    [est, `${P}J`, agora],
+  );
+  const novoExame = (sufixo: string, nome: string) =>
+    e.inserir(
+      `INSERT INTO exame (codigo, sigla, nome, tipo_servico, tipo_resultado, modalidade_imagem_id, ativo, criado_em, versao)
+       VALUES (?, ?, ?, 'imagem', 'laudo', ?, TRUE, ?, 1)`,
+      [`${P}${sufixo}`, `${P}${sufixo}`, nome, modalidade, agora],
+    );
+  const examePacote = await novoExame('P', 'TOMOGRAFIA EM PACOTE SINTETICA');
+  const exameKit = await novoExame('K', 'PUNCAO GUIADA SINTETICA');
+  const kit = await e.inserir(
+    `INSERT INTO kit_material (estabelecimento_id, codigo, nome, tipo, ativo, criado_em, versao)
+     VALUES (?, ?, 'KIT SINTETICO DE PUNCAO', 'procedimento', TRUE, ?, 1)`,
+    [est, `${P}KIT`, agora],
+  );
+  const unidadeInsumo = Number(
+    (await e.uma<{ u: number }>('SELECT estoque_unidade_medida_id AS u FROM insumo WHERE id = ?', [
+      s.insumo,
+    ]))!.u,
+  );
+  for (const [seq, ins, un, q] of [
+    [1, insumoSetor, unidadeSetor, 2],
+    [2, s.insumo, unidadeInsumo, 1],
+  ] as const)
+    await e.executar(
+      `INSERT INTO kit_material_item (kit_material_id, sequencia, insumo_id, unidade_medida_id, quantidade, criado_em, versao)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`,
+      [kit, seq, ins, un, q, agora],
+    );
+  const requisicao2 = await e.inserir(
+    `INSERT INTO requisicao_exame (estabelecimento_id, numero, paciente_id, atendimento_id, setor_diagnostico_id,
+       fonte_pagadora_id, solicitante_profissional_id, solicitado_em, criado_em, versao)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [est, `${P}-R2`, paciente, atendimento, setor2, convenio, medico, agora, agora],
+  );
+  return {
+    s,
+    hospital,
+    exame,
+    setor,
+    conta,
+    itemA,
+    itemB,
+    insumoSetor,
+    setor2,
+    examePacote,
+    exameKit,
+    kit,
+    itemGeral: await item(1, requisicao2, exame),
+    itemPacote: await item(2, requisicao2, examePacote),
+    itemKit: await item(3, requisicao2, exameKit),
+  };
 }
 
 describe.skipIf(SEM_BANCO)('consumo padrão do exame (05-SADT linha 22): contrato de efeito', () => {
@@ -462,5 +537,133 @@ describe.skipIf(SEM_BANCO)('consumo padrão do exame (05-SADT linha 22): contrat
     expect(
       await numero('SELECT COUNT(*) AS n FROM exame_item WHERE id = ? AND realizado_em IS NULL', [m.itemB]),
     ).toBe(1);
+  });
+
+  const saldo = (insumo: number) =>
+    numero('SELECT quantidade AS n FROM saldo_estoque WHERE local_estoque_id = ? AND insumo_id = ?', [
+      m.s.localA,
+      insumo,
+    ]);
+  const itensDaConta = () =>
+    numero('SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?', [m.conta]);
+  const baixas = (item: number) =>
+    ler<{
+      insumo_id: number;
+      quantidade_consumida: string;
+      cobravel: number;
+      conta_hospitalar_item_id: number | null;
+      consumo_padrao_exame_id: number;
+      mov_quantidade: string | null;
+    }>(
+      `SELECT x.insumo_id, x.quantidade_consumida, x.cobravel, x.conta_hospitalar_item_id, x.consumo_padrao_exame_id,
+              mv.quantidade AS mov_quantidade
+         FROM item_exame_insumo x LEFT JOIN movimento_estoque mv ON mv.id = x.movimento_estoque_id
+        WHERE x.exame_item_id = ? ORDER BY x.insumo_id`,
+      [item],
+    ).then((ls) =>
+      ls.map((x) => [
+        Number(x.insumo_id),
+        Number(x.quantidade_consumida),
+        Boolean(x.cobravel),
+        x.conta_hospitalar_item_id !== null,
+        Number(x.consumo_padrao_exame_id),
+        x.mov_quantidade === null ? null : Number(x.mov_quantidade),
+      ]),
+    );
+
+  it('conta fechada: o cobrável que não entraria na conta recusa a realização inteira, sem baixa', async () => {
+    const situacao = (fechar: boolean) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-conta` }, (e) =>
+        e.executar(
+          fechar
+            ? "UPDATE conta_hospitalar SET situacao = 'fechada', fechada_em = NOW(3), fechada_por_usuario_id = ? WHERE id = ?"
+            : "UPDATE conta_hospitalar SET situacao = 'aberta', fechada_em = NULL, fechada_por_usuario_id = NULL WHERE id = ?",
+          fechar ? [m.s.usuario, m.conta] : [m.conta],
+        ),
+      );
+    const antes = [await saldo(m.s.insumo), await saldo(m.insumoSetor)];
+    const contaAntes = await itensDaConta();
+    await situacao(true);
+    try {
+      expect(await falha(porta.realizar(ctx(), m.itemB, { local: m.s.localA }))).toEqual({
+        codigo: 'conta-nao-lancavel',
+        status: 409,
+      });
+    } finally {
+      await situacao(false);
+    }
+    expect(
+      await numero('SELECT COUNT(*) AS n FROM item_exame_insumo WHERE exame_item_id = ?', [m.itemB]),
+    ).toBe(0);
+    expect([await saldo(m.s.insumo), await saldo(m.insumoSetor)]).toEqual(antes);
+    expect(await itensDaConta()).toBe(contaAntes);
+    expect(
+      await numero('SELECT COUNT(*) AS n FROM exame_item WHERE id = ? AND realizado_em IS NULL', [m.itemB]),
+    ).toBe(1);
+  });
+
+  it('setor contra o geral, pacote e kit: o que baixa, o que vai à conta e a quantidade do kit', async () => {
+    const geral = await porta.salvar(ctx(), {
+      exame: m.exame,
+      setor: null,
+      descricao: 'Tomografia, todos os setores',
+      baixaAutomatica: true,
+      lancamentoConta: true,
+      itens: [{ insumo: m.s.insumo, kit: null, quantidade: 1, ajustavel: false }],
+    });
+    const pacote = await porta.salvar(ctx(), {
+      exame: m.examePacote,
+      setor: null,
+      descricao: 'Material no preço do exame',
+      baixaAutomatica: true,
+      lancamentoConta: false,
+      itens: [{ insumo: m.s.insumo, kit: null, quantidade: 1, ajustavel: false }],
+    });
+    const comKit = await porta.salvar(ctx(), {
+      exame: m.exameKit,
+      setor: null,
+      descricao: 'Kit de punção',
+      baixaAutomatica: true,
+      lancamentoConta: true,
+      itens: [{ insumo: null, kit: m.kit, quantidade: 2, ajustavel: false }],
+    });
+    // O consumo do setor vale no setor dele, mesmo com o geral do mesmo exame; no outro setor vale o geral.
+    expect((await porta.sugestao(ctx(), m.itemB)).consumo?.id).toBe(consumo);
+    expect((await porta.sugestao(ctx(), m.itemGeral)).consumo?.id).toBe(geral.id);
+    expect((await porta.pendentes(ctx(), m.setor2)).map((p) => p.item).sort()).toEqual(
+      [m.itemGeral, m.itemPacote, m.itemKit].sort(),
+    );
+
+    const contaAntes = await itensDaConta();
+    const s0 = [await saldo(m.s.insumo), await saldo(m.insumoSetor)];
+    const g = await porta.realizar(ctx(), m.itemGeral, { local: m.s.localA });
+    expect(g).toMatchObject({ baixados: 1, itensConta: 1 });
+    expect(await baixas(m.itemGeral)).toEqual([[m.s.insumo, 1, true, true, geral.id, 1]]);
+
+    // Pacote: o estoque baixa, nada vai à conta e o item fica não cobrável.
+    const contaAntesPacote = await itensDaConta();
+    const pc = await porta.realizar(ctx(), m.itemPacote, { local: m.s.localA });
+    expect(pc).toMatchObject({ baixados: 1, itensConta: 0 });
+    expect(await baixas(m.itemPacote)).toEqual([[m.s.insumo, 1, false, false, pacote.id, 1]]);
+    expect(await itensDaConta()).toBe(contaAntesPacote);
+
+    // Kit: 2 kits de (2 seringas + 1 contraste) = 4 seringas ao setor e 2 contrastes à conta.
+    const sk = await porta.sugestao(ctx(), m.itemKit);
+    expect(sk.produtos.map((p) => [p.insumo, p.quantidade]).sort((a, b) => a[0]! - b[0]!)).toEqual(
+      [
+        [m.insumoSetor, 4],
+        [m.s.insumo, 2],
+      ].sort((a, b) => a[0]! - b[0]!),
+    );
+    const k = await porta.realizar(ctx(), m.itemKit, { local: m.s.localA });
+    expect(k).toMatchObject({ baixados: 2, itensConta: 1 });
+    expect(await baixas(m.itemKit)).toEqual(
+      [
+        [m.s.insumo, 2, true, true, comKit.id, 2],
+        [m.insumoSetor, 4, false, false, comKit.id, 4],
+      ].sort((a, b) => (a[0] as number) - (b[0] as number)),
+    );
+    expect(await itensDaConta()).toBe(contaAntes + 2);
+    expect([await saldo(m.s.insumo), await saldo(m.insumoSetor)]).toEqual([s0[0]! - 4, s0[1]! - 4]);
   });
 });

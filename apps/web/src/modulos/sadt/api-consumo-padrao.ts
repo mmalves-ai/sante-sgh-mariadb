@@ -10,6 +10,7 @@ const txt = z.string();
 const opcao = z.object({ id: n, nome: txt });
 
 const esquemaApoio = z.object({
+  setores: z.array(opcao),
   locais: z.array(opcao),
   kits: z.array(opcao),
   produtos: z.array(z.object({ id: n, codigo: txt, nome: txt })),
@@ -118,7 +119,7 @@ const esquemaRealizado = z.object({ id: n, baixados: n, itensConta: n }).passthr
 const busca = (b: string | null) =>
   b && b.trim().length >= 3 ? `?busca=${encodeURIComponent(b.trim())}` : '';
 
-/** Locais de estoque, kits e produtos ativos (produto só com 3 letras ou mais). */
+/** Setores executantes, locais de estoque, kits e produtos ativos (produto só com 3 letras ou mais). */
 export const lerApoioConsumo = (termo: string | null) => ler(`${B}/apoio${busca(termo)}`, esquemaApoio);
 export const listarConsumosPadrao = (exame: number | null) =>
   ler(`${B}${exame === null ? '' : `?exame=${exame}`}`, esquemaLista);
