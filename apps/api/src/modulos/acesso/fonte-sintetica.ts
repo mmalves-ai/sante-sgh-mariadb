@@ -3458,6 +3458,23 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     concessoes: { grupo: 'MEDICOS', opcoesGrupo: [], conselho: true },
     perfisConcedidos: ['pesquisa-clinica'],
   },
+  /**
+   * C3-012 (F7, 02-REC L37; no fim da lista para não mudar o ID sintético das outras contas): a supervisão da
+   * recepção, que consulta o contrato do convênio e abre atendimento. É quem confere na prévia das regras do plano
+   * (tela de regras do plano) se uma abertura passaria (especialidade, serviço, setor e senha). Nenhuma conta tinha
+   * as duas permissões: o faturamento edita o contrato sem abrir atendimento e o guichê abre sem ler o contrato.
+   */
+  'SINT.RECEPCAO.SUPERVISAO': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'RECEPSUP',
+      opcoesGrupo: opcoesDasPermissoes('convenio.contrato.ler', 'atendimento.atendimento.abrir'),
+    },
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */

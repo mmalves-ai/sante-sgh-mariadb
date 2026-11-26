@@ -110,10 +110,6 @@ test.describe('Senha e elegibilidade da operadora na recepção @C3-012 @fase7',
     const inicio = dataFutura();
     await page.getByTestId('rp-campo-vigenciaInicio').fill(inicio);
     await semViolacaoAxe(page, 'regras do plano com setor');
-    // A prévia confere a abertura também por especialidade, serviço e setor.
-    await expect(page.getByTestId('rp-previa-especialidade')).toBeVisible();
-    await expect(page.getByTestId('rp-previa-servico')).toBeVisible();
-    await expect(page.getByTestId('rp-previa-setor')).toBeVisible();
     await page.getByTestId('rp-gravar').click();
     await expect(tela.getByRole('columnheader', { name: 'Especialidade, serviço e setor' })).toBeVisible();
     await expect(
@@ -132,6 +128,25 @@ test.describe('Senha e elegibilidade da operadora na recepção @C3-012 @fase7',
       exigeSenhaAutorizacao: true,
       vigenciaInicio: inicio,
     });
+    expect(externas).toEqual([]);
+  });
+
+  test('a supervisão da recepção confere a abertura na prévia por especialidade, serviço e setor; axe', async ({
+    page,
+  }) => {
+    // A prévia é a crítica da abertura (POST .../previa pede atendimento.atendimento.abrir): quem só edita o contrato
+    // não a vê; a supervisão da recepção, que lê o contrato e abre atendimento, a vê com o alcance da regra.
+    const externas = vigiarExternas(page);
+    await simularRegrasPlano(page);
+    await entrar(page, 'SINT.RECEPCAO.SUPERVISAO');
+    await page.goto('/recepcao/atendimento/regras-plano');
+    await escolher(page.getByTestId('rp-fonte'), { rotulo: /alfa/i });
+    await expect(page.getByTestId('rp-previa-especialidade')).toBeVisible();
+    await expect(page.getByTestId('rp-previa-servico')).toBeVisible();
+    await expect(page.getByTestId('rp-previa-setor')).toBeVisible();
+    await expect(page.getByTestId('rp-previa-senhaAutorizacao')).toBeVisible();
+    await expect(page.getByTestId('rp-gravar')).toHaveCount(0);
+    await semViolacaoAxe(page, 'prévia das regras do plano');
     expect(externas).toEqual([]);
   });
 
