@@ -235,7 +235,8 @@ test.describe('@C2-046 produção hospitalar mensal', () => {
     const externas = vigiarExternas(page);
     const api = simular(page);
     await api.ligar();
-    await entrar(page, 'SINT.ADMIN');
+    // A produção hospitalar mensal é da diretoria (opção 2517, Censo/estatísticas hospitalar mensal → internacao.censo.ler).
+    await entrar(page, 'SINT.DIRETORIA');
 
     await page.goto('/internacao/producao-hospitalar');
     await expect(page.getByTestId('tela-producao-hospitalar')).toBeVisible();

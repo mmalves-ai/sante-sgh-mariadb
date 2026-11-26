@@ -191,12 +191,15 @@ test.describe('@C2-073 registro oncológico e radioterapia', () => {
     await page.getByTestId('onco-busca-topografia').getByRole('textbox').fill('C3');
     await page.getByTestId('onco-escolher-topografia-C34.1').click();
     await page.getByTestId('onco-diagnosticado-em').getByRole('textbox').fill('01/10/2026');
+    // A data só vale ao sair do campo (o SanteData confirma no blur ou no Enter).
+    await page.getByTestId('onco-diagnosticado-em').getByRole('textbox').press('Tab');
     await expect(page.getByTestId('onco-erros-tumor')).toContainText('não é do sítio do CID');
     await page.getByTestId('onco-busca-topografia').getByRole('textbox').fill('C50');
     await page.getByTestId('onco-escolher-topografia-C50.4').click();
     await page.getByTestId('onco-busca-morfologia').getByRole('textbox').fill('8500');
     await page.getByTestId('onco-escolher-morfologia-M8500/2').click();
     await page.getByTestId('onco-diagnosticado-em').getByRole('textbox').fill('01/10/2026');
+    await page.getByTestId('onco-diagnosticado-em').getByRole('textbox').press('Tab');
     await escolher(page.getByLabel('Lateralidade'), { rotulo: 'Esquerda' });
     await expect(page.getByTestId('onco-erros-tumor')).toContainText('não combina com o CID');
     await expect(page.getByTestId('onco-gravar-tumor')).toBeDisabled();
