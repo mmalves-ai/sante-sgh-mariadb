@@ -61,6 +61,10 @@ const achadas = ref<{ id: number; descricao: string }[] | null>(null);
 const CAMPOS_SIMPLES = CAMPOS_OPCAO.filter(
   (c) => c !== 'povoIndigena' && c !== 'racaCor' && c !== 'idiomaIndigena' && c !== 'orientacaoSexual',
 );
+/** Sem a permissão de ver dado sensível (LGPD art. 5º II), a religião não vem do servidor e não aparece. */
+const camposSimples = computed(() =>
+  dados.value?.sensivelRestrito ? CAMPOS_SIMPLES.filter((c) => c !== 'religiao') : CAMPOS_SIMPLES,
+);
 
 const pedeEtnia = computed(() => (dados.value ? exigeEtnia(form.value.racaCor || null, dados.value) : false));
 const gravacao = computed<GravacaoDemografia>(() => {
@@ -244,19 +248,25 @@ async function encerrar(v: Vulnerabilidade): Promise<void> {
               {{ t('demografia.nomeSocialSemUso') }}</template
             >
           </dd>
-          <dt>{{ t('demografia.campos.racaCor') }}</dt>
-          <dd>{{ descricao('racaCor') }}</dd>
-          <template v-if="dados.povoIndigena">
-            <dt>{{ t('demografia.campos.povoIndigena') }}</dt>
-            <dd>{{ descricao('povoIndigena') }}</dd>
+          <template v-if="dados.sensivelRestrito">
+            <dt>{{ t('demografia.sensivel.titulo') }}</dt>
+            <dd data-testid="demografia-sensivel-restrito">{{ t('demografia.sensivel.restrito') }}</dd>
           </template>
-          <template v-if="dados.idiomaIndigena">
-            <dt>{{ t('demografia.campos.idiomaIndigena') }}</dt>
-            <dd>{{ descricao('idiomaIndigena') }}</dd>
+          <template v-else>
+            <dt>{{ t('demografia.campos.racaCor') }}</dt>
+            <dd>{{ descricao('racaCor') }}</dd>
+            <template v-if="dados.povoIndigena">
+              <dt>{{ t('demografia.campos.povoIndigena') }}</dt>
+              <dd>{{ descricao('povoIndigena') }}</dd>
+            </template>
+            <template v-if="dados.idiomaIndigena">
+              <dt>{{ t('demografia.campos.idiomaIndigena') }}</dt>
+              <dd>{{ descricao('idiomaIndigena') }}</dd>
+            </template>
+            <dt>{{ t('demografia.campos.orientacaoSexual') }}</dt>
+            <dd>{{ descricao('orientacaoSexual') }}</dd>
           </template>
-          <dt>{{ t('demografia.campos.orientacaoSexual') }}</dt>
-          <dd>{{ descricao('orientacaoSexual') }}</dd>
-          <template v-for="c in CAMPOS_SIMPLES" :key="c">
+          <template v-for="c in camposSimples" :key="c">
             <dt>{{ t(`demografia.campos.${c}`) }}</dt>
             <dd>{{ descricao(c) }}</dd>
           </template>
@@ -282,36 +292,41 @@ async function encerrar(v: Vulnerabilidade): Promise<void> {
           :rotulo="t('demografia.campos.identidadeGenero')"
           :opcoes="opcoesDe('identidadeGenero')"
         />
-        <SanteSelecao
-          v-model="form.racaCor"
-          :rotulo="t('demografia.campos.racaCor')"
-          :opcoes="opcoesDe('racaCor')"
-        />
-        <template v-if="pedeEtnia">
+        <p v-if="dados.sensivelRestrito" class="ajuda" data-testid="demografia-sensivel-mantido">
+          {{ t('demografia.sensivel.mantido') }}
+        </p>
+        <template v-else>
           <SanteSelecao
-            v-model="form.povoIndigena"
-            :rotulo="t('demografia.campos.povoIndigena')"
-            obrigatorio
-            :opcoes="opcoesDe('povoIndigena')"
+            v-model="form.racaCor"
+            :rotulo="t('demografia.campos.racaCor')"
+            :opcoes="opcoesDe('racaCor')"
           />
-          <p v-if="dados.opcoes.povoIndigena.length === 0" class="ajuda">{{ t('demografia.semPovos') }}</p>
+          <template v-if="pedeEtnia">
+            <SanteSelecao
+              v-model="form.povoIndigena"
+              :rotulo="t('demografia.campos.povoIndigena')"
+              obrigatorio
+              :opcoes="opcoesDe('povoIndigena')"
+            />
+            <p v-if="dados.opcoes.povoIndigena.length === 0" class="ajuda">{{ t('demografia.semPovos') }}</p>
+            <SanteSelecao
+              v-model="form.idiomaIndigena"
+              :rotulo="t('demografia.campos.idiomaIndigena')"
+              :opcoes="opcoesDe('idiomaIndigena')"
+            />
+            <p v-if="dados.opcoes.idiomaIndigena.length === 0" class="ajuda">
+              {{ t('demografia.semIdiomas') }}
+            </p>
+          </template>
           <SanteSelecao
-            v-model="form.idiomaIndigena"
-            :rotulo="t('demografia.campos.idiomaIndigena')"
-            :opcoes="opcoesDe('idiomaIndigena')"
+            v-model="form.orientacaoSexual"
+            :rotulo="t('demografia.campos.orientacaoSexual')"
+            :opcoes="opcoesDe('orientacaoSexual')"
           />
-          <p v-if="dados.opcoes.idiomaIndigena.length === 0" class="ajuda">
-            {{ t('demografia.semIdiomas') }}
-          </p>
+          <p class="ajuda">{{ t('demografia.orientacaoAjuda') }}</p>
         </template>
         <SanteSelecao
-          v-model="form.orientacaoSexual"
-          :rotulo="t('demografia.campos.orientacaoSexual')"
-          :opcoes="opcoesDe('orientacaoSexual')"
-        />
-        <p class="ajuda">{{ t('demografia.orientacaoAjuda') }}</p>
-        <SanteSelecao
-          v-for="c in CAMPOS_SIMPLES.filter((x) => x !== 'identidadeGenero')"
+          v-for="c in camposSimples.filter((x) => x !== 'identidadeGenero')"
           :key="c"
           v-model="form[c]"
           :rotulo="t(`demografia.campos.${c}`)"
@@ -350,106 +365,111 @@ async function encerrar(v: Vulnerabilidade): Promise<void> {
         </div>
       </form>
 
-      <!-- ── vulnerabilidades: vigentes primeiro, encerradas no histórico ── -->
-      <h3 id="sec-vulnerabilidade">{{ t('demografia.vulnerabilidade.titulo') }}</h3>
-      <p v-if="dados.vulnerabilidades.length === 0">{{ t('demografia.vulnerabilidade.nenhuma') }}</p>
-      <table v-else data-testid="vulnerabilidades-paciente">
-        <caption>
-          {{
-            t('demografia.vulnerabilidade.legenda')
-          }}
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">{{ t('demografia.vulnerabilidade.condicao') }}</th>
-            <th scope="col">{{ t('demografia.vulnerabilidade.declaradaEm') }}</th>
-            <th scope="col">{{ t('demografia.vulnerabilidade.informante') }}</th>
-            <th scope="col">{{ t('demografia.vulnerabilidade.situacao') }}</th>
-            <th v-if="podeEditar" scope="col">{{ t('demografia.vulnerabilidade.acoes') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="v in dados.vulnerabilidades"
-            :key="v.id"
-            :data-situacao="v.vigente ? 'vigente' : 'encerrada'"
-          >
-            <td>{{ v.condicao.descricao }}</td>
-            <td>{{ dataBr(v.declaradaEm) }}</td>
-            <td>
-              {{ t(`demografia.vulnerabilidade.informantes.${v.informanteTipo}`) }}
-              <template v-if="v.informanteNome">({{ v.informanteNome }})</template>
-            </td>
-            <td>
-              {{
-                v.vigente
-                  ? t('demografia.vulnerabilidade.vigente')
-                  : `${t('demografia.vulnerabilidade.encerrada')} ${dataBr(v.fim)}`
-              }}
-            </td>
-            <td v-if="podeEditar">
-              <template v-if="v.vigente">
-                <label
-                  >{{ t('demografia.vulnerabilidade.dataFim') }}
-                  <input v-model="fins[v.id]" type="date" :min="v.declaradaEm" :max="dados.hoje"
-                /></label>
-                <button type="button" :disabled="!fins[v.id]" @click="encerrar(v)">
-                  {{ t('demografia.vulnerabilidade.encerrar') }}
-                </button>
-              </template>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <form
-        v-if="podeEditar && dados.opcoes.condicoesVulnerabilidade.length > 0"
-        class="bloco"
-        data-testid="nova-vulnerabilidade"
-        @submit.prevent="declarar"
-      >
-        <SanteSelecao
-          v-model="nova.condicao"
-          :rotulo="t('demografia.vulnerabilidade.condicao')"
-          obrigatorio
-          :opcoes="[
-            { valor: 0, rotulo: t('demografia.naoInformado'), desabilitada: true },
-            ...dados.opcoes.condicoesVulnerabilidade.map((o) => ({ valor: o.id, rotulo: o.descricao })),
-          ]"
-        />
-        <label
-          >{{ t('demografia.vulnerabilidade.declaradaEm') }}
-          <input v-model="nova.declaradaEm" type="date" :max="dados.hoje" required
-        /></label>
-        <SanteSelecao
-          v-model="nova.informanteTipo"
-          :rotulo="t('demografia.vulnerabilidade.informante')"
-          :opcoes="
-            dados.opcoes.informantes.map((i) => ({
-              valor: i,
-              rotulo: t(`demografia.vulnerabilidade.informantes.${i}`),
-            }))
-          "
-        />
-        <label v-if="pedeNomeInformante"
-          >{{ t('demografia.vulnerabilidade.informanteNome') }}
-          <input v-model="nova.informanteNome" maxlength="150"
-        /></label>
-        <ul v-if="pendenciasVulnerabilidade.length && nova.condicao" class="pendencias">
-          <li v-for="p in pendenciasVulnerabilidade" :key="p">{{ p }}</li>
-        </ul>
-        <button type="submit" :disabled="!podeDeclarar">
-          {{ t('demografia.vulnerabilidade.declarar') }}
-        </button>
-      </form>
+      <p v-if="dados.sensivelRestrito" data-testid="declaracoes-sensiveis-restritas">
+        {{ t('demografia.sensivel.declaracoes') }}
+      </p>
+      <template v-else>
+        <!-- ── vulnerabilidades: vigentes primeiro, encerradas no histórico ── -->
+        <h3 id="sec-vulnerabilidade">{{ t('demografia.vulnerabilidade.titulo') }}</h3>
+        <p v-if="dados.vulnerabilidades.length === 0">{{ t('demografia.vulnerabilidade.nenhuma') }}</p>
+        <table v-else data-testid="vulnerabilidades-paciente">
+          <caption>
+            {{
+              t('demografia.vulnerabilidade.legenda')
+            }}
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">{{ t('demografia.vulnerabilidade.condicao') }}</th>
+              <th scope="col">{{ t('demografia.vulnerabilidade.declaradaEm') }}</th>
+              <th scope="col">{{ t('demografia.vulnerabilidade.informante') }}</th>
+              <th scope="col">{{ t('demografia.vulnerabilidade.situacao') }}</th>
+              <th v-if="podeEditar" scope="col">{{ t('demografia.vulnerabilidade.acoes') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="v in dados.vulnerabilidades"
+              :key="v.id"
+              :data-situacao="v.vigente ? 'vigente' : 'encerrada'"
+            >
+              <td>{{ v.condicao.descricao }}</td>
+              <td>{{ dataBr(v.declaradaEm) }}</td>
+              <td>
+                {{ t(`demografia.vulnerabilidade.informantes.${v.informanteTipo}`) }}
+                <template v-if="v.informanteNome">({{ v.informanteNome }})</template>
+              </td>
+              <td>
+                {{
+                  v.vigente
+                    ? t('demografia.vulnerabilidade.vigente')
+                    : `${t('demografia.vulnerabilidade.encerrada')} ${dataBr(v.fim)}`
+                }}
+              </td>
+              <td v-if="podeEditar">
+                <template v-if="v.vigente">
+                  <label
+                    >{{ t('demografia.vulnerabilidade.dataFim') }}
+                    <input v-model="fins[v.id]" type="date" :min="v.declaradaEm" :max="dados.hoje"
+                  /></label>
+                  <button type="button" :disabled="!fins[v.id]" @click="encerrar(v)">
+                    {{ t('demografia.vulnerabilidade.encerrar') }}
+                  </button>
+                </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <form
+          v-if="podeEditar && dados.opcoes.condicoesVulnerabilidade.length > 0"
+          class="bloco"
+          data-testid="nova-vulnerabilidade"
+          @submit.prevent="declarar"
+        >
+          <SanteSelecao
+            v-model="nova.condicao"
+            :rotulo="t('demografia.vulnerabilidade.condicao')"
+            obrigatorio
+            :opcoes="[
+              { valor: 0, rotulo: t('demografia.naoInformado'), desabilitada: true },
+              ...dados.opcoes.condicoesVulnerabilidade.map((o) => ({ valor: o.id, rotulo: o.descricao })),
+            ]"
+          />
+          <label
+            >{{ t('demografia.vulnerabilidade.declaradaEm') }}
+            <input v-model="nova.declaradaEm" type="date" :max="dados.hoje" required
+          /></label>
+          <SanteSelecao
+            v-model="nova.informanteTipo"
+            :rotulo="t('demografia.vulnerabilidade.informante')"
+            :opcoes="
+              dados.opcoes.informantes.map((i) => ({
+                valor: i,
+                rotulo: t(`demografia.vulnerabilidade.informantes.${i}`),
+              }))
+            "
+          />
+          <label v-if="pedeNomeInformante"
+            >{{ t('demografia.vulnerabilidade.informanteNome') }}
+            <input v-model="nova.informanteNome" maxlength="150"
+          /></label>
+          <ul v-if="pendenciasVulnerabilidade.length && nova.condicao" class="pendencias">
+            <li v-for="p in pendenciasVulnerabilidade" :key="p">{{ p }}</li>
+          </ul>
+          <button type="submit" :disabled="!podeDeclarar">
+            {{ t('demografia.vulnerabilidade.declarar') }}
+          </button>
+        </form>
 
-      <!-- ── doenças crônicas referidas: mesma forma, lista própria ── -->
-      <CondicoesCronicasPaciente
-        :id-paciente="idPaciente"
-        :pode-editar="podeEditar"
-        :dados="dados"
-        @alterado="cronicaAlterada"
-        @erro="(e) => (erro = e)"
-      />
+        <!-- ── doenças crônicas referidas: mesma forma, lista própria ── -->
+        <CondicoesCronicasPaciente
+          :id-paciente="idPaciente"
+          :pode-editar="podeEditar"
+          :dados="dados"
+          @alterado="cronicaAlterada"
+          @erro="(e) => (erro = e)"
+        />
+      </template>
     </template>
   </section>
 </template>

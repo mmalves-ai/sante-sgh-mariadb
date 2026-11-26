@@ -19,9 +19,11 @@ import {
   errosDemografia,
   errosVulnerabilidade,
   INFORMANTES_VULNERABILIDADE,
+  manterSensiveisGravados,
   PAPEIS_REPRESENTANTE,
   type PapelResponsavel,
   recusaFimVulnerabilidade,
+  restringirSensiveisDemografia,
 } from '@sgh/dominio-cadastro';
 import {
   type ContextoOperacao,
@@ -237,6 +239,8 @@ export interface DemografiaPaciente {
   };
   vulnerabilidades: VulnerabilidadePaciente[];
   condicoesCronicas: CondicaoCronicaPaciente[];
+  /** Sem `cadastro.paciente.verSensivel`: os dados sensíveis vêm nulos e as declarações vazias (LGPD art. 5º II). */
+  sensivelRestrito: boolean;
 }
 
 // ── Leitura do que está gravado (na transação de quem usa) ──
@@ -340,14 +344,16 @@ const esquemaDemografia = z
   .strict();
 export type EntradaDemografia = z.infer<typeof esquemaDemografia>;
 
-const operacaoGravarDemografia = (trilha: RegistroTrilhaTela) =>
+const operacaoGravarDemografia = (trilha: RegistroTrilhaTela, verSensivel: boolean) =>
   definirOperacao({
     nome: 'cadastro.gravar-demografia-paciente',
     tabelas: ['pessoa_fisica', 'paciente'],
     entrada: esquemaDemografia,
     acao: 'alteracao',
-    async gravar(tx, e) {
-      const g = await gravado(tx, e.paciente);
+    async gravar(tx, pedido) {
+      const g = await gravado(tx, pedido.paciente);
+      // Quem não vê dado sensível não o recebeu na tela: o gravado continua, nunca é apagado por esse perfil.
+      const e = manterSensiveisGravados(pedido, g.ids, verSensivel);
       const marcas = {} as Record<CampoVocabulario, boolean | null>;
       for (const v of VOCABULARIOS) marcas[v.campo] = await conferirOpcao(tx, v, e[v.campo], g.ids[v.campo]);
       const nomeSocial = (e.nomeSocial ?? '').trim().replace(/\s+/g, ' ') || null;
@@ -594,7 +600,7 @@ export class DemografiaPacientePropria {
   }
 
   /** O que está gravado, os vocabulários em uso (com a opção gravada, mesmo desativada) e as vulnerabilidades. */
-  async demografia(c: ContextoPorta, paciente: number): Promise<DemografiaPaciente> {
+  async demografia(c: ContextoPorta, paciente: number, verSensivel: boolean): Promise<DemografiaPaciente> {
     return this.ler(c, async (l) => {
       const g = await gravado(l, paciente);
       const opcoes = {} as DemografiaPaciente['opcoes'];
@@ -639,7 +645,7 @@ export class DemografiaPacientePropria {
               'SELECT id, COALESCE(descricao_hospital, descricao) AS d FROM ocupacao_cbo WHERE id = ?',
               [g.ids.ocupacao],
             );
-      return {
+      const tudo = {
         paciente,
         hoje: g.hoje,
         nome: g.nome,
@@ -659,9 +665,10 @@ export class DemografiaPacientePropria {
         ocupacao: ocupacao ? { id: Number(ocupacao['id']), descricao: String(ocupacao['d']) } : null,
         temRepresentanteVigente: await temRepresentante(l, paciente),
         opcoes,
-        vulnerabilidades: await declaracoes(l, VULNERABILIDADE, paciente),
-        condicoesCronicas: await declaracoes(l, CONDICAO_CRONICA, paciente),
+        vulnerabilidades: verSensivel ? await declaracoes(l, VULNERABILIDADE, paciente) : [],
+        condicoesCronicas: verSensivel ? await declaracoes(l, CONDICAO_CRONICA, paciente) : [],
       };
+      return restringirSensiveisDemografia(tudo, verSensivel);
     });
   }
 
@@ -687,8 +694,13 @@ export class DemografiaPacientePropria {
     };
   }
 
-  gravar(c: ContextoPorta, e: EntradaDemografia, t: RegistroTrilhaTela): Promise<number> {
-    return this.executar(c, operacaoGravarDemografia(t) as never, e, t);
+  gravar(
+    c: ContextoPorta,
+    e: EntradaDemografia,
+    t: RegistroTrilhaTela,
+    verSensivel: boolean,
+  ): Promise<number> {
+    return this.executar(c, operacaoGravarDemografia(t, verSensivel) as never, e, t);
   }
 
   declararVulnerabilidade(

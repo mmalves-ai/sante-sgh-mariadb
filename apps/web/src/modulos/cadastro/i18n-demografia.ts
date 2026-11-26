@@ -24,6 +24,13 @@ export const mensagensDemografia = {
   },
   orientacaoAjuda: 'Pergunta opcional: a pessoa pode não querer declarar (dado sensível, LGPD).',
   semIdiomas: 'A tabela de línguas indígenas ainda não foi carregada neste ambiente.',
+  sensivel: {
+    titulo: 'Dados sensíveis',
+    restrito: 'Restrito ao seu perfil (raça/cor, etnia, língua indígena, religião e orientação sexual).',
+    mantido: 'Os dados sensíveis não aparecem para o seu perfil e continuam como estão gravados.',
+    declaracoes:
+      'Vulnerabilidades e doenças crônicas referidas: restritas ao seu perfil (dado sensível, LGPD).',
+  },
   cronica: {
     titulo: 'Doenças crônicas referidas',
     legenda: 'Doenças crônicas declaradas no cadastro, vigentes e encerradas',

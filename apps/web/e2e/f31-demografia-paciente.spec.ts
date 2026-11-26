@@ -37,7 +37,7 @@ interface Pedido {
 
 const op = (id: number, descricao: string, marca = false) => ({ id, descricao, marca });
 
-async function simular(page: Page, pedidos: Pedido[]): Promise<void> {
+async function simular(page: Page, pedidos: Pedido[], restrito = false): Promise<void> {
   const gravado: Record<string, unknown> = {
     usaNomeSocial: false,
     nomeSocial: null,
@@ -93,6 +93,19 @@ async function simular(page: Page, pedidos: Pedido[]): Promise<void> {
         },
         vulnerabilidades,
         condicoesCronicas: cronicas,
+        sensivelRestrito: restrito,
+        // Sem a permissão de ver dado sensível o servidor manda os sensíveis nulos e as declarações vazias.
+        ...(restrito
+          ? {
+              racaCor: null,
+              povoIndigena: null,
+              idiomaIndigena: null,
+              religiao: null,
+              orientacaoSexual: null,
+              vulnerabilidades: [],
+              condicoesCronicas: [],
+            }
+          : {}),
       });
     const corpo = (req.postDataJSON() ?? {}) as Record<string, unknown>;
     pedidos.push({ metodo: req.method(), caminho: `pacientes/${PACIENTE}/demografia`, corpo });
@@ -386,6 +399,45 @@ test.describe('@F3.1 @F3.1-07 dados demográficos do paciente', () => {
       metodo: 'POST',
       caminho: `pacientes/${PACIENTE}/condicoes-cronicas/800/encerrar`,
       corpo: { fim: '2026-11-20' },
+    });
+  });
+
+  test('@C1-099 dado sensível restrito ao perfil: sem raça/cor, religião, orientação nem declarações; axe', async ({
+    page,
+  }) => {
+    const pedidos: Pedido[] = [];
+    await entrar(page, 'SINT.RECEPCAO');
+    await simular(page, pedidos, true);
+
+    await page.goto(`/cadastros/pacientes/${PACIENTE}`);
+    const bloco = page.getByTestId('demografia-paciente');
+    const leitura = bloco.getByTestId('demografia-leitura');
+    await expect(leitura.getByTestId('demografia-sensivel-restrito')).toContainText('Restrito ao seu perfil');
+    await expect(leitura).not.toContainText('Orientação sexual');
+    await expect(leitura).not.toContainText('Religião');
+    await expect(bloco.getByTestId('declaracoes-sensiveis-restritas')).toBeVisible();
+    await expect(bloco.getByTestId('nova-vulnerabilidade')).toHaveCount(0);
+    await expect(bloco.getByTestId('vulnerabilidades-paciente')).toHaveCount(0);
+    await semViolacaoAxe(page, `/cadastros/pacientes/${PACIENTE} (demografia restrita)`);
+
+    // A edição não mostra os sensíveis e diz que eles continuam como estão gravados.
+    await bloco.getByTestId('editar-demografia').click();
+    const form = bloco.getByTestId('form-demografia');
+    await expect(form.getByTestId('demografia-sensivel-mantido')).toBeVisible();
+    await expect(form.getByRole('combobox', { name: 'Raça/cor' })).toHaveCount(0);
+    await expect(form.getByRole('combobox', { name: 'Orientação sexual' })).toHaveCount(0);
+    await expect(form.getByRole('combobox', { name: 'Religião' })).toHaveCount(0);
+    await escolher(form.getByRole('combobox', { name: 'Situação familiar' }), {
+      rotulo: 'VIVE SO SINTETICO',
+    });
+    await form.getByRole('button', { name: 'Gravar dados demográficos' }).click();
+    await expect(bloco.getByRole('status')).toContainText('Dados demográficos gravados.');
+    const put = pedidos.find((x) => x.metodo === 'PUT')!;
+    expect(put.corpo).toMatchObject({
+      situacaoFamiliar: 111,
+      racaCor: null,
+      religiao: null,
+      orientacaoSexual: null,
     });
   });
 });

@@ -56,6 +56,11 @@ export type Demografia = Record<CampoOpcao, number | null> & {
   vulnerabilidades: Vulnerabilidade[];
   /** Doenças crônicas referidas no cadastro (declaração, não diagnóstico), com a mesma forma da vulnerabilidade. */
   condicoesCronicas: Vulnerabilidade[];
+  /**
+   * Sem `cadastro.paciente.verSensivel` (LGPD art. 5º II): raça/cor, povo e língua indígena, religião e orientação
+   * sexual vêm nulos, as declarações vazias, e a gravação mantém o que está no banco.
+   */
+  sensivelRestrito: boolean;
 };
 export type GravacaoDemografia = Record<CampoOpcao, number | null> & {
   usaNomeSocial: boolean;

@@ -4,8 +4,10 @@ import {
   type DemografiaConferida,
   errosDemografia,
   errosVulnerabilidade,
+  manterSensiveisGravados,
   nomeDeTratamento,
   recusaFimVulnerabilidade,
+  restringirSensiveisDemografia,
 } from './demografia.js';
 
 const base: DemografiaConferida = {
@@ -144,5 +146,55 @@ describe('condição de vulnerabilidade do paciente', () => {
     expect(recusaFimVulnerabilidade('2026-11-20', '2026-11-19', HOJE)).toBe('fim');
     expect(recusaFimVulnerabilidade('2026-11-20', '2026-11-25', HOJE)).toBe('fim');
     expect(recusaFimVulnerabilidade('2026-11-20', '', HOJE)).toBe('fim');
+  });
+});
+
+describe('dados sensíveis do bloco demográfico (LGPD art. 5º II)', () => {
+  const lido = {
+    paciente: 7,
+    identidadeGenero: 2,
+    racaCor: 5,
+    povoIndigena: 11,
+    idiomaIndigena: 3,
+    religiao: 4,
+    orientacaoSexual: 6,
+    situacaoFamiliar: 1,
+    vulnerabilidades: [{ id: 1 }],
+    condicoesCronicas: [{ id: 2 }],
+  };
+
+  it('quem vê dado sensível recebe tudo, sem a marca de restrito', () => {
+    expect(restringirSensiveisDemografia(lido, true)).toEqual({ ...lido, sensivelRestrito: false });
+  });
+
+  it('quem não vê recebe os sensíveis nulos e as declarações vazias, com a marca de restrito', () => {
+    const r = restringirSensiveisDemografia(lido, false);
+    expect(r).toMatchObject({
+      racaCor: null,
+      povoIndigena: null,
+      idiomaIndigena: null,
+      religiao: null,
+      orientacaoSexual: null,
+      vulnerabilidades: [],
+      condicoesCronicas: [],
+      sensivelRestrito: true,
+    });
+    // O que não é sensível continua (a identidade de gênero guia o nome social).
+    expect(r).toMatchObject({ paciente: 7, identidadeGenero: 2, situacaoFamiliar: 1 });
+    expect(lido.racaCor).toBe(5);
+  });
+
+  it('a gravação sem a permissão mantém os sensíveis gravados e ignora o que veio no pedido', () => {
+    const gravados = { racaCor: 5, povoIndigena: 11, idiomaIndigena: 3, religiao: 4, orientacaoSexual: 6 };
+    const pedido = {
+      racaCor: null,
+      povoIndigena: null,
+      idiomaIndigena: 9,
+      religiao: null,
+      orientacaoSexual: 1,
+      escolaridade: 8,
+    };
+    expect(manterSensiveisGravados(pedido, gravados, false)).toEqual({ ...gravados, escolaridade: 8 });
+    expect(manterSensiveisGravados(pedido, gravados, true)).toEqual(pedido);
   });
 });

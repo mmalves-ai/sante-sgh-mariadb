@@ -119,3 +119,53 @@ export function errosVulnerabilidade(
 /** O fim da condição não é futuro nem anterior à declaração. */
 export const recusaFimVulnerabilidade = (declaradaEm: string, fim: string, hoje: string): 'fim' | null =>
   !DATA.test(fim) || fim > hoje || fim < declaradaEm ? 'fim' : null;
+
+/**
+ * Dados sensíveis do bloco demográfico (LGPD, art. 5º, II: origem racial ou étnica, convicção religiosa, vida
+ * sexual e saúde). Só saem para quem tem `cadastro.paciente.verSensivel`, como os sensíveis da ficha. A
+ * identidade de gênero fica de fora: ela guia o nome social, que todo atendimento precisa usar.
+ */
+export const CAMPOS_SENSIVEIS_DEMOGRAFIA = [
+  'racaCor',
+  'povoIndigena',
+  'idiomaIndigena',
+  'religiao',
+  'orientacaoSexual',
+] as const;
+export type CampoSensivelDemografia = (typeof CAMPOS_SENSIVEIS_DEMOGRAFIA)[number];
+
+/**
+ * A leitura para quem não vê dado sensível: os campos sensíveis vêm nulos, as declarações de vulnerabilidade e de
+ * doença crônica vêm vazias, e `sensivelRestrito` diz à tela que o bloco está restrito ao perfil (não "vazio").
+ */
+export function restringirSensiveisDemografia<
+  T extends Record<CampoSensivelDemografia, unknown> & {
+    vulnerabilidades: readonly unknown[];
+    condicoesCronicas: readonly unknown[];
+  },
+>(dados: T, verSensivel: boolean): T & { sensivelRestrito: boolean } {
+  if (verSensivel) return { ...dados, sensivelRestrito: false };
+  const r: T & { sensivelRestrito: boolean } = {
+    ...dados,
+    vulnerabilidades: [],
+    condicoesCronicas: [],
+    sensivelRestrito: true,
+  };
+  for (const c of CAMPOS_SENSIVEIS_DEMOGRAFIA) (r as Record<string, unknown>)[c] = null;
+  return r;
+}
+
+/**
+ * A gravação do bloco por quem não vê dado sensível: a tela não recebeu esses campos, então o que veio no pedido é
+ * ignorado e o que está gravado continua (nunca apaga o que o perfil não pôde ver).
+ */
+export function manterSensiveisGravados<T extends Record<CampoSensivelDemografia, number | null>>(
+  entrada: T,
+  gravados: Record<CampoSensivelDemografia, number | null>,
+  verSensivel: boolean,
+): T {
+  if (verSensivel) return entrada;
+  const r = { ...entrada };
+  for (const c of CAMPOS_SENSIVEIS_DEMOGRAFIA) (r as Record<string, number | null>)[c] = gravados[c];
+  return r;
+}

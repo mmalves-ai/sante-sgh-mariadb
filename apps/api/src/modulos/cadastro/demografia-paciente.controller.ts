@@ -25,7 +25,9 @@ import {
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
-import { idDaRota, linhaTrilha, problemaDoCadastro, type SessaoCadastro, sessaoDe } from './comum.js';
+import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
+import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
+import { exigir, idDaRota, linhaTrilha, problemaDoCadastro, type SessaoCadastro, sessaoDe } from './comum.js';
 import {
   DEMOGRAFIA_PACIENTE,
   type DemografiaPaciente,
@@ -51,13 +53,34 @@ function opcao(b: Corpo, campo: string): number | null {
   return n;
 }
 
+const VER_SENSIVEL = 'cadastro.paciente.verSensivel';
+
 @Controller('cadastros')
 export class DemografiaPacienteController {
   constructor(
     @Optional()
     @Inject(DEMOGRAFIA_PACIENTE)
     private readonly demografia: DemografiaPacientePropria | null = null,
+    @Optional() @Inject(REGISTRADOR_TRILHA) private readonly registro: RegistradorTrilha | null = null,
   ) {}
+
+  /**
+   * A vulnerabilidade e a doença crônica são dado sensível (LGPD art. 5º II): declarar e encerrar pedem, além da
+   * edição, a permissão de ver dado sensível (quem não vê a lista não encerra nem confere a já vigente).
+   */
+  private async exigirSensivel(s: SessaoCadastro): Promise<void> {
+    if (s.pode(VER_SENSIVEL)) return;
+    if (this.registro) await exigir(s, VER_SENSIVEL, this.registro);
+    throw new ErroProblema(
+      'sem-permissao',
+      403,
+      'Acesso negado',
+      'O seu perfil não vê dado sensível do paciente.',
+      {
+        codigo: 'sem-permissao',
+      },
+    );
+  }
 
   private servico(): DemografiaPacientePropria {
     if (!this.demografia)
@@ -89,7 +112,7 @@ export class DemografiaPacienteController {
     const s = sessaoDe(req);
     const n = idDaRota(p);
     req.sghAlvo = { paciente: n, tabelaAlvo: 'paciente', idAlvo: String(n) };
-    return this.rodar(() => this.servico().demografia(s.porta, n));
+    return this.rodar(() => this.servico().demografia(s.porta, n, s.pode(VER_SENSIVEL)));
   }
 
   @Get('ocupacoes-em-uso')
@@ -128,6 +151,7 @@ export class DemografiaPacienteController {
           ocupacao: opcao(b, 'ocupacao'),
         },
         this.trilha(s, 'cadastro.gravarDemografiaPaciente', 'paciente', n),
+        s.pode(VER_SENSIVEL),
       ),
     );
     return { id: r };
@@ -139,6 +163,7 @@ export class DemografiaPacienteController {
   @AuditadoNoHandler('executor: trilha na mesma transação')
   async declarar(@Param('id') p: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
+    await this.exigirSensivel(s);
     const n = idDaRota(p);
     const b = corpoDe(corpo);
     const condicao = opcao(b, 'condicao');
@@ -175,6 +200,7 @@ export class DemografiaPacienteController {
     @Req() req: RequisicaoAutorizada,
   ) {
     const s = sessaoDe(req);
+    await this.exigirSensivel(s);
     const n = idDaRota(p);
     const b = corpoDe(corpo);
     const r = await this.rodar(() =>
@@ -193,6 +219,7 @@ export class DemografiaPacienteController {
   @AuditadoNoHandler('executor: trilha na mesma transação')
   async declararCronica(@Param('id') p: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
+    await this.exigirSensivel(s);
     const n = idDaRota(p);
     const b = corpoDe(corpo);
     const condicao = opcao(b, 'condicao');
@@ -229,6 +256,7 @@ export class DemografiaPacienteController {
     @Req() req: RequisicaoAutorizada,
   ) {
     const s = sessaoDe(req);
+    await this.exigirSensivel(s);
     const n = idDaRota(p);
     const b = corpoDe(corpo);
     const r = await this.rodar(() =>
