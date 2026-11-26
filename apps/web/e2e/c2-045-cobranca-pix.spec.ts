@@ -190,9 +190,9 @@ test.describe('@C2-045 cobrança Pix sobre o título a receber', () => {
     await expect(page.getByTestId('px-copiado')).toBeVisible();
     await semViolacaoAxe(page, '/financeiro/receber/pix (cobrar)');
 
-    // Cobranças: quem baixa é a tesouraria (segregação: quem cobra não baixa). O simulador paga 120; a parcela baixa
+    // Cobranças: a baixa é do gestor financeiro (o administrador do sistema não baixa título). O simulador paga 120; a parcela baixa
     // 100 e 20 ficam livres para devolver.
-    await entrar(page, 'SINT.FIN.PAGA');
+    await entrar(page, 'SINT.FIN.GESTOR');
     await page.goto('/financeiro/receber/pix');
     await expect(page.getByTestId('px-simulador')).toBeVisible();
     await page.getByTestId('px-aba-cobrancas').click();

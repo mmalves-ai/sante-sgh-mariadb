@@ -1666,9 +1666,6 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
         'financeiro.tituloReceber.baixar',
         'financeiro.tituloReceber.baixarManual',
         'financeiro.dado.mostrar',
-        // C2-031/C2-045: a tesouraria acompanha a cobrança (boleto e Pix) para processar o retorno e baixar; não
-        // configura nem emite (isso é de quem cobra).
-        'financeiro.cobrancaBancaria.ler',
       ),
     },
   },
@@ -3287,11 +3284,13 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       grupo: 'FINGESTOR',
       // F3.8, 07-FIN linha 108: abre a escrituração das entradas (classificar e gerar a EFD vêm do perfil).
       // F8, 07-FIN linha 79 (C1-069): cadastra o portador do desconto e da cessão (parâmetro financeiro) e confere na
-      // ficha do título a receber com quem cada parcela está (leitura do título).
+      // ficha do título a receber com quem cada parcela está (leitura do título). C2-031/C2-045: a cobrança bancária e
+      // Pix vem do perfil (administrador do sistema); processar o retorno e pagar no simulador baixam a parcela.
       opcoesGrupo: opcoesFinanceiro(
         'financeiro.tituloPagar.ler',
         'financeiro.tituloPagar.criar',
         'financeiro.tituloReceber.ler',
+        'financeiro.tituloReceber.baixar',
         'financeiro.escrituracao.ler',
         'financeiro.parametro.editar',
       ),

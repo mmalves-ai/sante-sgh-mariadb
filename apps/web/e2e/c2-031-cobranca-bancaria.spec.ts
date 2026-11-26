@@ -309,9 +309,9 @@ test.describe('@C2-031 cobrança bancária com boleto', () => {
     expect(api.corpos.at(-1)).toEqual({ carteira: 31, mensagem: 'Mensagem ficticia' });
     await expect(page.getByTestId('cb-remessa-61')).toBeVisible();
 
-    // Retorno: quem baixa é a tesouraria (segregação: quem cobra não baixa). Arquivo torto recusado na hora; o do
+    // Retorno: a baixa é do gestor financeiro (o administrador do sistema não baixa título). Arquivo torto recusado na hora; o do
     // simulador é conferido e processado.
-    await entrar(page, 'SINT.FIN.PAGA');
+    await entrar(page, 'SINT.FIN.GESTOR');
     await page.goto('/financeiro/receber/cobranca-bancaria');
     await expect(page.getByTestId('tela-fin-cobranca-bancaria')).toBeVisible();
     await page.getByTestId('cb-aba-retorno').click();
