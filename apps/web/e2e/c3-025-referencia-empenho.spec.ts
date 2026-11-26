@@ -36,7 +36,9 @@ test.describe('@C3-025 referência do empenho no pedido e no título', () => {
     const painel = page.getByTestId('ref-empenho');
     await expect(painel).toBeVisible();
 
-    const empenhos = (await (await page.request.get('/api/suprimentos/empenhos')).json()) as {
+    const respEmpenhos = await page.request.get('/api/suprimentos/empenhos');
+    expect(respEmpenhos.status(), await respEmpenhos.text()).toBe(200);
+    const empenhos = (await respEmpenhos.json()) as {
       id: number;
       numero: string;
       situacao: string;
