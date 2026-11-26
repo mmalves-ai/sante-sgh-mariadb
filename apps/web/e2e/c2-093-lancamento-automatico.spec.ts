@@ -21,6 +21,33 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
+async function chave(page: Page, recurso: string, motivo: string): Promise<void> {
+  await page.getByTestId(`abrir-${recurso}`).click();
+  const form = page.getByTestId('form-liberacao');
+  await form.getByTestId('opcao-ligar').check();
+  await form.getByLabel('Justificativa').fill(motivo);
+  await form.getByTestId('liberacao-senha').fill(SENHA);
+  await form.getByTestId('liberacao-aplicar').click();
+  await expect(page.getByTestId('mensagem-liberacao')).toContainText('chave(s) alterada(s)', {
+    timeout: 30_000,
+  });
+}
+/** A contabilidade é pré-requisito do lançamento automático: o administrador registra a conferência e liga a chave
+ * `contabil` (se outro cenário já a ligou, segue). */
+async function ligar(page: Page, recurso: string, evidencia: string): Promise<void> {
+  await expect(page.getByTestId(`recurso-${recurso}`)).toBeVisible({ timeout: 30_000 });
+  const cartao = await page.getByTestId(`recurso-${recurso}`).innerText();
+  if (cartao.includes('Ligada')) return;
+  if (cartao.includes('Sem pré-requisito externo')) return chave(page, recurso, evidencia);
+  await page.getByTestId(`abrir-${recurso}`).click();
+  const pre = page.getByTestId('form-prerequisito');
+  await pre.getByLabel('Evidência (protocolo ou número; nunca o certificado ou a senha)').fill(evidencia);
+  await pre.locator('#prereq-senha').fill(SENHA);
+  await pre.getByRole('button', { name: 'Registrar pré-requisito' }).click();
+  await expect(page.getByTestId('mensagem-liberacao')).toBeVisible({ timeout: 30_000 });
+  await chave(page, recurso, evidencia);
+}
+
 test.describe('contabilidade: lançamento automático dos fatos publicados pelos módulos @C2-093', () => {
   test.setTimeout(240_000);
 
@@ -28,6 +55,9 @@ test.describe('contabilidade: lançamento automático dos fatos publicados pelos
     page,
   }) => {
     const externas = vigiarExternas(page);
+    await entrar(page, 'SINT.ADMIN');
+    await page.goto('/administracao/liberacao');
+    await ligar(page, 'contabil', 'Competência sintética conferida com o escritório (E2E C2-093)');
     await entrar(page, 'SINT.CONTADOR');
 
     // O catálogo das regras já traz a origem do repasse médico e os dois tipos de fato do repasse.
