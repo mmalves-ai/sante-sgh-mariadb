@@ -5,7 +5,8 @@
 // abre ao lado; e a manutenção dos modelos mostra os campos variáveis na hora e grava. A redação do laudo só existe no
 // banco do cliente: as rotas /api/sadt/laudos/* são simuladas aqui (massa SINTÉTICA) para conferir a tela e o corpo
 // enviado; o efeito no banco (versão, hash, palavras, exame liberado, avisos, emissão superada, recusa do outro
-// laudista) é provado no contrato de efeito laudo-redacao.int.spec.ts.
+// laudista, documento do prontuário de cada versão para a fila ICP-Brasil, C3-005) é provado no contrato de efeito
+// laudo-redacao.int.spec.ts.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -104,6 +105,9 @@ async function simularLaudos(page: Page) {
       em: '2026-11-24T12:00:00.000Z',
       motivo: estado.versao - i === 1 ? null : 'Correção de digitação',
       hash: 'a'.repeat(64),
+      // C3-005: a versão 1 já foi assinada com certificado; a retificação espera na fila ICP do laudista.
+      documento: 500 + estado.versao - i,
+      assinaturaIcp: estado.versao - i === 1 ? 'assinada' : 'na-fila',
     })),
     secoes: [],
     grandezas: [],
@@ -276,6 +280,14 @@ test.describe('@F3.5-09 laudo de imagem: lista de trabalho, redação, retifica�
     await page.getByTestId('laudo-retificar').click();
     await expect(page.getByTestId('laudo-mensagem')).toContainText('emita a nova via');
     expect(corpos.retificar).toMatchObject({ texto: TEXTO_V2, motivo: 3, palavrasChave: [1] });
+
+    // C3-005: cada versão mostra a assinatura com certificado ICP-Brasil; a que espera leva à fila de assinaturas.
+    await expect(page.getByTestId('laudo-versao-icp-1')).toContainText('Assinado com certificado ICP-Brasil');
+    await expect(page.getByTestId('laudo-versao-icp-2')).toContainText(
+      'Aguardando assinatura com certificado ICP-Brasil',
+    );
+    await expect(page.getByTestId('laudo-versao-assinar-icp-1')).toHaveCount(0);
+    await expect(page.getByTestId('laudo-versao-assinar-icp-2')).toHaveAttribute('href', /\/pep\/assinaturas$/);
 
     // O texto inteiro da versão anterior a um clique.
     await page.getByTestId('laudo-versao-ver-1').click();

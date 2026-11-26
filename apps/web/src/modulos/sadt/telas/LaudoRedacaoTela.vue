@@ -106,6 +106,14 @@ const M = {
   fecharVersao: 'Fechar',
   anteriores: 'Laudos anteriores deste exame',
   anterior: '{q} · {r}',
+  // C3-005: assinatura com certificado ICP-Brasil (nuvem por PSC, A3 ou A1) pela fila de assinaturas.
+  icp: {
+    'na-fila': 'Aguardando assinatura com certificado ICP-Brasil',
+    assinada: 'Assinado com certificado ICP-Brasil',
+    'nao-exigida': 'Assinatura eletrônica avançada',
+    'sem-documento': '',
+  } as Record<string, string>,
+  irFilaIcp: 'Assinar com certificado',
 };
 
 const rota = useRoute();
@@ -603,6 +611,15 @@ const motivoOk = computed(() => !!f.motivo || f.motivoTexto.trim().length >= 10)
               {{ v.numero }} · {{ M.situacao[v.situacao] ?? v.situacao }} ·
               {{ new Date(v.em).toLocaleString('pt-BR') }}
               <span v-if="v.motivo"> · {{ v.motivo }}</span>
+              <span v-if="M.icp[v.assinaturaIcp]" :data-testid="`laudo-versao-icp-${v.numero}`">
+                · {{ M.icp[v.assinaturaIcp] }}</span
+              >
+              <RouterLink
+                v-if="v.assinaturaIcp === 'na-fila'"
+                :to="{ name: 'assinatura.documentos' }"
+                :data-testid="`laudo-versao-assinar-icp-${v.numero}`"
+                >{{ M.irFilaIcp }}</RouterLink
+              >
               <SanteBotao
                 :rotulo="M.verTexto"
                 :data-testid="`laudo-versao-ver-${v.numero}`"
