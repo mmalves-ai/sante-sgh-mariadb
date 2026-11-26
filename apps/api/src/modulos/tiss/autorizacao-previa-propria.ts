@@ -46,6 +46,7 @@ import {
   VERSAO_TISS,
 } from '@sgh/dominio-faturamento';
 import {
+  conferirConferenciaParcial,
   conferirExcecaoUrgencia,
   etapaAutorizacaoCirurgia,
   type GuiaDaCirurgia,
@@ -327,10 +328,51 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
     );
   }
 
+  /**
+   * A conferência da autorização parcial (04-CC linha 102): a operadora autorizou só parte da guia ligada; a cirurgia
+   * só é confirmada e só entra no bloco depois que alguém registra o que segue autorizado e o que foi retirado ou
+   * complementado, com o instante e o usuário gravados no agendamento.
+   */
+  registrarConferenciaParcial(
+    c: ContextoPortaPropria,
+    agendamento: number,
+    entrada: unknown,
+  ): Promise<{ id: number; etapa: string }> {
+    const e = entradaValida(esquemaUrgencia, entrada);
+    return this.gravar(c, 'tiss.autorizacao.parcial', ['agendamento_cirurgico'], async (tx, est, usuario) => {
+      const atual = await this.montarCirurgia(tx, est.id, agendamento);
+      const a = await tx.uma('SELECT tipo_cobertura FROM agendamento_cirurgico WHERE id = ?', [agendamento]);
+      const vigente = atual.guias.find((g) => g.situacao !== 'cancelada') ?? null;
+      const problemas = conferirConferenciaParcial(
+        {
+          tipoCobertura: String(a?.['tipo_cobertura']),
+          natureza: atual.natureza,
+          senha: atual.senha,
+          guia: vigente ? { situacao: vigente.situacao, senha: vigente.senha } : null,
+          parcialConferida: atual.conferenciaParcial !== null,
+        },
+        e.justificativa,
+      );
+      if (!['solicitado', 'em_analise', 'agendado', 'confirmado'].includes(atual.situacao))
+        problemas.push({
+          campo: 'agendamento',
+          mensagem: 'A cirurgia já foi realizada, suspensa ou cancelada.',
+        });
+      if (problemas.length) throw recusaRegra('Conferência recusada', problemas);
+      await tx.alterar('agendamento_cirurgico', agendamento, e.versao, {
+        autorizacao_parcial_conferencia: e.justificativa.trim(),
+        autorizacao_parcial_conferida_em: new Date(),
+        autorizacao_parcial_conferida_por: usuario,
+      });
+      return { tabela: 'agendamento_cirurgico', id: agendamento, etapa: atual.etapa };
+    });
+  }
+
   private async montarCirurgia(l: Consulta, est: number, agendamento: number) {
     const a = await l.uma(
       `SELECT a.id, a.numero, a.situacao, a.tipo_cobertura, a.senha_autorizacao, a.inicio_previsto_em,
-              a.autorizacao_posterior_justificativa, a.autorizacao_posterior_em, a.versao, a.paciente_id, a.cirurgiao_profissional_id,
+              a.autorizacao_posterior_justificativa, a.autorizacao_posterior_em,
+              a.autorizacao_parcial_conferencia, a.autorizacao_parcial_conferida_em, a.versao, a.paciente_id, a.cirurgiao_profissional_id,
               cc.natureza, cc.descricao AS carater
          FROM agendamento_cirurgico a JOIN carater_cirurgia cc ON cc.id = a.carater_cirurgia_id
         WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
@@ -372,6 +414,12 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
         senha: txtOuNull(a['senha_autorizacao']),
         guia,
       }),
+      conferenciaParcial: a['autorizacao_parcial_conferida_em']
+        ? {
+            justificativa: txtOuNull(a['autorizacao_parcial_conferencia']),
+            em: iso(a['autorizacao_parcial_conferida_em']),
+          }
+        : null,
       autorizacaoPosterior: a['autorizacao_posterior_em']
         ? {
             justificativa: txtOuNull(a['autorizacao_posterior_justificativa']),

@@ -123,7 +123,7 @@ async function agendamentoDe(tx: TxOperacao, id: number): Promise<Linha> {
  */
 async function autorizacaoDaCirurgia(tx: TxOperacao, id: number): Promise<SituacaoAutorizacaoCirurgia> {
   const a = await tx.uma(
-    `SELECT a.tipo_cobertura, a.senha_autorizacao, a.autorizacao_posterior_em, cc.natureza
+    `SELECT a.tipo_cobertura, a.senha_autorizacao, a.autorizacao_posterior_em, a.autorizacao_parcial_conferida_em, cc.natureza
        FROM agendamento_cirurgico a JOIN carater_cirurgia cc ON cc.id = a.carater_cirurgia_id
       WHERE a.id = ? AND a.estabelecimento_id = ?`,
     [id, est(tx)],
@@ -143,6 +143,7 @@ async function autorizacaoDaCirurgia(tx: TxOperacao, id: number): Promise<Situac
     senha: (a?.['senha_autorizacao'] as string | null) ?? null,
     guia: g ? { situacao: texto(g['situacao']), senha: (g['senha'] as string | null) ?? null } : null,
     posteriorRegistrado: a?.['autorizacao_posterior_em'] != null,
+    parcialConferida: a?.['autorizacao_parcial_conferida_em'] != null,
   };
 }
 /** O pedido do portal relido sob a transação (FOR UPDATE), conferida a conta; `exigir`: recusa se não houver. */

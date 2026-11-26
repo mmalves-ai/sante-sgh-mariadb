@@ -4,7 +4,11 @@
 // ligadas com a senha, e o pedido em um passo: a carteira ativa do paciente vem marcada, o cirurgião é o solicitante e
 // o procedimento é conferido na hora (código TUSS de 8 dígitos). A eletiva de convênio só entra no bloco com a senha;
 // na urgência, a exceção é registrada com a justificativa e a guia é comunicada depois.
-import { conferirExcecaoUrgencia, naturezaDeUrgencia } from '@sgh/dominio-cirurgia';
+import {
+  conferirConferenciaParcial,
+  conferirExcecaoUrgencia,
+  naturezaDeUrgencia,
+} from '@sgh/dominio-cirurgia';
 import { SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
@@ -14,6 +18,7 @@ import {
   lerAutorizacaoDaCirurgia,
   lerCoberturasDoPaciente,
   pedirAutorizacaoDaCirurgia,
+  registrarConferenciaParcialDaCirurgia,
   registrarUrgenciaDaCirurgia,
 } from '../api-autorizacao-cirurgia.js';
 import ErroCirurgia from './ErroCirurgia.vue';
@@ -61,6 +66,13 @@ const { t } = useI18n({
       registrar: 'Registrar a exceção',
       registrada: 'Exceção registrada: a guia é comunicada à operadora depois.',
       posterior: 'Urgência sem senha: {justificativa}',
+      parcial:
+        'A operadora autorizou só parte da guia: confira os itens autorizados e registre a conferência antes de confirmar.',
+      conferir: 'Registrar a conferência',
+      conferencia: 'O que segue autorizado e o que foi retirado ou complementado',
+      gravarConferencia: 'Gravar a conferência',
+      conferida: 'Conferência registrada: a cirurgia pode ser confirmada.',
+      parcialConferida: 'Autorização parcial conferida: {justificativa}',
       escolha: 'Escolha',
     },
   },
@@ -83,13 +95,14 @@ const coberturas = useQuery({
   enabled: computed(() => podePedir.value && !!d.value && d.value.etapa !== 'nao_exigida'),
 });
 
-const aberto = ref<'' | 'pedido' | 'urgencia'>('');
+const aberto = ref<'' | 'pedido' | 'urgencia' | 'parcial'>('');
 const cobertura = ref('');
 const codigo = ref('');
 const descricao = ref('');
 const indicacao = ref('');
 const canal = ref<'webservice' | 'portal' | 'telefone' | 'email' | 'presencial'>('portal');
 const justificativa = ref('');
+const conferencia = ref('');
 const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
 const ocupado = ref(false);
@@ -133,6 +146,26 @@ const problemasUrgencia = computed(() =>
     : [],
 );
 
+const parcialPendente = computed(
+  () => !!d.value && d.value.etapa === 'autorizada_parcial' && !d.value.conferenciaParcial,
+);
+// A mesma regra do domínio que a gravação reconfere: validação na hora, antes de mandar.
+const problemasParcial = computed(() => {
+  const v = d.value;
+  if (!v) return [];
+  const vigente = v.guias.find((g) => g.situacao !== 'cancelada') ?? null;
+  return conferirConferenciaParcial(
+    {
+      tipoCobertura: 'convenio',
+      natureza: v.natureza,
+      senha: v.senha,
+      guia: vigente ? { situacao: vigente.situacao, senha: vigente.senha } : null,
+      parcialConferida: !!v.conferenciaParcial,
+    },
+    conferencia.value,
+  );
+});
+
 async function rodar(fn: () => Promise<string>): Promise<void> {
   ocupado.value = true;
   erro.value = null;
@@ -167,6 +200,12 @@ const registrar = () =>
     await registrarUrgenciaDaCirurgia(props.agendamento, d.value!.versao, justificativa.value);
     return t('registrada');
   });
+
+const conferir = () =>
+  rodar(async () => {
+    await registrarConferenciaParcialDaCirurgia(props.agendamento, d.value!.versao, conferencia.value);
+    return t('conferida');
+  });
 </script>
 
 <template>
@@ -188,6 +227,18 @@ const registrar = () =>
         {{ t('posterior', { justificativa: d.autorizacaoPosterior.justificativa ?? '' }) }}
       </p>
       <p v-else-if="d.etapa !== 'nao_exigida'" class="secundario">{{ t('semSenha') }}</p>
+      <p v-if="parcialPendente" class="secundario" data-testid="autorizacao-parcial">{{ t('parcial') }}</p>
+      <p v-else-if="d.conferenciaParcial" data-testid="autorizacao-parcial-conferida">
+        {{ t('parcialConferida', { justificativa: d.conferenciaParcial.justificativa ?? '' }) }}
+      </p>
+      <div v-if="podePedir && parcialPendente" class="acoes">
+        <SanteBotao
+          variante="secundario"
+          :rotulo="t('conferir')"
+          data-testid="autorizacao-conferir"
+          @acionar="aberto = 'parcial'"
+        />
+      </div>
       <ul v-if="d.guias.length" class="guias" data-testid="autorizacao-guias">
         <li v-for="g in d.guias" :key="g.id">
           {{ t('guia', { numero: g.numero, situacao: g.situacao }) }}
@@ -256,6 +307,21 @@ const registrar = () =>
           :desabilitado="problemasUrgencia.length > 0 || ocupado"
           data-testid="autorizacao-registrar-urgencia"
           @acionar="registrar"
+        />
+      </form>
+      <form
+        v-if="aberto === 'parcial'"
+        class="formulario"
+        data-testid="autorizacao-parcial-form"
+        @submit.prevent="conferir"
+      >
+        <SanteCampoTexto v-model="conferencia" :rotulo="t('conferencia')" :max-bytes="500" />
+        <small v-for="p in problemasParcial" :key="p.mensagem" class="erro-campo">{{ p.mensagem }}</small>
+        <SanteBotao
+          :rotulo="t('gravarConferencia')"
+          :desabilitado="problemasParcial.length > 0 || ocupado"
+          data-testid="autorizacao-gravar-conferencia"
+          @acionar="conferir"
         />
       </form>
     </template>

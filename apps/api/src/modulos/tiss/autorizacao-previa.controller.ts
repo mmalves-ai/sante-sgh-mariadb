@@ -2,6 +2,7 @@
 //   GET  /api/tiss/autorizacoes/pacientes/:paciente   coberturas e pedidos do paciente (visão por paciente)
 //   GET  /api/tiss/autorizacoes/cirurgias/:id        a autorização da cirurgia agendada por etapas (04-CC linha 102)
 //   POST /api/tiss/autorizacoes/cirurgias/:id/urgencia { versao, justificativa } exceção de urgência sem senha
+//   POST /api/tiss/autorizacoes/cirurgias/:id/parcial { versao, justificativa } conferência da autorização parcial
 //   GET  /api/tiss/autorizacoes/:id                   o pedido com itens, respostas e consultas de andamento
 //   GET  /api/tiss/autorizacoes/:id/xml               a mensagem SOLICITACAO_PROCEDIMENTOS guardada no envio
 //   POST /api/tiss/autorizacoes                       monta o pedido (rascunho) com os itens
@@ -82,6 +83,18 @@ export class AutorizacaoPreviaController {
     @Body() b: unknown,
   ) {
     return this.com(req, (p, c) => p.registrarUrgencia(c, agendamento, b));
+  }
+
+  @Post('cirurgias/:agendamento/parcial')
+  @AuditadoNoHandler(TRILHA)
+  @HttpCode(201)
+  @Permissao(PERMISSOES_AUTORIZACAO_PREVIA.solicitar)
+  registrarConferenciaParcial(
+    @Req() req: RequisicaoAutorizada,
+    @Param('agendamento', ParseIntPipe) agendamento: number,
+    @Body() b: unknown,
+  ) {
+    return this.com(req, (p, c) => p.registrarConferenciaParcial(c, agendamento, b));
   }
 
   @Get(':id')

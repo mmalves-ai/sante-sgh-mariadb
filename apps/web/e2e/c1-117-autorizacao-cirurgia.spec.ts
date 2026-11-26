@@ -9,7 +9,10 @@
 // apps/api/src/modulos/cirurgia/porta-propria.int.spec.ts (a eletiva de convênio sem senha não é confirmada). Aqui se
 // prova o fluxo: a etapa aparece, a carteira principal já vem marcada, o código TUSS é conferido na hora, um clique
 // grava o pedido ligado à cirurgia e a etapa muda; na urgência, a exceção é registrada e aparece no painel. Axe na
-// tela. Massa SINTÉTICA.
+// tela. Na tela do agendamento confirmado, a entrada no bloco sem senha é recusada (rota de mudança de estado simulada
+// com a recusa do servidor) e a causa aparece no texto da aplicação: autorizacao-pendente na eletiva,
+// justificativa-urgencia na urgência sem a exceção, autorizacao-parcial na guia autorizada em parte, que pede a
+// conferência registrada no painel. Massa SINTÉTICA.
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -43,12 +46,19 @@ interface Guia {
   senha: string | null;
 }
 
-function simular(page: Page, natureza: 'eletiva' | 'urgencia') {
-  const guias: Guia[] = [];
+function simular(
+  page: Page,
+  natureza: 'eletiva' | 'urgencia',
+  opcoes: { parcial?: boolean; recusaAndamento?: string } = {},
+) {
+  const guias: Guia[] = opcoes.parcial
+    ? [{ id: 950, numero: 'SA-FIC-9', situacao: 'autorizada_parcial', senha: 'PARC-FIC' }]
+    : [];
+  let conferencia: { justificativa: string; em: string } | null = null;
   const corpos: Record<string, unknown>[] = [];
   let versao = 3;
   let posterior: { justificativa: string; em: string } | null = null;
-  const etapa = () => (guias.length ? 'guia_em_preparo' : 'sem_guia');
+  const etapa = () => (opcoes.parcial ? 'autorizada_parcial' : guias.length ? 'guia_em_preparo' : 'sem_guia');
   const leitura = () => ({
     id: AG,
     numero: 'CC-FIC-1',
@@ -59,9 +69,10 @@ function simular(page: Page, natureza: 'eletiva' | 'urgencia') {
     versao,
     paciente: PACIENTE,
     cirurgiao: CIRURGIAO,
-    senha: null,
+    senha: opcoes.parcial ? 'PARC-FIC' : null,
     etapa: etapa(),
     autorizacaoPosterior: posterior,
+    conferenciaParcial: conferencia,
     guias,
   });
   return {
@@ -103,6 +114,36 @@ function simular(page: Page, natureza: 'eletiva' | 'urgencia') {
         versao += 1;
         return json(rota, { id: AG, etapa: etapa() });
       });
+      await page.route(`**/api/tiss/autorizacoes/cirurgias/${AG}/parcial`, async (rota) => {
+        const c = rota.request().postDataJSON() as { versao: number; justificativa: string };
+        corpos.push(c);
+        conferencia = { justificativa: c.justificativa, em: '2030-03-09 10:00' };
+        versao += 1;
+        return json(rota, { id: AG, etapa: etapa() });
+      });
+      const recusa = opcoes.recusaAndamento;
+      if (recusa) {
+        // O agendamento da fonte sintética aparece confirmado (a entrada no bloco fica oferecida).
+        await page.route(`**/api/cirurgia/agendamentos/${AG}`, async (rota) => {
+          if (rota.request().method() !== 'GET') return rota.fallback();
+          const resposta = await rota.fetch();
+          const corpo = (await resposta.json()) as { agendamento?: Record<string, unknown> };
+          if (corpo.agendamento)
+            corpo.agendamento = {
+              ...corpo.agendamento,
+              estado: 'confirmado',
+              estadoRotulo: 'Confirmado',
+              estadoId: corpo.agendamento['estadoId'] ?? AG,
+            };
+          await rota.fulfill({ response: resposta, json: corpo });
+        });
+        // A mudança de estado devolve a recusa do servidor enquanto a conferência (parcial) não for registrada.
+        await page.route('**/api/cirurgia/estados/*/andamento', async (rota) => {
+          corpos.push({ andamento: rota.request().postDataJSON() });
+          if (opcoes.parcial && conferencia) return json(rota, { id: AG, estado: 'no-bloco' });
+          return json(rota, { codigo: recusa, title: 'Recusada', status: 422 }, 422);
+        });
+      }
     },
   };
 }
@@ -198,6 +239,79 @@ test.describe('Autorização prévia da cirurgia eletiva por etapas @C1-117', ()
     await expect(page.getByTestId('autorizacao-urgencia')).toHaveCount(0);
     // A guia continua a ser pedida depois (comunicação posterior).
     await expect(page.getByTestId('autorizacao-pedir')).toBeVisible();
+    await semViolacaoAxe(page, `/cirurgia/agendamentos/${AG}`);
+    expect(externas).toEqual([]);
+  });
+
+  test('agendamento confirmado: a entrada no bloco sem senha é recusada com a causa (eletiva e urgência sem exceção)', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const api = simular(page, 'eletiva', { recusaAndamento: 'autorizacao-pendente' });
+    await api.ligar();
+    await entrar(page, 'SINT.BLOCO');
+
+    await page.goto(`/cirurgia/agendamentos/${AG}`);
+    await expect(page.getByTestId('autorizacao-etapa')).toHaveAttribute('data-etapa', 'sem_guia');
+    await page.getByRole('button', { name: 'Paciente no bloco' }).click();
+    const recusa = page.getByTestId('recusa-cirurgia');
+    await expect(recusa).toContainText('Cirurgia eletiva de convênio sem a senha da operadora');
+    await expect(recusa).toContainText('Autorização da operadora');
+    expect(api.corpos.at(-1)).toEqual({ andamento: { estado: 'no-bloco' } });
+    await semViolacaoAxe(page, `/cirurgia/agendamentos/${AG}`);
+
+    // Urgência sem a exceção registrada: a recusa pede a justificativa ou a exceção no painel.
+    const urg = simular(page, 'urgencia', { recusaAndamento: 'justificativa-urgencia' });
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await urg.ligar();
+    await page.goto(`/cirurgia/agendamentos/${AG}`);
+    await expect(page.getByTestId('autorizacao-urgencia')).toBeVisible();
+    await page.getByRole('button', { name: 'Paciente no bloco' }).click();
+    await expect(page.getByTestId('recusa-cirurgia')).toContainText('pelo menos 10 letras');
+    await expect(page.getByTestId('recusa-cirurgia')).toContainText('exceção de urgência');
+    expect(externas).toEqual([]);
+  });
+
+  test('autorizada em parte: a etapa fica parcial, o bloco é recusado até a conferência registrada no painel', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const api = simular(page, 'eletiva', { parcial: true, recusaAndamento: 'autorizacao-parcial' });
+    await api.ligar();
+    await entrar(page, 'SINT.BLOCO');
+
+    await page.goto(`/cirurgia/agendamentos/${AG}`);
+    await expect(page.getByTestId('autorizacao-etapa')).toHaveAttribute('data-etapa', 'autorizada_parcial');
+    await expect(page.getByTestId('autorizacao-parcial')).toContainText('autorizou só parte da guia');
+    await page.getByRole('button', { name: 'Paciente no bloco' }).click();
+    await expect(page.getByTestId('recusa-cirurgia')).toContainText(
+      'registre a conferência da autorização parcial',
+    );
+
+    await page.getByTestId('autorizacao-conferir').click();
+    const form = page.getByTestId('autorizacao-parcial-form');
+    await expect(form).toBeVisible();
+    // Validação na hora: a conferência curta deixa a gravação desligada.
+    await form.getByLabel('O que segue autorizado e o que foi retirado ou complementado').fill('CURTA');
+    await expect(page.getByTestId('autorizacao-gravar-conferencia')).toBeDisabled();
+    await form
+      .getByLabel('O que segue autorizado e o que foi retirado ou complementado')
+      .fill('SEGUE SO O ITEM AUTORIZADO; COMPLEMENTO PEDIDO');
+    await expect(page.getByTestId('autorizacao-gravar-conferencia')).toBeEnabled();
+    await page.getByTestId('autorizacao-gravar-conferencia').click();
+    await expect(page.getByTestId('autorizacao-mensagem')).toContainText('Conferência registrada');
+    expect(api.corpos.at(-1)).toEqual({
+      versao: 3,
+      justificativa: 'SEGUE SO O ITEM AUTORIZADO; COMPLEMENTO PEDIDO',
+    });
+    await expect(page.getByTestId('autorizacao-parcial-conferida')).toContainText(
+      'Autorização parcial conferida',
+    );
+    await expect(page.getByTestId('autorizacao-conferir')).toHaveCount(0);
+
+    // Com a conferência, a entrada no bloco passa.
+    await page.getByRole('button', { name: 'Paciente no bloco' }).click();
+    await expect(page.getByTestId('recusa-cirurgia')).toHaveCount(0);
     await semViolacaoAxe(page, `/cirurgia/agendamentos/${AG}`);
     expect(externas).toEqual([]);
   });

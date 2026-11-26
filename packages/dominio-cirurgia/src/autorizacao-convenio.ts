@@ -33,6 +33,41 @@ export interface SituacaoAutorizacaoCirurgia {
   guia: GuiaDaCirurgia | null;
   /** A exceção de urgência já registrada no agendamento (justificativa para a comunicação posterior). */
   posteriorRegistrado?: boolean;
+  /**
+   * A conferência da autorização parcial já registrada no agendamento: alguém conferiu que a cirurgia segue só com os
+   * procedimentos que a operadora autorizou (ou que a complementação foi pedida) e assinou a justificativa.
+   */
+  parcialConferida?: boolean;
+}
+
+/** A operadora autorizou só parte da guia ligada (há senha, mas nem todo procedimento pedido foi autorizado). */
+export function autorizacaoParcial(s: Pick<SituacaoAutorizacaoCirurgia, 'tipoCobertura' | 'guia'>): boolean {
+  return (
+    s.tipoCobertura === 'convenio' && s.guia?.situacao === 'autorizada_parcial' && preenchido(s.guia.senha)
+  );
+}
+
+/**
+ * Registrar a conferência da autorização parcial: só na cirurgia de convênio cuja guia vigente foi autorizada em parte,
+ * ainda não conferida, com justificativa de 10 a 500 letras (o que segue autorizado e o que foi retirado ou complementado).
+ */
+export function conferirConferenciaParcial(
+  s: SituacaoAutorizacaoCirurgia,
+  justificativa: string,
+): { campo: string; mensagem: string }[] {
+  const p: { campo: string; mensagem: string }[] = [];
+  if (!autorizacaoParcial(s))
+    p.push({ campo: 'agendamento', mensagem: 'A guia da cirurgia não foi autorizada em parte.' });
+  else if (s.parcialConferida)
+    p.push({ campo: 'agendamento', mensagem: 'A conferência da autorização parcial já está registrada.' });
+  const j = justificativa.trim().length;
+  if (j < 10 || j > 500)
+    p.push({
+      campo: 'justificativa',
+      mensagem:
+        'Descreva a conferência: o que a operadora autorizou e o que muda na cirurgia (10 a 500 letras).',
+    });
+  return p;
 }
 
 /**
@@ -59,8 +94,6 @@ export function conferirExcecaoUrgencia(
   return p;
 }
 
-const preenchido = (s: string | null | undefined): s is string => !!s && s.trim().length > 0;
-
 /** A natureza que dispensa a senha antes do ato (comunicação posterior à operadora). */
 export function naturezaDeUrgencia(natureza: string): boolean {
   return natureza === 'urgencia' || natureza === 'emergencia' || natureza === 'acidente';
@@ -74,9 +107,16 @@ export function senhaDaCirurgia(s: Pick<SituacaoAutorizacaoCirurgia, 'senha' | '
   return null;
 }
 
+function preenchido(s: string | null | undefined): s is string {
+  return !!s && s.trim().length > 0;
+}
+
 /** A etapa em que a autorização da cirurgia está, para a agenda e a tela da autorização. */
 export function etapaAutorizacaoCirurgia(s: SituacaoAutorizacaoCirurgia): EtapaAutorizacaoCirurgia {
   if (s.tipoCobertura !== 'convenio') return 'nao_exigida';
+  // A guia autorizada em parte vem antes da senha do agendamento: a senha da resposta parcial também vai a ele, e a
+  // etapa não pode parecer autorização total.
+  if (autorizacaoParcial(s)) return 'autorizada_parcial';
   if (preenchido(s.senha)) return 'autorizada';
   const g = s.guia;
   if (!g) return 'sem_guia';
@@ -107,7 +147,11 @@ export const SITUACOES_QUE_EXIGEM_SENHA = ['confirmado', 'no_bloco', 'em_andamen
 
 export type ConferenciaConfirmacao =
   | { ok: true; comunicarDepois: boolean }
-  | { ok: false; codigo: 'autorizacao-pendente' | 'justificativa-urgencia'; mensagem: string };
+  | {
+      ok: false;
+      codigo: 'autorizacao-pendente' | 'autorizacao-parcial' | 'justificativa-urgencia';
+      mensagem: string;
+    };
 
 const TEXTO_ETAPA: Record<EtapaAutorizacaoCirurgia, string> = {
   sem_guia: 'não há guia de solicitação ligada à cirurgia',
@@ -132,8 +176,19 @@ export function conferirConfirmacaoCirurgia(
 ): ConferenciaConfirmacao {
   if (!(SITUACOES_QUE_EXIGEM_SENHA as readonly string[]).includes(nova))
     return { ok: true, comunicarDepois: false };
-  if (s.tipoCobertura !== 'convenio' || senhaDaCirurgia(s) !== null)
-    return { ok: true, comunicarDepois: false };
+  if (s.tipoCobertura !== 'convenio') return { ok: true, comunicarDepois: false };
+  // Autorizada em parte: a senha existe, mas a cirurgia só segue com a conferência registrada (o que foi autorizado e
+  // o que foi retirado ou complementado), na eletiva e na urgência.
+  if (autorizacaoParcial(s)) {
+    if (s.parcialConferida) return { ok: true, comunicarDepois: false };
+    return {
+      ok: false,
+      codigo: 'autorizacao-parcial',
+      mensagem:
+        'A operadora autorizou só parte da guia: registre a conferência da autorização parcial no painel da autorização antes de confirmar.',
+    };
+  }
+  if (senhaDaCirurgia(s) !== null) return { ok: true, comunicarDepois: false };
   if (naturezaDeUrgencia(s.natureza)) {
     if (s.posteriorRegistrado) return { ok: true, comunicarDepois: false };
     if ((justificativa ?? '').trim().length < 10)

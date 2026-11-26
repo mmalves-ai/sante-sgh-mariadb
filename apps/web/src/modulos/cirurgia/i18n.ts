@@ -268,6 +268,12 @@ export const mensagensCirurgia = {
     retirarPergunta: 'Retirar {login} dos usuários permitidos da {sala}?',
   },
   recusas: {
+    'autorizacao-pendente':
+      'Cirurgia eletiva de convênio sem a senha da operadora: veja a etapa no painel "Autorização da operadora" e peça ou acompanhe a guia antes de confirmar.',
+    'autorizacao-parcial':
+      'A operadora autorizou só parte da guia: registre a conferência da autorização parcial no painel "Autorização da operadora" antes de confirmar.',
+    'justificativa-urgencia':
+      'Cirurgia de urgência sem senha: escreva no complemento a justificativa (pelo menos 10 letras) ou registre a exceção de urgência no painel "Autorização da operadora".',
     'sala-ocupada': 'A sala está ocupada nesse horário: escolha outro horário ou outra sala.',
     'sala-fechada-na-grade':
       'A sala não atende nesse horário pela grade de funcionamento: escolha outro horário, outra sala ou registre a exceção de urgência.',

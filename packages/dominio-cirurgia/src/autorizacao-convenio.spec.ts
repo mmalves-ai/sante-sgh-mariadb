@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  autorizacaoParcial,
+  conferirConferenciaParcial,
   conferirConfirmacaoCirurgia,
   conferirExcecaoUrgencia,
   etapaAutorizacaoCirurgia,
@@ -103,5 +105,47 @@ describe('autorização prévia da cirurgia eletiva (04-CC linha 102)', () => {
     expect(
       conferirExcecaoUrgencia({ ...urg, tipoCobertura: 'sus' }, 'Trauma com sangramento ativo'),
     ).toHaveLength(1);
+  });
+
+  it('autorizada em parte: a etapa não vira autorizada pela senha e a confirmação pede a conferência registrada', () => {
+    const parcial = { situacao: 'autorizada_parcial', senha: 'P7' };
+    // a senha da resposta parcial também vai ao agendamento: a etapa segue "autorizada em parte"
+    const s = { ...base, senha: 'P7', guia: parcial };
+    expect(autorizacaoParcial(s)).toBe(true);
+    expect(etapaAutorizacaoCirurgia(s)).toBe('autorizada_parcial');
+    expect(etapaAutorizacaoCirurgia({ ...base, guia: parcial })).toBe('autorizada_parcial');
+    expect(etapaAutorizacaoCirurgia({ ...base, guia: { situacao: 'autorizada_parcial', senha: null } })).toBe(
+      'aguardando_operadora',
+    );
+    for (const nova of ['confirmado', 'no_bloco', 'em_andamento']) {
+      const r = conferirConfirmacaoCirurgia(s, nova, 'qualquer complemento longo');
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.codigo).toBe('autorizacao-parcial');
+    }
+    // a urgência autorizada em parte também pede a conferência (a exceção de urgência não vale: já há senha)
+    expect(conferirConfirmacaoCirurgia({ ...s, natureza: 'urgencia' }, 'no_bloco', null).ok).toBe(false);
+    expect(
+      conferirExcecaoUrgencia({ ...s, natureza: 'urgencia' }, 'Trauma com sangramento ativo'),
+    ).toHaveLength(1);
+    expect(conferirConfirmacaoCirurgia({ ...s, parcialConferida: true }, 'confirmado', null)).toEqual({
+      ok: true,
+      comunicarDepois: false,
+    });
+    expect(conferirConfirmacaoCirurgia(s, 'cancelado', null).ok).toBe(true);
+    // registrar a conferência: só na guia parcial, uma vez, com 10 a 500 letras
+    expect(conferirConferenciaParcial(s, 'Segue só o procedimento principal autorizado')).toEqual([]);
+    expect(conferirConferenciaParcial(s, 'curta').map((x) => x.campo)).toEqual(['justificativa']);
+    expect(
+      conferirConferenciaParcial({ ...s, parcialConferida: true }, 'Segue só o principal autorizado'),
+    ).toHaveLength(1);
+    expect(
+      conferirConferenciaParcial(
+        { ...base, senha: 'S1', guia: { situacao: 'autorizada', senha: 'S1' } },
+        'Segue só o principal autorizado',
+      ).map((x) => x.campo),
+    ).toEqual(['agendamento']);
+    expect(conferirConferenciaParcial({ ...s, tipoCobertura: 'sus' }, 'Segue só o principal')).toHaveLength(
+      1,
+    );
   });
 });

@@ -58,6 +58,7 @@ describe.skipIf(SEM_BANCO)('autorização prévia da cirurgia eletiva por etapas
     eletiva: number;
     urgencia: number;
     outra: number;
+    parcial: number;
   };
   const ctx = () => ({ cliente: CLIENTE, hospital: P, usuario: m.usuario, correlacao: P });
   const ctxCc = () => ({ cliente: CLIENTE, estabelecimento: m.est, usuario: m.usuario, correlacao: P });
@@ -155,6 +156,7 @@ describe.skipIf(SEM_BANCO)('autorização prévia da cirurgia eletiva por etapas
         eletiva: await agendar(`${P}-1`, paciente, caraterEletiva),
         urgencia: await agendar(`${P}-2`, paciente, caraterUrgencia),
         outra: await agendar(`${P}-3`, outroPaciente, caraterEletiva),
+        parcial: await agendar(`${P}-4`, paciente, caraterEletiva),
       };
     });
     porta = new PortaAutorizacaoPreviaPropria(nucleo, CLIENTE);
@@ -296,5 +298,96 @@ describe.skipIf(SEM_BANCO)('autorização prévia da cirurgia eletiva por etapas
         )['q'],
       ),
     ).toBeGreaterThan(0);
+  });
+
+  it('autorizada em parte: a etapa fica parcial com a senha, a confirmação é recusada até a conferência registrada', async () => {
+    const g = await porta.criar(ctx(), {
+      tipo: 'sp_sadt',
+      cobertura: m.cobertura,
+      agendamentoCirurgico: m.parcial,
+      solicitanteExterno: m.externo,
+      canal: 'portal',
+      indicacaoClinica: 'Indicação sintética',
+      itens: [{ ...item, quantidade: 2 }],
+    });
+    await porta.enviar(ctx(), g.id, { versao: 1 });
+    const v = Number((await um('SELECT versao FROM solicitacao_autorizacao WHERE id = ?', [g.id]))['versao']);
+    await porta.responder(ctx(), g.id, {
+      senha: 'PARC1117',
+      dataAutorizacao: '2026-11-25',
+      itens: [{ sequencia: 1, quantidadeAutorizada: 1 }],
+      versao: v,
+    });
+    expect((await um('SELECT situacao FROM solicitacao_autorizacao WHERE id = ?', [g.id]))['situacao']).toBe(
+      'autorizada_parcial',
+    );
+    // A senha da resposta parcial vai ao agendamento, mas a etapa não vira "autorizada".
+    const antes = await um(
+      'SELECT senha_autorizacao, situacao, versao, autorizacao_parcial_conferida_em FROM agendamento_cirurgico WHERE id = ?',
+      [m.parcial],
+    );
+    expect(antes).toMatchObject({
+      senha_autorizacao: 'PARC1117',
+      situacao: 'agendado',
+      autorizacao_parcial_conferida_em: null,
+    });
+    expect(await porta.daCirurgia(ctx(), m.parcial)).toMatchObject({
+      etapa: 'autorizada_parcial',
+      conferenciaParcial: null,
+    });
+    // Sem a conferência, a eletiva não entra no bloco e o agendamento fica como estava.
+    await expect(paraBloco(m.parcial)).rejects.toThrow(/autorizacao-parcial/);
+    expect(
+      await um('SELECT situacao, versao FROM agendamento_cirurgico WHERE id = ?', [m.parcial]),
+    ).toMatchObject({
+      situacao: 'agendado',
+      versao: Number(antes['versao']),
+    });
+
+    // A conferência curta é recusada; a cirurgia com guia autorizada inteira não registra conferência.
+    await expect(
+      porta.registrarConferenciaParcial(ctx(), m.parcial, {
+        versao: Number(antes['versao']),
+        justificativa: 'curta',
+      }),
+    ).rejects.toMatchObject(recusa);
+    await expect(
+      porta.registrarConferenciaParcial(ctx(), m.eletiva, {
+        versao: Number(
+          (await um('SELECT versao FROM agendamento_cirurgico WHERE id = ?', [m.eletiva]))['versao'],
+        ),
+        justificativa: 'Segue só o procedimento autorizado',
+      }),
+    ).rejects.toMatchObject(recusa);
+
+    await porta.registrarConferenciaParcial(ctx(), m.parcial, {
+      versao: Number(antes['versao']),
+      justificativa: 'Segue com uma unidade autorizada; complementação pedida',
+    });
+    const depois = await um(
+      `SELECT autorizacao_parcial_conferencia, autorizacao_parcial_conferida_em, autorizacao_parcial_conferida_por, versao
+         FROM agendamento_cirurgico WHERE id = ?`,
+      [m.parcial],
+    );
+    expect(depois).toMatchObject({
+      autorizacao_parcial_conferencia: 'Segue com uma unidade autorizada; complementação pedida',
+      autorizacao_parcial_conferida_por: m.usuario,
+      versao: Number(antes['versao']) + 1,
+    });
+    expect(depois['autorizacao_parcial_conferida_em']).not.toBeNull();
+    expect((await porta.daCirurgia(ctx(), m.parcial)).conferenciaParcial).toMatchObject({
+      justificativa: 'Segue com uma unidade autorizada; complementação pedida',
+    });
+    // A repetição é recusada; com a conferência, a cirurgia entra no bloco.
+    await expect(
+      porta.registrarConferenciaParcial(ctx(), m.parcial, {
+        versao: Number(depois['versao']),
+        justificativa: 'Outra conferência da mesma guia',
+      }),
+    ).rejects.toMatchObject(recusa);
+    await paraBloco(m.parcial);
+    expect(
+      (await um('SELECT situacao FROM agendamento_cirurgico WHERE id = ?', [m.parcial]))['situacao'],
+    ).toBe('no_bloco');
   });
 });

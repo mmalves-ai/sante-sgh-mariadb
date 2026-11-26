@@ -21,6 +21,10 @@ const esquemaCirurgia = z.object({
   autorizacaoPosterior: z
     .object({ justificativa: z.string().nullable(), em: z.string().nullable() })
     .nullable(),
+  conferenciaParcial: z
+    .object({ justificativa: z.string().nullable(), em: z.string().nullable() })
+    .nullable()
+    .default(null),
   guias: z.array(
     z.object({ id: z.number(), numero: z.string(), situacao: z.string(), senha: z.string().nullable() }),
   ),
@@ -86,4 +90,16 @@ export const registrarUrgenciaDaCirurgia = (agendamento: number, versao: number,
     { versao, justificativa: justificativa.trim() },
     z.object({ id: z.number(), etapa: z.string() }).passthrough(),
     novaChave('autorizacao-urgencia'),
+  );
+
+export const registrarConferenciaParcialDaCirurgia = (
+  agendamento: number,
+  versao: number,
+  justificativa: string,
+) =>
+  enviar(
+    `${A}/cirurgias/${agendamento}/parcial`,
+    { versao, justificativa: justificativa.trim() },
+    z.object({ id: z.number(), etapa: z.string() }).passthrough(),
+    novaChave('autorizacao-parcial'),
   );
