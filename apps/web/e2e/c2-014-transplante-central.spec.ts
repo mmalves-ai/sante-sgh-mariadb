@@ -210,7 +210,7 @@ test.describe('C2-014 transplante para a central estadual @C2-014', () => {
     await page.getByTestId('transplante-abrir-notificacao-901').click();
     await page.getByTestId('transplante-doador-protocolo-fim').fill('2026-11-01T20:00');
     await page.getByTestId('transplante-doador-abordagem').fill('2026-11-01T21:00');
-    await escolher(page.getByTestId('transplante-doador-consentimento'), 'true');
+    await escolher(page.getByTestId('transplante-doador-consentimento'), 'sim');
     await escolher(page.getByTestId('transplante-doador-desfecho'), 'doacao_efetivada');
     await page.getByTestId('transplante-doador-desfecho-em').fill('2026-11-02T06:00');
     await expect(page.getByTestId('transplante-doador-problemas')).toContainText(
