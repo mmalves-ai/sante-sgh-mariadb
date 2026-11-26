@@ -79,6 +79,12 @@ import {
   PortaProgramaSaudePropria,
 } from './programa-saude-propria.js';
 import { ReajusteColetivoOperadoraController } from './reajuste-coletivo.controller.js';
+import { ProvisaoTecnicaOperadoraController } from './provisao-tecnica.controller.js';
+import {
+  METODOS_PROVISAO_TECNICA_PORTA,
+  PORTA_PROVISAO_TECNICA,
+  PortaProvisaoTecnicaPropria,
+} from './provisao-tecnica-propria.js';
 import {
   METODOS_REAJUSTE_COLETIVO,
   PORTA_REAJUSTE_COLETIVO,
@@ -303,6 +309,7 @@ export async function moduloOperadora(
       DeclaracoesAnsController,
       RegrasCoparticipacaoController,
       ReajusteColetivoOperadoraController,
+      ProvisaoTecnicaOperadoraController,
       ProgramaSaudeOperadoraController,
       RedeCadastroOperadoraController,
       BeneficiarioSaudeOperadoraController,
@@ -400,6 +407,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaReajusteColetivoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaReajusteColetivoPropria>(METODOS_REAJUSTE_COLETIVO),
+      },
+      // 08-SGO L111 (C3-026): plano padrão da ANS, mapa das contas e provisões técnicas só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_PROVISAO_TECNICA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaProvisaoTecnicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaProvisaoTecnicaPropria>(METODOS_PROVISAO_TECNICA_PORTA),
       },
       // 08-SGO L102 (C2-120): remuneração e pagamento do prestador só no banco do cliente (sem núcleo, 503).
       {
