@@ -424,5 +424,18 @@ describe.skipIf(SEM_BANCO)('regra própria do plano na recepção (MariaDB)', ()
     // Com a senha a abertura passa.
     await abrir('servico', { servico: alvo, senhaConvenio: 'SENHA456' });
     expect(await atendimentos()).toBe(antes + 3);
+    // O atendimento guarda o serviço escolhido na abertura (um em cada serviço sintético).
+    const noServico = (s: number) =>
+      contar('SELECT COUNT(*) AS n FROM atendimento WHERE paciente_id = ? AND servico_atendimento_id = ?', [
+        paciente,
+        s,
+      ]);
+    expect(await noServico(alvo)).toBe(1);
+    expect(await noServico(outro)).toBe(1);
+    // Serviço inexistente é recusado e nada se grava.
+    await expect(abrir('servico', { servico: 999_999_999 })).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'servico-inexistente' }),
+    });
+    expect(await atendimentos()).toBe(antes + 3);
   });
 });
