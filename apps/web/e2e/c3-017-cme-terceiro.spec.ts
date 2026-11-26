@@ -106,7 +106,10 @@ test.describe('C3-017 material de terceiro na CME', () => {
       return json(r, { situacao: 'devolvido' });
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // A CME é permissão clínica por perfil (cirurgia.cme.ler e .operar, perfil central-material-esteril): a segregação de
+    // funções a tira do administrador sem perfil assistencial. Quem recebe, confere e devolve o material de terceiro é a
+    // equipe da CME.
+    await entrar(page, 'SINT.CME');
     await page.goto('/cirurgia/cme/terceiros');
     await expect(page.getByTestId('tela-cme-terceiros')).toBeVisible();
 
