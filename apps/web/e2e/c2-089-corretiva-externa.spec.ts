@@ -58,7 +58,7 @@ test.describe('manutenção corretiva: oficina, orçamento e conserto externo @C
     await escolher(form.getByTestId('oficina-fornecedor'), { indice: 1 });
     await form.getByTestId('oficina-membro-incluir').click();
     await campo(form.getByTestId('oficina-membro-login-0')).fill('SINT.MANUTENCAO');
-    await escolher(form.getByTestId('oficina-membro-funcao-0'), 'Aprovador de orçamento');
+    await escolher(form.getByTestId('oficina-membro-funcao-0'), { rotulo: 'Aprovador de orçamento' });
     await campo(form.getByTestId('oficina-membro-alcada-0')).fill('5.000,00');
     await form.getByTestId('oficina-servico-incluir').click();
     await escolher(form.getByTestId('oficina-servico-0'), { indice: 1 });
@@ -75,7 +75,7 @@ test.describe('manutenção corretiva: oficina, orçamento e conserto externo @C
     const ultimo = form.locator('[data-testid^="oficina-membro-login-"]').last();
     await campo(ultimo).fill('SINT.MANUTENCAO');
     const funcoes = form.locator('[data-testid^="oficina-membro-funcao-"]');
-    await escolher(funcoes.last(), 'Aprovador de orçamento');
+    await escolher(funcoes.last(), { rotulo: 'Aprovador de orçamento' });
     await campo(form.locator('[data-testid^="oficina-membro-alcada-"]').last()).fill('5000');
     await form.getByTestId('oficina-gravar').click();
     await expect(tela.getByTestId('oficina-mensagem')).toContainText('Oficina gravada', { timeout: 30_000 });
@@ -107,7 +107,7 @@ test.describe('manutenção corretiva: oficina, orçamento e conserto externo @C
     await campo(c.getByTestId('os-remessa-termo')).fill('Com cabo de força.');
     await c.getByTestId('os-corretiva-gravar').click();
     await expect(c.getByTestId('os-corretiva-problemas')).toContainText('sem custo');
-    await escolher(c.getByTestId('os-remessa-motivo-sem-orcamento'), 'Comodato');
+    await escolher(c.getByTestId('os-remessa-motivo-sem-orcamento'), { rotulo: 'Comodato' });
     await c.getByTestId('os-corretiva-gravar').click();
     await expect(c.getByTestId('os-corretiva-problemas')).toContainText('pelo menos 10 caracteres');
     await c.getByRole('button', { name: 'Cancelar' }).click();
@@ -166,10 +166,10 @@ test.describe('manutenção corretiva: oficina, orçamento e conserto externo @C
     d = await abrirOs(page, aberta.id);
     c = d.getByTestId('os-corretiva');
     const r = c.getByTestId('os-corretiva-retorno');
-    await escolher(r.getByTestId('os-retorno-resultado'), 'Sem conserto');
+    await escolher(r.getByTestId('os-retorno-resultado'), { rotulo: 'Sem conserto' });
     await r.getByTestId('os-retorno-gravar').click();
     await expect(c.getByTestId('os-corretiva-problemas')).toContainText('pelo menos 10 caracteres');
-    await escolher(r.getByTestId('os-retorno-resultado'), 'Consertado');
+    await escolher(r.getByTestId('os-retorno-resultado'), { rotulo: 'Consertado' });
     await campo(r.getByTestId('os-retorno-nota')).fill('900456');
     await r.getByTestId('os-retorno-gravar').click();
     await expect(c.getByTestId('os-remessa-retornado')).toBeVisible({ timeout: 30_000 });
