@@ -76,6 +76,8 @@ export * from './entrada-doacao.js';
 // C2-015 (05-SUP linha 22): devolução de compra ao fornecedor (quantidade, chave da NF-e e abatimento no contas a pagar).
 export * from './devolucao-fornecedor.js';
 export * from './ata-empenho.js';
+// C3-025 (07-FIN linha 132): só a referência do empenho no pedido e no título, com a exportação para o ente.
+export * from './referencia-empenho.js';
 // C2-030 (05-SUP linha 26): lances da disputa aberta do pregão e do leilão (Lei 14.133, art. 56 e 57).
 export * from './lance-pregao.js';
 // C2-038 (05-SUP linha 21): impostos por item e custo de entrada; conferência física do recebimento.

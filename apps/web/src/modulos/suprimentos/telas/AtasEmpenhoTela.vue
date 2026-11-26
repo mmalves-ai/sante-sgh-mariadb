@@ -26,6 +26,7 @@ import {
   registrarAta,
 } from '../api-ata-empenho.js';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
+import ReferenciaEmpenhoPainel from '../componentes/ReferenciaEmpenhoPainel.vue';
 import { data, numero, qtd, reais } from '../usar-suprimentos.js';
 
 const { t } = useI18n();
@@ -438,5 +439,6 @@ async function confirmarAnulacao(e: EmpenhoTela): Promise<void> {
         </tr>
       </tbody>
     </table>
+    <ReferenciaEmpenhoPainel :empenhos="empenhos" />
   </section>
 </template>

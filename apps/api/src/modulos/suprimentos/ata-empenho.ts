@@ -35,6 +35,21 @@ import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import { hojeNoEstabelecimento, insumoAtivo } from './porta-propria.js';
+import {
+  type CandidatosReferenciaVisao,
+  type EntradaReferenciaEmpenho,
+  esquemaReferenciaEmpenho,
+  lerCandidatos,
+  lerExportacao,
+  lerReferencias,
+  OPERACAO_REFERIR_PEDIDO,
+  OPERACAO_REFERIR_TITULO,
+  type ReferenciasEmpenhoVisao,
+  referirPedido,
+  referirTitulo,
+  TABELAS_REFERIR_PEDIDO,
+  TABELAS_REFERIR_TITULO,
+} from './referencia-empenho.js';
 
 export const PORTA_ATA_EMPENHO = Symbol('PORTA_ATA_EMPENHO');
 export const OPERACAO_ATA = 'suprimentos.ata-registro-preco.registrar';
@@ -163,6 +178,26 @@ export interface PortaAtaEmpenho {
     e: EntradaAnulacaoEmpenho,
     chave: string,
   ): Promise<ResultadoAtaEmpenho>;
+  /** C3-025 (07-FIN linha 132): só a referência do empenho no pedido e no título, com a exportação para o ente. */
+  referencias(c: ContextoPortaM18, empenho: number): Promise<ReferenciasEmpenhoVisao>;
+  candidatosReferencia(
+    c: ContextoPortaM18,
+    empenho: number,
+    termo: string,
+  ): Promise<CandidatosReferenciaVisao>;
+  referirPedido(
+    c: ContextoPortaM18,
+    empenho: number,
+    e: EntradaReferenciaEmpenho,
+    chave: string,
+  ): Promise<ResultadoAtaEmpenho>;
+  referirTitulo(
+    c: ContextoPortaM18,
+    empenho: number,
+    e: EntradaReferenciaEmpenho,
+    chave: string,
+  ): Promise<ResultadoAtaEmpenho>;
+  exportacao(c: ContextoPortaM18, inicio: string, fim: string): Promise<string>;
 }
 
 const n = (v: unknown) => Number(v ?? 0);
@@ -613,6 +648,53 @@ export class PortaAtaEmpenhoPropria implements PortaAtaEmpenho {
       () => ({ empenho }),
     );
   }
+
+  referencias(c: ContextoPortaM18, empenho: number): Promise<ReferenciasEmpenhoVisao> {
+    const ctx = this.contexto(c);
+    return this.nucleo.lerSomente(ctx, (l) => lerReferencias(l, ctx.estabelecimento, empenho));
+  }
+
+  candidatosReferencia(
+    c: ContextoPortaM18,
+    empenho: number,
+    termo: string,
+  ): Promise<CandidatosReferenciaVisao> {
+    const ctx = this.contexto(c);
+    return this.nucleo.lerSomente(ctx, (l) => lerCandidatos(l, ctx.estabelecimento, empenho, termo));
+  }
+
+  exportacao(c: ContextoPortaM18, inicio: string, fim: string): Promise<string> {
+    const ctx = this.contexto(c);
+    return this.nucleo.lerSomente(ctx, (l) => lerExportacao(l, ctx.estabelecimento, inicio, fim));
+  }
+
+  referirPedido(c: ContextoPortaM18, empenho: number, e: EntradaReferenciaEmpenho, chave: string) {
+    return this.executar(
+      c,
+      chave,
+      OPERACAO_REFERIR_PEDIDO,
+      TABELAS_REFERIR_PEDIDO,
+      esquemaReferenciaEmpenho,
+      e,
+      (tx, est, x) => referirPedido(tx, est, empenho, x),
+      'pedido_compra',
+      (x) => ({ empenho, pedido: x.id }),
+    );
+  }
+
+  referirTitulo(c: ContextoPortaM18, empenho: number, e: EntradaReferenciaEmpenho, chave: string) {
+    return this.executar(
+      c,
+      chave,
+      OPERACAO_REFERIR_TITULO,
+      TABELAS_REFERIR_TITULO,
+      esquemaReferenciaEmpenho,
+      e,
+      (tx, est, x) => referirTitulo(tx, est, empenho, x),
+      'titulo_pagar',
+      (x) => ({ empenho, titulo: x.id }),
+    );
+  }
 }
 
 export function portaAtaEmpenhoIndisponivel(): PortaAtaEmpenho {
@@ -631,5 +713,10 @@ export function portaAtaEmpenhoIndisponivel(): PortaAtaEmpenho {
     registrarAta: falha,
     emitirEmpenho: falha,
     anularEmpenho: falha,
+    referencias: falha,
+    candidatosReferencia: falha,
+    referirPedido: falha,
+    referirTitulo: falha,
+    exportacao: falha,
   };
 }
