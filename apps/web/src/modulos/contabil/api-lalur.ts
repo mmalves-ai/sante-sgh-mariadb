@@ -108,5 +108,11 @@ export const apurarLalur = (apuracao: number, c: Record<string, unknown>) =>
   gravar(`${P}/apuracoes/${apuracao}/apurar`, c, 'lalur-apurar');
 export const provisionarLalur = (apuracao: number, versao: number) =>
   gravar(`${P}/apuracoes/${apuracao}/provisionar`, { versao }, 'lalur-provisionar');
+export const estornarProvisaoLalur = (apuracao: number, versao: number, justificativa: string) =>
+  gravar(
+    `${P}/apuracoes/${apuracao}/estornar-provisao`,
+    { versao, justificativa },
+    'lalur-estornar-provisao',
+  );
 export const fecharLalur = (apuracao: number, c: Record<string, unknown>) =>
   gravar(`${P}/apuracoes/${apuracao}/fechar`, c, 'lalur-fechar');

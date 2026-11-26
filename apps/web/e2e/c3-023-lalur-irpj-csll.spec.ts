@@ -82,6 +82,16 @@ test.describe('LALUR e apuração do IRPJ e da CSLL @C3-023 @fase7', () => {
           situacao = 'provisionada';
           return json(r, gravacao('Provisão lançada na contabilidade.', { apuracao: 5, lancamento: 44 }));
         }
+        if (caminho.endsWith('/estornar-provisao')) {
+          situacao = 'apurada';
+          return json(
+            r,
+            gravacao('Provisão estornada: a apuração voltou a apurada e os ajustes estão abertos.', {
+              apuracao: 5,
+              estorno: 45,
+            }),
+          );
+        }
         if (caminho.endsWith('/fechar')) {
           situacao = 'fechada';
           return json(
@@ -166,6 +176,15 @@ test.describe('LALUR e apuração do IRPJ e da CSLL @C3-023 @fase7', () => {
     const apuracao = pedidos.find((p) => p.caminho.endsWith('/apurar'));
     expect(apuracao?.corpo).toMatchObject({ contaPrejuizo: 7, contaBaseNegativa: 8 });
 
+    await page.getByTestId('lalur-provisionar').click();
+    await expect(page.getByTestId('lalur-aviso')).toContainText('Provisão lançada');
+    // Estorno da provisão (com o motivo) e nova provisão.
+    await page.getByTestId('lalur-justificativa-estorno').fill('Provisão refeita após revisão');
+    await page.getByTestId('lalur-estornar').click();
+    await expect(page.getByTestId('lalur-aviso')).toContainText('Provisão estornada');
+    expect(pedidos.find((p) => p.caminho.endsWith('/estornar-provisao'))?.corpo).toMatchObject({
+      justificativa: 'Provisão refeita após revisão',
+    });
     await page.getByTestId('lalur-provisionar').click();
     await expect(page.getByTestId('lalur-aviso')).toContainText('Provisão lançada');
     await page.getByTestId('lalur-fechar').click();

@@ -23,6 +23,7 @@ import {
   ladoParteB,
   type LinhaParteAEcf,
   type NaturezaSaldoParteB,
+  partidasEstornoProvisao,
   partidasProvisaoIrpjCsll,
   type RecusaLalur,
   registrosBlocoMEcf,
@@ -825,6 +826,67 @@ const provisionar = definirOperacao<
   alvo: (e) => ({ tabela: 'apuracao_irpj_csll', id: e.apuracao }),
 });
 
+const esquemaEstorno = esquemaVersao.extend({ justificativa: z.string().trim().min(5).max(400) });
+/** O estorno da provisão: lançamento de estorno ligado à provisão e a apuração de volta a apurada (ajustes reabertos). */
+const estornarProvisao = definirOperacao<
+  z.infer<typeof esquemaEstorno>,
+  { apuracao: number; estorno: number | null }
+>({
+  nome: 'contabil.lalur_estornar_provisao',
+  tabelas: ['apuracao_irpj_csll', 'configuracao_provisao_irpj_csll', ...TABELAS_CONTABILIZACAO],
+  entrada: esquemaEstorno as never,
+  async gravar(tx, e, ctx) {
+    const ap = await travarApuracao(tx, e.apuracao);
+    falhar(conferirAcaoApuracao(ap.situacao, 'estornar'));
+    const est = doContexto(ctx);
+    if (est !== null && est !== ap.estabelecimento)
+      throw recusa('outro-estabelecimento', 'Estorne a partir do estabelecimento da apuração.', {
+        campos: ['apuracao'],
+      });
+    let estorno: number | null = null;
+    if (ap.provisao !== null) {
+      const partidas = await tx.consultar(
+        `SELECT p.lado, c.classificacao, p.valor, p.complemento AS historico FROM partida_contabil p
+           JOIN conta_contabil c ON c.id = p.conta_contabil_id
+          WHERE p.lancamento_contabil_id = ? ORDER BY p.sequencia`,
+        [ap.provisao],
+      );
+      const rotulo = `${ap.inicio.slice(0, 7)} a ${ap.fim.slice(0, 7)}`;
+      const g = gravacaoDosFatos(tx, ap.estabelecimento);
+      estorno = (
+        await g.gravarLancamento({
+          chave: `estorno:${ap.provisao}`,
+          tipo: 'estorno',
+          empresa: ap.estabelecimento,
+          data: ap.fim,
+          competencia: ap.fim.slice(0, 7),
+          historico: `Estorno da provisão do IRPJ e da CSLL do lucro real ${rotulo}`,
+          partidas: partidasEstornoProvisao(
+            partidas.map((x) => ({
+              lado: String(x['lado']) === 'debito' ? ('D' as const) : ('C' as const),
+              conta: txt(x['classificacao']),
+              valorCentavos: centavos(x['valor']),
+              historico: txt(x['historico']),
+              centroCusto: null,
+            })),
+          ),
+          fatoId: null,
+          regraId: null,
+          regra: null,
+          estornaId: ap.provisao,
+          justificativa: e.justificativa,
+        })
+      ).id;
+    }
+    await tx.alterar('apuracao_irpj_csll', ap.id, e.versao, {
+      situacao: 'apurada',
+      provisao_lancamento_contabil_id: null,
+    });
+    return { apuracao: ap.id, estorno };
+  },
+  alvo: (e) => ({ tabela: 'apuracao_irpj_csll', id: e.apuracao }),
+});
+
 const esquemaFechar = esquemaVersao.extend({
   contaPrejuizo: id.nullable().default(null),
   contaBaseNegativa: id.nullable().default(null),
@@ -880,5 +942,6 @@ export const OPERACOES_LALUR = {
   excluirAjuste,
   apurar,
   provisionar,
+  estornarProvisao,
   fechar,
 } as const;

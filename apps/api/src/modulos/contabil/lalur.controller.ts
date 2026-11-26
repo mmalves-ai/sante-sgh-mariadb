@@ -183,6 +183,20 @@ export class LalurController {
     );
   }
 
+  @Post('apuracoes/:id/estornar-provisao')
+  @HttpCode(200)
+  @Permissao('contabil.lalur.apurar')
+  @AuditadoNoHandler('contabil.lalur_estornar_provisao pelo executor (trilha na mesma transação)')
+  estornarProvisao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const c = corpo(b);
+    return this.gravar(
+      req,
+      'estornarProvisao',
+      { apuracao: positivo(id, 'Apuração'), versao: c['versao'], justificativa: c['justificativa'] },
+      () => 'Provisão estornada: a apuração voltou a apurada e os ajustes estão abertos.',
+    );
+  }
+
   @Post('apuracoes/:id/fechar')
   @HttpCode(200)
   @Permissao('contabil.lalur.apurar')

@@ -165,7 +165,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // sadt.lancamento.ler) entrou junto.
 // C1-135 (06-FAT linha 38, F3): o item "Preferências do faturista" das contas do paciente entrou à mão (mesmo motivo); a
 // contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":520,"M":198,"P":57,"N":265};
+// C3-023 (07-FIN linha 115, F7): o item "LALUR e apuração do IRPJ e da CSLL" da contabilidade entrou à mão (mesmo
+// motivo; F7 vai como fase 7); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":521,"M":198,"P":57,"N":266};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -560,6 +562,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"controladoria.contabilidade.lancamentos-automaticos-dos-modulos-e-razao","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","Lançamentos automáticos dos módulos e razão"],"titulo":"Lançamentos automáticos dos módulos e razão","selo":"N","fase":6,"rota":"/contabil/lancamentos","permissao":"contabil.lancamento.ler"},
   {"id":"controladoria.contabilidade.balancete-dre-e-balanco","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","Balancete, DRE e balanço"],"titulo":"Balancete, DRE e balanço","selo":"N","fase":6,"rota":"/contabil/demonstracoes","permissao":"contabil.demonstracao.ler"},
   {"id":"controladoria.contabilidade.sped-ecd-ecf","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","SPED ECD/ECF"],"titulo":"SPED ECD/ECF","selo":"N","fase":6,"rota":"/contabil/sped","permissao":"contabil.sped.ler"},
+  {"id":"controladoria.contabilidade.lalur-e-apuracao-do-irpj-e-da-csll","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","LALUR e apuração do IRPJ e da CSLL"],"titulo":"LALUR e apuração do IRPJ e da CSLL","selo":"N","fase":7,"rota":"/contabil/lalur","permissao":"contabil.lalur.ler"},
   {"id":"controladoria.custos-hospitalares.centros-de-custo-e-criterios-de-rateio","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Centros de custo e critérios de rateio"],"titulo":"Centros de custo e critérios de rateio","selo":"N","fase":6,"rota":"/custos/centros","permissao":"custos.centro.ler"},
   {"id":"controladoria.custos-hospitalares.custo-por-procedimento-e-por-paciente","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Custo por procedimento e por paciente"],"titulo":"Custo por procedimento e por paciente","selo":"N","fase":6,"rota":"/custos/apuracao","permissao":"custos.apuracao.ler"},
   {"id":"controladoria.custos-hospitalares.resultado-por-unidade-e-por-convenio","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Resultado por unidade e por convênio"],"titulo":"Resultado por unidade e por convênio","selo":"N","fase":6,"rota":"/custos/resultado","permissao":"custos.resultado.ler"},

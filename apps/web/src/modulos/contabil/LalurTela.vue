@@ -12,6 +12,7 @@ import {
   abrirApuracaoLalur,
   apurarLalur,
   excluirAjusteLalur,
+  estornarProvisaoLalur,
   fecharLalur,
   incluirAjusteLalur,
   incluirContaParteB,
@@ -173,6 +174,9 @@ const situacao = computed(() => ap.value?.situacao ?? '');
 const versao = computed(() => ap.value?.versao ?? 1);
 const apurar = () => acao.mutate(() => apurarLalur(apuracao.value!, { versao: versao.value, ...calc }));
 const provisionar = () => acao.mutate(() => provisionarLalur(apuracao.value!, versao.value));
+const justificativaEstorno = ref('');
+const estornar = () =>
+  acao.mutate(() => estornarProvisaoLalur(apuracao.value!, versao.value, justificativaEstorno.value));
 const fechar = () =>
   acao.mutate(() =>
     fecharLalur(apuracao.value!, {
@@ -363,6 +367,22 @@ const ajustavel = computed(() => situacao.value === 'aberta' || situacao.value =
           data-testid="lalur-provisionar"
           @acionar="provisionar"
         />
+        <template v-if="situacao === 'provisionada'">
+          <label
+            >{{ k('apurar.justificativaEstorno') }}
+            <input
+              v-model="justificativaEstorno"
+              type="text"
+              maxlength="400"
+              data-testid="lalur-justificativa-estorno"
+          /></label>
+          <SanteBotao
+            variante="secundario"
+            :rotulo="k('apurar.estornar')"
+            data-testid="lalur-estornar"
+            @acionar="estornar"
+          />
+        </template>
         <SanteBotao
           v-if="situacao === 'apurada' || situacao === 'provisionada'"
           variante="secundario"

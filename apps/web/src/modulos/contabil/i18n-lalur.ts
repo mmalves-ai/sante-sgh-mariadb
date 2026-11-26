@@ -77,6 +77,8 @@ export const mensagensLalur = {
     botao: 'Apurar',
     provisionar: 'Provisionar',
     fechar: 'Fechar',
+    justificativaEstorno: 'Motivo do estorno da provisão',
+    estornar: 'Estornar a provisão',
     lucro: 'Lucro antes dos tributos',
     baseIrpj: 'Base do IRPJ',
     baseCsll: 'Base da CSLL',

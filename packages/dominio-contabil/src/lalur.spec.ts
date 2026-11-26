@@ -9,6 +9,7 @@ import {
   type EntradaLucroReal,
   ladoParteB,
   mesesDoPeriodo,
+  partidasEstornoProvisao,
   partidasProvisaoIrpjCsll,
   registrosBlocoMEcf,
   saldoParteB,
@@ -132,6 +133,9 @@ describe('LALUR e apuração do lucro real', () => {
     expect(conferirAcaoApuracao('apurada', 'fechar', 100)?.codigo).toBe('apuracao-sem-provisao');
     expect(conferirAcaoApuracao('apurada', 'fechar', 0)).toBeNull();
     expect(conferirAcaoApuracao('provisionada', 'fechar', 100)).toBeNull();
+    expect(conferirAcaoApuracao('provisionada', 'estornar')).toBeNull();
+    expect(conferirAcaoApuracao('apurada', 'estornar')?.codigo).toBe('apuracao-nao-provisionada');
+    expect(conferirAcaoApuracao('fechada', 'estornar')?.codigo).toBe('apuracao-nao-provisionada');
   });
 
   it('provisão: despesa contra o tributo a recolher; bloco M com M010, M300, M350, M410 e M500', () => {
@@ -141,6 +145,9 @@ describe('LALUR e apuração do lucro real', () => {
       '1º tri',
     );
     expect(p.map((x) => `${x.lado}${x.conta}${x.valorCentavos}`)).toEqual(['D5.9.11000', 'C2.1.91000']);
+    const e = partidasEstornoProvisao(p);
+    expect(e.map((x) => `${x.lado}${x.conta}${x.valorCentavos}`)).toEqual(['C5.9.11000', 'D2.1.91000']);
+    expect(e[0]?.historico).toBe('Estorno da provisão do IRPJ 1º tri');
     const { linhas, avisos } = registrosBlocoMEcf(
       [
         {

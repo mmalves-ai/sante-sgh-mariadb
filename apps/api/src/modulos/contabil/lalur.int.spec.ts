@@ -57,6 +57,10 @@ describe.skipIf(SEM_BANCO)('LALUR/LACS, apuração e provisão do IRPJ e da CSLL
       'DELETE p FROM partida_contabil p JOIN lancamento_contabil l ON l.id = p.lancamento_contabil_id WHERE l.estabelecimento_id = ?',
       [est],
     );
+    await e.executar(
+      'DELETE FROM lancamento_contabil WHERE estabelecimento_id = ? AND estornado_lancamento_contabil_id IS NOT NULL',
+      [est],
+    );
     await e.executar('DELETE FROM lancamento_contabil WHERE estabelecimento_id = ?', [est]);
     await e.executar('DELETE FROM periodo_contabil WHERE estabelecimento_id = ?', [est]);
     await limparTrilhaDaMassa(e, { ids: [est] });
@@ -258,6 +262,50 @@ describe.skipIf(SEM_BANCO)('LALUR/LACS, apuração e provisão do IRPJ e da CSLL
     expect(await codigoDaGravacao(ajuste({ tipo: 'adicao', descricao: 'TARDE', valor: 1 }))).toBe(
       'apuracao-travada',
     );
+
+    // Estorno da provisão: sem justificativa recusa sem escrita; com ela, o lançamento de estorno ligado à provisão
+    // com os lados trocados, a apuração volta a apurada (ajustes reabertos) e um segundo estorno é recusado.
+    const lancs = async () =>
+      contagem('SELECT COUNT(*) AS n FROM lancamento_contabil WHERE estornado_lancamento_contabil_id = ?', [
+        p['lancamento'],
+      ]);
+    expect(
+      await codigoDaGravacao(
+        executar('estornarProvisao', { apuracao: ap, versao: await versao(ap), justificativa: '' }),
+      ),
+    ).toBeTruthy();
+    expect(await lancs()).toBe(0);
+    const est1 = await executar('estornarProvisao', {
+      apuracao: ap,
+      versao: await versao(ap),
+      justificativa: 'Provisão refeita após revisão',
+    });
+    const inversas = await consultar(
+      `SELECT c.classificacao, p.lado, p.valor FROM partida_contabil p JOIN conta_contabil c ON c.id = p.conta_contabil_id
+        WHERE p.lancamento_contabil_id = ? ORDER BY p.sequencia`,
+      [est1['estorno']],
+    );
+    expect(
+      inversas.map((x) => `${String(x['lado'])}:${String(x['classificacao'])}:${Number(x['valor'])}`),
+    ).toEqual(['credito:5.9:30750', 'debito:2.9:30750', 'credito:5.8:15300', 'debito:2.8:15300']);
+    expect(await lancs()).toBe(1);
+    const [voltou] = await consultar(
+      'SELECT situacao, provisao_lancamento_contabil_id AS l FROM apuracao_irpj_csll WHERE id = ?',
+      [ap],
+    );
+    expect(voltou?.['situacao']).toBe('apurada');
+    expect(voltou?.['l']).toBeNull();
+    expect(
+      await codigoDaGravacao(
+        executar('estornarProvisao', {
+          apuracao: ap,
+          versao: await versao(ap),
+          justificativa: 'De novo, por engano',
+        }),
+      ),
+    ).toBe('apuracao-nao-provisionada');
+    const p2 = await executar('provisionar', { apuracao: ap, versao: await versao(ap) });
+    expect(Number(p2['lancamento'])).not.toBe(Number(p['lancamento']));
 
     await executar('fechar', { apuracao: ap, versao: await versao(ap) });
     const d = await ler((l) => detalheApuracaoLalur(l, ap));

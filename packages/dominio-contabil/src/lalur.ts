@@ -29,7 +29,7 @@ export type SituacaoApuracaoLucroReal = (typeof SITUACOES_APURACAO_LUCRO_REAL)[n
 export type TributoParteB = 'irpj' | 'csll' | 'ambos';
 export type NaturezaSaldoParteB = 'devedor' | 'credor';
 export type EfeitoParteB = 'constitui' | 'baixa';
-export type AcaoApuracaoLucroReal = 'ajustar' | 'apurar' | 'provisionar' | 'fechar';
+export type AcaoApuracaoLucroReal = 'ajustar' | 'apurar' | 'provisionar' | 'estornar' | 'fechar';
 
 export interface RecusaLalur {
   readonly codigo: string;
@@ -96,6 +96,14 @@ export function conferirAcaoApuracao(
     return situacao === 'apurada'
       ? null
       : recusa('apuracao-nao-apurada', 'Só a apuração calculada (apurada) é provisionada.', ['apuracao']);
+  if (acao === 'estornar')
+    return situacao === 'provisionada'
+      ? null
+      : recusa(
+          'apuracao-nao-provisionada',
+          'Só a apuração provisionada (e ainda não fechada) tem a provisão estornada.',
+          ['apuracao'],
+        );
   if (situacao === 'provisionada' || (situacao === 'apurada' && aRecolherCentavos === 0)) return null;
   return recusa(
     'apuracao-sem-provisao',
@@ -297,6 +305,18 @@ export function apurarLucroReal(e: EntradaLucroReal): ResultadoLucroReal {
     csllRecolher,
     memoria,
   };
+}
+
+/**
+ * O estorno da provisão: as mesmas partidas com os lados trocados. A apuração volta a apurada e os ajustes se
+ * reabrem (prática do mercado: a provisão errada se estorna e se refaz; o lançamento original nunca se apaga).
+ */
+export function partidasEstornoProvisao(provisao: readonly PartidaGerada[]): PartidaGerada[] {
+  return provisao.map((x) => ({
+    ...x,
+    lado: (x.lado === 'D' ? 'C' : 'D') as PartidaGerada['lado'],
+    historico: `Estorno da ${x.historico.charAt(0).toLowerCase()}${x.historico.slice(1)}`,
+  }));
 }
 
 export interface ContasProvisao {
