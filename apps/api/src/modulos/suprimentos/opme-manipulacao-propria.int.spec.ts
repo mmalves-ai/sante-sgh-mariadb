@@ -29,6 +29,13 @@ async function limparOpme(e: Escritor): Promise<void> {
     `DELETE FROM conferencia_manipulacao WHERE ordem_manipulacao_id IN (SELECT id FROM ordem_manipulacao WHERE estabelecimento_id IN (${ESTS}))`,
     `DELETE FROM ordem_manipulacao_insumo WHERE ordem_manipulacao_id IN (SELECT id FROM ordem_manipulacao WHERE estabelecimento_id IN (${ESTS}))`,
     `DELETE FROM ordem_manipulacao WHERE estabelecimento_id IN (${ESTS})`,
+    `DELETE FROM etapa_solicitacao_opme WHERE estabelecimento_id IN (${ESTS})`,
+    `DELETE FROM recebimento_material_terceiro WHERE estabelecimento_id IN (${ESTS})`,
+    `DELETE ri FROM remessa_consignada_item ri JOIN remessa_consignada r ON r.id = ri.remessa_consignada_id WHERE r.estabelecimento_id IN (${ESTS})`,
+    `DELETE FROM remessa_consignada WHERE estabelecimento_id IN (${ESTS})`,
+    `DELETE FROM nota_entrada WHERE estabelecimento_id IN (${ESTS}) AND numero >= 970000`,
+    `DELETE FROM pedido_compra WHERE estabelecimento_id IN (${ESTS}) AND numero >= 970000`,
+    `DELETE FROM setor_funcional WHERE estabelecimento_id IN (${ESTS}) AND codigo LIKE '%-CMEOPME'`,
     `DELETE FROM consumo_opme WHERE estabelecimento_id IN (${ESTS})`,
     `DELETE FROM autorizacao_opme WHERE estabelecimento_id IN (${ESTS})`,
     `DELETE FROM solicitacao_opme_item WHERE solicitacao_opme_id IN (SELECT id FROM solicitacao_opme WHERE estabelecimento_id IN (${ESTS}))`,
@@ -212,7 +219,7 @@ describe.skipIf(SEM_BANCO)('gravações do OPME e da manipulação na porta pró
     });
     expect(lida!.etapas.map((e) => e.etapa)).toEqual(['solicitacao']);
     expect(await opme.solicitacao(contexto(m, m.estB), s.id)).toBeNull();
-    // Etapa sem estrutura no banco: recusa com o motivo.
+    // A nota fiscal sem a chave da nota: recusa com o motivo, nada gravado.
     expect(
       await codigoDe(
         opme.gravarSgh(c, trilha('solicitacao_opme'), (g) =>
@@ -227,7 +234,7 @@ describe.skipIf(SEM_BANCO)('gravações do OPME e da manipulação na porta pró
           }),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('sem-nf');
     const pedidoAut = {
       solicitacao: s.id,
       etapa: 'autorizacao' as const,
@@ -316,7 +323,7 @@ describe.skipIf(SEM_BANCO)('gravações do OPME e da manipulação na porta pró
         lote: 'LOTE-OPME-1',
         serie: 'SERIE-1',
         fabricante: `FABRICANTE ${m.marca}`,
-        modelo: null,
+        modelo: 'MODELO SINTETICO X1',
         registroAnvisa: '1234567890123',
         validade: '2027-12-31',
         codigoLido: null,
@@ -331,6 +338,12 @@ describe.skipIf(SEM_BANCO)('gravações do OPME e da manipulação na porta pró
       chaveIdempotencia: chConsumo,
     });
     const consumo = await opme.consumoPelaChave(c, chConsumo);
+    // O modelo do material fica no consumo (rastreio: fabricante, modelo, lote e série).
+    const [mod] = await ler<{ modelo: unknown }>(
+      'SELECT modelo FROM consumo_opme WHERE estabelecimento_id = ? ORDER BY id DESC LIMIT 1',
+      [m.estA],
+    );
+    expect(mod!.modelo).toBe('MODELO SINTETICO X1');
     expect(consumo).toMatchObject({
       id: Number(r.resultado['consumo']),
       solicitacao: s.id,
@@ -414,6 +427,200 @@ describe.skipIf(SEM_BANCO)('gravações do OPME e da manipulação na porta pró
       ),
     ).toBe('fabricante-nao-cadastrado');
     expect(await opme.podeGravar(c, 'opme.desconhecida')).toMatchObject({ pode: false });
+  });
+
+  it('OPME (C3-021): pedido de compra, consignação, esterilização na CME e nota fiscal ligados aos documentos reais', async () => {
+    const c = contexto(m);
+    const num = 970_000 + (Date.now() % 20_000);
+    const s = await opme.gravarSgh(c, trilha('solicitacao_opme'), (g) =>
+      g.solicitar({
+        agendamento: ids.agenda!,
+        sala: 1,
+        dataHora: '2026-11-21T08:00',
+        reg: ids.atendimento!,
+        paciente: ids.paciente!,
+        item: m.insumoOpme,
+        tuss: '70000002',
+        quantidade: 1,
+        fornecedor: m.fornecedor,
+        justificativa: 'Implante sintetico das etapas logisticas.',
+        consignado: true,
+        em: '2026-11-20T09:00',
+        usuario: 'x',
+        chave: chave(),
+      }),
+    );
+    let v = (await opme.solicitacao(c, s.id))!.versao;
+    const avancar = (
+      etapa: 'autorizacao' | 'pedido' | 'consignacao' | 'cme' | 'nf',
+      x: Record<string, unknown>,
+      situacao: string,
+    ) =>
+      opme.gravarSgh(c, trilha('etapa_solicitacao_opme'), (g) =>
+        g.avancar({
+          solicitacao: s.id,
+          versaoVista: v,
+          etapa,
+          em: '2026-11-20T10:00',
+          usuario: 'x',
+          chave: chave(),
+          ...x,
+          mudanca: { situacao: situacao as 'autorizada' },
+        } as never),
+      );
+    v = (
+      await avancar(
+        'autorizacao',
+        { quantidade: 1, senha: 'S2', guia: 'G2', validade: '2026-12-31' },
+        'autorizada',
+      )
+    ).versao;
+    // Os documentos reais (massa sintética): pedido, remessa consignada com o material, a CME e a nota de entrada.
+    const docs = await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-f24sf-c3021' }, async (e) => {
+      const x = (t: string, val: Record<string, unknown>) => inserirMinimo(e, t, val, m.marca);
+      const tipoEntrada = await e.uma<{ id: unknown }>(
+        'SELECT id FROM tipo_entrada_estoque ORDER BY id LIMIT 1',
+        [],
+      );
+      const pedido = await x('pedido_compra', {
+        estabelecimento_id: m.estA,
+        centro_custo_id: m.centroCusto,
+        empresa_fornecedora_id: m.fornecedor,
+        ano: 2026,
+        numero: num,
+        data_pedido: '2026-11-20',
+      });
+      const remessa = await x('remessa_consignada', {
+        estabelecimento_id: m.estA,
+        empresa_fornecedora_id: m.fornecedor,
+        local_estoque_id: m.localA2,
+        numero: num,
+        recebida_em: '2026-11-20 07:00:00',
+        situacao: 'aberta',
+      });
+      await x('remessa_consignada_item', {
+        remessa_consignada_id: remessa,
+        insumo_id: m.insumoOpme,
+        unidade_medida_id: m.unidade,
+        numero_serie: `SER-${m.marca}`,
+        quantidade: 1,
+      });
+      const cme = await x('setor_funcional', {
+        estabelecimento_id: m.estA,
+        codigo: `${m.marca}-CMEOPME`,
+        tipo: 'apoio_tecnico',
+      });
+      const receb = await x('recebimento_material_terceiro', {
+        estabelecimento_id: m.estA,
+        numero: num,
+        empresa_fornecedora_id: m.fornecedor,
+        agendamento_cirurgico_id: ids.agenda,
+        cme_setor_funcional_id: cme,
+        recebido_por_usuario_id: m.usuario,
+        recebido_em: '2026-11-20 07:30:00',
+        situacao: 'em_reprocessamento',
+      });
+      const nota = await x('nota_entrada', {
+        estabelecimento_id: m.estA,
+        local_estoque_id: m.localA2,
+        tipo_entrada_estoque_id: Number(tipoEntrada!.id),
+        empresa_fornecedora_id: m.fornecedor,
+        numero: num,
+      });
+      const [ne] = await e.consultar<{ em: unknown }>(
+        'SELECT criado_em AS em FROM nota_entrada WHERE id = ?',
+        [nota],
+      );
+      return {
+        pedido,
+        remessa,
+        receb,
+        nota,
+        notaEm: new Date(String(ne!.em instanceof Date ? (ne!.em as Date).toISOString() : ne!.em)),
+      };
+    });
+    const contar = async () =>
+      Number(
+        (
+          await ler<{ q: unknown }>(
+            'SELECT COUNT(*) AS q FROM etapa_solicitacao_opme WHERE solicitacao_opme_id = ?',
+            [s.id],
+          )
+        )[0]!.q,
+      );
+    // Recusas sem escrita: pedido que não existe; a CME ainda reprocessando.
+    expect(await codigoDe(avancar('pedido', { pedido: { ano: 2026, doc: num + 1 } }, 'pedido'))).toBe(
+      'pedido-inexistente',
+    );
+    expect(await codigoDe(avancar('cme', {}, 'cme'))).toBe('cme-em-processamento');
+    expect(await contar()).toBe(0);
+    // Pedido de compra ligado pela chave.
+    const ep = await avancar('pedido', { pedido: { ano: 2026, doc: num } }, 'pedido');
+    v = ep.versao;
+    let lida = (await opme.solicitacao(c, s.id))!;
+    expect(lida.situacao).toBe('pedido');
+    expect(lida.etapas.find((e) => e.etapa === 'pedido')).toMatchObject({ pedido: { ano: 2026, doc: num } });
+    // Consignação: outro fornecedor sem remessa recusa; o do pedido liga a remessa com o material.
+    expect(await codigoDe(avancar('consignacao', { fornecedor: m.fornecedor2 }, 'consignada'))).toBe(
+      'sem-remessa-consignada',
+    );
+    v = (await avancar('consignacao', { fornecedor: m.fornecedor }, 'consignada')).versao;
+    expect((await opme.solicitacao(c, s.id))!.situacao).toBe('consignada');
+    // A CME libera: a etapa liga o recebimento disponível.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-f24sf-c3021' }, (e) =>
+      e.executar("UPDATE recebimento_material_terceiro SET situacao = 'disponivel' WHERE id = ?", [
+        docs.receb,
+      ]),
+    );
+    v = (await avancar('cme', {}, 'cme')).versao;
+    lida = (await opme.solicitacao(c, s.id))!;
+    expect(lida.situacao).toBe('cme');
+    // A nota fiscal antes do consumo fica registrada sem fechar a solicitação.
+    const em = docs.notaEm;
+    v = (
+      await avancar('nf', { nf: { ano: em.getUTCFullYear(), mes: em.getUTCMonth() + 1, doc: num } }, 'cme')
+    ).versao;
+    lida = (await opme.solicitacao(c, s.id))!;
+    expect(lida.situacao).toBe('cme');
+    expect(lida.etapas.map((e) => e.etapa)).toEqual([
+      'solicitacao',
+      'autorizacao',
+      'pedido',
+      'consignacao',
+      'cme',
+      'nf',
+    ]);
+    expect(lida.etapas.find((e) => e.etapa === 'nf')!.nf).toMatchObject({ doc: num });
+    // O contrato de efeito: uma linha por etapa, cada uma com o documento real e o fornecedor.
+    const linhas = await ler<Record<string, unknown>>(
+      `SELECT etapa, pedido_compra_id AS p, remessa_consignada_id AS r, recebimento_material_terceiro_id AS t,
+              nota_entrada_id AS n, empresa_fornecedora_id AS f, registrado_por_usuario_id AS u
+         FROM etapa_solicitacao_opme WHERE solicitacao_opme_id = ? ORDER BY id`,
+      [s.id],
+    );
+    expect(
+      linhas.map((l) => [
+        l['etapa'],
+        Number(l['p'] ?? 0),
+        Number(l['r'] ?? 0),
+        Number(l['t'] ?? 0),
+        Number(l['n'] ?? 0),
+      ]),
+    ).toEqual([
+      ['pedido', docs.pedido, 0, 0, 0],
+      ['consignacao', 0, docs.remessa, 0, 0],
+      ['esterilizacao', 0, 0, docs.receb, 0],
+      ['nota_fiscal', 0, 0, 0, docs.nota],
+    ]);
+    expect(linhas.every((l) => Number(l['f']) === m.fornecedor && Number(l['u']) === m.usuario)).toBe(true);
+    const [cab] = await ler<{ situacao: unknown; versao: unknown }>(
+      'SELECT situacao, versao FROM solicitacao_opme WHERE id = ?',
+      [s.id],
+    );
+    expect(cab).toMatchObject({ situacao: 'autorizada' });
+    expect(Number(cab!.versao)).toBe(v);
+    // Outro estabelecimento não enxerga a solicitação.
+    expect(await opme.solicitacao(contexto(m, m.estB), s.id)).toBeNull();
   });
 
   it('manipulação: abertura, dupla conferência por outro farmacêutico e baixa do insumo', async () => {

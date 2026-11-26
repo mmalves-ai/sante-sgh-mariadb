@@ -460,3 +460,104 @@ export function lerCodigoEmbalagem(texto: string): CodigoEmbalagemLido {
     validade: campos.has('17') ? validadeGs1(campos.get('17') as string) : null,
   };
 }
+
+// ── Etapas logísticas: o documento real a que a etapa fica ligada (C3-021) ─────────────────────────────────────────
+
+/** A remessa consignada candidata: a do fornecedor com o item e saldo ainda não consumido nem devolvido. */
+export interface RemessaCandidataOpme {
+  readonly id: number;
+  readonly fornecedor: number;
+  readonly situacao: 'aberta' | 'conferida' | 'encerrada' | 'cancelada';
+  /** O saldo do item na remessa (quantidade - consumida - devolvida). */
+  readonly saldo: number;
+  /** AAAA-MM-DDTHH:mm. */
+  readonly recebidaEm: string;
+}
+
+/** O recebimento do material de terceiro na CME (central de material e esterilização) para a cirurgia. */
+export interface RecebimentoCmeCandidatoOpme {
+  readonly id: number;
+  readonly fornecedor: number | null;
+  readonly situacao:
+    'recebido' | 'conferido' | 'em_reprocessamento' | 'disponivel' | 'devolvido' | 'divergente' | 'cancelado';
+  /** AAAA-MM-DDTHH:mm. */
+  readonly recebidoEm: string;
+}
+
+export type VinculoEtapaOpme =
+  { readonly ok: true; readonly id: number } | { readonly ok: false; readonly recusa: RecusaSuprimentos };
+
+/**
+ * A remessa consignada da etapa de consignação: a mais recente do fornecedor, aberta ou conferida, com saldo do item
+ * que cubra a quantidade (autorizada ou solicitada). Sem remessa do fornecedor com o item, recusa: a consignação só
+ * existe com a nota de remessa recebida no estoque.
+ */
+export function escolherRemessaConsignadaOpme(
+  candidatas: readonly RemessaCandidataOpme[],
+  fornecedor: number,
+  quantidade: number,
+): VinculoEtapaOpme {
+  const doFornecedor = candidatas.filter((c) => c.fornecedor === fornecedor);
+  const vivas = doFornecedor.filter((c) => c.situacao === 'aberta' || c.situacao === 'conferida');
+  if (!vivas.length)
+    return {
+      ok: false,
+      recusa: recusa(
+        'sem-remessa-consignada',
+        'Não há remessa consignada aberta deste fornecedor com o material: receba a nota de remessa no estoque antes.',
+        ['fornecedor'],
+      ),
+    };
+  const cobre = vivas
+    .filter((c) => qtd3(c.saldo) >= qtd3(quantidade))
+    .sort((a, b) => (a.recebidaEm < b.recebidaEm ? 1 : a.recebidaEm > b.recebidaEm ? -1 : b.id - a.id));
+  if (!cobre.length)
+    return {
+      ok: false,
+      recusa: recusa(
+        'remessa-sem-saldo',
+        `A remessa consignada do fornecedor não tem saldo do material para ${qtd3(quantidade)} unidade(s).`,
+        ['fornecedor'],
+      ),
+    };
+  return { ok: true, id: cobre[0]!.id };
+}
+
+/**
+ * O recebimento na CME da etapa de esterilização: o da cirurgia, do mesmo fornecedor quando os dois o informam, e só
+ * disponível (todos os pacotes estéreis). Em conferência ou reprocessamento, recusa com o motivo: o material ainda não
+ * pode ir à sala; divergente ou cancelado não serve.
+ */
+export function escolherRecebimentoCmeOpme(
+  candidatos: readonly RecebimentoCmeCandidatoOpme[],
+  fornecedor: number | null,
+): VinculoEtapaOpme {
+  const meus = candidatos.filter(
+    (c) => fornecedor === null || c.fornecedor === null || c.fornecedor === fornecedor,
+  );
+  const disponivel = [...meus]
+    .filter((c) => c.situacao === 'disponivel')
+    .sort((a, b) => (a.recebidoEm < b.recebidoEm ? 1 : a.recebidoEm > b.recebidoEm ? -1 : b.id - a.id));
+  if (disponivel.length) return { ok: true, id: disponivel[0]!.id };
+  if (
+    meus.some(
+      (c) => c.situacao === 'recebido' || c.situacao === 'conferido' || c.situacao === 'em_reprocessamento',
+    )
+  )
+    return {
+      ok: false,
+      recusa: recusa(
+        'cme-em-processamento',
+        'O material está na CME e ainda não foi liberado estéril: aguarde a liberação do ciclo.',
+        ['etapa'],
+      ),
+    };
+  return {
+    ok: false,
+    recusa: recusa(
+      'sem-recebimento-cme',
+      'A CME não recebeu o material desta cirurgia: registre o recebimento do material de terceiro na CME.',
+      ['etapa'],
+    ),
+  };
+}

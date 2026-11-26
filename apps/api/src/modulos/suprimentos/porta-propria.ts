@@ -27,7 +27,7 @@
 // e o custo depois e os lotes); a saída nunca deixa saldo negativo e, sem lote escolhido no item rastreável, usa o que
 // vence primeiro (nunca vencido nem bloqueado); a devolução volta pelo custo e pelos lotes da saída e aponta o
 // movimento que desfaz.
-// Ainda fora (recusa com o motivo): o consumo e a devolução de OPME na saída e a baixa do insumo da manipulação.
+// O consumo de OPME grava o modelo do material (C3-021); a devolução volta pelos lotes da saída.
 // O pedido de compra nasce ligado ao contrato do fornecedor (05-SUP linha 27), pelas regras do vínculo do contrato.
 import {
   ajusteDoInventario,
@@ -153,7 +153,6 @@ import {
   chaveDaTela,
   contextoNucleo,
   ENTRADAS_SUPRIMENTOS,
-  modeloPendente,
   operacaoSuprimentos,
   resultadoDe,
   valorDe,
@@ -2197,7 +2196,6 @@ async function gravarConsumoOpme(
   u: SaidaFeita,
 ): Promise<number> {
   const o = e.opme!;
-  if (o.modelo) throw modeloPendente('o modelo do OPME no consumo (coluna de modelo em consumo_opme)');
   const fab = await tx.uma<Linha>(
     `SELECT id FROM fabricante WHERE UPPER(nome) = UPPER(?) AND ativo = TRUE AND excluido_em IS NULL
       ORDER BY id LIMIT 1`,
@@ -2259,6 +2257,7 @@ async function gravarConsumoOpme(
     sala_cirurgica_id: numeroOuNulo(ag['sala_cirurgica_id']),
     insumo_id: u.insumo,
     fabricante_id: n(fab['id']),
+    modelo: o.modelo ? o.modelo.slice(0, 80) : null,
     empresa_fornecedora_id: o.fornecedor,
     lote_insumo_id: u.lotes.length === 1 ? u.lotes[0]!.id : null,
     numero_lote: o.lote,
