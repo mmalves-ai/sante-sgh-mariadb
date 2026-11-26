@@ -1,5 +1,5 @@
 // E2E @C2-092 (05-SUP linha 11): fracionamento e unitarização de dose pelas rotas reais do módulo (o
-// UnitarizacaoDoseController registrado no modulo.ts). O usuário da manipulação (SINT.BLOCO, como no E2E M46) abre a tela pelo menu (Suprimentos > Farmácia
+// UnitarizacaoDoseController registrado no modulo.ts). O usuário da manipulação (SINT.MANIPULACAO, o farmacêutico da manipulação do E2E M46) abre a tela pelo menu (Suprimentos > Farmácia
 // hospitalar > Fracionamento e unitarização de dose). A porta grava só no banco próprio: na sessão sintética de dev/ci
 // (logins SINT.*, sem o núcleo), GET /api/farmacia/unitarizacao responde 503 e a tela mostra o erro sem inventar
 // regra nem ordem (primeiro teste). O segundo teste simula as rotas (page.route com respostas sintéticas) e percorre o
@@ -43,7 +43,7 @@ test.describe('@C2-092 Fracionamento e unitarização de dose', () => {
     page,
   }) => {
     vigiarExternas(page);
-    await entrar(page, 'SINT.BLOCO');
+    await entrar(page, 'SINT.MANIPULACAO');
     const status = await abrirPeloMenu(page);
     const tela = page.getByTestId('tela-farmacia-unitarizacao');
     if (status === 503) {
@@ -184,7 +184,7 @@ test.describe('@C2-092 Fracionamento e unitarização de dose', () => {
       return rota.fallback();
     });
 
-    await entrar(page, 'SINT.BLOCO');
+    await entrar(page, 'SINT.MANIPULACAO');
     await abrirPeloMenu(page);
     const tela = page.getByTestId('tela-farmacia-unitarizacao');
     await expect(tela.getByTestId('unit-regra-7')).toContainText('Dose sintética 2 mL');

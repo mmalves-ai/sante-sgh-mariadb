@@ -345,7 +345,8 @@ const registro = useMutation({
     </template>
 
     <h2>{{ M.lista }}</h2>
-    <p v-if="!devolucoes.data.value">{{ M.carregando }}</p>
+    <ErroSuprimentos v-if="devolucoes.error.value" :erro="devolucoes.error.value" />
+    <p v-else-if="!devolucoes.data.value">{{ M.carregando }}</p>
     <p v-else-if="devolucoes.data.value.length === 0">{{ M.vazia }}</p>
     <table v-else class="tabela" data-testid="devf-lista">
       <thead>
