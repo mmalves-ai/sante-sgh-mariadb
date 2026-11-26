@@ -39,6 +39,7 @@ export const esquemaPainelRepasseSus = z.object({
       procedimentoCodigo: z.string().nullable(),
       grupoCodigo: z.string().nullable(),
       profissional: z.number().nullable(),
+      profissionalNome: z.string().nullable(),
       consideraSadt: z.boolean(),
       usaPeso: z.boolean(),
       pesoPercentual: z.number().nullable(),

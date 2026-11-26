@@ -91,6 +91,7 @@ test.describe('C3-022 repasse da produção SUS @C3-022', () => {
           procedimentoCodigo: corpo['procedimento'],
           grupoCodigo: corpo['grupo'],
           profissional: null,
+          profissionalNome: null,
           consideraSadt: true,
           usaPeso: false,
           pesoPercentual: null,

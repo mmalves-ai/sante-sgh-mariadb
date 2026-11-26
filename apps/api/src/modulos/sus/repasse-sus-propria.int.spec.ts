@@ -306,7 +306,7 @@ describe.skipIf(SEM_BANCO)('PortaRepasseSusPropria contra o MariaDB (contrato de
     ).rejects.toMatchObject({ problema: { status: 422 } });
     expect(await regrasDoEst()).toBe(3);
     const rt = await porta.incluirRateio(ctx(), { procedimento: SIG[2], inicio: '2025-01-01' });
-    expect(rt).toMatchObject({ procedimentoCodigo: SIG[2], consideraSadt: true, usaPeso: false });
+    expect(rt).toMatchObject({ procedimentoCodigo: SIG[2], consideraSadt: true, usaPeso: false, profissionalNome: null });
     await expect(porta.incluirRateio(ctx(), { inicio: '2025-01-01' })).rejects.toMatchObject({
       problema: { status: 422 },
     });

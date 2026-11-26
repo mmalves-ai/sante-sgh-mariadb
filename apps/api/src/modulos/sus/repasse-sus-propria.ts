@@ -95,6 +95,8 @@ export interface RegraRepasseSusLida extends RegraRepasseSus {
 export interface RateioSadtLido extends RegraRateioSadtAih {
   readonly procedimentoCodigo: string | null;
   readonly grupoCodigo: string | null;
+  /** Nome do profissional do rateio (null = qualquer profissional). */
+  readonly profissionalNome: string | null;
   readonly versao: number;
 }
 export interface ApuracaoAberta {
@@ -170,6 +172,7 @@ function rateioDaLinha(x: Linha): RateioSadtLido {
     grupo: numOuNull(x['grupo_sigtap_id']),
     grupoCodigo: txtOuNull(x['grupo_codigo']),
     profissional: numOuNull(x['profissional_id']),
+    profissionalNome: txtOuNull(x['profissional_nome']),
     consideraSadt: bool(x['considera_sadt']),
     usaPeso: bool(x['usa_peso']),
     pesoPercentual: numOuNull(x['peso_percentual']),
@@ -196,10 +199,12 @@ async function regras(l: Leitor, est: number): Promise<RegraRepasseSusLida[]> {
 
 async function rateios(l: Leitor, est: number): Promise<RateioSadtLido[]> {
   const xs = await l.consultar(
-    `SELECT r.*, ps.codigo_sigtap AS procedimento_codigo, g.codigo_sigtap AS grupo_codigo
+    `SELECT r.*, ps.codigo_sigtap AS procedimento_codigo, g.codigo_sigtap AS grupo_codigo, pf.nome AS profissional_nome
        FROM regra_rateio_sadt_aih r
        LEFT JOIN procedimento_sigtap ps ON ps.id = r.procedimento_sigtap_id
        LEFT JOIN grupo_sigtap g ON g.id = r.grupo_sigtap_id
+       LEFT JOIN profissional pr ON pr.id = r.profissional_id
+       LEFT JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
       WHERE r.estabelecimento_id = ? ORDER BY r.vigencia_inicio, r.id`,
     [est],
   );

@@ -444,7 +444,7 @@ const alvo = (p: string | null, g: string | null) => p ?? (g ? `${t('campos.grup
         <tbody>
           <tr v-for="x in painel.data.value.rateios" :key="x.id" :data-testid="`repasse-sus-rateio-${x.id}`">
             <td>{{ alvo(x.procedimentoCodigo, x.grupoCodigo) }}</td>
-            <td>{{ x.profissional ?? t('campos.qualquerProfissional') }}</td>
+            <td>{{ x.profissionalNome ?? t('campos.qualquerProfissional') }}</td>
             <td>{{ x.consideraSadt ? t('campos.sim') : t('campos.nao') }}</td>
             <td>{{ x.usaPeso ? `${x.pesoPercentual}%` : '' }}</td>
             <td>{{ x.tetoPercentual !== null ? `${x.tetoPercentual}%` : '' }}</td>
