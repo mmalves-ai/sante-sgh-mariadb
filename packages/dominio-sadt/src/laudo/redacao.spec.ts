@@ -228,10 +228,14 @@ describe('assinatura ICP-Brasil do laudo (C3-005)', () => {
 
   it('situação da assinatura com certificado de cada versão', async () => {
     const { assinaturaIcpDoLaudo, MEIOS_ASSINATURA_LAUDO } = await import('./redacao.js');
-    expect(assinaturaIcpDoLaudo({ documento: null, envelopeAssinado: false, naFila: false })).toBe('sem-documento');
+    expect(assinaturaIcpDoLaudo({ documento: null, envelopeAssinado: false, naFila: false })).toBe(
+      'sem-documento',
+    );
     expect(assinaturaIcpDoLaudo({ documento: 7, envelopeAssinado: true, naFila: false })).toBe('assinada');
     expect(assinaturaIcpDoLaudo({ documento: 7, envelopeAssinado: false, naFila: true })).toBe('na-fila');
-    expect(assinaturaIcpDoLaudo({ documento: 7, envelopeAssinado: false, naFila: false })).toBe('nao-exigida');
+    expect(assinaturaIcpDoLaudo({ documento: 7, envelopeAssinado: false, naFila: false })).toBe(
+      'nao-exigida',
+    );
     expect(MEIOS_ASSINATURA_LAUDO[0]).toBe('nuvem');
   });
 });

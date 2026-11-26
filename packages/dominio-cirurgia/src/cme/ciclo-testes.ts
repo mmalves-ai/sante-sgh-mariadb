@@ -38,8 +38,7 @@ export function conferirTeste(t: TesteEntrada): ProblemaCme[] {
   const p: ProblemaCme[] = [];
   if (t.situacaoCiclo !== 'em_andamento' && t.situacaoCiclo !== 'concluido')
     p.push({ campo: 'ciclo', mensagem: 'Só o ciclo em andamento ou aguardando liberação recebe teste.' });
-  if (t.exigeLote && !t.lote?.trim())
-    p.push({ campo: 'lote', mensagem: 'Informe o lote do indicador.' });
+  if (t.exigeLote && !t.lote?.trim()) p.push({ campo: 'lote', mensagem: 'Informe o lote do indicador.' });
   if (t.validade && t.validade < t.diaDoCiclo)
     p.push({ campo: 'validade', mensagem: 'O indicador estava vencido no dia do ciclo.' });
   if (t.resultado !== 'pendente' && !t.leitura)
@@ -122,7 +121,10 @@ export function conferirRejeicao(r: RejeicaoEntrada): ProblemaCme[] {
   if (r.objeto === 'pacote' && !PACOTE_REJEITAVEL.includes(r.situacao))
     p.push({ campo: 'pacote', mensagem: 'O pacote usado, rejeitado ou descartado não é rejeitado de novo.' });
   if (r.objeto === 'ciclo' && !CICLO_REJEITAVEL.includes(r.situacao))
-    p.push({ campo: 'ciclo', mensagem: 'Só o ciclo concluído ou liberado é rejeitado (o em andamento se conclui).' });
+    p.push({
+      campo: 'ciclo',
+      mensagem: 'Só o ciclo concluído ou liberado é rejeitado (o em andamento se conclui).',
+    });
   if (!r.motivoAtivo) p.push({ campo: 'motivo', mensagem: 'Escolha um motivo de rejeição ativo.' });
   if (r.faseDoMotivo !== null && r.faseDoMotivo !== r.fase)
     p.push({ campo: 'fase', mensagem: 'Este motivo não se aplica à fase escolhida.' });
@@ -139,7 +141,11 @@ export function conferirRejeicao(r: RejeicaoEntrada): ProblemaCme[] {
  * Exige recolhimento quando o motivo o obriga ou quando a rejeição é do ciclo e já há pacote distribuído dele: os
  * pacotes que saíram da CME voltam (recall) antes de a rejeição se concluir.
  */
-export function exigeRecolhimento(objeto: 'pacote' | 'ciclo', motivoExige: boolean, distribuidos: number): boolean {
+export function exigeRecolhimento(
+  objeto: 'pacote' | 'ciclo',
+  motivoExige: boolean,
+  distribuidos: number,
+): boolean {
   return distribuidos > 0 && (motivoExige || objeto === 'ciclo');
 }
 

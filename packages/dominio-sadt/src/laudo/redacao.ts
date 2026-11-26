@@ -215,8 +215,13 @@ export const ORIGEM_DOCUMENTO_LAUDO = 'laudo_diagnostico_versao';
 export const MEIOS_ASSINATURA_LAUDO = ['nuvem', 'a3', 'a1'] as const;
 
 /** O título do documento do laudo no prontuário (até 150 caracteres): exame, versão e, se houver, a retificação. */
-export function tituloDocumentoLaudo(exame: string, numero: number, situacao: 'assinado' | 'retificado'): string {
-  if (!Number.isInteger(numero) || numero < 1) throw new RecusaLaudo('versao-invalida', 'Versão do laudo inválida.');
+export function tituloDocumentoLaudo(
+  exame: string,
+  numero: number,
+  situacao: 'assinado' | 'retificado',
+): string {
+  if (!Number.isInteger(numero) || numero < 1)
+    throw new RecusaLaudo('versao-invalida', 'Versão do laudo inválida.');
   const sufixo = situacao === 'retificado' ? ` (retificação, versão ${numero})` : ` (versão ${numero})`;
   const nome = (exame.trim() || 'exame').slice(0, 150 - 'Laudo de '.length - sufixo.length);
   return `Laudo de ${nome}${sufixo}`;

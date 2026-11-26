@@ -50,11 +50,17 @@ describe('teste do indicador', () => {
       ),
     ).toEqual(['ciclo', 'valorMedido']));
   it('pendente não pede leitura', () =>
-    expect(conferirTeste(teste({ resultado: 'pendente', leitura: null, incubacaoInicio: null }))).toEqual([]));
+    expect(conferirTeste(teste({ resultado: 'pendente', leitura: null, incubacaoInicio: null }))).toEqual(
+      [],
+    ));
 });
 
 describe('indicadores pelos testes: liberação só com indicador aprovado', () => {
-  const t = (categoria: 'fisico' | 'quimico' | 'biologico' | 'bowie_dick', resultado: 'aprovado' | 'reprovado' | 'pendente' | 'inconclusivo', liberacaoDepende = true) => ({
+  const t = (
+    categoria: 'fisico' | 'quimico' | 'biologico' | 'bowie_dick',
+    resultado: 'aprovado' | 'reprovado' | 'pendente' | 'inconclusivo',
+    liberacaoDepende = true,
+  ) => ({
     categoria,
     resultado,
     liberacaoDepende,
@@ -65,41 +71,57 @@ describe('indicadores pelos testes: liberação só com indicador aprovado', () 
     expect(desfechoDoCiclo(i, false).situacao).toBe('recusa');
   });
   it('físico e químico aprovados liberam a carga sem implante', () =>
-    expect(desfechoDoCiclo(indicadoresDosTestes([t('fisico', 'aprovado'), t('quimico', 'aprovado')]), false).situacao).toBe(
-      'liberado',
-    ));
-  it('inconclusivo não libera; reprovado de que a liberação depende reprova', () => {
-    expect(indicadoresDosTestes([t('quimico', 'aprovado'), t('quimico', 'inconclusivo')]).quimico).toBe('pendente');
     expect(
-      desfechoDoCiclo(indicadoresDosTestes([t('fisico', 'aprovado'), t('quimico', 'reprovado')]), false).situacao,
+      desfechoDoCiclo(indicadoresDosTestes([t('fisico', 'aprovado'), t('quimico', 'aprovado')]), false)
+        .situacao,
+    ).toBe('liberado'));
+  it('inconclusivo não libera; reprovado de que a liberação depende reprova', () => {
+    expect(indicadoresDosTestes([t('quimico', 'aprovado'), t('quimico', 'inconclusivo')]).quimico).toBe(
+      'pendente',
+    );
+    expect(
+      desfechoDoCiclo(indicadoresDosTestes([t('fisico', 'aprovado'), t('quimico', 'reprovado')]), false)
+        .situacao,
     ).toBe('reprovado');
   });
   it('o teste repetido depois do inconclusivo e a leitura depois do biológico em incubação valem por tipo', () => {
-    expect(indicadoresDosTestes([t('quimico', 'inconclusivo'), t('quimico', 'aprovado')]).quimico).toBe('conforme');
-    expect(indicadoresDosTestes([t('biologico', 'pendente'), t('biologico', 'aprovado')]).biologico).toBe('conforme');
-    expect(indicadoresDosTestes([t('quimico', 'reprovado'), t('quimico', 'aprovado')]).quimico).toBe('nao_conforme');
+    expect(indicadoresDosTestes([t('quimico', 'inconclusivo'), t('quimico', 'aprovado')]).quimico).toBe(
+      'conforme',
+    );
+    expect(indicadoresDosTestes([t('biologico', 'pendente'), t('biologico', 'aprovado')]).biologico).toBe(
+      'conforme',
+    );
+    expect(indicadoresDosTestes([t('quimico', 'reprovado'), t('quimico', 'aprovado')]).quimico).toBe(
+      'nao_conforme',
+    );
     // Dois tipos exigidos na mesma categoria: o último de cada um precisa estar aprovado.
     const q = (tipo: number, resultado: 'aprovado' | 'pendente') => ({ ...t('quimico', resultado), tipo });
     expect(indicadoresDosTestes([q(4, 'aprovado'), q(5, 'pendente')]).quimico).toBe('pendente');
-    expect(indicadoresDosTestes([q(4, 'aprovado'), q(5, 'pendente'), q(5, 'aprovado')]).quimico).toBe('conforme');
+    expect(indicadoresDosTestes([q(4, 'aprovado'), q(5, 'pendente'), q(5, 'aprovado')]).quimico).toBe(
+      'conforme',
+    );
   });
   it('indicador informativo (não decide a liberação) não reprova', () =>
     expect(indicadoresDosTestes([t('quimico', 'aprovado'), t('quimico', 'reprovado', false)]).quimico).toBe(
       'conforme',
     ));
   it('Bowie-Dick reprovado reprova o físico; aprovado sozinho não basta', () => {
-    expect(indicadoresDosTestes([t('fisico', 'aprovado'), t('bowie_dick', 'reprovado')]).fisico).toBe('nao_conforme');
+    expect(indicadoresDosTestes([t('fisico', 'aprovado'), t('bowie_dick', 'reprovado')]).fisico).toBe(
+      'nao_conforme',
+    );
     expect(indicadoresDosTestes([t('bowie_dick', 'aprovado')]).fisico).toBe('pendente');
   });
   it('carga com implante aguarda o biológico e libera com ele aprovado', () => {
     const base = [t('fisico', 'aprovado'), t('quimico', 'aprovado')];
     expect(desfechoDoCiclo(indicadoresDosTestes(base), true).situacao).toBe('concluido');
-    expect(desfechoDaLiberacao('concluido', indicadoresDosTestes([...base, t('biologico', 'pendente')]).biologico).situacao).toBe(
-      'recusa',
-    );
-    expect(desfechoDaLiberacao('concluido', indicadoresDosTestes([...base, t('biologico', 'aprovado')]).biologico).situacao).toBe(
-      'liberado',
-    );
+    expect(
+      desfechoDaLiberacao('concluido', indicadoresDosTestes([...base, t('biologico', 'pendente')]).biologico)
+        .situacao,
+    ).toBe('recusa');
+    expect(
+      desfechoDaLiberacao('concluido', indicadoresDosTestes([...base, t('biologico', 'aprovado')]).biologico)
+        .situacao,
+    ).toBe('liberado');
   });
 });
 
@@ -120,11 +142,16 @@ describe('rejeição no reprocessamento', () => {
   it('aceita o pacote estéril com retorno à limpeza', () => expect(conferirRejeicao(r())).toEqual([]));
   it('recusa pacote usado, motivo inativo, fase errada e retorno para frente', () =>
     expect(
-      campos(conferirRejeicao(r({ situacao: 'usado', motivoAtivo: false, faseDoMotivo: 3, ordemRetorno: 7 }))),
+      campos(
+        conferirRejeicao(r({ situacao: 'usado', motivoAtivo: false, faseDoMotivo: 3, ordemRetorno: 7 })),
+      ),
     ).toEqual(['pacote', 'motivo', 'fase', 'faseRetorno']));
   it('retorno sem fase; ciclo em andamento e sem descrição', () => {
     expect(campos(conferirRejeicao(r({ faseRetorno: null, ordemRetorno: null })))).toEqual(['faseRetorno']);
-    expect(campos(conferirRejeicao(r({ objeto: 'ciclo', situacao: 'em_andamento' })))).toEqual(['ciclo', 'descricao']);
+    expect(campos(conferirRejeicao(r({ objeto: 'ciclo', situacao: 'em_andamento' })))).toEqual([
+      'ciclo',
+      'descricao',
+    ]);
   });
   it('recolhimento: ciclo com distribuído sempre; pacote só se o motivo exige', () => {
     expect(exigeRecolhimento('ciclo', false, 2)).toBe(true);

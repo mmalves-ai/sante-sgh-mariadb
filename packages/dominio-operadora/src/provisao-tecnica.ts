@@ -68,7 +68,11 @@ export interface ContaPadraoAns {
 export const grauDaContaAns = (codigo: string): number => codigo.trim().length;
 
 /** A conta-mãe é a de maior prefixo próprio do código, vigente no início da conta. */
-export function superiorDaContaAns<T extends ContaPadraoAns>(codigo: string, existentes: readonly T[], dia: string): T | null {
+export function superiorDaContaAns<T extends ContaPadraoAns>(
+  codigo: string,
+  existentes: readonly T[],
+  dia: string,
+): T | null {
   const c = codigo.trim();
   let melhor: T | null = null;
   for (const e of existentes) {
@@ -95,16 +99,24 @@ export function problemasDaContaPadraoAns(
     if (!(MODALIDADES_OPERADORA as readonly string[]).includes(m))
       p.push(prob('modalidade-invalida', 'modalidades', `Modalidade desconhecida: ${m}.`));
   if (p.length) return p;
-  if (existentes.some((e) => e.codigo === codigo && sobrepoe(
-    { inicio: e.vigenciaInicio, fim: e.vigenciaFim },
-    { inicio: c.vigenciaInicio, fim: c.vigenciaFim },
-  )))
+  if (
+    existentes.some(
+      (e) =>
+        e.codigo === codigo &&
+        sobrepoe(
+          { inicio: e.vigenciaInicio, fim: e.vigenciaFim },
+          { inicio: c.vigenciaInicio, fim: c.vigenciaFim },
+        ),
+    )
+  )
     p.push(prob('conta-repetida', 'codigo', 'Já existe a conta com este código na vigência.'));
   if (codigo.length > 1) {
     const sup = superiorDaContaAns(codigo, existentes, c.vigenciaInicio);
     if (!sup) p.push(prob('sem-superior', 'codigo', 'Cadastre antes a conta-mãe do código.'));
     else if (sup.tipo === 'analitica')
-      p.push(prob('superior-analitica', 'codigo', `A conta ${sup.codigo} é analítica e não aceita subcontas.`));
+      p.push(
+        prob('superior-analitica', 'codigo', `A conta ${sup.codigo} é analítica e não aceita subcontas.`),
+      );
   }
   return p;
 }
@@ -136,22 +148,40 @@ export function problemasDoMapaAns(
   if (!propria || !propria.ativo)
     p.push(prob('conta-propria-invalida', 'contaContabil', 'A conta contábil não existe ou está inativa.'));
   else if (propria.tipo !== 'analitica')
-    p.push(prob('conta-propria-sintetica', 'contaContabil', 'Só a conta contábil analítica recebe saldo do balancete.'));
+    p.push(
+      prob(
+        'conta-propria-sintetica',
+        'contaContabil',
+        'Só a conta contábil analítica recebe saldo do balancete.',
+      ),
+    );
   if (!contaAns || !vigente(contaAns, m.vigenciaInicio))
     p.push(prob('conta-ans-fora-vigencia', 'contaAns', 'A conta da ANS não existe na vigência do mapa.'));
   else {
     if (contaAns.tipo !== 'analitica')
-      p.push(prob('conta-ans-sintetica', 'contaAns', 'O mapa liga a conta própria a uma conta analítica da ANS.'));
+      p.push(
+        prob('conta-ans-sintetica', 'contaAns', 'O mapa liga a conta própria a uma conta analítica da ANS.'),
+      );
     if (contaAns.modalidades && contaAns.modalidades.length && !contaAns.modalidades.includes(modalidade))
-      p.push(prob('modalidade-nao-aplicavel', 'contaAns', 'A conta da ANS não se aplica à modalidade da operadora.'));
+      p.push(
+        prob(
+          'modalidade-nao-aplicavel',
+          'contaAns',
+          'A conta da ANS não se aplica à modalidade da operadora.',
+        ),
+      );
   }
   if (p.length) return p;
   const janela = { inicio: m.vigenciaInicio, fim: m.vigenciaFim };
   const mesmas = existentes.filter(
-    (e) => e.contaContabil === m.contaContabil && sobrepoe({ inicio: e.vigenciaInicio, fim: e.vigenciaFim }, janela),
+    (e) =>
+      e.contaContabil === m.contaContabil &&
+      sobrepoe({ inicio: e.vigenciaInicio, fim: e.vigenciaFim }, janela),
   );
   if (mesmas.some((e) => e.contaAns === m.contaAns))
-    p.push(prob('mapa-repetido', 'contaAns', 'A conta própria já está ligada a esta conta da ANS na vigência.'));
+    p.push(
+      prob('mapa-repetido', 'contaAns', 'A conta própria já está ligada a esta conta da ANS na vigência.'),
+    );
   else if (!m.duplicaValor && mesmas.some((e) => !e.duplicaValor))
     p.push(
       prob(
@@ -195,7 +225,9 @@ export function balanceteNoPadraoAns(
 ): BalanceteAns {
   const contas = plano.filter((c) => vigente(c, dia));
   const porCodigo = new Map(contas.map((c) => [c.codigo, c]));
-  const vig = mapas.filter((m) => m.vigenciaInicio <= dia && (m.vigenciaFim === null || m.vigenciaFim >= dia));
+  const vig = mapas.filter(
+    (m) => m.vigenciaInicio <= dia && (m.vigenciaFim === null || m.vigenciaFim >= dia),
+  );
   const total = new Map<string, number>();
   const parcelas = new Map<string, { classificacao: string; saldoCentavos: number }[]>();
   const semMapa: SaldoContaPropria[] = [];
@@ -206,7 +238,10 @@ export function balanceteNoPadraoAns(
       continue;
     }
     for (const d of destinos) {
-      parcelas.set(d.contaAns, [...(parcelas.get(d.contaAns) ?? []), { classificacao: s.classificacao, saldoCentavos: s.saldoCentavos }]);
+      parcelas.set(d.contaAns, [
+        ...(parcelas.get(d.contaAns) ?? []),
+        { classificacao: s.classificacao, saldoCentavos: s.saldoCentavos },
+      ]);
       for (let n = d.contaAns.length; n >= 1; n--) {
         const cod = d.contaAns.slice(0, n);
         if (porCodigo.has(cod)) total.set(cod, (total.get(cod) ?? 0) + s.saldoCentavos);
@@ -300,7 +335,9 @@ export function calcularProvisoesTecnicas(e: EntradaProvisaoTecnica): ResultadoP
   if (!/^\d{4}-(0[1-9]|1[0-2])-01$/.test(e.competencia))
     p.push(prob('competencia-invalida', 'competencia', 'A competência é o primeiro dia do mês.'));
   if (e.metodo === 'nota_tecnica_atuarial' && !e.notaTecnica?.trim())
-    p.push(prob('sem-nota-tecnica', 'notaTecnica', 'Informe a referência da nota técnica atuarial aprovada.'));
+    p.push(
+      prob('sem-nota-tecnica', 'notaTecnica', 'Informe a referência da nota técnica atuarial aprovada.'),
+    );
   const vistos = new Set<string>();
   for (const i of e.informados) {
     if (!Number.isInteger(i.valorCentavos) || i.valorCentavos < 0)
@@ -309,10 +346,17 @@ export function calcularProvisoesTecnicas(e: EntradaProvisaoTecnica): ResultadoP
       p.push(prob('tipo-repetido', 'informados', `O tipo ${i.tipo} foi informado duas vezes.`));
     vistos.add(i.tipo);
     if (e.metodo === 'metodologia_ans' && (i.tipo === 'peona' || i.tipo === 'pesl'))
-      p.push(prob('calculado-pelo-sistema', 'informados', `Na metodologia da ANS a ${i.tipo} é calculada pelo sistema.`));
+      p.push(
+        prob(
+          'calculado-pelo-sistema',
+          'informados',
+          `Na metodologia da ANS a ${i.tipo} é calculada pelo sistema.`,
+        ),
+      );
   }
   for (const v of Object.values(e.base))
-    if (!Number.isInteger(v) || v < 0) p.push(prob('base-invalida', 'base', 'Os valores da base não podem ser negativos.'));
+    if (!Number.isInteger(v) || v < 0)
+      p.push(prob('base-invalida', 'base', 'Os valores da base não podem ser negativos.'));
   const brutos: { tipo: TipoProvisaoTecnica; valor: number; memoria: string }[] = [];
   if (e.metodo === 'metodologia_ans') {
     const peona = peonaMetodologiaAns(e.base);
@@ -328,8 +372,9 @@ export function calcularProvisoesTecnicas(e: EntradaProvisaoTecnica): ResultadoP
       tipo: i.tipo,
       valor: i.valorCentavos,
       memoria:
-        (e.metodo === 'nota_tecnica_atuarial' ? `informado pelo atuário (nota ${e.notaTecnica?.trim() ?? ''})` : 'informado') +
-        (i.observacao?.trim() ? `: ${i.observacao.trim()}` : ''),
+        (e.metodo === 'nota_tecnica_atuarial'
+          ? `informado pelo atuário (nota ${e.notaTecnica?.trim() ?? ''})`
+          : 'informado') + (i.observacao?.trim() ? `: ${i.observacao.trim()}` : ''),
     });
   if (!brutos.length) p.push(prob('sem-itens', 'informados', 'Informe ao menos um valor de provisão.'));
   for (const b of brutos)
@@ -379,7 +424,12 @@ export interface PartidaProvisao {
  * provisão; redução debita a provisão e credita a reversão (ou a própria despesa, sem conta de reversão).
  */
 export function partidasDaProvisao(
-  itens: readonly { tipo: string; contaClassificacao: string; valorCentavos: number; anteriorCentavos: number | null }[],
+  itens: readonly {
+    tipo: string;
+    contaClassificacao: string;
+    valorCentavos: number;
+    anteriorCentavos: number | null;
+  }[],
   contaDespesa: string,
   contaReversao: string | null,
   rotulo: string,
@@ -394,7 +444,13 @@ export function partidasDaProvisao(
       r.push({ lado: 'C', conta: i.contaClassificacao, valorCentavos: v, historico: h, centroCusto: null });
     } else {
       r.push({ lado: 'D', conta: i.contaClassificacao, valorCentavos: -v, historico: h, centroCusto: null });
-      r.push({ lado: 'C', conta: contaReversao ?? contaDespesa, valorCentavos: -v, historico: h, centroCusto: null });
+      r.push({
+        lado: 'C',
+        conta: contaReversao ?? contaDespesa,
+        valorCentavos: -v,
+        historico: h,
+        centroCusto: null,
+      });
     }
   }
   return r;

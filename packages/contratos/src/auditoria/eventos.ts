@@ -4938,17 +4938,20 @@ export const EVENTOS_AUDITAVEIS = {
   },
   operadoraPortalContaSituacao: {
     codigo: 'operadora.portal.conta-situacao',
-    descricao: 'Conta do portal externo ativada com os termos, bloqueada com motivo, desbloqueada ou encerrada',
+    descricao:
+      'Conta do portal externo ativada com os termos, bloqueada com motivo, desbloqueada ou encerrada',
     legado: null,
   },
   operadoraPortalSolicitacaoAberta: {
     codigo: 'operadora.portal.solicitacao-aberta',
-    descricao: 'Solicitação aberta pelo portal (segunda via, reembolso, inclusão, exclusão, reativação, alteração)',
+    descricao:
+      'Solicitação aberta pelo portal (segunda via, reembolso, inclusão, exclusão, reativação, alteração)',
     legado: null,
   },
   operadoraPortalSolicitacaoDecidida: {
     codigo: 'operadora.portal.solicitacao-decidida',
-    descricao: 'Solicitação do portal analisada, aprovada, reprovada, concluída ou cancelada pelo solicitante',
+    descricao:
+      'Solicitação do portal analisada, aprovada, reprovada, concluída ou cancelada pelo solicitante',
     legado: null,
   },
   operadoraPortalLoteExclusao: {

@@ -236,7 +236,12 @@ export function lerArquivoRespostas(
       return;
     }
     const marca =
-      cMarca >= 0 ? (l[cMarca] ?? '').replace(/^'(?=[=+\-@])/, '').replace(/\s+/g, ' ').trim() : undefined;
+      cMarca >= 0
+        ? (l[cMarca] ?? '')
+            .replace(/^'(?=[=+\-@])/, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+        : undefined;
     if (marca !== undefined && marca.length > MAX_MARCA) {
       recusas.push({ linha, codigo: 'marca-longa', mensagem: 'A marca tem no máximo 25 caracteres.' });
       return;

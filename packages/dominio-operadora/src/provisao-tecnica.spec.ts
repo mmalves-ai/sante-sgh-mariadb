@@ -13,7 +13,11 @@ import {
   problemasDoMapaAns,
 } from './provisao-tecnica.js';
 
-const conta = (codigo: string, tipo: 'sintetica' | 'analitica', extra: Partial<ContaPadraoAns> = {}): ContaPadraoAns => ({
+const conta = (
+  codigo: string,
+  tipo: 'sintetica' | 'analitica',
+  extra: Partial<ContaPadraoAns> = {},
+): ContaPadraoAns => ({
   codigo,
   descricao: `Conta ${codigo}`,
   tipo,
@@ -72,11 +76,15 @@ describe('mapa da conta própria para a ANS', () => {
     expect(problemasDoMapaAns(m('212'), plano[6] ?? null, propria, 'medicina_grupo', [])[0]?.codigo).toBe(
       'modalidade-nao-aplicavel',
     );
-    expect(problemasDoMapaAns(m('211'), c211, { ...propria, tipo: 'sintetica' }, 'medicina_grupo', [])[0]?.codigo).toBe(
-      'conta-propria-sintetica',
+    expect(
+      problemasDoMapaAns(m('211'), c211, { ...propria, tipo: 'sintetica' }, 'medicina_grupo', [])[0]?.codigo,
+    ).toBe('conta-propria-sintetica');
+    expect(problemasDoMapaAns(m('211'), c211, propria, 'medicina_grupo', [m('211')])[0]?.codigo).toBe(
+      'mapa-repetido',
     );
-    expect(problemasDoMapaAns(m('211'), c211, propria, 'medicina_grupo', [m('211')])[0]?.codigo).toBe('mapa-repetido');
-    expect(problemasDoMapaAns(m('211'), c211, propria, 'medicina_grupo', [m('121')])[0]?.codigo).toBe('conta-ja-mapeada');
+    expect(problemasDoMapaAns(m('211'), c211, propria, 'medicina_grupo', [m('121')])[0]?.codigo).toBe(
+      'conta-ja-mapeada',
+    );
     expect(problemasDoMapaAns(m('211', true), c211, propria, 'medicina_grupo', [m('121')])).toEqual([]);
   });
 });
@@ -84,9 +92,27 @@ describe('mapa da conta própria para a ANS', () => {
 describe('balancete no padrão da ANS', () => {
   it('soma as contas próprias nas analíticas e sobe às sintéticas, e lista as sem mapa', () => {
     const mapas: MapaContaAns[] = [
-      { contaContabil: 1, contaAns: '121', duplicaValor: false, vigenciaInicio: '2026-01-01', vigenciaFim: null },
-      { contaContabil: 2, contaAns: '121', duplicaValor: false, vigenciaInicio: '2026-01-01', vigenciaFim: null },
-      { contaContabil: 3, contaAns: '211', duplicaValor: false, vigenciaInicio: '2026-01-01', vigenciaFim: null },
+      {
+        contaContabil: 1,
+        contaAns: '121',
+        duplicaValor: false,
+        vigenciaInicio: '2026-01-01',
+        vigenciaFim: null,
+      },
+      {
+        contaContabil: 2,
+        contaAns: '121',
+        duplicaValor: false,
+        vigenciaInicio: '2026-01-01',
+        vigenciaFim: null,
+      },
+      {
+        contaContabil: 3,
+        contaAns: '211',
+        duplicaValor: false,
+        vigenciaInicio: '2026-01-01',
+        vigenciaFim: null,
+      },
     ];
     const b = balanceteNoPadraoAns(
       [
@@ -118,7 +144,11 @@ describe('provisões técnicas', () => {
     competencia: '2026-03-01',
     metodo: 'metodologia_ans',
     contas: { peona: 11, pesl: 12, remissao: 13 },
-    base: { contraprestacoesCentavos: 120_000_00, eventosCentavos: 90_000_00, avisadosNaoPagosCentavos: 4_321_00 },
+    base: {
+      contraprestacoesCentavos: 120_000_00,
+      eventosCentavos: 90_000_00,
+      avisadosNaoPagosCentavos: 4_321_00,
+    },
     informados: [{ tipo: 'remissao', valorCentavos: 500_00, observacao: null }],
     notaTecnica: null,
     anteriores: { peona: 9_000_00 },
@@ -142,12 +172,20 @@ describe('provisões técnicas', () => {
     expect(r.memoria).toContain('10200.00 + 4321.00 + 500.00 = 15021.00');
   });
   it('recusa conta faltando, PEONA informada na metodologia e nota técnica sem referência', () => {
-    expect(calcularProvisoesTecnicas({ ...base, contas: { peona: 11 } }).problemas[0]?.campo).toBe('contas.pesl');
+    expect(calcularProvisoesTecnicas({ ...base, contas: { peona: 11 } }).problemas[0]?.campo).toBe(
+      'contas.pesl',
+    );
     expect(
-      calcularProvisoesTecnicas({ ...base, informados: [{ tipo: 'peona', valorCentavos: 1, observacao: null }] })
-        .problemas[0]?.codigo,
+      calcularProvisoesTecnicas({
+        ...base,
+        informados: [{ tipo: 'peona', valorCentavos: 1, observacao: null }],
+      }).problemas[0]?.codigo,
     ).toBe('calculado-pelo-sistema');
-    const atuarial = { ...base, metodo: 'nota_tecnica_atuarial' as const, informados: [{ tipo: 'peona' as const, valorCentavos: 8_000_00, observacao: null }] };
+    const atuarial = {
+      ...base,
+      metodo: 'nota_tecnica_atuarial' as const,
+      informados: [{ tipo: 'peona' as const, valorCentavos: 8_000_00, observacao: null }],
+    };
     expect(calcularProvisoesTecnicas(atuarial).problemas[0]?.codigo).toBe('sem-nota-tecnica');
     const ok = calcularProvisoesTecnicas({ ...atuarial, notaTecnica: 'NTA 12/2026' });
     expect(ok.itens.map((i) => [i.tipo, i.valorCentavos])).toEqual([['peona', 8_000_00]]);

@@ -19,11 +19,7 @@ export const TIPOS_REMESSA_FOLHA = ['mensal', 'decimo_terceiro', 'complementar']
 export type TipoRemessaFolha = (typeof TIPOS_REMESSA_FOLHA)[number];
 
 export type SituacaoItemFolha =
-  | 'pendente'
-  | 'descontado'
-  | 'descontado_parcial'
-  | 'nao_descontado'
-  | 'baixado_manual';
+  'pendente' | 'descontado' | 'descontado_parcial' | 'nao_descontado' | 'baixado_manual';
 
 const PASSAGENS: Readonly<Record<SituacaoRemessaFolha, readonly SituacaoRemessaFolha[]>> = {
   gerada: ['enviada', 'cancelada'],
@@ -247,12 +243,16 @@ export interface ConciliacaoRetornoFolha {
  * remessa ausente no retorno fica não descontada.
  */
 export function conciliarRetornoFolha(
-  itens: readonly Pick<ItemRemessaFolha, 'sequencia' | 'fatura' | 'matriculaFuncional' | 'competencia' | 'valorEnviado'>[],
+  itens: readonly Pick<
+    ItemRemessaFolha,
+    'sequencia' | 'fatura' | 'matriculaFuncional' | 'competencia' | 'valorEnviado'
+  >[],
   linhas: readonly LinhaRetornoFolha[],
 ): ConciliacaoRetornoFolha {
   const problemas: ProblemaRetornoFolha[] = [];
   const porMatricula = new Map<string, typeof itens>();
-  for (const i of itens) porMatricula.set(i.matriculaFuncional, [...(porMatricula.get(i.matriculaFuncional) ?? []), i]);
+  for (const i of itens)
+    porMatricula.set(i.matriculaFuncional, [...(porMatricula.get(i.matriculaFuncional) ?? []), i]);
   const descontado = new Map<string, number>();
   for (const l of linhas) {
     const doItem = porMatricula.get(l.matricula);
@@ -284,7 +284,9 @@ export function conciliarRetornoFolha(
   const saida: ItemConciliadoFolha[] = [];
   for (const [matricula, doItem] of porMatricula) {
     let resto = descontado.get(matricula) ?? 0;
-    const ordem = [...doItem].sort((a, b) => a.competencia.localeCompare(b.competencia) || a.sequencia - b.sequencia);
+    const ordem = [...doItem].sort(
+      (a, b) => a.competencia.localeCompare(b.competencia) || a.sequencia - b.sequencia,
+    );
     for (const i of ordem) {
       const v = centavos(Math.min(resto, i.valorEnviado));
       resto = centavos(resto - v);
