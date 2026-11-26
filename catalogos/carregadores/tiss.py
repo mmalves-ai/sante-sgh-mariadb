@@ -12,7 +12,15 @@ Destino (idempotente; rodar de novo não duplica):
   termo_terminologia (todos os termos de cada tabela, com a vigência da planilha);
 - carater_atendimento_tiss (tabela 23: caráter do atendimento; código 2 é urgência/emergência);
 - conselho_classe (tabela 26: conselho profissional; a sigla é a que a ANS põe entre parênteses no termo; "Outros
-  Conselhos", sem sigla oficial, fica com a sigla OUTROS).
+  Conselhos", sem sigla oficial, fica com a sigla OUTROS);
+- carater_admissao (tabela 23 de novo: o caráter da admissão da internação; 1 vira o código 'eletiva' e 2 'urgencia',
+  os que o de-para do conector procura; outro código novo da ANS vira o termo sem acento);
+- via_acesso_cirurgico (tabela 61: via de acesso; código pelo termo sem acento, codigo_tiss e versao_tiss da planilha;
+  o percentual de remuneração não vem da ANS e fica como o hospital definir);
+- versao_padrao_tiss (tabela 69: versões do componente de comunicação, componente 'troca'; o código 'MM.mm.pp' da
+  planilha vira 'M.mm.pp', a forma do de-para versao_tiss do conector; vigência da planilha).
+As tabelas 18, 19, 20 e 22 (TUSS de diárias e taxas, materiais, medicamentos e procedimentos) não estão nesta planilha:
+vêm em arquivos próprios do pacote da ANS e ainda não têm carregador.
 Linha sem código ou sem termo fica de fora (aviso com o número da linha); vigência com fim antes do início fica sem fim
 (aviso). Lida só com a biblioteca padrão (zipfile + XML).
 """
@@ -37,6 +45,8 @@ _R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 _REL = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 _EXCEL_ZERO = datetime.date(1899, 12, 30)
 SIGLA_SEM_OFICIAL = {"10": "OUTROS"}
+# caráter da admissão: o código do produto que o de-para do conector usa para cada código da tabela 23
+CARATER_CODIGO = {"1": "eletiva", "2": "urgencia"}
 
 
 def _col(ref):
@@ -136,6 +146,17 @@ def ler(arquivo):
     return tabelas, avisos
 
 
+def codigo_termo(termo, limite=30):
+    """Código do produto a partir do termo oficial: sem acento, minúsculo, palavras ligadas por '_'."""
+    return re.sub(r"[^a-z0-9]+", "_", _sem_acento(termo)).strip("_")[:limite] or None
+
+
+def versao_tiss(termo):
+    """'04.03.00' -> '4.03.00' (a forma do de-para versao_tiss do conector); fora da forma: None."""
+    m = re.fullmatch(r"(\d{1,2})\.(\d{1,2})\.(\d{1,2})", termo.strip())
+    return "%d.%02d.%02d" % tuple(int(x) for x in m.groups()) if m else None
+
+
 def sigla_conselho(codigo, termo):
     """Sigla do conselho (tabela 26): a que vem entre parênteses no termo, em maiúsculas (CHECK [A-Z]{2,10})."""
     m = re.search(r"\(([A-Za-z]{2,10})\)\s*$", termo)
@@ -224,6 +245,32 @@ def gerar_sql(tabelas, versao, sha):
                      "vigencia_fim = VALUES(vigencia_fim), "
                      "alterado_em = IF(versao_fonte <=> VALUES(versao_fonte), alterado_em, UTC_TIMESTAMP(3)), "
                      "versao_fonte = VALUES(versao_fonte);")
+    if "23" in tabelas:
+        vals = ",\n".join(f"({_q(CARATER_CODIGO.get(c) or codigo_termo(d))}, {_q(d[:150])}, {_q(not f)}, {_q(c[:2])}, "
+                          f"{_q('urg' in d.lower())}, UTC_TIMESTAMP(3), 1)" for c, d, a, f in tabelas["23"]["termos"])
+        p.append("INSERT INTO carater_admissao (codigo, descricao, ativo, codigo_tiss, urgencia, criado_em, versao) VALUES\n"
+                 f"{vals}\nON DUPLICATE KEY UPDATE codigo_tiss = VALUES(codigo_tiss), urgencia = VALUES(urgencia);")
+    if "61" in tabelas:
+        vals = ",\n".join(f"({_q(codigo_termo(d))}, {_q(d[:150])}, {_q(not f)}, {_q(c[:10])}, {_q(versao)}, {_q(a)}, "
+                          "UTC_TIMESTAMP(3), 1)" for c, d, a, f in tabelas["61"]["termos"])
+        p.append("INSERT INTO via_acesso_cirurgico (codigo, descricao, ativo, codigo_tiss, versao_tiss, vigencia_inicio, "
+                 f"criado_em, versao) VALUES\n{vals}\nON DUPLICATE KEY UPDATE codigo_tiss = VALUES(codigo_tiss), "
+                 "versao_tiss = VALUES(versao_tiss), vigencia_inicio = VALUES(vigencia_inicio);")
+    if "69" in tabelas:
+        linhas = []
+        for c, d, a, f in tabelas["69"]["termos"]:
+            v = versao_tiss(d)
+            if not v or not a:
+                AVISOS.append(f"tabela 69, código {c}: versão fora da forma ou sem início de vigência, fora")
+                continue
+            linhas.append(f"({_q(v)}, 'troca', {_q('Padrão TISS versão ' + v)}, {_q(a)}, {_q(f)}, {_q(versao)}, "
+                          f"{_q(not f)}, UTC_TIMESTAMP(3), 1)")
+        if linhas:
+            p.append("INSERT INTO versao_padrao_tiss (codigo_tiss, componente, descricao, vigencia_inicio, vigencia_fim, "
+                     "versao_fonte, ativo, criado_em, versao) VALUES\n" + ",\n".join(linhas) + "\nON DUPLICATE KEY UPDATE "
+                     "vigencia_inicio = VALUES(vigencia_inicio), vigencia_fim = VALUES(vigencia_fim), ativo = VALUES(ativo), "
+                     "alterado_em = IF(versao_fonte <=> VALUES(versao_fonte), alterado_em, UTC_TIMESTAMP(3)), "
+                     "versao_fonte = VALUES(versao_fonte);")
     p.append("COMMIT;")
     return "\n".join(p)
 
@@ -235,7 +282,8 @@ def carregar(banco: str) -> dict:
         # catalogo_oficial_ausente_* visível no painel
         AVISOS.append(f"fonte {FONTE} não registrada: registre a planilha oficial com "
                       f"`python3 -I catalogos/baixar.py --registrar tiss <xlsx> <AAAAMM>` e rode de novo")
-        return {"termo_terminologia": 0, "carater_atendimento_tiss": 0, "conselho_classe": 0}
+        return {"termo_terminologia": 0, "carater_atendimento_tiss": 0, "conselho_classe": 0, "carater_admissao": 0,
+                "via_acesso_cirurgico": 0, "versao_padrao_tiss": 0}
     arquivo, versao = reg
     tabelas, avisos = ler(arquivo)
     AVISOS.extend(avisos)
@@ -246,7 +294,10 @@ def carregar(banco: str) -> dict:
     cont = _sql(banco, None, "-N", "-e",
                 "SELECT (SELECT COUNT(*) FROM termo_terminologia tt JOIN terminologia t ON t.id = tt.terminologia_id "
                 "WHERE t.tipo = 'dominio_tiss'), (SELECT COUNT(*) FROM carater_atendimento_tiss), "
-                "(SELECT COUNT(*) FROM conselho_classe), (SELECT COUNT(*) FROM terminologia WHERE tipo = 'dominio_tiss')"
-                ).split()
+                "(SELECT COUNT(*) FROM conselho_classe), (SELECT COUNT(*) FROM terminologia WHERE tipo = 'dominio_tiss'), "
+                "(SELECT COUNT(*) FROM carater_admissao WHERE codigo_tiss IS NOT NULL), "
+                "(SELECT COUNT(*) FROM via_acesso_cirurgico WHERE codigo_tiss IS NOT NULL), "
+                "(SELECT COUNT(*) FROM versao_padrao_tiss WHERE componente = 'troca')").split()
     return {"termo_terminologia": int(cont[0]), "carater_atendimento_tiss": int(cont[1]),
-            "conselho_classe": int(cont[2]), "terminologia": int(cont[3])}
+            "conselho_classe": int(cont[2]), "terminologia": int(cont[3]), "carater_admissao": int(cont[4]),
+            "via_acesso_cirurgico": int(cont[5]), "versao_padrao_tiss": int(cont[6])}

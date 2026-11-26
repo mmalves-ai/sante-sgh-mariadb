@@ -37,6 +37,7 @@ import {
   PARAMETRO_PROTOCOLOS_ENFERMEIRO,
 } from '../enfermagem/prescricao-enfermeiro.js';
 import { PARAMETRO_IMUNOBIOLOGICOS } from '../enfermagem/vacina.js';
+import { PARAMETROS_CONTINUIDADE } from './continuidade.js';
 
 /** Níveis, do mais específico ao mais amplo (ordem da resolução). */
 export const NIVEIS_PARAMETRO = [
@@ -2405,6 +2406,8 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
   ...PARAMETROS_PA_LEITOS,
   // F2.2 onda 5d (pedido do lote 05-15): destinatários dos alertas por papel, no nível da rede.
   ...PARAMETROS_ALERTA_EMAIL,
+  // Recusas da carga, fase 2 (K2, C7): parâmetros que a importação usa para continuar a configuração do hospital.
+  ...PARAMETROS_CONTINUIDADE,
 ];
 
 export function definicaoParametro(chave: string): DefinicaoParametro | undefined {

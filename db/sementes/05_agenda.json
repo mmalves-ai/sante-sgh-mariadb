@@ -55,6 +55,13 @@
       "significado": "bloqueada",
       "cor": "#616161",
       "ordem": 8
+    },
+    {
+      "codigo": "nao_informada_origem",
+      "descricao": "Situação não informada na origem",
+      "significado": "nao_informada",
+      "cor": "#BDBDBD",
+      "ordem": 9
     }
   ]
 }

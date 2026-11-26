@@ -94,5 +94,95 @@
       "tipo_saida": "permanencia",
       "encerra_internacao": false
     }
+  ],
+  "situacao_leito": [
+    {
+      "codigo": "livre",
+      "descricao": "Livre",
+      "situacao_base": "livre",
+      "permite_ocupacao": true,
+      "conta_como_ocupado": false,
+      "conta_como_operacional": true,
+      "exige_motivo": false,
+      "cor_exibicao": "#388E3C",
+      "ordem_exibicao": 1
+    },
+    {
+      "codigo": "ocupado",
+      "descricao": "Ocupado",
+      "situacao_base": "ocupado",
+      "permite_ocupacao": false,
+      "conta_como_ocupado": true,
+      "conta_como_operacional": true,
+      "exige_motivo": false,
+      "cor_exibicao": "#D32F2F",
+      "ordem_exibicao": 2
+    },
+    {
+      "codigo": "reservado",
+      "descricao": "Reservado",
+      "situacao_base": "reservado",
+      "permite_ocupacao": false,
+      "conta_como_ocupado": false,
+      "conta_como_operacional": true,
+      "exige_motivo": false,
+      "cor_exibicao": "#1976D2",
+      "ordem_exibicao": 3
+    },
+    {
+      "codigo": "higienizacao",
+      "descricao": "Em higienização",
+      "situacao_base": "higienizacao",
+      "permite_ocupacao": false,
+      "conta_como_ocupado": false,
+      "conta_como_operacional": true,
+      "exige_motivo": false,
+      "cor_exibicao": "#F57C00",
+      "ordem_exibicao": 4
+    },
+    {
+      "codigo": "interditado",
+      "descricao": "Interditado",
+      "situacao_base": "interditado",
+      "permite_ocupacao": false,
+      "conta_como_ocupado": false,
+      "conta_como_operacional": false,
+      "exige_motivo": true,
+      "cor_exibicao": "#616161",
+      "ordem_exibicao": 5
+    },
+    {
+      "codigo": "manutencao",
+      "descricao": "Em manutenção",
+      "situacao_base": "manutencao",
+      "permite_ocupacao": false,
+      "conta_como_ocupado": false,
+      "conta_como_operacional": false,
+      "exige_motivo": true,
+      "cor_exibicao": "#795548",
+      "ordem_exibicao": 6
+    },
+    {
+      "codigo": "bloqueado",
+      "descricao": "Bloqueado",
+      "situacao_base": "bloqueado",
+      "permite_ocupacao": false,
+      "conta_como_ocupado": false,
+      "conta_como_operacional": false,
+      "exige_motivo": true,
+      "cor_exibicao": "#9E9E9E",
+      "ordem_exibicao": 7
+    },
+    {
+      "codigo": "inativo",
+      "descricao": "Inativo",
+      "situacao_base": "inativo",
+      "permite_ocupacao": false,
+      "conta_como_ocupado": false,
+      "conta_como_operacional": false,
+      "exige_motivo": false,
+      "cor_exibicao": "#424242",
+      "ordem_exibicao": 8
+    }
   ]
 }

@@ -7,6 +7,10 @@ import { PARAMETROS_SADT_SETOR } from './sadt-setor.js';
 const SEMENTE = fileURLToPath(
   new URL('../../../../db/migracoes/10_SADT/97_parametros_setor_chaves.sql', import.meta.url),
 );
+// Hemoterapia (sadt.hemoterapia.*): semeada com os parâmetros de continuidade da importação (recusas da carga, K2).
+const SEMENTE_CONTINUIDADE = fileURLToPath(
+  new URL('../../../../db/migracoes/02_ADM/99za_parametros_continuidade_chaves.sql', import.meta.url),
+);
 
 describe('parâmetros do diagnóstico por setor (05-SADT linha 25)', () => {
   it('oito parâmetros por setor, todos no registro do produto e sem chave repetida', () => {
@@ -20,9 +24,11 @@ describe('parâmetros do diagnóstico por setor (05-SADT linha 25)', () => {
 
   it('a semente do banco traz cada parâmetro sadt.* do contrato com o mesmo padrão', () => {
     const sql = readFileSync(SEMENTE, 'utf8');
+    const continuidade = readFileSync(SEMENTE_CONTINUIDADE, 'utf8');
     const sadt = PARAMETROS_NOVOS.filter((d) => d.chave.startsWith('sadt.'));
-    expect(sadt.length).toBe(38);
-    for (const d of sadt) expect(sql).toContain(`'${d.chave}' AS chave`);
+    expect(sadt.length).toBe(55);
+    for (const d of sadt)
+      expect(d.chave.startsWith('sadt.hemoterapia.') ? continuidade : sql).toContain(`'${d.chave}' AS chave`);
     for (const d of PARAMETROS_SADT_SETOR)
       expect(sql).toMatch(
         new RegExp(

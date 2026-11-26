@@ -84,5 +84,49 @@
       "sentido": "saida",
       "exige_justificativa": false
     }
+  ],
+  "tributo": [
+    {
+      "codigo": "IRRF",
+      "descricao": "Imposto de renda retido na fonte",
+      "esfera": "federal",
+      "forma_apuracao": "por_pagamento",
+      "incidencia": "retido"
+    },
+    {
+      "codigo": "ISS",
+      "descricao": "Imposto sobre serviços de qualquer natureza",
+      "esfera": "municipal",
+      "forma_apuracao": "mensal",
+      "incidencia": "ambos"
+    },
+    {
+      "codigo": "PIS",
+      "descricao": "Contribuição para o PIS/Pasep",
+      "esfera": "federal",
+      "forma_apuracao": "mensal",
+      "incidencia": "ambos"
+    },
+    {
+      "codigo": "COFINS",
+      "descricao": "Contribuição para o financiamento da seguridade social",
+      "esfera": "federal",
+      "forma_apuracao": "mensal",
+      "incidencia": "ambos"
+    },
+    {
+      "codigo": "CSLL",
+      "descricao": "Contribuição social sobre o lucro líquido",
+      "esfera": "federal",
+      "forma_apuracao": "mensal",
+      "incidencia": "ambos"
+    },
+    {
+      "codigo": "INSS",
+      "descricao": "Contribuição previdenciária (INSS)",
+      "esfera": "federal",
+      "forma_apuracao": "mensal",
+      "incidencia": "ambos"
+    }
   ]
 }

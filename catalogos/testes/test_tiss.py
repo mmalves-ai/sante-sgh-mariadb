@@ -54,6 +54,10 @@ class CarregadorTiss(unittest.TestCase):
             ("Tab 26", "Tabela 26 - Terminologia de conselho profissional",
              [["06", "Conselho Regional de Medicina (CRM)", 41192, ""], ["10", "Outros Conselhos ", 41192, ""],
               ["11", "Conselho Regional de Biologia (CRBio)", 44409, ""], ["", "linha sem código", "", ""]]),
+            ("Tab 61", "Tabela 61 - Terminologia de via de acesso",
+             [["1", "Única", 41192, ""], ["2", "Mesma via", 41192, ""], ["3", "Diferentes vias", 41192, ""]]),
+            ("Tab 69", "Tabela 69 - Terminologia de versão do componente de comunicação do padrão TISS",
+             [["022", "03.05.00", 43924, ""], ["027", "04.03.00", 46000, ""], ["028", "versão sem forma", 46000, ""]]),
         ])
         self.mod = _tiss()
         self.mod.AVISOS.clear()
@@ -63,7 +67,7 @@ class CarregadorTiss(unittest.TestCase):
 
     def test_le_as_tabelas_de_dominio_com_vigencia(self):
         tab, avisos = self.mod.ler(self.arq)
-        self.assertEqual(sorted(tab), ["23", "26"])
+        self.assertEqual(sorted(tab), ["23", "26", "61", "69"])
         self.assertEqual(tab["23"]["termos"][1], ("2", "Urgência/Emergência", "2012-10-10", None))
         self.assertEqual(tab["23"]["nome"], "Terminologia de caráter do atendimento")
         self.assertEqual(len(tab["26"]["termos"]), 3)
@@ -86,6 +90,31 @@ class CarregadorTiss(unittest.TestCase):
         self.assertIn("'06', 'CRM'", sql)
         self.assertEqual(sql.count("ON DUPLICATE KEY UPDATE"), sql.count("INSERT INTO"))
         self.assertIn("'dominio_tiss'", sql)
+
+    def test_carater_da_admissao_com_os_codigos_do_de_para(self):
+        tab, _ = self.mod.ler(self.arq)
+        sql = self.mod.gerar_sql(tab, "202609", "0" * 64)
+        self.assertIn("INSERT INTO carater_admissao", sql)
+        self.assertIn("('eletiva', 'Eletivo', TRUE, '1', FALSE", sql)
+        self.assertIn("('urgencia', 'Urgência/Emergência', TRUE, '2', TRUE", sql)
+
+    def test_via_de_acesso_pelo_codigo_tiss(self):
+        tab, _ = self.mod.ler(self.arq)
+        sql = self.mod.gerar_sql(tab, "202609", "0" * 64)
+        self.assertIn("INSERT INTO via_acesso_cirurgico", sql)
+        for v in ("('unica', 'Única', TRUE, '1', '202609'", "('mesma_via', 'Mesma via', TRUE, '2'",
+                  "('diferentes_vias', 'Diferentes vias', TRUE, '3'"):
+            self.assertIn(v, sql)
+
+    def test_versoes_do_padrao_na_forma_do_de_para(self):
+        tab, _ = self.mod.ler(self.arq)
+        sql = self.mod.gerar_sql(tab, "202609", "0" * 64)
+        self.assertIn("INSERT INTO versao_padrao_tiss", sql)
+        self.assertIn("('3.05.00', 'troca', 'Padrão TISS versão 3.05.00', '2020-04-03', NULL, '202609', TRUE", sql)
+        self.assertIn("('4.03.00', 'troca'", sql)
+        self.assertNotIn("sem forma", sql.split("INSERT INTO versao_padrao_tiss")[1])
+        self.assertEqual(len([a for a in self.mod.AVISOS if a.startswith("tabela 69")]), 1)
+        self.assertEqual(sql.count("ON DUPLICATE KEY UPDATE"), sql.count("INSERT INTO"))
 
 
 if __name__ == "__main__":
