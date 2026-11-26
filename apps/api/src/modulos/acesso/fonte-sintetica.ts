@@ -722,6 +722,15 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
           'pep.protocoloPrescricao.editar',
           'pep.receitaPadrao.ler',
         ),
+        // C1-115 (03-PEP L106): o catálogo editável da prescrição: inclui e inativa o item não padronizado e mantém
+        // os complementos do item (sem as opções, a tela escondia os formulários de gravação).
+        ...opcoesDasPermissoes(
+          'pep.itemNaoPadronizado.ler',
+          'pep.itemNaoPadronizado.criar',
+          'pep.itemNaoPadronizado.inativar',
+          'pep.parametroClinicoItem.ler',
+          'pep.parametroClinicoItem.editar',
+        ),
       ],
     },
   },
