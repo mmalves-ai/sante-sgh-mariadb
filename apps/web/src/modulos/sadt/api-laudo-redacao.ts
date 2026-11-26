@@ -56,7 +56,16 @@ export const esquemaLaudoEmRedacao = z.object({
     })
     .nullable(),
   versoes: z.array(
-    z.object({ numero: n, situacao: txt, em: txt, motivo: txt.nullable(), hash: txt.nullable() }),
+    z.object({
+      numero: n,
+      situacao: txt,
+      em: txt,
+      motivo: txt.nullable(),
+      hash: txt.nullable(),
+      // C3-005: o documento do prontuário da versão e onde está a assinatura com certificado ICP-Brasil.
+      documento: n.nullable().default(null),
+      assinaturaIcp: z.enum(['sem-documento', 'nao-exigida', 'na-fila', 'assinada']).default('sem-documento'),
+    }),
   ),
   secoes: z.array(z.object({ id: n, nome: txt, ordem: n })),
   grandezas: z.array(

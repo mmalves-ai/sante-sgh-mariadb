@@ -212,6 +212,9 @@ function simular(page: Page) {
 }
 
 test.describe('@C2-098 cardápio, ficha técnica, planejamento e produção', () => {
+  // Jornada inteira numa sessão (ficha técnica, planejamento, envio, publicação, produção, três escolhas e duas
+  // varreduras do axe): não cabe nos 30 s padrão, como os demais fluxos completos (C2-016, C2-030).
+  test.setTimeout(180_000);
   test('ficha técnica com cálculo na hora → rascunho → envio → publicação → produção → escolha; axe', async ({
     page,
   }) => {
@@ -253,6 +256,7 @@ test.describe('@C2-098 cardápio, ficha técnica, planejamento e produção', ()
     await escolher(page.getByTestId('linha-preparacao'), { rotulo: 'Frango grelhado' });
     await expect(page.getByText('Esta preparação já está nesta opção deste dia.')).toBeVisible();
     await page.getByTestId('salvar-planejamento').click();
+    await expect(page.getByTestId('cardapio-mensagem')).toContainText('Planejamento salvo');
     await expect(page.getByTestId('plano-situacao')).toContainText('Rascunho');
     expect(estado.gravouPlano).toMatchObject({
       descricao: 'Almoço da semana',

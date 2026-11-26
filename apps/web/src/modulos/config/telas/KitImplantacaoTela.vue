@@ -12,7 +12,7 @@ import {
   minimoEfetivo,
   SITUACOES_ITEM_PRONTIDAO,
   TIPOS_VERIFICACAO,
-} from '@sgh/dominio-config';
+} from '@sgh/dominio-config/implantacao';
 import { SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';

@@ -47,8 +47,10 @@ import { marcaDasCoberturas, motivoSemCarteira, preenchimentoDaCobertura } from 
 import { preenchimentoDaMarcacao, tipoInicialDaAbertura } from '../regras-tela.js';
 import AvisoAtendimento from '../componentes/AvisoAtendimento.vue';
 import ErroAtendimento from '../componentes/ErroAtendimento.vue';
+import ElegibilidadeNaAbertura from '../componentes/ElegibilidadeNaAbertura.vue';
 import RegraPlanoNaAbertura from '../componentes/RegraPlanoNaAbertura.vue';
 import { usarAtendimento } from '../usar-atendimento.js';
+import { lerServicosAbertura } from '../api-regras-plano.js';
 
 type Tipo = (typeof CODIGOS_TIPO_ATENDIMENTO)[number];
 const { t } = useI18n();
@@ -88,6 +90,8 @@ const convenio = ref('');
 const profissional = ref('');
 const especialidade = ref('');
 const unidade = ref('');
+/** 02-REC linha 37: o serviço do atendimento; a regra do plano (e a senha que ela exige) pode valer só nele. */
+const servico = ref('');
 const centroCusto = ref('');
 const procedimento = ref('');
 const termoProcedimento = ref('');
@@ -98,6 +102,9 @@ const retorno = ref(false);
 const matricula = ref('');
 const validadeCarteira = ref('');
 const guia = ref('');
+// 02-REC linha 37: a senha de autorização da operadora e a validade dela (a regra do plano pode exigi-la).
+const senhaConvenio = ref('');
+const validadeSenha = ref('');
 const plano = ref('');
 const horarioEspecial = ref(false);
 const comResponsavel = ref(false);
@@ -332,6 +339,18 @@ const profissionais = computed(() =>
 const unidades = computed(() =>
   opc((apoio.data.value?.unidades ?? []).map((u) => ({ valor: String(u.codigo), rotulo: u.nome }))),
 );
+const servicosAbertura = useQuery({
+  queryKey: ['atendimento', 'regras-plano', 'servicos'],
+  queryFn: lerServicosAbertura,
+  staleTime: 300_000,
+  retry: false,
+});
+const servicos = computed(() =>
+  opc(
+    (servicosAbertura.data.value ?? []).map((s) => ({ valor: String(s.id), rotulo: s.rotulo })),
+    t('atendimento.servicoNenhum'),
+  ),
+);
 const centros = computed(() =>
   opc((apoio.data.value?.centrosCusto ?? []).map((u) => ({ valor: String(u.codigo), rotulo: u.nome }))),
 );
@@ -425,6 +444,7 @@ async function abrir(): Promise<void> {
         profissional: Number(profissional.value),
         especialidade: lab.value ? 0 : Number(especialidade.value),
         unidade: Number(unidade.value),
+        ...(servico.value ? { servico: Number(servico.value) } : {}),
         centroCusto: Number(centroCusto.value),
         procedimento: lab.value ? Number(procedimento.value || 0) : Number(procedimento.value),
         carater: carater.value,
@@ -434,6 +454,8 @@ async function abrir(): Promise<void> {
         ...(matricula.value.trim() ? { matricula: matricula.value } : {}),
         ...(validadeCarteira.value ? { validadeCarteira: validadeCarteira.value } : {}),
         ...(guia.value.trim() ? { guia: guia.value } : {}),
+        ...(senhaConvenio.value.trim() ? { senhaConvenio: senhaConvenio.value.trim() } : {}),
+        ...(validadeSenha.value ? { validadeSenha: validadeSenha.value } : {}),
         ...(plano.value.trim() ? { plano: plano.value } : {}),
         ...(observacao.value.trim() ? { observacao: observacao.value } : {}),
         ...(lab.value && solicitante.value ? { solicitante: solicitante.value.id } : {}),
@@ -677,6 +699,12 @@ async function abrir(): Promise<void> {
           :opcoes="profissionais"
         />
         <SanteSelecao v-model="unidade" :rotulo="t('atendimento.unidade')" :opcoes="unidades" />
+        <SanteSelecao
+          v-model="servico"
+          :rotulo="t('atendimento.servico')"
+          :opcoes="servicos"
+          data-testid="abrir-servico"
+        />
         <SanteSelecao v-model="centroCusto" :rotulo="t('atendimento.centroCusto')" :opcoes="centros" />
       </div>
       <SanteOpcoes v-model="carater" :legenda="t('atendimento.carater')" :opcoes="caracteres" />
@@ -793,12 +821,22 @@ async function abrir(): Promise<void> {
         <SanteCampoTexto v-model="guia" :rotulo="t('atendimento.segurado.guia')" :max-bytes="20" />
         <SanteCampoTexto v-model="plano" :rotulo="t('atendimento.segurado.plano')" :max-bytes="40" />
       </div>
+      <ElegibilidadeNaAbertura
+        v-model:senha="senhaConvenio"
+        v-model:validade-senha="validadeSenha"
+        :paciente="paciente?.id ?? null"
+      />
       <RegraPlanoNaAbertura
         :fonte="convenio === '' ? 0 : Number(convenio)"
         :paciente="paciente?.id ?? null"
         :carteira="matricula"
         :validade-carteira="validadeCarteira"
         :guia="guia"
+        :senha="senhaConvenio"
+        :validade-senha="validadeSenha"
+        :especialidade="especialidade === '' ? null : Number(especialidade)"
+        :servico="servico === '' ? null : Number(servico)"
+        :setor="unidade === '' ? null : Number(unidade)"
         :aberto="avisoPlano"
       />
       <label

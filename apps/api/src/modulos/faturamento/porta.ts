@@ -36,6 +36,7 @@ import type {
   WorklistFaturamento,
 } from '@sgh/contratos';
 import type { SituacaoDerivada } from '@sgh/dominio-faturamento';
+import type { ReajusteSimulado } from '@sgh/dominio-preco';
 import type { ContextoPorta } from '../cadastro/porta.js';
 import { type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 
@@ -105,6 +106,8 @@ export interface PortaFaturamento extends PortaGravacaoM18<GravadorSghFaturament
   hoje(c: ContextoFaturamento): Promise<string>;
   /** Os convênios do estabelecimento (código e nome), para o filtro da lista de contas. */
   convenios(c: ContextoFaturamento): Promise<{ codigo: number; nome: string }[]>;
+  /** Os setores ativos do estabelecimento (id e nome), para a escolha do setor no simulador (06-FAT linha 11). */
+  setoresDoSimulador(c: ContextoFaturamento): Promise<{ id: number; nome: string }[]>;
   contas(c: ContextoFaturamento, f: FiltroContasPorta, hoje: string): Promise<ListaContas>;
   conta(c: ContextoFaturamento, id: number, hoje: string): Promise<ContaDetalhe | null>;
   itens(
@@ -166,23 +169,44 @@ export interface PortaFaturamento extends PortaGravacaoM18<GravadorSghFaturament
     c: ContextoFaturamento,
     o: { convenios: readonly number[] | null; hoje: string; prazoDias: number; desde: string },
   ): Promise<WorklistFaturamento>;
-  /** Simulador: o preço de tabela de um código para um convênio e data (somente leitura). */
-  simular(
-    c: ContextoFaturamento,
-    s: {
-      convenio: number;
-      tipoConta: 'E' | 'I';
-      tipo: 1 | 2 | 3 | 4;
-      codigo: number;
-      quantidade: number;
-      data: string;
-    },
-  ): Promise<{
-    encontrado: boolean;
-    nome: string;
-    preco: { modelo: string; unitario: number; ch: number; cop: number; filme: number; valor: number } | null;
-    vigencia: string | null;
-  }>;
+  /** Simulador: o preço de um código para um convênio e data, explicado, e o impacto de um reajuste (somente leitura). */
+  simular(c: ContextoFaturamento, s: PedidoSimulacao): Promise<ResultadoSimulacao>;
+}
+
+/** Pedido do simulador (06-FAT linha 11): o item, onde seria lançado e, opcional, o reajuste a medir (em %). */
+export interface PedidoSimulacao {
+  convenio: number;
+  tipoConta: 'E' | 'I';
+  tipo: 1 | 2 | 3 | 4;
+  codigo: number;
+  quantidade: number;
+  data: string;
+  /** Setor do lançamento: o índice do setor no acordo. */
+  setor?: number | null;
+  horarioEspecial?: boolean;
+  reajuste?: ReajusteSimulado | null;
+}
+
+export interface ResultadoSimulacao {
+  encontrado: boolean;
+  nome: string;
+  preco: { modelo: string; unitario: number; ch: number; cop: number; filme: number; valor: number } | null;
+  vigencia: string | null;
+  /** De onde saiu o unitário: do índice do acordo (CH ou PORTE) ou da vigência do valor da tabela. */
+  origem?: 'indice' | 'vigencia' | null;
+  /** A explicação do valor, passo a passo (a mesma memória gravada no item quando lançado). */
+  passos?: readonly string[];
+  /** O item é cobrado pelo índice e falta valor no acordo: o que falta. */
+  falta?: string | null;
+  /** O impacto do reajuste pedido, na quantidade simulada. */
+  impacto?: {
+    atual: number | null;
+    novo: number | null;
+    diferenca: number | null;
+    percentual: number | null;
+    afetadoPor: readonly string[];
+    passos: readonly string[];
+  } | null;
 }
 
 export const METODOS_PORTA_FATURAMENTO: ReadonlySet<string> = new Set([

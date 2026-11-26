@@ -121,7 +121,11 @@ test.describe('auditoria das checagens de enfermagem (09-AREA L86) @C1-035', () 
       );
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // A permissão é clínica: o administrador sem perfil assistencial não a recebe (segregação de funções). Quem audita
+    // aqui é a coordenação de enfermagem com conselho (grupo ENFERMAGEM_SUPERVISAO, que dá o perfil
+    // assistencial-com-conselho). O SINT.ENF.PLANTAO não serve: o grupo dele está fora do mapa grupo → perfil (caso a
+    // caso) e não recebe perfil por adivinhação, então a rota mostrava Sem permissão.
+    await entrar(page, 'SINT.COORD.ENF');
     await page.goto('/enfermagem/auditoria-checagem');
     await expect(page.getByTestId('tela-auditoria-checagem')).toBeVisible();
     await expect(page.getByTestId('ac-vazio')).toBeVisible();
@@ -135,7 +139,7 @@ test.describe('auditoria das checagens de enfermagem (09-AREA L86) @C1-035', () 
     await page.getByTestId('ac-inicio').fill('2026-11-24T07:00');
     await page.getByTestId('ac-fim').fill('2026-11-24T19:00');
     await expect(page.getByTestId('ac-periodo-invalido')).toBeHidden();
-    await escolher(page.getByTestId('ac-unidade'), 'UTI ADULTO SINTETICA');
+    await escolher(page.getByTestId('ac-unidade'), { rotulo: 'UTI ADULTO SINTETICA' });
     await page.getByTestId('ac-tamanho').fill('2');
     await escolher(page.getByTestId('ac-auditor'), { rotulo: /AUDITORA SINTETICA/ });
     await page.getByTestId('ac-incluir-auditor').click();
@@ -164,10 +168,10 @@ test.describe('auditoria das checagens de enfermagem (09-AREA L86) @C1-035', () 
 
     // Segunda não conforme: motivo e justificativa conferidos na hora.
     await page.getByTestId('ac-avaliar-502').click();
-    await escolher(page.getByTestId('ac-resultado'), 'Não conforme');
+    await escolher(page.getByTestId('ac-resultado'), { rotulo: 'Não conforme' });
     await expect(page.getByTestId('ac-problema')).toBeVisible();
     await expect(page.getByTestId('ac-gravar')).toBeDisabled();
-    await escolher(page.getByTestId('ac-motivo'), 'Dose divergente');
+    await escolher(page.getByTestId('ac-motivo'), { rotulo: 'Dose divergente' });
     await page.getByTestId('ac-justificativa').fill('curta');
     await expect(page.getByTestId('ac-gravar')).toBeDisabled();
     await page.getByTestId('ac-justificativa').fill('Dose checada com o volume diferente do prescrito');

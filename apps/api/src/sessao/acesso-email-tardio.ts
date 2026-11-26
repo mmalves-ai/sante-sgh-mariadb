@@ -15,6 +15,7 @@ import {
   type DependenciasAcessoEmail,
   type ServicosAcessoEmail,
 } from './acesso-email-proprio.js';
+import type { OpcoesValidacaoCredencial, RespostaValidacao } from '@sgh/dominio-acesso';
 import type { DesfechoConferenciaCodigo, MetodoSegundoFator } from './codigo-email.js';
 import type { FonteParametrosTrocaRapida } from './troca-rapida.js';
 
@@ -97,6 +98,21 @@ export interface GanchoSegundoFatorEmail {
     login: string,
     codigo: string,
   ): Promise<DesfechoConferenciaCodigo>;
+  /** 01-ADM L62: o desafio da chave do dispositivo na entrada (null: a conta não tem aparelho ativo). */
+  opcoesDispositivoUsuario?(
+    rede: string,
+    estabelecimento: string,
+    login: string,
+    correlacao: string,
+  ): Promise<OpcoesValidacaoCredencial | null>;
+  /** 01-ADM L62: confere a assinatura do dispositivo (desafio de uso único); recusa com ErroOperacao. */
+  conferirDispositivoUsuario?(
+    rede: string,
+    estabelecimento: string,
+    login: string,
+    resposta: RespostaValidacao,
+    correlacao: string,
+  ): Promise<void>;
   /** O método do administrador da plataforma (null: conta não encontrada). */
   metodoPlataforma(id: number): Promise<MetodoSegundoFator | null>;
   emitirPlataforma(id: number, correlacao: string): Promise<{ validadeMinutos: number }>;
@@ -145,6 +161,34 @@ export class SegundoFatorEmailTardio implements GanchoSegundoFatorEmail {
     const c = this.exigir().codigoUsuario;
     if (!c) return Promise.reject(new Error('envio de e-mail indisponível'));
     return c.conferir(rede, estabelecimento, login, codigo);
+  }
+
+  // 01-ADM L62: a entrada ainda não tem sessão; o desafio fica guardado pela conta (uso único, validade curta).
+  async opcoesDispositivoUsuario(
+    rede: string,
+    estabelecimento: string,
+    login: string,
+    correlacao: string,
+  ): Promise<OpcoesValidacaoCredencial | null> {
+    const d = this.exigir().dispositivo;
+    const ator = { rede, hospital: estabelecimento, login, estacao: null, correlacao };
+    if ((await d.listar(ator)).length === 0) return null;
+    return d.iniciarValidacao(chaveEntradaDispositivo(rede, estabelecimento, login), ator);
+  }
+
+  async conferirDispositivoUsuario(
+    rede: string,
+    estabelecimento: string,
+    login: string,
+    resposta: RespostaValidacao,
+    correlacao: string,
+  ): Promise<void> {
+    const ator = { rede, hospital: estabelecimento, login, estacao: null, correlacao };
+    await this.exigir().dispositivo.concluirValidacao(
+      chaveEntradaDispositivo(rede, estabelecimento, login),
+      ator,
+      resposta,
+    );
   }
 
   async metodoPlataforma(id: number): Promise<MetodoSegundoFator | null> {
@@ -205,4 +249,9 @@ export function montarLigacaoAcessoEmail(
     ],
     naoMigrados: restantes,
   };
+}
+
+/** A chave do desafio da entrada (sem sessão aberta): a conta no estabelecimento da rede. */
+export function chaveEntradaDispositivo(rede: string, estabelecimento: string, login: string): string {
+  return `entrada:${rede}:${estabelecimento}:${login}`;
 }

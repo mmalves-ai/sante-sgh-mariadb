@@ -35,6 +35,7 @@
       "@sgh/dominio-acesso": ["./packages/dominio-acesso/src/index.ts"],
       "@sgh/dominio-acesso/autorizacao": ["./packages/dominio-acesso/src/autorizacao.ts"],
       "@sgh/dominio-config": ["./packages/dominio-config/src/index.ts"],
+      "@sgh/dominio-config/implantacao": ["./packages/dominio-config/src/prontidao/implantacao.ts"],
       "@sgh/dominio-cadastro": ["./packages/dominio-cadastro/src/index.ts"],
       "@sgh/dominio-custos": ["./packages/dominio-custos/src/index.ts"],
       "@sgh/dominio-patrimonio": ["./packages/dominio-patrimonio/src/index.ts"],

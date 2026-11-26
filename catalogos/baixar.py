@@ -32,6 +32,14 @@ def sigtap_url() -> tuple[str, str]:
     return base + zips[-1], zips[-1].split("_")[1]
 
 
+def cnes_url() -> tuple[str, str]:
+    """Base mensal pública do cadastro nacional de estabelecimentos (DATASUS): o pacote mais recente."""
+    base = "ftp://ftp.datasus.gov.br/cnes/"
+    nomes = urllib.request.urlopen(base, timeout=60).read().decode("latin-1").split()
+    zips = sorted(n for n in nomes if re.fullmatch(r"BASE_DE_DADOS_CNES_\d{6}\.ZIP", n, re.I))
+    return base + zips[-1], re.search(r"\d{6}", zips[-1]).group(0)
+
+
 # fonte -> (url ou função, limite em MB, versão fixa ou None)
 FONTES = {
     "ibge_uf": ("https://servicodados.ibge.gov.br/api/v1/localidades/estados", 5, None),
@@ -59,6 +67,8 @@ FONTES = {
     "curvas_ig_estatura_f": ("https://raw.githubusercontent.com/ropensci/gigs/main/data-raw/tables/ig_png/ig_png_len_female_zscores.csv", 1, "intergrowth-2015"),
     "curvas_ig_pc_m": ("https://raw.githubusercontent.com/ropensci/gigs/main/data-raw/tables/ig_png/ig_png_hc_male_zscores.csv", 1, "intergrowth-2015"),
     "curvas_ig_pc_f": ("https://raw.githubusercontent.com/ropensci/gigs/main/data-raw/tables/ig_png/ig_png_hc_female_zscores.csv", 1, "intergrowth-2015"),
+    # Cadastro nacional de estabelecimentos (C3-011): base mensal completa, cerca de 1 GB; só quando nomeada.
+    "cnes": (cnes_url, 1500, None),
     "etnia_indigena": ("ftp://ftp.datasus.gov.br/dissemin/publicos/SIASUS/200801_/Auxiliar/TAB_SIA.zip", 150, None),
 }
 
@@ -101,7 +111,7 @@ def baixar(nome: str) -> dict:
 
 
 # fontes oficiais sem endereço fixo: só por --registrar (o carregador lê o arquivo registrado)
-MANUAIS = {"cfop", "tiss", "ciap2"}
+MANUAIS = {"cfop", "tiss", "ciap2", "taco"}
 
 
 def registrar(nome: str, origem: str, versao: str | None = None) -> dict:

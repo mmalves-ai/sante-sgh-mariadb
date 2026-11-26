@@ -185,6 +185,19 @@ function estrutura(): Recepcao[] {
   ];
 }
 
+/**
+ * A porta em memória que o módulo da recepção do processo usa (dev e E2E sobre a fonte sintética). A abertura do
+ * atendimento em memória confere e atende por ela a senha chamada no guichê, para as duas portas nunca se desmentirem.
+ */
+let recepcaoMemoriaDoProcesso: PortaRecepcaoMemoria | null = null;
+export function lembrarRecepcaoMemoria(porta: PortaRecepcaoMemoria): PortaRecepcaoMemoria {
+  recepcaoMemoriaDoProcesso = porta;
+  return porta;
+}
+export function recepcaoMemoriaAtual(): PortaRecepcaoMemoria | null {
+  return recepcaoMemoriaDoProcesso;
+}
+
 export class PortaRecepcaoMemoria implements PortaRecepcao {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();

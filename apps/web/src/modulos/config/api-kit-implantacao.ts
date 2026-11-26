@@ -6,7 +6,7 @@ import {
   INDICADORES_META,
   SITUACOES_ITEM_PRONTIDAO,
   TIPOS_VERIFICACAO,
-} from '@sgh/dominio-config';
+} from '@sgh/dominio-config/implantacao'; // subcaminho: o índice do pacote traz node:crypto, que não roda no navegador
 import { z } from 'zod';
 import { tokenCsrf } from '../../api.js';
 import { ler, lerJson, novaChave } from '../exames/api-exames.js';

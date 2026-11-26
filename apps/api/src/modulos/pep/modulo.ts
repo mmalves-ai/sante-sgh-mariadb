@@ -58,6 +58,8 @@ import { PORTA_EQUIPE_PAINEL, PortaEquipePainelPropria } from './equipe-painel-p
 import { SumarioAltaSecoesController } from './sumario-alta-secoes.controller.js';
 import { FARMACOVIGILANCIA, FarmacovigilanciaController } from './farmacovigilancia.controller.js';
 import { FarmacovigilanciaPropria } from './farmacovigilancia-propria.js';
+import { PesquisaClinicaController } from './pesquisa-clinica.controller.js';
+import { PORTA_PESQUISA_CLINICA, PesquisaClinicaPropria } from './pesquisa-clinica-propria.js';
 import { PrescricaoCadastroController } from './prescricao-cadastro.controller.js';
 import { PrescricaoPadroesController } from './prescricao-padroes.controller.js';
 import {
@@ -82,6 +84,8 @@ import {
   PortaRegrasAvisoClinicoPropria,
 } from './avisos-clinicos-regras-propria.js';
 import { NotasPacientePropria } from './notas-paciente-propria.js';
+import { PLANO_CUIDADO, PlanoCuidadoController } from './plano-cuidado.controller.js';
+import { PlanoCuidadoPropria } from './plano-cuidado-propria.js';
 import { TRANSPLANTE_CLINICO, TransplanteClinicoController } from './transplante-clinico.controller.js';
 import { TransplanteClinicoPropria } from './transplante-clinico-propria.js';
 import { CurvasCrescimentoPropria } from './curvas-crescimento-propria.js';
@@ -117,6 +121,11 @@ import {
   PortaWorklistMemoria,
 } from './worklist-porta.js';
 import { PortaWorklistPropria } from './worklist-porta-propria.js';
+import { PrescricaoRestricoesController } from './prescricao-restricoes.controller.js';
+import {
+  CADASTRO_RESTRICOES_PRESCRICAO,
+  CadastroRestricoesPrescricaoPropria,
+} from './prescricao-propria-restricoes.js';
 
 export interface OpcoesModuloPep {
   /** Testes: portas já montadas. */
@@ -234,8 +243,11 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       PrescricaoCadastroController,
       PrescricaoPadroesController,
       NotasPacienteController,
+      PlanoCuidadoController,
       CurvasCrescimentoController,
       ExameFisicoController,
+      PesquisaClinicaController,
+      PrescricaoRestricoesController,
       TransplanteClinicoController,
       NotaSoapController,
       ProntuarioRestritoController,
@@ -310,6 +322,22 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
             ? new CadastroProtocolosPrescricaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
+      // 03-PEP L108 (C2-104): ajuste renal por faixa, restrição de posologia e alerta por setor; sem núcleo, 503.
+      {
+        provide: CADASTRO_RESTRICOES_PRESCRICAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new CadastroRestricoesPrescricaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L144: pesquisa clínica (estudo, critérios, triagem como sugestão, participantes); sem núcleo, 503.
+      {
+        provide: PORTA_PESQUISA_CLINICA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PesquisaClinicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
       // F78.03-1 (03-PEP L103 e L104): reação adversa no paciente e lista de uso contínuo; sem núcleo, 503.
       {
         provide: FARMACOVIGILANCIA,
@@ -372,6 +400,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new NotasPacientePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L142: plano de cuidado e estratificação de risco do paciente; sem núcleo, 503.
+      {
+        provide: PLANO_CUIDADO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PlanoCuidadoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // 03-PEP L145: doação e transplante de órgãos (doador, receptor, destino, acompanhamento); sem núcleo, 503.

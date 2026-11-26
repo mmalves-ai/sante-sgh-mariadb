@@ -121,8 +121,9 @@ test.describe('C2-014 transplante para a central estadual @C2-014', () => {
       return json(r, { id: 901 });
     });
 
-    // Permissão clínica: a segregação retira do administrador sem perfil assistencial; entra o coordenador médico.
-    await entrar(page, 'SINT.DIRETOR.CLINICO');
+    // Permissão clínica: a segregação retira do administrador sem perfil assistencial; entra a coordenadora de enfermagem
+    // (SINT.COORD.ENF, perfil coordenador-enfermagem). SINT.DIRETOR.CLINICO tem só diretoria-clinica, que não recebe a permissão.
+    await entrar(page, 'SINT.COORD.ENF');
     await page.goto('/faturamento/sus/transplantes');
     await expect(page.getByTestId('tela-transplante')).toBeVisible();
     await expect(page.getByTestId('transplante-receptores-vazio')).toBeVisible();
@@ -209,7 +210,7 @@ test.describe('C2-014 transplante para a central estadual @C2-014', () => {
     await page.getByTestId('transplante-abrir-notificacao-901').click();
     await page.getByTestId('transplante-doador-protocolo-fim').fill('2026-11-01T20:00');
     await page.getByTestId('transplante-doador-abordagem').fill('2026-11-01T21:00');
-    await escolher(page.getByTestId('transplante-doador-consentimento'), 'true');
+    await escolher(page.getByTestId('transplante-doador-consentimento'), 'sim');
     await escolher(page.getByTestId('transplante-doador-desfecho'), 'doacao_efetivada');
     await page.getByTestId('transplante-doador-desfecho-em').fill('2026-11-02T06:00');
     await expect(page.getByTestId('transplante-doador-problemas')).toContainText(

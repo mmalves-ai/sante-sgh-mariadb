@@ -19,6 +19,8 @@ import { portaDaPortaria } from '../portaria/modulo.js';
 import { PORTA_PORTARIA, type PortaPortaria } from '../portaria/porta.js';
 import type { ContextoModulo } from '../registro.js';
 import { CardapioController } from './cardapio.controller.js';
+import { ComposicaoController } from './composicao.controller.js';
+import { PORTA_COMPOSICAO, PortaComposicaoPropria } from './composicao-propria.js';
 import { PORTA_CARDAPIO, PortaCardapioPropria } from './cardapio-propria.js';
 import { DireitoRefeicaoController } from './direito-refeicao.controller.js';
 import { PORTA_DIREITO_REFEICAO, PortaDireitoRefeicaoPropria } from './direito-refeicao-propria.js';
@@ -71,6 +73,7 @@ export async function moduloNutricao(
       DireitoRefeicaoController,
       OcorrenciaRefeicaoController,
       CardapioController,
+      ComposicaoController,
     ],
     providers: [
       { provide: PORTA_NUTRICAO, useValue: porta },
@@ -97,6 +100,14 @@ export async function moduloNutricao(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaCardapioPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F8 (04-HOT linha 142): composição nutricional dos alimentos (TACO) e a ligação ao gênero; sem núcleo, 503.
+      {
+        provide: PORTA_COMPOSICAO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaComposicaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       ...(portaria ? [{ provide: PORTA_PORTARIA, useValue: portaria }] : []),

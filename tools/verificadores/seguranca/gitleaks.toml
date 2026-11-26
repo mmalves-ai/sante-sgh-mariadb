@@ -37,3 +37,10 @@ condition = "AND"
 paths = ['''(^|/)apps/api/src/modulos/qualidade/porta-perfil-cid-propria\.ts$''']
 regexTarget = "match"
 regexes = ['''id = a\.capitulo_cid10_id''']
+
+[[allowlists]]
+description = "Nome de arquivo do cliente web lido como chave genérica (ficha F78-03, commit 781eedc0; autorizada pelo dono em 26/11)"
+condition = "AND"
+paths = ['''(^|/)docs/fases/fichas/F78-03-prontuario\.md$''']
+regexTarget = "match"
+regexes = ['''api-pesquisa-clinica\.ts''']

@@ -29,6 +29,8 @@ export function textoRecusaSegundoFator(codigo: string | null): string | null {
       return 'acessoEmail.semEmail';
     case 'segundo-fator-email-envios':
       return 'acessoEmail.muitosEnvios';
+    case 'segundo-fator-dispositivo-invalido':
+      return 'acessoEmail.dispositivo.entradaRecusada';
     default:
       return null;
   }

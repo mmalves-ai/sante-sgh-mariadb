@@ -339,9 +339,12 @@ function gravarRetorno(r: RemessaDaOs) {
         />
       </div>
 
+      <!-- novalidate: o obrigatório fica no rótulo e no aria-required; a conferência é a da regra do domínio (a
+           saída sem custo, a justificativa), mostrada em os-corretiva-problemas, e não o balão do navegador. -->
       <form
         v-if="acao"
         class="bloco"
+        novalidate
         :data-testid="`os-corretiva-form-${acao}`"
         @submit.prevent="acao === 'orcamento' ? gravarOrcamento() : gravarRemessa()"
       >
@@ -462,9 +465,12 @@ function gravarRetorno(r: RemessaDaOs) {
         </div>
       </form>
 
-      <ul v-if="problemas.length > 0" class="vencido" role="alert" data-testid="os-corretiva-problemas">
-        <li v-for="x in problemas" :key="x">{{ x }}</li>
-      </ul>
+      <!-- O role="alert" fica no invólucro: num <ul> ele apaga o papel de lista e os <li> ficam órfãos (axe listitem). -->
+      <div v-if="problemas.length > 0" role="alert" data-testid="os-corretiva-problemas">
+        <ul class="vencido">
+          <li v-for="x in problemas" :key="x">{{ x }}</li>
+        </ul>
+      </div>
       <ErroManutencao v-if="erro" :erro="erro" grupo="corretiva" />
     </template>
   </section>

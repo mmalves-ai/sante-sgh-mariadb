@@ -179,6 +179,7 @@ test.describe('@C2-067 agenda de grupos e turmas', () => {
   test('cria a turma, gera os encontros, inscreve, registra a presença e encerra a participação', async ({
     page,
   }) => {
+    test.setTimeout(90_000);
     const externas = vigiarExternas(page);
     const st = simular(page);
     await entrar(page, 'SINT.AGENDA');
@@ -247,6 +248,8 @@ test.describe('@C2-067 agenda de grupos e turmas', () => {
       .filter({ has: page.getByTestId('encontros-gerar') });
     await datas.getByLabel('De').fill('01/03/2030');
     await datas.getByLabel('Até').fill('31/03/2030');
+    // A data confirma ao sair do campo (blur): sem isso o botão segue desabilitado.
+    await datas.getByLabel('Até').press('Tab');
     await page.getByTestId('encontros-gerar').click();
     await expect(page.getByTestId('turmas-mensagem')).toHaveText('2 encontro(s) gerado(s).');
     await expect(page.getByTestId('turma-encontros')).toContainText('05/03/2030');

@@ -804,9 +804,11 @@ const somenteLeitura = computed(() => !pode.value.editar);
             <label class="marcar"
               ><input v-model="conta.preferencial" type="checkbox" /> {{ M.contas.preferencial }}</label
             >
-            <ul v-if="recusasConta.length" role="alert" data-testid="cforn-conta-recusas">
-              <li v-for="r in recusasConta" :key="r.codigo">{{ r.mensagem }}</li>
-            </ul>
+            <div v-if="recusasConta.length" role="alert" data-testid="cforn-conta-recusas">
+              <ul>
+                <li v-for="r in recusasConta" :key="r.codigo">{{ r.mensagem }}</li>
+              </ul>
+            </div>
             <SanteBotao
               tipo="submit"
               :rotulo="M.contas.incluir"
@@ -871,9 +873,11 @@ const somenteLeitura = computed(() => !pode.value.editar);
                 })
               }}
             </p>
-            <ul v-if="recusasAvaliacao.length" role="alert" data-testid="cforn-aval-recusas">
-              <li v-for="r in recusasAvaliacao" :key="r.codigo + r.mensagem">{{ r.mensagem }}</li>
-            </ul>
+            <div v-if="recusasAvaliacao.length" role="alert" data-testid="cforn-aval-recusas">
+              <ul>
+                <li v-for="r in recusasAvaliacao" :key="r.codigo + r.mensagem">{{ r.mensagem }}</li>
+              </ul>
+            </div>
             <SanteBotao
               tipo="submit"
               :rotulo="M.avaliacoes.registrar"
@@ -933,9 +937,11 @@ const somenteLeitura = computed(() => !pode.value.editar);
                   :data-testid="`cforn-andamento-tratativa-${o.numero}`"
                 />
               </span>
-              <ul v-if="recusasAndamento(o).length" role="alert">
-                <li v-for="r in recusasAndamento(o)" :key="r.codigo">{{ r.mensagem }}</li>
-              </ul>
+              <div v-if="recusasAndamento(o).length" role="alert">
+                <ul>
+                  <li v-for="r in recusasAndamento(o)" :key="r.codigo">{{ r.mensagem }}</li>
+                </ul>
+              </div>
               <SanteBotao
                 tipo="submit"
                 :rotulo="M.ocorrencias.gravarAndamento"
@@ -1001,9 +1007,11 @@ const somenteLeitura = computed(() => !pode.value.editar);
                 data-testid="cforn-oc-descricao"
               />
             </span>
-            <ul v-if="recusasOcorrencia.length" role="alert" data-testid="cforn-oc-recusas">
-              <li v-for="r in recusasOcorrencia" :key="r.codigo">{{ r.mensagem }}</li>
-            </ul>
+            <div v-if="recusasOcorrencia.length" role="alert" data-testid="cforn-oc-recusas">
+              <ul>
+                <li v-for="r in recusasOcorrencia" :key="r.codigo">{{ r.mensagem }}</li>
+              </ul>
+            </div>
             <SanteBotao
               tipo="submit"
               :rotulo="M.ocorrencias.registrar"

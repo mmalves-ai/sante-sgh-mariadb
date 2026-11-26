@@ -213,3 +213,29 @@ describe('laudo estruturado', () => {
     expect(codigo(() => conferirDonoDoModelo(5, null))).toBe('modelo-de-outro-profissional');
   });
 });
+
+describe('assinatura ICP-Brasil do laudo (C3-005)', () => {
+  it('título do documento por versão, com a retificação marcada e no limite de 150', async () => {
+    const { tituloDocumentoLaudo } = await import('./redacao.js');
+    expect(tituloDocumentoLaudo('Ecocardiograma', 1, 'assinado')).toBe('Laudo de Ecocardiograma (versão 1)');
+    expect(tituloDocumentoLaudo('Ecocardiograma', 2, 'retificado')).toBe(
+      'Laudo de Ecocardiograma (retificação, versão 2)',
+    );
+    expect(tituloDocumentoLaudo('x'.repeat(300), 3, 'retificado').length).toBe(150);
+    expect(tituloDocumentoLaudo('  ', 1, 'assinado')).toBe('Laudo de exame (versão 1)');
+    expect(() => tituloDocumentoLaudo('Eco', 0, 'assinado')).toThrow('Versão do laudo inválida.');
+  });
+
+  it('situação da assinatura com certificado de cada versão', async () => {
+    const { assinaturaIcpDoLaudo, MEIOS_ASSINATURA_LAUDO } = await import('./redacao.js');
+    expect(assinaturaIcpDoLaudo({ documento: null, envelopeAssinado: false, naFila: false })).toBe(
+      'sem-documento',
+    );
+    expect(assinaturaIcpDoLaudo({ documento: 7, envelopeAssinado: true, naFila: false })).toBe('assinada');
+    expect(assinaturaIcpDoLaudo({ documento: 7, envelopeAssinado: false, naFila: true })).toBe('na-fila');
+    expect(assinaturaIcpDoLaudo({ documento: 7, envelopeAssinado: false, naFila: false })).toBe(
+      'nao-exigida',
+    );
+    expect(MEIOS_ASSINATURA_LAUDO[0]).toBe('nuvem');
+  });
+});

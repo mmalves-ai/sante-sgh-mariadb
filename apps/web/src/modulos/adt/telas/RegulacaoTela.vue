@@ -156,6 +156,16 @@ const rotuloBotao = (s: RegulacaoDaSolicitacao) =>
         data-testid="regulacao-conector"
       />
       <SanteAlerta v-if="d.acoes.motivo" variante="info" :texto="d.acoes.motivo" />
+      <SanteAlerta
+        v-if="!d.depara.completo || d.depara.aConfirmar > 0"
+        variante="aviso"
+        :texto="
+          !d.depara.completo
+            ? t('regulacao.depara.incompleto')
+            : t('regulacao.depara.aConfirmar', { n: d.depara.aConfirmar })
+        "
+        data-testid="regulacao-depara"
+      />
       <p v-if="mensagem" role="status" data-testid="regulacao-mensagem">{{ mensagem }}</p>
       <div v-if="erro" role="alert" data-testid="regulacao-erro">
         <SanteAlerta v-if="textoErro" variante="alerta" :texto="textoErro" />
@@ -190,6 +200,18 @@ const rotuloBotao = (s: RegulacaoDaSolicitacao) =>
                 em: horaCurta(s.solicitadoEm),
                 prioridade: t(`nir.prioridades.${s.prioridade}`),
               })
+            }}
+          </p>
+          <p class="secundario" data-testid="regulacao-situacao-pedido">
+            {{
+              s.situacaoPedido
+                ? t(
+                    s.situacaoPedido.aConfirmar
+                      ? 'regulacao.lista.situacaoPedidoAConfirmar'
+                      : 'regulacao.lista.situacaoPedido',
+                    { rotulo: s.situacaoPedido.rotulo },
+                  )
+                : t('regulacao.lista.situacaoPedidoSem')
             }}
           </p>
           <p v-if="s.vigente" data-testid="regulacao-vigente">

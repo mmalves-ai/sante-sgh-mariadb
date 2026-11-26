@@ -64,6 +64,13 @@ export interface CredenciaisEntrada {
   login: string;
   senha: string;
   codigoSegundoFator?: string;
+  /** 01-ADM L62: a assinatura do dispositivo (quando a conta escolheu a chave do dispositivo). */
+  respostaDispositivo?: {
+    idCredencial: string;
+    dadosCliente: string;
+    dadosAutenticador: string;
+    assinatura: string;
+  };
 }
 
 /** POST /api/sessao: entrar. A sessão volta no cookie HttpOnly; o corpo é só a sessão (sem token). */

@@ -18,6 +18,7 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import GrupoDominiosTela from '../../config/telas/GrupoDominiosTela.vue';
 import { lerApoioAns, lerEnviosAns, type ResultadoAns } from '../api-ans.js';
+import { mensagensProvisaoTecnica } from '../i18n-provisao-tecnica.js';
 import CatalogosAns from '../componentes/CatalogosAns.vue';
 import { dataBr } from '../componentes/f1/comum.js';
 import { brl } from '../componentes/f2/comum.js';
@@ -361,6 +362,11 @@ const rotuloObrigacao = (c: ObrigacaoAns) => a.value?.obrigacoes.find((o) => o.c
     <p>
       <RouterLink to="/operadora/ans/declaracoes" data-testid="link-declaracoes-ans">{{
         t('operadoraDeclaracoes.link')
+      }}</RouterLink>
+    </p>
+    <p v-if="pode('operadora.provisaoTecnica.ler')">
+      <RouterLink to="/operadora/ans/provisoes-tecnicas" data-testid="link-provisoes-tecnicas">{{
+        mensagensProvisaoTecnica.link
       }}</RouterLink>
     </p>
     <p>

@@ -253,7 +253,7 @@ export const mensagensContabil = {
     'leitura-parcial':
       'O exercício tem lançamentos demais para um só arquivo: nada foi gerado. Fale com o suporte.',
     'forma-nao-gerada':
-      'A escrituração fiscal pelo lucro real ou presumido não é gerada aqui: só a das entidades imunes e isentas. Gere a do lucro real ou presumido com o escritório contábil.',
+      'A escrituração fiscal pelo lucro presumido ou arbitrado não é gerada aqui: só a do lucro real e a das entidades imunes e isentas. Gere a do lucro presumido ou arbitrado com o escritório contábil.',
     'sem-cifra':
       'A guarda cifrada do arquivo não está configurada neste servidor: a geração fica desligada. Fale com o suporte.',
     'cifra-diferente': 'O arquivo foi guardado com outra chave e não pode ser lido: gere de novo.',
@@ -395,6 +395,9 @@ export const mensagensContabil = {
     email: 'E-mail',
     telefone: 'Telefone (com DDD)',
     incluirSignatario: 'Incluir signatário',
+    doCadastro: 'Signatários trazidos do cadastro da empresa ({n}). Confira antes de gerar.',
+    guardarSignatarios:
+      'Os signatários ficam guardados no cadastro da empresa (a pessoa precisa estar no cadastro de pessoas pelo CPF).',
     removerSignatario: 'Remover',
     doSignatario: 'Signatário {n}: {problema}',
     problemas: {

@@ -25,8 +25,8 @@ const props = defineProps<{ paciente: number; atendimento?: number | null }>();
 const { t } = useI18n();
 const cliente = useQueryClient();
 const dados = useQuery({
-  queryKey: computed(() => ['pep', 'doc', 'alergias', props.paciente]),
-  queryFn: () => lerAlergias(props.paciente),
+  queryKey: computed(() => ['pep', 'doc', 'alergias', props.paciente, props.atendimento ?? null]),
+  queryFn: () => lerAlergias(props.paciente, fetch, props.atendimento),
 });
 const versao = computed(() =>
   (dados.data.value?.ativas.map((a) => a.id) ?? []).sort((a, b) => a - b).join(','),
@@ -147,7 +147,7 @@ async function inativar(id: number): Promise<void> {
           </p>
           <HistoricoDaAlergia :paciente="paciente" :alergia="a.id" />
           <AlterarAlergia
-            v-if="dados.data.value.criar.pode"
+            v-if="dados.data.value.alterar.pode"
             :paciente="paciente"
             :alergia="a"
             :versao="versao"

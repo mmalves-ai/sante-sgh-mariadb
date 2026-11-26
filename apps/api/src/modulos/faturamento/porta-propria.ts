@@ -47,6 +47,7 @@ import {
   troco,
   valorPorExtenso,
 } from '@sgh/dominio-faturamento';
+import { type EntradaTotalHonorario, simularReajusteItem } from '@sgh/dominio-preco';
 import {
   type ContextoOperacao,
   definirOperacao,
@@ -69,7 +70,9 @@ import type {
   FiltroContas,
   FiltroPagamentos,
   GravadorSghFaturamento,
+  PedidoSimulacao,
   PortaFaturamento,
+  ResultadoSimulacao,
 } from './porta.js';
 import {
   conferirFechamentoConta,
@@ -466,6 +469,17 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
   }
 
   /** Fontes pagadoras ativas (cadastro da rede inteira, sem estabelecimento). */
+  setoresDoSimulador(c: ContextoFaturamento): Promise<{ id: number; nome: string }[]> {
+    return this.ler(c, async (l, est) => {
+      const r = await l.consultar<Linha>(
+        'SELECT id, nome FROM setor_funcional WHERE estabelecimento_id = ? AND excluido_em IS NULL ORDER BY nome',
+        [est],
+        { teto: 5_000 },
+      );
+      return r.map((x) => ({ id: n(x['id']), nome: texto(x['nome']) }));
+    });
+  }
+
   convenios(c: ContextoFaturamento): Promise<{ codigo: number; nome: string }[]> {
     return this.ler(c, async (l) => {
       const r = await l.consultar<Linha>(
@@ -1305,18 +1319,12 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
     });
   }
 
-  /** Simulador: o preço vigente do item na tabela de preço da fonte pagadora, na data. */
-  simular(
-    c: ContextoFaturamento,
-    s: {
-      convenio: number;
-      tipoConta: 'E' | 'I';
-      tipo: 1 | 2 | 3 | 4;
-      codigo: number;
-      quantidade: number;
-      data: string;
-    },
-  ) {
+  /**
+   * Simulador (06-FAT linha 11): o preço vigente do item na tabela da fonte pagadora, na data, pelo mesmo motor do
+   * lançamento (CH e PORTE pelo índice do acordo × quantidade, no regime do tipo de conta, no setor e em horário
+   * especial), explicado passo a passo, e o impacto do reajuste pedido (somente leitura; nada é gravado).
+   */
+  simular(c: ContextoFaturamento, s: PedidoSimulacao): Promise<ResultadoSimulacao> {
     return this.ler(c, async (l, est) => {
       const tipos = tiposDoGrupo(s.tipo);
       const item = await l.uma<Linha>(
@@ -1325,21 +1333,78 @@ export class PortaFaturamentoPropria implements PortaFaturamento {
         [String(s.codigo), ...tipos],
       );
       if (!item) return { encontrado: false, nome: '', preco: null, vigencia: null };
+      const nome = texto(item['descricao']);
       const tabelas = await tabelasDePreco(l, est, s.convenio, null);
-      const v = await precoVigente(l, tabelas, n(item['id']), s.data);
-      if (!v) return { encontrado: true, nome: texto(item['descricao']), preco: null, vigencia: null };
+      let v: Awaited<ReturnType<typeof precoVigente>>;
+      try {
+        v = await precoVigente(l, tabelas, n(item['id']), s.data, {
+          est,
+          fonte: s.convenio,
+          setor: s.setor ?? null,
+          horarioEspecial: s.horarioEspecial === true,
+          regime: s.tipoConta === 'I' ? 'internacao' : 'ambulatorial',
+        });
+      } catch (e) {
+        // CH ou PORTE sem o valor do índice no acordo: o simulador diz o que falta (o lançamento recusaria).
+        if (e instanceof ErroOperacao && e.problema.codigo === 'item-sem-indice')
+          return {
+            encontrado: true,
+            nome,
+            preco: null,
+            vigencia: null,
+            origem: 'indice',
+            falta: e.problema.detail ?? e.message,
+          };
+        throw e;
+      }
+      if (!v) return { encontrado: true, nome, preco: null, vigencia: null };
+      const valor = valorDoItem(v.unitario, s.quantidade);
+      const passos =
+        v.origem === 'indice'
+          ? [...(v.passos ?? []), `Valor = ${v.unitario} × ${s.quantidade} = ${valor}.`]
+          : [
+              `Vigência de ${v.vigencia} da tabela ${v.tabela}: honorário ${v.honorario} + custo operacional ${v.custoOperacional} + filme ${v.filme} = ${v.unitario}.`,
+              `Valor = ${v.unitario} × ${s.quantidade} = ${valor}.`,
+            ];
+      let impacto: ResultadoSimulacao['impacto'] = null;
+      if (s.reajuste) {
+        const entrada: EntradaTotalHonorario = v.entrada ?? {
+          item: { ch: 0 },
+          vigente: {
+            ch: v.honorario,
+            co: v.custoOperacional,
+            filme: v.filme,
+            anes: 0,
+            outros: r2(v.unitario - v.honorario - v.custoOperacional - v.filme),
+          },
+          indices: { valores: new Map(), origem: new Map() },
+          porte: null,
+        };
+        const x = simularReajusteItem(entrada, s.reajuste, s.quantidade);
+        impacto = {
+          atual: x.atual.total,
+          novo: x.novo.total,
+          diferenca: x.diferenca,
+          percentual: x.percentual,
+          afetadoPor: x.afetadoPor,
+          passos: x.novo.passos,
+        };
+      }
       return {
         encontrado: true,
-        nome: texto(item['descricao']),
+        nome,
         preco: {
           modelo: v.modelo,
           unitario: v.unitario,
           ch: v.honorario,
           cop: v.custoOperacional,
           filme: v.filme,
-          valor: valorDoItem(v.unitario, s.quantidade),
+          valor,
         },
         vigencia: v.vigencia,
+        origem: v.origem ?? 'vigencia',
+        passos,
+        impacto,
       };
     });
   }

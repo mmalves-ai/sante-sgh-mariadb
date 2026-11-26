@@ -31,6 +31,13 @@ export const rotasOperadora: RouteRecordRaw[] = [
     component: () => import('./telas/ReajusteColetivoTela.vue'),
     meta: { permissao: 'operadora.cobranca.ler' },
   },
+  // 08-SGO L97 (C3-028): desconto em folha da mensalidade (remessa à contratante, arquivo, retorno com baixa, conferência).
+  {
+    path: '/operadora/desconto-folha',
+    name: 'operadora.desconto-folha',
+    component: () => import('./telas/DescontoFolhaOperadoraTela.vue'),
+    meta: { permissao: 'operadora.cobranca.ler' },
+  },
   // 08-SGO L98 (C2-116): regras de coparticipação do plano e do contrato (escopo por guia, grupo, procedimento; tetos).
   {
     path: '/operadora/coparticipacao-regras',

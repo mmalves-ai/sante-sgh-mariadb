@@ -90,7 +90,7 @@ test.describe('C2-018 prescrição digital por plataforma externa @C2-018', () =
       return json(r, { id: 701, mensagem: 802 });
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.MEDICO');
     await page.goto('/pep/prescricao-digital');
     await expect(page.getByTestId('tela-prescricao-digital')).toBeVisible();
     await esperarValor(page.getByTestId('prescricao-plataforma'), 'plat-sint');

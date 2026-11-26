@@ -9,11 +9,11 @@
 // Melhoria: "é OPME" vem da marca do cadastro do insumo (insumo.opme); o local sugerido conta o saldo próprio e o
 // consignado; a solicitação é cabeçalho com item (o contrato da tela é o item 1); as etapas lidas vêm dos registros
 // reais (solicitação, resposta da operadora, consumo, devolução e cancelamento), nunca de um histórico paralelo.
-// Pendência (pedido p2-suprimentos-farmacia): as etapas de pedido de compra, consignação, esterilização e nota fiscal
-// não têm onde ficar ligadas à solicitação: respondem 409 com o motivo, nada em silêncio.
+// As etapas de pedido de compra, consignação, esterilização (CME) e nota fiscal (C3-021) ficam em
+// etapa_solicitacao_opme, cada uma ligada ao documento real (pedido_compra, remessa_consignada com saldo do material,
+// recebimento_material_terceiro disponível da cirurgia, nota_entrada), escolhido pelas regras do domínio.
 import {
   CLASSE_OPME,
-  type EtapaOpme,
   type EtapaOpmeLida,
   type ExpostoOpme,
   type ItemOpme,
@@ -36,6 +36,7 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { escolherRecebimentoCmeOpme, escolherRemessaConsignadaOpme } from '@sgh/dominio-suprimentos';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -44,7 +45,7 @@ import {
   portaIndisponivel,
   type TrilhaDaGravacao,
 } from '../exames/public-api.js';
-import { contextoNucleo, modeloPendente } from './operacoes.js';
+import { contextoNucleo } from './operacoes.js';
 import {
   type GravadorOpme,
   type ConsumoOpmeLeitura,
@@ -64,20 +65,13 @@ export const TABELAS_OPME = [
   'solicitacao_opme',
   'solicitacao_opme_item',
   'autorizacao_opme',
+  'etapa_solicitacao_opme',
   'sequencia_negocio',
   'idempotencia_operacao',
 ] as const;
 
 /** As operações do estoque que o OPME usa (o consumo e a devolução em sala). */
 const OPERACOES_ESTOQUE = new Set(['suprimentos.registrarSaida', 'suprimentos.registrarDevolucao']);
-
-/** As etapas sem estrutura ligada à solicitação no banco (pedido p2-suprimentos-farmacia). */
-const ETAPA_PENDENTE: Partial<Record<EtapaOpme, string>> = {
-  pedido: 'a etapa de pedido de compra da solicitação de OPME (ligação da solicitação ao pedido de compra)',
-  consignacao: 'a etapa de recebimento em consignação da solicitação de OPME (ligação à remessa consignada)',
-  cme: 'a etapa de esterilização da solicitação de OPME (ligação ao processamento da esterilização)',
-  nf: 'a etapa de nota fiscal da solicitação de OPME (ligação da solicitação à nota de entrada)',
-};
 
 const TETO = 200;
 type Linha = Record<string, unknown>;
@@ -135,9 +129,29 @@ const PARA_BANCO: Record<SituacaoOpme, string> = {
   cancelada: 'cancelada',
 };
 
-function situacaoLida(db: string, consumida: number, devolvida: number): SituacaoOpme {
+/**
+ * A situação lida dos registros: o banco guarda a fase da operadora; as etapas logísticas (a mais recente) refinam a
+ * autorizada (pedido, consignada, CME) e a nota fiscal depois do último consumo fecha como faturada.
+ */
+function situacaoLida(
+  db: string,
+  consumida: number,
+  devolvida: number,
+  logisticas: readonly { etapa: EtapaLogistica; em: string }[] = [],
+  ultimoConsumo = '',
+): SituacaoOpme {
   if (db === 'cancelada') return 'cancelada';
-  if (consumida > 0) return qtd(consumida - devolvida) > 0 ? 'consumida' : 'devolvida';
+  if (consumida > 0) {
+    if (logisticas.some((e) => e.etapa === 'nf' && e.em >= ultimoConsumo)) return 'faturada';
+    return qtd(consumida - devolvida) > 0 ? 'consumida' : 'devolvida';
+  }
+  if (db === 'autorizada') {
+    const fases = logisticas.filter((e) => e.etapa !== 'nf');
+    const ultima = fases[fases.length - 1]?.etapa;
+    if (ultima === 'pedido') return 'pedido';
+    if (ultima === 'consignacao') return 'consignada';
+    if (ultima === 'cme') return 'cme';
+  }
   if (db === 'em_cotacao' || db === 'aguardando_autorizacao') return 'cotacao';
   if (db === 'autorizada' || db === 'utilizada') return 'autorizada';
   if (db === 'negada') return 'negada';
@@ -164,7 +178,7 @@ const SQL_SOLICITACAO = `
 
 const SQL_CONSUMO = `
   SELECT co.id, co.solicitacao_opme_item_id, si.solicitacao_opme_id, co.agendamento_cirurgico_id, co.sala_cirurgica_id,
-         co.atendimento_id, co.insumo_id, co.quantidade, co.numero_lote, co.numero_serie, co.registro_anvisa,
+         co.atendimento_id, co.insumo_id, co.quantidade, co.numero_lote, co.numero_serie, co.registro_anvisa, co.modelo,
          co.validade, co.consignado, co.sem_autorizacao, co.motivo_sem_autorizacao, co.registrado_em, co.situacao,
          co.empresa_fornecedora_id, co.movimento_estoque_id, co.alterado_em, u.login, f.nome AS fabricante_nome,
          ins.nome AS insumo_nome, ag.inicio_previsto_em, ag.sala_cirurgica_id AS ag_sala, ag.cirurgiao_profissional_id, a.paciente_id,
@@ -208,7 +222,7 @@ function consumoDe(r: Linha): ConsumoOpmeLeitura {
     lote: txt(r['numero_lote']),
     serie: txt(r['numero_serie']),
     fabricante: String(r['fabricante_nome'] ?? ''),
-    modelo: null,
+    modelo: txt(r['modelo']),
     registroAnvisa: String(r['registro_anvisa'] ?? ''),
     validade: dia(r['validade']),
     consignado: verdadeiro(r['consignado']),
@@ -252,7 +266,7 @@ async function lerSolicitacoes(
   if (!cab.length) return { itens: [], cortada: false };
   const ids = cab.map((r) => n(r['id']));
   const itens = cab.map((r) => n(r['item_id']));
-  const [respostas, consumos] = await Promise.all([
+  const [respostas, consumos, logisticas] = await Promise.all([
     l.consultar<Linha>(
       `SELECT a.id, a.solicitacao_opme_id, a.situacao, a.senha_autorizacao, a.validade, a.respondido_em,
               a.motivo_negativa, a.observacao, u.login
@@ -262,9 +276,21 @@ async function lerSolicitacoes(
       [est, ...ids],
     ),
     lerConsumos(l, est, `co.solicitacao_opme_item_id IN (${marcas(itens)})`, itens, 10_000),
+    l.consultar<Linha>(
+      `SELECT e.id, e.solicitacao_opme_id, e.etapa, e.empresa_fornecedora_id, e.observacao, e.registrado_em,
+              u.login, pc.ano AS pedido_ano, pc.numero AS pedido_numero, ne.numero AS nf_numero,
+              ne.criado_em AS nf_em
+         FROM etapa_solicitacao_opme e
+         JOIN usuario u ON u.id = e.registrado_por_usuario_id
+         LEFT JOIN pedido_compra pc ON pc.id = e.pedido_compra_id
+         LEFT JOIN nota_entrada ne ON ne.id = e.nota_entrada_id
+        WHERE e.estabelecimento_id = ? AND e.excluido_em IS NULL AND e.solicitacao_opme_id IN (${marcas(ids)})
+        ORDER BY e.registrado_em, e.id`,
+      [est, ...ids],
+    ),
   ]);
   return {
-    itens: cab.map((r) => solicitacaoDe(r, respostas, consumos.itens)),
+    itens: cab.map((r) => solicitacaoDe(r, respostas, consumos.itens, logisticas)),
     cortada: linhas.length > teto,
   };
 }
@@ -273,6 +299,7 @@ function solicitacaoDe(
   r: Linha,
   respostas: readonly Linha[],
   consumos: readonly ConsumoOpmeLeitura[],
+  logisticas: readonly Linha[] = [],
 ): SolicitacaoOpme {
   const id = n(r['id']);
   const meus = consumos.filter((c) => c.solicitacao === id);
@@ -351,6 +378,23 @@ function solicitacaoDe(
         usuario: c.usuario,
       });
   }
+  const minhas = logisticas.filter((x) => n(x['solicitacao_opme_id']) === id);
+  for (const e of minhas) {
+    const qual = ETAPA_LIDA[String(e['etapa'])]!;
+    etapas.push({
+      ...vazia,
+      etapa: qual,
+      em: hm(e['registrado_em']),
+      fornecedor: nulo(e['empresa_fornecedora_id']),
+      pedido: qual === 'pedido' ? { ano: n(e['pedido_ano']), doc: n(e['pedido_numero']) } : null,
+      nf: qual === 'nf' ? chaveDoc(e['nf_numero'], e['nf_em']) : null,
+      observacao: txt(e['observacao']),
+      usuario: String(e['login']),
+    });
+  }
+  etapas.sort((a, b) =>
+    a.etapa === 'solicitacao' ? -1 : b.etapa === 'solicitacao' ? 1 : a.em.localeCompare(b.em),
+  );
   if (r['cancelado_em'])
     etapas.push({
       ...vazia,
@@ -372,7 +416,13 @@ function solicitacaoDe(
     fornecedor: nulo(r['empresa_fornecedora_id']),
     fornecedorNome: txt(r['fornecedor_nome']),
     justificativa: String(r['justificativa_clinica'] ?? ''),
-    situacao: situacaoLida(String(r['situacao']), consumida, devolvida),
+    situacao: situacaoLida(
+      String(r['situacao']),
+      consumida,
+      devolvida,
+      minhas.map((e) => ({ etapa: ETAPA_LIDA[String(e['etapa'])]!, em: hm(e['registrado_em']) })),
+      meus.reduce((m, c) => (c.em > m ? c.em : m), ''),
+    ),
     autorizada: n(r['quantidade_autorizada']),
     consumida,
     devolvida,
@@ -385,6 +435,99 @@ function solicitacaoDe(
     criadoEm: hm(r['solicitado_em']),
     etapas: etapas.map((e, k) => ({ ...e, seq: k + 1 })),
   };
+}
+
+// ── Etapas logísticas (C3-021): o documento real de cada uma ─────────────────────────────────────────────────────
+
+type EtapaLogistica = 'pedido' | 'consignacao' | 'cme' | 'nf';
+const ETAPA_LOGISTICA: Record<EtapaLogistica, string> = {
+  pedido: 'pedido',
+  consignacao: 'consignacao',
+  cme: 'esterilizacao',
+  nf: 'nota_fiscal',
+};
+const ETAPA_LIDA: Record<string, EtapaLogistica> = {
+  pedido: 'pedido',
+  consignacao: 'consignacao',
+  esterilizacao: 'cme',
+  nota_fiscal: 'nf',
+};
+
+/** A chave do documento da etapa (lida na transação; a recusa sai com o motivo, nada em silêncio). */
+async function vinculoDaEtapa(
+  tx: TxOperacao,
+  est: number,
+  x: NovaEtapaOpme,
+  s: Linha,
+  fornecedor: number | null,
+): Promise<Record<string, number>> {
+  if (x.etapa === 'pedido') {
+    if (!x.pedido) throw recusa('sem-pedido', 'Informe o pedido de compra (ano e número).');
+    const p = await tx.uma<Linha>(
+      `SELECT id FROM pedido_compra WHERE estabelecimento_id = ? AND ano = ? AND numero = ? AND excluido_em IS NULL`,
+      [est, x.pedido.ano, x.pedido.doc],
+    );
+    if (!p) throw recusa('pedido-inexistente', 'O pedido de compra não foi encontrado.');
+    return { pedido_compra_id: n(p['id']) };
+  }
+  if (x.etapa === 'nf') {
+    if (!x.nf) throw recusa('sem-nf', 'Informe a nota fiscal (ano, mês e número).');
+    const f = await tx.uma<Linha>(
+      `SELECT id FROM nota_entrada
+        WHERE estabelecimento_id = ? AND numero = ? AND YEAR(criado_em) = ? AND MONTH(criado_em) = ?
+          AND excluido_em IS NULL`,
+      [est, x.nf.doc, x.nf.ano, x.nf.mes],
+    );
+    if (!f) throw recusa('nf-inexistente', 'A nota fiscal de entrada não foi encontrada.');
+    return { nota_entrada_id: n(f['id']) };
+  }
+  if (x.etapa === 'consignacao') {
+    if (fornecedor === null)
+      throw recusa('sem-fornecedor', 'Informe o fornecedor que deixou o material em consignação.');
+    const linhas = await tx.consultar<Linha>(
+      `SELECT r.id, r.empresa_fornecedora_id, r.situacao, r.recebida_em,
+              SUM(ri.quantidade - ri.quantidade_consumida - ri.quantidade_devolvida) AS saldo
+         FROM remessa_consignada r
+         JOIN remessa_consignada_item ri ON ri.remessa_consignada_id = r.id AND ri.excluido_em IS NULL
+        WHERE r.estabelecimento_id = ? AND r.empresa_fornecedora_id = ? AND ri.insumo_id = ? AND r.excluido_em IS NULL
+        GROUP BY r.id, r.empresa_fornecedora_id, r.situacao, r.recebida_em
+        ORDER BY r.recebida_em DESC, r.id DESC LIMIT 50`,
+      [est, fornecedor, nulo(s['insumo_id'])],
+    );
+    const v = escolherRemessaConsignadaOpme(
+      linhas.map((r) => ({
+        id: n(r['id']),
+        fornecedor: n(r['empresa_fornecedora_id']),
+        situacao: String(r['situacao']) as 'aberta',
+        saldo: n(r['saldo']),
+        recebidaEm: hm(r['recebida_em']),
+      })),
+      fornecedor,
+      n(s['quantidade_autorizada'] ?? s['quantidade_solicitada']) || n(s['quantidade_solicitada']),
+    );
+    if (!v.ok) throw recusa(v.recusa.codigo, v.recusa.mensagem);
+    return { remessa_consignada_id: v.id };
+  }
+  const ag = nulo(s['agendamento_cirurgico_id']);
+  const linhas = ag
+    ? await tx.consultar<Linha>(
+        `SELECT id, empresa_fornecedora_id, situacao, recebido_em FROM recebimento_material_terceiro
+          WHERE estabelecimento_id = ? AND agendamento_cirurgico_id = ? AND excluido_em IS NULL
+          ORDER BY recebido_em DESC, id DESC LIMIT 50`,
+        [est, ag],
+      )
+    : [];
+  const v = escolherRecebimentoCmeOpme(
+    linhas.map((r) => ({
+      id: n(r['id']),
+      fornecedor: nulo(r['empresa_fornecedora_id']),
+      situacao: String(r['situacao']) as 'disponivel',
+      recebidoEm: hm(r['recebido_em']),
+    })),
+    fornecedor,
+  );
+  if (!v.ok) throw recusa(v.recusa.codigo, v.recusa.mensagem);
+  return { recebimento_material_terceiro_id: v.id };
 }
 
 // ── O gravador (dentro da operação do executor) ──────────────────────────────────────────────────────────────────
@@ -544,12 +687,10 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorOpme {
     async avancar(
       x: NovaEtapaOpme & { readonly versaoVista: number; readonly mudanca: MudancaSolicitacaoOpme },
     ) {
-      const pendente = ETAPA_PENDENTE[x.etapa];
-      if (pendente) throw modeloPendente(pendente);
       const [s] = await tx.consultarParaAtualizar<Linha>(
         `SELECT s.id, s.versao, s.atendimento_id, s.fonte_pagadora_id, s.solicitante_usuario_id, s.solicitado_em,
                 s.agendamento_cirurgico_id, s.observacao, i.id AS item_id, i.versao AS item_versao,
-                i.empresa_fornecedora_id
+                i.empresa_fornecedora_id, i.insumo_id, i.quantidade_solicitada, i.quantidade_autorizada
            FROM solicitacao_opme s
            JOIN solicitacao_opme_item i ON i.solicitacao_opme_id = s.id AND i.sequencia = 1 AND i.excluido_em IS NULL
           WHERE s.id = ? AND s.estabelecimento_id = ? AND s.excluido_em IS NULL`,
@@ -608,6 +749,26 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorOpme {
           observacao: x.observacao ? x.observacao.slice(0, 4000) : txt(s['observacao']),
         });
         etapa = n(s['id']);
+      } else if (x.etapa === 'pedido' || x.etapa === 'consignacao' || x.etapa === 'cme' || x.etapa === 'nf') {
+        const v = await vinculoDaEtapa(tx, est, x, s, fornecedor);
+        etapa = await tx.incluir('etapa_solicitacao_opme', {
+          estabelecimento_id: est,
+          solicitacao_opme_id: n(s['id']),
+          etapa: ETAPA_LOGISTICA[x.etapa],
+          ...v,
+          empresa_fornecedora_id: fornecedor,
+          observacao: x.observacao ? x.observacao.slice(0, 4000) : null,
+          registrado_por_usuario_id: usuario(),
+          registrado_em: em,
+        });
+        if (
+          x.etapa === 'consignacao' &&
+          fornecedor !== null &&
+          fornecedor !== nulo(s['empresa_fornecedora_id'])
+        )
+          await tx.alterar('solicitacao_opme_item', n(s['item_id']), n(s['item_versao']), {
+            empresa_fornecedora_id: fornecedor,
+          });
       } else {
         throw recusa('etapa-automatica', 'O consumo e a devolução nascem do estoque, não desta tela.');
       }

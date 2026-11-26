@@ -3,7 +3,8 @@
 // de-para da exportação e fatos SINTÉTICOS de duas fontes (nenhum dado de pessoa), as mesmas recusas do banco (código
 // repetido, versão vista, versão de regra concorrente) e o relógio do processo. Nada vai à cópia. A trilha da memória é
 // registrada pela API (como nas outras portas em memória).
-import { ORIGENS_LANCAMENTO } from '@sgh/contratos';
+import { ORIGENS_LANCAMENTO, type SignatarioSped } from '@sgh/contratos';
+import { conferirSignatarioCadastro } from '@sgh/dominio-contabil';
 import type {
   ContaPlanoVersionada,
   FiltroSomasPorta,
@@ -378,6 +379,19 @@ export class PortaContabilMemoria implements PortaContabil {
     return Promise.resolve(empresa === EMPRESA_SINTETICA.codigo ? { ...EMPRESA_SINTETICA } : null);
   }
 
+  /** Signatários guardados (memória: só a empresa sintética). */
+  private readonly signatariosGuardados: SignatarioSped[] = [];
+
+  signatariosSped(_c: ContextoContabil, empresa: number) {
+    return Promise.resolve(
+      empresa === EMPRESA_SINTETICA.codigo ? this.signatariosGuardados.map((s) => ({ ...s })) : [],
+    );
+  }
+
+  apuracoesLucroRealSped() {
+    return Promise.resolve([]);
+  }
+
   arquivosSped(_c: ContextoContabil, empresa: number, teto: number) {
     return Promise.resolve(this.f3.lista(empresa, teto));
   }
@@ -410,6 +424,17 @@ export class PortaContabilMemoria implements PortaContabil {
       desfazerConciliacao: (x) => Promise.resolve().then(() => f2.desfazerConciliacao(x)),
       gravarArquivoSped: (x) => Promise.resolve().then(() => f3.gravar(x)),
       situacaoArquivoSped: (x) => Promise.resolve().then(() => f3.situacao(x)),
+      guardarSignatarioSped: (x) =>
+        Promise.resolve().then(() => {
+          const falha = conferirSignatarioCadastro(x.signatario);
+          if (falha) throw recusa(falha.codigo, falha.mensagem);
+          const i = this.signatariosGuardados.findIndex(
+            (s) => s.cpf === x.signatario.cpf && s.qualificacao === x.signatario.qualificacao,
+          );
+          if (i >= 0) this.signatariosGuardados[i] = { ...x.signatario };
+          else this.signatariosGuardados.push({ ...x.signatario });
+          return { id: i >= 0 ? i + 1 : this.signatariosGuardados.length, novo: i < 0 };
+        }),
       incluirConta: (x) => {
         if (contas.some((c) => c.empresa === x.conta.empresa && c.codigo === x.conta.codigo))
           return Promise.reject(

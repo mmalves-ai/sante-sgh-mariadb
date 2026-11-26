@@ -87,7 +87,9 @@ const motivoTratamento = ref('');
 // O ciclo que abre o tratamento (ciclo 1 ou tratamento novo) leva o tumor do paciente e a intenção do tratamento.
 const diagnostico = ref('');
 const intencao = ref('');
-const abreTratamento = computed(() => numeroCiclo.value === '1' || novoTratamento.value);
+// O v-model do campo numérico devolve número depois da digitação (o Vue converte em input type="number"): compara
+// pelo valor, não pelo texto, para o ciclo 1 digitado também abrir o tratamento.
+const abreTratamento = computed(() => Number(numeroCiclo.value) === 1 || novoTratamento.value);
 const registroOnco = useQuery({
   queryKey: computed(() => ['especialidades', 'oncologia', 'registro', reg.value]),
   queryFn: () => lerRegistroOncologico(reg.value),

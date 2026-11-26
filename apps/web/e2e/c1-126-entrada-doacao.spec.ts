@@ -149,7 +149,7 @@ test.describe('@C1-126 Entrada por doação', () => {
     await expect(form.getByTestId('doa-recusa-data-futura')).toBeVisible();
     await form.getByTestId('doa-data').fill('2026-11-20');
     await expect(form.getByTestId('doa-recusa-data-futura')).toHaveCount(0);
-    await escolher(form.getByTestId('doa-local'), 'Almoxarifado sintético');
+    await escolher(form.getByTestId('doa-local'), { rotulo: 'Almoxarifado sintético' });
 
     // ---------------- item com último preço: o critério vem pelo último preço de compra
     await form.getByTestId('doa-item-busca-termo').fill('sint');
@@ -179,7 +179,7 @@ test.describe('@C1-126 Entrada por doação', () => {
     await expect(form.getByTestId('doa-recusa-lotes')).toHaveCount(0);
 
     // ---------------- valor justo da gaze bem acima do último preço: aviso, não recusa
-    await escolher(form.getByTestId('doa-item-71-criterio'), 'Valor justo do termo');
+    await escolher(form.getByTestId('doa-item-71-criterio'), { rotulo: 'Valor justo do termo' });
     await form.getByTestId('doa-item-71-valor-justo').fill('12');
     await expect(form.getByTestId('doa-item-71-aviso')).toBeVisible();
     await expect(form.getByTestId('doa-parcela-71')).toContainText(

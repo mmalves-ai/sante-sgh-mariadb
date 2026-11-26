@@ -418,10 +418,22 @@ export function analisarTexto(
     [/\bUPDATE\s+\$\{([^}]*)\}/g, 'UPDATE'],
     [/\bDELETE\s+FROM\s+\$\{([^}]*)\}/g, 'DELETE'],
   ];
+  // Acesso indexado a objeto de nomes (`${TABELAS[tipo]}`): qualquer propriedade pode ser a escolhida, então cada uma
+  // recebe a ação. Só quando o objeto inteiro se resolveu em nomes literais (senão segue como dinâmico e é recusado).
+  const porIndice = (expr: string): string[] | undefined => {
+    const x = /^([A-Z][A-Z0-9_]*)\s*\[[^\]]+\]$/.exec(expr);
+    if (!x) return undefined;
+    const nomes: string[] = [];
+    for (const [k, v] of constantes) if (k.startsWith(`${x[1]}.`) && typeof v === 'string') nomes.push(v);
+    return nomes.length > 0 ? nomes : undefined;
+  };
   for (const [re, acao] of DIN)
     for (const m of t.matchAll(re))
-      if (!(acao === 'SELECT' && /^\s*DELETE\s+$/i.test(t.slice(Math.max(0, m.index! - 8), m.index))))
-        dinamicos.push({ onde: linhaDe(naOrigem(m.index!)), acao, expressao: m[1]!.trim() });
+      if (!(acao === 'SELECT' && /^\s*DELETE\s+$/i.test(t.slice(Math.max(0, m.index! - 8), m.index)))) {
+        const indexados = porIndice(m[1]!.trim());
+        if (indexados) for (const n of indexados) declarar(n, acao);
+        else dinamicos.push({ onde: linhaDe(naOrigem(m.index!)), acao, expressao: m[1]!.trim() });
+      }
   // Gravação pelo Executor: tx.incluir/alterar/excluir(<tabela>, ...).
   for (const m of t.matchAll(/(\b[A-Za-z_$][\w$]*)?\.?\b(incluir|alterar|excluir)\(\s*([^,()]+?)\s*,/g)) {
     const [, recebedor, metodo, expr] = m;

@@ -51,6 +51,8 @@ import { rotasAssinatura } from './modulos/assinatura/rotas.js';
 import { rotasOperadora } from './modulos/operadora/rotas.js';
 import { rotasContratoAlteracoes } from './modulos/operadora/rotas-contrato-alteracoes.js';
 import { rotasDeclaracoesAns } from './modulos/operadora/rotas-declaracoes-ans.js';
+import { rotasProvisoesTecnicas } from './modulos/operadora/rotas-provisoes-tecnicas.js';
+import { rotasPortaisOperadora } from './modulos/operadora/rotas-portais-operadora.js';
 import { rotasProgramaSaude } from './modulos/operadora/rotas-programa-saude.js';
 import { rotasRemuneracaoRede } from './modulos/operadora/rotas-remuneracao-rede.js';
 import { rotasRegrasCriticaConta } from './modulos/operadora/rotas-regras-critica-conta.js';
@@ -185,6 +187,10 @@ export function rotas(desenvolvimento: boolean): RouteRecordRaw[] {
     // C2-108 (08-SGO L94): aditivos e cancelamento do contrato de plano da operadora.
     ...rotasContratoAlteracoes,
     ...rotasDeclaracoesAns,
+    // C3-026 (08-SGO L111): contabilidade regulatória da operadora.
+    ...rotasProvisoesTecnicas,
+    // C3-027 (08-SGO L114): portais do beneficiário, da contratante e do corretor.
+    ...rotasPortaisOperadora,
     // C2-102 (08-SGO L115): promoção da saúde e gestão de crônicos da operadora.
     ...rotasProgramaSaude,
     // C2-120 (08-SGO L102): remuneração e pagamento do prestador da rede.

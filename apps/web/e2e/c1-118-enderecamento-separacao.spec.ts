@@ -239,7 +239,8 @@ test.describe('@C1-118 endereçamento do armazém e reserva para a separação',
     await expect(linha).toContainText('Ativa');
     await semViolacaoAxe(page, '/suprimentos/requisicoes/:id/separacao (reserva)');
     await bloco.getByTestId('separacao-liberar').click();
-    await expect(bloco.getByTestId('separacao-reserva-aviso')).toContainText('Reserva liberada');
+    // Enquanto a liberação está a caminho, os avisos da reserva ainda estão na tela: espera o aviso único da liberação.
+    await expect(bloco.getByTestId('separacao-reserva-aviso')).toHaveText([/Reserva liberada/]);
     await expect(linha).toContainText('Liberada');
     await expect(bloco.getByTestId('separacao-liberar')).toHaveCount(0);
   });

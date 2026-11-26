@@ -187,7 +187,7 @@ void carregar();
     <ErroSadt v-if="erro" :erro="erro" />
     <p v-if="mensagem" role="status" data-testid="modelo-mensagem">{{ mensagem }}</p>
     <div v-if="dados" class="colunas">
-      <div>
+      <div class="lista">
         <p v-if="dados.itens.length === 0" data-testid="modelos-vazio">{{ M.vazio }}</p>
         <table v-else data-testid="modelos-lista">
           <thead>
@@ -279,11 +279,20 @@ void carregar();
   gap: 0.75rem;
   align-items: end;
 }
+/* A lista e a ficha ficam lado a lado só quando cada uma cabe inteira: em duas metades estreitas a tabela dos modelos
+   transbordava por baixo da ficha, que cobria o botão Editar de cada linha (axe target-size). A lista rola na própria
+   caixa se ainda faltar largura, sem invadir a ficha. */
 .colunas {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 36rem), 1fr));
   gap: 1rem;
   align-items: start;
+}
+.lista {
+  overflow-x: auto;
+}
+.lista td:last-child {
+  white-space: nowrap;
 }
 table {
   width: 100%;
@@ -303,6 +312,21 @@ textarea {
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
+}
+/* Alvo mínimo de 24 px (WCAG 2.5.8, axe target-size): a caixa de marcação padrão tem 13 px, o campo de texto padrão
+   cerca de 21 px e o link de voltar, a altura da linha do texto. */
+.ficha input {
+  min-block-size: 1.5rem;
+}
+input[type='checkbox'] {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  vertical-align: middle;
+}
+.linha a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 1.5rem;
 }
 @media (max-width: 900px) {
   .colunas {

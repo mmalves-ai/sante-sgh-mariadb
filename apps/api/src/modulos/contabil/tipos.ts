@@ -209,6 +209,8 @@ export interface EmpresaSped {
   readonly telefone: string | null;
   readonly email: string | null;
   readonly cnae: string | null;
+  /** Natureza jurídica (ECF 0030), só os dígitos. */
+  readonly naturezaJuridica?: string | null;
 }
 
 export interface PedidoEncerramento {

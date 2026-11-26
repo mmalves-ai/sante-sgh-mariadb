@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 517, M: 198, P: 57, N: 262 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 522, M: 198, P: 57, N: 267 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(517);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(522);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -362,6 +362,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/faturamento/sus/contratualizacao', // M55 (etapa 5)
         '/faturamento/sus/programacao', // C2-114 (06-SUS L54)
         '/faturamento/sus/raas', // C2-124 (06-SUS L64)
+        '/faturamento/sus/repasse', // C3-022 (06-SUS L62)
         '/faturamento/sus/sigtap', // M13
         '/faturamento/sus/solicitantes', // M51 (etapa 2)
         '/faturamento/sus/transplantes', // C2-014 (06-SUS linha 65)
@@ -412,6 +413,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/manutencao/oficinas', // C2-089 (04-HOT L135)
         '/mensagens', // M27
         '/nutricao/cardapio', // C2-098 (04-HOT L141)
+        '/nutricao/composicao', // C3-018 (04-HOT L142)
         '/nutricao/mapa', // M45 (etapa 5)
         '/nutricao/mapa?aba=etiquetas', // M45 (etapa 5): a etiqueta e o acompanhante na tela do mapa
         '/nutricao/terapia', // M45 (etapa 5)
@@ -421,6 +423,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/operadora/autorizacoes', // M56 (etapa 5, F4)
         '/operadora/rede', // M56 (etapa 4, F3)
         '/operadora/cobranca', // M56 (etapa 3, F2)
+        '/operadora/desconto-folha', // C3-028 (08-SGO L97)
         '/operadora/coparticipacao-regras', // C2-116 (08-SGO L98)
         '/operadora/programas-saude', // C2-102 (08-SGO L115)
         '/operadora/contratos', // C2-108 (08-SGO L94)
@@ -458,6 +461,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/pep/especialidades/oftalmologia', // M45 (etapa 6)
         '/pep/especialidades/oncologia', // M45 (etapa 6)
         '/pep/interconsultas',
+        '/pep/pesquisa', // C3-020 (03-PEP L144)
         '/pep/pacientes',
         '/pep/pacientes?aba=alergias',
         '/pep/pacientes?aba=alta',
@@ -599,6 +603,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/financeiro/fiscal/dmed', // M32
         '/financeiro/fiscal/entradas', // M32
         '/financeiro/fiscal/entradas-servico', // C2-094 (09-AREA linha 78)
+        '/contabil/lalur', // C3-023 (07-FIN linha 115)
         '/financeiro/fiscal/nfse', // M32
         '/financeiro/fiscal/notas-mercadoria', // C2-059 (07-FIN linha 114)
         '/financeiro/fiscal/reinf', // M32

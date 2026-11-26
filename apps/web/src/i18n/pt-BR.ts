@@ -54,6 +54,7 @@ import { mensagensRepasse } from '../modulos/repasse/i18n.js';
 import { mensagensManutencao } from '../modulos/manutencao/i18n.js';
 import { mensagensContabil } from '../modulos/contabil/i18n.js';
 import { mensagensConsolidacao } from '../modulos/contabil/i18n-consolidacao.js';
+import { mensagensLalur } from '../modulos/contabil/i18n-lalur.js';
 import { mensagensPatrimonio } from '../modulos/patrimonio/i18n.js';
 import { mensagensPessoas } from '../modulos/pessoas/i18n.js';
 import { mensagensEstruturaGestao } from '../modulos/cadastro/i18n-estrutura.js';
@@ -66,6 +67,7 @@ import { mensagensVinculos } from '../modulos/cadastro/i18n-vinculos.js';
 import { mensagensLinhasCuidado } from '../modulos/cadastro/i18n-linhas-cuidado.js';
 import { mensagensAcessoRestrito } from '../modulos/cadastro/i18n-acesso-restrito.js';
 import { mensagensDemografia } from '../modulos/cadastro/i18n-demografia.js';
+import { mensagensFotoIdentificacao } from '../modulos/cadastro/i18n-foto-identificacao.js';
 import { mensagensComplementoProfissional } from '../modulos/cadastro/i18n-complemento-profissional.js';
 import { mensagensSesmt } from '../modulos/pessoas/sesmt/i18n.js';
 import { mensagensPonto } from '../modulos/pessoas/ponto/i18n.js';
@@ -2468,6 +2470,7 @@ export const mensagensWeb = {
   contabil: mensagensContabil,
   // 07-FIN L127 (C2-101): a consolidação gerencial do grupo de estabelecimentos.
   consolidacao: mensagensConsolidacao,
+  lalur: mensagensLalur,
   patrimonio: mensagensPatrimonio,
   // M48 (etapa 1): notificação de incidentes, triagem do NSP, prazos e Notivisa.
   qualidade: mensagensQualidade,
@@ -2488,6 +2491,8 @@ export const mensagensWeb = {
   linhasCuidado: mensagensLinhasCuidado,
   acessoRestrito: mensagensAcessoRestrito,
   demografia: mensagensDemografia,
+  // F3.1 (02-CAD linha 5): foto do paciente para a identificação positiva.
+  fotoIdentificacao: mensagensFotoIdentificacao,
   ligacoes: mensagensLigacoes,
   calendario: mensagensCalendario,
   profissionalProvisorio: mensagensProfissionalProvisorio,

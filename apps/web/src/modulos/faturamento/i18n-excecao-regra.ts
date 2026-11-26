@@ -58,4 +58,6 @@ export const mensagensExcecaoRegra = {
   criadoPor: 'Registrada por {nome}',
   somenteLeitura:
     'Você consulta as exceções; incluir, encerrar e cancelar pedem a permissão de manter as regras.',
+  semBanco:
+    'As exceções das regras de lançamento automático exigem o banco próprio do hospital, que esta instalação ainda não tem. Nada foi alterado.',
 };

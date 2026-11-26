@@ -40,7 +40,7 @@ import { LocaisAtendimentoPropria } from './locais-atendimento-propria.js';
 import { GestaoRecepcaoController } from './gestao.controller.js';
 import { portaClassificacaoIndisponivel, portaRecepcaoIndisponivel } from './indisponivel.js';
 import { PORTA_RECEPCAO, type PortaRecepcao } from './porta.js';
-import { PortaRecepcaoMemoria } from './porta-memoria.js';
+import { lembrarRecepcaoMemoria, PortaRecepcaoMemoria } from './porta-memoria.js';
 import { PortaRecepcaoPropria } from './porta-propria.js';
 import { ProtocoloGerenciadoController } from './protocolo-gerenciado.controller.js';
 import { RecepcaoController } from './recepcao.controller.js';
@@ -70,7 +70,7 @@ export function moduloRecepcao(ctx: ContextoModulo, opcoes: OpcoesModuloRecepcao
     (propria && nucleo && cliente
       ? new PortaRecepcaoPropria(nucleo, executor ?? nucleo.criarExecutor(), cliente)
       : memoria
-        ? new PortaRecepcaoMemoria({ estado: () => 'verde' })
+        ? lembrarRecepcaoMemoria(new PortaRecepcaoMemoria({ estado: () => 'verde' }))
         : portaRecepcaoIndisponivel());
   const classificacao: PortaClassificacao =
     opcoes.classificacao ??

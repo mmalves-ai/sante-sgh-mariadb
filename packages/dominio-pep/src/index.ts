@@ -111,6 +111,7 @@ export * from './nutricao/direito-refeicao.js';
 export * from './nutricao/ocorrencia-refeicao.js';
 // F8 (04-HOT linha 141): cardápio, ficha técnica, planejamento aprovado por nutricionista e previsão da produção.
 export * from './nutricao/cardapio.js';
+export * from './nutricao/composicao.js';
 export * from './social/avaliacao.js';
 export * from './nutricao/correcao.js';
 // M45, etapa 6: especialidades sob demanda (oftalmologia, oncologia, obstetrícia) e o lactário (DP-32, desligados).
@@ -130,6 +131,7 @@ export * from './impressao-justificada.js';
 export * from './farmacovigilancia.js';
 // 03-PEP L102: notas e lembretes livres sobre o paciente.
 export * from './nota-paciente.js';
+export * from './plano-cuidado.js';
 export * from './anotacao-administrativa.js';
 export * from './obrigatoriedade-documento.js';
 // F3.5 (05-SADT linha 10): a caixa de avisos clínicos do destinatário na central de avisos.
@@ -149,3 +151,5 @@ export * from './especialidades/acompanhamento-oncologico.js';
 export * from './curvas-crescimento.js';
 // 03-PEP L145: doação e transplante de órgãos (doador, receptor, destino do órgão, acompanhamento).
 export * from './transplante.js';
+// 03-PEP L144: pesquisa clínica (estudo, critérios, triagem como sugestão, participantes).
+export * from './pesquisa-clinica.js';

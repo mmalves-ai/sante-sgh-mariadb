@@ -226,6 +226,38 @@ export function conferirUso(p: PacoteParaUso, agendamento: number, hoje: string)
   return conferirEsterilidade(p, hoje);
 }
 
+/** A conferência da abertura do pacote no paciente (F7, 04-CME linha 118; RDC 15/2012). */
+export interface AberturaPacote {
+  /** Embalagem íntegra, seca e dentro do prazo, conferida por quem abre o pacote. */
+  readonly integridadeConferida: boolean;
+  /** O indicador químico externo virou (null: a embalagem não tem indicador externo). */
+  readonly indicadorExternoOk: boolean | null;
+  /** O atendimento do paciente da cirurgia (sem ele, o uso não se liga ao paciente). */
+  readonly atendimento: number | null;
+}
+
+/** Recusas da baixa do uso no paciente: embalagem conferida, indicador externo virado e a cirurgia com atendimento. */
+export function conferirAbertura(a: AberturaPacote): ProblemaCme[] {
+  const f: ProblemaCme[] = [];
+  if (!a.integridadeConferida)
+    f.push({
+      campo: 'integridadeConferida',
+      mensagem: 'Confira a embalagem (íntegra, seca e no prazo) antes de abrir o pacote no paciente.',
+    });
+  if (a.indicadorExternoOk === false)
+    f.push({
+      campo: 'indicadorExternoOk',
+      mensagem: 'O indicador químico externo não virou: não use o pacote e devolva-o à CME.',
+    });
+  if (a.atendimento === null)
+    f.push({
+      campo: 'agendamento',
+      mensagem:
+        'A cirurgia ainda não tem atendimento: abra o atendimento do paciente antes de registrar o uso.',
+    });
+  return f;
+}
+
 function conferirEsterilidade(p: PacoteParaUso, hoje: string): ProblemaCme[] {
   if (p.cicloSituacao !== 'liberado')
     return [{ campo: 'pacote', mensagem: 'O ciclo de esterilização do pacote não foi liberado.' }];

@@ -22,6 +22,9 @@ export const mensagensAtendimento = {
   profissional: 'Profissional',
   especialidade: 'Especialidade',
   unidade: 'Unidade',
+  /** 02-REC linha 37: o serviço do atendimento (a regra do plano pode valer só nele). */
+  servico: 'Serviço',
+  servicoNenhum: 'Sem serviço',
   centroCusto: 'Centro de custo',
   procedimento: 'Procedimento',
   carater: 'Caráter do atendimento',
@@ -46,6 +49,8 @@ export const mensagensAtendimento = {
     limpar: 'Limpar a busca',
     local: 'Local',
     todosLocais: 'Todos os locais',
+    elegibilidade: 'Elegibilidade',
+    elegibilidadeDe: 'Elegibilidade do paciente do atendimento {reg} na operadora',
   },
   naoIdentificado: {
     titulo: 'Identificação pendente (pacientes não identificados)',

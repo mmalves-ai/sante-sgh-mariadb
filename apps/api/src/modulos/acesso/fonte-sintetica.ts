@@ -705,6 +705,13 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
           'suprimentos.requisicao.criar',
         ),
         ...opcoesDasPermissoes('acesso.escopo.editar'),
+        // C1-090 (06-FAT linha 16): o administrador consulta o lançamento automático e mantém as regras e as exceções
+        // (o recorte global, faturamento.regra.editarGlobal, ele já tinha; sem a consulta, nem chegava à tela).
+        ...opcoesFaturamento(
+          'faturamento.lancamento.ler',
+          'faturamento.regra.ler',
+          'faturamento.regra.editar',
+        ),
         // C2-097: os padrões da prescrição (kits de medicamentos e de soluções, protocolos e receitas padrão).
         ...opcoesDasPermissoes(
           'pep.kitPrescricao.ler',
@@ -719,6 +726,15 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
           'pep.protocoloPrescricao.editar',
           'pep.receitaPadrao.ler',
         ),
+        // C1-115 (03-PEP L106): o catálogo editável da prescrição: inclui e inativa o item não padronizado e mantém
+        // os complementos do item (sem as opções, a tela escondia os formulários de gravação).
+        ...opcoesDasPermissoes(
+          'pep.itemNaoPadronizado.ler',
+          'pep.itemNaoPadronizado.criar',
+          'pep.itemNaoPadronizado.inativar',
+          'pep.parametroClinicoItem.ler',
+          'pep.parametroClinicoItem.editar',
+        ),
       ],
     },
   },
@@ -729,7 +745,16 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     ativo: true,
     bloqueado: false,
     senhaAlteradaEm: new Date(),
-    concessoes: { grupo: 'LABORATORIO', opcoesGrupo: opcoesDaArea('sadt') },
+    concessoes: {
+      grupo: 'LABORATORIO',
+      opcoesGrupo: [
+        ...new Set([
+          ...opcoesDaArea('sadt'),
+          // C1-097: o laboratório lança e baixa o consumo dos exames do setor executante (sadt.lancamento.*).
+          ...opcoesDasPermissoes('sadt.lancamento.ler', 'sadt.lancamento.lancar'),
+        ]),
+      ],
+    },
   },
   /**
    * M14: departamento pessoal (RH): domínios de RH e a consulta provisória das telas da Fase 6. M52.1: Funcionário
@@ -3402,6 +3427,53 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     bloqueado: false,
     senhaAlteradaEm: new Date(),
     concessoes: { grupo: 'MEDICOS_INTERNACAO', opcoesGrupo: [2342, 6059, 6070, 6764], conselho: true },
+  },
+  /**
+   * C2-055 (F7, 04-CME linha 115; no fim da lista para não mudar o ID sintético das outras contas): a enfermeira da
+   * central de material esterilizado, com conselho e o perfil complementar `central-material-esteril` concedido
+   * nominalmente: consulta e opera a CME (cirurgia.cme.ler e cirurgia.cme.operar, permissões clínicas por perfil que a
+   * segregação de funções tira do administrador sem perfil assistencial). Nenhuma conta tinha o perfil da CME.
+   */
+  'SINT.CME': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: { grupo: 'ENFERMAGEM', opcoesGrupo: [2582], conselho: true },
+    perfisConcedidos: ['central-material-esteril'],
+  },
+  /**
+   * C3-020 (F8, 03-PEP L144; no fim da lista para não mudar o ID sintético das outras contas): o médico da equipe do
+   * centro de pesquisa clínica, com conselho e o perfil complementar `pesquisa-clinica` concedido nominalmente:
+   * consulta, cadastra e tria os estudos (pep.pesquisa.ler, gerir e triar, permissões clínicas por perfil que a
+   * segregação de funções tira do administrador sem perfil assistencial). Nenhuma conta tinha o perfil da pesquisa.
+   */
+  'SINT.PESQUISA': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: { grupo: 'MEDICOS', opcoesGrupo: [], conselho: true },
+    perfisConcedidos: ['pesquisa-clinica'],
+  },
+  /**
+   * C3-012 (F7, 02-REC L37; no fim da lista para não mudar o ID sintético das outras contas): a supervisão da
+   * recepção, que consulta o contrato do convênio e abre atendimento. É quem confere na prévia das regras do plano
+   * (tela de regras do plano) se uma abertura passaria (especialidade, serviço, setor e senha). Nenhuma conta tinha
+   * as duas permissões: o faturamento edita o contrato sem abrir atendimento e o guichê abre sem ler o contrato.
+   */
+  'SINT.RECEPCAO.SUPERVISAO': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'RECEPSUP',
+      opcoesGrupo: opcoesDasPermissoes('convenio.contrato.ler', 'atendimento.atendimento.abrir'),
+    },
   },
 };
 

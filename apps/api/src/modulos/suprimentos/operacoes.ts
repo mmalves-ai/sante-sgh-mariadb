@@ -14,6 +14,7 @@ import {
   esquemaCancelarCompra,
   esquemaGravarMotivoCancelamentoCompra,
   esquemaProgramarEntregasPedido,
+  esquemaImportarRespostasCotacao,
   esquemaRecalcularSaldos,
   esquemaMovimentoDireto,
   esquemaReabrirMes,
@@ -56,6 +57,8 @@ export const ENTRADAS_SUPRIMENTOS: Readonly<Record<string, ZodTypeAny>> = {
   'suprimentos.gravarKitPadrao': esquemaGravarKitPadrao,
   // F3.6 (05-SUP linha 20): a gestão do pedido emitido.
   'suprimentos.programarEntregasPedido': esquemaProgramarEntregasPedido,
+  // C3-008 (05-SUP linha 19): as respostas do mapa devolvido pelo portal (troca por arquivo).
+  'suprimentos.importarRespostasCotacao': esquemaImportarRespostasCotacao,
   'suprimentos.acompanharPedido': esquemaAcompanharPedido,
   'suprimentos.cancelarCompra': esquemaCancelarCompra,
   'suprimentos.gravarMotivoCancelamentoCompra': esquemaGravarMotivoCancelamentoCompra,

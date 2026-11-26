@@ -90,6 +90,119 @@ export interface EntradaSped {
 export interface EntradaEcf extends EntradaSped {
   readonly formaTributacao: FormaTributacaoEcf;
   readonly tipoEntidade: string;
+  /** Lucro real (forma 1): as apurações do IRPJ e da CSLL do exercício (LALUR), com o bloco M de cada uma. */
+  readonly lucroReal?: readonly ApuracaoLucroRealEcf[];
+}
+
+/** Uma apuração do lucro real lida do LALUR (valores em centavos) e os registros do bloco M dela. */
+export interface ApuracaoLucroRealEcf {
+  readonly inicio: string;
+  readonly fim: string;
+  readonly forma: 'trimestral' | 'anual' | 'estimativa_mensal';
+  /** Fechada (ou provisionada): o cálculo não muda mais. */
+  readonly fechada: boolean;
+  readonly lucroAntes: number;
+  readonly compensacaoPrejuizo: number;
+  readonly baseIrpj: number;
+  readonly baseCsll: number;
+  readonly irpj: number;
+  readonly adicional: number;
+  readonly deducoesIrpj: number;
+  readonly irpjRecolher: number;
+  readonly csll: number;
+  readonly deducoesCsll: number;
+  readonly csllRecolher: number;
+  /** Os registros do e-LALUR e do e-LACS (M010, M300, M350, M410, M500), já formatados. */
+  readonly blocoM: readonly string[];
+}
+
+const diaSeguinte = (d: string): string => {
+  const x = new Date(`${d}T00:00:00Z`);
+  x.setUTCDate(x.getUTCDate() + 1);
+  return x.toISOString().slice(0, 10);
+};
+const mesesEntre = (ini: string, fim: string): number =>
+  (Number(fim.slice(0, 4)) - Number(ini.slice(0, 4))) * 12 +
+  Number(fim.slice(5, 7)) -
+  Number(ini.slice(5, 7)) +
+  1;
+
+/**
+ * As apurações do lucro real servem à ECF só se cobrem o exercício inteiro, sem buraco nem sobreposição, todas da
+ * mesma forma (anual: uma; trimestral: quatro trimestres; estimativa mensal: doze meses) e fechadas.
+ */
+export function conferirApuracoesEcf(
+  exercicio: number,
+  apuracoes: readonly ApuracaoLucroRealEcf[],
+): ImpedimentoContabil[] {
+  const doAno = [...apuracoes]
+    .filter((a) => a.inicio.slice(0, 4) === String(exercicio))
+    .sort((a, b) => a.inicio.localeCompare(b.inicio));
+  if (doAno.length === 0)
+    return [
+      {
+        codigo: 'lucro-real-sem-apuracao',
+        mensagem: `A ECF do lucro real precisa das apurações do IRPJ e da CSLL de ${exercicio} no LALUR.`,
+        quantidade: 1,
+      },
+    ];
+  const imp: ImpedimentoContabil[] = [];
+  const formas = new Set(doAno.map((a) => a.forma));
+  const passo = { anual: 12, trimestral: 3, estimativa_mensal: 1 } as const;
+  let esperado = `${exercicio}-01-01`;
+  let fora = 0;
+  for (const a of doAno) {
+    if (a.inicio !== esperado || mesesEntre(a.inicio, a.fim) !== passo[a.forma]) fora++;
+    esperado = diaSeguinte(a.fim);
+  }
+  if (formas.size > 1 || fora > 0 || esperado !== `${exercicio + 1}-01-01`)
+    imp.push({
+      codigo: 'apuracao-incompleta',
+      mensagem: `As apurações do lucro real não cobrem ${exercicio} inteiro numa forma só (anual, trimestres ou meses), sem buraco nem sobreposição.`,
+      quantidade: Math.max(1, fora),
+    });
+  const abertas = doAno.filter((a) => !a.fechada).length;
+  if (abertas > 0)
+    imp.push({
+      codigo: 'apuracao-nao-fechada',
+      mensagem: 'Feche (ou provisione) no LALUR as apurações do exercício antes da ECF.',
+      quantidade: abertas,
+    });
+  return imp;
+}
+
+/** Período da apuração na ECF (L030, M030, N030): A00 anual, T01 a T04 trimestral, A01 a A12 estimativa mensal. */
+export function periodoApuracaoEcf(a: Pick<ApuracaoLucroRealEcf, 'inicio' | 'forma'>): string {
+  const mes = Number(a.inicio.slice(5, 7));
+  if (a.forma === 'anual') return 'A00';
+  if (a.forma === 'trimestral') return `T0${Math.ceil(mes / 3)}`;
+  return `A${String(mes).padStart(2, '0')}`;
+}
+
+/**
+ * O bloco N (cálculo do IRPJ e da CSLL) de uma apuração: a base com a compensação (N500), o IRPJ (N630; N620 na
+ * estimativa), a base da CSLL (N650) e a CSLL (N670; N660 na estimativa). Cada linha é código, descrição e valor; os
+ * códigos seguem as tabelas dinâmicas da Receita e ficam com a conferência do programa oficial (leiaute não conferido).
+ */
+export function linhasBlocoNEcf(a: ApuracaoLucroRealEcf): [string, string, string, number][] {
+  const estimativa = a.forma === 'estimativa_mensal';
+  const irpj = estimativa ? 'N620' : 'N630';
+  const csll = estimativa ? 'N660' : 'N670';
+  return [
+    ['N500', '1', 'Lucro real antes da compensação de prejuízos', a.baseIrpj + a.compensacaoPrejuizo],
+    ['N500', '2', 'Compensação de prejuízos fiscais', a.compensacaoPrejuizo],
+    ['N500', '3', 'Lucro real (base de cálculo do IRPJ)', a.baseIrpj],
+    [irpj, '1', 'Base de cálculo do IRPJ', a.baseIrpj],
+    [irpj, '3', 'IRPJ à alíquota de 15%', a.irpj],
+    [irpj, '4', 'Adicional do IRPJ', a.adicional],
+    [irpj, '5', 'Deduções do IRPJ', a.deducoesIrpj],
+    [irpj, '6', 'IRPJ a pagar', a.irpjRecolher],
+    ['N650', '1', 'Base de cálculo da CSLL', a.baseCsll],
+    [csll, '1', 'Base de cálculo da CSLL', a.baseCsll],
+    [csll, '2', 'CSLL à alíquota', a.csll],
+    [csll, '3', 'Deduções da CSLL', a.deducoesCsll],
+    [csll, '4', 'CSLL a pagar', a.csllRecolher],
+  ];
 }
 
 export interface ArquivoGerado {
@@ -142,6 +255,12 @@ class Escritor {
   reg(...c: (string | number | null | undefined)[]) {
     const r = String(c[0]);
     this.linhas.push(`|${c.map(campo).join('|')}|`);
+    this.contagem.set(r, (this.contagem.get(r) ?? 0) + 1);
+  }
+  /** Uma linha já formatada (o registro é o primeiro campo). */
+  bruto(linha: string) {
+    this.linhas.push(linha);
+    const r = linha.split('|')[1] ?? '';
     this.contagem.set(r, (this.contagem.get(r) ?? 0) + 1);
   }
   /** Linhas do bloco cujo registro começa com o prefixo (inclui o de abertura e o de encerramento). */
@@ -536,9 +655,14 @@ export function gerarEcf(e: EntradaEcf): ArquivoGerado {
     impedimentos.push({
       codigo: 'forma-nao-gerada',
       mensagem:
-        'A ECF do lucro real ou do presumido (apuração do IRPJ e da CSLL) não é gerada pelo Sante: gere-a no programa da Receita com a ECD transmitida.',
+        'A ECF do lucro presumido ou arbitrado não é gerada pelo Sante: gere-a no programa da Receita com a ECD transmitida.',
       quantidade: 1,
     });
+  const real = e.formaTributacao === '1';
+  const apuracoes = [...(e.lucroReal ?? [])]
+    .filter((a) => a.inicio.slice(0, 4) === String(e.exercicio))
+    .sort((a, b) => a.inicio.localeCompare(b.inicio));
+  if (real) impedimentos.push(...conferirApuracoesEcf(e.exercicio, e.lucroReal ?? []));
   if (!e.empresa.naturezaJuridica)
     avisos.push('A empresa não tem a natureza jurídica no cadastro (registro 0030).');
   if (impedimentos.length > 0)
@@ -571,14 +695,16 @@ export function gerarEcf(e: EntradaEcf): ArquivoGerado {
     e.substituta ? e.hashAnterior : '',
     'N',
     e.formaTributacao,
+    // Lucro real: FORMA_APUR (T trimestral, A anual), COD_QUALIF_PJ (01 em geral), FORMA_TRIB_PER (R por trimestre),
+    // MES_BAL_RED (E estimativa por mês), TIP_ENT vazio, APUR_CSLL igual à do IRPJ.
+    real ? (apuracoes[0]?.forma === 'trimestral' ? 'T' : 'A') : '',
+    real ? '01' : '',
+    real && apuracoes[0]?.forma === 'trimestral' ? 'RRRR' : '',
+    real && apuracoes[0]?.forma === 'estimativa_mensal' ? 'EEEEEEEEEEEE' : '',
     '',
+    real ? '' : e.tipoEntidade,
     '',
-    '',
-    '',
-    '',
-    e.tipoEntidade,
-    '',
-    '',
+    real ? (apuracoes[0]?.forma === 'trimestral' ? 'T' : 'A') : '',
     '',
   );
   w.reg('0020', '', '0', ...Array.from({ length: 31 }, () => 'N'));
@@ -657,6 +783,14 @@ export function gerarEcf(e: EntradaEcf): ArquivoGerado {
     refRes.set(r, (refRes.get(r) ?? 0) + v);
   }
   w.reg('K990', w.doBloco('K') + 1);
+  if (real) {
+    blocosLucroReal(w, e, analiticas, apuracoes);
+    const { conteudo, registros } = w.fechar();
+    avisos.push(
+      'Blocos L, M e N do lucro real com as contas analíticas do plano referencial e as apurações do LALUR; o programa oficial completa as sintéticas e confere os códigos das tabelas dinâmicas.',
+    );
+    return { impedimentos, avisos, conteudo, linhas: w.linhas.length, registros, nomeArquivo };
+  }
   // Bloco U (imunes e isentas): balanço (U100) e resultado (U150) pelo plano referencial, só as contas analíticas
   // referenciais usadas (as sintéticas do referencial ficam com o programa oficial: o banco não guarda as contas dele).
   w.reg('U001', '0');
@@ -687,6 +821,91 @@ export function gerarEcf(e: EntradaEcf): ArquivoGerado {
     'Bloco U com as contas analíticas do plano referencial; o programa oficial completa as sintéticas na importação.',
   );
   return { impedimentos, avisos, conteudo, linhas: w.linhas.length, registros, nomeArquivo };
+}
+
+/** Os blocos L (balanço e DRE pelo referencial, por período), M (e-LALUR e e-LACS) e N (IRPJ e CSLL) do lucro real. */
+function blocosLucroReal(
+  w: Escritor,
+  e: EntradaEcf,
+  analiticas: readonly ContaPlano[],
+  apuracoes: readonly ApuracaoLucroRealEcf[],
+): void {
+  const ref = new Map(analiticas.map((c) => [c.codigo, c.referencialConta ?? '']));
+  const grupo = new Map(analiticas.map((c) => [c.codigo, c.grupo]));
+  const iniAno = new Map<string, number>();
+  for (const x of e.saldosIniciais) iniAno.set(x.conta, (iniAno.get(x.conta) ?? 0) + x.debitos - x.creditos);
+  const somar = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
+  w.reg('L001', '0');
+  for (const a of apuracoes) {
+    w.reg('L030', dataSped(a.inicio), dataSped(a.fim), periodoApuracaoEcf(a));
+    const pat = new Map<string, number>();
+    const res = new Map<string, number>();
+    for (const [k, v] of iniAno)
+      if (ref.has(k) && !eGrupoDeResultado(grupo.get(k)!)) somar(pat, ref.get(k)!, v);
+    for (const l of e.lancamentos) {
+      if (l.data > a.fim) continue;
+      for (const p of l.partidas) {
+        if (!ref.has(p.conta)) continue;
+        const v = p.lado === 'D' ? p.valorCentavos : -p.valorCentavos;
+        if (!eGrupoDeResultado(grupo.get(p.conta)!)) somar(pat, ref.get(p.conta)!, v);
+        else if (l.data >= a.inicio && !l.encerramento) somar(res, ref.get(p.conta)!, v);
+      }
+    }
+    for (const [r, v] of [...pat].sort(([x], [y]) => x.localeCompare(y)))
+      if (v !== 0) w.reg('L100', r, r, 'A', r.split('.').length, '', '', '', '', '', '', valorSped(v), dc(v));
+    for (const [r, v] of [...res].sort(([x], [y]) => x.localeCompare(y)))
+      if (v !== 0) w.reg('L300', r, r, 'A', r.split('.').length, '04', '', valorSped(v), dc(v));
+  }
+  w.reg('L990', w.doBloco('L') + 1);
+  w.reg('M001', '0');
+  const contasParteB = new Set<string>();
+  for (const a of apuracoes)
+    for (const x of a.blocoM)
+      if (x.startsWith('|M010|') && !contasParteB.has(x)) {
+        contasParteB.add(x);
+        w.bruto(x);
+      }
+  for (const a of apuracoes) {
+    w.reg('M030', dataSped(a.inicio), dataSped(a.fim), periodoApuracaoEcf(a));
+    for (const x of a.blocoM) if (!x.startsWith('|M010|')) w.bruto(x);
+  }
+  w.reg('M990', w.doBloco('M') + 1);
+  w.reg('N001', '0');
+  for (const a of apuracoes) {
+    w.reg('N030', dataSped(a.inicio), dataSped(a.fim), periodoApuracaoEcf(a));
+    for (const [reg, cod, desc, v] of linhasBlocoNEcf(a)) w.reg(reg, cod, desc, valorSped(v));
+  }
+  w.reg('N990', w.doBloco('N') + 1);
+}
+
+// ── Signatários da escrituração (cadastro) ──────────────────────────────────────────────────────
+
+export type PapelSignatario = 'contador' | 'responsavel_legal' | 'procurador' | 'outro';
+
+/** O papel do signatário no cadastro pela qualificação: 900 contador, 309 procurador, 2xx e 801 a direção. */
+export function papelDoSignatario(qualificacao: string): PapelSignatario {
+  if (qualificacao === '900') return 'contador';
+  if (qualificacao === '309') return 'procurador';
+  if (qualificacao.startsWith('2') || qualificacao === '801') return 'responsavel_legal';
+  return 'outro';
+}
+
+/** O signatário só entra no cadastro com o registro no conselho, quando contador. */
+export function conferirSignatarioCadastro(s: Pick<SignatarioSped, 'qualificacao' | 'crc'>): {
+  codigo: string;
+  mensagem: string;
+} | null {
+  if (s.qualificacao === '900' && !s.crc?.trim())
+    return { codigo: 'contador-sem-crc', mensagem: 'O contador precisa do registro no conselho (CRC).' };
+  return null;
+}
+
+/** Os signatários vigentes do cadastro servem à escrituração se há o contador e ao menos um responsável. */
+export function faltasDosSignatarios(lista: readonly Pick<SignatarioSped, 'qualificacao'>[]): string[] {
+  const faltas: string[] = [];
+  if (!lista.some((s) => s.qualificacao === '900')) faltas.push('contador');
+  if (!lista.some((s) => s.qualificacao !== '900')) faltas.push('responsavel');
+  return faltas;
 }
 
 /** Envio anterior da mesma escrituração (empresa, tipo e exercício) para planejar o próximo. */

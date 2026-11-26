@@ -1640,6 +1640,16 @@ const OPERACAO_ABRIR = definirOperacao({
         'Especialidade não encontrada.',
         'especialidade',
       );
+    // 02-REC linha 37: o serviço do atendimento (ativo), que a regra do plano confere e o atendimento guarda.
+    const servico = num('servico');
+    if (servico !== null)
+      await exigir(
+        'SELECT id FROM servico_atendimento WHERE id = ? AND ativo',
+        [servico],
+        'servico-inexistente',
+        'Serviço não encontrado.',
+        'servico',
+      );
     const local = await exigirLocal(tx, num('local'));
     const hoje = await hojeDoEstabelecimento(tx, est);
     // Senha da recepção: do estabelecimento, do dia, na fila e sem outro atendimento ativo (regra no domínio).
@@ -1753,6 +1763,10 @@ const OPERACAO_ABRIR = definirOperacao({
       planoId: plano ?? null,
       categoriaId: Number(cat['id']),
       estabelecimentoId: est,
+      // 02-REC linha 37: a regra (e a senha que ela exige) pode valer só na especialidade, no serviço ou no setor.
+      especialidadeId: esp,
+      servicoId: servico,
+      setorId: Number(unidade['id']),
       pacienteId: Number(pac['id']),
       data: hoje,
       carteira: texto(e['matricula']) ?? null,
@@ -1772,6 +1786,7 @@ const OPERACAO_ABRIR = definirOperacao({
       fonte_pagadora_id: Number(conv['id']),
       profissional_id: Number(prof['id']),
       especialidade_medica_id: esp,
+      servico_atendimento_id: servico,
       unidade_assistencial_id: Number(unidade['id']),
       centro_custo_id: Number(cc['id']),
       local_atendimento_id: local,

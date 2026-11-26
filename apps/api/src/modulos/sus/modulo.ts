@@ -13,6 +13,8 @@ import { EstabelecimentoSusController } from './estabelecimento-sus.controller.j
 import { PORTA_ESTABELECIMENTO_SUS, PortaEstabelecimentoSusPropria } from './estabelecimento-sus-propria.js';
 import { LaudoInternacaoSusController } from './laudo-internacao-sus.controller.js';
 import { ContaAihComplementoController } from './conta-aih-complemento.controller.js';
+import { RepasseSusController } from './repasse-sus.controller.js';
+import { PORTA_REPASSE_SUS, PortaRepasseSusPropria } from './repasse-sus-propria.js';
 import {
   PORTA_CONTA_AIH_COMPLEMENTO,
   PortaContaAihComplementoPropria,
@@ -79,6 +81,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
       EstabelecimentoSusController,
       LaudoInternacaoSusController,
       ContaAihComplementoController,
+      RepasseSusController,
       TransplanteSusController,
       ProgramacaoSusController,
       ApacComplementosController,
@@ -105,6 +108,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaContaAihComplementoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F7 (06-SUS linha 62): repasse da produção SUS aprovada aos profissionais (só com o banco do cliente).
+      {
+        provide: PORTA_REPASSE_SUS,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaRepasseSusPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F7 (06-SUS linha 59): leitos de UTI habilitados por tipo e vigência (só com o banco do cliente).

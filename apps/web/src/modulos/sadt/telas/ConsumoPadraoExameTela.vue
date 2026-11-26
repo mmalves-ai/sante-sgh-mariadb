@@ -657,4 +657,9 @@ label {
 .inativa {
   opacity: 0.6;
 }
+/* Alvo de toque mínimo (WCAG 2.5.8). */
+input[type='checkbox'] {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+}
 </style>

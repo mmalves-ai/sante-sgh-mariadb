@@ -8,6 +8,7 @@ import { mensagensSumarioSecoes } from './i18n-sumario-secoes.js';
 import { mensagensResultadosGrupos } from './i18n-resultados-grupos.js';
 import { mensagensFarmacovigilancia } from './i18n-farmacovigilancia.js';
 import { mensagensNotasPaciente } from './i18n-notas-paciente.js';
+import { mensagensPlanoCuidado } from './i18n-plano-cuidado.js';
 import { mensagensCurvasCrescimento } from './i18n-curvas-crescimento.js';
 import { mensagensTerminologiaClinica } from './i18n-terminologia-clinica.js';
 import { mensagensAvisosRegras } from './i18n-avisos-regras.js';
@@ -17,6 +18,7 @@ import { mensagensNotaSoap } from './i18n-nota-soap.js';
 import { mensagensProntuarioRestrito } from './i18n-prontuario-restrito.js';
 import { mensagensPedidoVaga } from './i18n-pedido-vaga.js';
 import { mensagensAnotacoesAdministrativas } from './i18n-anotacoes-administrativas.js';
+import { mensagensPesquisaClinica } from './i18n-pesquisa-clinica.js';
 import { mensagensCopiasProntuario } from './i18n-copias-prontuario.js';
 import { mensagensPadroesPrescricao } from './i18n-padroes-prescricao.js';
 import { mensagensCatalogoPrescricao } from './i18n-catalogo-prescricao.js';
@@ -43,6 +45,8 @@ export const mensagensPep = {
   farmaco: mensagensFarmacovigilancia,
   // 03-PEP L102: notas e lembretes livres sobre o paciente.
   notas: mensagensNotasPaciente,
+  // 03-PEP L142: plano de cuidado e estratificação de risco do paciente.
+  planoCuidado: mensagensPlanoCuidado,
   // 03-PEP L141: curvas de crescimento (OMS e INTERGROWTH) e medida de crescimento.
   crescimento: mensagensCurvasCrescimento,
   // 09-AREA L84: diagnósticos do paciente com a CID-10 e o conceito clínico equivalente.
@@ -59,6 +63,8 @@ export const mensagensPep = {
   pedidoVaga: mensagensPedidoVaga,
   // 03-PEP L147: anotação administrativa do caso.
   anotAdm: mensagensAnotacoesAdministrativas,
+  // 03-PEP L144: pesquisa clínica.
+  pesquisa: mensagensPesquisaClinica,
   // 03-PEP L131: cópia do prontuário no balcão e cabeçalho por tipo de documento.
   copias: mensagensCopiasProntuario,
   carregando: 'Carregando…',

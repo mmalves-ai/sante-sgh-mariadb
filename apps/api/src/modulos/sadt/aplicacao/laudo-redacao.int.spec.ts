@@ -110,6 +110,16 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         ));
       ids.palavraA = await palavra('T-F359-A', 'Caso de ensino (teste)');
       ids.palavraB = await palavra('T-F359-B', 'Achado raro (teste)');
+      // C3-005: o tipo que a fila ICP conhece, como a migração 08_CC/94 o semeia em todo cliente (fica, é cadastro de
+      // base; idempotente). A situação "lançado" vem da mesma migração.
+      await e.executar(
+        `INSERT INTO tipo_documento_clinico
+           (codigo, descricao, ativo, categoria, ordem_medica, compoe_prontuario, gera_pendencia, impede_alta, criado_em)
+         VALUES ('registro-clinico', 'Registro clínico (descrição cirúrgica e adendo)', TRUE, 'registro_cirurgico', FALSE,
+                 TRUE, TRUE, FALSE, ?)
+         ON DUPLICATE KEY UPDATE codigo = codigo`,
+        [agora],
+      );
       // Quem pediu o exame é o segundo profissional (outra conta): é ele que o aviso procura.
       await e.executar('UPDATE requisicao_exame SET solicitante_profissional_id = ? WHERE id = ?', [
         m!.base.profissional2,
@@ -137,6 +147,12 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
         await x('DELETE FROM emissao_laudo_exame WHERE exame_item_id = ?', [m!.itemImagem]);
         await x('DELETE FROM emissao_laudo WHERE codigo_autenticacao = ?', [codigoEmissao]);
         await x(`DELETE FROM valor_grandeza_laudo WHERE laudo_diagnostico_id IN ${laudos}`, []);
+        // C3-005: o documento do prontuário de cada versão (e o vínculo com o exame) sai antes da versão.
+        const docs = `(SELECT id FROM documento_prontuario WHERE entidade_origem = 'laudo_diagnostico_versao'
+          AND entidade_origem_id IN (SELECT id FROM laudo_diagnostico_versao WHERE laudo_diagnostico_id IN ${laudos}))`;
+        await x('DELETE FROM exame_item_assinatura WHERE exame_item_id = ?', [m!.itemImagem]);
+        await x(`DELETE FROM documento_prontuario_evento WHERE documento_prontuario_id IN ${docs}`, []);
+        await x(`DELETE FROM documento_prontuario WHERE id IN (SELECT id FROM ${docs} t)`, []);
         await x(`DELETE FROM laudo_diagnostico_versao WHERE laudo_diagnostico_id IN ${laudos}`, []);
         await x('DELETE FROM laudo_diagnostico WHERE exame_item_id = ?', [m!.itemImagem]);
         await x('DELETE FROM modelo_laudo WHERE estabelecimento_id IN (?, ?)', [
@@ -608,6 +624,73 @@ describe.skipIf(SEM_BANCO)('redação do laudo e laudo estruturado (MariaDB, cli
     const tela = await servico.abrir(c, item);
     expect(tela.laudo).toMatchObject({ situacao: 'retificado', versaoAtual: 3 });
     expect(tela.versoes.map((v) => v.numero)).toEqual([3, 2, 1]);
+    // C3-005: cada versão (assinatura e retificações) virou um documento do prontuário do paciente, do tipo que a fila
+    // de assinaturas com certificado ICP-Brasil conhece, situação "lançado", autor o laudista, ligado ao exame.
+    const docsIcp = await todos(
+      `SELECT v.numero_versao AS v, t.codigo AS tipo, s.categoria AS cat, dp.titulo, dp.paciente_id AS pac,
+              dp.documento_assinado_id IS NULL AS sem_envelope,
+              (SELECT COUNT(*) FROM exame_item_assinatura ea WHERE ea.documento_prontuario_id = dp.id
+                  AND ea.exame_item_id = ?) AS ligado,
+              (SELECT COUNT(*) FROM documento_prontuario_evento de WHERE de.documento_prontuario_id = dp.id) AS eventos
+         FROM laudo_diagnostico_versao v
+         JOIN documento_prontuario dp ON dp.entidade_origem = 'laudo_diagnostico_versao' AND dp.entidade_origem_id = v.id
+         JOIN tipo_documento_clinico t ON t.id = dp.tipo_documento_clinico_id
+         JOIN situacao_documento_prontuario s ON s.id = dp.situacao_documento_prontuario_id
+        WHERE v.laudo_diagnostico_id = ? ORDER BY v.numero_versao`,
+      [item, r.id],
+    );
+    expect(
+      docsIcp.map((d) => [d['v'], d['tipo'], d['cat'], d['sem_envelope'], d['ligado'], d['eventos']]),
+    ).toEqual([
+      [1, 'registro-clinico', 'lancado', 1, 1, 1],
+      [2, 'registro-clinico', 'lancado', 1, 1, 1],
+      [3, 'registro-clinico', 'lancado', 1, 1, 1],
+    ]);
+    expect(docsIcp.every((d) => Number(d['pac']) === Number(m!.base.paciente))).toBe(true);
+    expect(String(docsIcp[1]!['titulo'])).toContain('(retificação, versão 2)');
+    expect(tela.versoes.every((v) => v.documento !== null)).toBe(true);
+    // Sem política ICP-Brasil do estabelecimento para o tipo, fica a assinatura eletrônica avançada do clique; com a
+    // política vigente (nível icp-brasil, destino interno), as três versões entram na fila do laudista.
+    const tipoLaudo = Number(
+      (await um("SELECT id FROM tipo_documento_clinico WHERE codigo = 'registro-clinico'", []))!['id'],
+    );
+    const politicaAntes = await um(
+      `SELECT COUNT(*) AS n FROM regra_politica_assinatura r JOIN politica_assinatura p ON p.id = r.politica_assinatura_id
+        WHERE p.estabelecimento_id = ? AND p.tipo_documento_clinico_id = ? AND p.ativo AND r.vigente = 1
+          AND r.nivel = 'icp-brasil' AND r.destino = 'interno'`,
+      [m!.base.est, tipoLaudo],
+    );
+    if (Number(politicaAntes!['n']) === 0) {
+      expect(tela.versoes.map((v) => v.assinaturaIcp)).toEqual(['nao-exigida', 'nao-exigida', 'nao-exigida']);
+      const politica = await nucleo.escrever(ctxT, (e) =>
+        e.inserir(
+          `INSERT INTO politica_assinatura (estabelecimento_id, tipo_documento_clinico_id, vigencia_inicio, criado_em)
+           VALUES (?, ?, '2000-01-01', ?)`,
+          [m!.base.est, tipoLaudo, new Date()],
+        ),
+      );
+      try {
+        await nucleo.escrever(ctxT, (e) =>
+          e.inserir(
+            `INSERT INTO regra_politica_assinatura (politica_assinatura_id, destino, nivel, justificativa, vigencia_inicio,
+                                                    criado_em)
+             VALUES (?, 'interno', 'icp-brasil', 'Teste C3-005', '2000-01-01', ?)`,
+            [politica, new Date()],
+          ),
+        );
+        const naFila = await servico.abrir(c, item);
+        expect(naFila.versoes.map((v) => v.assinaturaIcp)).toEqual(['na-fila', 'na-fila', 'na-fila']);
+      } finally {
+        await nucleo.escrever(ctxT, async (e) => {
+          await e.executar('DELETE FROM regra_politica_assinatura WHERE politica_assinatura_id = ?', [
+            politica,
+          ]);
+          await e.executar('DELETE FROM politica_assinatura WHERE id = ?', [politica]);
+        });
+      }
+    } else {
+      expect(tela.versoes.map((v) => v.assinaturaIcp)).toEqual(['na-fila', 'na-fila', 'na-fila']);
+    }
     expect(tela.valores.map((v) => v.grandeza)).toEqual([ids.fe]);
     expect(tela.modelos[0]?.id).toBe(modelo.id);
     expect(tela.pode).toEqual({ salvar: false, assinar: false, retificar: true });

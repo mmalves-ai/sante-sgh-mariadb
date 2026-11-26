@@ -187,7 +187,7 @@ test.describe('@C2-055 cadastro da CME (04-CME linha 115)', () => {
   test('produto com fases conferidas na hora e caixa com composição em ordem', async ({ page }) => {
     const enviados: Record<string, unknown>[] = [];
     await simular(page, enviados);
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.CME');
 
     await page.goto('/cirurgia/cme/cadastro');
     await expect(page.getByTestId('tela-cme-cadastro')).toBeVisible();

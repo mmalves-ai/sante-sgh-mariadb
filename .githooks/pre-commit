@@ -13,6 +13,8 @@ if [[ -n "$APAGADOS" && "${SGH_PERMITIR_APAGAR:-}" != 1 ]]; then
   echo "Se o apagamento é da sua função, repita com SGH_PERMITIR_APAGAR=1; senão, refaça com git commit --only <seus arquivos>." >&2
   exit 1
 fi
+# Sintaxe dos .ts preparados (26/11): commit montado por trechos deixou o HEAD sem compilar três vezes.
+node "$RAIZ/tools/obra/sintaxe-staged.cjs" || exit 1
 # Em worktree (.git é um arquivo que aponta para <repo>/.git/worktrees/<nome>), o diretório git comum fica
 # fora de RAIZ: monta os dois nos MESMOS caminhos, só leitura, para o git do contêiner achar o repositório.
 COMUM="$(cd "$(git rev-parse --git-common-dir)" && pwd -P)"

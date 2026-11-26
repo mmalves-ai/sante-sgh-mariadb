@@ -14,6 +14,7 @@ import { z } from 'zod';
 import type { RegistradorTrilha } from '../autorizacao/trilha.js';
 import type { FonteConfiguracao } from '../modulos/config/public-api.js';
 import type { ArmazemSessao } from './armazem.js';
+import { CredencialDispositivoPropria, ServicoDispositivoSegundoFator } from './dispositivo-segundo-fator.js';
 import {
   contaUsuario,
   type DesfechoConferenciaCodigo,
@@ -155,6 +156,18 @@ export class PreferenciaSegundoFatorPropria {
           if (!ENDERECO_EMAIL.test(String(e?.['email'] ?? '').trim()))
             throw recusa('sem-email', 'Cadastre um e-mail na conta antes de escolher o código por e-mail.');
         }
+        if (metodo === 'dispositivo') {
+          // 01-ADM L62: só com ao menos um aparelho ativo (sem ele a entrada não teria o que conferir).
+          const d = await tx.uma(
+            'SELECT COUNT(*) AS n FROM credencial_dispositivo WHERE usuario_id = ? AND revogada_em IS NULL',
+            [Number(u['id'])],
+          );
+          if (Number(d?.['n'] ?? 0) < 1)
+            throw recusa(
+              'sem-dispositivo',
+              'Cadastre um dispositivo antes de escolher a chave do dispositivo.',
+            );
+        }
         const [atual] = await tx.consultarParaAtualizar(
           'SELECT id, metodo, versao FROM preferencia_segundo_fator WHERE usuario_id = ?',
           [Number(u['id'])],
@@ -272,6 +285,8 @@ export interface ServicosAcessoEmail {
   readonly preferencia: PreferenciaSegundoFatorPropria;
   readonly codigoUsuario: SegundoFatorEmailUsuario | null;
   readonly recuperacaoPlataforma: ServicoRecuperacaoPlataforma | null;
+  /** A chave do dispositivo (WebAuthn com biometria local) como segundo fator da conta do cliente. */
+  readonly dispositivo: ServicoDispositivoSegundoFator;
 }
 
 /** Monta os serviços da entrada por e-mail e da troca rápida sobre o banco próprio. */
@@ -303,10 +318,16 @@ export function montarAcessoEmailProprio(d: DependenciasAcessoEmail): ServicosAc
   const codigos = d.email ? new ServicoCodigoEmail(d.armazem, d.email) : null;
   const preferencia = new PreferenciaSegundoFatorPropria(d.nucleo, resolver, executor);
   const np = d.plataforma !== undefined ? d.plataforma : nucleoPlataforma(d.nucleo);
+  const dispositivo = new ServicoDispositivoSegundoFator(
+    new CredencialDispositivoPropria(d.nucleo, resolver, executor),
+    d.armazem,
+    base,
+  );
   return {
     recuperacao,
     trocaRapida,
     preferencia,
+    dispositivo,
     codigoUsuario: codigos
       ? new SegundoFatorEmailUsuario(d.nucleo, () => d.cliente, codigos, preferencia)
       : null,

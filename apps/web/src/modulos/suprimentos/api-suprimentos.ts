@@ -197,6 +197,12 @@ export const registrarProposta = (
   e: { valorUnitario: number; marca?: string },
   chave: string,
 ) => gravar(`${S}/pedidos/${p.ano}/${p.doc}/propostas/${proposta}`, e, chave);
+/** C3-008 (05-SUP linha 19): o mapa devolvido pelo portal ou pelo fornecedor (troca por arquivo). */
+export const importarRespostasCotacao = (
+  p: { ano: number; doc: number },
+  e: { arquivo: string; conteudo: string },
+  chave: string,
+) => gravar(`${S}/pedidos/${p.ano}/${p.doc}/respostas-portal`, e, chave);
 export const definirVencedor = (p: { ano: number; doc: number }, e: unknown, chave: string) =>
   gravar(`${S}/pedidos/${p.ano}/${p.doc}/vencedor`, e, chave);
 export const listarAprovacoes = (): Promise<AprovacaoPendente[]> =>

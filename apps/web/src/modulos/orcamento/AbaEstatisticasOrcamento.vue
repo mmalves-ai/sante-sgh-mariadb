@@ -49,10 +49,15 @@ const listaVersoes = computed(() =>
   (versoes.data.value?.versoes ?? []).filter((v) => v.situacao !== 'descartado'),
 );
 const versaoId = ref<number | null>(null);
-watch(listaVersoes, (l) => {
-  if (!l.some((v) => v.id === versaoId.value))
-    versaoId.value = (l.find((v) => v.situacao === 'rascunho') ?? l[0])?.id ?? null;
-});
+// immediate: a lista pode já estar no cache (a aba Versões usa a mesma chave) ao abrir a aba.
+watch(
+  listaVersoes,
+  (l) => {
+    if (!l.some((v) => v.id === versaoId.value))
+      versaoId.value = (l.find((v) => v.situacao === 'rascunho') ?? l[0])?.id ?? null;
+  },
+  { immediate: true },
+);
 const opcoesVersao = computed(() =>
   listaVersoes.value.map((v) => ({
     valor: v.id,

@@ -27,6 +27,7 @@ import {
   QUALIFICACOES_SIGNATARIO,
   type QualificacaoSignatario,
   type SignatarioSped,
+  type SignatariosSped,
   TETO_CONTAS_BALANCETE,
   TETO_DIARIO_LANCAMENTOS,
   TIPOS_DEMONSTRACAO,
@@ -40,6 +41,8 @@ import {
   conferenciaDoDiario,
   dataDaApuracao,
   type EntradaSped,
+  type ApuracaoLucroRealEcf,
+  faltasDosSignatarios,
   gerarEcd,
   gerarEcf,
   montarBalancete,
@@ -392,7 +395,11 @@ export class ServicoDemonstracoes {
     const codigoRef = refs.tiposPlanoReferencial.find((t) => t.id === tipoRef)?.codigo ?? null;
     return {
       exercicio,
-      empresa: { ...empresaLida, planoReferencial: codigoRef, naturezaJuridica: null },
+      empresa: {
+        ...empresaLida,
+        planoReferencial: codigoRef,
+        naturezaJuridica: empresaLida.naturezaJuridica ?? null,
+      },
       plano,
       saldosIniciais: iniciais,
       lancamentos: doExercicio.lancamentos.map((l) => ({
@@ -419,10 +426,17 @@ export class ServicoDemonstracoes {
     e: EntradaSped,
     forma: FormaTributacaoEcf | null,
     tipoEntidade: string | null,
+    lucroReal: readonly ApuracaoLucroRealEcf[] = [],
   ): ArquivoGerado {
     return tipo === 'ecd'
       ? gerarEcd(e)
-      : gerarEcf({ ...e, formaTributacao: forma ?? '9', tipoEntidade: tipoEntidade ?? '00' });
+      : gerarEcf({ ...e, formaTributacao: forma ?? '9', tipoEntidade: tipoEntidade ?? '00', lucroReal });
+  }
+
+  /** Os signatários vigentes no cadastro da empresa e o que falta (contador, responsável). */
+  async signatarios(c: ContextoContabil, empresa: number): Promise<SignatariosSped> {
+    const itens = await this.porta.signatariosSped(c, empresa);
+    return { empresa, itens, faltas: faltasDosSignatarios(itens) };
   }
 
   /** A prévia: impedimentos, avisos e a contagem dos registros, sem o conteúdo (os signatários vêm na geração). */
@@ -469,7 +483,12 @@ export class ServicoDemonstracoes {
       substituta: g.substituta,
       hashAnterior: g.hashAnterior,
     });
-    const gerado = this.gerar(g.tipo, e, g.formaTributacao, g.tipoEntidadeEcf);
+    // Lucro real: as apurações do IRPJ e da CSLL do LALUR entram nos blocos L, M e N.
+    const lucroReal =
+      g.tipo === 'ecf' && g.formaTributacao === '1'
+        ? await this.porta.apuracoesLucroRealSped(c, g.empresa, g.exercicio)
+        : [];
+    const gerado = this.gerar(g.tipo, e, g.formaTributacao, g.tipoEntidadeEcf, lucroReal);
     const primeiro = gerado.impedimentos[0];
     if (primeiro) throw recusa(primeiro.codigo, primeiro.mensagem, { impedimentos: gerado.impedimentos });
     const parametros = JSON.stringify({

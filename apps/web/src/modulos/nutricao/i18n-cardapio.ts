@@ -92,6 +92,7 @@ export const mensagensCardapio = {
   devolver: 'Devolver',
   publicar: 'Publicar',
   cancelarPlano: 'Cancelar cardápio',
+  confirmarCancelarPlano: 'Cancelar este cardápio? O cancelamento não é desfeito.',
   motivo: 'Motivo (obrigatório para devolver ou cancelar)',
   motivoCurto: 'Escreva o motivo com pelo menos 5 caracteres.',
   acaoFeita: 'Situação: {situacao}.',

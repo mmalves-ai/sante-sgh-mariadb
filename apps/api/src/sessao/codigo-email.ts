@@ -18,7 +18,7 @@ export const ENVIOS_CODIGO_EMAIL_HORA = 5;
 const HORA_SEG = 3600;
 
 /** Os dois segundos fatores escolhíveis. */
-export const METODOS_SEGUNDO_FATOR = ['aplicativo', 'email'] as const;
+export const METODOS_SEGUNDO_FATOR = ['aplicativo', 'email', 'dispositivo'] as const;
 export type MetodoSegundoFator = (typeof METODOS_SEGUNDO_FATOR)[number];
 export const ehMetodoSegundoFator = (v: unknown): v is MetodoSegundoFator =>
   typeof v === 'string' && (METODOS_SEGUNDO_FATOR as readonly string[]).includes(v);

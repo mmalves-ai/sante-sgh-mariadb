@@ -47,7 +47,13 @@ import { PORTA_GASTO_SALA, PortaGastoSalaPropria } from './gasto-sala-propria.js
 import { KitAgendamentoController } from './kit-agendamento.controller.js';
 import { CmeController } from './cme.controller.js';
 import { PORTA_CME, PortaCmePropria } from './cme-propria.js';
+import { CmeCicloController } from './cme-ciclo.controller.js';
+import { PORTA_CME_CICLO, PortaCmeCicloPropria } from './cme-ciclo-propria.js';
 import { CmeCadastroController } from './cme-cadastro.controller.js';
+import { CmeMovimentoController } from './cme-movimento.controller.js';
+import { PORTA_CME_MOVIMENTO, PortaCmeMovimentoPropria } from './cme-movimento-propria.js';
+import { CmeTerceiroController } from './cme-terceiro.controller.js';
+import { PORTA_CME_TERCEIRO, PortaCmeTerceiroPropria } from './cme-terceiro-propria.js';
 import { PORTA_CME_CADASTRO, PortaCmeCadastroPropria } from './cme-cadastro-propria.js';
 import { ReservaCirurgiaController } from './reserva-cirurgia.controller.js';
 import { DocumentosCirurgiaController } from './documentos-cirurgia.controller.js';
@@ -148,6 +154,9 @@ export async function moduloCirurgia(
       KitAgendamentoController,
       CmeController,
       CmeCadastroController,
+      CmeCicloController,
+      CmeMovimentoController,
+      CmeTerceiroController,
       EquipeRealizadaController,
       ReservaCirurgiaController,
       DocumentosCirurgiaController,
@@ -210,6 +219,30 @@ export async function moduloCirurgia(
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaCmePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F7 (04-CME linha 116): ciclo pelos testes dos indicadores e rejeição no reprocessamento; sem núcleo, 503.
+      {
+        provide: PORTA_CME_CICLO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCmeCicloPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F7 (04-CME linha 117): solicitação, entrega ao setor, recolhimento e permissões da CME por setor; sem núcleo, 503.
+      {
+        provide: PORTA_CME_MOVIMENTO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCmeMovimentoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // F7 (04-CME linha 119): material de terceiro e consignado processado pela CME; sem núcleo, 503.
+      {
+        provide: PORTA_CME_TERCEIRO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaCmeTerceiroPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // F7 (04-CME linha 115): cadastro da CME (produtos reprocessáveis, caixas e kits, fases e foto); sem núcleo, 503.

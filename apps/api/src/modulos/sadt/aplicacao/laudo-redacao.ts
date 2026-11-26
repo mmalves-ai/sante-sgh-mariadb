@@ -29,8 +29,13 @@ import {
   type GrandezaDoLaudo,
   ordenarModelos,
   type PacienteDoExame,
+  ORIGEM_DOCUMENTO_LAUDO,
   proximaVersao,
   RecusaLaudo,
+  TIPO_DOCUMENTO_LAUDO,
+  tituloDocumentoLaudo,
+  assinaturaIcpDoLaudo,
+  type AssinaturaIcpDoLaudo,
   type SituacaoLaudo,
   situacaoDepois,
   superficieCorporal,
@@ -47,6 +52,8 @@ import {
 } from '@sgh/nucleo';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { CATEGORIAS_ASSINAVEIS } from '../../assinatura/aplicacao/regras-assinatura.js';
+import { TIPOS_DOCUMENTO_ICP } from '../../assinatura/tipos.js';
 import { lerFormulasDasGrandezas } from '../laudo-grandezas-propria.js';
 import type { NucleoSadt } from '../porta-propria.js';
 import type { ContextoSadt } from '../porta.js';
@@ -161,6 +168,9 @@ export interface LaudoEmRedacao {
     em: string;
     motivo: string | null;
     hash: string | null;
+    /** C3-005: o documento do prontuário da versão e onde está a assinatura com certificado ICP-Brasil. */
+    documento: number | null;
+    assinaturaIcp: AssinaturaIcpDoLaudo;
   }[];
   readonly secoes: readonly { id: number; nome: string; ordem: number }[];
   readonly grandezas: readonly (GrandezaDoLaudo & { secao: number | null; sigla: string })[];
@@ -228,6 +238,25 @@ function daRegra<T>(fn: () => T): T {
   }
 }
 
+/**
+ * C3-005: o documento do prontuário (alias dp) está na fila de assinaturas com certificado do laudista, pelas mesmas
+ * condições da fila (assinatura/porta-propria.ts, filaIcp; igual à da descrição cirúrgica): tipo que a fila conhece,
+ * situação assinável, sem envelope e, sem tentativa, a política do estabelecimento exigindo ICP-Brasil para o tipo;
+ * com tentativa pendente ou em falha, sempre.
+ */
+const SQL_NA_FILA_ICP = `(dp.documento_assinado_id IS NULL
+    AND EXISTS (SELECT 1 FROM tipo_documento_clinico t WHERE t.id = dp.tipo_documento_clinico_id AND t.codigo IN (${TIPOS_DOCUMENTO_ICP.map(() => '?').join(', ')}))
+    AND EXISTS (SELECT 1 FROM situacao_documento_prontuario s WHERE s.id = dp.situacao_documento_prontuario_id
+                 AND s.categoria IN (${CATEGORIAS_ASSINAVEIS.map(() => '?').join(', ')}))
+    AND (EXISTS (SELECT 1 FROM assinatura_icp ai WHERE ai.documento_prontuario_id = dp.id
+                  AND ai.origem_assinatura = 'documento' AND ai.situacao IN ('pendente', 'falha'))
+         OR EXISTS (SELECT 1 FROM regra_politica_assinatura r
+                      JOIN politica_assinatura p ON p.id = r.politica_assinatura_id
+                     WHERE p.tipo_documento_clinico_id = dp.tipo_documento_clinico_id
+                       AND p.estabelecimento_id = dp.estabelecimento_id AND p.ativo AND r.vigente = 1
+                       AND r.nivel = 'icp-brasil' AND r.destino = 'interno')))`;
+const PARAMETROS_NA_FILA_ICP: readonly string[] = [...TIPOS_DOCUMENTO_ICP, ...CATEGORIAS_ASSINAVEIS];
+
 const TABELAS = [
   'laudo_diagnostico',
   'laudo_diagnostico_versao',
@@ -238,6 +267,9 @@ const TABELAS = [
   'aviso_valor_critico',
   'aviso_clinico',
   'aviso_clinico_destinatario',
+  'documento_prontuario',
+  'documento_prontuario_evento',
+  'exame_item_assinatura',
 ];
 
 interface MedidasPaciente {
@@ -525,10 +557,16 @@ export class ServicoLaudoRedacao {
       const versoes = laudo
         ? (
             await l.consultar(
-              `SELECT v.numero_versao, v.situacao, v.ocorrido_em, COALESCE(m.descricao, v.motivo) AS motivo, v.hash_sha256
+              `SELECT v.numero_versao, v.situacao, v.ocorrido_em, COALESCE(m.descricao, v.motivo) AS motivo, v.hash_sha256,
+                      dp.id AS documento,
+                      (dp.documento_assinado_id IS NOT NULL AND EXISTS (SELECT 1 FROM documento_assinado da
+                         WHERE da.id = dp.documento_assinado_id AND da.situacao = 'assinado')) AS envelope_assinado,
+                      (dp.id IS NOT NULL AND ${SQL_NA_FILA_ICP}) AS na_fila
                  FROM laudo_diagnostico_versao v LEFT JOIN motivo_retificacao_laudo m ON m.id = v.motivo_retificacao_laudo_id
+                 LEFT JOIN documento_prontuario dp ON dp.entidade_origem = ? AND dp.entidade_origem_id = v.id
+                       AND dp.numero_versao = 1 AND dp.excluido_em IS NULL
                 WHERE v.laudo_diagnostico_id = ? ORDER BY v.numero_versao DESC`,
-              [laudo.id],
+              [...PARAMETROS_NA_FILA_ICP, ORIGEM_DOCUMENTO_LAUDO, laudo.id],
               { teto: 200 },
             )
           ).map((r) => ({
@@ -537,6 +575,12 @@ export class ServicoLaudoRedacao {
             em: r['ocorrido_em'] instanceof Date ? r['ocorrido_em'].toISOString() : texto(r['ocorrido_em']),
             motivo: textoOuNulo(r['motivo']),
             hash: textoOuNulo(r['hash_sha256']),
+            documento: nn(r['documento']),
+            assinaturaIcp: assinaturaIcpDoLaudo({
+              documento: nn(r['documento']),
+              envelopeAssinado: Boolean(Number(r['envelope_assinado'] ?? 0)),
+              naFila: Boolean(Number(r['na_fila'] ?? 0)),
+            }),
           }))
         : [];
       const brutos = laudo
@@ -1070,6 +1114,83 @@ export class ServicoLaudoRedacao {
     return numero;
   }
 
+  /**
+   * C3-005: a versão assinada ou retificada vira um documento do prontuário do paciente (tipo do registro clínico,
+   * situação "lançado"), ligado ao exame em exame_item_assinatura. É por ele que o médico assina com certificado
+   * ICP-Brasil na fila de assinaturas (nuvem por PSC, A3 ou A1), quando a política do estabelecimento exige; sem
+   * tipo ou situação no cadastro, fica a assinatura eletrônica avançada do clique (devolve null).
+   */
+  private async documentoDaVersao(
+    tx: TxOperacao,
+    est: number,
+    b: Base,
+    laudo: number,
+    numero: number,
+    situacao: 'assinado' | 'retificado',
+    profissional: number,
+    p: { titulo: string | null; texto: string; resultado: string | null; achadoCritico: boolean },
+  ): Promise<number | null> {
+    const tipo = await tx.uma(
+      'SELECT id FROM tipo_documento_clinico WHERE ativo = TRUE AND codigo = ? ORDER BY id LIMIT 1',
+      [TIPO_DOCUMENTO_LAUDO],
+    );
+    const lancado = await tx.uma(
+      `SELECT id FROM situacao_documento_prontuario WHERE categoria = 'lancado' AND ativo = TRUE
+        ORDER BY (ordem IS NULL), ordem, id LIMIT 1`,
+    );
+    const ver = await tx.uma(
+      'SELECT id FROM laudo_diagnostico_versao WHERE laudo_diagnostico_id = ? AND numero_versao = ?',
+      [laudo, numero],
+    );
+    if (!tipo || !lancado || !ver) return null;
+    const { atendimento } = await this.pedido(tx, b.item);
+    const agora = new Date();
+    const documento = await tx.incluir('documento_prontuario', {
+      estabelecimento_id: est,
+      paciente_id: b.paciente,
+      atendimento_id: atendimento,
+      tipo_documento_clinico_id: n(tipo['id']),
+      situacao_documento_prontuario_id: n(lancado['id']),
+      entidade_origem: ORIGEM_DOCUMENTO_LAUDO,
+      entidade_origem_id: n(ver['id']),
+      titulo: tituloDocumentoLaudo(b.nomeExame, numero, situacao),
+      profissional_id: profissional,
+      referencia_em: agora,
+      lancado_em: agora,
+      fechado_em: agora,
+      numero_versao: 1,
+      confidencial: false,
+      conteudo: JSON.stringify({
+        laudo: laudo,
+        exame_item: b.item,
+        versao: numero,
+        titulo: p.titulo,
+        texto: p.texto,
+        resultado: p.resultado,
+        achado_critico: p.achadoCritico,
+        assinatura_eletronica: { nivel: 'eletronica-avancada', reautenticacao: false },
+      }),
+      origem: 'sistema',
+    });
+    await tx.incluir('documento_prontuario_evento', {
+      documento_prontuario_id: documento,
+      operacao: 'inclusao',
+      acao: 'criacao',
+      situacao_documento_prontuario_id: n(lancado['id']),
+      profissional_id: profissional,
+      evento_em: agora,
+      dados: JSON.stringify({ origem: ORIGEM_DOCUMENTO_LAUDO, laudo, versao: numero }),
+      ocorrido_em: agora,
+      usuario_id: n(tx.contexto.usuario),
+    });
+    await tx.incluir('exame_item_assinatura', {
+      exame_item_id: b.item,
+      documento_prontuario_id: documento,
+      origem: 'sistema',
+    });
+    return documento;
+  }
+
   /** Salva o rascunho (ou o envia para revisão): texto, modelo e medidas; nada de versão até a assinatura. */
   salvar(c: ContextoSadt, item: number, entrada: unknown): Promise<LaudoGravado> {
     const p = esquemaSalvarLaudo.parse(entrada);
@@ -1114,6 +1235,7 @@ export class ServicoLaudoRedacao {
         { id: null, texto: null },
         medidas,
       );
+      await this.documentoDaVersao(tx, est, b, laudo, numero, 'assinado', v!.profissional, p);
       const [atual] = await tx.consultarParaAtualizar(
         'SELECT versao FROM laudo_diagnostico WHERE id = ?',
         [laudo],
@@ -1189,6 +1311,7 @@ export class ServicoLaudoRedacao {
         { id: p.motivo, texto: p.motivoTexto },
         medidas,
       );
+      await this.documentoDaVersao(tx, est, b, laudo, numero, 'retificado', v!.profissional, p);
       const [atual] = await tx.consultarParaAtualizar(
         'SELECT versao FROM laudo_diagnostico WHERE id = ?',
         [laudo],

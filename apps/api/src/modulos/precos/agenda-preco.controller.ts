@@ -16,8 +16,20 @@
 //   POST /api/agendas/:id/coberturas | restricoes | preparos              agenda.estruturada.editar
 //   PUT  /api/agendas/:id/coberturas/:regra | restricoes/:regra | preparos/:regra (com versão)  agenda.estruturada.editar
 // As gravações levam Idempotency-Key e passam pelo executor (trilha e autoria na mesma transação).
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req } from '@nestjs/common';
-import { esquemaFiltroRegrasPrecoParticular } from '@sgh/contratos';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Optional,
+  Param,
+  Post,
+  Put,
+  Query,
+  Req,
+} from '@nestjs/common';
+import { esquemaFiltroRegrasPrecoParticular, type ResultadoCalculoPreco } from '@sgh/contratos';
 import { z } from 'zod';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -30,6 +42,19 @@ import {
 import { contextoOperacao, ctxDe, inteiro, problemaDoPreco } from './base.js';
 
 export const SERVICO_AGENDA_PRECO = Symbol('SERVICO_AGENDA_PRECO');
+/**
+ * A prévia do preço no atendimento sem o banco próprio (dev e E2E sobre a fonte sintética): a mesma tabela que o
+ * lançamento em memória usa. Com o banco próprio, a prévia é a do serviço (SERVICO_AGENDA_PRECO).
+ */
+export const PREVIA_PRECO_ATENDIMENTO = Symbol('PREVIA_PRECO_ATENDIMENTO');
+export interface PreviaPrecoAtendimento {
+  precoDoAtendimento(
+    ctx: ReturnType<typeof ctxDe>,
+    atendimentoId: number,
+    itemFaturavelId: number,
+    data: string,
+  ): Promise<ResultadoCalculoPreco | null>;
+}
 const EXECUTOR = 'executor: trilha e autoria na mesma transação';
 
 const opc = (v: string | undefined) => (v === undefined || v === '' ? undefined : Number(v));
@@ -53,7 +78,12 @@ const objeto = (c: unknown): Record<string, unknown> =>
 
 @Controller()
 export class AgendaPrecoController {
-  constructor(@Inject(SERVICO_AGENDA_PRECO) private readonly servico: ServicoAgendaPreco | null) {}
+  constructor(
+    @Inject(SERVICO_AGENDA_PRECO) private readonly servico: ServicoAgendaPreco | null,
+    @Optional()
+    @Inject(PREVIA_PRECO_ATENDIMENTO)
+    private readonly previa: PreviaPrecoAtendimento | null = null,
+  ) {}
 
   private s(): ServicoAgendaPreco {
     if (!this.servico)
@@ -123,7 +153,7 @@ export class AgendaPrecoController {
       },
     );
     const r = await this.rodar(() =>
-      this.s().precoDoAtendimento(
+      (this.servico ?? this.previa ?? this.s()).precoDoAtendimento(
         ctxDe(req, 'atendimento-preco'),
         inteiro(reg, 'atendimento', [1, Number.MAX_SAFE_INTEGER]),
         p.procedimento,

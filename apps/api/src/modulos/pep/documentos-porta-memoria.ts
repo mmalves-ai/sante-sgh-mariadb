@@ -215,6 +215,12 @@ interface Estado {
     Partial<Pick<AlergiaDoProntuarioLida, CampoAlergiaCompleta>> & {
       paciente: number;
       manifestacoes?: readonly number[];
+      /** Os passos depois da inclusão (retirada, reativação, alteração), na ordem gravada: a linha do tempo. */
+      passos?: readonly {
+        evento: 'inativacao' | 'reativacao' | 'alteracao';
+        em: string;
+        motivo: string | null;
+      }[];
     })[];
   documentos: (DocumentoProprioLido & {
     eventos: { tipo: string; em: string; justificativa?: string }[];
@@ -1005,18 +1011,21 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     // O dado completo (como a porta própria): o que a memória não guarda vai vazio; a origem é o hospital da sessão.
     return this.est(c.hospital)
       .alergias.filter((a) => a.paciente === paciente)
-      .map((a) => ({
-        descricaoLivre: null,
-        tipoRegistro: 'alergia' as const,
-        reacao: null,
-        gravidade: null,
-        certeza: null,
-        origemInformacao: null,
-        inativadaEm: null,
-        motivoInativacao: null,
-        estabelecimentoId: Number(c.hospital) || 0,
-        ...a,
-      }));
+      .map(({ passos, ...a }) => {
+        void passos; // a linha do tempo sai só no histórico
+        return {
+          descricaoLivre: null,
+          tipoRegistro: 'alergia' as const,
+          reacao: null,
+          gravidade: null,
+          certeza: null,
+          origemInformacao: null,
+          inativadaEm: null,
+          motivoInativacao: null,
+          estabelecimentoId: Number(c.hospital) || 0,
+          ...a,
+        };
+      });
   }
   async catalogoAlergias() {
     return { agentes: AGENTES, principios: PRINCIPIOS };
@@ -1024,7 +1033,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   async manifestacoesAlergicas() {
     return MANIFESTACOES.map((m) => ({ ...m }));
   }
-  /** A linha do tempo que a memória sabe dar: a inclusão e, se retirada, a retirada com o motivo (03-PEP L100). */
+  /** A linha do tempo (03-PEP L100): a inclusão e cada retirada, reativação e alteração gravadas, com o motivo. */
   async historicoAlergia(c: ContextoDocs, paciente: number, alergia: number) {
     const a = this.est(c.hospital).alergias.find((x) => x.id === alergia && x.paciente === paciente);
     if (!a)
@@ -1040,17 +1049,13 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       manifestacoes: MANIFESTACOES.filter((m) => ids.has(m.id)),
       passos: linhaDoTempoDaAlergia([
         { id: 1, evento: 'inclusao', ocorridoEm: a.registradaEm, profissional: a.profissional, motivo: null },
-        ...(a.ativa
-          ? []
-          : [
-              {
-                id: 2,
-                evento: 'inativacao',
-                ocorridoEm: a.inativadaEm ?? null,
-                profissional: null,
-                motivo: a.motivoInativacao ?? null,
-              },
-            ]),
+        ...(a.passos ?? []).map((p, k) => ({
+          id: k + 2,
+          evento: p.evento,
+          ocorridoEm: p.em,
+          profissional: null,
+          motivo: p.motivo,
+        })),
       ]),
     };
   }
@@ -1359,7 +1364,13 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
             'A lista de alergias mudou desde a leitura.',
           );
         const i = e.alergias.indexOf(a);
-        e.alergias[i] = { ...a, ativa: false, inativadaEm: agora, motivoInativacao: x.motivo };
+        e.alergias[i] = {
+          ...a,
+          ativa: false,
+          inativadaEm: agora,
+          motivoInativacao: x.motivo,
+          passos: [...(a.passos ?? []), { evento: 'inativacao', em: agora, motivo: x.motivo }],
+        };
         await this.auditar(c, login, 'pep.alergia.inativada', {
           tabela: 'alergia_paciente',
           id: a.id,
@@ -1411,7 +1422,13 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
                   descricaoLivre: y.agenteId ? null : y.agente,
                 })),
             );
-            e.alergias[i] = { ...a, ativa: true, inativadaEm: null, motivoInativacao: null };
+            e.alergias[i] = {
+              ...a,
+              ativa: true,
+              inativadaEm: null,
+              motivoInativacao: null,
+              passos: [...(a.passos ?? []), { evento: 'reativacao', em: agora, motivo: x.motivo ?? null }],
+            };
           } else if ('manifestacoes' in x) {
             conferirEstadoLido(alvo, {
               gravidade: x.lido.gravidade,
@@ -1433,6 +1450,10 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
               reacao: x.reacao?.trim() || null,
               observacao: x.observacao?.trim() || null,
               manifestacoes: m.manifestacoes,
+              passos: [
+                ...(a.passos ?? []),
+                { evento: 'alteracao', em: agora, motivo: x.motivo?.trim() || null },
+              ],
             };
           }
         } catch (erro) {

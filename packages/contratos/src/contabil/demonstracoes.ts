@@ -88,7 +88,8 @@ export const FORMAS_TRIBUTACAO_ECF = {
   '9': 'Isenta do IRPJ',
 } as const;
 export type FormaTributacaoEcf = keyof typeof FORMAS_TRIBUTACAO_ECF;
-export const FORMAS_ECF_GERADAS: readonly FormaTributacaoEcf[] = ['8', '9'];
+/** As geradas: imune, isenta e o lucro real (com as apurações do LALUR); presumido e arbitrado ficam com o programa oficial. */
+export const FORMAS_ECF_GERADAS: readonly FormaTributacaoEcf[] = ['1', '8', '9'];
 
 /** Qualificação do signatário (tabela do SPED, os códigos mais usados): o contador é 900. */
 export const QUALIFICACOES_SIGNATARIO = {
@@ -133,6 +134,8 @@ export const ROTAS_CONTABIL_F3 = {
   spedGerar: { caminho: 'contabil/sped/gerar', permissao: 'contabil.sped.gerar' },
   spedBaixar: { caminho: 'contabil/sped/arquivo', permissao: 'contabil.sped.gerar' },
   spedSituacao: { caminho: 'contabil/sped/situacao', permissao: 'contabil.sped.gerar' },
+  /** Os signatários vigentes do cadastro da empresa (com o CPF: só para quem gera). */
+  spedSignatarios: { caminho: 'contabil/sped/signatarios', permissao: 'contabil.sped.gerar' },
 } as const;
 
 // ── Entradas ──────────────────────────────────────────────────────────────────────────────────────
@@ -236,7 +239,9 @@ export const esquemaGerarSped = esquemaFiltroSped
     /** Escrituração substituta (ECD IND_FIN_ESC = 1; ECF RETIFICADORA = S) com o recibo ou o hash da anterior. */
     substituta: z.boolean().default(false),
     hashAnterior: z.string().trim().max(40).nullable().default(null),
-    /** ECF: forma de tributação (só imune e isenta são geradas). */
+    /** Guardar os signatários no cadastro da empresa (a próxima geração já os traz). */
+    guardarSignatarios: z.boolean().default(true),
+    /** ECF: forma de tributação (imune, isenta e lucro real são geradas). */
     formaTributacao: z
       .enum(Object.keys(FORMAS_TRIBUTACAO_ECF) as [FormaTributacaoEcf, ...FormaTributacaoEcf[]])
       .nullable()
@@ -567,4 +572,12 @@ export interface ApoioSped {
     readonly gerada: boolean;
   }[];
   readonly qualificacoes: readonly { readonly codigo: QualificacaoSignatario; readonly rotulo: string }[];
+}
+
+/** Os signatários vigentes no cadastro da empresa. */
+export interface SignatariosSped {
+  readonly empresa: number;
+  readonly itens: SignatarioSped[];
+  /** O que falta para a escrituração: contador, responsavel. */
+  readonly faltas: string[];
 }

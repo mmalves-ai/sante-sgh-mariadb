@@ -131,18 +131,31 @@ export const alterarPolitica2fa = (
     buscar,
   );
 
-export const revogarSegundoFatorDe = (
+/**
+ * O gestor revoga o segundo fator de outra conta (troca ou perda de aparelho): o aplicativo e, 01-ADM L62, as chaves do
+ * dispositivo (sem isso, quem escolheu o dispositivo e o perdeu ficaria sem entrada).
+ */
+export const revogarSegundoFatorDe = async (
   login: string,
   senha: string,
   buscar: typeof fetch = fetch,
-): Promise<{ revogado: true }> =>
-  enviar(
+): Promise<{ revogado: true; dispositivos: number }> => {
+  const r = await enviar(
     'POST',
     `${BASE}/usuarios/${encodeURIComponent(login)}/segundo-fator/revogar`,
     { senha },
     z.object({ revogado: z.literal(true) }),
     buscar,
   );
+  const d = await enviar(
+    'POST',
+    `${BASE}/usuarios/${encodeURIComponent(login)}/dispositivos/revogar`,
+    { senha },
+    z.object({ revogados: z.number().int().min(0) }),
+    buscar,
+  );
+  return { ...r, dispositivos: d.revogados };
+};
 
 export const retirarSenhaAntiga = (
   login: string,

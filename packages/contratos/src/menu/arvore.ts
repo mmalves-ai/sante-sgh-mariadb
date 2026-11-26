@@ -5,10 +5,13 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 
 // C2-072 (07-FIN L149, F8): os itens "Imobilizado em andamento" e "Seguro dos bens" do patrimônio entraram à mão
 // (mesmo motivo); a contagem acompanha.
+// C3-018 (04-HOT L142, F8): o item "Composição nutricional dos alimentos" do serviço de nutrição entrou à mão (mesmo
+// motivo); a contagem acompanha.
 // C2-098 (04-HOT L141, F8): o item "Cardápio, ficha técnica e produção" do serviço de nutrição entrou à mão (mesmo
 // motivo); a contagem acompanha.
 // C2-086 (06-FAT L30, F3): o item "Apresentação TISS por fonte pagadora" dos convênios entrou à mão (mesmo motivo); a
 // contagem acompanha.
+// C3-020 (03-PEP L144): o item "Pesquisa clínica" do PEP entrou à mão (mesmo motivo; F8); a contagem acompanha.
 // C1-110 (05-SADT L24, F8): o item "Busca ativa de resultados" do laboratório entrou à mão (mesmo motivo); a
 // contagem acompanha.
 // C2-067 (02-AGE L50, F8): o item "Grupos e turmas" da agenda entrou à mão (mesmo motivo); a contagem acompanha.
@@ -25,6 +28,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // C2-070 (06-FAT L26, F7): o item "Elegibilidade e autorização prévia" da recepção ganhou à mão a rota da tela de
 // elegibilidade do hospital (/faturamento/elegibilidade, leitura do atendimento); a contagem não muda.
 
+// C3-022 (06-SUS L62): o item "Repasse da produção SUS" do faturamento SUS entrou à mão (mesmo motivo; F7); a
+// contagem acompanha.
 // C2-114 (06-SUS L54): o item "Programação, tetos e cotas" do faturamento SUS entrou à mão (mesmo motivo; F7); a
 // contagem acompanha.
 // C2-102 (08-SGO L115): o item "Promoção da saúde e crônicos" da operadora própria entrou à mão (mesmo motivo; F7);
@@ -160,7 +165,11 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // sadt.lancamento.ler) entrou junto.
 // C1-135 (06-FAT linha 38, F3): o item "Preferências do faturista" das contas do paciente entrou à mão (mesmo motivo); a
 // contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":517,"M":198,"P":57,"N":262};
+// C3-023 (07-FIN linha 115, F7): o item "LALUR e apuração do IRPJ e da CSLL" da contabilidade entrou à mão (mesmo
+// motivo; F7 vai como fase 7); a contagem acompanha.
+// C3-028 (08-SGO linha 97, F7): o item "Desconto em folha" da operadora própria entrou à mão (mesmo motivo; F7 vai
+// como fase 7); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":522,"M":198,"P":57,"N":267};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -303,6 +312,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"pep.administracao-do-pep.secoes-do-sumario-de-alta","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Seções do sumário de alta"],"titulo":"Seções do sumário de alta","selo":"N","fase":3,"rota":"/pep/sumario-alta/secoes","permissao":"pep.admin.ler"},
   {"id":"pep.administracao-do-pep.regras-do-prontuario-por-setor","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Regras do prontuário por setor"],"titulo":"Regras do prontuário por setor","selo":"N","fase":3,"rota":"/pep/prontuario-setor","permissao":"pep.admin.ler"},
   {"id":"pep.administracao-do-pep.regras-de-aviso-clinico","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Regras de aviso clínico"],"titulo":"Regras de aviso clínico","selo":"N","fase":3,"rota":"/pep/avisos-clinicos/regras","permissao":"pep.admin.ler"},
+  {"id":"pep.pesquisa-clinica.estudos-e-participantes","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Pesquisa clínica","Estudos e participantes"],"titulo":"Estudos e participantes","selo":"N","fase":7,"rota":"/pep/pesquisa","permissao":"pep.pesquisa.ler"},
   {"id":"pep.administracao-do-pep.configuracao-da-nota-soap","area":"ASSISTÊNCIA","grupo":"Prontuário eletrônico (PEP)","caminho":["PEP","Administração do PEP","Configuração da nota S.O.A.P."],"titulo":"Configuração da nota S.O.A.P.","selo":"N","fase":7,"rota":"/pep/admin/nota-soap","permissao":"pep.admin.ler"},
   {"id":"enfermagem.aprazamento-e-checagem-de-medicamentos-em-tela","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Aprazamento e checagem de medicamentos"],"titulo":"Aprazamento e checagem de medicamentos","selo":"P","fase":2,"rota":"/enfermagem/aprazamento","permissao":"enfermagem.horario.ler"},
   {"id":"enfermagem.checagem-por-codigo-de-barras-pulseira-e-dose","area":"ASSISTÊNCIA","grupo":"Enfermagem","caminho":["Enfermagem","Checagem por código de barras"],"titulo":"Checagem por código de barras","selo":"N","fase":2,"rota":"/beira-leito/checagem","permissao":"enfermagem.administracao.ler"},
@@ -437,6 +447,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.faturamento-sus.medicos-solicitantes-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Médicos solicitantes SUS"],"titulo":"Médicos solicitantes SUS","selo":"P","fase":5,"rota":"/faturamento/sus/solicitantes","permissao":"faturamento.susSolicitante.ler"},
   {"id":"faturamento.faturamento-sus.transplantes-central-estadual","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Transplantes para a central estadual"],"titulo":"Transplantes para a central estadual","selo":"N","fase":7,"rota":"/faturamento/sus/transplantes","permissao":"faturamento.susTransplante.ler"},
   {"id":"faturamento.faturamento-sus.habilitacoes-e-servicos-do-estabelecimento","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Habilitações e serviços do estabelecimento"],"titulo":"Habilitações e serviços do estabelecimento","selo":"N","fase":7,"rota":"/faturamento/sus/cadastros/estabelecimento","permissao":"faturamento.sus.ler"},
+  {"id":"faturamento.faturamento-sus.repasse-da-producao-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Repasse da produção SUS"],"titulo":"Repasse da produção SUS","selo":"N","fase":7,"rota":"/faturamento/sus/repasse","permissao":"repasse.apuracao.ler"},
   {"id":"faturamento.repasse-medico.regras-de-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Regras de repasse"],"titulo":"Regras de repasse","selo":"M","fase":3,"rota":"/repasse/regras","permissao":"repasse.regra.ler"},
   {"id":"faturamento.repasse-medico.remuneracao-variavel","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Remuneração variável"],"titulo":"Remuneração variável","selo":"N","fase":7,"rota":"/repasse/remuneracao-variavel","permissao":"repasse.regra.ler"},
   {"id":"faturamento.repasse-medico.apuracao-faturamento-x-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Apuração"],"titulo":"Apuração","selo":"M","fase":3,"rota":"/repasse/apuracao","permissao":"repasse.apuracao.ler"},
@@ -450,6 +461,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.rede-credenciada-e-prestadora","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Rede credenciada e prestadora"],"titulo":"Rede credenciada e prestadora","selo":"N","fase":6,"rota":"/operadora/rede","permissao":"operadora.prestador.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.atendimento-autorizacao-e-protocolos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Atendimento, autorização e protocolos"],"titulo":"Atendimento, autorização e protocolos","selo":"N","fase":6,"rota":"/operadora/autorizacoes","permissao":"operadora.dominio.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.cobranca-e-mensalidades","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Cobrança e mensalidades"],"titulo":"Cobrança e mensalidades","selo":"N","fase":6,"rota":"/operadora/cobranca","permissao":"operadora.cobranca.ler"},
+  {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.desconto-em-folha","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Desconto em folha"],"titulo":"Desconto em folha","selo":"N","fase":7,"rota":"/operadora/desconto-folha","permissao":"operadora.cobranca.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.regras-de-coparticipacao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Regras de coparticipação"],"titulo":"Regras de coparticipação","selo":"N","fase":7,"rota":"/operadora/coparticipacao-regras","permissao":"operadora.beneficiario.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.promocao-da-saude-e-cronicos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Promoção da saúde e crônicos"],"titulo":"Promoção da saúde e crônicos","selo":"N","fase":7,"rota":"/operadora/programas-saude","permissao":"operadora.promocao.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.aditivos-e-cancelamento-de-contratos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Aditivos e cancelamento de contratos"],"titulo":"Aditivos e cancelamento de contratos","selo":"N","fase":7,"rota":"/operadora/contratos","permissao":"operadora.beneficiario.ler"},
@@ -505,6 +517,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.dietas-e-tipos-de-dieta","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Dietas e tipos de dieta"],"titulo":"Dietas e tipos de dieta","selo":"M","fase":2,"rota":"/hotelaria/nutricao/dietas","permissao":"internacao.dieta.ler"},
   {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.mapa-de-dietas-por-unidade-e-refeicao","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Mapa de dietas por unidade e refeição"],"titulo":"Mapa de dietas por unidade e refeição","selo":"N","fase":5,"rota":"/nutricao/mapa","permissao":"hotelaria.mapaDieta.ler"},
   {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.cardapio-ficha-tecnica-e-producao","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Cardápio, ficha técnica e produção"],"titulo":"Cardápio, ficha técnica e produção","selo":"N","fase":7,"rota":"/nutricao/cardapio","permissao":"hotelaria.mapaDieta.ler"},
+  {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.composicao-nutricional-dos-alimentos","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Composição nutricional dos alimentos"],"titulo":"Composição nutricional dos alimentos","selo":"N","fase":7,"rota":"/nutricao/composicao","permissao":"hotelaria.mapaDieta.ler"},
   {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.etiqueta-de-bandeja-e-dieta-do-acompanhante","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Etiqueta de bandeja e dieta do acompanhante"],"titulo":"Etiqueta de bandeja e dieta do acompanhante","selo":"N","fase":5,"rota":"/nutricao/mapa?aba=etiquetas","permissao":"hotelaria.mapaDieta.ler"},
   {"id":"hotelaria-e-apoio.portaria-e-visitantes.cadastro-de-visitantes-e-cracha","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Portaria e visitantes","Cadastro de visitantes e crachá"],"titulo":"Cadastro de visitantes e crachá","selo":"N","fase":5,"rota":"/portaria","permissao":"hotelaria.visita.ler"},
   {"id":"hotelaria-e-apoio.portaria-e-visitantes.regras-e-bloqueio-de-visita-por-paciente","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Portaria e visitantes","Regras e bloqueio de visita por paciente"],"titulo":"Regras e bloqueio de visita por paciente","selo":"N","fase":5,"rota":"/portaria/regras","permissao":"hotelaria.visita.regrar"},
@@ -552,6 +565,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"controladoria.contabilidade.lancamentos-automaticos-dos-modulos-e-razao","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","Lançamentos automáticos dos módulos e razão"],"titulo":"Lançamentos automáticos dos módulos e razão","selo":"N","fase":6,"rota":"/contabil/lancamentos","permissao":"contabil.lancamento.ler"},
   {"id":"controladoria.contabilidade.balancete-dre-e-balanco","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","Balancete, DRE e balanço"],"titulo":"Balancete, DRE e balanço","selo":"N","fase":6,"rota":"/contabil/demonstracoes","permissao":"contabil.demonstracao.ler"},
   {"id":"controladoria.contabilidade.sped-ecd-ecf","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","SPED ECD/ECF"],"titulo":"SPED ECD/ECF","selo":"N","fase":6,"rota":"/contabil/sped","permissao":"contabil.sped.ler"},
+  {"id":"controladoria.contabilidade.lalur-e-apuracao-do-irpj-e-da-csll","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","LALUR e apuração do IRPJ e da CSLL"],"titulo":"LALUR e apuração do IRPJ e da CSLL","selo":"N","fase":7,"rota":"/contabil/lalur","permissao":"contabil.lalur.ler"},
   {"id":"controladoria.custos-hospitalares.centros-de-custo-e-criterios-de-rateio","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Centros de custo e critérios de rateio"],"titulo":"Centros de custo e critérios de rateio","selo":"N","fase":6,"rota":"/custos/centros","permissao":"custos.centro.ler"},
   {"id":"controladoria.custos-hospitalares.custo-por-procedimento-e-por-paciente","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Custo por procedimento e por paciente"],"titulo":"Custo por procedimento e por paciente","selo":"N","fase":6,"rota":"/custos/apuracao","permissao":"custos.apuracao.ler"},
   {"id":"controladoria.custos-hospitalares.resultado-por-unidade-e-por-convenio","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Resultado por unidade e por convênio"],"titulo":"Resultado por unidade e por convênio","selo":"N","fase":6,"rota":"/custos/resultado","permissao":"custos.resultado.ler"},

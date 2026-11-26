@@ -1041,6 +1041,27 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
         observacao: r.observacao,
         origem: r.origem === 'conector' ? 'integracao' : 'sistema',
       });
+      // C3-013: o pedido aponta a regulação vigente e, pelo de-para aprovado, refina a situação dentro do mesmo estado.
+      const atual = await pedido(r.solicitacao);
+      const muda: Record<string, unknown> = { solicitacao_regulacao_id: id };
+      if (r.situacaoPedido) {
+        if (texto(atual['estado']) !== r.situacaoPedido.estado)
+          throw new ErroOperacao(
+            409,
+            'conflito-versao',
+            'Solicitação alterada',
+            'A solicitação mudou de estado desde a leitura.',
+            { colunas: ['situacao'] },
+          );
+        const nova = await situacaoEEstado(r.situacaoPedido.codigo);
+        if (nova.estado_situacao !== r.situacaoPedido.estado)
+          throw recusa(
+            'depara-divergente',
+            'A situação do pedido no de-para aprovado não corresponde ao estado do pedido: revise o de-para.',
+          );
+        Object.assign(muda, nova);
+      }
+      await tx.alterar('pedido_leito', r.solicitacao, n(atual['versao']), muda);
       return { id, outbox: null };
     },
   };

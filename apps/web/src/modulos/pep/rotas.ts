@@ -297,6 +297,14 @@ export const rotasPep: RouteRecordRaw[] = [
     meta: { permissao: 'pep.prontuario.ler' },
   },
   {
+    // 03-PEP L142: plano de cuidado e estratificação de risco do paciente (itens, passos, reestratificação).
+    path: `/pep/paciente/:paciente${id}/plano-cuidado`,
+    name: 'pep.planoCuidado',
+    component: () => import('./telas/PlanoCuidadoTela.vue'),
+    props: true,
+    meta: { permissao: 'pep.prontuario.ler' },
+  },
+  {
     // 03-PEP L141: curvas de crescimento do paciente (OMS e INTERGROWTH) com a medida de crescimento.
     path: `/pep/paciente/:paciente${id}/crescimento`,
     name: 'pep.crescimento',
@@ -602,5 +610,12 @@ export const rotasPep: RouteRecordRaw[] = [
     component: () => import('./telas/ValidarDocumentoTela.vue'),
     props: true,
     meta: { publica: true },
+  },
+  {
+    // 03-PEP L144: pesquisa clínica (estudos, critérios, triagem que só sugere e acompanhamento dos incluídos).
+    path: '/pep/pesquisa',
+    name: 'pep.pesquisa',
+    component: () => import('./telas/PesquisaClinicaTela.vue'),
+    meta: { permissao: 'pep.pesquisa.ler' },
   },
 ];

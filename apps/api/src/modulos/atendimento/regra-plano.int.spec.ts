@@ -35,8 +35,16 @@ describe.skipIf(SEM_BANCO)('regra própria do plano na recepção (MariaDB)', ()
   let m: Massa;
   let paciente = 0;
   let hoje = '';
-  const planos: Record<'p' | 'filho' | 'teto' | 'pend', number> = { p: 0, filho: 0, teto: 0, pend: 0 };
+  const planos: Record<'p' | 'filho' | 'teto' | 'pend' | 'setor' | 'servico', number> = {
+    p: 0,
+    filho: 0,
+    teto: 0,
+    pend: 0,
+    setor: 0,
+    servico: 0,
+  };
   let chave = 0;
+  let servicosSinteticos: number[] = [];
 
   const escrever = <T>(fn: Parameters<NucleoProprio['escrever']>[1]) =>
     nucleo.escrever({ cliente: CLIENTE_F22, correlacao: 'c2-026-preparo' }, fn) as Promise<T>;
@@ -139,6 +147,13 @@ describe.skipIf(SEM_BANCO)('regra própria do plano na recepção (MariaDB)', ()
     if (!nucleo) return;
     if (m) await limparMassa(nucleo, m).catch(() => undefined);
     await limparRegras().catch(() => undefined);
+    if (servicosSinteticos.length)
+      await escrever(async (e) => {
+        await e.executar(
+          `DELETE FROM servico_atendimento WHERE id IN (${servicosSinteticos.map(() => '?').join(',')})`,
+          servicosSinteticos,
+        );
+      }).catch(() => undefined);
     await escrever(async (e) => {
       const ids = Object.values(planos).filter((x) => x > 0);
       if (ids.length)
@@ -295,5 +310,132 @@ describe.skipIf(SEM_BANCO)('regra própria do plano na recepção (MariaDB)', ()
       vigente: false,
     });
     expect(lista.planos.some((x) => x.id === planos.pend)).toBe(true);
+  });
+
+  it('02-REC linha 37: a senha exigida só num setor ou numa especialidade vale só neles', async () => {
+    const outra = Number(
+      (
+        await ler<{ id: unknown }>(
+          'SELECT id FROM especialidade_medica WHERE ativo AND id <> ? ORDER BY id LIMIT 1',
+          [m.especialidade],
+        )
+      )?.id ?? 0,
+    );
+    expect(outra).toBeGreaterThan(0);
+    // Regra de outra especialidade: não vale para este atendimento; a abertura sem senha passa.
+    const r1 = await incluir(planos.setor, { especialidadeId: outra, exigeSenhaAutorizacao: true });
+    const antes = await atendimentos();
+    await abrir('setor');
+    expect(await atendimentos()).toBe(antes + 1);
+    // Setor inexistente é recusado; regra do setor com "todas as unidades" também.
+    await expect(
+      incluir(planos.setor, { setorId: 999999999, exigeSenhaAutorizacao: true }),
+    ).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'referencia-inexistente', campos: ['setorId'] }),
+    });
+    await expect(
+      incluir(planos.setor, { setorId: m.unidade, todasUnidades: true, exigeSenhaAutorizacao: true }),
+    ).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'entrada-invalida', campos: ['setorId'] }),
+    });
+    // Regra do setor do atendimento: sem senha a abertura é recusada e nada se grava.
+    const r2 = await incluir(planos.setor, { setorId: m.unidade, exigeSenhaAutorizacao: true });
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM regra_atendimento_fonte_pagadora
+          WHERE id = ? AND unidade_assistencial_id = ? AND especialidade_medica_id IS NULL AND servico_atendimento_id IS NULL
+            AND exige_senha_autorizacao AND criado_por IS NOT NULL`,
+        [r2.resultado.id, m.unidade],
+      ),
+    ).toBe(1);
+    // A regra da outra especialidade (chave diferente) continua vigente: nada encerrado.
+    expect(r2.resultado.encerradas).toBe(0);
+    expect(
+      await contar(
+        'SELECT COUNT(*) AS n FROM regra_atendimento_fonte_pagadora WHERE id = ? AND vigencia_fim IS NULL',
+        [r1.resultado.id],
+      ),
+    ).toBe(1);
+    await expect(abrir('setor')).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'senha-obrigatoria' }),
+    });
+    expect(await atendimentos()).toBe(antes + 1);
+    const pv = await regras.previa(
+      { hospital: CODIGO_ESTAB, login: m.login },
+      {
+        fonteId: m.fonte,
+        planoId: planos.setor,
+        categoriaId: null,
+        especialidadeId: null,
+        servicoId: null,
+        setorId: m.unidade,
+        pacienteId: null,
+        carteira: null,
+        validadeCarteira: null,
+        guia: null,
+        senhaAutorizacao: null,
+        validadeSenha: null,
+      },
+    );
+    expect(pv.regraId).toBe(r2.resultado.id);
+    // Com a senha a abertura passa.
+    await abrir('setor', { senhaConvenio: 'SENHA123' });
+    expect(await atendimentos()).toBe(antes + 2);
+    const lista = await regras.regras({ hospital: CODIGO_ESTAB, login: m.login }, m.fonte);
+    expect(lista.setores.some((x) => x.id === m.unidade)).toBe(true);
+    expect(lista.regras.find((x) => x.id === r2.resultado.id)).toMatchObject({ setorId: m.unidade });
+  });
+
+  it('02-REC linha 37: a senha exigida só num serviço vale quando a recepção abre naquele serviço', async () => {
+    // Dois serviços sintéticos (saem no fim, depois das regras).
+    servicosSinteticos = await escrever<number[]>(async (e) => {
+      const ids: number[] = [];
+      for (const k of ['A', 'B'])
+        ids.push(
+          await e.inserir('INSERT INTO servico_atendimento (codigo, descricao, criado_em) VALUES (?, ?, ?)', [
+            `${PREFIXO_PLANO}${k}`.slice(0, 30),
+            `SERVICO SINTETICO ${k} ${MARCA}`,
+            new Date(),
+          ]),
+        );
+      return ids;
+    });
+    const [alvo, outro] = servicosSinteticos as [number, number];
+    const servicos = await regras.servicos();
+    expect(servicos.filter((x) => x.id === alvo || x.id === outro)).toHaveLength(2);
+    const r = await incluir(planos.servico, { servicoId: alvo, exigeSenhaAutorizacao: true });
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM regra_atendimento_fonte_pagadora
+          WHERE id = ? AND servico_atendimento_id = ? AND exige_senha_autorizacao AND vigencia_fim IS NULL`,
+        [r.resultado.id, alvo],
+      ),
+    ).toBe(1);
+    const antes = await atendimentos();
+    // Sem serviço e em outro serviço a regra não vale: abre sem senha.
+    await abrir('servico');
+    await abrir('servico', { servico: outro });
+    expect(await atendimentos()).toBe(antes + 2);
+    // No serviço da regra, sem senha a abertura é recusada e nada se grava.
+    await expect(abrir('servico', { servico: alvo })).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'senha-obrigatoria' }),
+    });
+    expect(await atendimentos()).toBe(antes + 2);
+    // Com a senha a abertura passa.
+    await abrir('servico', { servico: alvo, senhaConvenio: 'SENHA456' });
+    expect(await atendimentos()).toBe(antes + 3);
+    // O atendimento guarda o serviço escolhido na abertura (um em cada serviço sintético).
+    const noServico = (s: number) =>
+      contar('SELECT COUNT(*) AS n FROM atendimento WHERE paciente_id = ? AND servico_atendimento_id = ?', [
+        paciente,
+        s,
+      ]);
+    expect(await noServico(alvo)).toBe(1);
+    expect(await noServico(outro)).toBe(1);
+    // Serviço inexistente é recusado e nada se grava.
+    await expect(abrir('servico', { servico: 999_999_999 })).rejects.toMatchObject({
+      problema: expect.objectContaining({ codigo: 'servico-inexistente' }),
+    });
+    expect(await atendimentos()).toBe(antes + 3);
   });
 });

@@ -125,7 +125,7 @@ test.describe('Prontuário de acesso restrito @C2-056 @fase8', () => {
             status: 403,
             contentType: 'application/problem+json',
             json: {
-              type: 'about:blank',
+              type: 'urn:sgh:problema:recusa-de-negocio',
               title: 'Senha do paciente',
               status: 403,
               detail: 'A senha do paciente não confere.',

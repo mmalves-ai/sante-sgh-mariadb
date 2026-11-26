@@ -724,6 +724,7 @@ async function registrar(): Promise<void> {
               <td>
                 <!-- F3.4-5 (04-CC L100): atalho da linha da realizada para o gasto de sala do mesmo ato. -->
                 <RouterLink
+                  class="atalho-linha"
                   :to="{ name: 'cirurgia.gasto-sala', params: { ato: String(r.id) } }"
                   :aria-label="t('cirurgia.registro.gastoSalaDo', { data: dataBr(r.data), sala: r.sala })"
                   :data-testid="`realizada-gasto-${r.id}`"
@@ -740,6 +741,7 @@ async function registrar(): Promise<void> {
                 />
                 <!-- 04-CC L96: a descrição cirúrgica e as intercorrências do mesmo ato. -->
                 <RouterLink
+                  class="atalho-linha"
                   :to="{ name: 'cirurgia.descricao', params: { ato: String(r.id) } }"
                   :aria-label="
                     t('cirurgia.descricao.linkRegistroAria', { data: dataBr(r.data), sala: r.sala })
@@ -762,3 +764,13 @@ async function registrar(): Promise<void> {
 </template>
 
 <style src="../../agenda/componentes/estilo-agenda.css"></style>
+<style scoped>
+/* WCAG 2.5.8 (axe target-size): os atalhos da linha da realizada têm alvo de pelo menos 24 px. */
+.atalho-linha {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  min-width: 24px;
+  padding-inline: 0.25rem;
+}
+</style>

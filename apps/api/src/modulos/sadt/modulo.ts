@@ -36,7 +36,9 @@ import { PortaPacsMemoria } from './pacs-porta-memoria.js';
 import { portaPacsIndisponivel, PortaPacsPropria } from './pacs-porta-propria.js';
 import { PORTA_SADT, type PortaSadt } from './porta.js';
 import { PortaSadtMemoria } from './porta-memoria.js';
+import { documentosMemoriaDaTrilha } from '../pep/documentos-porta-memoria.js';
 import { PortalController, SERVICO_PORTAL } from './portal.controller.js';
+import { estabelecimentoPadraoDoPortal } from './estabelecimento-padrao-portal.js';
 import { MapaTrabalhoController, SERVICO_MAPA_TRABALHO } from './mapa-trabalho.controller.js';
 import { LoteTrabalhoController, SERVICO_LOTE_TRABALHO } from './lote-trabalho.controller.js';
 import { ResultadoBancoController, SERVICO_RESULTADO_SADT } from './resultado-banco.controller.js';
@@ -96,7 +98,8 @@ export async function portasDoSadt(ctx: ContextoModulo): Promise<{ sadt: PortaSa
     return { sadt, pacs: new PortaPacsPropria(ctx.nucleo, sadt) };
   }
   if (!ctx.nucleo && fontesSinteticas(ctx.env)) {
-    const sadt = new PortaSadtMemoria(null);
+    // M26: os pedidos do prontuário em memória (a mesma trilha) viram os exames do setor, com os mesmos IDs.
+    const sadt = new PortaSadtMemoria(null, () => documentosMemoriaDaTrilha(ctx.trilha));
     return { sadt, pacs: new PortaPacsMemoria(sadt) };
   }
   const { portaSadtIndisponivel } = await import('./porta-propria.js');
@@ -403,7 +406,7 @@ export async function moduloSadt(ctx: ContextoModulo, opcoes: OpcoesModuloSadt =
             configuracaoDe(f),
             chavePortal,
             ctx.configuracao.produtoNome,
-            estabelecimentos[0] ?? null,
+            estabelecimentoPadraoDoPortal(estabelecimentos, memoria, ctx.env),
           );
           portal.imagens = (c, exame) => servicoPacs.imagemDoLaudo(c, exame);
           return portal;

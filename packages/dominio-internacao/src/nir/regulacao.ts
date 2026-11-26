@@ -3,7 +3,13 @@
 // cancelada) aceita um pedido novo com outro número; a concluída não muda mais. O conector só existe com a DP-29: o
 // simulador abaixo é a outra ponta fora de produção (determinístico, sem rede) e a carga que vai à outbox leva só IDs e
 // códigos.
-import { type CentralRegulacao, type SituacaoRegulacao, SITUACOES_REGULACAO } from '@sgh/contratos';
+import {
+  type CentralRegulacao,
+  type EstadoSolicitacaoNir,
+  type SituacaoRegulacao,
+  SITUACOES_REGULACAO,
+} from '@sgh/contratos';
+import { deparaCompleto, type LinhaDepara, situacaoEquivalente } from './maquina.js';
 
 export interface RegulacaoVigente {
   readonly id: number;
@@ -112,4 +118,53 @@ export function contagemRegulacao(vigentes: readonly (SituacaoRegulacao | null)[
   for (const s of SITUACOES_REGULACAO) r[s.codigo] = 0;
   for (const v of vigentes) r[v ?? 'sem-numero'] = (r[v ?? 'sem-numero'] ?? 0) + 1;
   return r;
+}
+
+// ── A regulação lida pelo de-para aprovado do NIR (C3-013; 04-INT linha 78) ─────────────────────────────────────────
+
+/**
+ * As situações do pedido de leito que cada situação da regulação pede, na ordem de preferência (códigos do de-para das
+ * situações de regulação: 3 "Aguardando regulação" e 10 "Regulado"). As situações finais da regulação (negada,
+ * cancelada, concluída) não mexem no pedido: o NIR decide pelas ações da fila (rejeitar, cancelar, internar).
+ */
+export const SITUACAO_DO_PEDIDO_PELA_REGULACAO: Readonly<Record<SituacaoRegulacao, readonly number[]>> = {
+  solicitada: [3],
+  em_analise: [3],
+  autorizada: [10],
+  negada: [],
+  cancelada: [],
+  concluida: [],
+};
+
+/**
+ * A situação do pedido de leito que acompanha o registro da regulação, lida no de-para APROVADO do estabelecimento:
+ * vale só a linha do de-para que existe, não está "a confirmar" e leva ao MESMO estado do NIR em que o pedido está (a
+ * regulação nunca move o estado do pedido; só refina a situação dentro dele). Null: o pedido fica como está.
+ */
+export function situacaoDoPedidoPelaRegulacao(
+  regulacao: SituacaoRegulacao,
+  estadoPedido: EstadoSolicitacaoNir,
+  linhas: readonly LinhaDepara[],
+): { codigo: number; rotulo: string } | null {
+  for (const codigo of SITUACAO_DO_PEDIDO_PELA_REGULACAO[regulacao]) {
+    const l = linhas.find((x) => x.situacao === codigo);
+    if (l && !l.aConfirmar && l.estado === estadoPedido) return { codigo, rotulo: l.rotulo };
+  }
+  return null;
+}
+
+/** O resumo do de-para para a tela da regulação: completo (regra 10) e quantas linhas ainda estão "a confirmar". */
+export function resumoDeparaRegulacao(linhas: readonly LinhaDepara[]): {
+  completo: boolean;
+  aConfirmar: number;
+} {
+  return { completo: deparaCompleto(linhas), aConfirmar: linhas.filter((l) => l.aConfirmar).length };
+}
+
+/** A situação do pedido equivalente ao estado do NIR, pelo de-para vigente (a coluna "situação do pedido" da tela). */
+export function situacaoDoPedidoNaTela(
+  estadoPedido: string,
+  linhas: readonly LinhaDepara[],
+): { codigo: number; rotulo: string; aConfirmar: boolean } | null {
+  return situacaoEquivalente(estadoPedido as EstadoSolicitacaoNir, linhas);
 }

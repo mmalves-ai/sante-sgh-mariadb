@@ -37,4 +37,11 @@ export const rotasContabil: RouteRecordRaw[] = [
     component: () => import('./ConsolidacaoTela.vue'),
     meta: { permissao: 'contabil.consolidacao.ler' },
   },
+  // C3-023 (07-FIN L115, F7): LALUR/LACS (partes A e B) e apuração e provisão do IRPJ e da CSLL do lucro real.
+  {
+    path: '/contabil/lalur',
+    name: 'contabil.lalur',
+    component: () => import('./LalurTela.vue'),
+    meta: { permissao: 'contabil.lalur.ler' },
+  },
 ];

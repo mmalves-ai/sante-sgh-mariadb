@@ -81,6 +81,11 @@ export async function limparGravacoesAdt(e: Escritor, ests: readonly number[]): 
     `UPDATE solicitacao_regulacao SET solicitacao_anterior_id = NULL WHERE estabelecimento_id IN (${em})`,
     ests,
   );
+  // C3-013: o pedido de leito aponta a regulação vigente.
+  await e.executar(
+    `UPDATE pedido_leito SET solicitacao_regulacao_id = NULL WHERE estabelecimento_id IN (${em})`,
+    ests,
+  );
   await e.executar(`DELETE FROM solicitacao_regulacao WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM reserva_leito WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`UPDATE internacao SET pedido_leito_id = NULL WHERE estabelecimento_id IN (${em})`, ests);

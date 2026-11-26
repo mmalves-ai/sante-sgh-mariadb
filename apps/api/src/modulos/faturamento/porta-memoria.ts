@@ -922,6 +922,10 @@ export class PortaFaturamentoMemoria implements PortaFaturamento {
     };
   }
 
+  async setoresDoSimulador(): Promise<{ id: number; nome: string }[]> {
+    return [];
+  }
+
   async convenios(): Promise<{ codigo: number; nome: string }[]> {
     return Object.entries(CONVENIOS).map(([k, nome]) => ({ codigo: Number(k), nome }));
   }

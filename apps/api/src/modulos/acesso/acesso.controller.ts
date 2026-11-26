@@ -71,6 +71,19 @@ import { descreverDispositivo } from '../../sessao/dispositivo.js';
 import { SessaoSintetica } from './sessao-sintetica.js';
 import type { ServicoTrocaRapida } from '../../sessao/troca-rapida.js';
 import { problemaDoAcessoEmail } from './acesso-email-erros.js';
+import { z } from 'zod';
+
+/** 01-ADM L62: a assinatura do dispositivo na entrada (base64url, como na rota de validação da tela Segurança). */
+const B64URL_ENTRADA = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]+$/)
+  .max(16_384);
+const esquemaRespostaDispositivoEntrada = z.object({
+  idCredencial: B64URL_ENTRADA.max(1400),
+  dadosCliente: B64URL_ENTRADA,
+  dadosAutenticador: B64URL_ENTRADA,
+  assinatura: B64URL_ENTRADA,
+});
 
 export const SERVICO_SESSAO = Symbol('SERVICO_SESSAO');
 export const SESSAO_SINTETICA = Symbol('SESSAO_SINTETICA');
@@ -217,6 +230,7 @@ export class AcessoController {
         ...(e.codigo ? { codigo: e.codigo } : {}),
         ...(e.falhas ? { falhas: e.falhas } : {}),
         ...(regras?.length ? { regras } : {}),
+        ...(e.dados ?? {}),
       });
     }
     const p = problemaDoAcessoEmail(e);
@@ -321,7 +335,18 @@ export class AcessoController {
     try {
       // A sessão que o navegador ainda trazia é apagada no servidor (identificador novo a cada login).
       const posto = this.postoDaEntrada(req);
-      const login = await servico.entrar(r.data, this.rede(req), this.idSessao(req), this.origem(req, posto));
+      // 01-ADM L62: a assinatura do dispositivo vem à parte (o contrato da entrada descreve só a senha e o código).
+      const disp = esquemaRespostaDispositivoEntrada.safeParse(
+        corpo && typeof corpo === 'object'
+          ? (corpo as Record<string, unknown>)['respostaDispositivo']
+          : undefined,
+      );
+      const login = await servico.entrar(
+        { ...r.data, ...(disp.success ? { respostaDispositivo: disp.data } : {}) },
+        this.rede(req),
+        this.idSessao(req),
+        this.origem(req, posto),
+      );
       const op = { maxIdadeSegundos: login.ttlSegundos, prefixoHost: this.prefixoHost };
       res.header('set-cookie', [
         cookieSessao(login.idSessao, op),

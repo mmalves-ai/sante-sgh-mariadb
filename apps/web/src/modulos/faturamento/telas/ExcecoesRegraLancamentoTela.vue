@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
+import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { usarSessao } from '../../../casca/sessao/sessao.js';
 import { novaChave } from '../api-faturamento.js';
 import {
@@ -35,6 +36,8 @@ const { permissoes } = usarSessao();
 const podeEditar = computed(() => permissoes.value.has('faturamento.regra.editar'));
 const podeGlobal = computed(() => podeEditar.value && permissoes.value.has(PERMISSAO_EDITAR_GLOBAL));
 const p = useQuery({ queryKey: ['faturamento', 'excecoes-regra'], queryFn: lerExcecoesRegra });
+// 503: a instalação sem o banco próprio; a tela explica em vez da mensagem geral de indisponibilidade.
+const semBanco = computed(() => p.error.value instanceof ErroApi && p.error.value.status === 503);
 
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
@@ -225,7 +228,8 @@ const naturezas = (x: ExcecaoRegra) =>
     </p>
     <ErroFaturamento v-if="erro" :erro="erro" />
     <MensagemFaturamento :texto="mensagem" :avisos="[]" testid="exr-mensagem" />
-    <ErroFaturamento v-if="p.error.value" :erro="p.error.value" />
+    <p v-if="semBanco" role="alert" data-testid="exr-sem-banco">{{ t('excecaoRegra.semBanco') }}</p>
+    <ErroFaturamento v-else-if="p.error.value" :erro="p.error.value" />
     <p v-else-if="!p.data.value" role="status">{{ t('faturamento.carregando') }}</p>
     <template v-else>
       <p v-if="p.data.value.regras.length === 0" data-testid="exr-sem-regras">

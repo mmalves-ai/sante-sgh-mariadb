@@ -5,6 +5,7 @@
 //   GET  /api/cirurgia/cme/produtos?busca=                 produtos do estoque para as peças da caixa (3 letras)
 //   GET  /api/cirurgia/cme/rastreio?etiqueta=               do pacote ao ciclo, à cirurgia e ao paciente
 //   GET  /api/cirurgia/cme/cirurgias/:agendamento           os pacotes entregues e usados na cirurgia
+//   GET  /api/cirurgia/cme/pacotes/etiqueta?etiqueta=       o ZPL da etiqueta do pacote (RDC 15/2012, art. 83)
 //   (a caixa se cadastra só em POST /api/cirurgia/cme/cadastro/caixas, com composição, fases e foto)
 //   POST /api/cirurgia/cme/equipamentos                     cadastra o equipamento de esterilização
 //   POST /api/cirurgia/cme/solicitacoes                     o setor ou a cirurgia pede material estéril
@@ -13,7 +14,8 @@
 //   POST /api/cirurgia/cme/ciclos/:id/concluir              indicadores e desfecho (liberado, reprovado, aguardando)
 //   POST /api/cirurgia/cme/ciclos/:id/liberar               leitura do biológico da carga com implante
 //   POST /api/cirurgia/cme/pacotes/:id/entregar             o pacote estéril sai para a cirurgia
-//   POST /api/cirurgia/cme/pacotes/:id/usar                 o pacote é aberto na cirurgia (rastreio ao paciente)
+//   POST /api/cirurgia/cme/pacotes/:id/usar                 o pacote é aberto na cirurgia: baixa do uso no paciente
+//                                                           (embalagem e indicador externo conferidos)
 import {
   Body,
   Controller,
@@ -32,6 +34,7 @@ import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
+import { etiquetaDoPacote } from './cme-etiqueta.js';
 import { PORTA_CME, type PortaCmePropria } from './cme-propria.js';
 
 @Controller('cirurgia/cme')
@@ -69,6 +72,13 @@ export class CmeController {
   rastreio(@Req() req: RequisicaoAutorizada, @Query('etiqueta') etiqueta?: string) {
     if (!etiqueta?.trim()) throw new ErroProblema('entrada-invalida', 400, 'Informe o código da etiqueta');
     return this.com(req, (p, c) => p.rastreio(c, etiqueta));
+  }
+
+  @Get('pacotes/etiqueta')
+  @Permissao(PERMISSOES_CME.ler)
+  etiqueta(@Req() req: RequisicaoAutorizada, @Query('etiqueta') etiqueta?: string) {
+    if (!etiqueta?.trim()) throw new ErroProblema('entrada-invalida', 400, 'Informe o código da etiqueta');
+    return this.com(req, (p, c) => p.rastreio(c, etiqueta)).then(etiquetaDoPacote);
   }
 
   @Get('cirurgias/:agendamento')

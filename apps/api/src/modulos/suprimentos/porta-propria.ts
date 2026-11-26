@@ -27,7 +27,7 @@
 // e o custo depois e os lotes); a saída nunca deixa saldo negativo e, sem lote escolhido no item rastreável, usa o que
 // vence primeiro (nunca vencido nem bloqueado); a devolução volta pelo custo e pelos lotes da saída e aponta o
 // movimento que desfaz.
-// Ainda fora (recusa com o motivo): o consumo e a devolução de OPME na saída e a baixa do insumo da manipulação.
+// O consumo de OPME grava o modelo do material (C3-021); a devolução volta pelos lotes da saída.
 // O pedido de compra nasce ligado ao contrato do fornecedor (05-SUP linha 27), pelas regras do vínculo do contrato.
 import {
   ajusteDoInventario,
@@ -137,6 +137,12 @@ import {
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 import { lancadorContaEstoque, TABELAS_CONTA_ESTOQUE } from './conta-estoque.js';
+import {
+  importarRespostasCotacao,
+  OPERACAO_IMPORTAR_RESPOSTAS_COTACAO,
+  portaisDoPedido,
+  TABELAS_MAPA_COTACAO,
+} from './mapa-cotacao.js';
 import { TABELAS_VINCULO_PEDIDO_CONTRATO, vincularPedidoNaCompra } from './contrato-porta-propria.js';
 import {
   controlarOrcamentoDoDocumento,
@@ -147,7 +153,6 @@ import {
   chaveDaTela,
   contextoNucleo,
   ENTRADAS_SUPRIMENTOS,
-  modeloPendente,
   operacaoSuprimentos,
   resultadoDe,
   valorDe,
@@ -2191,7 +2196,6 @@ async function gravarConsumoOpme(
   u: SaidaFeita,
 ): Promise<number> {
   const o = e.opme!;
-  if (o.modelo) throw modeloPendente('o modelo do OPME no consumo (coluna de modelo em consumo_opme)');
   const fab = await tx.uma<Linha>(
     `SELECT id FROM fabricante WHERE UPPER(nome) = UPPER(?) AND ativo = TRUE AND excluido_em IS NULL
       ORDER BY id LIMIT 1`,
@@ -2253,6 +2257,7 @@ async function gravarConsumoOpme(
     sala_cirurgica_id: numeroOuNulo(ag['sala_cirurgica_id']),
     insumo_id: u.insumo,
     fabricante_id: n(fab['id']),
+    modelo: o.modelo ? o.modelo.slice(0, 80) : null,
     empresa_fornecedora_id: o.fornecedor,
     lote_insumo_id: u.lotes.length === 1 ? u.lotes[0]!.id : null,
     numero_lote: o.lote,
@@ -3551,6 +3556,12 @@ const OPERACOES: Readonly<Record<string, Manipulador>> = {
   [OPERACAO_CANCELAR_COMPRA]: cancelarCompra as Manipulador,
   [OPERACAO_MOTIVO_CANCELAMENTO]: gravarMotivoCancelamentoCompra as Manipulador,
   [OPERACAO_RECALCULO_SALDO]: recalcularSaldos as Manipulador,
+  // C3-008 (05-SUP linha 19): as respostas do mapa devolvido pelo portal (primeiro adaptador: troca por arquivo).
+  [OPERACAO_IMPORTAR_RESPOSTAS_COTACAO]: importarRespostasCotacao({
+    pedidoTravado,
+    propostasDoPedido,
+    registrarProposta,
+  }) as Manipulador,
 };
 
 /** As tabelas que as operações do estoque gravam. */
@@ -3577,6 +3588,8 @@ export const TABELAS_OPERACOES_SUPRIMENTOS = [
   'cotacao_fornecedor',
   'cotacao_item',
   'cotacao_resposta_item',
+  // C3-008: a ligação do pedido ao portal de cotação (mapa-cotacao.ts).
+  ...TABELAS_MAPA_COTACAO,
   'inventario_estoque',
   'fechamento_estoque',
   'saldo_estoque_mensal',
@@ -4642,7 +4655,7 @@ export class PortaSuprimentosPropria implements PortaSuprimentos {
           justificativa: texto(r['motivo_escolha']),
           rateio: n(r['vencedoras']) > 1,
         })),
-        portal: [],
+        portal: await portaisDoPedido(l, cab.id),
       };
     });
   }

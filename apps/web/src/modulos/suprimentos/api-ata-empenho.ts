@@ -99,3 +99,40 @@ export const emitirEmpenho = (corpo: Record<string, unknown>, chave: string) =>
   enviar<ResultadoAtaEmpenhoTela>(`${S}/empenhos`, corpo, chave);
 export const anularEmpenho = (id: number, corpo: { motivo: string; versao: number }, chave: string) =>
   enviar<ResultadoAtaEmpenhoTela>(`${S}/empenhos/${id}/anulacao`, corpo, chave);
+
+// C3-025 (07-FIN linha 132): só a referência do empenho no pedido e no título, com a exportação para o ente.
+export interface ReferenciasEmpenhoTela {
+  readonly empenho: number;
+  readonly numero: string;
+  readonly valorTotal: number;
+  readonly referido: number;
+  readonly saldo: number;
+  readonly pedidos: readonly { id: number; numero: string; situacao: string }[];
+  readonly titulos: readonly {
+    id: number;
+    numero: string;
+    documento: string;
+    valorLiquido: number;
+    situacao: string;
+  }[];
+}
+export interface CandidatoReferenciaTela {
+  readonly id: number;
+  readonly rotulo: string;
+  readonly versao: number;
+  readonly valor: number | null;
+}
+export const listarReferenciasEmpenho = (empenho: number) =>
+  ler<ReferenciasEmpenhoTela>(`${S}/empenhos/${empenho}/referencias`);
+export const listarCandidatosReferencia = (empenho: number, termo: string) =>
+  ler<{ pedidos: CandidatoReferenciaTela[]; titulos: CandidatoReferenciaTela[] }>(
+    `${S}/empenhos/${empenho}/candidatos?termo=${encodeURIComponent(termo)}`,
+  );
+export const referirEmpenho = (
+  empenho: number,
+  alvo: 'pedidos' | 'titulos',
+  corpo: { id: number; versao: number },
+  chave: string,
+) => enviar<ResultadoAtaEmpenhoTela>(`${S}/empenhos/${empenho}/${alvo}`, corpo, chave);
+export const urlExportacaoEmpenhos = (inicio: string, fim: string) =>
+  `${S}/empenhos/exportacao?inicio=${encodeURIComponent(inicio)}&fim=${encodeURIComponent(fim)}`;

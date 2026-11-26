@@ -1,0 +1,220 @@
+// Contrato de efeito da chave do dispositivo (WebAuthn; 01-ADM L62) contra o MariaDB real (cliente de teste f22_o5,
+// 02_ADM/99w aplicada aqui): cadastro grava SÓ a chave pública e o contador (nenhum dado biométrico), validação anda
+// o contador e grava o uso, contador que regride e desafio reusado são recusados sem gravar, revogação tira a
+// credencial da validação. Dispositivo SIMULADO (par de chaves gerado no teste) e conta FICTÍCIA fixa.
+// Rodar: vitest run -c apps/api/vitest.integracao.config.ts src/sessao/dispositivo-segundo-fator.int.spec.ts
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { AutenticadorWebAuthnSimulado } from '@sgh/dominio-acesso';
+import { NucleoProprio } from '@sgh/nucleo';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PreferenciaSegundoFatorPropria } from './acesso-email-proprio.js';
+import { ArmazemMemoria } from './armazem.js';
+import { CredencialDispositivoPropria, ServicoDispositivoSegundoFator } from './dispositivo-segundo-fator.js';
+
+const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
+const RAIZ = resolve(import.meta.dirname, '../../../..');
+const CLIENTE = process.env['SGH_CLIENTE_TESTE_ACESSO_EMAIL']?.trim() || 'f22_o5';
+const BANCO = `cliente_${CLIENTE}`;
+const HOSPITAL = 'wan01';
+const LOGIN = 'wan.joana';
+const URL_PUBLICA = 'https://hospital.exemplo:5310/';
+const SERVIDOR = 'hospital.exemplo';
+const ORIGEM = 'https://hospital.exemplo:5310';
+
+function sql(texto: string): string {
+  return execFileSync('sh', [resolve(RAIZ, 'tools/db/sql.sh'), BANCO, '-N'], {
+    input: texto,
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+}
+
+describe.skipIf(SEM_BANCO)('chave do dispositivo (WebAuthn) no banco próprio', () => {
+  let nucleo: NucleoProprio;
+  let servico: ServicoDispositivoSegundoFator;
+  let idEst = 0;
+  const ator = {
+    rede: 'rede-teste',
+    hospital: HOSPITAL,
+    login: LOGIN,
+    estacao: 'teste-wan',
+    correlacao: 'wan-int',
+  };
+  const contar = (onde = '') =>
+    Number(
+      sql(`SELECT COUNT(*) FROM credencial_dispositivo d JOIN usuario u ON u.id = d.usuario_id
+            WHERE u.login = '${LOGIN}' ${onde}`).trim(),
+    );
+
+  beforeAll(async () => {
+    for (const arq of [
+      '99w_credencial_dispositivo_tabelas.sql',
+      '99w_credencial_dispositivo_chaves.sql',
+      // 01-ADM L62 (passo da entrada): o método 'dispositivo' na preferência; aplicada 2x (idempotente).
+      '99x_preferencia_segundo_fator_dispositivo_tabelas.sql',
+      '99x_preferencia_segundo_fator_dispositivo_tabelas.sql',
+    ])
+      sql(readFileSync(resolve(RAIZ, 'db/migracoes/02_ADM', arq), 'utf8'));
+    sql(`INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em)
+           SELECT '${HOSPITAL}', 'Hospital fictício wan', 'Hospital fictício wan (teste)', NOW(3)
+            WHERE NOT EXISTS (SELECT 1 FROM estabelecimento WHERE codigo = '${HOSPITAL}');
+         INSERT INTO usuario (login, nome, dispensa_cpf, criado_em)
+           SELECT '${LOGIN}', 'Conta fictícia wan', TRUE, NOW(3)
+            WHERE NOT EXISTS (SELECT 1 FROM usuario WHERE login = '${LOGIN}');
+         UPDATE credencial_dispositivo d JOIN usuario u ON u.id = d.usuario_id
+            SET d.revogada_em = NOW(3) WHERE u.login = '${LOGIN}' AND d.revogada_em IS NULL;`);
+    idEst = Number(sql(`SELECT id FROM estabelecimento WHERE codigo = '${HOSPITAL}'`).trim());
+    nucleo = new NucleoProprio();
+    const porta = new CredencialDispositivoPropria(nucleo, () => ({
+      cliente: CLIENTE,
+      estabelecimento: idEst,
+    }));
+    servico = new ServicoDispositivoSegundoFator(porta, new ArmazemMemoria(), URL_PUBLICA);
+  }, 60_000);
+
+  afterAll(async () => {
+    await nucleo?.encerrar?.();
+  });
+
+  it('cadastra, valida, recusa reuso e regressão, revoga', async () => {
+    const antes = contar();
+    const disp = new AutenticadorWebAuthnSimulado(-7, 5);
+    const op = await servico.iniciarCadastro('sessao-1', ator, 'Conta fictícia wan');
+    expect(op.rp.id).toBe(SERVIDOR);
+    const { id } = await servico.concluirCadastro(
+      'sessao-1',
+      ator,
+      disp.cadastrar(op.challenge, ORIGEM, SERVIDOR),
+      '  Celular  fictício ',
+    );
+    expect(contar()).toBe(antes + 1);
+    const linha = sql(
+      `SELECT nome, algoritmo, contador_assinatura, formato_atestado, verificacao_usuario, ultimo_uso_em IS NULL,
+              CHAR_LENGTH(chave_publica) > 40, revogada_em IS NULL FROM credencial_dispositivo WHERE id = ${id}`,
+    )
+      .trim()
+      .split('\t');
+    expect(linha).toEqual(['Celular fictício', '-7', '5', 'none', '1', '1', '1', '1']);
+    const trilhaCad = Number(
+      sql(
+        `SELECT COUNT(*) FROM trilha_auditoria WHERE entidade = 'credencial_dispositivo' AND entidade_id = ${id}`,
+      ).trim(),
+    );
+    expect(trilhaCad).toBe(1);
+
+    // Mesmo desafio duas vezes: o segundo pedido não acha o desafio (uso único) e nada se grava.
+    await expect(
+      servico.concluirCadastro('sessao-1', ator, disp.cadastrar(op.challenge, ORIGEM, SERVIDOR), 'x'),
+    ).rejects.toMatchObject({ problema: { codigo: 'desafio-incorreto' } });
+    expect(contar()).toBe(antes + 1);
+
+    const v = await servico.iniciarValidacao('sessao-1', ator);
+    expect(v.allowCredentials.map((c) => c.id)).toContain(disp.idCredencial);
+    await expect(
+      servico.concluirValidacao('sessao-1', ator, disp.validar(v.challenge, ORIGEM, SERVIDOR)),
+    ).resolves.toEqual({ id });
+    expect(
+      sql(
+        `SELECT contador_assinatura, ultimo_uso_em IS NOT NULL FROM credencial_dispositivo WHERE id = ${id}`,
+      ).trim(),
+    ).toBe('6\t1');
+
+    // Contador que não anda (cópia da chave): recusa e o contador gravado fica.
+    const v2 = await servico.iniciarValidacao('sessao-1', ator);
+    await expect(
+      servico.concluirValidacao('sessao-1', ator, disp.validar(v2.challenge, ORIGEM, SERVIDOR, false)),
+    ).rejects.toMatchObject({ problema: { codigo: 'contador-regrediu' } });
+    expect(sql(`SELECT contador_assinatura FROM credencial_dispositivo WHERE id = ${id}`).trim()).toBe('6');
+
+    expect((await servico.listar(ator)).map((d) => d.id)).toContain(id);
+    await servico.revogar(ator, id);
+    expect(contar(`AND d.id = ${id} AND d.revogada_em IS NOT NULL AND d.revogada_por = u.id`)).toBe(1);
+    expect((await servico.listar(ator)).map((d) => d.id)).not.toContain(id);
+    await expect(servico.iniciarValidacao('sessao-1', ator)).rejects.toMatchObject({
+      problema: { codigo: 'sem-dispositivo' },
+    });
+    await expect(servico.revogar(ator, id)).rejects.toMatchObject({
+      problema: { codigo: 'dispositivo-inexistente' },
+    });
+  }, 60_000);
+
+  it('escolhe a chave do dispositivo como método da entrada só com aparelho ativo (trilha e CHECK)', async () => {
+    sql(`DELETE p FROM preferencia_segundo_fator p JOIN usuario u ON u.id = p.usuario_id WHERE u.login = '${LOGIN}';
+         UPDATE credencial_dispositivo d JOIN usuario u ON u.id = d.usuario_id
+            SET d.revogada_em = NOW(3) WHERE u.login = '${LOGIN}' AND d.revogada_em IS NULL;`);
+    const pref = new PreferenciaSegundoFatorPropria(nucleo, () => ({
+      cliente: CLIENTE,
+      estabelecimento: idEst,
+    }));
+    const metodoGravado = () =>
+      sql(`SELECT p.metodo FROM preferencia_segundo_fator p JOIN usuario u ON u.id = p.usuario_id
+            WHERE u.login = '${LOGIN}'`).trim();
+    await expect(pref.escolher(ator, 'dispositivo')).rejects.toMatchObject({
+      problema: { codigo: 'sem-dispositivo' },
+    });
+    expect(metodoGravado()).toBe('');
+
+    const disp = new AutenticadorWebAuthnSimulado(-7, 0);
+    const op = await servico.iniciarCadastro('sessao-2', ator, 'Conta fictícia wan');
+    await servico.concluirCadastro(
+      'sessao-2',
+      ator,
+      disp.cadastrar(op.challenge, ORIGEM, SERVIDOR),
+      'Tablet',
+    );
+    await expect(pref.escolher(ator, 'dispositivo')).resolves.toEqual({ anterior: 'aplicativo' });
+    expect(metodoGravado()).toBe('dispositivo');
+    expect(await pref.metodo(ator.rede, HOSPITAL, LOGIN)).toBe('dispositivo');
+    // O banco recusa método fora do vocabulário (CHECK refeito pela 99x).
+    expect(() =>
+      sql(`UPDATE preferencia_segundo_fator p JOIN usuario u ON u.id = p.usuario_id
+              SET p.metodo = 'biometria' WHERE u.login = '${LOGIN}'`),
+    ).toThrow();
+    await expect(pref.escolher(ator, 'aplicativo')).resolves.toEqual({ anterior: 'dispositivo' });
+    expect(metodoGravado()).toBe('aplicativo');
+  }, 60_000);
+
+  it('o gestor de acessos revoga os dispositivos de outra conta (perda do aparelho) com trilha', async () => {
+    const GESTOR = 'wan.gestor';
+    sql(`INSERT INTO usuario (login, nome, dispensa_cpf, criado_em)
+           SELECT '${GESTOR}', 'Gestor fictício wan', TRUE, NOW(3)
+            WHERE NOT EXISTS (SELECT 1 FROM usuario WHERE login = '${GESTOR}');
+         UPDATE credencial_dispositivo d JOIN usuario u ON u.id = d.usuario_id
+            SET d.revogada_em = NOW(3) WHERE u.login = '${LOGIN}' AND d.revogada_em IS NULL;`);
+    const gestor = { ...ator, login: GESTOR };
+    for (const n of ['sessao-3', 'sessao-4']) {
+      const disp = new AutenticadorWebAuthnSimulado(-7, 0);
+      const op = await servico.iniciarCadastro(n, ator, 'Conta fictícia wan');
+      await servico.concluirCadastro(
+        n,
+        ator,
+        disp.cadastrar(op.challenge, ORIGEM, SERVIDOR),
+        `Aparelho ${n}`,
+      );
+    }
+    expect(contar('AND d.revogada_em IS NULL')).toBe(2);
+    const trilhaDispositivos = () =>
+      Number(
+        sql(`SELECT COUNT(*) FROM trilha_auditoria t JOIN credencial_dispositivo d ON d.id = t.entidade_id
+              JOIN usuario u ON u.id = d.usuario_id
+             WHERE t.entidade = 'credencial_dispositivo' AND u.login = '${LOGIN}'`).trim(),
+      );
+    const trilhaAntes = trilhaDispositivos();
+    // A própria conta não usa este caminho.
+    await expect(servico.revogarTodosDeOutro(ator, LOGIN)).rejects.toMatchObject({
+      problema: { codigo: 'remocao-recusada' },
+    });
+    await expect(servico.revogarTodosDeOutro(gestor, LOGIN)).resolves.toBe(2);
+    expect(contar('AND d.revogada_em IS NULL')).toBe(0);
+    const idGestor = sql(`SELECT id FROM usuario WHERE login = '${GESTOR}'`).trim();
+    expect(contar(`AND d.revogada_em IS NOT NULL AND d.revogada_por = ${idGestor}`)).toBe(2);
+    expect(trilhaDispositivos()).toBe(trilhaAntes + 2);
+    // Sem aparelho ativo, a entrada não pede mais o dispositivo e a segunda chamada não revoga nada.
+    await expect(servico.iniciarValidacao('sessao-3', ator)).rejects.toMatchObject({
+      problema: { codigo: 'sem-dispositivo' },
+    });
+    await expect(servico.revogarTodosDeOutro(gestor, LOGIN)).resolves.toBe(0);
+  }, 60_000);
+});

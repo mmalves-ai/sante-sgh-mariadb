@@ -772,4 +772,123 @@ describe.skipIf(SEM_BANCO)('porta própria da contabilidade contra o MariaDB (cl
     expect((await porta.empresaSped(ctxA, estA))?.nome).toBe('Hospital fictício f2204a (teste)');
     expect(await porta.empresaSped(ctxB, estA)).toBeNull();
   });
+
+  it('signatário da escrituração: contador sem CRC recusa sem escrita; guarda com a pessoa pelo CPF, atualiza o mesmo e lê os vigentes', async () => {
+    const cpf = `9${String(Date.now()).slice(-10)}`;
+    const contador = {
+      nome: 'Contador Fictício (teste)',
+      cpf,
+      qualificacao: '900' as const,
+      crc: null,
+      email: null,
+      telefone: null,
+    };
+    const deles = (sql: string) => contar(sql, [cpf]);
+    const SQL_SIG = `SELECT COUNT(*) AS n FROM signatario_escrituracao s JOIN pessoa_fisica p ON p.id = s.pessoa_fisica_id WHERE p.cpf = ?`;
+    expect(
+      await codigo(gravar(ctxA, (g) => g.guardarSignatarioSped({ empresa: estA, signatario: contador }))),
+    ).toBe('contador-sem-crc');
+    expect(await deles('SELECT COUNT(*) AS n FROM pessoa_fisica WHERE cpf = ?')).toBe(0);
+    const comCrc = { ...contador, crc: 'SP-000001/O' };
+    // Sem a pessoa no cadastro pelo CPF, nada é guardado.
+    expect(await gravar(ctxA, (g) => g.guardarSignatarioSped({ empresa: estA, signatario: comCrc }))).toEqual(
+      {
+        id: null,
+        novo: false,
+      },
+    );
+    expect(await deles(SQL_SIG)).toBe(0);
+    await escrever('INSERT INTO pessoa_fisica (nome, cpf, criado_em) VALUES (?, ?, NOW(3))', [
+      contador.nome,
+      cpf,
+    ]);
+    const a = await gravar(ctxA, (g) => g.guardarSignatarioSped({ empresa: estA, signatario: comCrc }));
+    expect(a.novo).toBe(true);
+    expect(await deles(SQL_SIG)).toBe(1);
+    const b = await gravar(ctxA, (g) =>
+      g.guardarSignatarioSped({
+        empresa: estA,
+        signatario: { ...contador, crc: 'SP-000001/O', email: 'contador@exemplo.invalid' },
+      }),
+    );
+    expect(b).toEqual({ id: a.id, novo: false });
+    const linha = await uma<{
+      papel: string;
+      versao: number;
+      email: string;
+      estabelecimento_id: number;
+      vigencia_fim: unknown;
+    }>(
+      'SELECT papel, versao, email, estabelecimento_id, vigencia_fim FROM signatario_escrituracao WHERE id = ?',
+      [a.id ?? 0],
+    );
+    expect(linha).toMatchObject({
+      papel: 'contador',
+      versao: 2,
+      email: 'contador@exemplo.invalid',
+      vigencia_fim: null,
+    });
+    expect(Number(linha?.estabelecimento_id)).toBe(estA);
+    const vigentes = await porta.signatariosSped(ctxA, estA);
+    expect(vigentes.find((x) => x.cpf === cpf)).toMatchObject({ qualificacao: '900', crc: 'SP-000001/O' });
+    expect(await porta.signatariosSped(ctxB, estA)).toEqual([]);
+    const semApuracoes = () =>
+      escrever(
+        'DELETE FROM apuracao_irpj_csll WHERE estabelecimento_id = ? AND YEAR(periodo_inicio) >= 2098',
+        [estA],
+      );
+    await semApuracoes();
+    expect(await porta.apuracoesLucroRealSped(ctxA, estA, 2099)).toEqual([]);
+    // Lucro real: a apuração fechada do exercício vem do LALUR do estabelecimento; a retificada e a de outro ano não.
+    for (const [ini, fim, sit] of [
+      ['2099-01-01', '2099-12-31', 'fechada'],
+      ['2099-01-01', '2099-03-31', 'retificada'],
+      ['2098-01-01', '2098-12-31', 'fechada'],
+    ] as const)
+      await escrever(
+        `INSERT INTO apuracao_irpj_csll (estabelecimento_id, periodo_inicio, periodo_fim, forma_apuracao, base_irpj,
+           valor_irpj, valor_irpj_recolher, situacao, criado_em) VALUES (?, ?, ?, ?, 1000, 150, 150, ?, NOW(3))`,
+        [estA, ini, fim, sit === 'retificada' ? 'trimestral' : 'anual', sit],
+      );
+    const apuracoes = await porta.apuracoesLucroRealSped(ctxA, estA, 2099);
+    expect(apuracoes).toHaveLength(1);
+    expect(apuracoes[0]).toMatchObject({
+      inicio: '2099-01-01',
+      fim: '2099-12-31',
+      forma: 'anual',
+      fechada: true,
+      baseIrpj: 100000,
+      irpj: 15000,
+    });
+    expect(await porta.apuracoesLucroRealSped(ctxB, estA, 2099)).toEqual([]);
+    await semApuracoes();
+    // NIRE, data do registro e CNAE vêm da mantenedora do estabelecimento.
+    const cnpj = `9${String(Date.now()).slice(-13)}`;
+    await escrever('INSERT INTO pessoa_juridica (razao_social, cnpj, criado_em) VALUES (?, ?, NOW(3))', [
+      'Mantenedora Fictícia (teste)',
+      cnpj,
+    ]);
+    await escrever(
+      `INSERT INTO mantenedora (codigo, pessoa_juridica_id, nire, data_registro_nire, cnae_principal, criado_em)
+         SELECT ?, id, '35300000001', '2001-02-03', '8610101', NOW(3) FROM pessoa_juridica WHERE cnpj = ?`,
+      [`T${cnpj}`, cnpj],
+    );
+    await escrever(
+      'UPDATE estabelecimento SET mantenedora_id = (SELECT id FROM mantenedora WHERE codigo = ?) WHERE id = ?',
+      [`T${cnpj}`, estA],
+    );
+    try {
+      expect(await porta.empresaSped(ctxA, estA)).toMatchObject({
+        nire: '35300000001',
+        dataNire: '2001-02-03',
+        cnae: '8610101',
+      });
+    } finally {
+      await escrever('UPDATE estabelecimento SET mantenedora_id = NULL WHERE id = ?', [estA]);
+      await escrever('DELETE FROM mantenedora WHERE codigo = ?', [`T${cnpj}`]);
+      await escrever('DELETE FROM pessoa_juridica WHERE cnpj = ?', [cnpj]);
+    }
+    await escrever('DELETE FROM signatario_escrituracao WHERE id = ?', [a.id ?? 0]);
+    await escrever('DELETE FROM pessoa_fisica WHERE cpf = ?', [cpf]);
+  });
 });

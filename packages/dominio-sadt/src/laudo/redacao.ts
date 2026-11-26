@@ -200,3 +200,45 @@ export function ordenarModelos<
     .filter((m) => m.profissional === null || m.profissional === alvo.profissional)
     .sort((a, b) => peso(a) - peso(b) || a.nome.localeCompare(b.nome, 'pt-BR'));
 }
+
+// ── Assinatura com certificado ICP-Brasil (C3-005, decisão de 26/11) ───────────────────────────────────────────
+// Cada versão assinada ou retificada do laudo vira um documento do prontuário do paciente, do tipo que a fila de
+// assinaturas com certificado conhece. O médico assina na fila pelo meio que tiver: certificado em nuvem de um PSC
+// credenciado (padrão, PAdES), token A3 pelo agente local ou A1. A política do estabelecimento diz se o tipo exige
+// ICP-Brasil (CFM 2.299/2021, SBIS NGS2); sem ela vale a assinatura eletrônica avançada do clique de assinar.
+
+/** O tipo do documento do prontuário que leva o laudo à fila ICP (o mesmo do registro clínico). */
+export const TIPO_DOCUMENTO_LAUDO = 'registro-clinico';
+/** A tabela de origem do documento: a versão do laudo (cada versão é um documento próprio, a anterior fica). */
+export const ORIGEM_DOCUMENTO_LAUDO = 'laudo_diagnostico_versao';
+/** Os meios de assinatura do laudo, em ordem de preferência: nuvem por PSC, depois A3, depois A1. */
+export const MEIOS_ASSINATURA_LAUDO = ['nuvem', 'a3', 'a1'] as const;
+
+/** O título do documento do laudo no prontuário (até 150 caracteres): exame, versão e, se houver, a retificação. */
+export function tituloDocumentoLaudo(
+  exame: string,
+  numero: number,
+  situacao: 'assinado' | 'retificado',
+): string {
+  if (!Number.isInteger(numero) || numero < 1)
+    throw new RecusaLaudo('versao-invalida', 'Versão do laudo inválida.');
+  const sufixo = situacao === 'retificado' ? ` (retificação, versão ${numero})` : ` (versão ${numero})`;
+  const nome = (exame.trim() || 'exame').slice(0, 150 - 'Laudo de '.length - sufixo.length);
+  return `Laudo de ${nome}${sufixo}`;
+}
+
+export type AssinaturaIcpDoLaudo = 'sem-documento' | 'nao-exigida' | 'na-fila' | 'assinada';
+
+/**
+ * Onde está a assinatura com certificado de uma versão: assinada (o envelope cobriu o documento), na fila do médico,
+ * não exigida pela política (fica a eletrônica avançada) ou sem documento (cadastro sem o tipo ou a situação).
+ */
+export function assinaturaIcpDoLaudo(c: {
+  documento: number | null;
+  envelopeAssinado: boolean;
+  naFila: boolean;
+}): AssinaturaIcpDoLaudo {
+  if (c.documento === null) return 'sem-documento';
+  if (c.envelopeAssinado) return 'assinada';
+  return c.naFila ? 'na-fila' : 'nao-exigida';
+}

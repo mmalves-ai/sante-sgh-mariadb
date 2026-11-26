@@ -1,3 +1,5 @@
+import type { SignatarioSped } from '@sgh/contratos';
+import type { ApuracaoLucroRealEcf } from '@sgh/dominio-contabil';
 // Porta da contabilidade (M54): o que as telas do plano de contas, das regras, dos fatos, dos lançamentos, das
 // demonstrações e do SPED leem e gravam, independente de onde (a API não escreve SQL; fronteira Nx):
 //   - `banco`: a porta própria sobre o banco do cliente (MariaDB, pelo @sgh/nucleo; porta-propria.ts), com as
@@ -83,6 +85,14 @@ export interface GravadorContabil {
     x: SemHospital<NovoArquivoSped>,
   ): Promise<{ id: number; numero: number; substituidos: number }>;
   situacaoArquivoSped(x: SemHospital<PedidoSituacaoArquivoSped>): Promise<ArquivoSpedRegistrado>;
+  /**
+   * O signatário no cadastro da empresa (signatario_escrituracao), vigente a partir de hoje; o mesmo, atualizado. A pessoa
+   * vem do cadastro de pessoas pelo CPF; sem ela, nada é guardado (id nulo).
+   */
+  guardarSignatarioSped(x: {
+    empresa: number;
+    signatario: SignatarioSped;
+  }): Promise<{ id: number | null; novo: boolean }>;
 }
 
 /** O razão lido (saldo anterior, totais, a soma antes da página e os movimentos da página até o teto + 1). */
@@ -208,6 +218,14 @@ export interface PortaContabil {
   /** Os dados cadastrais da empresa (só da empresa) para o SPED. */
   empresaSped(c: ContextoContabil, empresa: number): Promise<EmpresaSped | null>;
   arquivosSped(c: ContextoContabil, empresa: number, teto: number): Promise<ArquivoSpedRegistrado[]>;
+  /** Os signatários vigentes hoje no cadastro da empresa. */
+  signatariosSped(c: ContextoContabil, empresa: number): Promise<SignatarioSped[]>;
+  /** As apurações do lucro real do exercício (LALUR, sem as retificadas) com o bloco M de cada uma. */
+  apuracoesLucroRealSped(
+    c: ContextoContabil,
+    empresa: number,
+    exercicio: number,
+  ): Promise<ApuracaoLucroRealEcf[]>;
   conteudoSped(
     c: ContextoContabil,
     empresa: number,
@@ -254,6 +272,8 @@ export const METODOS_PORTA_CONTABIL: ReadonlySet<string> = new Set([
   'lancamentosDoExercicio',
   'empresaSped',
   'arquivosSped',
+  'signatariosSped',
+  'apuracoesLucroRealSped',
   'conteudoSped',
   'gravar',
 ]);

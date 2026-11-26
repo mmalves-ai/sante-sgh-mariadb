@@ -15,6 +15,7 @@ import { ErroApi } from '../../../casca/erros/problem-details.js';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import MeuPin from '../componentes/MeuPin.vue';
 import MetodoSegundoFator from '../componentes/MetodoSegundoFator.vue';
+import DispositivosSegundoFator from '../componentes/DispositivosSegundoFator.vue';
 import MinhasSessoes from '../componentes/MinhasSessoes.vue';
 import { CHAVE_SESSAO } from '../../../casca/sessao/sessao.js';
 import { desenharQr } from '../../suporte/qr.js';
@@ -273,6 +274,7 @@ async function remover(): Promise<void> {
     </template>
 
     <MetodoSegundoFator />
+    <DispositivosSegundoFator />
     <MeuPin />
 
     <MinhasSessoes />

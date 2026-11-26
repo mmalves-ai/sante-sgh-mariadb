@@ -90,7 +90,7 @@ test.describe('@C1-107 cotas e prazos de marcação', () => {
   test('cria a cota e o prazo com a validação na hora e mostra o uso da cota', async ({ page }) => {
     const externas = vigiarExternas(page);
     const st = simular(page);
-    await entrar(page, 'sint.gestor.agenda');
+    await entrar(page, 'SINT.AGENDA');
     await page.goto('/agenda/consultas/cotas-prazos');
     await expect(page.getByTestId('cotas-vazio')).toBeVisible();
     await expect(page.getByTestId('prazos-vazio')).toBeVisible();

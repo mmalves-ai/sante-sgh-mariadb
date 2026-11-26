@@ -607,9 +607,11 @@ async function lancar() {
             </tr>
           </tbody>
         </table>
-        <ul v-if="problemasMeta.length" role="alert" data-testid="rv-faixas-problemas">
-          <li v-for="x in problemasMeta" :key="x">{{ x }}</li>
-        </ul>
+        <div v-if="problemasMeta.length" role="alert" data-testid="rv-faixas-problemas">
+          <ul>
+            <li v-for="x in problemasMeta" :key="x">{{ x }}</li>
+          </ul>
+        </div>
         <div class="acoes">
           <button
             type="button"
@@ -672,9 +674,11 @@ async function lancar() {
           {{ t('repasse.remuneracaoVariavel.apuracao.credito') }}: {{ reais(doMedico.credito) }} ·
           {{ t('repasse.remuneracaoVariavel.apuracao.debito') }}: {{ reais(doMedico.debito) }}
         </p>
-        <ul v-if="doMedico.pendencias.length" role="alert" data-testid="rv-sim-pendencias">
-          <li v-for="x in doMedico.pendencias" :key="x">{{ x }}</li>
-        </ul>
+        <div v-if="doMedico.pendencias.length" role="alert" data-testid="rv-sim-pendencias">
+          <ul>
+            <li v-for="x in doMedico.pendencias" :key="x">{{ x }}</li>
+          </ul>
+        </div>
         <table v-if="doMedico.itens.length" class="tabela" data-testid="rv-sim-itens">
           <tbody>
             <tr v-for="(i, k) in doMedico.itens" :key="k" :data-testid="`rv-sim-item-${i.tipo}`">

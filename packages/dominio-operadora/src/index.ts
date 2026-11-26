@@ -61,3 +61,9 @@ export * from './declaracao-saude.js';
 export * from './rede-cadastro.js';
 // 08-SGO L102 (C2-120): remuneração do prestador (tabela, valoração, pacote, reajuste, calendário, adiantamento, lote).
 export * from './remuneracao-rede.js';
+// 08-SGO L111 (C3-026): plano de contas padrão da ANS, mapa das contas, balancete ANS e provisões técnicas.
+export * from './provisao-tecnica.js';
+// 08-SGO L114 (C3-027): portais do beneficiário, da contratante e do corretor (conta, solicitação, exclusão em lote).
+export * from './portais-operadora.js';
+// 08-SGO L97 (C3-028): desconto em folha da mensalidade (remessa à contratante, retorno e conciliação).
+export * from './desconto-folha.js';

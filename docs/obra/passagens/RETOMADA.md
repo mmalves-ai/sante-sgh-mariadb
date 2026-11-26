@@ -599,3 +599,24 @@ corrente de CronCreate morre com a sessão; ao retomar, recriar (formato na mem�
 - API do painel (3310, pid 1146506) segue no build de 24/11: rebuild na árvore principal só com a construir-2 parada
   (o build da árvore com trabalho pela metade quebraria o dist que a API carrega sob demanda).
 - Segundo merge (conector-autor-registro): a Painel de Injeção junta 9208e894, roda ci-sim e avisa o commit.
+
+## Passagem de 26/11 01h00 (Sessão de Construção)
+- Push: origin/main = 801e90b1 (ci-sim VERDE, 960 commits do dia). Painel 3310 com o build de 801e90b1 (dist copiado da
+  árvore limpa; o anterior em sante-sgh-dados/obra/painel-dist-anterior); migrações no cliente_prontocardio (1 CHECK da
+  carga recusado em dominio_sus, avisado à Painel de Injeção).
+- Fichas: 258/467 (55%). Esperam E2E: 32 prontas da completar-3 + E2E vermelhos das prontas (1ª e 2ª construção).
+- Plano de economia (docs/obra/plano-reducao-tokens-2026-11-25.md) e decisões (docs/obra/decisoes-tomadas.md) valem.
+- Sobras sem commit na árvore (C2-064, C2-113, cancelamento de contrato, telas da operadora): não entram em push.
+- Próximo: preflight-e2e.sh → integrar-3 (E2E das prontas pendentes, corretor com o erro extraído) → funções B e C.
+
+## Passagem de 26/11 07h30 (Sessão de Construção)
+- Fichas: 324/467 (69%): F3 183/254, F7 67/109, F8 74/104. Pendências por motivo em docs/obra/pendencias-2026-11-26.md.
+- Push PARADO: a esteira do 81311fe7 passou 5 de 6 etapas; o gitleaks do histórico acusa um falso positivo no commit local
+  781eedc0 (ficha F78-03, "api-pesquisa-clinica.ts, i18n-..."). Texto já corrigido na árvore (5140ce2d). A exceção estreita
+  no gitleaks.toml foi RECUSADA pela checagem automática de permissões e espera o dono (aviso enviado por e-mail).
+  Com a autorização: acrescentar a allowlist (só esse arquivo e o texto `api-pesquisa-clinica\.ts`), ci-sim, push.
+- Painel 3310 com o build do HEAD de 06h (dist anterior em sante-sgh-dados/obra/painel-dist-anterior); migrações aplicadas.
+- Rodadas fechadas na madrugada: construir-3 (28 B/C, 13 prontas), completar-4 (9, 6 prontas), integrar-3, correções de
+  E2E com o erro extraído, consolidar-6. Decisões em docs/obra/decisoes-tomadas.md (32 itens).
+- Regras novas: pre-commit recusa commit que apaga arquivo e erro de sintaxe na versão preparada; E2E por script
+  (preflight-e2e.sh + e2e-vm.sh --reporter=list); relatório por relatorio-50.py.

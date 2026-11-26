@@ -33,6 +33,7 @@ import { z } from 'zod';
 
 const TABELA = 'regra_atendimento_fonte_pagadora';
 const COLUNAS = `id, fonte_pagadora_id, plano_fonte_pagadora_id, categoria_atendimento_id, estabelecimento_id,
+  especialidade_medica_id, servico_atendimento_id, unidade_assistencial_id,
   exige_carteira, exige_validade_carteira, exige_titular, exige_guia, exige_senha_autorizacao, exige_codigo_validacao,
   tamanho_carteira, prefixo_carteira, permite_dependentes, prazo_retorno_dias, documentos_exigidos, orientacao_recepcao,
   teto_atendimentos, teto_periodo_dias, teto_bloqueia, pendencia, pendencia_motivo, vigencia_inicio, vigencia_fim,
@@ -73,6 +74,9 @@ function regraDaLinha(x: Linha, hoje: string): RegraPlanoVisao {
     planoId: numN(x['plano_fonte_pagadora_id']),
     categoriaId: numN(x['categoria_atendimento_id']),
     estabelecimentoId: numN(x['estabelecimento_id']),
+    especialidadeId: numN(x['especialidade_medica_id']),
+    servicoId: numN(x['servico_atendimento_id']),
+    setorId: numN(x['unidade_assistencial_id']),
     exigeCarteira: bool(x['exige_carteira']),
     exigeValidadeCarteira: bool(x['exige_validade_carteira']),
     exigeTitular: bool(x['exige_titular']),
@@ -119,6 +123,10 @@ export interface PedidoCriticaPlano {
   readonly planoId: number | null;
   readonly categoriaId: number | null;
   readonly estabelecimentoId: number;
+  /** 02-REC linha 37: especialidade, serviço e setor (unidade assistencial) do atendimento; ausente vale nulo. */
+  readonly especialidadeId?: number | null;
+  readonly servicoId?: number | null;
+  readonly setorId?: number | null;
   readonly pacienteId: number | null;
   /** AAAA-MM-DD. */
   readonly data: string;
@@ -149,6 +157,9 @@ export async function criticarPlano(l: Leitor, p: PedidoCriticaPlano): Promise<C
     planoSuperiorId,
     categoriaId: p.categoriaId,
     estabelecimentoId: p.estabelecimentoId,
+    especialidadeId: p.especialidadeId ?? null,
+    servicoId: p.servicoId ?? null,
+    setorId: p.setorId ?? null,
     data: p.data,
   };
   const regra = escolherRegraPlano(await lerRegrasDaFonte(l, p.fontePagadoraId, p.data), chave);
@@ -206,6 +217,9 @@ export const esquemaIncluirRegraPlano = z
     fonteId: idP,
     planoId: idP.nullable().default(null),
     categoriaId: idP.nullable().default(null),
+    especialidadeId: idP.nullable().default(null),
+    servicoId: idP.nullable().default(null),
+    setorId: idP.nullable().default(null),
     todasUnidades: z.boolean().default(false),
     exigeCarteira: z.boolean().default(false),
     exigeValidadeCarteira: z.boolean().default(false),
@@ -279,11 +293,34 @@ async function incluirRegra(tx: TxOperacao, e: Incluir, est: number): Promise<Re
     throw recusa('referencia-inexistente', 'A categoria de atendimento não existe.', {
       campos: ['categoriaId'],
     });
+  // 02-REC linha 37: a especialidade, o serviço e o setor (do estabelecimento da sessão) têm de existir e estar ativos.
+  const refs: [number | null, string, string, unknown[]][] = [
+    [e.especialidadeId, 'especialidadeId', 'SELECT id FROM especialidade_medica WHERE id = ? AND ativo', []],
+    [e.servicoId, 'servicoId', 'SELECT id FROM servico_atendimento WHERE id = ? AND ativo', []],
+    [
+      e.setorId,
+      'setorId',
+      'SELECT id FROM unidade_assistencial WHERE id = ? AND estabelecimento_id = ? AND ativo AND excluido_em IS NULL',
+      [est],
+    ],
+  ];
+  for (const [id, campo, sql, mais] of refs)
+    if (id !== null && !(await tx.uma(sql, [id, ...mais])))
+      throw recusa('referencia-inexistente', 'A especialidade, o serviço ou o setor escolhido não existe.', {
+        campos: [campo],
+      });
+  if (e.setorId !== null && e.todasUnidades)
+    throw recusa('entrada-invalida', 'A regra de um setor vale só no estabelecimento dele.', {
+      campos: ['setorId'],
+    });
   const chave = {
     fonte_pagadora_id: e.fonteId,
     plano_fonte_pagadora_id: e.planoId,
     categoria_atendimento_id: e.categoriaId,
     estabelecimento_id: proposta.estabelecimentoId,
+    especialidade_medica_id: e.especialidadeId,
+    servico_atendimento_id: e.servicoId,
+    unidade_assistencial_id: e.setorId,
   };
   const cols = Object.keys(chave) as (keyof typeof chave)[];
   const anteriores = await tx.consultarParaAtualizar<Linha>(
@@ -373,6 +410,10 @@ export interface RegrasPlanoDaFonte {
   readonly hoje: string;
   readonly planos: Opcao[];
   readonly categorias: Opcao[];
+  /** 02-REC linha 37: as opções da chave por especialidade, serviço e setor. */
+  readonly especialidades: Opcao[];
+  readonly servicos: Opcao[];
+  readonly setores: Opcao[];
   readonly regras: RegraPlanoVisao[];
 }
 
@@ -381,6 +422,9 @@ export const esquemaPreviaRegraPlano = z
     fonteId: idP,
     planoId: idP.nullable().default(null),
     categoriaId: idP.nullable().default(null),
+    especialidadeId: idP.nullable().default(null),
+    servicoId: idP.nullable().default(null),
+    setorId: idP.nullable().default(null),
     pacienteId: idP.nullable().default(null),
     data: dataP.optional(),
     carteira: z.string().max(30).nullable().default(null),
@@ -447,6 +491,19 @@ export class RegraPlanoPropria {
     );
   }
 
+  /** 02-REC linha 37: os serviços ativos, para a recepção escolher o da abertura (a regra pode valer só nele). */
+  servicos(): Promise<Opcao[]> {
+    return this.ler(async (l) =>
+      (
+        await l.consultar<Linha>(
+          'SELECT id, descricao FROM servico_atendimento WHERE ativo ORDER BY descricao',
+          [],
+          { teto: 2000 },
+        )
+      ).map((x) => ({ id: num(x['id']), rotulo: String(x['descricao']) })),
+    );
+  }
+
   /** As regras da fonte, com os planos e as categorias para os combos. */
   regras(c: ContextoRegraPlano, fonte: number): Promise<RegrasPlanoDaFonte> {
     return this.ler(async (l) => {
@@ -474,10 +531,36 @@ export class RegraPlanoPropria {
           },
         )
       ).map((x) => ({ id: num(x['id']), rotulo: String(x['descricao']) }));
+      const opcoes = async (sql: string, ps: unknown[]) =>
+        (await l.consultar<Linha>(sql, ps, { teto: 2000 })).map((x) => ({
+          id: num(x['id']),
+          rotulo: String(x['rotulo']),
+        }));
+      const especialidades = await opcoes(
+        'SELECT id, descricao AS rotulo FROM especialidade_medica WHERE ativo ORDER BY descricao',
+        [],
+      );
+      const servicos = await opcoes(
+        'SELECT id, descricao AS rotulo FROM servico_atendimento WHERE ativo ORDER BY descricao',
+        [],
+      );
+      const setores = await opcoes(
+        'SELECT id, nome AS rotulo FROM unidade_assistencial WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL ORDER BY nome',
+        [estabelecimento],
+      );
       const regras = (await lerRegrasDaFonte(l, fonte, hoje)).filter(
         (r) => r.estabelecimentoId === null || r.estabelecimentoId === estabelecimento,
       );
-      return { fonte: { id: num(f['id']), rotulo: String(f['nome']) }, hoje, planos, categorias, regras };
+      return {
+        fonte: { id: num(f['id']), rotulo: String(f['nome']) },
+        hoje,
+        planos,
+        categorias,
+        especialidades,
+        servicos,
+        setores,
+        regras,
+      };
     });
   }
 
@@ -490,6 +573,9 @@ export class RegraPlanoPropria {
         planoId: e.planoId,
         categoriaId: e.categoriaId,
         estabelecimentoId: estabelecimento,
+        especialidadeId: e.especialidadeId,
+        servicoId: e.servicoId,
+        setorId: e.setorId,
         pacienteId: e.pacienteId,
         data: e.data ?? (await hojeDoBanco(l)),
         carteira: e.carteira,

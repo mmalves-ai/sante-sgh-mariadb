@@ -170,6 +170,12 @@ export interface NovaRegulacao {
   readonly por: string;
   /** Com o conector ligado: o evento da outbox na mesma transação (o pedido à central). */
   readonly outbox: { rede: string; tipo: string } | null;
+  /**
+   * C3-013: a situação do pedido de leito pelo de-para aprovado (`situacaoDoPedidoPelaRegulacao`), no mesmo estado do
+   * NIR em que o pedido está; null ou ausente: o pedido fica com a situação que tem. O pedido passa a apontar a
+   * regulação vigente em qualquer caso.
+   */
+  readonly situacaoPedido?: { codigo: number; estado: string } | null;
 }
 
 export interface ReservaLeitoNir {

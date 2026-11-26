@@ -14,6 +14,9 @@
 // A lista vigente que a crítica da competência usa sai de `habilitacoesCadastradas`. A trilha vai pelo executor.
 import {
   conciliarHabilitacoesCnes,
+  conferirComCadastroNacional,
+  resumoCriticasCnes,
+  vigenteNaCompetenciaSus,
   type ConciliacaoCnes,
   conferirHabilitacaoEstabelecimento,
   conferirRegraPrestador,
@@ -47,6 +50,8 @@ const TABELAS = [
   'servico_classificacao_estabelecimento',
   'regra_prestador_sus',
   'regra_servico_classificacao_sus',
+  'remessa_cnes',
+  'critica_cnes',
 ];
 
 const dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -222,6 +227,24 @@ const opcao = (r: Linha): Opcao => ({
   codigo: txt(r['codigo']),
   descricao: txt(r['descricao']),
 });
+
+export interface ConferenciaCnesLida {
+  readonly id: number;
+  readonly competencia: string;
+  readonly numeroRemessa: number;
+  readonly situacao: string;
+  readonly geradaEm: string | null;
+  readonly quantidadeCriticas: number;
+  readonly criticas: readonly {
+    id: number;
+    sequencia: number;
+    categoria: string;
+    gravidade: string;
+    mensagem: string;
+    resolvida: boolean;
+    versao: number;
+  }[];
+}
 
 export class PortaEstabelecimentoSusPropria extends PortaEstabelecimentoPropria {
   constructor(nucleo: ConstructorParameters<typeof PortaEstabelecimentoPropria>[0], cliente: string) {
@@ -835,6 +858,196 @@ export class PortaEstabelecimentoSusPropria extends PortaEstabelecimentoPropria 
         throw recusaRegra('Regra recusada', [{ campo: 'ativo', mensagem: 'A regra já está inativa.' }]);
       await tx.alterar('regra_servico_classificacao_sus', alvo, e.versao, { ativo: false });
       return { tabela: 'regra_servico_classificacao_sus', id: alvo };
+    });
+  }
+
+  // Conferência com a base oficial do cadastro nacional (C3-011): grava a remessa de conferência da competência e uma
+  // crítica por divergência; a base oficial vem do catálogo carregado (catalogos/carregadores/cnes.py).
+
+  /** As conferências do estabelecimento (as 24 mais recentes), com as críticas. */
+  conferenciasCnes(c: ContextoPortaPropria): Promise<ConferenciaCnesLida[]> {
+    return this.ler(c, 'conferencias-cnes', async (l, est) => {
+      const rem = await l.consultar(
+        `SELECT id, competencia, numero_remessa, situacao, gerada_em, quantidade_criticas
+           FROM remessa_cnes WHERE estabelecimento_id = ? AND tipo = 'conferencia' AND excluido_em IS NULL
+          ORDER BY competencia DESC, numero_remessa DESC LIMIT 24`,
+        [est.id],
+      );
+      const ids = rem.map((r) => num(r['id']));
+      const crit = ids.length
+        ? await l.consultar(
+            `SELECT id, remessa_cnes_id, sequencia, categoria, gravidade, mensagem, resolvida, resolvida_em, versao
+               FROM critica_cnes WHERE remessa_cnes_id IN (${ids.map(() => '?').join(',')}) AND excluido_em IS NULL
+              ORDER BY remessa_cnes_id, sequencia`,
+            ids,
+          )
+        : [];
+      return rem.map((r) => ({
+        id: num(r['id']),
+        competencia: dataIso(r['competencia'])!.slice(0, 7).replace('-', ''),
+        numeroRemessa: num(r['numero_remessa']),
+        situacao: txt(r['situacao']),
+        geradaEm: r['gerada_em'] instanceof Date ? r['gerada_em'].toISOString() : txtOuNull(r['gerada_em']),
+        quantidadeCriticas: num(r['quantidade_criticas']),
+        criticas: crit
+          .filter((x) => num(x['remessa_cnes_id']) === num(r['id']))
+          .map((x) => ({
+            id: num(x['id']),
+            sequencia: num(x['sequencia']),
+            categoria: txt(x['categoria']),
+            gravidade: txt(x['gravidade']),
+            mensagem: txt(x['mensagem']),
+            resolvida: bool(x['resolvida']),
+            versao: num(x['versao']),
+          })),
+      }));
+    });
+  }
+
+  /** Confere o cadastro vigente na competência (AAAAMM) com a base oficial carregada e grava a remessa e as críticas. */
+  async conferirComCnes(
+    c: ContextoPortaPropria,
+    entrada: unknown,
+  ): Promise<{ id: number; resumo: Record<string, number>; quantidadeCriticas: number }> {
+    const e = entradaValida(z.object({ competencia: z.string().regex(/^\d{6}$/) }).strict(), entrada);
+    const dias = diasDaCompetenciaSus(e.competencia);
+    if (!dias)
+      throw recusaRegra('Conferência recusada', [
+        { campo: 'competencia', mensagem: 'Competência inválida.' },
+      ]);
+    return this.gravar(
+      c,
+      'faturamento.sus.cnes.conferir',
+      ['remessa_cnes', 'critica_cnes'],
+      async (tx, est, usuario) => {
+        const ident = await tx.uma('SELECT codigo_cnes, cnpj FROM estabelecimento WHERE id = ?', [est.id]);
+        const cnes = txtOuNull(ident?.['codigo_cnes']);
+        const vig = (r: Linha) => ({
+          vigenciaInicio: dataIso(r['vigencia_inicio'])!,
+          vigenciaFim: dataIso(r['vigencia_fim']),
+        });
+        const habs = (
+          await tx.consultar(
+            `SELECT hs.codigo_cnes, he.vigencia_inicio, he.vigencia_fim
+             FROM habilitacao_estabelecimento he JOIN habilitacao_sus hs ON hs.id = he.habilitacao_sus_id
+            WHERE he.estabelecimento_id = ? AND he.excluido_em IS NULL`,
+            [est.id],
+          )
+        ).filter((r) => vigenteNaCompetenciaSus(vig(r), e.competencia));
+        const servs = (
+          await tx.consultar(
+            `SELECT sc.codigo_servico_cnes, sc.codigo_classificacao_cnes, se.vigencia_inicio, se.vigencia_fim
+             FROM servico_classificacao_estabelecimento se
+             JOIN servico_classificacao sc ON sc.id = se.servico_classificacao_id
+            WHERE se.estabelecimento_id = ? AND se.excluido_em IS NULL AND se.ativo`,
+            [est.id],
+          )
+        ).filter((r) => vigenteNaCompetenciaSus(vig(r), e.competencia));
+        const of = (t: string, cols: string) =>
+          tx.consultar(`SELECT ${cols} FROM ${t} WHERE competencia = ? AND codigo_cnes = ?`, [
+            dias.inicio,
+            cnes,
+          ]);
+        const [oEst] = cnes ? await of('estabelecimento_cadastro_nacional', 'cnpj, razao_social') : [];
+        const oHab = cnes
+          ? await of(
+              'habilitacao_cadastro_nacional',
+              'codigo_habilitacao, competencia_inicio, competencia_fim',
+            )
+          : [];
+        const oSrv = cnes
+          ? await of('servico_cadastro_nacional', 'codigo_servico, codigo_classificacao')
+          : [];
+        const oLei = cnes ? await of('leito_cadastro_nacional', 'quantidade_existente, quantidade_sus') : [];
+        const criticas = conferirComCadastroNacional(
+          {
+            codigoCnes: cnes,
+            cnpj: txtOuNull(ident?.['cnpj']),
+            habilitacoes: habs.map((r) => txt(r['codigo_cnes'])),
+            servicos: servs.map((r) => ({
+              servico: txt(r['codigo_servico_cnes']),
+              classificacao: txt(r['codigo_classificacao_cnes']),
+            })),
+          },
+          {
+            estabelecimento: oEst
+              ? { cnpj: txtOuNull(oEst['cnpj']), razaoSocial: txt(oEst['razao_social']) }
+              : null,
+            habilitacoes: oHab.map((r) => ({
+              codigo: txt(r['codigo_habilitacao']),
+              competenciaInicio: dataIso(r['competencia_inicio']),
+              competenciaFim: dataIso(r['competencia_fim']),
+            })),
+            servicos: oSrv.map((r) => ({
+              servico: txt(r['codigo_servico']),
+              classificacao: txt(r['codigo_classificacao']),
+            })),
+            leitos: oLei.map((r) => ({
+              quantidadeExistente: num(r['quantidade_existente']),
+              quantidadeSus: num(r['quantidade_sus']),
+            })),
+          },
+          dias.inicio,
+        );
+        const ult = await tx.uma(
+          `SELECT COALESCE(MAX(numero_remessa), 0) AS n FROM remessa_cnes
+          WHERE estabelecimento_id = ? AND competencia = ? AND tipo = 'conferencia'`,
+          [est.id, dias.inicio],
+        );
+        const agora = new Date();
+        const id = await tx.incluir('remessa_cnes', {
+          estabelecimento_id: est.id,
+          competencia: dias.inicio,
+          numero_remessa: num(ult?.['n']) + 1,
+          tipo: 'conferencia',
+          situacao: 'conferida',
+          gerada_em: agora,
+          responsavel_usuario_id: usuario,
+          quantidade_criticas: criticas.length,
+        });
+        let seq = 0;
+        for (const x of criticas)
+          await tx.incluir('critica_cnes', {
+            remessa_cnes_id: id,
+            sequencia: ++seq,
+            categoria: x.categoria,
+            gravidade: x.gravidade,
+            mensagem: x.mensagem.slice(0, 500),
+          });
+        return {
+          tabela: 'remessa_cnes',
+          id,
+          resumo: resumoCriticasCnes(criticas),
+          quantidadeCriticas: criticas.length,
+        };
+      },
+    );
+  }
+
+  /** Marca a crítica como resolvida (quem resolveu e quando); a crítica de outro estabelecimento não existe aqui. */
+  async resolverCriticaCnes(
+    c: ContextoPortaPropria,
+    alvo: number,
+    entrada: unknown,
+  ): Promise<{ id: number }> {
+    const e = entradaValida(z.object({ versao: z.number().int().positive() }).strict(), entrada);
+    return this.gravar(c, 'faturamento.sus.cnes.resolver', ['critica_cnes'], async (tx, est, usuario) => {
+      const cr = await tx.uma(
+        `SELECT cc.id, cc.resolvida FROM critica_cnes cc JOIN remessa_cnes r ON r.id = cc.remessa_cnes_id
+          WHERE cc.id = ? AND r.estabelecimento_id = ? AND cc.excluido_em IS NULL`,
+        [alvo, est.id],
+      );
+      if (!cr) throw naoEncontrado('Crítica');
+      if (bool(cr['resolvida']))
+        throw recusaRegra('Crítica já resolvida', [
+          { campo: 'versao', mensagem: 'A crítica já foi resolvida.' },
+        ]);
+      await tx.alterar('critica_cnes', alvo, e.versao, {
+        resolvida: true,
+        resolvida_em: new Date(),
+        resolvida_usuario_id: usuario,
+      });
+      return { tabela: 'critica_cnes', id: alvo };
     });
   }
 }

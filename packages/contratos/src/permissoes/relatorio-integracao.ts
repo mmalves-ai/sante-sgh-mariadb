@@ -369,9 +369,11 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     descricao:
       'Consultar a prescrição digital externa (registro de integração; sem o conteúdo da prescrição)',
     // Recurso só do novo (08-INTG L132): sem opção de origem para mapear, a leitura também é concedida por perfil.
+    // É o registro da integração, sem o conteúdo da prescrição: administrativa (a segregação tira do administrador
+    // toda permissão clínica). O prescritor com conselho lê os envios das receitas que assina.
     concessaoPorPerfil: 'por-perfil',
-    perfis: [...ADMIN],
-    categoria: 'clinica',
+    perfis: [...ADMIN, 'assistencial-com-conselho'],
+    categoria: 'administrativa',
     criticidade: 'normal',
   },
   // F8 (08-INTG L132): envio da receita assinada à plataforma de prescrição digital e o cancelamento; recurso só do
@@ -381,7 +383,8 @@ export const PERMISSOES_M34: readonly DeclaracaoPermissao[] = [
     descricao:
       'Enviar a receita assinada à plataforma de prescrição digital e cancelar o envio (simulador fora de produção)',
     concessaoPorPerfil: 'por-perfil',
-    perfis: [...ADMIN],
+    // Ato clínico do prescritor com conselho (envio da receita que ele assinou).
+    perfis: ['assistencial-com-conselho'],
     categoria: 'clinica',
     criticidade: 'sensivel',
   },

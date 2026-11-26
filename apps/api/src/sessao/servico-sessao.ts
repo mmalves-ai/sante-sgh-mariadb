@@ -6,6 +6,8 @@
 import { createHash, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { GanchoSegundoFatorEmail } from './acesso-email-tardio.js';
 import { ErroCodigoEmail } from './codigo-email.js';
+import type { OpcoesValidacaoCredencial, RespostaValidacao } from '@sgh/dominio-acesso';
+import { ErroOperacao } from '@sgh/nucleo';
 import {
   CATALOGO_ACESSO,
   type FalhaSenha,
@@ -157,6 +159,8 @@ export class ErroSessao extends Error {
     readonly codigo?: string,
     /** W1-01: regras da política que a senha nova não cumpre (só códigos). */
     readonly falhas?: readonly FalhaSenha[],
+    /** 01-ADM L62: extensões a mais do Problem Details (o desafio do dispositivo na entrada). */
+    readonly dados?: Readonly<Record<string, unknown>>,
   ) {
     super(tipo);
     this.name = 'ErroSessao';
@@ -240,7 +244,7 @@ const CACHE_SITUACAO_PLATAFORMA_MS = 180_000;
 export const PREFIXO_LOGIN_PLATAFORMA = 'plataforma:';
 
 /** Os métodos do segundo fator que a conta escolhe (o mesmo conjunto de codigo-email.ts). */
-type MetodoSegundoFatorSessao = 'aplicativo' | 'email';
+type MetodoSegundoFatorSessao = 'aplicativo' | 'email' | 'dispositivo';
 
 /** Login do administrador da plataforma sem o prefixo da sessão. */
 export function loginPuroPlataforma(login: string): string {
@@ -449,6 +453,12 @@ export class ServicoSessao {
     conferir: (codigo: string) => Promise<'ok' | 'invalido' | 'esgotado'>,
     codigo: string | undefined,
     origem: OrigemPedido,
+    /** 01-ADM L62: a chave do dispositivo (só a conta do cliente; a da plataforma não a tem). */
+    dispositivo?: {
+      readonly opcoes: () => Promise<OpcoesValidacaoCredencial | null>;
+      readonly conferir: (r: RespostaValidacao) => Promise<void>;
+      readonly resposta: RespostaValidacao | undefined;
+    },
   ): Promise<boolean> {
     if (!this.segundoFatorEmail) return false;
     let escolhido: MetodoSegundoFatorSessao | null;
@@ -457,6 +467,8 @@ export class ServicoSessao {
     } catch {
       throw new ErroSessao('indisponivel', INDISPONIVEL);
     }
+    if (escolhido === 'dispositivo' && dispositivo)
+      return this.conferirSegundoFatorDispositivo(alvo, dispositivo, origem);
     if (escolhido !== 'email') return false;
     try {
       if (!codigo) {
@@ -489,6 +501,51 @@ export class ServicoSessao {
         throw new ErroSessao('segundo-fator-necessario', e.message, 'segundo-fator-sem-email');
       throw new ErroSessao('indisponivel', INDISPONIVEL);
     }
+  }
+
+  /**
+   * 01-ADM L62: a chave do dispositivo (WebAuthn, biometria ou PIN do próprio aparelho) como segundo fator da entrada.
+   * Sem resposta: devolve o desafio na recusa (401, código segundo-fator-dispositivo, extensão opcoesDispositivo). Com
+   * resposta: confere a assinatura (desafio de uso único, origem, contador). Sem aparelho ativo (todos revogados), segue
+   * o fluxo do aplicativo, como quem não escolheu nada: o dispositivo nunca rebaixa o fator.
+   */
+  private async conferirSegundoFatorDispositivo(
+    alvo: { rede: string; estabelecimento: string; login: string },
+    d: {
+      readonly opcoes: () => Promise<OpcoesValidacaoCredencial | null>;
+      readonly conferir: (r: RespostaValidacao) => Promise<void>;
+      readonly resposta: RespostaValidacao | undefined;
+    },
+    origem: OrigemPedido,
+  ): Promise<boolean> {
+    if (!d.resposta) {
+      let opcoes: OpcoesValidacaoCredencial | null;
+      try {
+        opcoes = await d.opcoes();
+      } catch {
+        throw new ErroSessao('indisponivel', INDISPONIVEL);
+      }
+      if (!opcoes) return false;
+      throw new ErroSessao(
+        'segundo-fator-necessario',
+        'Confirme a entrada no seu dispositivo (biometria ou PIN do aparelho).',
+        'segundo-fator-dispositivo',
+        undefined,
+        { opcoesDispositivo: opcoes },
+      );
+    }
+    try {
+      await d.conferir(d.resposta);
+      return true;
+    } catch (e) {
+      if (!(e instanceof ErroOperacao)) throw new ErroSessao('indisponivel', INDISPONIVEL);
+    }
+    await this.registrar(EVENTOS_AUDITAVEIS.loginFalho.codigo, alvo, origem, false, 'falha');
+    throw new ErroSessao(
+      'segundo-fator-necessario',
+      'O dispositivo não confirmou a entrada. Entre de novo para tentar outra vez.',
+      'segundo-fator-dispositivo-invalido',
+    );
   }
 
   /** ADR 0022: o serviço de autorização (a tela "Perfis e permissões" explica e invalida o cache). */
@@ -730,6 +787,8 @@ export class ServicoSessao {
       login: string;
       senha: string;
       codigoSegundoFator?: string | undefined;
+      /** 01-ADM L62: a assinatura do dispositivo, quando a conta escolheu a chave do dispositivo. */
+      respostaDispositivo?: RespostaValidacao | undefined;
     },
     redeDoEndereco: string | null,
     idAnterior: string | null = null,
@@ -790,6 +849,26 @@ export class ServicoSessao {
         (c) => this.segundoFatorEmail!.conferirUsuario(rede, estabelecimento, conta.login, c),
         entrada.codigoSegundoFator,
         origem,
+        this.segundoFatorEmail?.opcoesDispositivoUsuario && this.segundoFatorEmail.conferirDispositivoUsuario
+          ? {
+              opcoes: () =>
+                this.segundoFatorEmail!.opcoesDispositivoUsuario!(
+                  rede,
+                  estabelecimento,
+                  conta.login,
+                  origem.correlacao,
+                ),
+              conferir: (resp) =>
+                this.segundoFatorEmail!.conferirDispositivoUsuario!(
+                  rede,
+                  estabelecimento,
+                  conta.login,
+                  resp,
+                  origem.correlacao,
+                ),
+              resposta: entrada.respostaDispositivo,
+            }
+          : undefined,
       );
     // M59-F2: o segundo fator confere dentro da abertura (precisa do perfil); a tentativa só é apagada depois dele.
     const r = await this.abrirSessao(

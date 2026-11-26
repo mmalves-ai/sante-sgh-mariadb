@@ -234,6 +234,7 @@ export * from './suprimentos/entradas.js';
 // F3.6 (05-SUP linha 13): kit padrão.
 export * from './suprimentos/kit-padrao.js';
 export * from './suprimentos/recalculo-saldo.js';
+export * from './suprimentos/cotacao-portal.js';
 export * from './suprimentos/respostas.js';
 // M41: onda 3 (setores, operações e chaves da liberação; painel de acompanhamento dos efeitos no estoque).
 export * from './suprimentos/onda3.js';
@@ -347,6 +348,7 @@ export * from './permissoes/qualidade-ccih.js';
 export * from './qualidade/agravo.js';
 export * from './permissoes/qualidade-agravo.js';
 export * from './permissoes/cirurgia-cme.js';
+export * from './permissoes/pesquisa-clinica.js';
 // M48, etapa 5: gestão da qualidade (ONA) e envios regulatórios.
 export * from './qualidade/gestao.js';
 export * from './permissoes/qualidade-gestao.js';

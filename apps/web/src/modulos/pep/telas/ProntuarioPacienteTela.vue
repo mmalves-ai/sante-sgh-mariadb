@@ -177,6 +177,9 @@ async function exportar(): Promise<void> {
           <RouterLink :to="`/pep/paciente/${id}/notas`" data-testid="atalho-notas">{{
             t('pep.notas.atalho')
           }}</RouterLink>
+          <RouterLink :to="`/pep/paciente/${id}/plano-cuidado`" data-testid="atalho-plano-cuidado">{{
+            t('pep.planoCuidado.atalho')
+          }}</RouterLink>
           <RouterLink :to="`/pep/paciente/${id}/crescimento`" data-testid="atalho-crescimento">{{
             t('pep.crescimento.atalho')
           }}</RouterLink>

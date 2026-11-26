@@ -99,6 +99,8 @@ test.describe('SADT, laudos e portal de resultados @M26 @fase2', () => {
       .locator('[data-testid^="sadt-exame-"]')
       .filter({ hasText: 'POTÁSSIO' })
       .filter({ hasText: 'Pedido do prontuário' })
+      // Ainda a receber (servidor compartilhado: o potássio já recebido por outro spec não tem a seleção).
+      .filter({ has: page.locator('[data-testid^="sadt-selecionar-"]') })
       .first();
     const id = Number((await linha.getAttribute('data-testid'))!.replace('sadt-exame-', ''));
     await page.getByTestId(`sadt-selecionar-${id}`).check();
@@ -235,6 +237,7 @@ test.describe('SADT, laudos e portal de resultados @M26 @fase2', () => {
     await page.getByTestId('medico-nome').fill('Medica Solicitante Portal');
     await page.getByTestId('medico-uf').fill('SP');
     await page.getByTestId('medico-numero').fill('12345');
+    await page.getByTestId('medico-cpf').fill('111.444.777-35');
     await page.getByTestId('medico-email').fill('medica.portal@exemplo.invalid');
     await page.getByTestId('medico-senha').fill('senha-longa-sintetica');
     await page.getByTestId('medico-aceite').check();

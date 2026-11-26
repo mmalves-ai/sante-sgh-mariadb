@@ -5,6 +5,7 @@
 //   - o setor do lançamento leva o índice do setor no acordo (valor_indice_setor);
 //   - o item no modelo PORTE é cobrado pelo valor do porte do acordo na data;
 //   - faltando o valor do porte no acordo, o lançamento recusa com a falta dita (nada fica gravado).
+//   - o simulador (06-FAT linha 11) dá o mesmo valor, explicado, e mede o impacto de um reajuste sem gravar nada.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { randomUUID } from 'node:crypto';
 import { type ContextoOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
@@ -358,5 +359,72 @@ describe.skipIf(SEM_BANCO)('preço pelo índice do acordo no lançamento da cont
       [ids['conta']],
     );
     expect(Number(depois[0]!['n'])).toBe(Number(antes[0]!['n']));
+  });
+
+  // Simulador (06-FAT linha 11): o mesmo motor do lançamento, explicado, e o impacto do reajuste; nada é gravado.
+  const simular = (codigo: number, quantidade: number, extra: Record<string, unknown> = {}) =>
+    porta.simular(c, {
+      convenio: ids['fonte']!,
+      tipoConta: 'I',
+      tipo: 3,
+      codigo,
+      quantidade,
+      data: '2026-01-20',
+      ...extra,
+    });
+  const contagem = async () => {
+    const [x] = await linhas(
+      `SELECT (SELECT COUNT(*) FROM valor_indice WHERE fonte_pagadora_id = ?) AS ind,
+              (SELECT COUNT(*) FROM valor_porte_medico WHERE fonte_pagadora_id = ?) AS por,
+              (SELECT COUNT(*) FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?) AS itens`,
+      [ids['fonte'], ids['fonte'], ids['conta']],
+    );
+    return [Number(x!['ind']), Number(x!['por']), Number(x!['itens'])];
+  };
+
+  it('simulador, modelo CH: valor = (CH do acordo × CH do item + porte anestésico da internação) × quantidade, explicado', async () => {
+    const r = await simular(COD.ch, 2);
+    expect(r.origem).toBe('indice');
+    expect(r.preco?.unitario).toBe(200);
+    expect(r.preco?.valor).toBe(400);
+    expect(r.passos?.join(' ')).toContain('Porte anestésico 1');
+    expect(r.passos?.at(-1)).toBe('Valor = 200 × 2 = 400.');
+    expect((await simular(COD.ch, 1, { setor: ids['setor'] })).preco?.unitario).toBe(0.7 * 100 + 150);
+    expect((await simular(COD.ch, 1, { horarioEspecial: true })).preco?.unitario).toBe(50 + 195);
+  });
+
+  it('simulador: impacto do reajuste do índice e do porte, só no que o item usa, sem gravar nada', async () => {
+    const antes = await contagem();
+    const ch = await simular(COD.ch, 2, { reajuste: { indice: 10, tabela: 50 } });
+    expect(ch.impacto).toMatchObject({
+      atual: 400,
+      novo: 410,
+      diferenca: 10,
+      percentual: 2.5,
+      afetadoPor: ['indice'],
+    });
+    const porte = await simular(COD.porte, 3, { reajuste: { porte: -5 } });
+    expect(porte.preco?.valor).toBe(630);
+    expect(porte.impacto).toMatchObject({ atual: 630, novo: 598.5, diferenca: -31.5, afetadoPor: ['porte'] });
+    const nada = await simular(COD.porte, 1, { reajuste: { tabela: 10 } });
+    expect(nada.impacto).toMatchObject({ diferenca: 0, afetadoPor: [] });
+    expect(await contagem()).toEqual(antes);
+  });
+
+  it('simulador: os setores oferecidos são só os do estabelecimento da sessão', async () => {
+    const setores = await porta.setoresDoSimulador(c);
+    expect(setores.map((x) => x.id)).toContain(ids['setor']);
+    const [x] = await linhas(
+      'SELECT COUNT(*) AS n FROM setor_funcional WHERE estabelecimento_id = ? AND excluido_em IS NULL',
+      [ids['est']],
+    );
+    expect(setores).toHaveLength(Number(x!['n']));
+  });
+
+  it('simulador: porte sem valor no acordo diz a falta (o lançamento recusaria)', async () => {
+    const r = await simular(COD.semPorte, 1);
+    expect(r.preco).toBeNull();
+    expect(r.origem).toBe('indice');
+    expect(r.falta).toContain('registre o valor');
   });
 });

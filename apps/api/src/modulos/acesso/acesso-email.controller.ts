@@ -4,8 +4,8 @@
 //   - a escolha do segundo fator da própria conta (aplicativo ou código no e-mail), com a senha conferida há pouco e o
 //     CSRF, para o usuário do cliente e para o administrador da plataforma.
 // O token, o código e a senha nunca vão a log nem a trilha; a senha provisória volta só a quem tem o link.
-import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Req } from '@nestjs/common';
-import { PERMISSOES_ACESSO } from '@sgh/contratos';
+import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Req } from '@nestjs/common';
+import { PERMISSOES_ACESSO, PERMISSOES_M59_F2_CODIGOS } from '@sgh/contratos';
 import { z } from 'zod';
 import { AuditadoNoHandler, Permissao, Publica } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -28,6 +28,22 @@ interface Req {
 const esquemaPedidoPlataforma = z.object({ email: z.string().trim().min(3).max(254) });
 const esquemaUsarPlataforma = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) });
 const esquemaEscolherMetodo = z.object({ metodo: z.enum(METODOS_SEGUNDO_FATOR) });
+const B64URL = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]+$/)
+  .max(16_384);
+const esquemaCadastroDispositivo = z.object({
+  nome: z.string().trim().min(1).max(60),
+  resposta: z.object({ idCredencial: B64URL.max(1400), dadosCliente: B64URL, objetoAtestado: B64URL }),
+});
+const esquemaValidacaoDispositivo = z.object({
+  resposta: z.object({
+    idCredencial: B64URL.max(1400),
+    dadosCliente: B64URL,
+    dadosAutenticador: B64URL,
+    assinatura: B64URL,
+  }),
+});
 
 export interface MetodoSegundoFatorTela {
   readonly metodo: MetodoSegundoFator;
@@ -42,13 +58,16 @@ const AMBIENTES_SEM_PREFIXO = new Set(['dev', 'ci']);
  * substitui o aplicativo já cadastrado (nunca se troca por um fator mais fraco). A entrada aplica a mesma regra
  * (ServicoSessao: o e-mail vale só onde a política deixa entrar sem o código do aplicativo). null: pode escolher.
  */
-export function recusaEmailPelaPolitica(reg: Pick<Registro, 'segundoFator'>): string | null {
+export function recusaEmailPelaPolitica(
+  reg: Pick<Registro, 'segundoFator'>,
+  substituto = 'o código no e-mail',
+): string | null {
   const sf = reg.segundoFator;
   if (!sf) return null;
   if (sf.exigencia !== 'opcional')
-    return 'O seu perfil exige o código do aplicativo autenticador; o código no e-mail não o substitui.';
+    return `O seu perfil exige o código do aplicativo autenticador; ${substituto} não o substitui.`;
   if (sf.cadastrado)
-    return 'Você já usa o aplicativo autenticador; o código no e-mail não o substitui. Remova o aplicativo antes.';
+    return `Você já usa o aplicativo autenticador; ${substituto} não o substitui. Remova o aplicativo antes.`;
   return null;
 }
 
@@ -225,17 +244,41 @@ export class AcessoEmailController {
     const { id, rede } = await this.sessaoDoPedido(req, true);
     const r = esquemaEscolherMetodo.safeParse(corpo);
     if (!r.success)
-      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Escolha aplicativo ou e-mail.');
+      throw new ErroProblema(
+        'entrada-invalida',
+        400,
+        'Dados inválidos',
+        'Escolha aplicativo, e-mail ou dispositivo.',
+      );
     if (!this.servicos) throw new ErroProblema('indisponivel', 503, 'Serviço indisponível');
     try {
       const reg = await this.sessao!.exigirReautenticacaoRecente(id, rede);
       if (r.data.metodo === 'email' && !this.emailDisponivel(reg))
         throw new ErroProblema('indisponivel', 503, 'Envio de e-mail indisponível');
-      const recusa = r.data.metodo === 'email' ? recusaEmailPelaPolitica(reg) : null;
+      // 01-ADM L62: a chave do dispositivo é da conta do cliente (a conta da plataforma usa aplicativo ou e-mail).
+      if (r.data.metodo === 'dispositivo' && reg.plataforma)
+        throw new ErroProblema(
+          'recusa-de-negocio',
+          409,
+          'Chave do dispositivo indisponível',
+          'A conta da plataforma usa o aplicativo autenticador ou o código no e-mail.',
+          { codigo: 'dispositivo-so-cliente' },
+        );
+      // Como o e-mail, o dispositivo substitui o aplicativo só onde a política não o exige.
+      const recusa =
+        r.data.metodo === 'email'
+          ? recusaEmailPelaPolitica(reg)
+          : r.data.metodo === 'dispositivo'
+            ? recusaEmailPelaPolitica(reg, 'a chave do dispositivo')
+            : null;
       if (recusa)
-        throw new ErroProblema('recusa-de-negocio', 409, 'Código no e-mail não permitido', recusa, {
-          codigo: 'politica-exige-aplicativo',
-        });
+        throw new ErroProblema(
+          'recusa-de-negocio',
+          409,
+          r.data.metodo === 'email' ? 'Código no e-mail não permitido' : 'Chave do dispositivo não permitida',
+          recusa,
+          { codigo: 'politica-exige-aplicativo' },
+        );
       const correlacao = correlacaoDaRequisicao(req, 'segundo-fator');
       if (reg.plataforma)
         await this.plataforma().escolherMetodoSegundoFator(
@@ -256,6 +299,165 @@ export class AcessoEmailController {
           r.data.metodo,
         );
       return { metodo: r.data.metodo, emailDisponivel: this.emailDisponivel(reg) };
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  // ── A chave do dispositivo (WebAuthn com biometria local; 01-ADM L62): só contas do cliente ──
+
+  private dispositivo(r: Registro, req: Req) {
+    const d = this.servicos?.dispositivo;
+    if (!d) throw new ErroProblema('indisponivel', 503, 'Serviço indisponível');
+    if (r.plataforma)
+      throw new ErroProblema(
+        'recusa-de-negocio',
+        409,
+        'Não disponível',
+        'A conta da plataforma usa o aplicativo.',
+        {
+          codigo: 'dispositivo-so-cliente',
+        },
+      );
+    const ator = {
+      rede: r.rede,
+      hospital: r.estabelecimento,
+      login: r.login,
+      estacao: estacaoDaRequisicao(req),
+      correlacao: correlacaoDaRequisicao(req, 'dispositivo'),
+    };
+    return { d, ator };
+  }
+
+  private async lerRegistro(id: string, rede: string | null): Promise<Registro> {
+    const lido = await this.sessao!.ler(id, rede);
+    if (!lido) throw new ErroProblema('nao-autenticado', 401, 'Sessão necessária');
+    return lido.registro;
+  }
+
+  /** GET /api/sessao/segundo-fator/dispositivos: os dispositivos ativos da própria conta. */
+  @Get('sessao/segundo-fator/dispositivos')
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  async listarDispositivos(@Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, false);
+    try {
+      const { d, ator } = this.dispositivo(await this.lerRegistro(id, rede), req);
+      return { dispositivos: await d.listar(ator) };
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /** POST .../dispositivos/opcoes-cadastro: o desafio do cadastro (senha conferida há pouco; CSRF). */
+  @Post('sessao/segundo-fator/dispositivos/opcoes-cadastro')
+  @AuditadoNoHandler(
+    'desafio WebAuthn do cadastro: só emite o desafio (efêmero, na sessão); o cadastro do dispositivo grava a trilha',
+  )
+  @HttpCode(200)
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  async opcoesCadastroDispositivo(@Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    try {
+      const reg = await this.sessao!.exigirReautenticacaoRecente(id, rede);
+      const { d, ator } = this.dispositivo(reg, req);
+      return await d.iniciarCadastro(id, ator, reg.nome);
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /** POST .../dispositivos: grava a credencial conferida (só a chave pública). */
+  @Post('sessao/segundo-fator/dispositivos')
+  @HttpCode(201)
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  @AuditadoNoHandler('acesso.dispositivo.cadastrado na mesma transação')
+  async cadastrarDispositivo(@Body() corpo: unknown, @Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    const r = esquemaCadastroDispositivo.safeParse(corpo);
+    if (!r.success)
+      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Resposta do dispositivo inválida.');
+    try {
+      const reg = await this.sessao!.exigirReautenticacaoRecente(id, rede);
+      const { d, ator } = this.dispositivo(reg, req);
+      return await d.concluirCadastro(id, ator, r.data.resposta, r.data.nome);
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /** POST .../dispositivos/:id/revogar: remove o dispositivo (senha conferida há pouco; CSRF). */
+  @Post('sessao/segundo-fator/dispositivos/:id/revogar')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  @AuditadoNoHandler('acesso.dispositivo.revogado na mesma transação')
+  async revogarDispositivo(@Param('id') alvo: string, @Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    const n = Number(alvo);
+    if (!Number.isSafeInteger(n) || n < 1) throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos');
+    try {
+      const reg = await this.sessao!.exigirReautenticacaoRecente(id, rede);
+      const { d, ator } = this.dispositivo(reg, req);
+      await d.revogar(ator, n);
+      return { dispositivos: await d.listar(ator) };
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /**
+   * POST /api/acesso/identidade/usuarios/:login/dispositivos/revogar: o gestor de acessos revoga os dispositivos de
+   * outra conta (troca ou perda de aparelho), ao lado da revogação do aplicativo; a conta volta ao fluxo do aplicativo.
+   * Senha do gestor conferida de novo (reautenticação) e CSRF.
+   */
+  @Post('acesso/identidade/usuarios/:login/dispositivos/revogar')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_M59_F2_CODIGOS.politica2faEditar)
+  @AuditadoNoHandler('acesso.dispositivo.revogado na mesma transação de cada credencial')
+  async revogarDispositivosDeOutro(@Param('login') bruto: string, @Body() corpo: unknown, @Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    const login = z.string().trim().min(1).max(64).safeParse(bruto);
+    const p = z.object({ senha: z.string().min(1).max(256) }).safeParse(corpo);
+    if (!login.success || !p.success) throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos');
+    try {
+      await this.sessao!.reautenticar(id, rede, p.data.senha);
+      const reg = await this.sessao!.exigirReautenticacaoRecente(id, rede);
+      const { d, ator } = this.dispositivo(reg, req);
+      return { revogados: await d.revogarTodosDeOutro(ator, login.data) };
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /** POST .../dispositivos/opcoes-validacao: o desafio para conferir o dispositivo (CSRF). */
+  @Post('sessao/segundo-fator/dispositivos/opcoes-validacao')
+  @AuditadoNoHandler(
+    'desafio WebAuthn da validação: só emite o desafio (efêmero, na sessão); a validação grava a trilha',
+  )
+  @HttpCode(200)
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  async opcoesValidacaoDispositivo(@Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    try {
+      const { d, ator } = this.dispositivo(await this.lerRegistro(id, rede), req);
+      return await d.iniciarValidacao(id, ator);
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /** POST .../dispositivos/validar: confere a assinatura do dispositivo e grava o uso (contador). */
+  @Post('sessao/segundo-fator/dispositivos/validar')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_ACESSO.segundoFatorGerir)
+  @AuditadoNoHandler('acesso.dispositivo.usado na mesma transação')
+  async validarDispositivo(@Body() corpo: unknown, @Req() req: Req) {
+    const { id, rede } = await this.sessaoDoPedido(req, true);
+    const r = esquemaValidacaoDispositivo.safeParse(corpo);
+    if (!r.success)
+      throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Resposta do dispositivo inválida.');
+    try {
+      const { d, ator } = this.dispositivo(await this.lerRegistro(id, rede), req);
+      return { conferido: true, ...(await d.concluirValidacao(id, ator, r.data.resposta)) };
     } catch (e) {
       this.erro(e);
     }

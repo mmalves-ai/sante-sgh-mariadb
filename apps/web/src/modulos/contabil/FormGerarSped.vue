@@ -13,10 +13,10 @@ import {
 } from '@sgh/contratos';
 import { SanteAlerta, SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQueryClient } from '@tanstack/vue-query';
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import ErroContabil from './ErroContabil.vue';
-import { gerarSped } from './api-demonstracoes.js';
+import { gerarSped, lerSignatariosSped } from './api-demonstracoes.js';
 import { corpoDoSped, novoRascunhoSped, problemasDoSped, signatarioVazio } from './comum-demonstracoes.js';
 
 const props = defineProps<{ apoio: ApoioSped; empresa: number; tipo: TipoArquivoSped; exercicio: number }>();
@@ -45,6 +45,24 @@ const tentou = ref(false);
 const ocupado = ref(false);
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
+// Os signatários vigentes do cadastro da empresa preenchem o formulário (contador e responsável).
+const doCadastro = ref(0);
+onMounted(async () => {
+  try {
+    const c = await lerSignatariosSped(props.empresa);
+    if (c.faltas.length === 0 && c.itens.length >= 2) {
+      r.value.signatarios = c.itens.map((s) => ({
+        ...s,
+        crc: s.crc ?? '',
+        email: s.email ?? '',
+        telefone: s.telefone ?? '',
+      }));
+      doCadastro.value = c.itens.length;
+    }
+  } catch {
+    // Sem o cadastro, o formulário segue vazio para digitar.
+  }
+});
 function incluirSignatario() {
   if (r.value.signatarios.length < 10) r.value.signatarios.push(signatarioVazio());
 }
@@ -114,6 +132,13 @@ async function gerar() {
       data-testid="sped-forma-nao-gerada"
     />
     <h4>{{ t('contabil.sped.signatarios') }}</h4>
+    <SanteAlerta
+      v-if="doCadastro > 0"
+      variante="info"
+      :texto="t('contabil.sped.doCadastro', { n: doCadastro })"
+      data-testid="sped-signatarios-cadastro"
+    />
+    <p class="dica" data-testid="sped-guardar-signatarios">{{ t('contabil.sped.guardarSignatarios') }}</p>
     <fieldset
       v-for="(s, i) in r.signatarios"
       :key="i"

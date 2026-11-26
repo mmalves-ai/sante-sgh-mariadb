@@ -79,6 +79,12 @@ import {
   PortaProgramaSaudePropria,
 } from './programa-saude-propria.js';
 import { ReajusteColetivoOperadoraController } from './reajuste-coletivo.controller.js';
+import { ProvisaoTecnicaOperadoraController } from './provisao-tecnica.controller.js';
+import {
+  METODOS_PROVISAO_TECNICA_PORTA,
+  PORTA_PROVISAO_TECNICA,
+  PortaProvisaoTecnicaPropria,
+} from './provisao-tecnica-propria.js';
 import {
   METODOS_REAJUSTE_COLETIVO,
   PORTA_REAJUSTE_COLETIVO,
@@ -96,6 +102,12 @@ import {
   PortaCadastroComplementarPropria,
 } from './cadastro-complementar-porta-propria.js';
 import { CobrancaOperadoraController } from './cobranca.controller.js';
+import { DescontoFolhaOperadoraController } from './desconto-folha.controller.js';
+import {
+  METODOS_DESCONTO_FOLHA,
+  PORTA_DESCONTO_FOLHA,
+  PortaDescontoFolhaPropria,
+} from './desconto-folha-propria.js';
 import {
   METODOS_PORTA_COBRANCA,
   PORTA_COBRANCA_OPERADORA,
@@ -114,6 +126,12 @@ import {
 import { ContasOperadoraController } from './contas.controller.js';
 import { METODOS_TROCA_TISS, PORTA_TROCA_TISS, PortaTrocaTissPropria } from './troca-tiss-propria.js';
 import { TrocaTissOperadoraController } from './troca-tiss.controller.js';
+import { PortaisOperadoraController } from './portais-operadora.controller.js';
+import {
+  METODOS_PORTAIS_OPERADORA,
+  PORTA_PORTAIS_OPERADORA,
+  PortaPortaisOperadoraPropria,
+} from './portais-operadora-propria.js';
 import { PortalPrestadorPedidosController } from './portal-prestador-pedidos.controller.js';
 import {
   METODOS_PORTAL_PRESTADOR_PEDIDOS,
@@ -303,14 +321,17 @@ export async function moduloOperadora(
       DeclaracoesAnsController,
       RegrasCoparticipacaoController,
       ReajusteColetivoOperadoraController,
+      ProvisaoTecnicaOperadoraController,
       ProgramaSaudeOperadoraController,
       RedeCadastroOperadoraController,
       BeneficiarioSaudeOperadoraController,
       ComercialOperadoraController,
       ContaConferenciaOperadoraController,
       ReembolsoOperadoraController,
+      DescontoFolhaOperadoraController,
       TrocaTissOperadoraController,
       PortalPrestadorPedidosController,
+      PortaisOperadoraController,
     ],
     providers: [
       ...(configuracao ? [{ provide: FONTE_CONFIGURACAO, useValue: configuracao }] : []),
@@ -352,6 +373,22 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaPortalPrestadorPedidosPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaPortalPrestadorPedidosPropria>(METODOS_PORTAL_PRESTADOR_PEDIDOS),
+      },
+      // 08-SGO L114 (C3-027): portais do beneficiário, da contratante e do corretor só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_PORTAIS_OPERADORA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaPortaisOperadoraPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaPortaisOperadoraPropria>(METODOS_PORTAIS_OPERADORA),
+      },
+      // 08-SGO L97 (C3-028): desconto em folha da mensalidade só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_DESCONTO_FOLHA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaDescontoFolhaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaDescontoFolhaPropria>(METODOS_DESCONTO_FOLHA),
       },
       // 08-SGO L106 (C2-047): reembolso ao beneficiário só no banco (sem núcleo, 503); comprovantes pela porta de arquivos.
       {
@@ -400,6 +437,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaReajusteColetivoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaReajusteColetivoPropria>(METODOS_REAJUSTE_COLETIVO),
+      },
+      // 08-SGO L111 (C3-026): plano padrão da ANS, mapa das contas e provisões técnicas só no banco (sem núcleo, 503).
+      {
+        provide: PORTA_PROVISAO_TECNICA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaProvisaoTecnicaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaProvisaoTecnicaPropria>(METODOS_PROVISAO_TECNICA_PORTA),
       },
       // 08-SGO L102 (C2-120): remuneração e pagamento do prestador só no banco do cliente (sem núcleo, 503).
       {

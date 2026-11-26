@@ -371,6 +371,13 @@ export const rotasFaturamento: RouteRecordRaw[] = [
     meta: { permissao: 'faturamento.sus.ler' },
   },
   {
+    // F7 (06-SUS linha 62): repasse da produção SUS aprovada aos profissionais (regras, rateio do SADT e apuração).
+    path: '/faturamento/sus/repasse',
+    name: 'faturamento.susRepasse',
+    component: () => import('./telas/RepasseSusTela.vue'),
+    meta: { permissao: 'repasse.apuracao.ler' },
+  },
+  {
     // F8 (06-SUS linha 65): notificação de doador e inscrição de receptor para a central estadual de transplantes.
     path: '/faturamento/sus/transplantes',
     name: 'faturamento.susTransplantes',

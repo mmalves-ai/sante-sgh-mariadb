@@ -927,6 +927,7 @@ export class ServicoDocumentos {
     paciente: number,
     prof: ProfissionalPep | null,
     acoes: { criar: AcaoLiberada; inativar: AcaoLiberada },
+    noFormulario: number | null = null,
   ): Promise<AlergiasPaciente> {
     const [als, cat, sit, ats, docs, manifestacoes] = await Promise.all([
       this.porta.alergias(c, paciente),
@@ -966,13 +967,17 @@ export class ServicoDocumentos {
       principios: cat.principios,
       registros,
       manifestacoes,
+      // Fora do formulário, a alergia é ligada a um registro clínico do atendimento; dentro dele (D-ALE-2), ao
+      // próprio atendimento aberto, sem exigir registro já gravado.
       criar:
-        acoes.criar.pode && registros.length === 0
+        acoes.criar.pode && registros.length === 0 && !ats.some((a) => a.aberto && a.id === noFormulario)
           ? {
               pode: false,
               motivo: 'Faça antes o registro clínico do atendimento: a alergia é informada dentro dele.',
             }
           : acoes.criar,
+      // A alteração vale sobre a alergia já registrada: pede a permissão de registrar, não o registro clínico.
+      alterar: acoes.criar,
       inativar: acoes.inativar,
     };
   }
