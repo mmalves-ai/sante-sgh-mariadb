@@ -47,7 +47,7 @@ const motorista = (id: number, nome: string, controlado: boolean) => ({
 const transferencia = (documento: number, numero: string, controlado: boolean) => ({
   documento,
   numero,
-  situacao: 'enviada',
+  situacao: 'aberto',
   movimentadoEm: '2026-11-25T08:00:00',
   origem: 'ALMOXARIFADO SINTETICO',
   destino: 'FARMACIA SATELITE SINTETICA',
@@ -56,7 +56,7 @@ const transferencia = (documento: number, numero: string, controlado: boolean) =
   controlado,
   termolabil: false,
 });
-const item = (id: number, sequencia: number, documento: number, situacao: string) => ({
+const item = (id: number, sequencia: number, documento: number, situacao: string, destinoAqui = false) => ({
   id,
   sequencia,
   documento,
@@ -69,6 +69,8 @@ const item = (id: number, sequencia: number, documento: number, situacao: string
   recebedor: null,
   entregueEm: null,
   observacao: null,
+  // Os itens chegam à unidade B: só ela confere (a sessão passa a ser a da B depois da expedição).
+  destinoAqui,
 });
 
 test.describe('@C1-120 romaneio de entrega entre unidades', () => {
@@ -87,6 +89,9 @@ test.describe('@C1-120 romaneio de entrega entre unidades', () => {
               lista: undefined,
               pendentes: (romaneio['lista'] as { situacao: string }[]).filter(
                 (i) => i.situacao === 'pendente',
+              ).length,
+              pendentesAqui: (romaneio['lista'] as { situacao: string; destinoAqui: boolean }[]).filter(
+                (i) => i.situacao === 'pendente' && i.destinoAqui,
               ).length,
             },
           ]
@@ -108,7 +113,16 @@ test.describe('@C1-120 romaneio de entrega entre unidades', () => {
           veiculos,
           transportadoras: [{ id: 81, nome: 'TRANSPORTADORA SINTETICA' }],
           transferencias: romaneio ? [] : transferencias,
+          locais: [{ id: 11, nome: 'ALMOXARIFADO SINTETICO' }],
+          destinos: [{ id: 21, nome: 'FARMACIA SATELITE SINTETICA', unidade: 'UNIDADE SINTETICA 2' }],
+          saldos: [{ local: 11, item: 51, nome: 'ITEM SINTETICO', livre: 10 }],
         });
+      if (url === `${B}/envios`)
+        return json(
+          rota,
+          { ok: true, id: 703, numero: 703, mensagem: 'Envio 703 registrado: aguarda o romaneio.' },
+          201,
+        );
       if (req.method() === 'GET' && url === `${B}/1`) return json(rota, romaneio);
       if (url === `${B}/veiculos`) {
         veiculos.push({
@@ -142,6 +156,8 @@ test.describe('@C1-120 romaneio de entrega entre unidades', () => {
           valorFrete: null,
           itens: 2,
           pendentes: 2,
+          pendentesAqui: 0,
+          daUnidade: true,
           veiculoId: 41,
           motoristaId: null,
           transportadoraId: null,
@@ -166,6 +182,10 @@ test.describe('@C1-120 romaneio de entrega entre unidades', () => {
           quilometragemSaida: 1000,
           saidaEm: '2026-11-25T09:00:00',
           liberador: 'ALMOXARIFE SINTETICO',
+          // A partir daqui a leitura é a da unidade B, que recebe: ela confere; a origem não.
+          daUnidade: false,
+          pendentesAqui: 2,
+          lista: [item(901, 1, 701, 'pendente', true), item(902, 2, 702, 'pendente', true)],
         };
         return json(rota, { ok: true, id: 1, mensagem: 'Romaneio expedido: em trânsito.' });
       }
@@ -175,7 +195,8 @@ test.describe('@C1-120 romaneio de entrega entre unidades', () => {
           versao: 3,
           situacao: 'entregue_parcial',
           quilometragemChegada: 1042,
-          lista: [item(901, 1, 701, 'entregue'), item(902, 2, 702, 'recusado')],
+          pendentesAqui: 0,
+          lista: [item(901, 1, 701, 'entregue', true), item(902, 2, 702, 'recusado', true)],
         };
         return json(rota, { ok: true, id: 1, mensagem: 'Conferência registrada.' });
       }
@@ -208,8 +229,30 @@ test.describe('@C1-120 romaneio de entrega entre unidades', () => {
     });
     expect(vei?.chave).toBeTruthy();
 
-    // Montagem: as duas transferências, o controlado à vista, o veículo cadastrado.
+    // Envio a outra unidade: a quantidade acima do saldo livre trava na hora; dentro dele, o envio é registrado.
+    await tela.getByTestId('romaneio-aba-envio').click();
+    await escolher(tela.getByTestId('romaneio-envio-origem'), { rotulo: 'ALMOXARIFADO SINTETICO' });
+    await escolher(tela.getByTestId('romaneio-envio-destino'), { rotulo: /UNIDADE SINTETICA 2/ });
+    await escolher(tela.getByTestId('romaneio-envio-item'), { rotulo: /ITEM SINTETICO/ });
+    await tela.getByTestId('romaneio-envio-quantidade').fill('12');
+    await tela.getByTestId('romaneio-envio-adicionar').click();
+    await expect(tela.getByTestId('romaneio-recusas-envio')).toContainText('saldo livre');
+    await expect(tela.getByTestId('romaneio-enviar')).toBeDisabled();
+    await tela.getByTestId('romaneio-envio-itens').getByRole('button').click();
+    await escolher(tela.getByTestId('romaneio-envio-item'), { rotulo: /ITEM SINTETICO/ });
+    await tela.getByTestId('romaneio-envio-quantidade').fill('4');
+    await tela.getByTestId('romaneio-envio-adicionar').click();
+    await tela.getByTestId('romaneio-enviar').click();
+    await expect(tela.getByTestId('romaneio-mensagem')).toContainText('Envio 703 registrado');
+    expect(gravados.find((g) => g.url === `${B}/envios`)?.corpo).toMatchObject({
+      origem: 11,
+      destino: 21,
+      itens: [{ item: 51, quantidade: 4 }],
+    });
+
+    // Montagem: as duas transferências, o controlado à vista, o veículo cadastrado; cancelar envio pede o motivo.
     await tela.getByTestId('romaneio-aba-montar').click();
+    await expect(tela.getByTestId('romaneio-cancelar-envio-T-701')).toBeDisabled();
     await expect(tela.getByTestId('romaneio-transferencias')).toContainText('controlado');
     await expect(tela.getByTestId('romaneio-montar')).toBeDisabled();
     await tela.getByTestId('romaneio-transferencia-T-701').check();
@@ -243,7 +286,8 @@ test.describe('@C1-120 romaneio de entrega entre unidades', () => {
       quilometragemSaida: 1000,
     });
 
-    // Conferência por item: o recusado sem motivo trava; com o motivo, fecha entregue em parte.
+    // Conferência por item, pela unidade que recebe: o recusado sem motivo trava; com o motivo, fecha entregue em parte.
+    await expect(detalhe.getByTestId('romaneio-cancelamento')).toHaveCount(0);
     await expect(detalhe.getByTestId('romaneio-conferencia')).toBeVisible();
     await escolher(detalhe.getByTestId('romaneio-desfecho-1'), { rotulo: 'Entregue' });
     await escolher(detalhe.getByTestId('romaneio-desfecho-2'), { rotulo: 'Recusado' });

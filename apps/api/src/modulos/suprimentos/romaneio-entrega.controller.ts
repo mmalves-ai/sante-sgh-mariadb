@@ -8,8 +8,11 @@
 //   POST /api/suprimentos/romaneios/:id/cancelamento   cancela antes da saída, com o motivo
 //   POST /api/suprimentos/romaneios/motoristas[/:id]   o cadastro do motorista (novo ou a alteração)
 //   POST /api/suprimentos/romaneios/veiculos[/:id]     o cadastro do veículo (novo ou a alteração)
+//   POST /api/suprimentos/romaneios/envios             o envio entre unidades (destino em outra unidade do cliente)
+//   POST /api/suprimentos/romaneios/envios/:id/cancelamento  cancela o envio em aberto fora de romaneio ativo
 // Ler pede suprimentos.transferencia.ler; montar, expedir, cancelar e os cadastros, suprimentos.transferencia.enviar;
-// a conferência na chegada, suprimentos.transferencia.receber. A gravação exige a Idempotency-Key.
+// a conferência na chegada (pela unidade de destino), suprimentos.transferencia.receber. O envio entre unidades e o
+// cancelamento dele, suprimentos.transferencia.enviar. A gravação exige a Idempotency-Key.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req } from '@nestjs/common';
 import { CATEGORIAS_HABILITACAO, DESFECHOS_ITEM_ROMANEIO } from '@sgh/contratos/regras-suprimentos';
 import { z } from 'zod';
@@ -99,6 +102,20 @@ export const esquemaConferencia = z
       .max(200),
   })
   .strict();
+
+export const esquemaEnvio = z
+  .object({
+    origem: id_,
+    destino: id_,
+    itens: z
+      .array(z.object({ item: id_, quantidade: z.number().positive().max(9_999_999) }).strict())
+      .min(1)
+      .max(200),
+    observacao: z.string().trim().max(1000).nullable().default(null),
+  })
+  .strict();
+
+export const esquemaCancelamentoEnvio = z.object({ motivo: z.string().trim().max(500) }).strict();
 
 export const esquemaCancelamento = z
   .object({ versao: z.number().int().positive(), motivo: z.string().trim().max(500) })
@@ -199,6 +216,26 @@ export class RomaneioEntregaController {
     const e = corpo(esquemaMontagem, b);
     const r = await this.porta.montar(sessaoDe(req).porta, e, chaveDe(req));
     return { ok: true, ...r, mensagem: `Romaneio ${r.numero} montado.` };
+  }
+
+  @Post('envios')
+  @HttpCode(201)
+  @Permissao(ENVIAR)
+  @AuditadoNoHandler('suprimentos.romaneio.enviar-entre-unidades pelo executor (trilha na mesma transação)')
+  async enviar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const e = corpo(esquemaEnvio, b);
+    const r = await this.porta.enviar(sessaoDe(req).porta, e, chaveDe(req));
+    return { ok: true, ...r, mensagem: `Envio ${r.numero} registrado: aguarda o romaneio.` };
+  }
+
+  @Post('envios/:id/cancelamento')
+  @HttpCode(200)
+  @Permissao(ENVIAR)
+  @AuditadoNoHandler('suprimentos.romaneio.cancelar-envio pelo executor (trilha na mesma transação)')
+  async cancelarEnvio(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const e = corpo(esquemaCancelamentoEnvio, b);
+    const r = await this.porta.cancelarEnvio(sessaoDe(req).porta, idDe(id), e.motivo, chaveDe(req));
+    return { ok: true, ...r, mensagem: 'Envio cancelado: o histórico continua.' };
   }
 
   @Post(':id/expedicao')

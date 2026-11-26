@@ -13,6 +13,8 @@ import {
   type MotoristaEntrada,
   placaNormalizada,
   situacaoAposConferencia,
+  conferirCancelamentoEnvio,
+  conferirEnvioEntreUnidades,
   type VeiculoEntrada,
 } from './index.js';
 
@@ -93,13 +95,21 @@ describe('cadastro do motorista e do veículo', () => {
 
 describe('montagem do romaneio', () => {
   const transf = [
-    { documento: 10, situacaoDocumento: 'aberto', emOutroRomaneio: false },
-    { documento: 11, situacaoDocumento: 'concluido', emOutroRomaneio: false },
-    { documento: 12, situacaoDocumento: 'cancelado', emOutroRomaneio: false },
-    { documento: 13, situacaoDocumento: 'aberto', emOutroRomaneio: true },
+    { documento: 10, situacaoDocumento: 'aberto', emOutroRomaneio: false, entreUnidades: true },
+    { documento: 11, situacaoDocumento: 'concluido', emOutroRomaneio: false, entreUnidades: true },
+    { documento: 12, situacaoDocumento: 'cancelado', emOutroRomaneio: false, entreUnidades: true },
+    { documento: 13, situacaoDocumento: 'aberto', emOutroRomaneio: true, entreUnidades: true },
+    { documento: 14, situacaoDocumento: 'aberto', emOutroRomaneio: false, entreUnidades: true },
+    { documento: 15, situacaoDocumento: 'aberto', emOutroRomaneio: false, entreUnidades: false },
   ];
-  it('aceita transferências abertas ou concluídas fora de outro romaneio', () => {
-    expect(conferirMontagem({ documentos: [10, 11], valorFrete: 120 }, transf)).toEqual([]);
+  it('aceita só as transferências entre unidades em aberto, fora de outro romaneio', () => {
+    expect(conferirMontagem({ documentos: [10, 14], valorFrete: 120 }, transf)).toEqual([]);
+  });
+  it('recusa a transferência já recebida e a da mesma unidade', () => {
+    expect(codigos(conferirMontagem({ documentos: [11, 15], valorFrete: null }, transf))).toEqual([
+      'romaneio-transferencia-recebida',
+      'romaneio-mesma-unidade',
+    ]);
   });
   it('recusa vazio, repetida, inexistente, cancelada, já em outro romaneio e frete negativo', () => {
     expect(codigos(conferirMontagem({ documentos: [], valorFrete: null }, transf))).toEqual([
@@ -119,10 +129,17 @@ describe('expedição', () => {
   it('aceita o veículo próprio com motorista apto', () => {
     expect(conferirExpedicao(EXPEDICAO)).toEqual([]);
   });
-  it('aceita a transportadora sem veículo nem motorista', () => {
+  it('aceita a transportadora sem veículo nem motorista na carga comum', () => {
     expect(conferirExpedicao({ ...EXPEDICAO, veiculo: null, motorista: null, transportadora: 7 })).toEqual(
       [],
     );
+  });
+  it('recusa a carga controlada e a termolábil só com a transportadora, sem motorista nem veículo', () => {
+    const terceiro = { ...EXPEDICAO, veiculo: null, motorista: null, transportadora: 7 };
+    expect(codigos(conferirExpedicao({ ...terceiro, levaControlado: true, levaTermolabil: true }))).toEqual([
+      'romaneio-controlado-sem-motorista',
+      'romaneio-termolabil-sem-veiculo',
+    ]);
   });
   it('recusa sem transporte, sem itens e o romaneio já expedido', () => {
     expect(codigos(conferirExpedicao({ ...EXPEDICAO, itens: 0, veiculo: null, motorista: null }))).toEqual([
@@ -241,5 +258,46 @@ describe('cancelamento', () => {
       'romaneio-nao-cancelavel',
       'romaneio-motivo',
     ]);
+  });
+});
+
+describe('envio entre unidades', () => {
+  const itens = [{ item: 1, quantidade: 2 }];
+  it('aceita o destino ativo em outra unidade', () => {
+    expect(conferirEnvioEntreUnidades({ origemUnidade: 1, destinoUnidade: 2, itens })).toEqual([]);
+  });
+  it('recusa o destino da mesma unidade, o inexistente, sem itens, repetido e quantidade zero', () => {
+    expect(codigos(conferirEnvioEntreUnidades({ origemUnidade: 1, destinoUnidade: 1, itens }))).toEqual([
+      'envio-mesma-unidade',
+    ]);
+    expect(
+      codigos(
+        conferirEnvioEntreUnidades({
+          origemUnidade: 1,
+          destinoUnidade: null,
+          itens: [
+            { item: 1, quantidade: 0 },
+            { item: 1, quantidade: 1 },
+          ],
+        }),
+      ),
+    ).toEqual(['envio-destino-inexistente', 'envio-item-repetido', 'envio-quantidade']);
+    expect(codigos(conferirEnvioEntreUnidades({ origemUnidade: 1, destinoUnidade: 2, itens: [] }))).toEqual([
+      'envio-sem-itens',
+    ]);
+  });
+  it('o cancelamento recusa o envio em romaneio ativo, o já recebido e sem motivo', () => {
+    expect(
+      conferirCancelamentoEnvio({
+        situacaoDocumento: 'aberto',
+        emRomaneioAtivo: false,
+        motivo: 'Pedido errado',
+      }),
+    ).toEqual([]);
+    expect(
+      codigos(
+        conferirCancelamentoEnvio({ situacaoDocumento: 'concluido', emRomaneioAtivo: true, motivo: '' }),
+      ),
+    ).toEqual(['envio-nao-cancelavel', 'envio-em-romaneio', 'envio-motivo']);
   });
 });

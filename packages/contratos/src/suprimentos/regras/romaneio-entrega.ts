@@ -120,6 +120,8 @@ export interface TransferenciaRomaneavel {
   readonly situacaoDocumento: string;
   /** Já está em outro romaneio não cancelado com item pendente ou entregue. */
   readonly emOutroRomaneio: boolean;
+  /** O destino é local de outra unidade do cliente (o romaneio é a logística entre unidades). */
+  readonly entreUnidades: boolean;
 }
 
 export interface MontagemRomaneio {
@@ -127,7 +129,10 @@ export interface MontagemRomaneio {
   readonly valorFrete: number | null;
 }
 
-/** A montagem: ao menos uma transferência, sem repetir, cada uma aberta ao envio e fora de outro romaneio ativo. */
+/**
+ * A montagem: ao menos uma transferência entre unidades, sem repetir, cada uma ainda em aberto (enviada e não recebida:
+ * a recebida, a cancelada e a estornada não viajam) e fora de outro romaneio ativo.
+ */
 export function conferirMontagem(
   e: MontagemRomaneio,
   transferencias: readonly TransferenciaRomaneavel[],
@@ -156,6 +161,20 @@ export function conferirMontagem(
         recusa('romaneio-transferencia-cancelada', `A transferência ${d} foi cancelada ou estornada.`, [
           'documentos',
         ]),
+      );
+    else if (t.situacaoDocumento !== 'aberto')
+      r.push(
+        recusa('romaneio-transferencia-recebida', `A transferência ${d} já foi recebida no destino.`, [
+          'documentos',
+        ]),
+      );
+    if (!t.entreUnidades)
+      r.push(
+        recusa(
+          'romaneio-mesma-unidade',
+          `A transferência ${d} é entre locais da mesma unidade: o romaneio leva de uma unidade a outra.`,
+          ['documentos'],
+        ),
       );
     if (t.emOutroRomaneio)
       r.push(
@@ -242,6 +261,24 @@ export function conferirExpedicao(e: Expedicao): RecusaSuprimentos[] {
         ),
       );
   }
+  // Sem motorista nem veículo informados (só a transportadora), a carga controlada e a termolábil não saem: a
+  // vigilância sanitária pede o transportador habilitado e a cadeia fria conferidos na saída, também no terceiro.
+  if (e.levaControlado && e.motorista === null)
+    r.push(
+      recusa(
+        'romaneio-controlado-sem-motorista',
+        'A carga tem medicamento controlado: informe o motorista habilitado a esse transporte, próprio ou da transportadora.',
+        ['motorista'],
+      ),
+    );
+  if (e.levaTermolabil && e.veiculo === null)
+    r.push(
+      recusa(
+        'romaneio-termolabil-sem-veiculo',
+        'A carga tem item termolábil: informe o veículo com baú refrigerado, próprio ou da transportadora.',
+        ['veiculo'],
+      ),
+    );
   if (e.levaTermolabil && e.veiculo && !e.veiculo.refrigerado)
     r.push(
       recusa('romaneio-termolabil', 'A carga tem item termolábil: escolha um veículo com baú refrigerado.', [
@@ -325,5 +362,54 @@ export function conferirCancelamentoRomaneio(
     r.push(recusa('romaneio-nao-cancelavel', 'Depois da saída o romaneio não se cancela: confira os itens.'));
   if (motivo.trim().length < MOTIVO_MINIMO_ROMANEIO)
     r.push(recusa('romaneio-motivo', 'O cancelamento pede o motivo (ao menos 5 caracteres).', ['motivo']));
+  return r;
+}
+
+export interface EnvioEntreUnidades {
+  readonly origemUnidade: number;
+  /** A unidade do local de destino; null quando o local não existe ou está inativo. */
+  readonly destinoUnidade: number | null;
+  readonly itens: readonly { readonly item: number; readonly quantidade: number }[];
+}
+
+/** O envio entre unidades: destino ativo em outra unidade do cliente, ao menos um item, sem repetir, quantidade > 0. */
+export function conferirEnvioEntreUnidades(e: EnvioEntreUnidades): RecusaSuprimentos[] {
+  const r: RecusaSuprimentos[] = [];
+  if (e.destinoUnidade === null)
+    r.push(
+      recusa('envio-destino-inexistente', 'O local de destino não existe ou está inativo.', ['destino']),
+    );
+  else if (e.destinoUnidade === e.origemUnidade)
+    r.push(
+      recusa('envio-mesma-unidade', 'O destino é desta unidade: use a transferência entre locais.', [
+        'destino',
+      ]),
+    );
+  if (e.itens.length === 0) r.push(recusa('envio-sem-itens', 'Informe ao menos um item.', ['itens']));
+  if (new Set(e.itens.map((i) => i.item)).size !== e.itens.length)
+    r.push(recusa('envio-item-repetido', 'O mesmo item entrou duas vezes.', ['itens']));
+  if (e.itens.some((i) => !(i.quantidade > 0)))
+    r.push(recusa('envio-quantidade', 'A quantidade de cada item é maior que zero.', ['itens']));
+  return r;
+}
+
+/** O cancelamento do envio entre unidades: só em aberto, fora de romaneio ativo e com o motivo. */
+export function conferirCancelamentoEnvio(c: {
+  readonly situacaoDocumento: string;
+  readonly emRomaneioAtivo: boolean;
+  readonly motivo: string;
+}): RecusaSuprimentos[] {
+  const r: RecusaSuprimentos[] = [];
+  if (c.situacaoDocumento !== 'aberto')
+    r.push(recusa('envio-nao-cancelavel', 'O envio já foi recebido ou cancelado.'));
+  if (c.emRomaneioAtivo)
+    r.push(
+      recusa(
+        'envio-em-romaneio',
+        'O envio está num romaneio ativo: cancele o romaneio antes da saída ou confira o item na chegada.',
+      ),
+    );
+  if (c.motivo.trim().length < MOTIVO_MINIMO_ROMANEIO)
+    r.push(recusa('envio-motivo', 'O cancelamento pede o motivo (ao menos 5 caracteres).', ['motivo']));
   return r;
 }

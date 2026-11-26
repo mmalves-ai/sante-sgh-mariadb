@@ -72,6 +72,10 @@ export interface RomaneioResumoTela {
   readonly valorFrete: number | null;
   readonly itens: number;
   readonly pendentes: number;
+  /** Itens pendentes que chegam a esta unidade: a conferência é de quem recebe. */
+  readonly pendentesAqui: number;
+  /** O romaneio é desta unidade: a origem expede e cancela. */
+  readonly daUnidade: boolean;
 }
 
 export interface ItemRomaneioTela {
@@ -87,6 +91,8 @@ export interface ItemRomaneioTela {
   readonly recebedor: string | null;
   readonly entregueEm: string | null;
   readonly observacao: string | null;
+  /** O item chega a esta unidade (só ela confere). */
+  readonly destinoAqui: boolean;
 }
 
 export interface RomaneioDetalheTela extends RomaneioResumoTela {
@@ -110,6 +116,14 @@ export interface PainelRomaneioTela {
   readonly veiculos: readonly VeiculoTela[];
   readonly transportadoras: readonly { readonly id: number; readonly nome: string }[];
   readonly transferencias: readonly TransferenciaDisponivelTela[];
+  readonly locais: readonly { readonly id: number; readonly nome: string }[];
+  readonly destinos: readonly { readonly id: number; readonly nome: string; readonly unidade: string }[];
+  readonly saldos: readonly {
+    readonly local: number;
+    readonly item: number;
+    readonly nome: string;
+    readonly livre: number;
+  }[];
 }
 
 export interface TransporteTela {
@@ -194,6 +208,22 @@ export const conferirRomaneio = (
   e: { versao: number; quilometragemChegada: number | null; desfechos: DesfechoItem[] },
   chave = novaChaveRomaneio('conferir'),
 ): Promise<RespostaRomaneio> => postar(`${R}/${id}/conferencia`, e, chave);
+
+export const enviarEntreUnidades = (
+  e: {
+    origem: number;
+    destino: number;
+    itens: { item: number; quantidade: number }[];
+    observacao: string | null;
+  },
+  chave = novaChaveRomaneio('enviar'),
+): Promise<RespostaRomaneio> => postar(`${R}/envios`, e, chave);
+
+export const cancelarEnvio = (
+  documento: number,
+  motivo: string,
+  chave = novaChaveRomaneio('cancelar-envio'),
+): Promise<RespostaRomaneio> => postar(`${R}/envios/${documento}/cancelamento`, { motivo }, chave);
 
 export const cancelarRomaneio = (
   id: number,

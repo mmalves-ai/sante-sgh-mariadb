@@ -8,7 +8,9 @@
 import {
   type CategoriaHabilitacao,
   CATEGORIAS_HABILITACAO,
+  conferirCancelamentoEnvio,
   conferirCancelamentoRomaneio,
+  conferirEnvioEntreUnidades,
   conferirConferencia,
   conferirExpedicao,
   conferirMontagem,
@@ -21,8 +23,10 @@ import {
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { computed, onMounted, reactive, ref } from 'vue';
 import {
+  cancelarEnvio,
   cancelarRomaneio,
   conferirRomaneio,
+  enviarEntreUnidades,
   expedirRomaneio,
   gravarMotorista,
   gravarVeiculo,
@@ -42,9 +46,10 @@ type Chave = keyof typeof M;
 const k = (chave: Chave, p: Record<string, string | number> = {}): string =>
   M[chave].replace(/\{(\w+)\}/g, (_x, n: string) => String(p[n] ?? ''));
 
-type Aba = 'romaneios' | 'montar' | 'motoristas' | 'veiculos';
+type Aba = 'romaneios' | 'envio' | 'montar' | 'motoristas' | 'veiculos';
 const ABAS: readonly { id: Aba; rotulo: Chave }[] = [
   { id: 'romaneios', rotulo: 'abaRomaneios' },
+  { id: 'envio', rotulo: 'abaEnvio' },
   { id: 'montar', rotulo: 'abaMontar' },
   { id: 'motoristas', rotulo: 'abaMotoristas' },
   { id: 'veiculos', rotulo: 'abaVeiculos' },
@@ -136,9 +141,92 @@ const recusasMontagem = computed<RecusaSuprimentos[]>(() =>
       documento: t.documento,
       situacaoDocumento: t.situacao,
       emOutroRomaneio: false,
+      entreUnidades: true,
     })),
   ),
 );
+
+// ---- envio entre unidades (o documento que o romaneio leva) ----
+const envio = reactive({
+  origem: '',
+  destino: '',
+  item: '',
+  quantidade: '',
+  observacao: '',
+  itens: [] as { item: number; nome: string; quantidade: number; livre: number }[],
+});
+const opcoesOrigem = computed(() => [
+  { valor: '', rotulo: k('escolha') },
+  ...(painel.value?.locais ?? []).map((l) => ({ valor: String(l.id), rotulo: l.nome })),
+]);
+const opcoesDestino = computed(() => [
+  { valor: '', rotulo: k('escolha') },
+  ...(painel.value?.destinos ?? []).map((l) => ({ valor: String(l.id), rotulo: `${l.unidade} · ${l.nome}` })),
+]);
+const saldosDaOrigem = computed(() =>
+  (painel.value?.saldos ?? []).filter((s) => String(s.local) === envio.origem),
+);
+const opcoesItemEnvio = computed(() => [
+  { valor: '', rotulo: k('escolha') },
+  ...saldosDaOrigem.value.map((s) => ({
+    valor: String(s.item),
+    rotulo: `${s.nome} · ${k('livre')} ${s.livre}`,
+  })),
+]);
+function adicionarItemEnvio(): void {
+  const s = saldosDaOrigem.value.find((x) => String(x.item) === envio.item);
+  const q = numeroOuNulo(envio.quantidade);
+  if (!s || q === null) return;
+  envio.itens.push({ item: s.item, nome: s.nome, quantidade: q, livre: s.livre });
+  envio.item = '';
+  envio.quantidade = '';
+}
+const recusasEnvio = computed<RecusaSuprimentos[]>(() => {
+  const destino = (painel.value?.destinos ?? []).find((l) => String(l.id) === envio.destino);
+  const r = conferirEnvioEntreUnidades({
+    origemUnidade: 0,
+    destinoUnidade: destino ? 1 : null,
+    itens: envio.itens.map((i) => ({ item: i.item, quantidade: i.quantidade })),
+  });
+  if (!envio.origem) r.unshift({ codigo: 'envio-origem', mensagem: k('origemEnvio'), campos: ['origem'] });
+  if (envio.itens.some((i) => i.quantidade > i.livre))
+    r.push({ codigo: 'envio-saldo', mensagem: k('semSaldoLivre'), campos: ['itens'] });
+  return r;
+});
+function enviar(): void {
+  if (recusasEnvio.value.length) return;
+  void executar(
+    () =>
+      enviarEntreUnidades({
+        origem: Number(envio.origem),
+        destino: Number(envio.destino),
+        itens: envio.itens.map((i) => ({ item: i.item, quantidade: i.quantidade })),
+        observacao: envio.observacao.trim() || null,
+      }),
+    () => {
+      envio.itens = [];
+      envio.observacao = '';
+      aba.value = 'montar';
+    },
+  );
+}
+const motivoEnvio = ref('');
+const recusasCancelarEnvio = computed(() =>
+  conferirCancelamentoEnvio({
+    situacaoDocumento: 'aberto',
+    emRomaneioAtivo: false,
+    motivo: motivoEnvio.value,
+  }),
+);
+function cancelarOEnvio(documento: number): void {
+  if (recusasCancelarEnvio.value.length) return;
+  void executar(
+    () => cancelarEnvio(documento, motivoEnvio.value.trim()),
+    () => {
+      motivoEnvio.value = '';
+    },
+  );
+}
 function montar(): void {
   if (recusasMontagem.value.length) return;
   void executar(
@@ -241,7 +329,7 @@ const recusasConferencia = computed<RecusaSuprimentos[]>(() => {
   if (!d || d.situacao !== 'em_transito') return [];
   return conferirConferencia({
     situacao: d.situacao,
-    itens: d.lista.map((i) => ({ id: i.id, situacao: i.situacao })),
+    itens: d.lista.filter((i) => i.destinoAqui).map((i) => ({ id: i.id, situacao: i.situacao })),
     desfechos: desfechosEntrada.value,
     quilometragemSaida: d.quilometragemSaida,
     quilometragemChegada: numeroOuNulo(kmChegada.value),
@@ -432,7 +520,12 @@ const opcoesFrota = [
               <td>{{ r.veiculo ?? '' }}</td>
               <td>{{ r.motorista ?? '' }}</td>
               <td>{{ r.itens }}</td>
-              <td>{{ r.pendentes }}</td>
+              <td>
+                {{ r.pendentes }}
+                <span v-if="r.pendentesAqui" :data-testid="`romaneio-a-receber-${r.numero}`"
+                  >· {{ k('aReceber') }} {{ r.pendentesAqui }}</span
+                >
+              </td>
               <td>{{ dataHora(r.saidaEm ?? r.saidaPrevistaEm) }}</td>
               <td>
                 <SanteBotao
@@ -460,7 +553,7 @@ const opcoesFrota = [
 
           <!-- Expedição: aberto ou liberado -->
           <form
-            v-if="detalhe.situacao === 'aberto' || detalhe.situacao === 'liberado'"
+            v-if="detalhe.daUnidade && (detalhe.situacao === 'aberto' || detalhe.situacao === 'liberado')"
             class="filtros"
             data-testid="romaneio-expedicao"
             @submit.prevent="expedir"
@@ -529,7 +622,7 @@ const opcoesFrota = [
                 <template v-if="detalhe.situacao === 'em_transito'">
                   <td>
                     <SanteSelecao
-                      v-if="i.situacao === 'pendente' && desfechos[i.id]"
+                      v-if="i.destinoAqui && i.situacao === 'pendente' && desfechos[i.id]"
                       v-model="desfechos[i.id]!.desfecho"
                       :rotulo="k('desfecho')"
                       ocultar-rotulo
@@ -539,7 +632,7 @@ const opcoesFrota = [
                   </td>
                   <td>
                     <input
-                      v-if="i.situacao === 'pendente' && desfechos[i.id]"
+                      v-if="i.destinoAqui && i.situacao === 'pendente' && desfechos[i.id]"
                       v-model="desfechos[i.id]!.motivo"
                       :aria-label="k('motivo')"
                       :data-testid="`romaneio-motivo-${i.sequencia}`"
@@ -551,8 +644,15 @@ const opcoesFrota = [
           </table>
 
           <!-- Conferência na chegada: em trânsito -->
+          <p
+            v-if="detalhe.situacao === 'em_transito' && detalhe.pendentesAqui === 0"
+            class="secundario"
+            data-testid="romaneio-conferencia-outra-unidade"
+          >
+            {{ k('conferenciaOutraUnidade') }}
+          </p>
           <form
-            v-if="detalhe.situacao === 'em_transito'"
+            v-if="detalhe.situacao === 'em_transito' && detalhe.pendentesAqui > 0"
             class="filtros"
             data-testid="romaneio-conferencia"
             @submit.prevent="conferir"
@@ -583,7 +683,7 @@ const opcoesFrota = [
 
           <!-- Cancelamento: só antes da saída -->
           <form
-            v-if="detalhe.situacao === 'aberto' || detalhe.situacao === 'liberado'"
+            v-if="detalhe.daUnidade && (detalhe.situacao === 'aberto' || detalhe.situacao === 'liberado')"
             class="filtros"
             data-testid="romaneio-cancelamento"
             @submit.prevent="cancelar"
@@ -608,6 +708,70 @@ const opcoesFrota = [
         </article>
       </div>
 
+      <!-- Envio entre unidades -->
+      <div v-else-if="aba === 'envio'" role="tabpanel" data-testid="romaneio-envio">
+        <form class="filtros" @submit.prevent="enviar">
+          <SanteSelecao
+            v-model="envio.origem"
+            :rotulo="k('origemEnvio')"
+            :opcoes="opcoesOrigem"
+            data-testid="romaneio-envio-origem"
+          />
+          <SanteSelecao
+            v-model="envio.destino"
+            :rotulo="k('destinoEnvio')"
+            :opcoes="opcoesDestino"
+            data-testid="romaneio-envio-destino"
+          />
+          <SanteSelecao
+            v-model="envio.item"
+            :rotulo="k('itemEnvio')"
+            :opcoes="opcoesItemEnvio"
+            data-testid="romaneio-envio-item"
+          />
+          <span class="campo">
+            <label for="romaneio-envio-quantidade">{{ k('quantidade') }}</label>
+            <input
+              id="romaneio-envio-quantidade"
+              v-model="envio.quantidade"
+              inputmode="decimal"
+              data-testid="romaneio-envio-quantidade"
+            />
+          </span>
+          <SanteBotao
+            variante="secundario"
+            :rotulo="k('adicionarItem')"
+            :desabilitado="!envio.item || !envio.quantidade"
+            data-testid="romaneio-envio-adicionar"
+            @click="adicionarItemEnvio"
+          />
+          <SanteBotao
+            tipo="submit"
+            :rotulo="k('enviar')"
+            :desabilitado="gravando || recusasEnvio.length > 0"
+            data-testid="romaneio-enviar"
+          />
+        </form>
+        <table v-if="envio.itens.length" class="tabela" data-testid="romaneio-envio-itens">
+          <tbody>
+            <tr v-for="(i, x) in envio.itens" :key="`${i.item}-${x}`">
+              <td>{{ i.nome }}</td>
+              <td>{{ i.quantidade }} ({{ k('livre') }} {{ i.livre }})</td>
+              <td>
+                <SanteBotao variante="secundario" :rotulo="k('remover')" @click="envio.itens.splice(x, 1)" />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <ul
+          v-if="envio.itens.length && recusasEnvio.length"
+          role="alert"
+          data-testid="romaneio-recusas-envio"
+        >
+          <li v-for="r in recusasEnvio" :key="r.codigo">{{ r.mensagem }}</li>
+        </ul>
+      </div>
+
       <!-- Montagem -->
       <div v-else-if="aba === 'montar'" role="tabpanel" data-testid="romaneio-montagem">
         <p
@@ -626,6 +790,7 @@ const opcoesFrota = [
               <th scope="col">{{ k('destino') }}</th>
               <th scope="col">{{ k('itens') }}</th>
               <th scope="col">{{ k('cuidados') }}</th>
+              <th scope="col"></th>
             </tr>
           </thead>
           <tbody>
@@ -650,9 +815,22 @@ const opcoesFrota = [
                     .join(', ')
                 }}
               </td>
+              <td>
+                <SanteBotao
+                  variante="secundario"
+                  :rotulo="k('cancelarEnvio')"
+                  :desabilitado="gravando || recusasCancelarEnvio.length > 0"
+                  :data-testid="`romaneio-cancelar-envio-${t.numero}`"
+                  @click="cancelarOEnvio(t.documento)"
+                />
+              </td>
             </tr>
           </tbody>
         </table>
+        <span class="campo">
+          <label for="romaneio-motivo-envio">{{ k('motivoCancelarEnvio') }}</label>
+          <input id="romaneio-motivo-envio" v-model="motivoEnvio" data-testid="romaneio-motivo-envio" />
+        </span>
         <p class="secundario">{{ k('selecionadas', { n: montagem.documentos.length }) }}</p>
         <form class="filtros" @submit.prevent="montar">
           <span class="campo">

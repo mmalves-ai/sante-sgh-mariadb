@@ -2,13 +2,16 @@
 // Contrato de efeito:
 //   - o motorista gravado com a pessoa física achada ou criada pelo CPF (categorias, vencimento, controlado) e o
 //     duplicado recusado; o veículo com a placa normalizada e a placa repetida recusada;
-//   - o romaneio montado (número da sequência da unidade, aberto, transporte e frete) com um item por transferência e o
-//     destino (unidade e local) tirado do local de destino da transferência; a transferência já em romaneio recusada;
-//   - a expedição recusada com a carga controlada e motorista sem habilitação para ela, e gravada (em trânsito,
-//     liberador, liberado_em, saida_em, quilometragem) com o motorista habilitado;
-//   - a conferência por item: o primeiro entregue (recebedor e hora) deixa o romaneio em trânsito; o segundo recusado com
-//     o motivo fecha entregue em parte com conferente, chegada e quilometragem; a quilometragem abaixo da saída recusada;
-//   - o cancelamento só antes da saída (o expedido recusa; o aberto cancela com o motivo e libera a transferência);
+//   - o envio entre unidades pela porta (unidade A para um local da unidade B): documento de transferência em aberto com
+//     os itens, sem mexer no saldo; o destino da mesma unidade e o saldo livre insuficiente recusados;
+//   - o romaneio montado (número da sequência da unidade, aberto, transporte e frete) com um item por envio e o destino
+//     (unidade B e local) tirado do local de destino; o envio já em romaneio recusado e o cancelamento dele recusado;
+//   - a expedição recusada com a carga controlada só com a transportadora (sem motorista) e com o motorista sem
+//     habilitação para ela, e gravada (em trânsito, liberador, liberado_em, saida_em, quilometragem) com o habilitado;
+//   - a conferência pela unidade B (a A não acha o romaneio para conferir): o entregue (recebedor da B) dá o recebimento
+//     (sai da A, entra na B, envio concluído) e deixa o romaneio em trânsito; o recusado com o motivo fecha entregue em
+//     parte e deixa o envio em aberto na A, livre para outro romaneio e cancelável; o envio recebido não monta de novo;
+//   - o cancelamento só antes da saída (o expedido recusa; o aberto cancela com o motivo e libera o envio);
 //   - a trilha de cada operação e o reenvio pela mesma chave sem linha nova. Nada é apagado.
 // Massa SINTÉTICA, limpa no fim. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
@@ -43,6 +46,10 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
   let estA = 0;
   let estB = 0;
   let usuario = 0;
+  let usuarioB = 0;
+  let comum = 0;
+  let controlado = 0;
+  let ctxB: ContextoPortaM18;
   let localA = 0;
   let localB = 0;
   let transportadora = 0;
@@ -69,6 +76,20 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
         CPF_2,
         `${MARCA}%`,
       ]);
+      await e.executar(
+        `DELETE FROM movimento_lote WHERE movimento_estoque_id IN (SELECT id FROM movimento_estoque WHERE estabelecimento_id IN (${ests}))`,
+        [],
+      );
+      await e.executar(
+        `UPDATE documento_estoque_item SET movimento_estoque_id = NULL WHERE documento_estoque_id IN (SELECT id FROM documento_estoque WHERE estabelecimento_id IN (${ests}))`,
+        [],
+      );
+      await e.executar(`DELETE FROM movimento_estoque WHERE estabelecimento_id IN (${ests})`, []);
+      await e.executar(`DELETE FROM saldo_estoque WHERE estabelecimento_id IN (${ests})`, []);
+      await e.executar(
+        `DELETE FROM sequencia_negocio WHERE tipo = 'documento_estoque' AND estabelecimento_id IN (${ests})`,
+        [],
+      );
       await e.executar(
         `DELETE FROM documento_estoque_item WHERE documento_estoque_id IN (SELECT id FROM documento_estoque WHERE estabelecimento_id IN (${ests}))`,
         [],
@@ -112,6 +133,13 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
         e.inserir("INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)", [
           'c1120.teste',
           'Usuário fictício do romaneio',
+          agora,
+        ]),
+      );
+      usuarioB = await garantir(e, 'SELECT id FROM usuario WHERE login = ?', ['c1120.recebe'], () =>
+        e.inserir("INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)", [
+          'c1120.recebe',
+          'Usuário fictício da unidade que recebe',
           agora,
         ]),
       );
@@ -161,44 +189,22 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
           },
           MARCA,
         );
-      const comum = await insumo(`${MARCA}I1`, false);
-      const controlado = await insumo(`${MARCA}I2`, true);
-      const doc = async (numero: number, itens: number[]) => {
-        const id = await inserirMinimo(
+      comum = await insumo(`${MARCA}I1`, false);
+      controlado = await insumo(`${MARCA}I2`, true);
+      // O saldo de partida na unidade A (estoque existente): o envio e o recebimento correm pela porta.
+      for (const i of [comum, controlado])
+        await inserirMinimo(
           e,
-          'documento_estoque',
+          'saldo_estoque',
           {
             estabelecimento_id: estA,
-            numero,
-            tipo: 'transferencia',
-            origem_local_estoque_id: localA,
-            destino_local_estoque_id: localB,
-            movimentado_em: agora,
-            situacao: 'concluido',
+            local_estoque_id: localA,
+            insumo_id: i,
+            quantidade: 50,
+            custo_medio: 2,
           },
           MARCA,
         );
-        let s = 0;
-        for (const i of itens)
-          await inserirMinimo(
-            e,
-            'documento_estoque_item',
-            {
-              documento_estoque_id: id,
-              sequencia: ++s,
-              insumo_id: i,
-              unidade_medida_id: unidade,
-              quantidade: 5,
-            },
-            MARCA,
-          );
-        return id;
-      };
-      docs = [
-        await doc(91120001, [comum]),
-        await doc(91120002, [comum, controlado]),
-        await doc(91120003, [comum]),
-      ];
       const pj = await e.inserir(
         'INSERT INTO pessoa_juridica (razao_social, cnpj, criado_em) VALUES (?, ?, ?)',
         ['TRANSPORTES FICTÍCIOS C1120 LTDA', CNPJ, agora],
@@ -209,6 +215,7 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
       );
     });
     ctx = { cliente: CLIENTE, estabelecimento: estA, usuario, correlacao: `c1120-${sufixo}` };
+    ctxB = { cliente: CLIENTE, estabelecimento: estB, usuario: usuarioB, correlacao: `c1120b-${sufixo}` };
   }, 120_000);
 
   afterAll(async () => {
@@ -290,6 +297,54 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
     ).toBe('veiculo-duplicado');
   });
 
+  const saldoDe = async (local: number, insumo: number) =>
+    Number(
+      (
+        await ler<Record<string, unknown>>(
+          'SELECT quantidade FROM saldo_estoque WHERE local_estoque_id = ? AND insumo_id = ? AND excluido_em IS NULL',
+          [local, insumo],
+        )
+      )[0]?.['quantidade'] ?? 0,
+    );
+
+  it('envia entre unidades pela porta: envio em aberto com os itens, saldo intacto; recusa a mesma unidade e o sem saldo', async () => {
+    const envio = (itens: { item: number; quantidade: number }[], destino = localB) =>
+      porta.enviar(ctx, { origem: localA, destino, itens, observacao: null }, chave('envio'));
+    expect(await codigoDe(envio([{ item: comum, quantidade: 1 }], localA))).toBe('envio-mesma-unidade');
+    expect(await codigoDe(envio([{ item: comum, quantidade: 51 }]))).toBe('saldo-insuficiente');
+    docs = [
+      (await envio([{ item: comum, quantidade: 5 }])).id,
+      (
+        await envio([
+          { item: comum, quantidade: 5 },
+          { item: controlado, quantidade: 5 },
+        ])
+      ).id,
+      (await envio([{ item: comum, quantidade: 5 }])).id,
+    ];
+    const ds = await ler<Record<string, unknown>>(
+      `SELECT d.estabelecimento_id, d.situacao, d.consolidado, d.origem_local_estoque_id, d.destino_local_estoque_id,
+              (SELECT COUNT(*) FROM documento_estoque_item di WHERE di.documento_estoque_id = d.id) AS itens
+         FROM documento_estoque d WHERE d.id IN (?, ?, ?) ORDER BY d.id`,
+      docs,
+    );
+    expect(
+      ds.map((d) => [
+        Number(d['estabelecimento_id']),
+        d['situacao'],
+        Number(d['origem_local_estoque_id']),
+        Number(d['destino_local_estoque_id']),
+        Number(d['itens']),
+      ]),
+    ).toEqual([
+      [estA, 'aberto', localA, localB, 1],
+      [estA, 'aberto', localA, localB, 2],
+      [estA, 'aberto', localA, localB, 1],
+    ]);
+    expect(await saldoDe(localA, comum)).toBe(50);
+    expect(await saldoDe(localB, comum)).toBe(0);
+  });
+
   it('monta o romaneio com um item por transferência e o destino do local; recusa a transferência já romaneada', async () => {
     const painel = await porta.painel(ctx);
     expect(painel.transferencias.map((t) => t.documento)).toEqual(expect.arrayContaining(docs));
@@ -347,6 +402,9 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
       chave('montar-dup'),
     );
     expect(await codigoDe(outro)).toBe('romaneio-transferencia-em-outro');
+    expect(
+      await codigoDe(porta.cancelarEnvio(ctx, docs[0]!, 'Pedido fictício errado', chave('canc-env'))),
+    ).toBe('envio-em-romaneio');
     expect((await porta.painel(ctx)).transferencias.map((t) => t.documento)).not.toContain(docs[0]);
   });
 
@@ -361,6 +419,10 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
       transportadora: null,
       valorFrete: 0,
     };
+    const soTerceiro = { ...exp, veiculo: null, motorista: null, transportadora };
+    expect(await codigoDe(porta.expedir(ctx, romaneio, soTerceiro, chave('exp-terc')))).toBe(
+      'romaneio-controlado-sem-motorista',
+    );
     expect(await codigoDe(porta.expedir(ctx, romaneio, exp, chave('exp-rec')))).toBe('romaneio-controlado');
     const m = (await porta.painel(ctx)).motoristas.find((x) => x.id === motorista)!;
     await porta.gravarMotorista(
@@ -384,13 +446,29 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
     );
   });
 
-  it('confere por item: entregue segue em trânsito; o recusado com motivo fecha entregue em parte', async () => {
-    const d = await porta.detalhe(ctx, romaneio);
+  it('a unidade B confere: o entregue dá o recebimento; o recusado fecha em parte e deixa o envio em aberto na A', async () => {
+    const d = await porta.detalhe(ctxB, romaneio);
     const [i1, i2] = d.lista;
+    expect(d.lista.every((i) => i.destinoAqui)).toBe(true);
+    expect((await porta.painel(ctxB)).romaneios.find((r) => r.id === romaneio)).toMatchObject({
+      daUnidade: false,
+      pendentesAqui: 2,
+    });
+    const naOrigem = porta.conferir(
+      ctx,
+      romaneio,
+      {
+        versao: d.versao,
+        quilometragemChegada: null,
+        desfechos: [{ item: i1!.id, desfecho: 'entregue', motivo: null }],
+      },
+      chave('conf-origem'),
+    );
+    expect(await codigoDe(naOrigem)).toBe('nao-encontrado');
     expect(
       await codigoDe(
         porta.conferir(
-          ctx,
+          ctxB,
           romaneio,
           {
             versao: d.versao,
@@ -402,7 +480,7 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
       ),
     ).toBe('conferencia-quilometragem');
     const r1 = await porta.conferir(
-      ctx,
+      ctxB,
       romaneio,
       {
         versao: d.versao,
@@ -412,9 +490,26 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
       chave('conf1'),
     );
     expect(r1.situacao).toBe('em_transito');
-    const d2 = await porta.detalhe(ctx, romaneio);
+    // O recebimento do envio 1: sai da A, entra na B, envio concluído pela B.
+    expect(await saldoDe(localA, comum)).toBe(45);
+    expect(await saldoDe(localB, comum)).toBe(5);
+    const [env1] = await ler<Record<string, unknown>>(
+      'SELECT situacao, consolidado, concluido_usuario_id FROM documento_estoque WHERE id = ?',
+      [docs[0]],
+    );
+    expect(env1).toMatchObject({ situacao: 'concluido' });
+    expect(Number(env1!['concluido_usuario_id'])).toBe(usuarioB);
+    expect(
+      (
+        await ler<Record<string, unknown>>(
+          'SELECT estabelecimento_id FROM movimento_estoque WHERE documento_estoque_id = ? ORDER BY id',
+          [docs[0]],
+        )
+      ).map((m) => Number(m['estabelecimento_id'])),
+    ).toEqual([estA, estB]);
+    const d2 = await porta.detalhe(ctxB, romaneio);
     const r2 = await porta.conferir(
-      ctx,
+      ctxB,
       romaneio,
       {
         versao: d2.versao,
@@ -429,7 +524,7 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
       [romaneio],
     );
     expect(itens[0]).toMatchObject({ situacao: 'entregue', observacao: null });
-    expect(Number(itens[0]!['recebedor_usuario_id'])).toBe(usuario);
+    expect(Number(itens[0]!['recebedor_usuario_id'])).toBe(usuarioB);
     expect(itens[0]!['entregue_em']).not.toBeNull();
     expect(itens[1]).toMatchObject({
       situacao: 'recusado',
@@ -441,9 +536,33 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
       [romaneio],
     );
     expect(r).toMatchObject({ situacao: 'entregue_parcial' });
-    expect(Number(r!['conferente_usuario_id'])).toBe(usuario);
+    expect(Number(r!['conferente_usuario_id'])).toBe(usuarioB);
     expect(r!['chegada_em']).not.toBeNull();
     expect(Number(r!['quilometragem_chegada'])).toBe(1042);
+    // O recusado: o envio 2 segue em aberto na A (saldo do controlado intacto), volta à lista e pode ser cancelado.
+    expect(await saldoDe(localA, controlado)).toBe(50);
+    expect((await porta.painel(ctx)).transferencias.map((t) => t.documento)).toContain(docs[1]);
+    await porta.cancelarEnvio(ctx, docs[1]!, 'Recusado na chegada', chave('canc-env2'));
+    const [env2] = await ler<Record<string, unknown>>('SELECT situacao FROM documento_estoque WHERE id = ?', [
+      docs[1],
+    ]);
+    expect(env2).toMatchObject({ situacao: 'cancelado' });
+    // O envio recebido não viaja de novo.
+    const deNovo = porta.montar(
+      ctx,
+      {
+        documentos: [docs[0]!],
+        descricao: null,
+        saidaPrevista: null,
+        observacao: null,
+        veiculo: null,
+        motorista: null,
+        transportadora,
+        valorFrete: null,
+      },
+      chave('montar-recebido'),
+    );
+    expect(await codigoDe(deNovo)).toBe('romaneio-transferencia-recebida');
   });
 
   it('cancela o romaneio aberto com o motivo e libera a transferência; trilha de cada operação', async () => {
@@ -475,9 +594,9 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
     expect((await porta.painel(ctx)).transferencias.map((t) => t.documento)).toContain(docs[2]);
     const ops = await ler<Record<string, unknown>>(
       `SELECT JSON_VALUE(dados_depois, '$.operacao') AS operacao, COUNT(*) AS n FROM trilha_auditoria
-        WHERE estabelecimento_id = ? AND JSON_VALUE(dados_depois, '$.operacao') LIKE 'suprimentos.romaneio.%'
+        WHERE estabelecimento_id IN (?, ?) AND JSON_VALUE(dados_depois, '$.operacao') LIKE 'suprimentos.romaneio.%'
         GROUP BY JSON_VALUE(dados_depois, '$.operacao')`,
-      [estA],
+      [estA, estB],
     );
     const por = Object.fromEntries(ops.map((o) => [String(o['operacao']), Number(o['n'])]));
     expect(por).toMatchObject({
@@ -487,6 +606,8 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
       [OPERACOES_ROMANEIO_ENTREGA.expedir]: 1,
       [OPERACOES_ROMANEIO_ENTREGA.conferir]: 2,
       [OPERACOES_ROMANEIO_ENTREGA.cancelar]: 1,
+      [OPERACOES_ROMANEIO_ENTREGA.enviar]: 3,
+      [OPERACOES_ROMANEIO_ENTREGA.cancelarEnvio]: 1,
     });
   });
 });
