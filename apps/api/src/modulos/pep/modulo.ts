@@ -316,8 +316,6 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
             ? new CadastroProtocolosPrescricaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
-      // F78.03-1 (03-PEP L103 e L104): reação adversa no paciente e lista de uso contínuo; sem núcleo, 503.
-      {
       // 03-PEP L108 (C2-104): ajuste renal por faixa, restrição de posologia e alerta por setor; sem núcleo, 503.
       {
         provide: CADASTRO_RESTRICOES_PRESCRICAO,
