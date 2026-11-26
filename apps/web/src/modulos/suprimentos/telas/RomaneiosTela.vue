@@ -596,9 +596,11 @@ const opcoesFrota = [
               data-testid="romaneio-expedir"
             />
           </form>
-          <ul v-if="recusasExpedicao.length" role="alert" data-testid="romaneio-recusas-expedicao">
-            <li v-for="r in recusasExpedicao" :key="r.codigo">{{ r.mensagem }}</li>
-          </ul>
+          <div v-if="recusasExpedicao.length" role="alert" data-testid="romaneio-recusas-expedicao">
+            <ul>
+              <li v-for="r in recusasExpedicao" :key="r.codigo">{{ r.mensagem }}</li>
+            </ul>
+          </div>
 
           <table class="tabela" data-testid="romaneio-itens">
             <thead>
@@ -673,13 +675,15 @@ const opcoesFrota = [
               data-testid="romaneio-conferir"
             />
           </form>
-          <ul
+          <div
             v-if="desfechosEntrada.length && recusasConferencia.length"
             role="alert"
             data-testid="romaneio-recusas-conferencia"
           >
-            <li v-for="r in recusasConferencia" :key="r.codigo">{{ r.mensagem }}</li>
-          </ul>
+            <ul>
+              <li v-for="r in recusasConferencia" :key="r.codigo">{{ r.mensagem }}</li>
+            </ul>
+          </div>
 
           <!-- Cancelamento: só antes da saída -->
           <form
@@ -763,13 +767,15 @@ const opcoesFrota = [
             </tr>
           </tbody>
         </table>
-        <ul
+        <div
           v-if="envio.itens.length && recusasEnvio.length"
           role="alert"
           data-testid="romaneio-recusas-envio"
         >
-          <li v-for="r in recusasEnvio" :key="r.codigo">{{ r.mensagem }}</li>
-        </ul>
+          <ul>
+            <li v-for="r in recusasEnvio" :key="r.codigo">{{ r.mensagem }}</li>
+          </ul>
+        </div>
       </div>
 
       <!-- Montagem -->
@@ -879,9 +885,11 @@ const opcoesFrota = [
             data-testid="romaneio-montar"
           />
         </form>
-        <ul v-if="montagem.documentos.length && recusasMontagem.length" role="alert">
-          <li v-for="r in recusasMontagem" :key="r.codigo">{{ r.mensagem }}</li>
-        </ul>
+        <div v-if="montagem.documentos.length && recusasMontagem.length" role="alert">
+          <ul>
+            <li v-for="r in recusasMontagem" :key="r.codigo">{{ r.mensagem }}</li>
+          </ul>
+        </div>
       </div>
 
       <!-- Motoristas -->
@@ -989,9 +997,11 @@ const opcoesFrota = [
             @click="Object.assign(motorista, motoristaVazio())"
           />
         </form>
-        <ul v-if="motorista.nome && recusasMotorista.length" role="alert" data-testid="mot-recusas">
-          <li v-for="r in recusasMotorista" :key="r.codigo">{{ r.mensagem }}</li>
-        </ul>
+        <div v-if="motorista.nome && recusasMotorista.length" role="alert" data-testid="mot-recusas">
+          <ul>
+            <li v-for="r in recusasMotorista" :key="r.codigo">{{ r.mensagem }}</li>
+          </ul>
+        </div>
       </div>
 
       <!-- Veículos -->
@@ -1082,9 +1092,11 @@ const opcoesFrota = [
             @click="Object.assign(veiculo, veiculoVazio())"
           />
         </form>
-        <ul v-if="veiculo.codigo && recusasVeiculo.length" role="alert" data-testid="vei-recusas">
-          <li v-for="r in recusasVeiculo" :key="r.codigo">{{ r.mensagem }}</li>
-        </ul>
+        <div v-if="veiculo.codigo && recusasVeiculo.length" role="alert" data-testid="vei-recusas">
+          <ul>
+            <li v-for="r in recusasVeiculo" :key="r.codigo">{{ r.mensagem }}</li>
+          </ul>
+        </div>
       </div>
     </template>
   </section>
