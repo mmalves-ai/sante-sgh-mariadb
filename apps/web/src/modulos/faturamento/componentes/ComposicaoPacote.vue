@@ -503,4 +503,9 @@ function gravar() {
 .erro {
   color: var(--sgh-alerta-texto);
 }
+/* Alvo de toque mínimo (WCAG 2.5.8). */
+input[type='checkbox'] {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+}
 </style>
