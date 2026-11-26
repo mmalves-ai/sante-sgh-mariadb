@@ -339,9 +339,12 @@ function gravarRetorno(r: RemessaDaOs) {
         />
       </div>
 
+      <!-- novalidate: o obrigatório fica no rótulo e no aria-required; a conferência é a da regra do domínio (a
+           saída sem custo, a justificativa), mostrada em os-corretiva-problemas, e não o balão do navegador. -->
       <form
         v-if="acao"
         class="bloco"
+        novalidate
         :data-testid="`os-corretiva-form-${acao}`"
         @submit.prevent="acao === 'orcamento' ? gravarOrcamento() : gravarRemessa()"
       >
