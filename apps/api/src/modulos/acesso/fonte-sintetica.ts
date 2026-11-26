@@ -1418,6 +1418,9 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
         'faturamento.regra.*',
         'faturamento.pacote.*',
         'cirurgia.nota.ler',
+      ).concat(
+        // F3.4-5: as cirurgias realizadas (2285, só leitura), para conferir e debitar o gasto de sala do ato na conta.
+        2285,
       ),
     },
     // C1-114: o faturista das contas emite e confere o protocolo de documentos entre setores (perfil próprio).
