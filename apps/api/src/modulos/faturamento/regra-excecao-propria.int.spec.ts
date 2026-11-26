@@ -3,12 +3,15 @@
 // sem gravar; a exceção incluída fica em regra_lancamento_excecao com o estabelecimento da sessão, a autoria, as
 // naturezas, a vigência e o motivo, e aparece na lista da regra como vigente; o encerramento grava vigencia_fim = ontem
 // (a linha continua no banco, com a versão nova) e não se repete; a exceção que começa hoje não se encerra. No fim, a
-// massa é apagada. SGH_NUCLEO_SEM_BANCO=1 pula.
+// a exceção de todos os estabelecimentos pede a permissão própria; a que começa hoje ou depois se cancela (quem,
+// quando, por quê) e a apuração a ignora; a 'aplicar_somente' de um estabelecimento não entra na apuração do outro. No
+// fim, a massa é apagada. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { randomUUID } from 'node:crypto';
 import { diaAnterior } from '@sgh/dominio-faturamento';
 import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
+import { excecoesDaApuracao } from './conta-entrada.js';
 import { ServicoExcecaoRegra } from './regra-excecao.controller.js';
 import { excecoesRegraLancamentoPropria } from './regra-excecao-propria.js';
 
@@ -80,6 +83,13 @@ describe.skipIf(SEM_BANCO)('exceções da regra de lançamento automático (Mari
         'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
         [`${P}A`, `ESTAB ${P} SINTETICO`, `ESTAB ${P} SINTETICO`, agora],
       );
+      ids['estB'] = await garantir(
+        e,
+        'SELECT id FROM estabelecimento WHERE codigo = ?',
+        [`${P}B`],
+        'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
+        [`${P}B`, `ESTAB ${P}B SINTETICO`, `ESTAB ${P}B SINTETICO`, agora],
+      );
       ids['usuario'] = await garantir(
         e,
         'SELECT id FROM usuario WHERE login = ?',
@@ -124,7 +134,7 @@ describe.skipIf(SEM_BANCO)('exceções da regra de lançamento automático (Mari
       await e.executar('DELETE FROM regra_lancamento WHERE id = ?', [ids['regra']]);
       await e.executar('DELETE FROM plano_fonte_pagadora WHERE id = ?', [ids['planoOutra']]);
       await e.executar('DELETE FROM fonte_pagadora WHERE id IN (?, ?)', [ids['fonte'], ids['outraFonte']]);
-      await limparTrilhaDaMassa(e, { ids: [ids['est'] as number] });
+      await limparTrilhaDaMassa(e, { ids: [ids['est'] as number, ids['estB'] as number] });
     });
     await nucleo.encerrar();
   });
@@ -132,7 +142,12 @@ describe.skipIf(SEM_BANCO)('exceções da regra de lançamento automático (Mari
   it('recusa sem gravar: sem recorte, plano de outra fonte e motivo curto', async () => {
     expect(
       await codigoDo(
-        s.gravar('incluir-excecao', op(), { ...base(), fontePagadoraId: null, todosEstabelecimentos: true }),
+        s.gravar('incluir-excecao', op(), {
+          ...base(),
+          fontePagadoraId: null,
+          todosEstabelecimentos: true,
+          podeTodosEstabelecimentos: true,
+        }),
       ),
     ).toBe('entrada-invalida');
     expect(await codigoDo(s.gravar('incluir-excecao', op(), { ...base(), planoId: ids['planoOutra'] }))).toBe(
@@ -201,5 +216,108 @@ describe.skipIf(SEM_BANCO)('exceções da regra de lançamento automático (Mari
       [ids['regra']],
     );
     expect(Number(q[0]?.['q'])).toBe(2);
+  });
+
+  it('a exceção de todos os estabelecimentos pede a permissão própria (incluir, encerrar e cancelar); com ela, grava nulo', async () => {
+    expect(
+      await codigoDo(s.gravar('incluir-excecao', op(), { ...base(), todosEstabelecimentos: true })),
+    ).toBe('sem-permissao-global');
+    // Mesmo que o corpo traga a permissão, o controller a sobrescreve pela sessão; aqui a porta recebe a da sessão.
+    const g = await s.gravar('incluir-excecao', op(), {
+      ...base(),
+      todosEstabelecimentos: true,
+      vigenciaInicio: '2026-02-01',
+      podeTodosEstabelecimentos: true,
+    });
+    ids['global'] = Number(g['id']);
+    const [x] = await linhas('SELECT estabelecimento_id FROM regra_lancamento_excecao WHERE id = ?', [
+      ids['global'],
+    ]);
+    expect(x?.['estabelecimento_id']).toBeNull();
+    expect(await codigoDo(s.gravar('encerrar-excecao', op(), { id: ids['global'], versao: 1 }))).toBe(
+      'sem-permissao-global',
+    );
+    expect(
+      await codigoDo(
+        s.gravar('cancelar-excecao', op(), { id: ids['global'], versao: 1, motivo: 'Recorte errado' }),
+      ),
+    ).toBe('sem-permissao-global');
+    const [y] = await linhas(
+      'SELECT vigencia_fim, cancelada_em, versao FROM regra_lancamento_excecao WHERE id = ?',
+      [ids['global']],
+    );
+    expect(y).toMatchObject({ vigencia_fim: null, cancelada_em: null });
+    expect(Number(y?.['versao'])).toBe(1);
+    const r = await s.gravar('encerrar-excecao', op(), {
+      id: ids['global'],
+      versao: 1,
+      podeTodosEstabelecimentos: true,
+    });
+    expect(r['vigenciaFim']).toBe(diaAnterior(HOJE));
+  });
+
+  it('cancelar a exceção que começa hoje ou depois: grava quem, quando e por quê, sem apagar; a apuração a ignora', async () => {
+    const nova = await s.gravar('incluir-excecao', op(), { ...base(), vigenciaInicio: '2099-01-01' });
+    const idNova = Number(nova['id']);
+    expect(await codigoDo(s.gravar('cancelar-excecao', op(), { id: idNova, versao: 1, motivo: 'x' }))).toBe(
+      'entrada-invalida',
+    );
+    // A que já valeu antes de hoje (a primeira, encerrada) não se cancela.
+    expect(
+      await codigoDo(
+        s.gravar('cancelar-excecao', op(), { id: ids['excecao'], versao: 2, motivo: 'Recorte errado' }),
+      ),
+    ).toBe('excecao-em-vigor');
+    const r = await s.gravar('cancelar-excecao', op(), { id: idNova, versao: 1, motivo: '  Fonte errada  ' });
+    expect(r['situacao']).toBe('cancelada');
+    const [x] = await linhas(
+      'SELECT cancelada_em, cancelada_por, motivo_cancelamento, versao, alterado_por FROM regra_lancamento_excecao WHERE id = ?',
+      [idNova],
+    );
+    expect(x?.['cancelada_em']).not.toBeNull();
+    expect(Number(x?.['cancelada_por'])).toBe(ids['usuario']);
+    expect(x?.['motivo_cancelamento']).toBe('Fonte errada');
+    expect(Number(x?.['versao'])).toBe(2);
+    expect(
+      await codigoDo(s.gravar('cancelar-excecao', op(), { id: idNova, versao: 2, motivo: 'De novo aqui' })),
+    ).toBe('excecao-cancelada');
+    expect(await codigoDo(s.gravar('encerrar-excecao', op(), { id: idNova, versao: 2 }))).toBe(
+      'excecao-cancelada',
+    );
+    const lista = await nucleo.lerSomente(
+      { cliente: CLIENTE, estabelecimento: ids['est'] as number, correlacao: 'teste-f909' },
+      (l) => excecoesRegraLancamentoPropria(l, ids['est'] as number),
+    );
+    const cancelada = lista.regras.find((g) => g.id === ids['regra'])?.excecoes.find((e) => e.id === idNova);
+    expect([cancelada?.situacao, cancelada?.motivoCancelamento]).toEqual(['cancelada', 'Fonte errada']);
+    const daRegra = await escrever(async (e) =>
+      (await excecoesDaApuracao(e, ids['est'] as number))(ids['regra'] as number),
+    );
+    expect(daRegra.some((e) => e.vigenciaInicio === '2099-01-01')).toBe(false);
+  });
+
+  it("a 'aplicar_somente' do estabelecimento A não entra na apuração do B; a do A e a global entram na do A", async () => {
+    const a = await s.gravar('incluir-excecao', op(), {
+      ...base(),
+      efeito: 'aplicar_somente',
+      vigenciaInicio: '2026-03-01',
+    });
+    const idA = Number(a['id']);
+    const doB = await escrever(async (e) =>
+      (await excecoesDaApuracao(e, ids['estB'] as number))(ids['regra'] as number),
+    );
+    // No B só a global (estabelecimento nulo); nenhuma do A, nem a 'aplicar_somente'.
+    expect(doB.map((x) => [x.estabelecimento, x.efeito])).toEqual([[null, 'nao_aplicar']]);
+    const doA = await escrever(async (e) =>
+      (await excecoesDaApuracao(e, ids['est'] as number))(ids['regra'] as number),
+    );
+    expect(doA.some((x) => x.efeito === 'aplicar_somente' && x.estabelecimento === ids['est'])).toBe(true);
+    expect(doA.some((x) => x.estabelecimento === null)).toBe(true);
+    // A lista do B não mostra a exceção do A.
+    const listaB = await nucleo.lerSomente(
+      { cliente: CLIENTE, estabelecimento: ids['estB'] as number, correlacao: 'teste-f909' },
+      (l) => excecoesRegraLancamentoPropria(l, ids['estB'] as number),
+    );
+    expect(listaB.regras.find((g) => g.id === ids['regra'])?.excecoes.some((x) => x.id === idA)).toBe(false);
   });
 });

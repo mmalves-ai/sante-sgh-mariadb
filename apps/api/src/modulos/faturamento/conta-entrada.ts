@@ -439,38 +439,7 @@ export async function apurarConta(
                 }
               : null,
         }));
-  const excecoes = await tx.consultar<Linha>(
-    `SELECT x.regra_lancamento_id AS regra, x.estabelecimento_id, x.fonte_pagadora_id, x.plano_fonte_pagadora_id,
-            x.setor_funcional_id, x.especialidade_medica_id, x.item_faturavel_id, x.grupo_faturamento_id, x.efeito,
-            x.aplica_internacao, x.aplica_ambulatorial, x.aplica_externo, x.aplica_urgencia, x.aplica_domiciliar,
-            DATE_FORMAT(x.vigencia_inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(x.vigencia_fim, '%Y-%m-%d') AS fim
-       FROM regra_lancamento_excecao x JOIN regra_lancamento rl ON rl.id = x.regra_lancamento_id
-      WHERE rl.ativo = TRUE AND rl.gatilho IN ('abertura_atendimento','diaria_internacao')`,
-    [],
-    { teto: 5000 },
-  );
-  const excecoesDa = (regra: number): ExcecaoRegraLancamento[] =>
-    excecoes
-      .filter((x) => n(x['regra']) === regra)
-      .map((x) => ({
-        estabelecimento: nn(x['estabelecimento_id']),
-        fontePagadora: nn(x['fonte_pagadora_id']),
-        plano: nn(x['plano_fonte_pagadora_id']),
-        setor: nn(x['setor_funcional_id']),
-        especialidade: nn(x['especialidade_medica_id']),
-        item: nn(x['item_faturavel_id']),
-        grupo: nn(x['grupo_faturamento_id']),
-        efeito: texto(x['efeito']) as ExcecaoRegraLancamento['efeito'],
-        aplica: {
-          internacao: Boolean(n(x['aplica_internacao'])),
-          ambulatorial: Boolean(n(x['aplica_ambulatorial'])),
-          externo: Boolean(n(x['aplica_externo'])),
-          urgencia: Boolean(n(x['aplica_urgencia'])),
-          domiciliar: Boolean(n(x['aplica_domiciliar'])),
-        },
-        vigenciaInicio: x['inicio'] === null ? null : texto(x['inicio']),
-        vigenciaFim: x['fim'] === null ? null : texto(x['fim']),
-      }));
+  const excecoesDa = await excecoesDaApuracao(tx, est);
   const taxas: TaxaAutomatica[] = (
     await tx.consultar<Linha>(
       `SELECT rl.id AS regra, ri.id AS regra_item, ri.tabela_preco_id, rl.gatilho, rl.acao, rl.exige_confirmacao, rl.lanca_uma_vez_por_conta,
@@ -699,6 +668,48 @@ export async function apurarConta(
 
 /** Código do motivo de cancelamento que o sistema usa para a conta da entrada excluída. */
 export const MOTIVO_CANCELAMENTO_ENTRADA = 'ENTRADA_EXCLUIDA';
+
+/**
+ * As exceções que a apuração da conta do estabelecimento confere, por regra (C1-090): só as do estabelecimento da conta
+ * e as que valem para todos (a de outro estabelecimento nunca muda esta apuração) e nunca a cancelada antes de valer.
+ * `x.*`: a coluna cancelada_em (migração 12_FAT/99_excecao_regra_cancelamento) é lida pelo nome quando existe.
+ */
+export async function excecoesDaApuracao(
+  tx: Pick<TxOperacao, 'consultar'>,
+  est: number,
+): Promise<(regra: number) => ExcecaoRegraLancamento[]> {
+  const excecoes = await tx.consultar<Linha>(
+    `SELECT x.*, x.regra_lancamento_id AS regra,
+            DATE_FORMAT(x.vigencia_inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(x.vigencia_fim, '%Y-%m-%d') AS fim
+       FROM regra_lancamento_excecao x JOIN regra_lancamento rl ON rl.id = x.regra_lancamento_id
+      WHERE rl.ativo = TRUE AND rl.gatilho IN ('abertura_atendimento','diaria_internacao')
+        AND (x.estabelecimento_id IS NULL OR x.estabelecimento_id = ?)`,
+    [est],
+    { teto: 5000 },
+  );
+  return (regra: number): ExcecaoRegraLancamento[] =>
+    excecoes
+      .filter((x) => n(x['regra']) === regra && (x['cancelada_em'] ?? null) === null)
+      .map((x) => ({
+        estabelecimento: nn(x['estabelecimento_id']),
+        fontePagadora: nn(x['fonte_pagadora_id']),
+        plano: nn(x['plano_fonte_pagadora_id']),
+        setor: nn(x['setor_funcional_id']),
+        especialidade: nn(x['especialidade_medica_id']),
+        item: nn(x['item_faturavel_id']),
+        grupo: nn(x['grupo_faturamento_id']),
+        efeito: texto(x['efeito']) as ExcecaoRegraLancamento['efeito'],
+        aplica: {
+          internacao: Boolean(n(x['aplica_internacao'])),
+          ambulatorial: Boolean(n(x['aplica_ambulatorial'])),
+          externo: Boolean(n(x['aplica_externo'])),
+          urgencia: Boolean(n(x['aplica_urgencia'])),
+          domiciliar: Boolean(n(x['aplica_domiciliar'])),
+        },
+        vigenciaInicio: x['inicio'] === null ? null : texto(x['inicio']),
+        vigenciaFim: x['fim'] === null ? null : texto(x['fim']),
+      }));
+}
 
 /**
  * A entrada excluída (internação ou atendimento cancelado): estorna os lançamentos automáticos com o motivo

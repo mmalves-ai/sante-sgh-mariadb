@@ -118,6 +118,12 @@ export const PERMISSOES_FATURAMENTO_M30: readonly DeclaracaoPermissao[] = [
   p('faturamento.regra.editar', 'Manter as regras de faturabilidade', {
     criticidade: 'sensivel',
   }),
+  // C1-090: a exceção da regra de lançamento automático para todos os estabelecimentos muda a apuração dos outros.
+  p(
+    'faturamento.regra.editarGlobal',
+    'Incluir, encerrar e cancelar exceção da regra de lançamento que vale para todos os estabelecimentos',
+    { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'], criticidade: 'sensivel' },
+  ),
   p('faturamento.preco.simular', 'Simular preço e explicar o preço de um item (somente leitura)'),
   // Centro cirúrgico: os escopos são os do módulo (sem o convênio do faturamento).
   {

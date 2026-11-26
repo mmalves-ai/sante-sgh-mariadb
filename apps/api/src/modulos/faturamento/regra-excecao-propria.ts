@@ -6,7 +6,13 @@
 // - Incluir: a exceção com o recorte (fonte pagadora, plano, setor, especialidade, item ou grupo; o estabelecimento da
 //   sessão ou todos), o efeito, as naturezas, a vigência e o motivo. A apuração seguinte já a respeita.
 // - Encerrar: a exceção passa a valer até ontem (vigencia_fim). Nunca se apaga: o histórico continua no banco.
+// - Cancelar: a exceção gravada errada que começa hoje ou depois deixa de valer antes do primeiro dia (cancelada_em,
+//   cancelada_por e motivo_cancelamento); a linha fica no banco e a apuração a ignora (conta-entrada.ts).
+// - Todos os estabelecimentos: incluir, encerrar ou cancelar a exceção global pede faturamento.regra.editarGlobal
+//   (o controller passa podeTodosEstabelecimentos pela sessão; o corpo nunca o define), porque ela muda a apuração dos
+//   outros estabelecimentos.
 import {
+  cancelamentoExcecaoRegra,
   encerramentoExcecaoRegra,
   situacaoExcecaoRegra,
   validarExcecaoRegraLancamento,
@@ -58,7 +64,8 @@ export async function excecoesRegraLancamentoPropria(l: Consulta, est: number) {
             CONCAT(it.codigo, ' ', it.descricao) AS item, x.grupo_faturamento_id, gf.descricao AS grupo, x.efeito,
             x.aplica_internacao, x.aplica_ambulatorial, x.aplica_externo, x.aplica_urgencia, x.aplica_domiciliar,
             DATE_FORMAT(x.vigencia_inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(x.vigencia_fim, '%Y-%m-%d') AS fim,
-            x.motivo, x.criado_em, u.nome AS criado_por
+            x.motivo, x.criado_em, u.nome AS criado_por, x.cancelada_em, x.motivo_cancelamento,
+            uc.nome AS cancelada_por
        FROM regra_lancamento_excecao x
        JOIN regra_lancamento rl ON rl.id = x.regra_lancamento_id
        LEFT JOIN fonte_pagadora fp ON fp.id = x.fonte_pagadora_id
@@ -68,6 +75,7 @@ export async function excecoesRegraLancamentoPropria(l: Consulta, est: number) {
        LEFT JOIN item_faturavel it ON it.id = x.item_faturavel_id
        LEFT JOIN grupo_faturamento gf ON gf.id = x.grupo_faturamento_id
        LEFT JOIN usuario u ON u.id = x.criado_por
+       LEFT JOIN usuario uc ON uc.id = x.cancelada_por
       WHERE rl.ativo = TRUE AND (x.estabelecimento_id IS NULL OR x.estabelecimento_id = ?)
       ORDER BY x.vigencia_inicio DESC, x.id DESC`,
     [est],
@@ -140,9 +148,11 @@ export async function excecoesRegraLancamentoPropria(l: Consulta, est: number) {
           },
           vigenciaInicio: txt(x['inicio']),
           vigenciaFim: txt(x['fim']),
-          situacao: situacaoExcecaoRegra(txt(x['inicio']), txt(x['fim']), dia),
+          situacao: situacaoExcecaoRegra(txt(x['inicio']), txt(x['fim']), dia, x['cancelada_em'] !== null),
           motivo: txt(x['motivo']),
           criadoPor: txt(x['criado_por']),
+          motivoCancelamento: txt(x['motivo_cancelamento']),
+          canceladaPor: txt(x['cancelada_por']),
         })),
     })),
     opcoes: {
@@ -179,8 +189,36 @@ export const esquemaIncluirExcecao = z.object({
   vigenciaInicio: dataZ,
   vigenciaFim: dataZ.nullable().default(null),
   motivo: z.string().max(600),
+  /** Da sessão (faturamento.regra.editarGlobal), posto pelo controller depois do corpo. */
+  podeTodosEstabelecimentos: z.boolean().default(false),
 });
-export const esquemaEncerrarExcecao = z.object({ id, versao: z.number().int().positive() });
+export const esquemaEncerrarExcecao = z.object({
+  id,
+  versao: z.number().int().positive(),
+  podeTodosEstabelecimentos: z.boolean().default(false),
+});
+export const esquemaCancelarExcecao = esquemaEncerrarExcecao.extend({ motivo: z.string().max(600) });
+
+const SEM_GLOBAL =
+  'A exceção de todos os estabelecimentos muda a apuração dos outros: pede a permissão faturamento.regra.editarGlobal.';
+function exigirGlobal(global: boolean, pode: boolean): void {
+  if (global && !pode)
+    throw recusa('sem-permissao-global', SEM_GLOBAL, { campos: ['todosEstabelecimentos'] });
+}
+
+/** A exceção do estabelecimento da sessão ou global, travada para alterar; recusa a global sem a permissão. */
+async function excecaoParaAlterar(tx: TxOperacao, idExcecao: number, pode: boolean) {
+  const est = estDe(tx.contexto);
+  const x = await tx.uma<Linha>(
+    `SELECT id, estabelecimento_id, cancelada_em, DATE_FORMAT(vigencia_inicio, '%Y-%m-%d') AS inicio,
+            DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim
+       FROM regra_lancamento_excecao WHERE id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
+    [idExcecao, est],
+  );
+  if (!x) throw recusa('nao-encontrado', 'Exceção não encontrada.', { campos: ['id'] });
+  exigirGlobal(x['estabelecimento_id'] === null, pode);
+  return { inicio: txt(x['inicio']), fim: txt(x['fim']), cancelada: x['cancelada_em'] !== null };
+}
 
 async function exigirExiste(tx: TxOperacao, sql: string, p: unknown[], campo: string, msg: string) {
   if (!(await tx.uma<Linha>(sql, p))) throw recusa('entrada-invalida', msg, { campos: [campo] });
@@ -192,6 +230,7 @@ export const opIncluirExcecaoRegra = definirOperacao({
   entrada: esquemaIncluirExcecao,
   async gravar(tx, e) {
     const est = estDe(tx.contexto);
+    exigirGlobal(e.todosEstabelecimentos, e.podeTodosEstabelecimentos);
     const estab = e.todosEstabelecimentos ? null : est;
     const erros = validarExcecaoRegraLancamento({
       regraLancamento: e.regraLancamentoId,
@@ -294,14 +333,8 @@ export const opEncerrarExcecaoRegra = definirOperacao({
   tabelas: ['regra_lancamento_excecao'],
   entrada: esquemaEncerrarExcecao,
   async gravar(tx, e) {
-    const est = estDe(tx.contexto);
-    const x = await tx.uma<Linha>(
-      `SELECT id, DATE_FORMAT(vigencia_inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(vigencia_fim, '%Y-%m-%d') AS fim
-         FROM regra_lancamento_excecao WHERE id = ? AND (estabelecimento_id IS NULL OR estabelecimento_id = ?)`,
-      [e.id, est],
-    );
-    if (!x) throw recusa('nao-encontrado', 'Exceção não encontrada.', { campos: ['id'] });
-    const r = encerramentoExcecaoRegra(txt(x['inicio']), txt(x['fim']), hoje());
+    const x = await excecaoParaAlterar(tx, e.id, e.podeTodosEstabelecimentos);
+    const r = encerramentoExcecaoRegra(x.inicio, x.fim, hoje(), x.cancelada);
     if (!r.ok) throw recusa(r.codigo, r.mensagem, { campos: ['id'] });
     await tx.alterar('regra_lancamento_excecao', e.id, e.versao, { vigencia_fim: r.vigenciaFim });
     return { id: e.id, vigenciaFim: r.vigenciaFim };
@@ -309,9 +342,29 @@ export const opEncerrarExcecaoRegra = definirOperacao({
   alvo: (e) => ({ tabela: 'regra_lancamento_excecao', id: e.id }),
 });
 
+export const opCancelarExcecaoRegra = definirOperacao({
+  nome: 'faturamento.cancelar-excecao-regra-lancamento',
+  tabelas: ['regra_lancamento_excecao'],
+  entrada: esquemaCancelarExcecao,
+  async gravar(tx, e) {
+    const x = await excecaoParaAlterar(tx, e.id, e.podeTodosEstabelecimentos);
+    const r = cancelamentoExcecaoRegra(x.inicio, x.cancelada, hoje(), e.motivo);
+    if (!r.ok)
+      throw recusa(r.codigo, r.mensagem, { campos: [r.codigo === 'entrada-invalida' ? 'motivo' : 'id'] });
+    await tx.alterar('regra_lancamento_excecao', e.id, e.versao, {
+      cancelada_em: new Date(),
+      cancelada_por: tx.contexto.usuario,
+      motivo_cancelamento: r.motivo,
+    });
+    return { id: e.id, situacao: 'cancelada' };
+  },
+  alvo: (e) => ({ tabela: 'regra_lancamento_excecao', id: e.id }),
+});
+
 export const OPERACOES_EXCECAO_REGRA = {
   'incluir-excecao': opIncluirExcecaoRegra,
   'encerrar-excecao': opEncerrarExcecaoRegra,
+  'cancelar-excecao': opCancelarExcecaoRegra,
 } as const;
 export type NomeOperacaoExcecaoRegra = keyof typeof OPERACOES_EXCECAO_REGRA;
 
