@@ -132,7 +132,10 @@ test.describe('C3-028 desconto em folha da mensalidade @C3-028', () => {
       return json(r, { mensagem: 'não simulado' }, 404);
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // Entra como o gestor da operadora (perfil operadora-gestor: operadora.cobranca.ler e .gerar). O SINT.ADMIN não tem os
+    // perfis da operadora própria (nenhuma opção do outro sistema dá a operadora, D-PERM-56), e a rota abriria em Sem
+    // permissão.
+    await entrar(page, 'SINT.OPERADORA');
     await page.goto('/operadora/desconto-folha');
     await expect(page.getByTestId('tela-desconto-folha')).toBeVisible();
     await expect(page.getByTestId('desconto-folha-previa')).toBeDisabled();
