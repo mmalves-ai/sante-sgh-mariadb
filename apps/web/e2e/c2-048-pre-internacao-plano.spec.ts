@@ -182,7 +182,9 @@ test.describe('internação: plano da pré-internação e fila de espera @C2-048
   }) => {
     const externas = vigiarExternas(page);
     const st = simular(page);
-    await entrar(page, 'SINT.ADMIN');
+    // A pré-internação pede internacao.pre.ler e o plano internacao.pre.criar: quem tem é a recepção de internação
+    // (SINT.INTERNACAO); o administrador do sistema não recebe as opções da internação.
+    await entrar(page, 'SINT.INTERNACAO');
     await page.goto('/internacao/pre');
     const tela = page.getByTestId('tela-pre-internacao');
     await expect(tela).toBeVisible();

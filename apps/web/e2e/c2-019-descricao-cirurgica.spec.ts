@@ -198,7 +198,9 @@ test.describe('@C2-019 descrição cirúrgica assinada e intercorrências', () =
     const externas = vigiarExternas(page);
     const sim = simular(page);
     await sim.ligar();
-    await entrar(page, 'SINT.ADMIN');
+    // A descrição cirúrgica pede cirurgia.registro.ler: quem tem é o SINT.BLOCO (Registro de cirurgia); o
+    // administrador do sistema não recebe as opções do bloco. Quem descreve vem da leitura simulada (eu = EU).
+    await entrar(page, 'SINT.BLOCO');
     await page.goto(`/cirurgia/descricao/${ATO}`);
     await expect(page.getByTestId('tela-descricao-cirurgica')).toBeVisible();
     await expect(page.getByTestId('descricao-equipe')).toContainText('ANESTESISTA SINTETICO');
