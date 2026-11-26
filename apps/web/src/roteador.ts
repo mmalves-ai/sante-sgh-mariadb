@@ -53,6 +53,7 @@ import { rotasContratoAlteracoes } from './modulos/operadora/rotas-contrato-alte
 import { rotasDeclaracoesAns } from './modulos/operadora/rotas-declaracoes-ans.js';
 import { rotasProgramaSaude } from './modulos/operadora/rotas-programa-saude.js';
 import { rotasRemuneracaoRede } from './modulos/operadora/rotas-remuneracao-rede.js';
+import { rotasRegrasCriticaConta } from './modulos/operadora/rotas-regras-critica-conta.js';
 import { rotasPessoas } from './modulos/pessoas/rotas.js';
 import { rotasSesmt } from './modulos/pessoas/sesmt/rotas.js';
 import { rotasF6 } from './modulos/pessoas/f6/rotas.js';
@@ -188,6 +189,7 @@ export function rotas(desenvolvimento: boolean): RouteRecordRaw[] {
     ...rotasProgramaSaude,
     // C2-120 (08-SGO L102): remuneração e pagamento do prestador da rede.
     ...rotasRemuneracaoRede,
+    ...rotasRegrasCriticaConta,
     // M52.1: colaboradores e admissão (gestão de pessoas, fatia F1).
     ...rotasPessoas,
     // M52.5: SESMT (ASO, CAT, riscos e EPI, vacinação do colaborador).
