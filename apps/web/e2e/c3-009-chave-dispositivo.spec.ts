@@ -27,6 +27,9 @@ const b64 = (texto: string) => Buffer.from(texto).toString('base64url');
 
 test.describe('@C3-009 chave do dispositivo como segundo fator', () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'autenticador virtual só no Chromium (CDP)');
+  // A WebAuthn recusa endereço IP como identificador do servidor (rpId): "127.0.0.1" dá SecurityError "invalid domain".
+  // O mesmo servidor de teste é aberto por "localhost" (contexto seguro e domínio válido), como num servidor real com nome.
+  test.use({ baseURL: async ({ baseURL }, use) => use(baseURL?.replace('//127.0.0.1', '//localhost')) });
 
   test('cadastra o aparelho, testa a biometria e remove', async ({ page }) => {
     const cdp = await page.context().newCDPSession(page);
@@ -103,7 +106,7 @@ test.describe('@C3-009 chave do dispositivo como segundo fator', () => {
     await expect(page.getByTestId('dispositivos-nenhum')).toBeVisible();
     await semViolacaoAxe(page, 'C3-009 chave do dispositivo (vazia)');
 
-    await page.getByTestId('dispositivo-nome').fill('Notebook sintético');
+    await page.getByTestId('dispositivo-nome').locator('input').fill('Notebook sintético');
     await page.getByTestId('dispositivo-cadastrar').click();
     await expect(page.getByTestId('dispositivo-item')).toHaveCount(1);
     await expect(page.getByTestId('dispositivo-item')).toContainText('Notebook sintético');
