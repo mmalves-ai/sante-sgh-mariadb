@@ -6,3 +6,12 @@ brasindice	TBVLRMEM	VALOR_PFB_BRASINDICE	preco_fabrica	L8-05 r5 (ADR 0006, 3): p
 brasindice	TBVLRMEM	VALOR_PMC_BRASINDICE	preco_maximo_consumidor	L8-05 r5 (ADR 0006, 3): preço máximo ao consumidor da edição
 brasindice	TBVLRMEM	ID_TBVERSAOBRASIN>TBVERSAOBRASIN>VERSAO	#edicao	L8-05 r5 (ADR 0006, 3): edição pela versão da publicação (pai pela chave)
 brasindice	TBVLRMEM	DATA	#vigencia	L8-05 r5 (ADR 0006, 3): vigência da edição = a data mais antiga dos preços dela
+brasindice	TBVLRMEM	TAB>TBCTRMEM>REF_SIMP=N,F,	#so_se	R16 (ADR 0011): tira da edição do Brasíndice as tabelas com marca Simpro; as 704 linhas das tabelas de duas marcas (sem preço Brasíndice, VALOR_PFB/PMC_BRASINDICE = 0) vão para o Simpro
+simpro	TBVLRMEM	COD	codigo	R16 (ADR 0011): código do item na tabela Simpro do hospital, o mesmo do cadastro do item (ligar_espelho:simpro:COD)
+simpro	TBVLRMEM	ID_TBMATMED>TBMATMED>NOME	descricao	R16 (ADR 0011): descrição pelo cadastro do item (pai pela chave)
+simpro	TBVLRMEM	=outro	tipo_produto	R16 (ADR 0011): a origem não separa material de medicamento: outro, para o cliente classificar
+simpro	TBVLRMEM	VALOR;se:PFB=T	preco_fabrica	R16 (ADR 0011): PFB=T: VALOR é o preço de fábrica
+simpro	TBVLRMEM	VALOR;se:PFB=F,	preco_maximo_consumidor	R16 (ADR 0011): PFB=F ou vazio: VALOR é o preço máximo ao consumidor (as 5 linhas sem PFB válido ficam aqui)
+simpro	TBVLRMEM	DATA	#edicao	R16 (ADR 0011): a origem não tem edição do Simpro; cada data de preço é uma edição (guarda o histórico sem codigo_repetido)
+simpro	TBVLRMEM	DATA	#vigencia	R16 (ADR 0011): vigência = a data do preço
+simpro	TBVLRMEM	TAB>TBCTRMEM>REF_SIMP=S,T	#so_se	R16 (ADR 0011, verificação): tabelas com marca Simpro, inclusive as de duas marcas (361.407 linhas); condição única, sem extensão do motor

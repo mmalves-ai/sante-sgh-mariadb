@@ -1,1 +1,3 @@
 generator	tipo	motivo
+#max:documento_estoque.numero	documento_estoque	recusas fase 2 (A05; substitui o M9): a sequência do número do documento de estoque nunca fica abaixo do maior número migrado (medido em 26/11: 1.655.127); sem generator na origem, o mínimo vem do destino
+#max:requisicao_material.numero	requisicao_material	recusas fase 2 (A05; substitui o M9): a sequência do número da requisição de material nunca fica abaixo do maior número migrado (medido em 26/11: 655.105); sem generator na origem, o mínimo vem do destino
