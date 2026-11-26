@@ -21,7 +21,8 @@ async function entrar(page: Page, login: string): Promise<void> {
 test.describe('Simulador: explicar o valor e medir o reajuste @C3-001 @fase3', () => {
   test('explicação do valor, percentual recusado e impacto por alvo, sem gravar; axe', async ({ page }) => {
     const externas = vigiarExternas(page);
-    await entrar(page, 'SINT.FATURAMENTO');
+    // O supervisor das contas (M30) tem o simulador (faturamento.preco.*); SINT.FATURAMENTO é o dos convênios (M12).
+    await entrar(page, 'SINT.CONTAS');
     let gravacoes = 0;
     page.on('request', (r) => {
       if (r.method() !== 'GET' && new URL(r.url()).pathname.startsWith('/api/faturamento')) gravacoes++;
