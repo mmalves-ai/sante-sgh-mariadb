@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 514, M: 198, P: 57, N: 259 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 515, M: 198, P: 57, N: 260 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(514);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(515);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -561,6 +561,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/sadt/agencia/requisicoes', // M47 (etapa 1)
         '/sadt/amostras',
         '/sadt/atendimentos', // M26
+        '/sadt/busca-ativa', // C1-110 (05-SADT linha 24)
         '/sadt/coleta',
         '/sadt/entregas', // F3.5 (05-SADT linha 21)
         '/sadt/entregas/cadastro', // F3.5 (05-SADT linha 21)

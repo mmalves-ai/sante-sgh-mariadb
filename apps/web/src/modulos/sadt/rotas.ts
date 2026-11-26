@@ -82,6 +82,13 @@ export const rotasSadt: RouteRecordRaw[] = [
     component: () => import('./telas/CatalogoExamesTela.vue'),
     meta: { permissao: 'sadt.catalogo.ler' },
   },
+  // F8 (05-SADT linha 24): busca ativa de resultados liberados depois da alta.
+  {
+    path: '/sadt/busca-ativa',
+    name: 'sadt.busca-ativa',
+    component: () => import('./telas/BuscaAtivaTela.vue'),
+    meta: { permissao: 'sadt.resultado.ler' },
+  },
   // F3.5 (05-SADT linha 21): a entrega de resultados no balcão e o cadastro do prazo e da publicação no portal.
   {
     path: '/sadt/entregas',

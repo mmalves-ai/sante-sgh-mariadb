@@ -7,6 +7,7 @@ import { mensagensLimites } from './i18n-limites.js';
 import { mensagensConsumoPadrao, recusasConsumoPadrao } from './i18n-consumo-padrao.js';
 import { mensagensAutoliberacao } from './i18n-autoliberacao.js';
 import { mensagensSoroteca } from './i18n-soroteca.js';
+import { mensagensBuscaAtiva } from './i18n-busca-ativa.js';
 import { mensagensMicrobiologia } from './i18n-microbiologia.js';
 import { mensagensLoteTrabalho } from './i18n-lote-trabalho.js';
 import { mensagensTransfusao } from './i18n-transfusao.js';
@@ -422,6 +423,8 @@ export const mensagensSadt = {
   microbiologia: mensagensMicrobiologia,
   // F8 (05-SADT linha 9): soroteca, a aba de guarda e expurgo da tela de amostras.
   soroteca: mensagensSoroteca,
+  // F8 (05-SADT linha 24): busca ativa de resultados liberados depois da alta.
+  buscaAtiva: mensagensBuscaAtiva,
   // F3.5 (05-SADT linha 21): entrega de resultados no balcão, prazos e publicação no portal.
   entrega: mensagensEntrega,
   // F3.5 (05-SADT linha 19): escala de execução e fila do setor.
