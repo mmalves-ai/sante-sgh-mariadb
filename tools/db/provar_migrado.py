@@ -1,4 +1,4 @@
-"""Prova das obrigatoriedades relaxadas só no registro migrado (recusas da carga, fase 2, K1).
+"""Prova das obrigatoriedades relaxadas só no registro migrado (recusas da carga, fase 2, K1 e K1b).
 
 uso: python3 -I tools/db/provar_migrado.py [--banco validacao] [--montar [--manter]]
 
@@ -12,6 +12,7 @@ Depois, na tabela real (com as FKs e todas as CHECKs), grava um registro clínic
 profissional e sem usuário: os pais obrigatórios são criados antes (só eles com check_constraint_checks=0), numa
 transação desfeita no fim (nada fica no banco). Também: profissional inexistente dá ERRO 1452 (FK) e o mesmo registro com origem 'sistema'
 dá 4025.
+Por fim, as chaves únicas novas do K1b (UNICOS): numa cópia sem CHECKs, a mesma linha gravada duas vezes dá ERRO 1062.
 Imprime "ok" (com o número de casos) ou a lista de erros; sai com 1 se houver erro. Não lê dados de pessoas.
 """
 import re
@@ -68,6 +69,21 @@ CASOS = [
      [(S, "4025"), (M, "ok"), ({**S, "percentual": 10}, "ok"),
       ({**M, "percentual": 10, "valor_fixo": 10}, "4025"), ({**S, "percentual": 10, "valor_fixo": 10}, "4025")]),
     ("rubrica", "ck_rubrica_natureza", {"natureza_rubrica_id": None}, [(S, "4025"), (M, "ok")]),
+    # K1b
+    ("rateio_lancamento", "ck_rateio_lancamento_pai",
+     {"titulo_pagar_id": None, "titulo_receber_id": None, "baixa_titulo_id": None, "movimento_bancario_id": None,
+      "movimento_caixa_id": None, "adiantamento_id": 1},
+     [(S, "ok"), (M, "ok"), ({**S, "adiantamento_id": None}, "4025"), ({**M, "titulo_pagar_id": 1}, "4025")]),
+    ("requisicao_material", "ck_requisicao_material_setor",
+     {"tipo": "setor", "setor_funcional_id": None, "centro_custo_id": None},
+     [(S, "4025"), (M, "ok"), ({**S, "centro_custo_id": 1}, "ok"), ({**S, "tipo": "paciente"}, "ok")]),
+    ("lote_insumo", "ck_lote_insumo_validade", {"validade": None}, [(S, "4025"), (M, "ok"),
+                                                                    ({**S, "validade": "2027-01-01"}, "ok")]),
+]
+# (tabela, chave única, linha): a mesma linha gravada duas vezes tem de dar ERRO 1062 nomeando a chave.
+UNICOS = [
+    ("rateio_lancamento", "uq_rateio_lancamento_adiantamento", {**M, "adiantamento_id": 1, "sequencia": 1}),
+    ("lote_insumo", "uq_lote_insumo_sem_validade", {**M, "validade": None, "numero_lote": "SEM_LOTE"}),
 ]
 
 
@@ -244,13 +260,26 @@ def provar() -> int:
                 erros.append(f"{tabela}/{check} {campos}: esperado {esperado}, obtido {obtido}"
                              + (f" ({r.stderr.strip()[:160]})" if obtido == "outro" else ""))
         sql(f"DROP TABLE IF EXISTS {copia};")
+    for tabela, chave, campos in UNICOS:
+        n += 1
+        copia = f"k1prova_{tabela}"[:64]
+        sql(f"DROP TABLE IF EXISTS {copia}; CREATE TABLE {copia} LIKE {tabela};")
+        for (c,) in linhas(f"SELECT constraint_name FROM information_schema.check_constraints "
+                           f"WHERE constraint_schema='{BANCO}' AND table_name='{copia}'"):
+            sql(f"ALTER TABLE {copia} DROP CONSTRAINT `{c}`;")
+        linha = {**colunas_obrigatorias(copia), **campos}
+        ins = f"INSERT INTO {copia} ({', '.join(linha)}) VALUES ({', '.join(literal(v) for v in linha.values())});"
+        r = sql(ins + ins)
+        if not ("1062" in r.stderr and chave in r.stderr):
+            erros.append(f"{tabela}/{chave}: esperado 1062 na segunda linha, obtido {r.stderr.strip()[:160] or 'ok'}")
+        sql(f"DROP TABLE IF EXISTS {copia};")
     erros_r, n_r = provar_real()
     erros += erros_r
     n += n_r
     if erros:
         print("\n".join(erros))
         return 1
-    print(f"ok ({n} casos em {len(CASOS)} CHECKs, {n_r} na tabela real com FKs)")
+    print(f"ok ({n} casos em {len(CASOS)} CHECKs e {len(UNICOS)} chaves únicas, {n_r} na tabela real com FKs)")
     return 0
 
 
