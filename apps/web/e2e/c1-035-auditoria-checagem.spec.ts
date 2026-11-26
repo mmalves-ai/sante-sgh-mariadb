@@ -122,8 +122,10 @@ test.describe('auditoria das checagens de enfermagem (09-AREA L86) @C1-035', () 
     });
 
     // A permissão é clínica: o administrador sem perfil assistencial não a recebe (segregação de funções). Quem audita
-    // aqui é a enfermeira com conselho (perfil assistencial-com-conselho).
-    await entrar(page, 'SINT.ENF.PLANTAO');
+    // aqui é a coordenação de enfermagem com conselho (grupo ENFERMAGEM_SUPERVISAO, que dá o perfil
+    // assistencial-com-conselho). O SINT.ENF.PLANTAO não serve: o grupo dele está fora do mapa grupo → perfil (caso a
+    // caso) e não recebe perfil por adivinhação, então a rota mostrava Sem permissão.
+    await entrar(page, 'SINT.COORD.ENF');
     await page.goto('/enfermagem/auditoria-checagem');
     await expect(page.getByTestId('tela-auditoria-checagem')).toBeVisible();
     await expect(page.getByTestId('ac-vazio')).toBeVisible();
