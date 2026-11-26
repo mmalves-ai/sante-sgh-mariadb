@@ -608,3 +608,15 @@ corrente de CronCreate morre com a sessão; ao retomar, recriar (formato na mem�
 - Plano de economia (docs/obra/plano-reducao-tokens-2026-11-25.md) e decisões (docs/obra/decisoes-tomadas.md) valem.
 - Sobras sem commit na árvore (C2-064, C2-113, cancelamento de contrato, telas da operadora): não entram em push.
 - Próximo: preflight-e2e.sh → integrar-3 (E2E das prontas pendentes, corretor com o erro extraído) → funções B e C.
+
+## Passagem de 26/11 07h30 (Sessão de Construção)
+- Fichas: 324/467 (69%): F3 183/254, F7 67/109, F8 74/104. Pendências por motivo em docs/obra/pendencias-2026-11-26.md.
+- Push PARADO: a esteira do 81311fe7 passou 5 de 6 etapas; o gitleaks do histórico acusa um falso positivo no commit local
+  781eedc0 (ficha F78-03, "api-pesquisa-clinica.ts, i18n-..."). Texto já corrigido na árvore (5140ce2d). A exceção estreita
+  no gitleaks.toml foi RECUSADA pela checagem automática de permissões e espera o dono (aviso enviado por e-mail).
+  Com a autorização: acrescentar a allowlist (só esse arquivo e o texto `api-pesquisa-clinica\.ts`), ci-sim, push.
+- Painel 3310 com o build do HEAD de 06h (dist anterior em sante-sgh-dados/obra/painel-dist-anterior); migrações aplicadas.
+- Rodadas fechadas na madrugada: construir-3 (28 B/C, 13 prontas), completar-4 (9, 6 prontas), integrar-3, correções de
+  E2E com o erro extraído, consolidar-6. Decisões em docs/obra/decisoes-tomadas.md (32 itens).
+- Regras novas: pre-commit recusa commit que apaga arquivo e erro de sintaxe na versão preparada; E2E por script
+  (preflight-e2e.sh + e2e-vm.sh --reporter=list); relatório por relatorio-50.py.
