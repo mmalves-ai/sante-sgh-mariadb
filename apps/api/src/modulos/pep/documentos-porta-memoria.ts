@@ -1427,7 +1427,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
               ativa: true,
               inativadaEm: null,
               motivoInativacao: null,
-              passos: [...(a.passos ?? []), { evento: 'reativacao', em: agora, motivo: x.motivo }],
+              passos: [...(a.passos ?? []), { evento: 'reativacao', em: agora, motivo: x.motivo ?? null }],
             };
           } else if ('manifestacoes' in x) {
             conferirEstadoLido(alvo, {

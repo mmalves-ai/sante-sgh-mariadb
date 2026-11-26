@@ -164,7 +164,7 @@ export class PortaisOperadoraController {
         ? await this.porta.contaDoUsuario(s.porta, portal, usuario).catch(this.falha)
         : null;
     if (!c)
-      throw new ErroProblema('sem-conta-portal', 403, 'Sem conta no portal', 'Sem conta ativa neste portal.');
+      throw new ErroProblema('sem-permissao', 403, 'Sem conta no portal', 'Sem conta ativa neste portal.');
     return { s, c };
   }
 

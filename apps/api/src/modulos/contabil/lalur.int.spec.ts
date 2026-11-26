@@ -264,7 +264,9 @@ describe.skipIf(SEM_BANCO)('LALUR/LACS, apuração e provisão do IRPJ e da CSLL
     expect(d?.apuracao.situacao).toBe('fechada');
     expect(d?.ecf.linhas.filter((x) => x.startsWith('|M300|'))).toHaveLength(3);
     expect(d?.ecf.linhas.filter((x) => x.startsWith('|M350|'))).toHaveLength(2);
-    expect(d?.ecf.linhas.some((x) => x.startsWith('|M500|PF|I|100000,00|D|63000,00|C|0,00|D|37000,00|D|'))).toBe(true);
+    expect(
+      d?.ecf.linhas.some((x) => x.startsWith('|M500|PF|I|100000,00|D|63000,00|C|0,00|D|37000,00|D|')),
+    ).toBe(true);
   }, 120_000);
 
   it('trimestre com prejuízo: fechamento exige a conta e constitui o prejuízo na parte B', async () => {

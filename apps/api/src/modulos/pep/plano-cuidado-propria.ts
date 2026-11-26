@@ -96,7 +96,7 @@ export const esquemaPlano = z.discriminatedUnion('acao', [
       justificativa: z.string().max(JUSTIFICATIVA_MAXIMA_PLANO).nullable().optional(),
     })
     .strict(),
-] as unknown as [z.ZodDiscriminatedUnionOption<'acao'>, ...z.ZodDiscriminatedUnionOption<'acao'>[]]);
+] as unknown as [z.core.$ZodTypeDiscriminable, ...z.core.$ZodTypeDiscriminable[]]);
 
 type Id = number;
 export type EntradaPlano =
@@ -193,14 +193,14 @@ export interface PlanosDoPaciente {
   readonly podeEscrever: boolean;
 }
 
-export interface ResultadoPlano {
+export type ResultadoPlano = {
   readonly plano: number;
   readonly situacao: string;
   readonly item?: number;
   readonly risco?: string | null;
   /** O risco subiu para alto ou muito alto: a tela avisa a equipe. */
   readonly avisar?: boolean;
-}
+};
 
 const recusar = (f: readonly FalhaRegra[]): never => {
   throw recusa(f[0]!.codigo, f.map((x) => x.mensagem).join(' '));

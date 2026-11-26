@@ -31,7 +31,14 @@ import {
   type TipoAjusteLalur,
   type TributoParteB,
 } from '@sgh/dominio-contabil';
-import { type ContextoOperacao, definirOperacao, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
+import {
+  type ContextoOperacao,
+  definirOperacao,
+  type Leitor,
+  recusa,
+  type ResultadoOperacao,
+  type TxOperacao,
+} from '@sgh/nucleo';
 import { gravacaoDosFatos, TABELAS_CONTABILIZACAO } from '@sgh/persistencia-contabil';
 import { z } from 'zod';
 
@@ -643,7 +650,7 @@ const esquemaApurar = z.object({
   deducoesIrpj: dinheiro.default(0),
   deducoesCsll: dinheiro.default(0),
 });
-const apurar = definirOperacao<z.infer<typeof esquemaApurar>, Record<string, unknown>>({
+const apurar = definirOperacao<z.infer<typeof esquemaApurar>, ResultadoOperacao>({
   nome: 'contabil.lalur_apurar',
   tabelas: ['apuracao_irpj_csll', 'ajuste_lalur', 'movimento_lalur_parte_b', 'saldo_lalur_parte_b'],
   entrada: esquemaApurar as never,
@@ -751,7 +758,8 @@ const apurar = definirOperacao<z.infer<typeof esquemaApurar>, Record<string, unk
       compensacaoBaseNegativa: r.compensacaoBaseNegativa,
       irpjRecolher: r.irpjRecolher,
       csllRecolher: r.csllRecolher,
-      memoria: r.memoria,
+      // A memória completa sai no detalhe da apuração; o resultado da operação só leva valores simples.
+      memoria: r.memoria.join('\n'),
     };
   },
   alvo: (e) => ({ tabela: 'apuracao_irpj_csll', id: e.apuracao }),
@@ -821,7 +829,7 @@ const esquemaFechar = esquemaVersao.extend({
   contaPrejuizo: id.nullable().default(null),
   contaBaseNegativa: id.nullable().default(null),
 });
-const fechar = definirOperacao<z.infer<typeof esquemaFechar>, Record<string, unknown>>({
+const fechar = definirOperacao<z.infer<typeof esquemaFechar>, ResultadoOperacao>({
   nome: 'contabil.lalur_fechar',
   tabelas: ['apuracao_irpj_csll', 'ajuste_lalur', 'movimento_lalur_parte_b', 'saldo_lalur_parte_b'],
   entrada: esquemaFechar as never,
@@ -859,7 +867,7 @@ const fechar = definirOperacao<z.infer<typeof esquemaFechar>, Record<string, unk
       fechado_em: new Date(),
       responsavel_usuario_id: ctx.usuario,
     });
-    return { apuracao: ap.id, prejuizo, baseNegativa, constituidos };
+    return { apuracao: ap.id, prejuizo, baseNegativa, constituidos: constituidos.join(',') };
   },
   alvo: (e) => ({ tabela: 'apuracao_irpj_csll', id: e.apuracao }),
 });
