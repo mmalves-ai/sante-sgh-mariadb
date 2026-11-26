@@ -152,12 +152,12 @@ test.describe('@C2-115 custo-padrão por procedimento', () => {
     await expect(page.getByTestId('cp-situacao')).toHaveText('Rascunho');
 
     // Mão de obra sem descrição: recusa na hora, botão desligado.
-    await escolher(page.getByTestId('cp-item-tipo'), 'Mão de obra');
+    await escolher(page.getByTestId('cp-item-tipo'), 'mao_de_obra');
     await expect(page.getByTestId('cp-item-problemas')).toContainText('Descreva a mão de obra');
     await expect(page.getByTestId('cp-item-incluir')).toBeDisabled();
 
     // Insumo: o custo de referência vem preenchido e a prévia aparece.
-    await escolher(page.getByTestId('cp-item-tipo'), 'Insumo');
+    await escolher(page.getByTestId('cp-item-tipo'), 'insumo');
     await campo(page.getByTestId('cp-item-busca')).fill('E2E');
     await escolher(page.getByTestId('cp-item-referencia'), { rotulo: /E2E-INS/ });
     await expect(page.getByTestId('cp-item-unitario')).toHaveValue('5,5');
