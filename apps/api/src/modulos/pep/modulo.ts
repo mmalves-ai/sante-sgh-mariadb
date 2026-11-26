@@ -82,6 +82,8 @@ import {
   PortaRegrasAvisoClinicoPropria,
 } from './avisos-clinicos-regras-propria.js';
 import { NotasPacientePropria } from './notas-paciente-propria.js';
+import { PLANO_CUIDADO, PlanoCuidadoController } from './plano-cuidado.controller.js';
+import { PlanoCuidadoPropria } from './plano-cuidado-propria.js';
 import { TRANSPLANTE_CLINICO, TransplanteClinicoController } from './transplante-clinico.controller.js';
 import { TransplanteClinicoPropria } from './transplante-clinico-propria.js';
 import { CurvasCrescimentoPropria } from './curvas-crescimento-propria.js';
@@ -234,6 +236,7 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
       PrescricaoCadastroController,
       PrescricaoPadroesController,
       NotasPacienteController,
+      PlanoCuidadoController,
       CurvasCrescimentoController,
       ExameFisicoController,
       TransplanteClinicoController,
@@ -372,6 +375,14 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new NotasPacientePropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // 03-PEP L142: plano de cuidado e estratificação de risco do paciente; sem núcleo, 503.
+      {
+        provide: PLANO_CUIDADO,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PlanoCuidadoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
       // 03-PEP L145: doação e transplante de órgãos (doador, receptor, destino, acompanhamento); sem núcleo, 503.

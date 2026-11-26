@@ -8,6 +8,7 @@ import { mensagensSumarioSecoes } from './i18n-sumario-secoes.js';
 import { mensagensResultadosGrupos } from './i18n-resultados-grupos.js';
 import { mensagensFarmacovigilancia } from './i18n-farmacovigilancia.js';
 import { mensagensNotasPaciente } from './i18n-notas-paciente.js';
+import { mensagensPlanoCuidado } from './i18n-plano-cuidado.js';
 import { mensagensCurvasCrescimento } from './i18n-curvas-crescimento.js';
 import { mensagensTerminologiaClinica } from './i18n-terminologia-clinica.js';
 import { mensagensAvisosRegras } from './i18n-avisos-regras.js';
@@ -43,6 +44,8 @@ export const mensagensPep = {
   farmaco: mensagensFarmacovigilancia,
   // 03-PEP L102: notas e lembretes livres sobre o paciente.
   notas: mensagensNotasPaciente,
+  // 03-PEP L142: plano de cuidado e estratificação de risco do paciente.
+  planoCuidado: mensagensPlanoCuidado,
   // 03-PEP L141: curvas de crescimento (OMS e INTERGROWTH) e medida de crescimento.
   crescimento: mensagensCurvasCrescimento,
   // 09-AREA L84: diagnósticos do paciente com a CID-10 e o conceito clínico equivalente.
