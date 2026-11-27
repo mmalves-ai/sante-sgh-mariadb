@@ -84,6 +84,12 @@ describe.skipIf(SEM_DB)('Romaneio de entrega entre unidades contra o MariaDB (cl
         `UPDATE documento_estoque_item SET movimento_estoque_id = NULL WHERE documento_estoque_id IN (SELECT id FROM documento_estoque WHERE estabelecimento_id IN (${ests}))`,
         [],
       );
+      // C2-093: o movimento publica o fato contábil (estornos antes).
+      await e.executar(
+        `DELETE FROM fato_contabil WHERE estabelecimento_id IN (${ests}) AND estornado_fato_contabil_id IS NOT NULL`,
+        [],
+      );
+      await e.executar(`DELETE FROM fato_contabil WHERE estabelecimento_id IN (${ests})`, []);
       await e.executar(`DELETE FROM movimento_estoque WHERE estabelecimento_id IN (${ests})`, []);
       await e.executar(`DELETE FROM saldo_estoque WHERE estabelecimento_id IN (${ests})`, []);
       await e.executar(

@@ -477,6 +477,12 @@ export async function limparMassa(nucleo: NucleoProprio, _m: MassaSuprimentos | 
       `DELETE FROM movimento_lote WHERE movimento_estoque_id IN (SELECT id FROM movimento_estoque WHERE estabelecimento_id IN (${ests}))`,
       [like],
     );
+    // C2-093: o movimento e a nota publicam o fato contábil (estornos antes, pela chave do estorno).
+    await e.executar(
+      `DELETE FROM fato_contabil WHERE estabelecimento_id IN (${ests}) AND estornado_fato_contabil_id IS NOT NULL`,
+      [like],
+    );
+    await e.executar(`DELETE FROM fato_contabil WHERE estabelecimento_id IN (${ests})`, [like]);
     await e.executar(`DELETE FROM movimento_estoque WHERE estabelecimento_id IN (${ests})`, [like]);
     await e.executar(
       `UPDATE inventario_estoque SET documento_estoque_id = NULL WHERE estabelecimento_id IN (${ests})`,

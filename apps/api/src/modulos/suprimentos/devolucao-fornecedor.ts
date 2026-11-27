@@ -8,6 +8,7 @@
 //   a nota de crédito recebida do fornecedor (motivo "devolucao"), uma por parcela em aberto do título a pagar da nota,
 //   emitida e aplicada pela operação do financeiro (desconto na parcela e no título); o que sobra fica pendente.
 // Nada é apagado.
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import {
   conferirDevolucaoFornecedor,
   disponivelParaDevolver,
@@ -53,6 +54,8 @@ export const TABELAS_DEVOLUCAO_FORNECEDOR = [
   'saldo_lote',
   'lote_insumo',
   'movimento_estoque',
+  // C2-093: o movimento publica o fato contábil.
+  ...TABELAS_PUBLICACAO_FATO,
   'movimento_lote',
   'nota_credito_debito',
   'tributo_nota_credito_debito',

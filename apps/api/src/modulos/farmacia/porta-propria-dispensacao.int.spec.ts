@@ -85,6 +85,8 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
         'DELETE FROM entrega_setor WHERE estabelecimento_id = ?',
         'UPDATE receita_controlada SET dispensacao_id = NULL WHERE estabelecimento_id = ?',
         'DELETE dei FROM documento_estoque_item dei JOIN documento_estoque de ON de.id = dei.documento_estoque_id WHERE de.estabelecimento_id = ?',
+        'DELETE FROM fato_contabil WHERE estabelecimento_id = ? AND estornado_fato_contabil_id IS NOT NULL',
+        'DELETE FROM fato_contabil WHERE estabelecimento_id = ?',
         'DELETE FROM movimento_estoque WHERE estabelecimento_id = ? AND estorno_movimento_estoque_id IS NOT NULL',
         'DELETE FROM movimento_estoque WHERE estabelecimento_id = ?',
         'DELETE di FROM devolucao_dispensacao_item di JOIN devolucao_dispensacao d ON d.id = di.devolucao_dispensacao_id WHERE d.estabelecimento_id = ?',

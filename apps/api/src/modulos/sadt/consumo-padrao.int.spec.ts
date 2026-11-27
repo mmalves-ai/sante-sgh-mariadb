@@ -109,6 +109,12 @@ async function limpar(e: Escritor) {
     `UPDATE documento_estoque_item SET movimento_estoque_id = NULL WHERE documento_estoque_id IN (${docs})`,
     [`${P}%`],
   );
+  // C2-093: a saída publica o fato contábil do movimento (estornos antes).
+  for (const so of ['AND estornado_fato_contabil_id IS NOT NULL', ''])
+    await e.executar(
+      `DELETE FROM fato_contabil WHERE entidade_origem = 'movimento_estoque' AND entidade_origem_id IN (${movs}) ${so}`,
+      [`${P}%`],
+    );
   await e.executar(`DELETE FROM movimento_lote WHERE movimento_estoque_id IN (${movs})`, [`${P}%`]);
   await e.executar(`DELETE FROM movimento_estoque WHERE atendimento_id IN (${atds})`, [`${P}%`]);
   await e.executar(`DELETE FROM documento_estoque_item WHERE documento_estoque_id IN (${docs})`, [`${P}%`]);

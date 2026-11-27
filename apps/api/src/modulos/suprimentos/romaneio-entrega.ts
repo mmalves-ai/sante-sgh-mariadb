@@ -9,6 +9,7 @@
 //   - conferência por item na chegada: entregue (recebedor e hora), recusado, devolvido ou extraviado com o motivo; o
 //     romaneio fecha entregue ou entregue em parte, com conferente, chegada e quilometragem, quando não sobra pendente;
 //   - cancelamento só antes da saída, com o motivo na observação. Nada é apagado.
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import {
   type CategoriaHabilitacao,
   CATEGORIAS_HABILITACAO,
@@ -68,6 +69,8 @@ export const TABELAS_ROMANEIO_ENTREGA = [
   'documento_estoque',
   'documento_estoque_item',
   'movimento_estoque',
+  // C2-093: o movimento publica o fato contábil.
+  ...TABELAS_PUBLICACAO_FATO,
   'movimento_lote',
   'saldo_estoque',
   'saldo_lote',

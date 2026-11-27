@@ -194,6 +194,8 @@ import {
   recalcularSaldos,
   TABELAS_RECALCULO_SALDO,
 } from './recalculo-saldo.js';
+import { estornarFatoDaNota, publicarFatoDaNota, publicarFatoDoMovimento } from './fato-contabil-estoque.js';
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 
 /** O mínimo do núcleo que a porta usa. */
 export type NucleoSuprimentos = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
@@ -1728,6 +1730,19 @@ export async function movimentar(
       lote_insumo_id: l.id,
       quantidade: l.quantidade,
     });
+  // C2-093: o fato contábil do movimento (saída de consumo ou estorno) na mesma transação.
+  await publicarFatoDoMovimento(tx, est, {
+    id,
+    natureza: m.natureza,
+    valor,
+    hoje: m.hoje,
+    tipoMovimento: m.tipoMovimento,
+    insumo: m.insumo,
+    centroCusto: m.centroCusto ?? null,
+    contrapartida: m.contrapartida ?? null,
+    consignado: m.consignado ?? false,
+    estorno: m.estorno ?? null,
+  });
   return { id, custo, valor };
 }
 
@@ -3021,6 +3036,14 @@ async function registrarEntradaNF(
       ...(pedido['aprovado_em'] ? {} : { aprovado_em: agora }),
     });
   }
+  // C2-093: o fato contábil da nota confirmada, na mesma transação.
+  await publicarFatoDaNota(tx, est, {
+    id: nota,
+    hoje,
+    valorTotal: custos.valorTotal,
+    tipoEntrada: n(tipoEntrada['id']),
+    fornecedor: e.fornecedor,
+  });
   if (conferencia) await ligarConferenciaNota(tx, conferencia, nota);
   const c = chaveLida(numero.valor, hoje);
   return { id: nota, ano: c.ano, mes: c.mes, doc: c.doc, itens: e.itens.length };
@@ -3635,6 +3658,7 @@ async function desconsolidarDocumento(
       situacao: algum ? 'parcialmente_recebido' : pc['enviado_fornecedor_em'] ? 'enviado' : 'aprovado',
     });
   }
+  await estornarFatoDaNota(tx, est, n(nota['id']), hoje);
   await tx.alterar('nota_entrada', n(nota['id']), n(nota['versao']), { situacao: 'conferencia' });
   return { id: n(nota['id']) };
 }
@@ -3710,6 +3734,8 @@ export const TABELAS_OPERACOES_SUPRIMENTOS = [
   'documento_estoque_item',
   'movimento_estoque',
   'movimento_lote',
+  // C2-093: o movimento publica o fato contábil (fato-contabil-estoque.ts).
+  ...TABELAS_PUBLICACAO_FATO,
   'saldo_estoque',
   'saldo_lote',
   'lote_insumo',

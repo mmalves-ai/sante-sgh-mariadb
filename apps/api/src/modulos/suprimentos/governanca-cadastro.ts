@@ -12,6 +12,7 @@
 //   permanece como substituição de apresentação e deixa o absorvido inativo, bloqueado para compra e nunca apagado.
 // Nada é apagado: o histórico de movimentos continua ligado ao absorvido e a correspondência fica em
 // unificacao_insumo_item.
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import {
   conferirDuplicidadeInclusao,
   conferirInativacaoItem,
@@ -67,6 +68,8 @@ const TABELAS_UNIFICACAO = [
   'saldo_lote',
   'lote_insumo',
   'movimento_estoque',
+  // C2-093: o movimento publica o fato contábil.
+  ...TABELAS_PUBLICACAO_FATO,
   'movimento_lote',
   'insumo_codigo_barras',
   'insumo_fornecedor',

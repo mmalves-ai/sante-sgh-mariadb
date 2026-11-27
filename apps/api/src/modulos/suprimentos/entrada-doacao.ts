@@ -5,6 +5,7 @@
 // doador empresa no emitente ou o doador pessoa em doador_pessoa_fisica_id, o termo no número do documento), os itens
 // com o critério do custo, os lotes, o movimento "entrada_doacao" (propriedade doação, custo médio novo) e a parte
 // doada do saldo (quantidade_doada). O último preço de compra do item não muda. Nada é apagado.
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import {
   avisosValorJusto,
   buscaDoDoador,
@@ -51,6 +52,8 @@ export const TABELAS_ENTRADA_DOACAO = [
   'saldo_lote',
   'lote_insumo',
   'movimento_estoque',
+  // C2-093: o movimento publica o fato contábil.
+  ...TABELAS_PUBLICACAO_FATO,
   'movimento_lote',
 ] as const;
 

@@ -8,6 +8,7 @@
 // são recusadas sem gravar nada. A segunda devolução (o resto, total) abate o que cabe nas parcelas e deixa a sobra como
 // crédito pendente. Sem abater, nada muda no contas a pagar. Outro estabelecimento não vê a devolução.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import { randomUUID } from 'node:crypto';
 import { definirOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -219,7 +220,13 @@ describe.skipIf(SEM_BANCO)('devolução de compra ao fornecedor (MariaDB)', () =
     // A entrada da compra no estoque, pelo motor (o movimento ligado ao item da nota).
     const entrada = definirOperacao({
       nome: 'teste.c2015.entrada_compra',
-      tabelas: ['saldo_estoque', 'saldo_lote', 'movimento_estoque', 'movimento_lote'],
+      tabelas: [
+        'saldo_estoque',
+        'saldo_lote',
+        'movimento_estoque',
+        'movimento_lote',
+        ...TABELAS_PUBLICACAO_FATO,
+      ],
       entrada: z.object({}),
       gravar: async (tx) => {
         await movimentar(tx, m.estA, {
@@ -473,7 +480,14 @@ describe.skipIf(SEM_BANCO)('devolução de compra ao fornecedor (MariaDB)', () =
     const l2 = `C2015B${sufixo}`;
     const entrada = definirOperacao({
       nome: 'teste.c2015.entrada_lotes',
-      tabelas: ['saldo_estoque', 'saldo_lote', 'lote_insumo', 'movimento_estoque', 'movimento_lote'],
+      tabelas: [
+        'saldo_estoque',
+        'saldo_lote',
+        'lote_insumo',
+        'movimento_estoque',
+        'movimento_lote',
+        ...TABELAS_PUBLICACAO_FATO,
+      ],
       entrada: z.object({}),
       gravar: async (tx) => {
         const ins = await insumoAtivo(tx, m.insumo);

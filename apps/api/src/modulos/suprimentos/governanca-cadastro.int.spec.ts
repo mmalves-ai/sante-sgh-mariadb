@@ -7,6 +7,7 @@
 // apagado; a repetição pela mesma chave não grava duas vezes; a substituição é incluída e desativada.
 // A migração 11_SUP/99_unificacao_insumo só está no f22_o5: rode com SGH_CLIENTE_TESTE=f22_o5.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import { randomUUID } from 'node:crypto';
 import { definirOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -90,7 +91,13 @@ describe.skipIf(SEM_BANCO)('governança do cadastro de itens (MariaDB)', () => {
     await nucleo.criarExecutor().executar(
       definirOperacao({
         nome: 'teste.c2082.entrada',
-        tabelas: ['saldo_estoque', 'saldo_lote', 'movimento_estoque', 'movimento_lote'],
+        tabelas: [
+          'saldo_estoque',
+          'saldo_lote',
+          'movimento_estoque',
+          'movimento_lote',
+          ...TABELAS_PUBLICACAO_FATO,
+        ],
         entrada: z.unknown(),
         gravar: async (tx) => {
           const r = await movimentar(tx, m.estA, {

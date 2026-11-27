@@ -8,6 +8,7 @@
 //     (tipo dose) e o lote de origem;
 //   - o rastreio dose → ordem → lote de origem, com as doses irmãs do mesmo lote.
 // Nada é apagado: a ordem e a dose são registro permanente da rastreabilidade (RDC 67/2007 da ANVISA).
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import {
   conferirRegraFracionamento,
   conferirUnitarizacao,
@@ -57,6 +58,8 @@ export const TABELAS_UNITARIZACAO_DOSE = [
   'saldo_estoque',
   'saldo_lote',
   'movimento_estoque',
+  // C2-093: o movimento publica o fato contábil.
+  ...TABELAS_PUBLICACAO_FATO,
   'movimento_lote',
   'sequencia_negocio',
 ] as const;

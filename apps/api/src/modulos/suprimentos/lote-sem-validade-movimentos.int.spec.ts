@@ -5,6 +5,7 @@
 //   - o balanço do inventário (ajuste do saldo físico) baixa a falta pelo lote datado e completa com o lote sem
 //     validade, que continua nulo.
 // O envio entre unidades do romaneio fica em romaneio-entrega.int.spec.ts. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import { randomUUID } from 'node:crypto';
 import { definirOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -153,7 +154,13 @@ describe.skipIf(SEM_BANCO)('lote migrado sem validade na devolução e no balan�
     // A entrada da compra pelo motor: 2 no lote datado e 3 no lote migrado sem validade, ligadas ao item da nota.
     const entrada = definirOperacao({
       nome: 'teste.recusas.entrada_lote_sem_validade',
-      tabelas: ['saldo_estoque', 'saldo_lote', 'movimento_estoque', 'movimento_lote'],
+      tabelas: [
+        'saldo_estoque',
+        'saldo_lote',
+        'movimento_estoque',
+        'movimento_lote',
+        ...TABELAS_PUBLICACAO_FATO,
+      ],
       entrada: z.object({}),
       gravar: async (tx) => {
         await movimentar(tx, m.estA, {

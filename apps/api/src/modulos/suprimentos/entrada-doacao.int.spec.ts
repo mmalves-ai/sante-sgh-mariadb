@@ -23,6 +23,7 @@ import {
   montarMassa,
   SEM_BANCO,
 } from './massa-propria.spec-util.js';
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import type { ContextoSuprimentos } from './porta.js';
 import { movimentar, PortaSuprimentosPropria, tipoMovimentoId } from './porta-propria.js';
 
@@ -288,7 +289,14 @@ describe.skipIf(SEM_BANCO)('entrada por doação (MariaDB)', () => {
       nucleo.criarExecutor().executar(
         definirOperacao({
           nome: 'teste.c1126.saida',
-          tabelas: ['saldo_estoque', 'saldo_lote', 'movimento_estoque', 'movimento_lote'],
+          // C2-093: a saída publica o fato contábil do movimento.
+          tabelas: [
+            'saldo_estoque',
+            'saldo_lote',
+            'movimento_estoque',
+            'movimento_lote',
+            ...TABELAS_PUBLICACAO_FATO,
+          ],
           entrada: z.unknown(),
           gravar: async (tx) => {
             const r = await movimentar(tx, m.estA, {

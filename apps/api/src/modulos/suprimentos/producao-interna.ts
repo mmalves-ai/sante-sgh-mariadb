@@ -8,6 +8,7 @@
 //   - kit montado: a composição do kit padrão sai do local (movimento producao_consumo, lotes que vencem primeiro) e o
 //     kit entra como lote próprio (lote_produzido tipo kit_montado), com validade até a do componente que vence primeiro.
 // Nada é apagado: o lote produzido é registro permanente da rastreabilidade (RDC 67/2007 e RDC 220/2004 da ANVISA).
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import {
   conferirFechamentoProducao,
   conferirMontagemKit,
@@ -53,6 +54,8 @@ export const TABELAS_PRODUCAO_INTERNA = [
   'saldo_estoque',
   'saldo_lote',
   'movimento_estoque',
+  // C2-093: o movimento publica o fato contábil.
+  ...TABELAS_PUBLICACAO_FATO,
   'movimento_lote',
 ] as const;
 export const OPERACOES_PRODUCAO_INTERNA = {
