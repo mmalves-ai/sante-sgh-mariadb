@@ -40,9 +40,13 @@ async function ligarContasPagar(page: Page): Promise<void> {
   await form.getByLabel('Justificativa').fill('Ciclo sintético do pagamento eletrônico (E2E C1-026)');
   await form.getByTestId('liberacao-senha').fill(SENHA);
   await form.getByTestId('liberacao-aplicar').click();
-  await expect(page.getByTestId('mensagem-liberacao')).toContainText('chave(s) alterada(s)', {
-    timeout: 30_000,
-  });
+  // O fim do pedido: a mensagem do lote ou a recusa do servidor (com o texto, para o diagnóstico).
+  const fim = page
+    .getByTestId('mensagem-liberacao')
+    .or(page.getByTestId('recusa-liberacao'))
+    .or(form.getByRole('alert'));
+  await expect(fim.first()).toBeVisible({ timeout: 30_000 });
+  expect(await fim.first().innerText()).toContain('chave(s) alterada(s)');
 }
 
 const dia = (mais: number) => new Date(Date.now() + mais * 86_400_000).toISOString().slice(0, 10);
