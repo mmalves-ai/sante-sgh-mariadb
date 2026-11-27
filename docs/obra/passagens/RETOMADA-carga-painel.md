@@ -90,3 +90,15 @@
    - contas externas sem atendimento;
    - TBMEDSOL divergentes.
 10. **`01_SIS/95_kit_implantacao_tabelas.sql`:** 60 erros no `validar_migracoes`. Vêm da main e são da Sessão de Construção.
+
+### Espelho do Brasíndice do cliente (27/11/2026, autorizado pelo dono)
+- **Ressemeadura:** `semear-espelho pc-20261019.fdb --espelho cliente_prontocardio --ressemear brasindice:0` deixou a edição "0" com só 566 preços. A origem tem 3.446 linhas nessa edição, com 2.880 códigos repetidos, e o comando apagou 155.593 preços que vinham do espelho padrão. Resultado: 153.816 itens do Brasíndice ficaram sem preço.
+  - O mesmo comando semeou o Simpro: 2.535 edições, 360.698 linhas e 709 recusadas.
+- **Reparo, só com inserção:**
+  - os 155.593 preços da edição "0" foram reinseridos a partir do espelho padrão, com os mesmos ids (`INSERT IGNORE`, numa transação);
+  - os 566 preços da origem ficaram como histórico, com a vigência de 2014-03-07, contra 2000-03-01 no espelho.
+- **Conferido:**
+  - nenhum item do Brasíndice sem preço;
+  - nenhum preço nem item do espelho ausente no cliente;
+  - 18 itens com situação ou descrição atualizadas pela origem.
+- **Lição:** não usar `--ressemear` numa edição adotada do espelho padrão, porque a edição da origem pode ser menor que a adotada. **Pendência de motor:** o `_ressemear` só pode trocar os preços quando a origem tiver ao menos o que a edição adotada tem; senão, deve recusar com aviso.
