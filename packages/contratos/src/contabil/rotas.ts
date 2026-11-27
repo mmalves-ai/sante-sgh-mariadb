@@ -43,7 +43,12 @@ export const ROTULOS_FONTE_FATO: Readonly<Record<string, string>> = {
   lancamento_repasse: 'Repasse aos profissionais',
 };
 
-export const rotuloDaFonte = (tabela: string): string => ROTULOS_FONTE_FATO[tabela] ?? 'Outra fonte';
+const ROTULOS_CONHECIDOS: ReadonlySet<string> = new Set(Object.values(ROTULOS_FONTE_FATO));
+
+/** Rótulo de produto da fonte. Idempotente: a API já entrega o rótulo e a tela o repassa por aqui sem virar
+ * "Outra fonte" (E2E C2-093). */
+export const rotuloDaFonte = (tabela: string): string =>
+  ROTULOS_FONTE_FATO[tabela] ?? (ROTULOS_CONHECIDOS.has(tabela) ? tabela : 'Outra fonte');
 
 // ── Entradas que só a API usa (as do motor estão em entradas.ts) ─────────────────────────────────
 

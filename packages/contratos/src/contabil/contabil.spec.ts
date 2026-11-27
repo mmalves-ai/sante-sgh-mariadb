@@ -17,6 +17,7 @@ import {
   TIPOS_FATO,
 } from './vocabulario.js';
 import { opcoesDoMapa } from '../permissoes/mapa-origem-teste.js';
+import { rotuloDaFonte } from './rotas.js';
 
 const regra = {
   empresa: 1,
@@ -133,5 +134,12 @@ describe('permissões e liberação da contabilidade (etapa 1)', () => {
   it('as chaves contabil e contabil.sped existem, com pré-requisito', () => {
     expect(recursoDesligado('contabil')?.prerequisitos.length).toBe(1);
     expect(recursoDesligado('contabil.sped')?.marco).toBe('M54');
+  });
+
+  it('rotuloDaFonte é idempotente: o rótulo entregue pela API não vira "Outra fonte" na tela (C2-093)', () => {
+    const r = rotuloDaFonte('conta_hospitalar');
+    expect(r).toBe('Contas dos pacientes (receita)');
+    expect(rotuloDaFonte(r)).toBe(r);
+    expect(rotuloDaFonte('tabela_desconhecida')).toBe('Outra fonte');
   });
 });
