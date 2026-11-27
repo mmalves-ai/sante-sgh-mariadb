@@ -3,7 +3,7 @@
 // segregação, sem aprovação, conflito de versão, outro estabelecimento, modelo pendente). A bateria comum de recusas
 // roda sobre as duas fábricas (memória e banco) num describe.each. SGH_NUCLEO_SEM_BANCO=1 pula o banco.
 import { randomUUID } from 'node:crypto';
-import { type ContextoNucleo, type ContextoOperacao, definirOperacao } from '@sgh/nucleo';
+import { type ContextoNucleo, type ContextoOperacao, definirOperacao, type Escritor } from '@sgh/nucleo';
 import { z } from 'zod';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -235,6 +235,111 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     const det = await porta.tituloPagar(c, parcela, new Date().toISOString().slice(0, 10));
     expect(det?.situacao).toBe('pago');
     expect(det?.aprovacoesFeitas.map((a) => a.aprovador)).toEqual(['l0207.aprova']);
+  });
+
+  it('C2-112: a aprovação real do título sob regra de bloqueio sem exceção não aprova; com saldo, aprova e deixa a reserva', async () => {
+    const CLI = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
+    const PLANO = 'c2112fin';
+    const hoje = new Date().toISOString().slice(0, 10);
+    const ano = Number(hoje.slice(0, 4));
+    const mes = `valor_mes_${hoje.slice(5, 7)}`;
+    const escrever = (f: (e: Escritor) => Promise<unknown>) =>
+      m.nucleo.escrever({ cliente: CLI, correlacao: 'c2112-fin' }, f);
+    const limparOrcamento = () =>
+      escrever(async (e) => {
+        await e.executar('DELETE FROM reserva_orcamentaria WHERE estabelecimento_id = ?', [m.est]);
+        await e.executar('DELETE FROM regra_controle_orcamentario WHERE estabelecimento_id = ?', [m.est]);
+        await e.executar(
+          `DELETE l FROM linha_orcamento l JOIN versao_orcamento v ON v.id = l.versao_orcamento_id
+            WHERE v.estabelecimento_id = ?`,
+          [m.est],
+        );
+        await e.executar('DELETE FROM versao_orcamento WHERE estabelecimento_id = ?', [m.est]);
+        await e.executar('DELETE FROM plano_orcamentario WHERE codigo = ?', [PLANO]);
+      });
+    await limparOrcamento();
+    try {
+      // A faixa de alçada (uma aprovação; a do teste da alçada, se já gravada) e o título com parcela, no centro da massa.
+      if ((await porta.faixas(m.ctx(m.lanca))).length === 0)
+        await porta.gravarSgh(comChave(m.ctx(m.lanca)), trilha, (g) =>
+          g.salvarFaixa({
+            id: null,
+            centroCusto: null,
+            tipoCredor: null,
+            valorDe: 0,
+            valorAte: null,
+            aprovacoes: 1,
+            permissao: 'financeiro.tituloPagar.aprovar',
+            vigenciaInicio: '2000-01-01',
+            vigenciaFim: null,
+            ativa: true,
+            usuario: 'x',
+          }),
+        );
+      const c = m.ctx(m.lanca);
+      const r = await porta.executar(c, 'financeiro.criarTituloPagar', tituloDaMassa(m, 7112, 500), op(c));
+      const parcela = Number(r.resultado['titulo']);
+      const titulo = Number(r.resultado['tituloPagar']);
+      // O orçamento oficial aprovado do ano: a linha do centro com 100 no mês e a regra que bloqueia, sem exceção.
+      const linha = Number(
+        await escrever(async (e) => {
+          const agora = new Date();
+          await e.executar('UPDATE titulo_pagar SET centro_custo_id = ? WHERE id = ?', [m.centro, titulo]);
+          const plano = await e.inserir(
+            `INSERT INTO plano_orcamentario (codigo, descricao, mascara, vigencia_inicio, criado_em)
+             VALUES (?, 'Plano sintético C2-112', '9.99', '2000-01-01', ?)`,
+            [PLANO, agora],
+          );
+          const versao = await e.inserir(
+            `INSERT INTO versao_orcamento (estabelecimento_id, plano_orcamentario_id, ano, numero_versao, descricao,
+               vigencia_inicio, vigencia_fim, oficial, situacao, aprovado_em, aprovador_usuario_id, criado_em)
+             VALUES (?, ?, ?, 1, 'Versão sintética C2-112', ?, ?, TRUE, 'aprovado', ?, ?, ?)`,
+            [m.est, plano, ano, `${ano}-01-01`, `${ano}-12-31`, agora, m.aprova, agora],
+          );
+          await e.inserir(
+            `INSERT INTO regra_controle_orcamentario (estabelecimento_id, acao, centro_custo_id, prioridade,
+               vigencia_inicio, ativo, criado_em) VALUES (?, 'bloquear', ?, 10, '2000-01-01', TRUE, ?)`,
+            [m.est, m.centro, agora],
+          );
+          return e.inserir(
+            `INSERT INTO linha_orcamento (versao_orcamento_id, sequencia, centro_custo_id, natureza, ${mes}, criado_em)
+             VALUES (?, 1, ?, 'despesa', 100, ?)`,
+            [versao, m.centro, agora],
+          );
+        }),
+      );
+      const aprovar = () =>
+        porta.gravarSgh(comChave(m.ctx(m.aprova)), trilha, (g) =>
+          g.aprovarTitulo({ titulo: parcela, observacao: '', usuario: 'x', temPermissao: () => true }),
+        );
+      const efeito = async () => [
+        await contar(
+          `SELECT COUNT(*) AS n FROM reserva_orcamentaria WHERE titulo_pagar_id = ? AND tipo_documento = 'titulo_pagar'`,
+          [titulo],
+        ),
+        await contar('SELECT COUNT(*) AS n FROM titulo_pagar WHERE id = ? AND autorizado = TRUE', [titulo]),
+        await contar(
+          "SELECT COUNT(*) AS n FROM pedido_aprovacao WHERE entidade = 'titulo_pagar' AND entidade_id = ? AND situacao = 'aprovado'",
+          [titulo],
+        ),
+      ];
+      // 500 sobre 100 de saldo, regra de bloqueio e nenhuma exceção: a aprovação é recusada e nada fica gravado.
+      expect(await codigoDaGravacao(aprovar())).toBe('regra-violada');
+      expect(await efeito()).toEqual([0, 0, 0]);
+      // Com saldo na linha, a mesma aprovação passa e deixa a reserva do título gravada na linha do centro.
+      await escrever((e) => e.executar(`UPDATE linha_orcamento SET ${mes} = 1000 WHERE id = ?`, [linha]));
+      expect((await aprovar()).aprovado).toBe(true);
+      expect(await efeito()).toEqual([1, 1, 1]);
+      expect(
+        await contar(
+          `SELECT COUNT(*) AS n FROM reserva_orcamentaria WHERE titulo_pagar_id = ? AND linha_orcamento_id = ?
+              AND centro_custo_id = ? AND valor_reservado = 500 AND excedeu_saldo = FALSE AND situacao = 'ativa'`,
+          [titulo, linha, m.centro],
+        ),
+      ).toBe(1);
+    } finally {
+      await limparOrcamento();
+    }
   });
 
   it('exclui o título em aberto (lógica, com versão); conflito de versão e outro estabelecimento são recusados', async () => {
