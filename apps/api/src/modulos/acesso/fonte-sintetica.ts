@@ -752,6 +752,8 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
           ...opcoesDaArea('sadt'),
           // C1-097: o laboratório lança e baixa o consumo dos exames do setor executante (sadt.lancamento.*).
           ...opcoesDasPermissoes('sadt.lancamento.ler', 'sadt.lancamento.lancar'),
+          // C3-004: a tela das interfaces com os equipamentos do laboratório (sadt.interface.ler).
+          ...opcoesDasPermissoes('sadt.interface.ler'),
         ]),
       ],
     },
