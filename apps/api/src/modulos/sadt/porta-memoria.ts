@@ -789,6 +789,24 @@ export class PortaSadtMemoria implements PortaSadt {
     return { resultado, repetida: false, trilha: null };
   }
 
+  /**
+   * sadt.receberSolicitacao no contrato novo (POST /api/sadt/exames-pedidos/receber) sem o banco do cliente: o exame
+   * pelo id e pela versão da lista do setor, com as mesmas recusas do gravador (versão divergente, suspenso, já recebido).
+   */
+  receberNoSetor(
+    c: ContextoSadt,
+    exames: readonly { id: number; versao: string | null }[],
+  ): { id: number; recebidos: number; mensagem: string } {
+    const s = this.e(c);
+    const r = this.aplicar(c, s, 'sadt.receberSolicitacao', { exames }, M);
+    const n = new Set(exames.map((x) => x.id)).size;
+    return {
+      id: Number(r['exame']),
+      recebidos: n,
+      mensagem: n === 1 ? 'Pedido recebido no setor.' : `${n} pedidos recebidos no setor.`,
+    };
+  }
+
   private conferirVersao(e: ExameM, versao: string | null): void {
     // Como o gravador do banco: o carimbo inteiro, e o nulo não pula a conferência.
     if (versao !== e.versao)

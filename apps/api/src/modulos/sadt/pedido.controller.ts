@@ -46,6 +46,8 @@ import {
   esquemaSituacaoPosto,
   type EtiquetasImpressas,
 } from './aplicacao/posto-coleta-propria.js';
+import { PortaSadtMemoria } from './porta-memoria.js';
+import { PORTA_SADT, type PortaSadt } from './porta.js';
 
 export const SERVICO_PEDIDO_SADT = Symbol('SERVICO_PEDIDO_SADT');
 
@@ -58,6 +60,7 @@ export class PedidoSadtController {
   constructor(
     @Inject(SERVICO_PEDIDO_SADT) private readonly servico: ServicoPedidoSadt | null,
     @Optional() @Inject(FONTE_DOCUMENTO) private readonly documento: FonteDocumento | null = null,
+    @Optional() @Inject(PORTA_SADT) private readonly porta: PortaSadt | null = null,
   ) {}
 
   /**
@@ -135,7 +138,18 @@ export class PedidoSadtController {
   @Permissao('sadt.lancamento.receber')
   @AuditadoNoHandler('sadt.receberSolicitacao pelo executor (trilha na mesma transação)')
   async receberNoSetor(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
-    const r = await this.s.receberNoSetor(sessaoDe(req).porta, corpo(esquemaReceberNoSetor, b));
+    const entrada = corpo(esquemaReceberNoSetor, b);
+    // Sem o banco do cliente (fonte sintética), a porta em memória do SADT recebe com as mesmas recusas.
+    if (!this.servico && this.porta instanceof PortaSadtMemoria) {
+      const m = this.porta.receberNoSetor(sessaoDe(req).porta, entrada.exames);
+      return {
+        mensagem: m.mensagem,
+        repetida: false,
+        ids: { exame: m.id, recebidos: m.recebidos },
+        avisos: [],
+      };
+    }
+    const r = await this.s.receberNoSetor(sessaoDe(req).porta, entrada);
     // A resposta das gravações do setor (mensagem, ids e avisos): o exame sem cobrança vira aviso, não recusa.
     const pendentes = r.cobranca.itens.filter((i) => i.pendencia !== null);
     return {
