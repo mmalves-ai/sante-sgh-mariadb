@@ -87,7 +87,6 @@ test.describe('@F3.5-06 resultado: digitar, liberar e retificar pelo exame pedid
       .last();
     const id = Number((await linha.getAttribute('data-testid'))!.replace('sadt-exame-', ''));
     await page.getByTestId(`sadt-selecionar-${id}`).check();
-    await escolher(page.getByTestId('sadt-prestador'), { indice: 1 });
     await page.getByTestId('sadt-receber').click();
     await expect(page.getByTestId('sadt-mensagem')).toContainText('Pedido recebido');
 

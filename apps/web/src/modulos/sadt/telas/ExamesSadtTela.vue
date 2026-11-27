@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Lançamento e solicitação de exames (ficha do M26, seção 7): `/sadt/exames`. Os pedidos do prontuário a receber e os
-// exames do dia por setor, com as contagens por situação; receber os selecionados (executante, prestador e local do
-// setor). O lançamento direto no setor foi aposentado: o exame lançado no setor é um pedido em `/sadt/pedido`, que grava
+// exames do dia por setor, com as contagens por situação; receber os selecionados no setor do pedido (o exame pelo id e
+// pela versão lida). O lançamento direto no setor foi aposentado: o exame lançado no setor é um pedido em `/sadt/pedido`, que grava
 // pelo serviço do pedido com a restrição clínica do exame (05-SADT linha 5), os limites e a cobrança na conta.
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
@@ -22,7 +22,7 @@ const data = ref(hojeLocal());
 const situacao = ref('todos');
 const termo = ref('');
 const buscado = ref('');
-const { apoio, pode, motivoSetor, gravacao } = usarSadt(setor);
+const { pode, motivoSetor } = usarSadt(setor);
 const lista = useQuery({
   queryKey: computed(() => ['sadt', 'exames', setor.value, data.value, situacao.value, buscado.value]),
   queryFn: () =>
@@ -45,17 +45,6 @@ const situacoes = computed(() =>
     rotulo: t(`sadt.situacoes.${s}`),
   })),
 );
-const executantes = computed(() => [
-  { valor: '', rotulo: t('sadt.escolha') },
-  ...(apoio.data.value?.executantes ?? []).map((e) => ({ valor: String(e.id), rotulo: e.nome })),
-]);
-const prestadores = computed(() => [
-  { valor: '', rotulo: t('sadt.escolha') },
-  ...(apoio.data.value?.prestadores ?? []).map((p) => ({ valor: String(p.id), rotulo: p.nome })),
-]);
-const executante = ref('');
-const prestador = ref('');
-const local = ref('1');
 const selecionados = ref<number[]>([]);
 const podeReceber = computed(() => pode(setor.value, 'sadt.receberSolicitacao'));
 /** O lançamento no setor é o pedido de exames (`/sadt/pedido`): o atalho aparece para quem abre o pedido. */
@@ -77,12 +66,8 @@ async function receber(): Promise<void> {
   try {
     const itens = (lista.data.value?.itens ?? []).filter((x) => selecionados.value.includes(x.id));
     const r = await receberPedidos(
-      {
-        exames: itens.map((x) => ({ id: x.id, chave: x.chave, versao: x.versao })),
-        executante: Number(executante.value || gravacao.data.value?.habilitacao.vinculo || 0),
-        prestador: Number(prestador.value),
-        local: Number(local.value || 1),
-      },
+      // Contrato novo: o exame pelo id e pela versão lida; o setor executante é o do pedido.
+      { exames: itens.map((x) => ({ id: x.id, versao: x.versao })) },
       novaChave('receber'),
     );
     mensagem.value = r.mensagem;
@@ -188,25 +173,9 @@ async function receber(): Promise<void> {
       <div v-if="podeReceber" class="painel">
         <p>{{ t('sadt.exames.selecionados', { n: selecionados.length }) }}</p>
         <div class="filtros">
-          <SanteSelecao
-            v-model="executante"
-            :rotulo="t('sadt.executante')"
-            :opcoes="executantes"
-            data-testid="sadt-executante"
-          />
-          <SanteSelecao
-            v-model="prestador"
-            :rotulo="t('sadt.prestador')"
-            :opcoes="prestadores"
-            data-testid="sadt-prestador"
-          />
-          <span class="campo">
-            <label for="sadt-local">{{ t('sadt.local') }}</label>
-            <input id="sadt-local" v-model="local" type="number" min="0" data-testid="sadt-local" />
-          </span>
           <SanteBotao
             :rotulo="t('sadt.exames.receber')"
-            :desabilitado="ocupado || selecionados.length === 0 || !prestador"
+            :desabilitado="ocupado || selecionados.length === 0"
             data-testid="sadt-receber"
             @acionar="receber"
           />

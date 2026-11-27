@@ -80,6 +80,20 @@ export const esquemaPedidoExames = z.object({
 });
 export type PedidoExames = z.infer<typeof esquemaPedidoExames>;
 
+/**
+ * sadt.receberSolicitacao no contrato novo (05-SADT linha 4): o exame pedido pelo id e pela versão que a tela leu, mais
+ * o setor executante (omitido: o setor do pedido). O recebimento é o evento "recebido" do item, não uma situação nova: a
+ * situação segue a da amostra e do resultado.
+ */
+export const esquemaReceberNoSetor = z.object({
+  exames: z
+    .array(z.object({ id, versao: z.string().max(40).nullable().default(null) }))
+    .min(1)
+    .max(40),
+  setor: id.nullable().default(null),
+});
+export type ReceberNoSetorEntrada = z.infer<typeof esquemaReceberNoSetor>;
+
 export const esquemaCancelarItem = z.object({
   motivo: id,
   complemento: z.string().trim().max(500).nullable().default(null),
@@ -192,6 +206,9 @@ type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
 const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const texto = (v: unknown) => (v === null || v === undefined ? '' : String(v));
+/** DATETIME do banco → "AAAA-MM-DDTHH:MM:SS", o mesmo formato da versão que a lista de exames entrega à tela. */
+const instanteDoBanco = (v: unknown): string =>
+  v instanceof Date ? v.toISOString().slice(0, 19) : v ? String(v).replace(' ', 'T').slice(0, 19) : '';
 const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 const dataIso = (v: unknown): string | null => {
   if (v === null || v === undefined) return null;
@@ -954,6 +971,75 @@ export class ServicoPedidoSadt {
       gravados.push({ id: item, exame: i.exame, sequencia: i.sequencia });
     }
     return { requisicao, numero, itens: gravados, excecoes };
+  }
+
+  /**
+   * Recebe no setor os exames pedidos (o pedido do prontuário): confere a versão lida, recusa o exame cancelado e o já
+   * recebido, grava o evento "recebido" com o setor executante (o item passa a esse setor) e lança na conta os exames
+   * recebidos ainda não cobrados (a cobrança é no pedido; o recebimento cobra o pedido que veio do prontuário).
+   */
+  receberNoSetor(
+    c: ContextoSadt,
+    entrada: unknown,
+  ): Promise<{ id: number; recebidos: number; cobranca: CobrancaDoPedido; mensagem: string }> {
+    const p = esquemaReceberNoSetor.parse(entrada);
+    const ids = [...new Set(p.exames.map((x) => x.id))];
+    return this.gravar(c, 'sadt.pedido.recebido', 'exame_item', async (tx, est) => {
+      const linhas = await tx.consultarParaAtualizar(
+        `SELECT ei.id, ei.versao, ei.situacao, ei.setor_diagnostico_id, ei.criado_em, ei.alterado_em,
+                (SELECT COUNT(*) FROM item_exame_evento ev WHERE ev.exame_item_id = ei.id AND ev.evento = 'recebido') AS recebido
+           FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
+          WHERE ei.id IN (${ids.map(() => '?').join(', ')}) AND r.estabelecimento_id = ? AND ei.excluido_em IS NULL
+            AND r.excluido_em IS NULL`,
+        [...ids, est],
+        { teto: 40 },
+      );
+      const porId = new Map(linhas.map((l) => [n(l['id']), l]));
+      if (p.setor !== null) {
+        const s = await tx.uma('SELECT id FROM setor_diagnostico WHERE id = ? AND ativo = TRUE', [p.setor]);
+        if (!s) throw recusa('setor-inexistente', 'O setor executante não existe ou está inativo.');
+      }
+      for (const x of p.exames) {
+        const l = porId.get(x.id);
+        if (!l) throw recusa('exame-inexistente', 'O exame não existe neste estabelecimento.');
+        const lida = instanteDoBanco(l['alterado_em'] ?? l['criado_em']);
+        if (x.versao !== null && x.versao !== lida)
+          throw recusa(
+            'versao-divergente',
+            'O pedido mudou depois da leitura: atualize a lista e receba de novo.',
+          );
+        if (['cancelado', 'recusado'].includes(texto(l['situacao'])))
+          throw recusa('pedido-cancelado', 'O pedido foi cancelado e não pode ser recebido.');
+        if (n(l['recebido']) > 0) throw recusa('pedido-recebido', 'O pedido já foi recebido pelo setor.');
+      }
+      const agora = new Date();
+      const usuario = tx.contexto.usuario;
+      for (const item of ids) {
+        const l = porId.get(item)!;
+        const setor = p.setor ?? n(l['setor_diagnostico_id']);
+        if (setor !== n(l['setor_diagnostico_id']))
+          await tx.alterar('exame_item', item, n(l['versao']), { setor_diagnostico_id: setor });
+        await tx.incluir('item_exame_evento', {
+          exame_item_id: item,
+          operacao: 'inclusao',
+          evento: 'recebido',
+          ocorrido_em: agora,
+          usuario_id: usuario,
+          situacao_anterior: texto(l['situacao']),
+          situacao_nova: texto(l['situacao']),
+          setor_diagnostico_id: setor,
+          dados: JSON.stringify({ setorAnterior: n(l['setor_diagnostico_id']) }),
+        });
+      }
+      const cobranca = await lancarExamesNaConta(tx, est, { itens: ids }, (await relogio(tx, est)).hoje);
+      return {
+        id: ids[0]!,
+        recebidos: ids.length,
+        cobranca,
+        mensagem:
+          ids.length === 1 ? 'Pedido recebido no setor.' : `${ids.length} pedidos recebidos no setor.`,
+      };
+    });
   }
 
   /** Cancela o item com o motivo do cadastro; a requisição fica cancelada quando o último item cai. */

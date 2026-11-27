@@ -40,7 +40,6 @@ const CONTRATO =
  * está no pedido do lote 02-09 (contrato e operação no banco).
  */
 export const OPERACOES_SADT_PENDENTES: Readonly<Record<string, string>> = {
-  'sadt.receberSolicitacao': `o recebimento do pedido no setor ${CONTRATO}`,
   'sadt.lancarExame': `o lançamento de exame no setor ${CONTRATO}`,
   'sadt.criarOrcamento': `o orçamento do diagnóstico ${CONTRATO}`,
   'sadt.registrarVisualizacaoPortal': `a visualização no portal ${CONTRATO}`,
@@ -52,6 +51,8 @@ export const OPERACOES_SADT_PENDENTES: Readonly<Record<string, string>> = {
  * usa: digitar, liberar e retificar o resultado (F3.5, 05-SADT linha 10; aplicacao/resultado-propria.ts).
  */
 export const OPERACOES_SADT_NO_CONTRATO_NOVO: Readonly<Record<string, string>> = {
+  // O recebimento do pedido do prontuário no setor (05-SADT linha 4; aplicacao/pedido-propria.ts receberNoSetor).
+  'sadt.receberSolicitacao': 'POST /api/sadt/exames-pedidos/receber',
   'sadt.registrarResultado': 'POST /api/sadt/exames-pedidos/:exame/resultado',
   'sadt.liberarExame': 'POST /api/sadt/exames-pedidos/:exame/resultado/liberar',
   'sadt.retificarResultado': 'POST /api/sadt/exames-pedidos/:exame/resultado/retificar',

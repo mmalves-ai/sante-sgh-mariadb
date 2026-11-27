@@ -36,6 +36,7 @@ import {
   esquemaColetarRecoleta,
   esquemaPedidoExames,
   esquemaPedirRecoleta,
+  esquemaReceberNoSetor,
   esquemaVersaoKit,
   type ServicoPedidoSadt,
 } from './aplicacao/pedido-propria.js';
@@ -126,6 +127,25 @@ export class PedidoSadtController {
   @Permissao('sadt.requisicao.ler')
   motivos(@Req() req: RequisicaoAutorizada) {
     return this.s.motivos(sessaoDe(req).porta);
+  }
+
+  /** sadt.receberSolicitacao no contrato novo: o pedido do prontuário recebido no setor (evento e cobrança). */
+  @Post('exames-pedidos/receber')
+  @HttpCode(200)
+  @Permissao('sadt.lancamento.receber')
+  @AuditadoNoHandler('sadt.receberSolicitacao pelo executor (trilha na mesma transação)')
+  async receberNoSetor(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const r = await this.s.receberNoSetor(sessaoDe(req).porta, corpo(esquemaReceberNoSetor, b));
+    // A resposta das gravações do setor (mensagem, ids e avisos): o exame sem cobrança vira aviso, não recusa.
+    const pendentes = r.cobranca.itens.filter((i) => i.pendencia !== null);
+    return {
+      mensagem: r.mensagem,
+      repetida: false,
+      ids: { exame: r.id, recebidos: r.recebidos },
+      avisos: pendentes.length
+        ? [`${pendentes.length} exame(s) recebido(s) ficaram pendentes de cobrança na conta.`]
+        : [],
+    };
   }
 
   @Post('itens/:id/cancelar')

@@ -514,7 +514,6 @@ test.describe('portal do médico externo: conta e pedido de cirurgia @W0-10', ()
         .first();
       const exame = Number((await linha.getAttribute('data-testid'))!.replace('sadt-exame-', ''));
       await page.getByTestId(`sadt-selecionar-${exame}`).check();
-      await escolher(page.getByTestId('sadt-prestador'), { indice: 1 });
       await page.getByTestId('sadt-receber').click();
       await expect(page.getByTestId('sadt-mensagem')).toContainText('Pedido recebido');
       await page.goto(`/sadt/resultados/digitacao?exame=${exame}`);

@@ -104,7 +104,6 @@ test.describe('SADT, laudos e portal de resultados @M26 @fase2', () => {
       .first();
     const id = Number((await linha.getAttribute('data-testid'))!.replace('sadt-exame-', ''));
     await page.getByTestId(`sadt-selecionar-${id}`).check();
-    await escolher(page.getByTestId('sadt-prestador'), { indice: 1 });
     await page.getByTestId('sadt-receber').click();
     await expect(page.getByTestId('sadt-mensagem')).toContainText('Pedido recebido');
     await expect(page.getByTestId(`sadt-estado-${id}`)).toContainText('Recebido');

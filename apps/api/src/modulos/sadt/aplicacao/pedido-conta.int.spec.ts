@@ -268,6 +268,70 @@ describe.skipIf(SEM_BANCO)('exame pedido na conta do paciente (MariaDB, cliente 
     expect(ev?.['destino']).toBe('estornado');
   }, 60_000);
 
+  it('pedido do prontuário recebido no setor: evento "recebido", cobrança dele só; repetir e versão velha recusam', async () => {
+    const c = contexto(m!);
+    const base = await pedir(1);
+    // O pedido do prontuário: o exame "solicitado" no setor padrão, ainda sem cobrança (como grava o prontuário).
+    const item = await nucleo.escrever(CORR, (e) =>
+      e.inserir(
+        `INSERT INTO exame_item (requisicao_exame_id, sequencia, exame_id, setor_diagnostico_id, quantidade, urgente,
+           situacao, origem, criado_em) VALUES (?, 2, ?, ?, 1, FALSE, 'solicitado', 'sistema', ?)`,
+        [base.requisicao, m!.exameLab, m!.setorLab, new Date()],
+      ),
+    );
+    expect(await faturado(item)).toBe(0);
+    const versao = String(
+      (
+        await um('SELECT DATE_FORMAT(criado_em, "%Y-%m-%dT%H:%i:%s") AS v FROM exame_item WHERE id = ?', [
+          item,
+        ])
+      )?.['v'],
+    );
+    expect(
+      codigoDe(
+        await servico
+          .receberNoSetor(c, { exames: [{ id: item, versao: '2000-01-01T00:00:00' }] })
+          .catch((e: unknown) => e),
+      ),
+    ).toBe('versao-divergente');
+    const contaAntes = await num(
+      'SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
+      [conta],
+    );
+    const r = await servico.receberNoSetor(c, { exames: [{ id: item, versao }] });
+    expect({ recebidos: r.recebidos, cobrados: r.cobranca.itens.map((i) => [i.item, i.pendencia]) }).toEqual({
+      recebidos: 1,
+      cobrados: [[item, null]],
+    });
+    const ev = await um(
+      "SELECT COUNT(*) AS n, MAX(setor_diagnostico_id) AS setor, MAX(situacao_nova) AS sit FROM item_exame_evento WHERE exame_item_id = ? AND evento = 'recebido'",
+      [item],
+    );
+    expect([Number(ev?.['n']), Number(ev?.['setor']), ev?.['sit']]).toEqual([1, m!.setorLab, 'solicitado']);
+    // A situação não muda (o recebimento é evento, não situação); a cobrança entra com a origem do diagnóstico.
+    expect((await um('SELECT situacao FROM exame_item WHERE id = ?', [item]))?.['situacao']).toBe(
+      'solicitado',
+    );
+    expect(await faturado(item)).toBe(1);
+    expect((await itemDaConta(item))?.['origem']).toBe('diagnostico');
+    expect(
+      await num('SELECT COUNT(*) AS n FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?', [conta]),
+    ).toBe(contaAntes + 1);
+    expect(await valorItensDaConta()).toBe(await somaDosItens());
+    // Repetir é recusado e nada muda.
+    expect(
+      codigoDe(
+        await servico.receberNoSetor(c, { exames: [{ id: item, versao: null }] }).catch((e: unknown) => e),
+      ),
+    ).toBe('pedido-recebido');
+    expect(
+      await num(
+        "SELECT COUNT(*) AS n FROM item_exame_evento WHERE exame_item_id = ? AND evento = 'recebido'",
+        [item],
+      ),
+    ).toBe(1);
+  }, 60_000);
+
   it('conta fechada recusa o cancelamento com estorno e nada muda; sem conta aberta o pedido segue pendente', async () => {
     const c = contexto(m!);
     const d = await pedir(1);

@@ -66,10 +66,20 @@ async function refazerTotais(tx: TxOperacao, conta: number): Promise<void> {
 export async function lancarExamesNaConta(
   tx: TxOperacao,
   est: number,
-  alvo: { readonly requisicao: number } | { readonly atendimento: number },
+  alvo:
+    | { readonly requisicao: number }
+    | { readonly atendimento: number }
+    /** Só estes exames (o recebimento no setor). */
+    | { readonly itens: readonly number[] },
   hoje: string,
 ): Promise<CobrancaDoPedido> {
-  const porRequisicao = 'requisicao' in alvo;
+  const [filtro, valores] =
+    'itens' in alvo
+      ? [`ei.id IN (${alvo.itens.map(() => '?').join(', ')})`, [...alvo.itens]]
+      : 'requisicao' in alvo
+        ? ['r.id = ?', [alvo.requisicao]]
+        : ['r.atendimento_id = ? AND r.orcamento_particular_id IS NULL', [alvo.atendimento]];
+  if (valores.length === 0) return { conta: null, itens: [] };
   const itens = await tx.consultarParaAtualizar<Linha>(
     `SELECT ei.id, ei.versao, ei.quantidade, ei.percentual_faturamento, r.id AS requisicao, r.atendimento_id,
             r.fonte_pagadora_id, r.orcamento_particular_id, r.solicitante_profissional_id, e.item_faturavel_id, e.nome
@@ -77,9 +87,9 @@ export async function lancarExamesNaConta(
        JOIN exame e ON e.id = ei.exame_id
       WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL AND ei.excluido_em IS NULL AND ei.faturado = 0
         AND ei.situacao NOT IN ('cancelado', 'recusado')
-        AND ${porRequisicao ? 'r.id = ?' : 'r.atendimento_id = ? AND r.orcamento_particular_id IS NULL'}
+        AND ${filtro}
       ORDER BY ei.id`,
-    [est, porRequisicao ? alvo.requisicao : alvo.atendimento],
+    [est, ...valores],
     { teto: 500 },
   );
   if (!itens.length) return { conta: null, itens: [] };
