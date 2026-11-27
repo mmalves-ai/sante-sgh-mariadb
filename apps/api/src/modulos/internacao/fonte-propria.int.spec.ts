@@ -5,6 +5,7 @@
 // selo do vigia pela trilha, com operações reais do Executor e o MotorVigia ligado à fonte.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { randomUUID } from 'node:crypto';
+import { GRUPOS_MOTIVO_ALTA } from '@sgh/contratos';
 import { normalizarTrajetorias } from '@sgh/dominio-internacao';
 import { conferirLeitos } from '@sgh/dominio-organizacao';
 import {
@@ -416,6 +417,47 @@ describe.skipIf(SEM_BANCO)('fonte própria do M16 (MariaDB, cliente f22_o1)', ()
   it('dias de censo fechado do período, só do estabelecimento', async () => {
     expect(await fonte.diasFechados(c, '2026-01-01', '2026-01-31')).toEqual(['2026-01-10']);
     expect(await fonte.diasFechados(c, '2026-02-01', '2026-02-28')).toEqual([]);
+  });
+
+  it('censo fechado: lê o retrato gravado pelo fechamento (acomodação e altas por grupo); sem retrato, o motor recalcula', async () => {
+    const gravarResumo = (resumo: string | null) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-censo-fechado' }, async (e) => {
+        await e.executar('UPDATE fechamento_censo SET resumo = ?, situacao = ? WHERE id = ?', [
+          resumo,
+          'fechado',
+          ids.censo,
+        ]);
+      });
+    const tipos = new Map<number, string>();
+    await gravarResumo(null);
+    expect(await fonte.censoFechado(c, '2026-01-10', tipos, new Map())).toBeNull();
+    const linha = {
+      bloco: 'UI1',
+      acomodacao: 'AP',
+      nome: 'Apartamento',
+      tipo: { id: 1, nome: 'Apartamento' },
+      intensiva: false,
+      internados: 3,
+      admissoes: 1,
+      altas: Object.fromEntries(GRUPOS_MOTIVO_ALTA.map((g) => [g, g === 'obito' ? 1 : 0])),
+      saidas: 1,
+      obitos: 1,
+      transferenciasEntrada: 0,
+      transferenciasSaida: 0,
+      leitosOperacionais: 5,
+    };
+    await gravarResumo(JSON.stringify({ horaFechamento: 23, versaoCalculo: 2, linhas: [linha] }));
+    const lido = await fonte.censoFechado(
+      c,
+      '2026-01-10',
+      tipos,
+      new Map([['UI1/AP', 'Apartamento padrão']]),
+    );
+    expect(lido?.horaFechamento).toBe(23);
+    expect(lido?.versaoCalculo).toBe(2);
+    expect(lido?.geradoEm).not.toBeNull();
+    expect(lido?.linhas).toEqual([{ ...linha, nome: 'Apartamento padrão' }]);
+    expect(await fonte.censoFechado(c, '2026-01-11', tipos, new Map())).toBeNull();
   });
 
   it('vigia: a marca perdida recomeça do topo; uma gravação de leito na trilha muda o selo, outra tabela não', async () => {

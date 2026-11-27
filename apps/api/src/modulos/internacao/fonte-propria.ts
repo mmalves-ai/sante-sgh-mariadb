@@ -10,20 +10,23 @@
 // Melhoria: o grupo da saída (óbito, transferência, evasão…) vem do tipo de saída do cadastro de motivos, nunca de
 // faixa de código; a clínica do recorte é a especialidade da internação.
 // Os painéis operacional e financeiro mensais leem o banco próprio (contagens e somas por mês civil do fuso do
-// estabelecimento). Pendências (registradas na saída do lote 01-05): o retrato do censo fechado (o fechamento guarda
-// a unidade, não a acomodação: o motor recalcula) e a rota de divergências, que comparava o cadastro com o espelho do sistema antigo (no banco próprio o
+// estabelecimento). O retrato do censo fechado vem do resumo que o fechamento grava por unidade (as linhas do motor, com
+// a acomodação e as altas por grupo). Pendência (registrada na saída do lote 01-05): a rota de divergências, que comparava o cadastro com o espelho do sistema antigo (no banco próprio o
 // cadastro e o retrato são o mesmo: nenhuma divergência).
 import {
   type CanalVigia,
+  esquemaLinhaCenso,
   iniciaisDoNome,
   type InternacaoMovimento,
   type LeiturasPainel,
+  type LinhaCenso,
   type MovimentoInternacao,
   type PosicaoLeito,
   type TransferenciaMovimento,
   type TrechoMovimento,
 } from '@sgh/contratos';
 import { grupoDoTipoSaida } from '@sgh/dominio-internacao';
+import { z } from 'zod';
 import type { ContextoNucleo, Leitor, NucleoProprio } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
 import { civil, FUSO_PADRAO } from '../exames/relogio.js';
@@ -94,6 +97,21 @@ const SQL_POSICAO = `
 function diaEHora(v: unknown, fuso: string): { dia: Date; hora: string } {
   const c = civil(v as Date, fuso);
   return { dia: new Date(`${c.data}T00:00:00Z`), hora: c.hora };
+}
+
+/** O resumo que o fechamento do censo grava em fechamento_censo (worker, censo-fechamento-propria). */
+const RESUMO_CENSO = z.object({
+  horaFechamento: z.number().int().min(1).max(24),
+  versaoCalculo: z.number().int(),
+  linhas: z.array(esquemaLinhaCenso),
+});
+
+function jsonOuNulo(t: string): unknown {
+  try {
+    return JSON.parse(t) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 export class FonteInternacaoPropria implements FonteInternacao {
@@ -441,9 +459,50 @@ export class FonteInternacaoPropria implements FonteInternacao {
     });
   }
 
-  /** O retrato do censo fechado é gravado pelo fechamento do censo (worker, onda 8): até lá, o motor recalcula. */
-  async censoFechado(): Promise<CensoFechadoLido | null> {
-    return null;
+  /**
+   * O retrato do censo fechado: o fechamento do censo (worker, censo-fechamento-propria) grava uma linha por unidade de
+   * internação e dia com as linhas do motor no resumo (acomodação, altas por grupo, hora e versão do cálculo). O dia só
+   * vale como fechado se todas as unidades dele estiverem fechadas e com o retrato legível; senão (dia reaberto, retrato
+   * ausente ou de outro formato) volta nulo e o motor recalcula. O nome da acomodação vem do cadastro atual quando há.
+   */
+  censoFechado(
+    c: CtxInternacao,
+    data: string,
+    _tipos: ReadonlyMap<number, string>,
+    nomes: ReadonlyMap<string, string>,
+  ): Promise<CensoFechadoLido | null> {
+    return this.ler(c, async (l, est) => {
+      const rs = await l.consultar(
+        `SELECT situacao, resumo, fechado_em FROM fechamento_censo
+          WHERE estabelecimento_id = ? AND data_referencia = ? AND excluido_em IS NULL
+          ORDER BY unidade_internacao_id, id`,
+        [est, data],
+      );
+      if (rs.length === 0 || rs.some((r) => r['situacao'] !== 'fechado')) return null;
+      const linhas: LinhaCenso[] = [];
+      let hora: number | null = null;
+      let versao: number | null = null;
+      let gerado: Date | null = null;
+      for (const r of rs) {
+        const bruto = r['resumo'];
+        const lido = RESUMO_CENSO.safeParse(typeof bruto === 'string' ? jsonOuNulo(bruto) : bruto);
+        if (!lido.success) return null;
+        hora ??= lido.data.horaFechamento;
+        versao ??= lido.data.versaoCalculo;
+        const em = r['fechado_em'] instanceof Date ? r['fechado_em'] : null;
+        if (em && (!gerado || em > gerado)) gerado = em;
+        for (const x of lido.data.linhas)
+          linhas.push({ ...x, nome: nomes.get(`${x.bloco}/${x.acomodacao}`) ?? x.nome });
+      }
+      if (hora === null || versao === null) return null;
+      linhas.sort((a, b) => a.bloco.localeCompare(b.bloco) || a.acomodacao.localeCompare(b.acomodacao));
+      return {
+        linhas,
+        horaFechamento: hora,
+        versaoCalculo: versao,
+        geradoEm: gerado ? gerado.toISOString() : null,
+      };
+    });
   }
 
   diasFechados(c: CtxInternacao, de: string, ate: string): Promise<string[]> {
