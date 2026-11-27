@@ -103,6 +103,8 @@ export default defineConfig({
   outputDir: 'test-results',
   reporter: [['list']],
   forbidOnly: true,
+  // Aquecimento real (API, módulos do web e a página de entrada) antes do 1º teste: e2e/aquecer.ts.
+  globalSetup: './e2e/aquecer.ts',
   globalTeardown: './e2e/encerrar.ts',
   workers: 1,
   use: {
