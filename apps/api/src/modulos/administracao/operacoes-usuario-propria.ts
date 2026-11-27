@@ -275,6 +275,15 @@ const ESCOPOS: Partial<
     valida: 'SELECT id FROM tipo_documento_clinico WHERE id = ? AND ativo',
     noEst: false,
   },
+  // Permissão por procedimento do SUS (migração 02_ADM/99zd): ramo vigente da tabela unificada (grupo, subgrupo ou
+  // forma de organização); o fechamento da AIH confere os procedimentos pelo prefixo do código (dominio-acesso).
+  procedimentoSus: {
+    tabela: 'usuario_grupo_sigtap',
+    coluna: 'grupo_sigtap_id',
+    valida:
+      'SELECT id FROM grupo_sigtap WHERE id = ? AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)',
+    noEst: false,
+  },
 };
 
 function operacaoEscopo(tipo: TipoEscopo, conceder: boolean) {
@@ -340,6 +349,8 @@ export const OPERACOES_USUARIO_PROPRIA = {
   'acesso.retirarTipoAgendaUsuario': operacaoEscopo('tipoAgenda', false),
   'acesso.concederTipoProntuarioUsuario': operacaoEscopo('tipoProntuario', true),
   'acesso.retirarTipoProntuarioUsuario': operacaoEscopo('tipoProntuario', false),
+  'acesso.concederProcedimentoSusUsuario': operacaoEscopo('procedimentoSus', true),
+  'acesso.retirarProcedimentoSusUsuario': operacaoEscopo('procedimentoSus', false),
 } as const;
 
 export const NOMES_OPERACOES_USUARIO_PROPRIA = Object.keys(OPERACOES_USUARIO_PROPRIA);

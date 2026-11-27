@@ -111,6 +111,7 @@ const ESCOPOS_VAZIOS = {
   convenioFaturamento: [],
   tipoAgenda: [],
   tipoProntuario: [],
+  procedimentoSus: [],
 };
 function ficha(
   m: {

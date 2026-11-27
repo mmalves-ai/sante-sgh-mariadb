@@ -172,6 +172,7 @@ export const mensagensAdministracao = {
       convenioFaturamento: 'Convênios do faturamento',
       tipoAgenda: 'Tipos de agenda',
       tipoProntuario: 'Tipos de prontuário',
+      procedimentoSus: 'Grupos de procedimentos do SUS',
     },
     escolher: 'Escolha em {tipo}',
     escolherPlaceholder: 'Escolha…',

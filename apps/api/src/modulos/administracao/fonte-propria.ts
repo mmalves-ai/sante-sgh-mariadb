@@ -906,6 +906,11 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
           `SELECT t.id AS valor, t.descricao AS rotulo FROM usuario_tipo_prontuario x JOIN tipo_documento_clinico t ON t.id = x.tipo_documento_clinico_id
             WHERE x.usuario_id = ? AND x.excluido_em IS NULL ORDER BY t.descricao`,
           [id],
+        ), // Permissão por procedimento do SUS (C2-051): ramos da tabela unificada concedidos (código e descrição).
+        procedimentoSus: await escopo(
+          `SELECT g.id AS valor, CONCAT(g.codigo_sigtap, ' ', g.descricao) AS rotulo FROM usuario_grupo_sigtap x JOIN grupo_sigtap g ON g.id = x.grupo_sigtap_id
+            WHERE x.usuario_id = ? AND x.excluido_em IS NULL ORDER BY g.codigo_sigtap`,
+          [id],
         ),
       };
       const [cons] = await l.consultar(
@@ -1001,6 +1006,12 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         ),
         tipoProntuario: await q(
           'SELECT id AS valor, descricao AS rotulo FROM tipo_documento_clinico WHERE ativo ORDER BY descricao',
+          [],
+        ),
+        // Grupos e subgrupos vigentes da tabela unificada (a forma de organização entra pelo mesmo caminho, se pedida).
+        procedimentoSus: await q(
+          `SELECT id AS valor, CONCAT(codigo_sigtap, ' ', descricao) AS rotulo FROM grupo_sigtap
+            WHERE nivel IN ('grupo','subgrupo') AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE) ORDER BY codigo_sigtap`,
           [],
         ),
       };

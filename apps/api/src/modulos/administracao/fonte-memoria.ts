@@ -211,6 +211,7 @@ export class EstadoM10Sintetico {
         convenioFaturamento: new Set(),
         tipoAgenda: new Set(),
         tipoProntuario: new Set(),
+        procedimentoSus: new Set(),
       };
       this.escopos.set(login, e);
     }
@@ -251,6 +252,10 @@ const OPCOES_ESCOPO: Record<string, ItemEscopo[]> = {
   tipoProntuario: [
     { valor: 'A', rotulo: 'A' },
     { valor: 'E', rotulo: 'E' },
+  ],
+  procedimentoSus: [
+    { valor: '901', rotulo: '03 Procedimentos clínicos (sintético)' },
+    { valor: '902', rotulo: '04 Procedimentos cirúrgicos (sintético)' },
   ],
 };
 
@@ -305,7 +310,7 @@ function aplicarM10(nome: string, e: Record<string, unknown>, operador: string):
     if (String(login) === operador) throw recusa('a-si-mesmo', msg);
   };
   const escopo =
-    /^acesso\.(conceder|retirar)(Unidade|Local|Convenio|ConvenioFaturamento|TipoAgenda|TipoProntuario)Usuario$/.exec(
+    /^acesso\.(conceder|retirar)(Unidade|Local|Convenio|ConvenioFaturamento|TipoAgenda|TipoProntuario|ProcedimentoSus)Usuario$/.exec(
       nome,
     );
   if (escopo) {
@@ -873,7 +878,7 @@ export function fonteAdministracaoMemoria(
         return { idUsuario: conta.id, modo: plano.modo };
       }
       const escopo =
-        /^acesso\.(conceder|retirar)(Unidade|Local|Convenio|ConvenioFaturamento|TipoAgenda|TipoProntuario)Usuario$/.test(
+        /^acesso\.(conceder|retirar)(Unidade|Local|Convenio|ConvenioFaturamento|TipoAgenda|TipoProntuario|ProcedimentoSus)Usuario$/.test(
           nome,
         );
       const op =

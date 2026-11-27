@@ -16,6 +16,7 @@ import {
   type DiariaUtiCompetencia,
   habilitacaoUtiDaCompetencia,
 } from '@sgh/dominio-faturamento';
+import { procedimentosSusForaDoEscopo } from '@sgh/dominio-acesso';
 import { type Escritor, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { solicitanteQueRespondeHoje } from '../cadastro/solicitante-vigente.js';
 import type { DiariasUtiGravadas, SolicitanteAihLido } from './porta-aih.js';
@@ -468,6 +469,35 @@ export class GravacoesAihPropria {
     return x;
   }
 
+  /**
+   * Permissão por procedimento do SUS (01-ADM L59, C2-051): a conta com ramos da tabela unificada concedidos
+   * (usuario_grupo_sigtap) só fecha a AIH com procedimentos desses ramos; sem concessão, não há restrição própria (vale a
+   * compatibilidade com o CBO). A recusa desfaz a gravação inteira do fechamento (mesma transação).
+   */
+  private async conferirProcedimentosSusDaConta(ids: readonly number[]): Promise<void> {
+    const concedidos = (
+      await this.tx.consultar(
+        `SELECT g.codigo_sigtap FROM usuario_grupo_sigtap x JOIN grupo_sigtap g ON g.id = x.grupo_sigtap_id
+          WHERE x.usuario_id = ? AND x.excluido_em IS NULL`,
+        [this.tx.contexto.usuario],
+      )
+    ).map((r) => txt(r['codigo_sigtap']));
+    if (concedidos.length === 0) return;
+    const unicos = [...new Set(ids)];
+    const codigos = (
+      await this.tx.consultar(
+        `SELECT codigo_sigtap FROM procedimento_sigtap WHERE id IN (${unicos.map(() => '?').join(', ')})`,
+        unicos,
+      )
+    ).map((r) => txt(r['codigo_sigtap']));
+    const fora = procedimentosSusForaDoEscopo(codigos, concedidos);
+    if (fora.length > 0)
+      throw recusa(
+        'procedimento-sus-fora-do-escopo',
+        `A conta não tem permissão para lançar estes procedimentos do SUS: ${fora.join(', ')}.`,
+      );
+  }
+
   private async sigtapId(codigo: string): Promise<number | null> {
     const x = await this.tx.uma(
       'SELECT id FROM procedimento_sigtap WHERE codigo_sigtap = ? ORDER BY id DESC LIMIT 1',
@@ -690,11 +720,13 @@ export class GravacoesAihPropria {
       origem: 'sistema',
     });
     let sequencia = 0;
+    const lancados = [realizado];
     for (const item of p.itens) {
       sequencia += 1;
       const sigtap = item.sigtap ?? (await this.sigtapId(item.procedimento));
       if (!sigtap)
         throw recusa('procedimento-inexistente', 'Um item do fechamento não existe na tabela unificada.');
+      lancados.push(sigtap);
       if (item.tipo === 'opm') {
         const cnpj = soDigitos(item.opm?.cnpjFornecedor ?? '');
         await this.tx.incluir('conta_aih_opm', {
@@ -735,6 +767,7 @@ export class GravacoesAihPropria {
         origem: 'sistema',
       });
     }
+    await this.conferirProcedimentosSusDaConta(lancados);
     await this.gravarDiariasUti(conta, p.diariasCompetencia ?? []);
     // O complemento (06-SUS linha 58): o da conta reaberta passa à nova; no primeiro fechamento, o CID secundário do
     // laudo é o primeiro diagnóstico secundário.

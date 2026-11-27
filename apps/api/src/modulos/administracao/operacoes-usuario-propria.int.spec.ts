@@ -30,6 +30,11 @@ const MIGRACOES = [
   // Finalidade do convênio (atendimento ou faturamento), aplicada duas vezes para provar que é idempotente.
   'db/migracoes/02_ADM/99zb_usuario_fonte_pagadora_finalidade_tabelas.sql',
   'db/migracoes/02_ADM/99zb_usuario_fonte_pagadora_finalidade_tabelas.sql',
+  // Permissão por procedimento do SUS (C2-051), também duas vezes.
+  'db/migracoes/02_ADM/99zd_usuario_grupo_sigtap_tabelas.sql',
+  'db/migracoes/02_ADM/99zd_usuario_grupo_sigtap_chaves.sql',
+  'db/migracoes/02_ADM/99zd_usuario_grupo_sigtap_tabelas.sql',
+  'db/migracoes/02_ADM/99zd_usuario_grupo_sigtap_chaves.sql',
 ];
 const ontemLocal = (): string => {
   const d = new Date();
@@ -80,6 +85,7 @@ describe.skipIf(SEM_BANCO)('cadastro da conta no banco próprio (MariaDB, client
         'usuario_local_atendimento',
         'usuario_fonte_pagadora',
         'usuario_tipo_prontuario',
+        'usuario_grupo_sigtap',
         'credencial_usuario',
         'historico_senha',
         'usuario_perfil',
@@ -413,6 +419,37 @@ describe.skipIf(SEM_BANCO)('cadastro da conta no banco próprio (MariaDB, client
       usuario_tipo_prontuario: true,
       usuario_unidade: true,
     });
+  });
+
+  it('procedimento do SUS: concede o ramo da tabela unificada, recusa repetido e inexistente; retirada lógica', async () => {
+    const id = Number((await um<{ id: number }>('SELECT id FROM usuario WHERE login = ?', [NOVO])).id);
+    const g = await um<{ id: number; codigo_sigtap: string }>(
+      "SELECT id, codigo_sigtap FROM grupo_sigtap WHERE nivel = 'grupo' AND vigencia_fim IS NULL ORDER BY codigo_sigtap LIMIT 1",
+      [],
+    );
+    const grupo = Number(g.id);
+    await exec('acesso.concederProcedimentoSusUsuario', { login: NOVO, valor: grupo });
+    let f = await fonte.fichaUsuario(c, NOVO, false);
+    expect(
+      f?.escopos['procedimentoSus']?.map((x) => [x.valor, x.rotulo.startsWith(`${g.codigo_sigtap} `)]),
+    ).toEqual([[String(grupo), true]]);
+    expect(await codigo(exec('acesso.concederProcedimentoSusUsuario', { login: NOVO, valor: grupo }))).toBe(
+      'ja-concedido',
+    );
+    expect(
+      await codigo(exec('acesso.concederProcedimentoSusUsuario', { login: NOVO, valor: 999999999 })),
+    ).toBe('valor-inexistente');
+    await exec('acesso.retirarProcedimentoSusUsuario', { login: NOVO, valor: grupo });
+    f = await fonte.fichaUsuario(c, NOVO, false);
+    expect(f?.escopos['procedimentoSus']).toEqual([]);
+    expect(await codigo(exec('acesso.retirarProcedimentoSusUsuario', { login: NOVO, valor: grupo }))).toBe(
+      'nao-concedido',
+    );
+    const n = await um<Record<string, unknown>>(
+      'SELECT COUNT(*) AS n FROM usuario_grupo_sigtap WHERE usuario_id = ? AND grupo_sigtap_id = ? AND excluido_em IS NOT NULL',
+      [id, grupo],
+    );
+    expect(Number(n['n'])).toBe(1);
   });
 
   it('convênio do faturamento: concessão à parte da do atendimento, mesma tabela pela finalidade; retirada lógica; trilha', async () => {

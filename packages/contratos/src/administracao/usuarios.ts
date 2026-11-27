@@ -134,6 +134,7 @@ export const TIPOS_ESCOPO = [
   'convenioFaturamento',
   'tipoAgenda',
   'tipoProntuario',
+  'procedimentoSus',
 ] as const;
 export type TipoEscopo = (typeof TIPOS_ESCOPO)[number];
 
@@ -320,6 +321,8 @@ export const OPERACOES_USUARIOS = {
   'acesso.retirarConvenioFaturamentoUsuario': 'Retirar convênio do faturamento',
   'acesso.concederTipoAgendaUsuario': 'Conceder tipo de agenda',
   'acesso.retirarTipoAgendaUsuario': 'Retirar tipo de agenda',
+  'acesso.concederProcedimentoSusUsuario': 'Conceder grupo de procedimentos do SUS',
+  'acesso.retirarProcedimentoSusUsuario': 'Retirar grupo de procedimentos do SUS',
   'acesso.concederTipoProntuarioUsuario': 'Conceder tipo de prontuário',
   'acesso.retirarTipoProntuarioUsuario': 'Retirar tipo de prontuário',
   'acesso.trocarGrupoUsuario': 'Trocar o grupo do usuário',

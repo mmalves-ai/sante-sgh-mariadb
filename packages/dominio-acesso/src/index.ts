@@ -73,3 +73,4 @@ export * from './notificacao/email-configuracao.js';
 export * from './notificacao/email-saida.js';
 export * from './webauthn.js';
 export * from './webauthn-simulado.js';
+export * from './usuario/procedimento-sus.js';
