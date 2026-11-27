@@ -332,6 +332,7 @@ async function anexar() {
               <input
                 v-model="solucoes[p.id]"
                 :placeholder="t('auditoriaTramite.guia.solucao')"
+                :aria-label="t('auditoriaTramite.guia.solucao')"
                 maxlength="500"
               />
               <button
@@ -359,7 +360,12 @@ async function anexar() {
           :opcoes="[...guia.data.value.motivosPendencia.map((m) => ({ valor: m.id, rotulo: m.descricao }))]"
           data-testid="gc-motivo"
         />
-        <input v-model="pendencia.descricao" maxlength="500" :placeholder="t('auditoriaTramite.motivo')" />
+        <input
+          v-model="pendencia.descricao"
+          maxlength="500"
+          :placeholder="t('auditoriaTramite.motivo')"
+          :aria-label="t('auditoriaTramite.guia.descricaoPendencia')"
+        />
         <label>
           {{ t('auditoriaTramite.guia.prazo') }}
           <input v-model="pendencia.prazo" type="datetime-local" />
@@ -392,7 +398,12 @@ async function anexar() {
             })),
           ]"
         />
-        <input type="file" accept="application/pdf,image/jpeg,image/png" @change="escolherArquivo" />
+        <input
+          type="file"
+          accept="application/pdf,image/jpeg,image/png"
+          :aria-label="t('auditoriaTramite.guia.arquivoAnexo')"
+          @change="escolherArquivo"
+        />
         <p v-for="(m, k) in errosAnexo" :key="k" role="alert">{{ m }}</p>
         <button type="submit" :disabled="!anexo.arquivo || Object.keys(errosAnexo).length > 0">
           {{ t('auditoriaTramite.guia.anexar') }}

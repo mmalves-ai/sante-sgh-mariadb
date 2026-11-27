@@ -147,6 +147,8 @@ export const mensagensAuditoriaTramite = {
     solucao: 'Solução',
     anexos: 'Anexos',
     anexar: 'Anexar',
+    descricaoPendencia: 'Descrição da pendência',
+    arquivoAnexo: 'Arquivo do anexo (PDF, JPEG ou PNG)',
     tipoDocumento: 'Tipo do documento',
     tiposAnexo: {
       pedido_medico: 'Pedido médico',
