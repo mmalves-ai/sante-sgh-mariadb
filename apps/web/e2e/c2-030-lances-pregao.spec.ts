@@ -12,7 +12,6 @@ import { itemDoMenu, semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
-const S = '/api/suprimentos/lances-pregao';
 
 interface Disputa {
   id: number;
@@ -135,20 +134,13 @@ test.describe('Lances do pregão @C2-030', () => {
     page,
   }) => {
     const externas = vigiarExternas(page);
-    await simular(page, novaDisputa());
+    const d = novaDisputa();
+    await simular(page, d);
     await entrar(page, 'SINT.LICITACAO');
 
-    const processos = (await (await page.request.get(S)).json()) as { id: number; numero: string }[];
-    let disputa: Disputa | null = null;
-    for (const p of processos) {
-      const d = (await (await page.request.get(`${S}/${p.id}`)).json()) as Disputa;
-      if (d.sentido === 'menor' && d.itens[0]?.propostas.some((x) => x.apta)) {
-        disputa = d;
-        break;
-      }
-    }
-    test.skip(disputa === null, 'Sem pregão em sessão com proposta válida no cliente do E2E.');
-    const item = disputa!.itens[0]!;
+    // page.request não passa pela simulação da página: a disputa vem do mesmo estado do servidor simulado.
+    const disputa: Disputa = d;
+    const item = disputa.itens[0]!;
     const licitante = item.propostas.find((x) => x.apta)!;
     const proprios = item.lances.filter((l) => l.fornecedor === licitante.fornecedor).map((l) => l.valor);
     const anterior = Math.min(licitante.valor, ...proprios);
@@ -162,7 +154,7 @@ test.describe('Lances do pregão @C2-030', () => {
     await expect(page.getByTestId('tela-lances-pregao')).toBeVisible();
     await semViolacaoAxe(page, '/suprimentos/licitacao/lances');
 
-    await escolher(page.getByTestId('lance-processo'), { rotulo: new RegExp(disputa!.numero) });
+    await escolher(page.getByTestId('lance-processo'), { rotulo: new RegExp(disputa.numero) });
     const s = item.sequencia;
     await escolher(page.getByTestId(`lance-licitante-${s}`), { rotulo: licitante.fornecedorNome });
     // Não melhora: a regra do domínio avisa na hora e o botão fica travado.
@@ -179,10 +171,9 @@ test.describe('Lances do pregão @C2-030', () => {
 
     // Recarregada a tela, o lance segue gravado (histórico e oferta do licitante).
     await page.reload();
-    await escolher(page.getByTestId('lance-processo'), { rotulo: new RegExp(disputa!.numero) });
+    await escolher(page.getByTestId('lance-processo'), { rotulo: new RegExp(disputa.numero) });
     await expect(page.getByTestId(`lance-historico-${s}`)).toContainText(licitante.fornecedorNome);
-    const depois = (await (await page.request.get(`${S}/${disputa!.id}`)).json()) as Disputa;
-    const oferta = depois.itens[0]!.propostas.find((x) => x.fornecedor === licitante.fornecedor)!.ultimoLance;
+    const oferta = d.itens[0]!.propostas.find((x) => x.fornecedor === licitante.fornecedor)!.ultimoLance;
     expect(oferta).toBe(lance);
     expect(externas).toEqual([]);
   });
