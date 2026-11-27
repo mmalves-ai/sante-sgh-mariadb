@@ -12,7 +12,8 @@ export const mensagensProtocoloCriterios = {
   incluirDoAlerta: 'Incluir no protocolo',
   horarioZeroSugerido: 'Horário zero (sugerido: quando o critério foi atendido)',
   confirmarInclusao: 'Confirmar inclusão',
-  semVigente: 'Não há versão publicada do protocolo deste tipo para o internado: publique-a antes de incluir.',
+  semVigente:
+    'Não há versão publicada do protocolo deste tipo para o internado: publique-a antes de incluir.',
   semSinais: 'Nenhum parâmetro vital ativo no cadastro.',
   paciente: 'Paciente',
   atendimento: 'Atendimento {numero}',

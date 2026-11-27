@@ -82,7 +82,10 @@ const opcoesFiltro = computed(() => [
 ]);
 const opcoesMotivo = computed(() => [
   { valor: null as number | null, rotulo: t('escolha') },
-  ...(motivos.data.value ?? []).map((m) => ({ valor: m.id as number | null, rotulo: `${m.codigo} ${m.descricao}` })),
+  ...(motivos.data.value ?? []).map((m) => ({
+    valor: m.id as number | null,
+    rotulo: `${m.codigo} ${m.descricao}`,
+  })),
 ]);
 
 const atual = ref<ComunicacaoRecebida | null>(null);
@@ -100,7 +103,11 @@ function abrir(x: ComunicacaoRecebida) {
   aviso.value = '';
 }
 
-async function executar(fn: (x: ComunicacaoRecebida) => Promise<{ versao: number }>, msg: string, fecha: boolean) {
+async function executar(
+  fn: (x: ComunicacaoRecebida) => Promise<{ versao: number }>,
+  msg: string,
+  fecha: boolean,
+) {
   const x = atual.value;
   if (!x || enviando.value) return;
   enviando.value = true;
@@ -121,7 +128,8 @@ async function executar(fn: (x: ComunicacaoRecebida) => Promise<{ versao: number
 
 const identificar = () =>
   executar((x) => identificarCarteira(x.id, x.versao, carteira.value), 'identificada', false);
-const aceitar = () => executar((x) => responderComunicacao(x.id, x.versao, { acao: 'aceitar' }), 'aceita', true);
+const aceitar = () =>
+  executar((x) => responderComunicacao(x.id, x.versao, { acao: 'aceitar' }), 'aceita', true);
 const recusar = () =>
   executar(
     (x) => responderComunicacao(x.id, x.versao, { acao: 'recusar', motivoRecusa: motivo.value }),
@@ -173,7 +181,9 @@ const quando = (v: string) => (v ? new Date(v).toLocaleString('pt-BR') : '');
         <tr v-for="x in lista.data.value" :key="x.id" :data-testid="`comunicacao-${x.id}`">
           <td>{{ quando(x.recebidoEm) }}</td>
           <td>{{ x.prestador ?? '' }}</td>
-          <td>{{ t(`eventos.${x.tipoEvento}`) }} <span v-if="x.recemNascido">{{ t('rn') }}</span></td>
+          <td>
+            {{ t(`eventos.${x.tipoEvento}`) }} <span v-if="x.recemNascido">{{ t('rn') }}</span>
+          </td>
           <td>{{ data(x.eventoEm) }}</td>
           <td>{{ x.numeroCarteira }}</td>
           <td>{{ x.matricula ?? t('naoIdentificado') }}</td>
@@ -240,7 +250,12 @@ const quando = (v: string) => (v ? new Date(v).toLocaleString('pt-BR') : '');
           data-testid="comunicacao-recusar"
           @acionar="recusar"
         />
-        <SanteBotao :rotulo="t('fechar')" variante="texto" data-testid="comunicacao-fechar" @acionar="atual = null" />
+        <SanteBotao
+          :rotulo="t('fechar')"
+          variante="texto"
+          data-testid="comunicacao-fechar"
+          @acionar="atual = null"
+        />
       </div>
       <MensagemErro v-if="erro" :erro="erro" />
     </section>

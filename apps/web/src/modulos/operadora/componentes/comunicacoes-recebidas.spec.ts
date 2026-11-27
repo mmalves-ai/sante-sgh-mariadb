@@ -61,7 +61,10 @@ afterEach(() => vi.unstubAllGlobals());
 describe('ComunicacoesRecebidas', () => {
   it('só leitura: lista a pendente sem o botão de responder', async () => {
     definirSessaoDaTela({ permissoes: ['operadora.conta.ler'] } as never);
-    vi.stubGlobal('fetch', vi.fn(async () => resposta({ itens: [item] })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => resposta({ itens: [item] })),
+    );
     const w = montar();
     await flushPromises();
     const linha = w.get('[data-testid="comunicacao-1"]');
@@ -92,7 +95,10 @@ describe('ComunicacoesRecebidas', () => {
     await w.get('[data-testid="comunicacao-identificar"]').trigger('click');
     await flushPromises();
     expect(chamadas).toEqual([
-      { url: '/api/operadora/troca-tiss/comunicacoes/1/carteira', corpo: { versao: 1, carteira: 'SINT.MAT-1' } },
+      {
+        url: '/api/operadora/troca-tiss/comunicacoes/1/carteira',
+        corpo: { versao: 1, carteira: 'SINT.MAT-1' },
+      },
     ]);
     expect(w.get('[data-testid="comunicacao-aviso"]').text()).toContain('Carteira identificada.');
   });

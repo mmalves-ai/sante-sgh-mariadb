@@ -157,7 +157,11 @@ describe.skipIf(SEM_BANCO)('regras de franquia do plano (MariaDB, cliente f22_o2
     );
     expect(Number(t[0]?.['n'])).toBeGreaterThanOrEqual(1);
     const lidas = await porta.regras(contexto(m), m.operadora, { plano, contrato: null });
-    expect(lidas.find((r) => r.id === g.id)).toMatchObject({ codigo: `${COD}-MES`, vigente: true, tetoPorGuia: 80 });
+    expect(lidas.find((r) => r.id === g.id)).toMatchObject({
+      codigo: `${COD}-MES`,
+      vigente: true,
+      tetoPorGuia: 80,
+    });
   });
 
   it('recusa percentual com fator, teto acima do limite, escopo duplo e vigência sobreposta sem gravar nada', async () => {
@@ -205,7 +209,10 @@ describe.skipIf(SEM_BANCO)('regras de franquia do plano (MariaDB, cliente f22_o2
       acumulado: lancado,
       restante: Math.round((200 - lancado) * 100) / 100,
     });
-    await escrever("UPDATE fatura_plano SET situacao = 'cancelada', cancelada_em = NOW(3), motivo_cancelamento = 'TESTE SINTETICO C2116' WHERE id = ?", [f.id]);
+    await escrever(
+      "UPDATE fatura_plano SET situacao = 'cancelada', cancelada_em = NOW(3), motivo_cancelamento = 'TESTE SINTETICO C2116' WHERE id = ?",
+      [f.id],
+    );
     expect((await porta.acumulado(contexto(m), r!.id, m.dependente, hoje)).acumulado).toBe(0);
   });
 

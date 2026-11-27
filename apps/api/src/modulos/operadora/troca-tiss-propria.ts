@@ -161,9 +161,15 @@ const MOTIVOS_RESPOSTA: Readonly<Record<string, string>> = {
 /** A recusa de negócio pelos códigos do domínio (409, com o campo). */
 function recusarSe(p: readonly ProblemaTroca[]): void {
   if (!p.length) return;
-  throw new ErroOperacao(409, p[0]!.codigo, 'Comunicação recusada', p.map((x) => MOTIVOS_RESPOSTA[x.codigo] ?? x.codigo).join(' '), {
-    campos: p.map((x) => x.campo ?? 'situacao'),
-  });
+  throw new ErroOperacao(
+    409,
+    p[0]!.codigo,
+    'Comunicação recusada',
+    p.map((x) => MOTIVOS_RESPOSTA[x.codigo] ?? x.codigo).join(' '),
+    {
+      campos: p.map((x) => x.campo ?? 'situacao'),
+    },
+  );
 }
 
 const instante = (t: string) => new Date(`${t.replace(' ', 'T')}${t.length <= 19 ? 'Z' : ''}`);
@@ -192,7 +198,11 @@ export class PortaTrocaTissPropria {
   }
 
   /** O beneficiário do estabelecimento pela carteira normalizada (sem pontuação, maiúsculas); nulo se não houver. */
-  private static async beneficiarioPelaCarteira(tx: Pick<TxOperacao, 'uma'>, est: number, carteira: string): Promise<number | null> {
+  private static async beneficiarioPelaCarteira(
+    tx: Pick<TxOperacao, 'uma'>,
+    est: number,
+    carteira: string,
+  ): Promise<number | null> {
     const n = carteiraNormalizada(carteira);
     if (!n) return null;
     const b = await tx.uma(
@@ -693,7 +703,8 @@ export class PortaTrocaTissPropria {
         const atual = await PortaTrocaTissPropria.comunicacaoDoEst(tx, est, id);
         recusarSe(problemasDaIdentificacaoComunicacao(atual.situacao, carteira));
         const beneficiario = await PortaTrocaTissPropria.beneficiarioPelaCarteira(tx, est, carteira);
-        if (beneficiario === null) recusarSe([{ codigo: 'carteira-nao-identificada', campo: 'numeroCarteira' }]);
+        if (beneficiario === null)
+          recusarSe([{ codigo: 'carteira-nao-identificada', campo: 'numeroCarteira' }]);
         const v = await tx.alterar('comunicacao_internacao_recebida', id, versao, {
           beneficiario_plano_id: beneficiario,
         });
@@ -715,7 +726,9 @@ export class PortaTrocaTissPropria {
   ): Promise<Gravado & { readonly situacao: 'aceita' | 'recusada' }> {
     return this.gravar(
       c,
-      r.acao === 'aceitar' ? 'operadora.troca-tiss.comunicacao.aceitar' : 'operadora.troca-tiss.comunicacao.recusar',
+      r.acao === 'aceitar'
+        ? 'operadora.troca-tiss.comunicacao.aceitar'
+        : 'operadora.troca-tiss.comunicacao.recusar',
       'comunicacao_internacao_recebida',
       trilha,
       async (tx, est) => {
@@ -743,7 +756,10 @@ export class PortaTrocaTissPropria {
       [id, est],
     );
     if (!x) throw naoEncontrado('A comunicação recebida');
-    return { situacao: textoObrigatorio(x['situacao']), beneficiarioIdentificado: x['beneficiario_plano_id'] != null };
+    return {
+      situacao: textoObrigatorio(x['situacao']),
+      beneficiarioIdentificado: x['beneficiario_plano_id'] != null,
+    };
   }
 
   private static async loteDoEst(l: Leitor | Escritor, est: number, lote: number) {

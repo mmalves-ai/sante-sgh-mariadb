@@ -112,7 +112,9 @@ test.describe('Login único corporativo @C2-010 @fase7', () => {
     expect(externas).toEqual([]);
   });
 
-  test('"Entrar com" o provedor: volta em /entrar/provedor pede o segundo fator e abre a sessão', async ({ page }) => {
+  test('"Entrar com" o provedor: volta em /entrar/provedor pede o segundo fator e abre a sessão', async ({
+    page,
+  }) => {
     const externas = vigiarExternas(page);
     let estabelecimento = '';
     const retornos: Record<string, unknown>[] = [];

@@ -255,9 +255,13 @@ export class PortaRegrasFranquiaPropria {
           [est, op],
           { teto: 2000 },
         ),
-        l.consultar('SELECT id, descricao AS rotulo FROM tipo_franquia WHERE ativo = TRUE ORDER BY descricao', [], {
-          teto: 200,
-        }),
+        l.consultar(
+          'SELECT id, descricao AS rotulo FROM tipo_franquia WHERE ativo = TRUE ORDER BY descricao',
+          [],
+          {
+            teto: 200,
+          },
+        ),
         l.consultar(
           `SELECT id, CONCAT(codigo, ' — ', descricao) AS rotulo FROM grupo_procedimento_operadora
             WHERE ativo = TRUE ORDER BY codigo`,
@@ -316,7 +320,11 @@ export class PortaRegrasFranquiaPropria {
             campos: [campo],
           });
       };
-      await existe('SELECT 1 AS ok FROM tipo_franquia WHERE id = ? AND ativo = TRUE', e.tipoFranquia, 'tipoFranquia');
+      await existe(
+        'SELECT 1 AS ok FROM tipo_franquia WHERE id = ? AND ativo = TRUE',
+        e.tipoFranquia,
+        'tipoFranquia',
+      );
       await existe(
         'SELECT 1 AS ok FROM plano_comercializado WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
         e.plano,
@@ -380,7 +388,12 @@ export class PortaRegrasFranquiaPropria {
   }
 
   /** Encerra a regra na data (fim da vigência); a linha fica para o histórico. */
-  encerrar(c: ContextoPorta, id: number, x: { versao: number; fim: string }, trilha: Trilha): Promise<Gravado> {
+  encerrar(
+    c: ContextoPorta,
+    id: number,
+    x: { versao: number; fim: string },
+    trilha: Trilha,
+  ): Promise<Gravado> {
     return this.gravar(c, 'operadora.franquia.regra.encerrar', trilha, async (tx, est) => {
       const [r] = await tx.consultarParaAtualizar(
         `SELECT r.id, r.vigencia_inicio, r.vigencia_fim FROM regra_franquia_plano r
@@ -406,7 +419,12 @@ export class PortaRegrasFranquiaPropria {
    * O acumulado de franquia do beneficiário na janela da regra que contém a data (janelaDeAcumulo do domínio), só dos
    * lançamentos válidos, e o que resta até o limite. Na janela por evento o acumulado é sempre zero.
    */
-  acumulado(c: ContextoPorta, regraId: number, beneficiario: number, dataEvento: string): Promise<AcumuladoFranquia> {
+  acumulado(
+    c: ContextoPorta,
+    regraId: number,
+    beneficiario: number,
+    dataEvento: string,
+  ): Promise<AcumuladoFranquia> {
     return this.ler(c, async (l, est) => {
       const r = await l.uma(`${SELECT_REGRA} WHERE r.id = ? AND ${DO_ESTABELECIMENTO}`, [regraId, est, est]);
       if (!r) throw naoEncontrado();
@@ -446,7 +464,8 @@ export class PortaRegrasFranquiaPropria {
         );
         acumulado = numero(s?.['total']) ?? 0;
       }
-      const restante = regra.valor === null ? null : Math.round(Math.max(0, regra.valor - acumulado) * 100) / 100;
+      const restante =
+        regra.valor === null ? null : Math.round(Math.max(0, regra.valor - acumulado) * 100) / 100;
       return { regra: regra.id, janela, acumulado, restante };
     });
   }

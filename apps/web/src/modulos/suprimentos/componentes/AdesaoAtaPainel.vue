@@ -151,7 +151,12 @@ async function decidir(a: AdesaoTela, decisao: 'autorizar' | 'negar'): Promise<v
           <label for="ade-numero">{{ t('ataEmpenho.adesao.numero') }}</label>
           <input id="ade-numero" v-model="numero" maxlength="30" data-testid="ade-numero" />
         </span>
-        <SanteSelecao v-model="tipo" :rotulo="t('ataEmpenho.adesao.tipo')" :opcoes="opcoesTipo" data-testid="ade-tipo" />
+        <SanteSelecao
+          v-model="tipo"
+          :rotulo="t('ataEmpenho.adesao.tipo')"
+          :opcoes="opcoesTipo"
+          data-testid="ade-tipo"
+        />
         <SanteSelecao
           :model-value="externa ? 'externa' : 'propria'"
           :rotulo="t('ataEmpenho.adesao.origem')"
@@ -176,7 +181,12 @@ async function decidir(a: AdesaoTela, decisao: 'autorizar' | 'negar'): Promise<v
           </span>
           <span class="campo">
             <label for="ade-registrada">{{ t('ataEmpenho.adesao.registrada') }}</label>
-            <input id="ade-registrada" v-model="registrada" inputmode="decimal" data-testid="ade-registrada" />
+            <input
+              id="ade-registrada"
+              v-model="registrada"
+              inputmode="decimal"
+              data-testid="ade-registrada"
+            />
           </span>
           <span class="campo">
             <label for="ade-preco">{{ t('ataEmpenho.adesao.preco') }}</label>
@@ -189,10 +199,15 @@ async function decidir(a: AdesaoTela, decisao: 'autorizar' | 'negar'): Promise<v
         </span>
         <span class="campo">
           <label for="ade-justificativa">{{ t('ataEmpenho.adesao.justificativa') }}</label>
-          <textarea id="ade-justificativa" v-model="justificativa" maxlength="2000" data-testid="ade-justificativa" />
+          <textarea
+            id="ade-justificativa"
+            v-model="justificativa"
+            maxlength="2000"
+            data-testid="ade-justificativa"
+          />
         </span>
       </div>
-      <SanteBotao type="submit" data-testid="ade-solicitar">{{ t('ataEmpenho.adesao.solicitar') }}</SanteBotao>
+      <SanteBotao tipo="submit" :rotulo="t('ataEmpenho.adesao.solicitar')" data-testid="ade-solicitar" />
     </form>
 
     <p v-if="adesoes.length === 0">{{ t('ataEmpenho.adesao.nenhuma') }}</p>
@@ -215,34 +230,54 @@ async function decidir(a: AdesaoTela, decisao: 'autorizar' | 'negar'): Promise<v
         <template v-if="a.motivoDecisao"> · {{ a.motivoDecisao }}</template>
       </p>
       <template v-if="a.situacao === 'solicitada' || a.situacao === 'em_analise'">
-        <SanteBotao v-if="decidindo !== a.id" variante="secundario" data-testid="ade-decidir" @click="abrir(a)">
-          {{ t('ataEmpenho.adesao.autorizar') }} / {{ t('ataEmpenho.adesao.negar') }}
-        </SanteBotao>
+        <SanteBotao
+          v-if="decidindo !== a.id"
+          variante="secundario"
+          :rotulo="`${t('ataEmpenho.adesao.autorizar')} / ${t('ataEmpenho.adesao.negar')}`"
+          data-testid="ade-decidir"
+          @acionar="abrir(a)"
+        />
         <div v-else class="filtros" data-testid="ade-decisao">
           <span class="campo">
             <label :for="`ade-aderida-${a.id}`">{{ t('ataEmpenho.adesao.aderida') }}</label>
-            <input :id="`ade-aderida-${a.id}`" v-model="aderida" inputmode="decimal" data-testid="ade-aderida" />
+            <input
+              :id="`ade-aderida-${a.id}`"
+              v-model="aderida"
+              inputmode="decimal"
+              data-testid="ade-aderida"
+            />
           </span>
           <span class="campo">
             <label :for="`ade-oficio-${a.id}`">{{ t('ataEmpenho.adesao.oficio') }}</label>
             <input :id="`ade-oficio-${a.id}`" v-model="oficio" maxlength="15" data-testid="ade-oficio" />
           </span>
-          <label><input v-model="aceiteGerenciador" type="checkbox" data-testid="ade-aceite-gerenciador" />
-            {{ t('ataEmpenho.adesao.aceiteGerenciador') }}</label>
-          <label><input v-model="aceiteFornecedor" type="checkbox" data-testid="ade-aceite-fornecedor" />
-            {{ t('ataEmpenho.adesao.aceiteFornecedor') }}</label>
-          <label><input v-model="documentacao" type="checkbox" data-testid="ade-documentacao" />
-            {{ t('ataEmpenho.adesao.documentacao') }}</label>
-          <SanteBotao data-testid="ade-autorizar" @click="decidir(a, 'autorizar')">{{
-            t('ataEmpenho.adesao.autorizar')
-          }}</SanteBotao>
+          <label
+            ><input v-model="aceiteGerenciador" type="checkbox" data-testid="ade-aceite-gerenciador" />
+            {{ t('ataEmpenho.adesao.aceiteGerenciador') }}</label
+          >
+          <label
+            ><input v-model="aceiteFornecedor" type="checkbox" data-testid="ade-aceite-fornecedor" />
+            {{ t('ataEmpenho.adesao.aceiteFornecedor') }}</label
+          >
+          <label
+            ><input v-model="documentacao" type="checkbox" data-testid="ade-documentacao" />
+            {{ t('ataEmpenho.adesao.documentacao') }}</label
+          >
+          <SanteBotao
+            :rotulo="t('ataEmpenho.adesao.autorizar')"
+            data-testid="ade-autorizar"
+            @acionar="decidir(a, 'autorizar')"
+          />
           <span class="campo">
             <label :for="`ade-motivo-${a.id}`">{{ t('ataEmpenho.adesao.motivo') }}</label>
             <input :id="`ade-motivo-${a.id}`" v-model="motivo" maxlength="500" data-testid="ade-motivo" />
           </span>
-          <SanteBotao variante="secundario" data-testid="ade-negar" @click="decidir(a, 'negar')">{{
-            t('ataEmpenho.adesao.negar')
-          }}</SanteBotao>
+          <SanteBotao
+            variante="secundario"
+            :rotulo="t('ataEmpenho.adesao.negar')"
+            data-testid="ade-negar"
+            @acionar="decidir(a, 'negar')"
+          />
         </div>
       </template>
     </article>

@@ -45,11 +45,18 @@ const comunicacao = (id: number, extra: Record<string, unknown>) => ({
 test.describe('Comunicação de internação recebida pela operadora @C1-108 @fase7', () => {
   test.setTimeout(180_000);
 
-  test('pendente primeiro, identifica a carteira e aceita; a outra é recusada com motivo; axe', async ({ page }) => {
+  test('pendente primeiro, identifica a carteira e aceita; a outra é recusada com motivo; axe', async ({
+    page,
+  }) => {
     const enviados: { caminho: string; corpo: Record<string, unknown> }[] = [];
     const itens = [
       comunicacao(1, {}),
-      comunicacao(2, { tipoEvento: 'alta', tipoInternacao: null, motivoEncerramento: '12', recemNascido: true }),
+      comunicacao(2, {
+        tipoEvento: 'alta',
+        tipoInternacao: null,
+        motivoEncerramento: '12',
+        recemNascido: true,
+      }),
       comunicacao(3, { situacao: 'aceita', beneficiario: 7, matricula: 'SINT-MAT-3' }),
     ];
     await page.route('**/api/operadora/troca-tiss**', (r) => json(r, { itens: [] }));

@@ -25,6 +25,15 @@ export interface ProblemDetails {
   readonly dependentes?: readonly DependenteDoProblema[];
   readonly podeInativar?: boolean;
   readonly regras?: readonly RegraDoProblema[];
+  readonly pendencias?: readonly PendenciaDoProblema[];
+}
+
+/** C2-028: documento exigido pendente que recusou o passo (regra, modelo, título e momento; sem dado clínico). */
+export interface PendenciaDoProblema {
+  readonly regra: number;
+  readonly modelo: number;
+  readonly titulo: string;
+  readonly momento: string;
 }
 
 /** Um motivo da recusa (código e mensagem em português): a recusa com vários motivos leva todos de uma vez. */
@@ -40,6 +49,7 @@ export interface ExtrasProblema {
   readonly dependentes?: readonly DependenteDoProblema[];
   readonly podeInativar?: boolean;
   readonly regras?: readonly RegraDoProblema[];
+  readonly pendencias?: readonly PendenciaDoProblema[];
 }
 
 export class ErroOperacao extends Error {

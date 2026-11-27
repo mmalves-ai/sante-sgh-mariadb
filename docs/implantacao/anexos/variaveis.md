@@ -161,6 +161,7 @@ servidor, nunca em repositório, e-mail ou chamado.
 | `PACS_WORKLIST` | opcional |  | Lista de trabalho do PACS. Vazio: o padrão do ambiente. |
 | `PESSOAS_CONSELHO_DIARIO` | opcional |  | Conferência diária dos conselhos profissionais. Vazio: o padrão do ambiente. |
 | `CONTRATOS_ALERTA_DIARIO` | opcional |  | Alerta diário de vencimento dos contratos com fornecedores. Vazio: o padrão do ambiente. |
+| `CANCELAMENTO_CONTRATO_DIARIO` | opcional |  | Efetivação diária dos cancelamentos de contrato de plano vencidos. Vazio: o padrão do ambiente. |
 | `REDE_MPI_NOTURNO` | opcional |  | Carga noturna do índice de pacientes da rede. Vazio: o padrão do ambiente. |
 | `ENFERMAGEM_VIGIA` | opcional |  | Vigia dos horários da enfermagem. Vazio: o padrão do ambiente. |
 | `ENFERMAGEM_VIGIA_CONTENCAO` | opcional |  | Vigia da contenção mecânica vencida (aviso ao prescritor; "nao" desliga). Vazio: o padrão do ambiente. |

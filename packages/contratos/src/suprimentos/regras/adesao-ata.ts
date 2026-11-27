@@ -142,7 +142,9 @@ export function conferirAdesao(a: AdesaoParaConferir): RecusaSuprimentos[] {
     if (a.ataPropria.situacao !== 'vigente')
       r.push(recusa('ata-nao-vigente', 'A ata não está vigente.', ['ata']));
     else if (a.dataSolicitacao < a.ataPropria.vigenciaInicio || a.dataSolicitacao > a.ataPropria.vigenciaFim)
-      r.push(recusa('adesao-fora-da-vigencia', 'A solicitação está fora da vigência da ata.', ['dataSolicitacao']));
+      r.push(
+        recusa('adesao-fora-da-vigencia', 'A solicitação está fora da vigência da ata.', ['dataSolicitacao']),
+      );
     if (a.valorUnitario > a.ataPropria.valorRegistrado)
       r.push(
         recusa(
@@ -187,7 +189,9 @@ export interface DecisaoAdesaoParaConferir {
 /** As recusas da decisão da adesão (autorizar ou negar). */
 export function conferirDecisaoAdesao(d: DecisaoAdesaoParaConferir): RecusaSuprimentos[] {
   if (d.situacao !== 'solicitada' && d.situacao !== 'em_analise')
-    return [recusa('adesao-ja-decidida', `A adesão está ${d.situacao}: só a solicitada ou em análise é decidida.`)];
+    return [
+      recusa('adesao-ja-decidida', `A adesão está ${d.situacao}: só a solicitada ou em análise é decidida.`),
+    ];
   if (d.decisao === 'negar')
     return (d.motivo ?? '').trim().length < 10
       ? [recusa('adesao-sem-motivo', 'Descreva o motivo da negação (ao menos 10 letras).', ['motivo'])]

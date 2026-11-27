@@ -91,7 +91,12 @@ export const mensagensSusEstabelecimento = {
     resolver: 'Resolver',
     resolvida: 'Resolvida',
     pendente: 'Pendente',
-    colunas: { gravidade: 'Gravidade', categoria: 'Categoria', mensagem: 'Divergência', situacao: 'Situação' },
+    colunas: {
+      gravidade: 'Gravidade',
+      categoria: 'Categoria',
+      mensagem: 'Divergência',
+      situacao: 'Situação',
+    },
     gravidades: { erro: 'Erro', alerta: 'Alerta', informacao: 'Informação' },
     resumoGravidade: 'Erros: {erro} · alertas: {alerta} · informações: {informacao}',
   },

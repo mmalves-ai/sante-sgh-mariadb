@@ -107,7 +107,8 @@ const esquemaResposta = z.discriminatedUnion('acao', [
 ]);
 const idDaRota = (v: string): number => {
   const r = idRota.safeParse(v);
-  if (!r.success) throw new ErroProblema('entrada-invalida', 400, 'Parâmetros inválidos', 'Identificador inválido.');
+  if (!r.success)
+    throw new ErroProblema('entrada-invalida', 400, 'Parâmetros inválidos', 'Identificador inválido.');
   return r.data;
 };
 
@@ -248,7 +249,9 @@ export class TrocaTissOperadoraController {
   @Post(ROTAS_TROCA_TISS.identificar)
   @HttpCode(200)
   @Permissao(PERM_RECEBER)
-  @AuditadoNoHandler('operadora.troca-tiss.comunicacao.identificar (comunicacao_internacao_recebida) com a trilha')
+  @AuditadoNoHandler(
+    'operadora.troca-tiss.comunicacao.identificar (comunicacao_internacao_recebida) com a trilha',
+  )
   async identificar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
     const e = corpo(esquemaIdentificar, b);
@@ -274,13 +277,17 @@ export class TrocaTissOperadoraController {
   @Post(ROTAS_TROCA_TISS.responder)
   @HttpCode(200)
   @Permissao(PERM_RECEBER)
-  @AuditadoNoHandler('operadora.troca-tiss.comunicacao.aceitar|recusar (comunicacao_internacao_recebida) com a trilha')
+  @AuditadoNoHandler(
+    'operadora.troca-tiss.comunicacao.aceitar|recusar (comunicacao_internacao_recebida) com a trilha',
+  )
   async responder(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const n = idDaRota(id);
     const e = corpo(esquemaResposta, b);
     const s = await this.exigir(req, CHAVE_OPERADORA_CONTAS);
     const op =
-      e.acao === 'aceitar' ? 'operadora.troca-tiss.comunicacao.aceitar' : 'operadora.troca-tiss.comunicacao.recusar';
+      e.acao === 'aceitar'
+        ? 'operadora.troca-tiss.comunicacao.aceitar'
+        : 'operadora.troca-tiss.comunicacao.recusar';
     return this.porta
       .responderComunicacao(
         s.porta,

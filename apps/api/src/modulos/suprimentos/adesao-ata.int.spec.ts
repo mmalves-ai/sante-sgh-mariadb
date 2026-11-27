@@ -40,9 +40,12 @@ describe.skipIf(SEM_BANCO)('adesão à ata de registro de preços (MariaDB)', ()
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't-c2017-ade' }, (l) => l.uma<L>(sql, p));
   const contar = async () =>
     Number(
-      (await um('SELECT COUNT(*) AS n FROM adesao_ata_registro_preco WHERE estabelecimento_id IN (?, ?)', [m.estA, m.estB]))?.[
-        'n'
-      ],
+      (
+        await um('SELECT COUNT(*) AS n FROM adesao_ata_registro_preco WHERE estabelecimento_id IN (?, ?)', [
+          m.estA,
+          m.estB,
+        ])
+      )?.['n'],
     );
   const adesao = (x: Partial<EntradaAdesao> = {}): EntradaAdesao => ({
     numero: `AD${MARCA}`,
@@ -82,7 +85,9 @@ describe.skipIf(SEM_BANCO)('adesão à ata de registro de preços (MariaDB)', ()
           vigenciaFim: fim,
           processo: null,
           observacao: null,
-          itens: [{ insumo: m.insumo, fornecedor: m.fornecedor, quantidade: 100, valorUnitario: 2.5, marca: null }],
+          itens: [
+            { insumo: m.insumo, fornecedor: m.fornecedor, quantidade: 100, valorUnitario: 2.5, marca: null },
+          ],
         },
         k(),
       )
@@ -93,12 +98,18 @@ describe.skipIf(SEM_BANCO)('adesão à ata de registro de preços (MariaDB)', ()
     if (!nucleo) return;
     if (m)
       await nucleo.escrever({ cliente: CLIENTE, correlacao: 't-c2017-ade-limpa' }, async (e) => {
-        await e.executar('DELETE FROM adesao_ata_registro_preco WHERE estabelecimento_id IN (?, ?)', [m.estA, m.estB]);
+        await e.executar('DELETE FROM adesao_ata_registro_preco WHERE estabelecimento_id IN (?, ?)', [
+          m.estA,
+          m.estB,
+        ]);
         await e.executar(
           'DELETE i FROM ata_registro_preco_item i JOIN ata_registro_preco a ON a.id = i.ata_registro_preco_id WHERE a.estabelecimento_id IN (?, ?)',
           [m.estA, m.estB],
         );
-        await e.executar('DELETE FROM ata_registro_preco WHERE estabelecimento_id IN (?, ?)', [m.estA, m.estB]);
+        await e.executar('DELETE FROM ata_registro_preco WHERE estabelecimento_id IN (?, ?)', [
+          m.estA,
+          m.estB,
+        ]);
         await limparTrilhaDaMassa(e, { ids: [m.estA, m.estB] });
       });
     await limparMassa(nucleo, m);
@@ -143,12 +154,21 @@ describe.skipIf(SEM_BANCO)('adesão à ata de registro de preços (MariaDB)', ()
     expect(await codigoDe(porta.decidirAdesao(cA, r.id, { ...decisao, aceiteFornecedor: true }, k()))).toBe(
       'adesao-inexistente',
     );
-    await porta.decidirAdesao(cB, r.id, { ...decisao, aceiteFornecedor: true, aceiteFornecedorEm: hoje }, k());
+    await porta.decidirAdesao(
+      cB,
+      r.id,
+      { ...decisao, aceiteFornecedor: true, aceiteFornecedorEm: hoje },
+      k(),
+    );
     const autorizada = await um(
       'SELECT situacao, quantidade_aderida, numero_oficio, oficio_autorizado, aceite_fornecedor, documentacao_conferida, avaliador_usuario_id, avaliado_em FROM adesao_ata_registro_preco WHERE id = ?',
       [r.id],
     );
-    expect(autorizada).toMatchObject({ situacao: 'autorizada', numero_oficio: 'OF-1/2026', avaliador_usuario_id: m.usuario });
+    expect(autorizada).toMatchObject({
+      situacao: 'autorizada',
+      numero_oficio: 'OF-1/2026',
+      avaliador_usuario_id: m.usuario,
+    });
     expect(Number(autorizada?.['quantidade_aderida'])).toBe(30);
     expect(Number(autorizada?.['oficio_autorizado'])).toBe(1);
     expect(Number(autorizada?.['aceite_fornecedor'])).toBe(1);
@@ -156,7 +176,9 @@ describe.skipIf(SEM_BANCO)('adesão à ata de registro de preços (MariaDB)', ()
 
     // O mesmo órgão já ocupa 30 (a aderida): mais 21 passaria de 50.
     expect(
-      await codigoDe(porta.solicitarAdesao(cB, adesao({ numero: `AE${MARCA}`, quantidadeSolicitada: 21 }), k())),
+      await codigoDe(
+        porta.solicitarAdesao(cB, adesao({ numero: `AE${MARCA}`, quantidadeSolicitada: 21 }), k()),
+      ),
     ).toBe('adesao-acima-do-limite-do-orgao');
     expect((await porta.adesoes(cB)).find((a) => a.id === r.id)).toMatchObject({
       situacao: 'autorizada',
@@ -168,7 +190,13 @@ describe.skipIf(SEM_BANCO)('adesão à ata de registro de preços (MariaDB)', ()
 
   it('a ata de outro órgão grava o gerenciador e a negação guarda o motivo', async () => {
     expect(
-      await codigoDe(porta.solicitarAdesao(cA, adesao({ numero: `AX${MARCA}`, ata: null, quantidadeRegistrada: 200, valorUnitario: 4 }), k())),
+      await codigoDe(
+        porta.solicitarAdesao(
+          cA,
+          adesao({ numero: `AX${MARCA}`, ata: null, quantidadeRegistrada: 200, valorUnitario: 4 }),
+          k(),
+        ),
+      ),
     ).toBe('adesao-sem-gerenciador');
     const r = await porta.solicitarAdesao(
       cA,
@@ -183,13 +211,23 @@ describe.skipIf(SEM_BANCO)('adesão à ata de registro de preços (MariaDB)', ()
       }),
       k(),
     );
-    const v = Number((await um('SELECT versao FROM adesao_ata_registro_preco WHERE id = ?', [r.id]))?.['versao']);
-    expect(await codigoDe(porta.decidirAdesao(cA, r.id, { decisao: 'negar', versao: v, motivo: 'curto' }, k()))).toBe(
-      'adesao-sem-motivo',
+    const v = Number(
+      (await um('SELECT versao FROM adesao_ata_registro_preco WHERE id = ?', [r.id]))?.['versao'],
     );
-    await porta.decidirAdesao(cA, r.id, { decisao: 'negar', versao: v, motivo: 'Gerenciador não autorizou a adesão.' }, k());
     expect(
-      await um('SELECT situacao, orgao_gerenciador, numero_pregao, motivo_decisao FROM adesao_ata_registro_preco WHERE id = ?', [r.id]),
+      await codigoDe(porta.decidirAdesao(cA, r.id, { decisao: 'negar', versao: v, motivo: 'curto' }, k())),
+    ).toBe('adesao-sem-motivo');
+    await porta.decidirAdesao(
+      cA,
+      r.id,
+      { decisao: 'negar', versao: v, motivo: 'Gerenciador não autorizou a adesão.' },
+      k(),
+    );
+    expect(
+      await um(
+        'SELECT situacao, orgao_gerenciador, numero_pregao, motivo_decisao FROM adesao_ata_registro_preco WHERE id = ?',
+        [r.id],
+      ),
     ).toMatchObject({
       situacao: 'negada',
       orgao_gerenciador: 'Secretaria sintética de saúde',

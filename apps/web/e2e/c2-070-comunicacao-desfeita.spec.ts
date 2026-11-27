@@ -33,7 +33,9 @@ const base = {
 };
 
 test.describe('C2-070 comunicação à operadora desfeita @C2-070', () => {
-  test('desfeita mostra quando e por quê; a recebida pela operadora é cancelada junto a ela', async ({ page }) => {
+  test('desfeita mostra quando e por quê; a recebida pela operadora é cancelada junto a ela', async ({
+    page,
+  }) => {
     const pedidos: { caminho: string; corpo: Record<string, unknown> }[] = [];
     const itens: Record<string, unknown>[] = [
       {
@@ -84,7 +86,9 @@ test.describe('C2-070 comunicação à operadora desfeita @C2-070', () => {
     await page.goto('/internacao/123/comunicacoes-operadora');
     await expect(page.getByTestId('tela-comunicacao-operadora')).toBeVisible();
 
-    await expect(page.getByTestId('com-op-desfeita-901')).toContainText('Desfeita em 2026-11-25 11:00: Alta cancelada');
+    await expect(page.getByTestId('com-op-desfeita-901')).toContainText(
+      'Desfeita em 2026-11-25 11:00: Alta cancelada',
+    );
     await expect(page.getByTestId('com-op-retificacao-901')).toBeVisible();
     await expect(page.getByTestId('com-op-desfeita-902')).toContainText('Internação excluída');
     await expect(page.getByTestId('com-op-retificacao-902')).toHaveCount(0);
@@ -95,7 +99,9 @@ test.describe('C2-070 comunicação à operadora desfeita @C2-070', () => {
     await expect(page.getByTestId('com-op-problemas')).toContainText('Informe o motivo.');
     expect(pedidos).toHaveLength(0);
 
-    await page.getByTestId('com-op-motivo-cancelamento-901').fill('Cancelada junto à operadora, protocolo PR-SINT-10');
+    await page
+      .getByTestId('com-op-motivo-cancelamento-901')
+      .fill('Cancelada junto à operadora, protocolo PR-SINT-10');
     await page.getByTestId('com-op-cancelar-operadora-901').click();
     await expect(page.getByTestId('com-op-alta')).toContainText('Cancelada');
     await expect(page.getByTestId('com-op-retificacao-901')).toHaveCount(0);

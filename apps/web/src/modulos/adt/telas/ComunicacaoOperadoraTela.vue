@@ -161,7 +161,12 @@ const verMensagem = async (c: Comunicacao) => {
             </span>
             <span v-if="c.desfeitaEm" class="secundario" :data-testid="`com-op-desfeita-${c.id}`">
               <br />
-              {{ t('adt.leitosSus.comunicacao.desfeita', { quando: quando(c.desfeitaEm), motivo: c.motivoDesfeita }) }}
+              {{
+                t('adt.leitosSus.comunicacao.desfeita', {
+                  quando: quando(c.desfeitaEm),
+                  motivo: c.motivoDesfeita,
+                })
+              }}
             </span>
             <strong v-if="c.retificacaoPendente" :data-testid="`com-op-retificacao-${c.id}`">
               <br />

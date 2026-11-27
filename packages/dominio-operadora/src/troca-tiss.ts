@@ -308,8 +308,7 @@ export function carteiraNormalizada(carteira: string): string {
 }
 
 export type RespostaComunicacao =
-  | { readonly acao: 'aceitar' }
-  | { readonly acao: 'recusar'; readonly motivoRecusa: number | null };
+  { readonly acao: 'aceitar' } | { readonly acao: 'recusar'; readonly motivoRecusa: number | null };
 
 /**
  * A resposta da central à comunicação recebida: só a ainda 'recebida' é respondida; o aceite exige o beneficiário
@@ -322,7 +321,8 @@ export function problemasDaRespostaComunicacao(
   if (atual.situacao !== 'recebida') return [{ codigo: 'comunicacao-ja-respondida', campo: 'situacao' }];
   if (r.acao === 'aceitar' && !atual.beneficiarioIdentificado)
     return [{ codigo: 'carteira-nao-identificada', campo: 'numeroCarteira' }];
-  if (r.acao === 'recusar' && !r.motivoRecusa) return [{ codigo: 'recusa-sem-motivo', campo: 'motivoRecusa' }];
+  if (r.acao === 'recusar' && !r.motivoRecusa)
+    return [{ codigo: 'recusa-sem-motivo', campo: 'motivoRecusa' }];
   return [];
 }
 

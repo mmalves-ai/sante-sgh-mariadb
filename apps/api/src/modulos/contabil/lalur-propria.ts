@@ -753,8 +753,8 @@ const apurar = definirOperacao<z.infer<typeof esquemaApurar>, ResultadoOperacao>
         ? await estimativasAnteriores(tx, ap.estabelecimento, ap.inicio)
         : { irpj: 0, csll: 0 };
     const r = apurarLucroReal({
-      baseEstimativa: estimativa ?? undefined,
-      receitaBrutaCentavos: receita ?? undefined,
+      ...(estimativa ? { baseEstimativa: estimativa } : {}),
+      ...(receita != null ? { receitaBrutaCentavos: receita } : {}),
       percentualPresuncaoIrpj: e.percentualPresuncaoIrpj,
       percentualPresuncaoCsll: e.percentualPresuncaoCsll,
       estimativasAnterioresIrpjCentavos: anteriores.irpj,

@@ -146,7 +146,10 @@ const opcoesCategoria = computed(() =>
   })),
 );
 const opcoesCampo = computed(() =>
-  (definicao.data.value?.sinaisVitais ?? []).map((s) => ({ valor: s.codigo, rotulo: `${s.descricao} (${s.codigo})` })),
+  (definicao.data.value?.sinaisVitais ?? []).map((s) => ({
+    valor: s.codigo,
+    rotulo: `${s.descricao} (${s.codigo})`,
+  })),
 );
 // O campo do sinal vital nasce com o primeiro parâmetro do catálogo do cliente (nunca um código fora dele).
 watch(opcoesCampo, (o) => {
@@ -160,7 +163,8 @@ const problemaCriterio = computed(() => {
   const [mi, ma] = [numero(n.minimo), numero(n.maximo)];
   if (mi !== null && ma !== null && ma < mi) return t(k('problemas.faixa'));
   if (n.categoria !== 'diagnostico' && mi === null && ma === null) return t(k('problemas.valor'));
-  if (n.categoria === 'sinal_vital' && !opcoesCampo.value.some((x) => x.valor === n.campo)) return t(k('semSinais'));
+  if (n.categoria === 'sinal_vital' && !opcoesCampo.value.some((x) => x.valor === n.campo))
+    return t(k('semSinais'));
   return null;
 });
 function incluirNovoCriterio() {
@@ -227,10 +231,15 @@ const metas = ref<Record<number, string>>({});
             @acionar="abrirInclusao(a)"
           />
           <div v-else class="inclusao-alerta">
-            <p v-if="vigentes.isSuccess.value && !vigenteDoAlerta(a)" role="alert">{{ t(k('semVigente')) }}</p>
+            <p v-if="vigentes.isSuccess.value && !vigenteDoAlerta(a)" role="alert">
+              {{ t(k('semVigente')) }}
+            </p>
             <label
               >{{ t(k('horarioZeroSugerido')) }}
-              <input v-model="horarioZero" type="datetime-local" :data-testid="`pc-horario-zero-${a.atendimento}`"
+              <input
+                v-model="horarioZero"
+                type="datetime-local"
+                :data-testid="`pc-horario-zero-${a.atendimento}`"
             /></label>
             <SanteBotao
               :rotulo="t(k('confirmarInclusao'))"

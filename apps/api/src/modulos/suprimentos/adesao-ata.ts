@@ -180,7 +180,9 @@ export async function solicitarAdesao(
     [e.fornecedor],
   );
   if (!f)
-    throw recusa('fornecedor-inativo', 'O fornecedor não está ativo no cadastro.', { campos: ['fornecedor'] });
+    throw recusa('fornecedor-inativo', 'O fornecedor não está ativo no cadastro.', {
+      campos: ['fornecedor'],
+    });
   const propria = e.ata === null ? null : await itemAtaPropria(tx, e.ata, e.insumo, e.fornecedor);
   const orgao = propria ? null : vazio(e.orgaoGerenciador);
   const pregao = vazio(e.numeroPregao);

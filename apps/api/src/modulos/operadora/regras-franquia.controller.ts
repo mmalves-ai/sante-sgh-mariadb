@@ -20,7 +20,11 @@ import {
   sessaoDe,
 } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
-import { type Gravado, PORTA_REGRAS_FRANQUIA, type PortaRegrasFranquiaPropria } from './regras-franquia-propria.js';
+import {
+  type Gravado,
+  PORTA_REGRAS_FRANQUIA,
+  type PortaRegrasFranquiaPropria,
+} from './regras-franquia-propria.js';
 
 const LER = 'operadora.beneficiario.ler';
 const EDITAR = 'operadora.beneficiario.editar';

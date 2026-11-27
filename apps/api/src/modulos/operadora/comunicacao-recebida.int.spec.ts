@@ -111,7 +111,10 @@ describe.skipIf(SEM_BANCO)('comunicação recebida pela operadora (MariaDB, clie
     // A lista traz as pendentes, com a carteira como chegou.
     const pend = await porta.comunicacoes(contexto(m), { situacao: 'recebida' });
     expect(pend.map((x) => x.id)).toEqual(expect.arrayContaining([a.id, b.id]));
-    expect(pend.find((x) => x.id === a.id)).toMatchObject({ numeroCarteira: 'DIGITADA-ERRADA', beneficiario: null });
+    expect(pend.find((x) => x.id === a.id)).toMatchObject({
+      numeroCarteira: 'DIGITADA-ERRADA',
+      beneficiario: null,
+    });
 
     // Aceitar sem identificar, carteira desconhecida e recusa sem motivo: recusados, nada gravado.
     expect(await codigo(porta.responderComunicacao(contexto(m), a.id, 1, { acao: 'aceitar' }, T('x')))).toBe(
@@ -121,7 +124,9 @@ describe.skipIf(SEM_BANCO)('comunicação recebida pela operadora (MariaDB, clie
       'carteira-nao-identificada',
     );
     expect(
-      await codigo(porta.responderComunicacao(contexto(m), b.id, 1, { acao: 'recusar', motivoRecusa: null }, T('x'))),
+      await codigo(
+        porta.responderComunicacao(contexto(m), b.id, 1, { acao: 'recusar', motivoRecusa: null }, T('x')),
+      ),
     ).toBe('recusa-sem-motivo');
 
     // Identifica pela carteira com pontuação e minúsculas, e aceita.
@@ -153,9 +158,9 @@ describe.skipIf(SEM_BANCO)('comunicação recebida pela operadora (MariaDB, clie
     expect(rc).toMatchObject({ situacao: 'recusada' });
 
     // A respondida não muda.
-    expect(
-      await codigo(porta.responderComunicacao(contexto(m), b.id, 2, { acao: 'aceitar' }, T('x'))),
-    ).toBe('comunicacao-ja-respondida');
+    expect(await codigo(porta.responderComunicacao(contexto(m), b.id, 2, { acao: 'aceitar' }, T('x')))).toBe(
+      'comunicacao-ja-respondida',
+    );
 
     const linhas = await ler(
       'SELECT id, situacao, beneficiario_plano_id, motivo_glosa_id, numero_carteira, respondido_em IS NOT NULL AS respondida FROM comunicacao_internacao_recebida WHERE id IN (?, ?) ORDER BY id',
@@ -169,7 +174,12 @@ describe.skipIf(SEM_BANCO)('comunicação recebida pela operadora (MariaDB, clie
         numero_carteira: 'DIGITADA-ERRADA',
         respondida: 1,
       }),
-      expect.objectContaining({ situacao: 'recusada', beneficiario_plano_id: null, motivo_glosa_id: motivo, respondida: 1 }),
+      expect.objectContaining({
+        situacao: 'recusada',
+        beneficiario_plano_id: null,
+        motivo_glosa_id: motivo,
+        respondida: 1,
+      }),
     ]);
     const trilha = await ler(
       "SELECT entidade_id FROM trilha_auditoria WHERE entidade = 'comunicacao_internacao_recebida' AND entidade_id IN (?, ?)",
