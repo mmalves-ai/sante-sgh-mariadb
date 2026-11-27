@@ -874,6 +874,8 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     bloqueado: false,
     senhaAlteradaEm: new Date(),
     concessoes: { grupo: 'DIRETORIA', opcoesGrupo: [6785, 6789, 6790, 2517, 2324, 1169, 3990, 2378] },
+    // C2-077 (01-REL L112): a diretoria clínica apura no mês os indicadores obrigatórios de internação.
+    perfisConcedidos: ['diretoria-clinica'],
   },
   // M23: a equipe multiprofissional (a matriz ação × categoria vem da ocupação; o prontuário de uso diário).
   /** Enfermagem com conselho: registra, pede parecer, alergia, anexo; sem atestado médico nem receita. */

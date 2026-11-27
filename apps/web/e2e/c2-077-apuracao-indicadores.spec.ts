@@ -71,7 +71,8 @@ test.describe('Apuração dos indicadores de internação @C2-077 @fase3', () =>
       return json(r, { competencia, apuracoes: [] });
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    // A diretoria lê os indicadores hospitalares (o administrador do sistema não tem a leitura) e apura o mês.
+    await entrar(page, 'SINT.DIRETORIA');
     await page.goto('/relatorios/indicadores');
     await page.getByTestId('link-apuracao-indicadores').click();
     await expect(page).toHaveURL(/\/relatorios\/apuracao-indicadores/);

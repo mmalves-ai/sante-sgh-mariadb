@@ -269,7 +269,6 @@ const uso = useMutation({
               type="button"
               class="pg-painel"
               :aria-pressed="aberto === p.id"
-              :aria-label="t('abrir', { nome: p.nome })"
               :data-testid="`pg-painel-${p.id}`"
               @click="aberto = p.id"
             >
