@@ -3739,6 +3739,9 @@ const OPERACOES: Readonly<Record<string, Manipulador>> = {
 
 /** As tabelas que as operações do estoque gravam. */
 export const TABELAS_OPERACOES_SUPRIMENTOS = [
+  // C2-112: a nota de entrada do pedido consome as reservas orçamentárias e grava o ajuste da nota
+  // (consumirReservasDoPedidoNaNota); sem elas a nota de pedido com reserva falhava com erro interno.
+  ...TABELAS_CONTROLE_NO_DOCUMENTO,
   // C2-024: a saída consome as etiquetas lidas (etiqueta-identificacao.ts, consumirEtiquetas).
   'etiqueta_identificacao',
   'documento_estoque',
