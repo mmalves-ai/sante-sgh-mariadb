@@ -679,7 +679,7 @@ motivo_glosa_fonte_pagadora	FAT	vinculo	F7	De-para do código de glosa próprio 
 motivo_pendencia_guia	FAT	dominio	F3	Motivos de pendência de guia	R1#24; MV: MOTIVO_PENDENCIA_GUIA	06	1
 motivo_reabertura_conta	FAT	dominio	F3	Motivos de reabertura de conta já fechada	R1#12; new-sgh: reabrir conta	06	0
 motivo_transferencia_conta	FAT	dominio	F3	Motivos de transferência de conta ou de itens	R1#14; MV: MOTIVO_TRANSFERENCIA	06	2
-nota_fatura	FAT	vinculo	F3	Liga a fatura ou conta à nota fiscal de serviço emitida	R1#36; SP: FCTPPGTONFSE; MV: ITFAT_NOTA_FISCAL*; dep: nota fiscal (07)	06	2
+nota_fatura	FAT	vinculo	F3	Liga a fatura ou conta à nota fiscal de serviço emitida	R1#36; SP: FCTPPGTONFSE; MV: ITFAT_NOTA_FISCAL*; dep: nota fiscal (07); decisão 38 (decisoes-tomadas.md, 26/11): mantida enquanto o conector a carrega (mapa linha 566); o produto usa vinculo_nota_faturamento; aposentada por migração 9x quando o conector carregar no vínculo	06	2
 orcamento_particular	FAT	principal	F3	Orçamento ao paciente particular, com validade, aceite e conta gerada	R1#40; SP: FCORCAME; MV: VAL_PROC_ORCAMENTO*; conflitos: dono 06	06	4
 orcamento_particular_item	FAT	item	F3	Itens do orçamento de qualquer tipo (procedimento, exame, diária, mat/med, honorário)	R1#40; MV: ITVAL_PROC_ORCAMENTO*	06	5
 origem_lancamento	FAT	dominio	F3	Origens do lançamento: manual, prescrição, diagnóstico, centro cirúrgico, kit, regra, importação	R1#16	06	0
