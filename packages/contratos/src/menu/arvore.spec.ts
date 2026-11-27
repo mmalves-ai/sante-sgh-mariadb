@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 525, M: 198, P: 57, N: 270 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 526, M: 198, P: 57, N: 271 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(525);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(526);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -134,6 +134,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/admin/pagina-inicial', // C2-039 (01-ADM L114)
         '/administracao/acesso/grupos', // M06
         '/administracao/acesso/permissoes', // M10 (o mapa do M06 e Perfis e permissões abrem dela)
+        '/administracao/acesso/provedores-identidade', // C2-010 (01-ADM L61)
         '/administracao/acesso/quebras-de-vidro',
         '/administracao/acesso/simulador', // M10 (D-MENU-2: o item da árvore abre o simulador)
         '/administracao/acesso/termo',

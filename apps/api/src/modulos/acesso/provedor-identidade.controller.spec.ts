@@ -76,7 +76,7 @@ describe('ProvedorIdentidadeController: volta do provedor', () => {
     const sessao = await m.voltar();
     expect(sessao).toEqual({ login: 'conta.sintetica' });
     expect(vi.mocked(m.porta.resolverEntrada).mock.calls[0]![2]).toMatchObject({ grupos: ['cn=enf'] });
-    expect(m.entrar.mock.calls[0]![0]).toEqual({
+    expect((m.entrar.mock.calls[0] as unknown[])[0]).toEqual({
       estabelecimento: 'pc',
       login: 'conta.sintetica',
       codigoSegundoFator: undefined,

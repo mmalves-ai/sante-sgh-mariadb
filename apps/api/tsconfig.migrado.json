@@ -1704,6 +1704,11 @@
     "src/modulos/financeiro/nota-mercadoria-permissao.spec.ts",
     "src/modulos/financeiro/entrada-servico-permissao.spec.ts",
     "src/modulos/financeiro/aplicacao/periodo-financeiro.int.spec.ts",
-    "src/modulos/financeiro/api/periodo-rotas.int.spec.ts"
+    "src/modulos/financeiro/api/periodo-rotas.int.spec.ts",
+    "src/modulos/acesso/entrada-oidc.ts",
+    "src/modulos/acesso/provedor-identidade.controller.ts",
+    "src/modulos/acesso/provedor-identidade.controller.spec.ts",
+    "src/modulos/acesso/provedor-identidade-propria.ts",
+    "src/modulos/acesso/provedor-identidade-propria.int.spec.ts"
   ]
 }
