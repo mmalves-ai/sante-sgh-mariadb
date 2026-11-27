@@ -25,7 +25,12 @@ const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L57U';
 const NOVO = `${P}.NOVA`;
 const RAIZ = resolve(import.meta.dirname, '../../../../..');
-const MIGRACAO = 'db/migracoes/02_ADM/94_escopo_usuario_vigente_tabelas.sql';
+const MIGRACOES = [
+  'db/migracoes/02_ADM/94_escopo_usuario_vigente_tabelas.sql',
+  // Finalidade do convênio (atendimento ou faturamento), aplicada duas vezes para provar que é idempotente.
+  'db/migracoes/02_ADM/99zb_usuario_fonte_pagadora_finalidade_tabelas.sql',
+  'db/migracoes/02_ADM/99zb_usuario_fonte_pagadora_finalidade_tabelas.sql',
+];
 const ontemLocal = (): string => {
   const d = new Date();
   d.setDate(d.getDate() - 1);
@@ -89,10 +94,11 @@ describe.skipIf(SEM_BANCO)('cadastro da conta no banco próprio (MariaDB, client
   beforeAll(async () => {
     const banco = (await nucleo.cliente(CLIENTE)).banco;
     if (banco !== `cliente_${CLIENTE}`) throw new Error('Cliente de teste inesperado.');
-    execFileSync('sh', [resolve(RAIZ, 'tools/db/sql.sh'), banco], {
-      input: readFileSync(resolve(RAIZ, MIGRACAO), 'utf8'),
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    for (const m of MIGRACOES)
+      execFileSync('sh', [resolve(RAIZ, 'tools/db/sql.sh'), banco], {
+        input: readFileSync(resolve(RAIZ, m), 'utf8'),
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
     await limpar();
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-l57u' }, async (e) => {
       const agora = new Date();
@@ -407,6 +413,47 @@ describe.skipIf(SEM_BANCO)('cadastro da conta no banco próprio (MariaDB, client
       usuario_tipo_prontuario: true,
       usuario_unidade: true,
     });
+  });
+
+  it('convênio do faturamento: concessão à parte da do atendimento, mesma tabela pela finalidade; retirada lógica; trilha', async () => {
+    const id = Number((await um<{ id: number }>('SELECT id FROM usuario WHERE login = ?', [NOVO])).id);
+    await exec('acesso.concederConvenioUsuario', { login: NOVO, valor: convenio });
+    await exec('acesso.concederConvenioFaturamentoUsuario', { login: NOVO, valor: convenio });
+    let f = await fonte.fichaUsuario(c, NOVO, false);
+    expect([f?.escopos['convenio']?.length, f?.escopos['convenioFaturamento']?.map((x) => x.valor)]).toEqual([
+      1,
+      [String(convenio)],
+    ]);
+    expect(
+      await codigo(exec('acesso.concederConvenioFaturamentoUsuario', { login: NOVO, valor: convenio })),
+    ).toBe('ja-concedido');
+    expect(
+      await codigo(exec('acesso.concederConvenioFaturamentoUsuario', { login: NOVO, valor: 999999999 })),
+    ).toBe('valor-inexistente');
+    // Retirar o do faturamento não mexe no do atendimento.
+    await exec('acesso.retirarConvenioFaturamentoUsuario', { login: NOVO, valor: convenio });
+    f = await fonte.fichaUsuario(c, NOVO, false);
+    expect([f?.escopos['convenio']?.length, f?.escopos['convenioFaturamento']]).toEqual([1, []]);
+    expect(
+      await codigo(exec('acesso.retirarConvenioFaturamentoUsuario', { login: NOVO, valor: convenio })),
+    ).toBe('nao-concedido');
+    await exec('acesso.retirarConvenioUsuario', { login: NOVO, valor: convenio });
+    const n = await um<Record<string, unknown>>(
+      `SELECT SUM(finalidade = 'faturamento' AND excluido_em IS NOT NULL AND excluido_por = ?) AS fat,
+              SUM(finalidade = 'atendimento' AND excluido_em IS NULL) AS vig FROM usuario_fonte_pagadora WHERE usuario_id = ?`,
+      [gestor, id],
+    );
+    expect([Number(n['fat']), Number(n['vig'])]).toEqual([1, 0]);
+    // O vocabulário da finalidade é do banco (CHECK).
+    expect(
+      await codigo(
+        nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-l57u-ck' }, (e) =>
+          e.executar("UPDATE usuario_fonte_pagadora SET finalidade = 'outra' WHERE usuario_id = ? LIMIT 1", [
+            id,
+          ]),
+        ),
+      ),
+    ).toMatch(/^outro: .*(CONSTRAINT|ck_usuario_fonte_pagadora_finalidade)/i);
   });
 
   it('nada vaza para outro estabelecimento: conta de lá e conta inexistente recusadas', async () => {

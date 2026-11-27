@@ -889,7 +889,12 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         ),
         convenio: await escopo(
           `SELECT fp.id AS valor, fp.nome AS rotulo FROM usuario_fonte_pagadora x JOIN fonte_pagadora fp ON fp.id = x.fonte_pagadora_id
-            WHERE x.usuario_id = ? AND x.excluido_em IS NULL ORDER BY fp.nome`,
+            WHERE x.usuario_id = ? AND x.excluido_em IS NULL AND x.finalidade = 'atendimento' ORDER BY fp.nome`,
+          [id],
+        ),
+        convenioFaturamento: await escopo(
+          `SELECT fp.id AS valor, fp.nome AS rotulo FROM usuario_fonte_pagadora x JOIN fonte_pagadora fp ON fp.id = x.fonte_pagadora_id
+            WHERE x.usuario_id = ? AND x.excluido_em IS NULL AND x.finalidade = 'faturamento' ORDER BY fp.nome`,
           [id],
         ),
         tipoAgenda: await escopo(
@@ -983,6 +988,10 @@ export class FonteAdministracaoPropria implements FonteAdministracao {
         ),
         // Fonte pagadora é cadastro da rede inteira (sem estabelecimento_id).
         convenio: await q(
+          "SELECT id AS valor, nome AS rotulo FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome",
+          [],
+        ),
+        convenioFaturamento: await q(
           "SELECT id AS valor, nome AS rotulo FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome",
           [],
         ),

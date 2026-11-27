@@ -219,7 +219,15 @@ const operacaoTrocarGrupo = definirOperacao({
 const ESCOPOS: Partial<
   Record<
     TipoEscopo,
-    { tabela: string; coluna: string; valida: string; noEst: boolean; extras?: Record<string, unknown> }
+    {
+      tabela: string;
+      coluna: string;
+      valida: string;
+      noEst: boolean;
+      extras?: Record<string, unknown>;
+      /** Condição fixa da concessão (a finalidade do convênio), na busca da vigente e na gravação (extras). */
+      filtro?: string;
+    }
   >
 > = {
   unidade: {
@@ -241,6 +249,17 @@ const ESCOPOS: Partial<
     coluna: 'fonte_pagadora_id',
     valida: "SELECT id FROM fonte_pagadora WHERE id = ? AND situacao = 'ativa' AND excluido_em IS NULL",
     noEst: false,
+    extras: { finalidade: 'atendimento' },
+    filtro: "finalidade = 'atendimento'",
+  },
+  // Convênio do faturamento: a conta fatura a produção do convênio (migração 02_ADM/99zb, coluna finalidade).
+  convenioFaturamento: {
+    tabela: 'usuario_fonte_pagadora',
+    coluna: 'fonte_pagadora_id',
+    valida: "SELECT id FROM fonte_pagadora WHERE id = ? AND situacao = 'ativa' AND excluido_em IS NULL",
+    noEst: false,
+    extras: { finalidade: 'faturamento' },
+    filtro: "finalidade = 'faturamento'",
   },
   // Tipo de agenda liberado: a pessoa consulta, marca e cancela nas agendas desse tipo.
   tipoAgenda: {
@@ -275,7 +294,7 @@ function operacaoEscopo(tipo: TipoEscopo, conceder: boolean) {
           : null;
       const [atual] = Number.isInteger(valor)
         ? await tx.consultarParaAtualizar(
-            `SELECT id, versao FROM ${d.tabela} WHERE usuario_id = ? AND ${d.coluna} = ? AND excluido_em IS NULL`,
+            `SELECT id, versao FROM ${d.tabela} WHERE usuario_id = ? AND ${d.coluna} = ? AND excluido_em IS NULL${d.filtro ? ` AND ${d.filtro}` : ''}`,
             [u.id, valor],
             { teto: 1 },
           )
@@ -315,6 +334,8 @@ export const OPERACOES_USUARIO_PROPRIA = {
   'acesso.retirarLocalUsuario': operacaoEscopo('local', false),
   'acesso.concederConvenioUsuario': operacaoEscopo('convenio', true),
   'acesso.retirarConvenioUsuario': operacaoEscopo('convenio', false),
+  'acesso.concederConvenioFaturamentoUsuario': operacaoEscopo('convenioFaturamento', true),
+  'acesso.retirarConvenioFaturamentoUsuario': operacaoEscopo('convenioFaturamento', false),
   'acesso.concederTipoAgendaUsuario': operacaoEscopo('tipoAgenda', true),
   'acesso.retirarTipoAgendaUsuario': operacaoEscopo('tipoAgenda', false),
   'acesso.concederTipoProntuarioUsuario': operacaoEscopo('tipoProntuario', true),
