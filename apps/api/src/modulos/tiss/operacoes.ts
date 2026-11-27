@@ -55,6 +55,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { civil } from '../exames/relogio.js';
+import { consumirAprovacaoAlcada } from '../faturamento/alcada-pedido-propria.js';
 import { versaoNumero } from '../faturamento/esquemas.js';
 import { abatimentoComercialDaConta } from '../faturamento/regras-comerciais-propria.js';
 import {
@@ -1048,12 +1049,17 @@ const fecharCompetencia = definirOperacao<FecharCompetenciaEntrada, ResultadoOpe
 /**
  * Reabre a competência fechada do convênio (com motivo): a linha do fechamento passa a `reaberta` com quando, quem e
  * o motivo, e o ciclo ganha a linha da reabertura (o retrato de cada fechamento fica no seu ciclo). Conta da
- * competência já em lote exige a confirmação do impacto (regra do domínio). A alçada é a permissão
+ * competência já em lote exige a confirmação do impacto (regra do domínio) e a aprovação pela alçada do faturamento
+ * (pedido fat_reabertura_competencia aprovado por outro usuário, consumido aqui). A permissão é
  * `faturamento.competencia.reabrir`, conferida pelo executor antes da gravação.
  */
 const reabrirCompetencia = definirOperacao<ReabrirCompetenciaEntrada, ResultadoOperacao>({
   nome: 'faturamento.reabrir-competencia',
-  tabelas: ['fechamento_competencia_fonte_pagadora', 'ciclo_competencia_fonte_pagadora'],
+  tabelas: [
+    'fechamento_competencia_fonte_pagadora',
+    'ciclo_competencia_fonte_pagadora',
+    'pedido_alcada_faturamento',
+  ],
   entrada: esquemaReabrirCompetencia,
   async gravar(tx, e, ctx) {
     const est = estabelecimentoDe(ctx);
@@ -1082,6 +1088,16 @@ const reabrirCompetencia = definirOperacao<ReabrirCompetenciaEntrada, ResultadoO
       confirmarImpacto: e.confirmarImpacto,
     });
     if (r) throw recusa(r.codigo, r.mensagem);
+    // Com contas já apresentadas, a reabertura passa pela alçada do faturamento (C1-135): consome o pedido aprovado
+    // por outro usuário com a alçada do valor apresentado; sem ele, recusa dizendo como pedir.
+    if (impacto.contasApresentadas > 0)
+      await consumirAprovacaoAlcada(
+        tx,
+        est,
+        'fat_reabertura_competencia',
+        n(atual!['id']),
+        impacto.valorApresentado,
+      );
     const agora = new Date();
     const motivo = e.motivo.trim().slice(0, 250);
     await tx.alterar('fechamento_competencia_fonte_pagadora', n(atual!['id']), n(atual!['versao']), {

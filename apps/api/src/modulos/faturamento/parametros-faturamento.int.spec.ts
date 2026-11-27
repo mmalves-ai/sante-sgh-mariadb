@@ -7,11 +7,14 @@
 import { randomUUID } from 'node:crypto';
 import {
   type ContextoOperacao,
+  definirOperacao,
   type Escritor,
   ErroOperacao,
   type Executor,
   NucleoProprio,
 } from '@sgh/nucleo';
+import { z } from 'zod';
+import { consumirAprovacaoAlcada, listarPedidosAlcada } from './alcada-pedido-propria.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ServicoParametrosFaturamento } from './parametros-faturamento.controller.js';
@@ -78,6 +81,10 @@ describe.skipIf(SEM_BANCO)('parâmetros, preferências e alçada do faturamento 
       'DELETE nv FROM alcada_aprovacao_nivel nv JOIN alcada_aprovacao a ON a.id = nv.alcada_aprovacao_id WHERE a.estabelecimento_id = ?',
       [ids['est']],
     );
+    await e.executar('DELETE FROM pedido_alcada_faturamento WHERE estabelecimento_id = ?', [ids['est']]);
+    await e.executar('DELETE FROM fechamento_competencia_fonte_pagadora WHERE estabelecimento_id = ?', [
+      ids['est'],
+    ]);
     await e.executar('DELETE FROM alcada_aprovacao WHERE estabelecimento_id = ?', [ids['est']]);
     await e.executar('DELETE FROM usuario_perfil WHERE estabelecimento_id = ?', [ids['est']]);
   };
@@ -293,5 +300,95 @@ describe.skipIf(SEM_BANCO)('parâmetros, preferências e alçada do faturamento 
     expect(
       await codigoDo(s.ler(ctxL(), (l, est) => conferirAlcadaFaturamentoNoBanco(l, est, 'outro', 1, 1, 2))),
     ).toBe('documento-invalido');
+  });
+
+  it('pedido e aprovação pela alçada: quem pede não aprova, faixa do decisor, recusa com motivo, aprovação vale uma vez', async () => {
+    const fech = await escrever(async (e) => {
+      const fonte = await e.uma<{ id: number }>('SELECT id FROM fonte_pagadora ORDER BY id LIMIT 1', []);
+      // A alçada da reabertura: nível 1 (cargo FAT1) até 1000; nível 2 (cargo FAT2) sem teto.
+      const tipo = await e.uma<{ id: number }>(
+        "SELECT id FROM tipo_documento_aprovacao WHERE codigo = 'fat_reabertura_competencia'",
+        [],
+      );
+      const a = await e.inserir(
+        `INSERT INTO alcada_aprovacao (estabelecimento_id, tipo_documento_aprovacao_id, descricao, quantidade_niveis,
+           vigencia_inicio, criado_em) VALUES (?, ?, ?, 2, '2026-01-01', NOW(3))`,
+        [ids['est'], Number(tipo!.id), `ALCADA REABERTURA ${P}`],
+      );
+      await e.executar(
+        `INSERT INTO alcada_aprovacao_nivel (alcada_aprovacao_id, sequencia, nivel, perfil_acesso_id,
+           valor_unitario_minimo, valor_unitario_maximo, criado_em) VALUES (?, 1, 1, ?, 0, 1000, NOW(3)), (?, 2, 2, ?, 0, NULL, NOW(3))`,
+        [a, ids['FAT1'], a, ids['FAT2']],
+      );
+      return e.inserir(
+        `INSERT INTO fechamento_competencia_fonte_pagadora (estabelecimento_id, fonte_pagadora_id, competencia,
+           data_abertura, criado_em) VALUES (?, ?, '2026-10-01', '2026-10-01', NOW(3))`,
+        [ids['est'], Number(fonte!.id)],
+      );
+    });
+    const pedir = (u: string, valor: number, referencia = fech) =>
+      s.pedirAlcada(op(ids[u] as number), {
+        documento: 'fat_reabertura_competencia',
+        referencia,
+        valor,
+        motivo: `conta esquecida ${P}`,
+      });
+    const decidir = (u: string, pedido: number, aprovar: boolean, motivo?: string) =>
+      s.decidirAlcada(op(ids[u] as number), { pedido, aprovar, ...(motivo ? { motivo } : {}) });
+    expect(await codigoDo(pedir('auxiliar', 5000, 999_999_999))).toBe('referencia-inexistente');
+    const p1 = Number((await pedir('auxiliar', 5000))['pedido']);
+    expect(await codigoDo(pedir('faturista', 10))).toBe('pedido-em-aberto');
+    expect(await codigoDo(decidir('auxiliar', p1, true))).toBe('quem-pede-nao-aprova');
+    expect(await codigoDo(decidir('faturista', p1, true))).toBe('fora-da-alcada');
+    expect(await decidir('supervisor', p1, true)).toMatchObject({ situacao: 'aprovado', nivel: 2 });
+    expect(await codigoDo(decidir('faturista', p1, false, 'tarde'))).toBe('pedido-decidido');
+    const [g] = await linhas(
+      'SELECT situacao, solicitado_por_usuario_id, decidido_por_usuario_id, nivel_alcada FROM pedido_alcada_faturamento WHERE id = ?',
+      [p1],
+    );
+    expect(g).toMatchObject({ situacao: 'aprovado', nivel_alcada: 2 });
+    expect(Number(g!['solicitado_por_usuario_id'])).toBe(ids['auxiliar']);
+    expect(Number(g!['decidido_por_usuario_id'])).toBe(ids['supervisor']);
+    // O fluxo do documento consome a aprovação na transação dele: valor acima do aprovado recusa; depois vale uma vez.
+    const executor = nucleo.criarExecutor({});
+    const consumir = definirOperacao({
+      nome: 'teste.c135.consumir',
+      tabelas: ['pedido_alcada_faturamento'],
+      entrada: z.object({ valor: z.number() }),
+      async gravar(tx, e, ctx) {
+        const id = await consumirAprovacaoAlcada(
+          tx,
+          ctx.estabelecimento as number,
+          'fat_reabertura_competencia',
+          fech,
+          e.valor,
+        );
+        return { pedido: id };
+      },
+      alvo: (_e, r) => ({ tabela: 'pedido_alcada_faturamento', id: Number(r['pedido']) }),
+    });
+    const rodar = (valor: number) =>
+      executor.executar(consumir as Parameters<Executor['executar']>[0], CLIENTE, { valor }, op());
+    expect(await codigoDo(rodar(6000))).toBe('alcada-valor-mudou');
+    expect((await rodar(5000)).resultado).toMatchObject({ pedido: p1 });
+    expect(await codigoDo(rodar(5000))).toBe('alcada-pendente');
+    const [u] = await linhas(
+      'SELECT situacao, usado_em IS NOT NULL AS usado FROM pedido_alcada_faturamento WHERE id = ?',
+      [p1],
+    );
+    expect(u).toMatchObject({ situacao: 'usado' });
+    expect(Number(u!['usado'])).toBe(1);
+    // Recusa: só com motivo; o pedido recusado libera um novo pedido do mesmo documento.
+    const p2 = Number((await pedir('faturista', 300))['pedido']);
+    expect(await codigoDo(decidir('supervisor', p2, false))).toBe('motivo-obrigatorio');
+    expect(await decidir('supervisor', p2, false, 'sem justificativa')).toMatchObject({
+      situacao: 'recusado',
+    });
+    const lista = await s.ler(ctxL(), (l, est) => listarPedidosAlcada(l, est, null));
+    expect(lista.map((x) => x.situacao).sort()).toEqual(['recusado', 'usado']);
+    expect(lista.find((x) => x.id === p2)).toMatchObject({
+      solicitante: ids['faturista'],
+      motivoDecisao: 'sem justificativa',
+    });
   });
 });

@@ -39,3 +39,41 @@ export const lerParametrosFaturamento = () => ler(`${F}/parametros`, esquemaPara
 /** Grava as preferências da própria conta (chave faturamento.preferencia.* → valor em texto). */
 export const gravarPreferenciasFaturista = (preferencias: Record<string, string>, chave: string) =>
   enviar(`${F}/preferencias`, { preferencias }, esquemaGravado, chave);
+
+// ── Alçada do faturamento: pedido e aprovação por outro usuário (quem pede não aprova) ──────────────────────────
+
+export const DOCUMENTOS_ALCADA = [
+  'fat_reabertura_competencia',
+  'fat_aceite_glosa',
+  'fat_cancelamento_conta',
+] as const;
+export type DocumentoAlcada = (typeof DOCUMENTOS_ALCADA)[number];
+
+const esquemaPedido = z.object({
+  id: z.number(),
+  documento: z.string(),
+  referencia: z.number(),
+  valor: z.number(),
+  motivo: z.string(),
+  situacao: z.enum(['pendente', 'aprovado', 'recusado', 'usado']),
+  solicitante: z.number(),
+  solicitanteNome: z.string().nullable(),
+  solicitadoEm: z.string(),
+  decisor: z.number().nullable(),
+  decisorNome: z.string().nullable(),
+  decididoEm: z.string().nullable(),
+  nivel: z.number().nullable(),
+  motivoDecisao: z.string().nullable(),
+});
+export type PedidoAlcada = z.infer<typeof esquemaPedido>;
+const esquemaRespostaPedido = z.object({ pedido: z.number(), situacao: z.string() }).passthrough();
+
+export const lerPedidosAlcada = () => ler(`${F}/alcada/pedidos`, z.array(esquemaPedido));
+
+export const pedirAlcada = (
+  e: { documento: DocumentoAlcada; referencia: number; valor: number; motivo: string },
+  chave: string,
+) => enviar(`${F}/alcada/pedidos`, e, esquemaRespostaPedido, chave);
+
+export const decidirAlcada = (pedido: number, e: { aprovar: boolean; motivo?: string }, chave: string) =>
+  enviar(`${F}/alcada/pedidos/${pedido}/decisao`, e, esquemaRespostaPedido, chave);

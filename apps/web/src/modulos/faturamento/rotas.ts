@@ -433,4 +433,14 @@ export const rotasFaturamento: RouteRecordRaw[] = [
       menu: 'Faturamento > Contas do paciente > Preferências do faturista',
     },
   },
+  // C1-135 (06-FAT linha 38): pedido e aprovação pela alçada do faturamento (quem pede não aprova).
+  {
+    path: '/faturamento/alcada',
+    name: 'faturamento.alcada',
+    component: () => import('./telas/AprovacoesAlcadaTela.vue'),
+    meta: {
+      permissao: 'faturamento.conta.ler',
+      menu: 'Faturamento > Contas do paciente > Aprovações de alçada',
+    },
+  },
 ];

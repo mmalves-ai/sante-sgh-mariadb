@@ -146,6 +146,7 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
         'DELETE FROM ciclo_competencia_fonte_pagadora WHERE estabelecimento_id IN (?, ?)',
         est,
       );
+      await e.executar('DELETE FROM pedido_alcada_faturamento WHERE estabelecimento_id IN (?, ?)', est);
       await e.executar(
         'DELETE FROM fechamento_competencia_fonte_pagadora WHERE estabelecimento_id IN (?, ?)',
         est,
@@ -1982,6 +1983,32 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
       );
       expect(codigo(e0)).toBe('competencia-apresentada');
       expect((await porta.resumoCompetencia(c, comp)).fechada).toBe(true);
+    }
+    if (emLote > 0) {
+      // Com contas apresentadas, a reabertura passa pela alçada do faturamento (C1-135): sem pedido aprovado, recusa.
+      const e1 = await erroDe(
+        porta.executar(
+          c,
+          'faturamento.reabrirCompetencia',
+          { ...comp, motivo: 'conta esquecida', confirmarImpacto: true },
+          op(),
+        ),
+      );
+      expect(codigo(e1)).toBe('alcada-pendente');
+      // O pedido aprovado por outro usuário (o fluxo de pedir e aprovar tem prova própria em alcada-pedido.int.spec).
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-03-16' }, async (e) => {
+        const outro = await e.uma<{ id: number }>(
+          'SELECT id FROM usuario WHERE id <> ? ORDER BY id LIMIT 1',
+          [ids.usuario],
+        );
+        await e.executar(
+          `INSERT INTO pedido_alcada_faturamento (estabelecimento_id, documento, referencia_tabela, referencia_id, valor,
+             motivo, situacao, solicitado_por_usuario_id, solicitado_em, decidido_por_usuario_id, decidido_em, criado_em)
+           VALUES (?, 'fat_reabertura_competencia', 'fechamento_competencia_fonte_pagadora', ?, 99999999, 'conta esquecida',
+             'aprovado', ?, NOW(3), ?, NOW(3), NOW(3))`,
+          [ids.est, antes!['id'], ids.usuario, Number(outro!.id)],
+        );
+      });
     }
     const r = await porta.executar(
       c,
