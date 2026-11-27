@@ -23,6 +23,7 @@ import { PortaFavorecidosRepasseMemoria } from './favorecidos-memoria.js';
 import { FONTE_FISCAL_REPASSE, fonteFiscalRepasse } from './fonte-fiscal.js';
 import { RemuneracaoVariavelController } from './remuneracao-variavel.controller.js';
 import { PortaRemuneracaoVariavelMemoria } from './remuneracao-variavel-memoria.js';
+import { PortaVariavelFaixaMemoria } from './variavel-faixa-memoria.js';
 import { VariavelFaixaController } from './variavel-faixa.controller.js';
 import { RateioCustoController } from './rateio-custo.controller.js';
 import { PORTA_RATEIO_CUSTO_REPASSE, PortaRateioCustoRepassePropria } from './rateio-custo-propria.js';
@@ -119,6 +120,8 @@ export async function moduloRepasse(
             { provide: PORTA_FAVORECIDOS_REPASSE, useValue: new PortaFavorecidosRepasseMemoria() },
             // Valor fixo e mínimo garantido (C2-100) na porta em memória da fonte sintética.
             { provide: PORTA_REMUNERACAO_VARIAVEL, useValue: new PortaRemuneracaoVariavelMemoria() },
+            // Remuneração variável por faixa e rateio da equipe (C2-106) na porta em memória da fonte sintética.
+            { provide: PORTA_VARIAVEL_FAIXA, useValue: new PortaVariavelFaixaMemoria() },
           ]
         : []),
       { provide: PORTA_REPASSE, useValue: porta },

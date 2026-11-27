@@ -7,10 +7,10 @@
 // o botão sem segundo lançamento); encerra a regra no fim do mês (nada apagado) e confere pela API o que ficou no
 // banco; axe sem violação séria em cada estado. As faixas têm valor fixo, para o valor não depender da produção.
 //
-// Fonte dos dados: sintética. A equipe e a regra só existem no banco próprio (sem ele a API responde 503 e o teste é
-// pulado com o motivo). Nada por índice de combo: o evento, a apuração e os dois médicos são lidos pela API e cada
-// combo é escolhido pelo id lido. Isolamento entre execuções: código da equipe e da regra únicos por execução, e a
-// regra fecha no mês da apuração. Nenhum dado de pessoa sai do teste (só ids em memória).
+// Fonte dos dados: sintética. Sem banco próprio, a API usa a porta em memória da fonte sintética (médicos sintéticos,
+// uma apuração em aberto na competência corrente); fora dela, sem banco a API responde 503 e o teste é pulado. Nada
+// por índice de combo: o evento, a apuração e os dois médicos são lidos pela API e cada combo é escolhido pelo id lido.
+// Isolamento entre execuções: código da equipe e da regra únicos por execução, e a regra fecha no mês da apuração. Nenhum dado de pessoa sai do teste (só ids em memória).
 import { expect, type APIRequestContext, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -96,6 +96,37 @@ async function doisMedicos(
   return achados;
 }
 
+/**
+ * Fonte sintética (sem banco próprio, como no CI): sem dois médicos com favorecido próprio, o teste cadastra pela API
+ * (o analista do repasse edita favorecidos; CSRF da sessão e Idempotency-Key, como a tela) o favorecido próprio dos
+ * médicos sintéticos que ainda não têm nenhum, e procura de novo.
+ */
+async function doisMedicosOuFavorecer(
+  page: Page,
+  inicio: string,
+): Promise<{ profissional: number; nome: string; registro: number }[]> {
+  const api = page.request;
+  const achados = await doisMedicos(api);
+  if (achados.length >= 2) return achados;
+  const fav = await api.get('/api/repasse/favorecidos');
+  if (!fav.ok()) return achados;
+  const comFavorecido = new Set(
+    ((await fav.json()) as { itens: Favorecido[] }).itens.map((f) => f.profissional),
+  );
+  const r = await api.get('/api/repasse/prestadores?termo=SINTETICO');
+  if (!r.ok()) return achados;
+  const csrf = (await page.context().cookies()).find((c) => c.name === 'sgh_csrf')?.value ?? '';
+  for (const p of (await r.json()) as { prestador: number }[]) {
+    if (comFavorecido.has(p.prestador)) continue;
+    comFavorecido.add(p.prestador);
+    await api.post('/api/repasse/favorecidos', {
+      headers: { 'x-csrf': csrf, 'idempotency-key': `e2e-c2-106-${Date.now()}-${p.prestador}` },
+      data: { profissional: p.prestador, tipo: 'proprio_profissional', inicio },
+    });
+  }
+  return doisMedicos(api);
+}
+
 async function adicionarMembro(
   page: Page,
   m: { nome: string; registro: number },
@@ -128,10 +159,10 @@ test.describe('remuneração variável por faixa e rateio da equipe @C2-106', ()
     const evento = base.eventos[0];
     test.skip(!apuracao, 'Sem apuração em aberto no cliente do E2E.');
     test.skip(!evento, 'Sem evento de rendimento no cliente do E2E.');
-    const medicos = await doisMedicos(page.request);
+    const de = `${apuracao!.competencia.slice(0, 7)}-01`;
+    const medicos = await doisMedicosOuFavorecer(page, de);
     test.skip(medicos.length < 2, 'Sem dois médicos com favorecido próprio achados pela busca.');
     const [a, b] = medicos as [(typeof medicos)[0], (typeof medicos)[0]];
-    const de = `${apuracao!.competencia.slice(0, 7)}-01`;
     const ate = ultimoDia(de);
     const sufixo = Date.now().toString(36).toUpperCase();
 

@@ -69,7 +69,7 @@ const diaAnterior = (d: string) => {
   return x.toISOString().slice(0, 10);
 };
 
-const esquemaMembro = z
+export const esquemaMembro = z
   .object({
     profissional: id.nullable().default(null),
     terceiro: id.nullable().default(null),
@@ -78,7 +78,7 @@ const esquemaMembro = z
   })
   .strict();
 
-const esquemaEquipe = z
+export const esquemaEquipe = z
   .object({
     codigo: z.string().trim().min(1).max(30),
     nome: z.string().trim().min(1).max(150),
@@ -88,7 +88,7 @@ const esquemaEquipe = z
   })
   .strict();
 
-const esquemaRecompor = z
+export const esquemaRecompor = z
   .object({
     versao: z.number().int().positive(),
     inicio: data,
@@ -108,7 +108,7 @@ const esquemaFaixa = z
   })
   .strict();
 
-const esquemaRegra = z
+export const esquemaRegra = z
   .object({
     codigo: z.string().trim().min(1).max(30),
     descricao: z.string().trim().min(1).max(150),
@@ -131,7 +131,7 @@ const esquemaRegra = z
   })
   .strict();
 
-const esquemaEncerrar = z.object({ versao: z.number().int().positive(), fim: data }).strict();
+export const esquemaEncerrar = z.object({ versao: z.number().int().positive(), fim: data }).strict();
 
 export interface ParteSimulada {
   readonly profissional: number | null;
