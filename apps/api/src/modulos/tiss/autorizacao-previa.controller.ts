@@ -158,6 +158,18 @@ export class AutorizacaoPreviaController {
     return this.com(req, (p, c) => p.registrarTransmissao(c, id, b));
   }
 
+  @Post(':id/transmissao-webservice')
+  @AuditadoNoHandler(TRILHA)
+  @HttpCode(200)
+  @Permissao(PERMISSOES_AUTORIZACAO_PREVIA.solicitar)
+  transmitirWebservice(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() b: unknown,
+  ) {
+    return this.com(req, (p, c) => p.transmitirWebservice(c, id, b));
+  }
+
   @Post(':id/resposta')
   @AuditadoNoHandler(TRILHA)
   @HttpCode(200)

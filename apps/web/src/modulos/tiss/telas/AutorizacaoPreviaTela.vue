@@ -26,6 +26,7 @@ import {
   ligarAutorizacaoNaConta,
   type PedidoAutorizacaoTela,
   registrarTransmissaoAutorizacao,
+  transmitirAutorizacaoWebservice,
   responderPedidoAutorizacao,
 } from '../api-autorizacao-previa.js';
 
@@ -253,6 +254,17 @@ const transmitir = (p: PedidoAutorizacaoTela) =>
   acao(
     () => registrarTransmissaoAutorizacao(p.id, p.versao, entregas[p.id]!),
     () => k('transmitida'),
+  );
+const transmitirWs = (p: PedidoAutorizacaoTela) =>
+  acao(
+    () => transmitirAutorizacaoWebservice(p.id, p.versao),
+    (r) => {
+      const t = r as { modo: string; protocolo: string | null; falha: string | null };
+      const modo = t.modo === 'real' ? k('modoReal') : k('modoSimulador');
+      return t.protocolo
+        ? k('transmitidaWebservice', { modo, protocolo: t.protocolo })
+        : k('falhaWebservice', { modo, falha: t.falha ?? '' });
+    },
   );
 const andamento = (p: PedidoAutorizacaoTela) =>
   acao(
@@ -536,6 +548,20 @@ if (pacienteTexto.value) void abrir();
               <a v-if="p.xmlGuardado" :href="`/api/tiss/autorizacoes/${p.id}/xml`" data-testid="aut-xml">{{
                 k('verXml')
               }}</a>
+              <div v-if="p.situacao === 'pronta_envio' && p.canal === 'webservice'" class="linha">
+                <SanteBotao
+                  :rotulo="k('transmitirWebservice')"
+                  data-testid="aut-transmitir-ws"
+                  @acionar="transmitirWs(p)"
+                />
+                <span v-if="p.falhaTransmissao" data-testid="aut-falha-ws">{{
+                  k('ultimaFalhaTransmissao', { falha: p.falhaTransmissao })
+                }}</span>
+              </div>
+              <span v-if="p.protocoloTransmissao" data-testid="aut-protocolo-ws"
+                >{{ k('protocoloTransmissao', { protocolo: p.protocoloTransmissao }) }}
+                <strong v-if="p.transmissaoModo === 'simulador'">{{ k('seloSimulador') }}</strong></span
+              >
               <div v-if="p.situacao === 'pronta_envio'" class="linha">
                 <SanteSelecao
                   v-model="entregas[p.id]!"

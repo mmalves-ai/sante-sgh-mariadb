@@ -12,6 +12,10 @@
 //     outros canais (portal, telefone, e-mail, presencial) fica 'enviada' com o canal registrado;
 //   - registrarTransmissao: o pedido 'pronta_envio' fica 'enviada' com o canal real usado para levar o XML guardado à
 //     operadora e o instante; a rota xml serve os bytes guardados (conferidos pelo SHA-256 do registro), nunca remonta;
+//   - transmitirWebservice: pela central de integrações externas (decisão 53); no simulador, o aceite deixa o pedido
+//     'enviada' (canal webservice, enviada_em, transmissao_modo e protocolo_transmissao, migração 12_FAT/99zt) e a
+//     recusa ou o erro de transporte o mantém 'pronta_envio' com falha_transmissao; o real depende da definição do
+//     fornecedor e recusa (503) com a falha registrada na central;
 //   - responder: `resposta_autorizacao` + `resposta_autorizacao_item` (quantidade e valor autorizados por item, negativa
 //     com motivo); o pedido muda para a situação derivada dos itens, cada item pedido guarda a quantidade autorizada,
 //     a senha vai à conta hospitalar ligada que ainda não tem senha e a consulta de andamento aberta fica respondida;
@@ -51,8 +55,10 @@ import {
   etapaAutorizacaoCirurgia,
   type GuiaDaCirurgia,
 } from '@sgh/dominio-cirurgia';
+import { respostaSimulada } from '@sgh/dominio-integracao';
 import { ErroOperacao, type Leitor, sha256, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
+import { modoDaIntegracao } from '../integracao/externas/servico.js';
 import {
   type ContextoPortaPropria,
   entradaValida,
@@ -164,6 +170,7 @@ const esquemaCriar = z
 const esquemaUrgencia = z
   .object({ versao: z.number().int().positive(), justificativa: z.string().trim().max(500) })
   .strict();
+const INTEGRACAO_TISS_WEBSERVICE = 'operadora-tiss-webservice';
 const esquemaVersao = z.object({ versao: z.number().int().positive() }).strict();
 const esquemaTransmissao = z
   .object({
@@ -536,6 +543,9 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
       enviadaEm: iso(s['enviada_em']),
       observacao: txtOuNull(s['observacao']),
       xmlGuardado: s['arquivo_id'] !== null && s['arquivo_id'] !== undefined,
+      transmissaoModo: txtOuNull(s['transmissao_modo']),
+      protocoloTransmissao: txtOuNull(s['protocolo_transmissao']),
+      falhaTransmissao: txtOuNull(s['falha_transmissao']),
       versao: num(s['versao']),
       itens,
       respostas,
@@ -1105,6 +1115,86 @@ export class PortaAutorizacaoPreviaPropria extends PortaEstabelecimentoPropria {
         canal: e.canal,
       });
       return { tabela: 'solicitacao_autorizacao', id: solicitacao, situacao: 'enviada' as const };
+    });
+  }
+
+  /**
+   * Transmissão automática ao webservice da operadora pela central de integrações externas (decisão 53): o XML
+   * guardado (conferido pelo SHA-256) é entregue ao adaptador. No simulador (padrão, e sempre fora de produção) a
+   * resposta segue o contrato do serviço: aceite com protocolo leva o pedido a 'enviada' pelo canal webservice com o
+   * modo e o protocolo; recusa ou erro de transporte deixa o pedido pronto para envio com a falha registrada. O
+   * transporte real depende da definição do fornecedor (WSDL e endereço da operadora): o modo real registra a falha na
+   * central e recusa, sem inventar endereço nem formato.
+   */
+  async transmitirWebservice(
+    c: ContextoPortaPropria,
+    solicitacao: number,
+    entrada: unknown,
+  ): Promise<{
+    id: number;
+    situacao: SituacaoSolicitacaoAutorizacao;
+    modo: 'simulador' | 'real';
+    protocolo: string | null;
+    falha: string | null;
+  }> {
+    const e = entradaValida(esquemaVersao, entrada);
+    await this.xml(c, solicitacao);
+    const central = await modoDaIntegracao(INTEGRACAO_TISS_WEBSERVICE);
+    if (central.modo === 'real') {
+      await central.registrarFalha(
+        'Transporte ao webservice depende da definição do fornecedor (WSDL e endereço).',
+      );
+      throw new ErroOperacao(
+        503,
+        'depende-definicao-fornecedor',
+        'Transmissão indisponível',
+        'O transporte real ao webservice da operadora depende da definição do fornecedor: passe a definição à equipe de desenvolvimento (Administração > Integrações externas).',
+      );
+    }
+    return this.gravar(c, 'tiss.autorizacao.transmitir', ['solicitacao_autorizacao'], async (tx, est) => {
+      const s = await this.lerPedido(tx, est.id, solicitacao);
+      const de = String(s['situacao']) as SituacaoSolicitacaoAutorizacao;
+      if (de !== 'pronta_envio' || s['canal'] !== 'webservice' || !podeMudar(de, 'enviada'))
+        throw recusaRegra('Transmissão recusada', [
+          {
+            campo: 'situacao',
+            mensagem: `O pedido está ${de}; só o pronto para envio pelo webservice é transmitido.`,
+          },
+        ]);
+      const r = respostaSimulada(INTEGRACAO_TISS_WEBSERVICE, String(s['numero']));
+      const agora = new Date();
+      if (r.tipo !== 'aceite') {
+        const falha = r.mensagem.slice(0, 300);
+        await tx.alterar('solicitacao_autorizacao', solicitacao, e.versao, {
+          falha_transmissao: falha,
+          falha_transmissao_em: agora,
+        });
+        return {
+          tabela: 'solicitacao_autorizacao',
+          id: solicitacao,
+          situacao: 'pronta_envio' as const,
+          modo: 'simulador' as const,
+          protocolo: null,
+          falha,
+        };
+      }
+      await tx.alterar('solicitacao_autorizacao', solicitacao, e.versao, {
+        situacao: 'enviada',
+        enviada_em: agora,
+        canal: 'webservice',
+        transmissao_modo: 'simulador',
+        protocolo_transmissao: r.protocolo,
+        falha_transmissao: null,
+        falha_transmissao_em: null,
+      });
+      return {
+        tabela: 'solicitacao_autorizacao',
+        id: solicitacao,
+        situacao: 'enviada' as const,
+        modo: 'simulador' as const,
+        protocolo: r.protocolo,
+        falha: null,
+      };
     });
   }
 

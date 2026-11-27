@@ -34,7 +34,7 @@ function visao(estado: Estado) {
     numero: 'SA000091',
     tipo: 'internacao',
     situacao: estado === 'coberta' ? 'autorizada_parcial' : estado,
-    canal: estado === 'rascunho' || estado === 'pronta_envio' ? 'webservice' : 'portal',
+    canal: 'webservice',
     fontePagadora: 'Operadora sintética',
     carteira: '0000555566667777',
     conta: 4410,
@@ -42,6 +42,9 @@ function visao(estado: Estado) {
     enviadaEm: estado === 'rascunho' || estado === 'pronta_envio' ? null : '2026-11-25T10:05:00.000Z',
     observacao: null,
     xmlGuardado: estado !== 'rascunho',
+    transmissaoModo: estado === 'rascunho' || estado === 'pronta_envio' ? null : 'simulador',
+    protocoloTransmissao: estado === 'rascunho' || estado === 'pronta_envio' ? null : 'SIM-00SINT1',
+    falhaTransmissao: null,
     versao: { nada: 1, rascunho: 1, pronta_envio: 2, enviada: 3, autorizada_parcial: 4, coberta: 4 }[estado],
     itensDaContaCobertos: estado === 'coberta' ? 1 : 0,
     diagnosticos: [{ sequencia: 1, principal: true, cid: 'K359', descricao: 'Diagnóstico sintético' }],
@@ -100,9 +103,15 @@ test.describe('Autorização prévia à operadora @C2-081 @fase7', () => {
         estado = 'pronta_envio';
         return json(rota, { id: 91, situacao: 'pronta_envio', hash: '0'.repeat(32) });
       }
-      if (caminho === '91/transmissao') {
+      if (caminho === '91/transmissao-webservice') {
         estado = 'enviada';
-        return json(rota, { id: 91, situacao: 'enviada' });
+        return json(rota, {
+          id: 91,
+          situacao: 'enviada',
+          modo: 'simulador',
+          protocolo: 'SIM-00SINT1',
+          falha: null,
+        });
       }
       if (caminho === '91/resposta') {
         estado = 'autorizada_parcial';
@@ -164,9 +173,14 @@ test.describe('Autorização prévia à operadora @C2-081 @fase7', () => {
     await linha.getByTestId('aut-enviar').click();
     await expect(page.getByTestId('aut-aviso')).toContainText('Guia validada e guardada');
     await expect(linha.getByTestId('aut-xml')).toBeVisible();
-    await escolher(linha.getByTestId('aut-entrega'), { rotulo: 'Portal da operadora' });
-    await linha.getByTestId('aut-transmitir').click();
+    // Transmissão automática pela central de integrações externas: sem credencial, o simulador responde.
+    await linha.getByTestId('aut-transmitir-ws').click();
+    await expect(page.getByTestId('aut-aviso')).toHaveText(
+      'Transmitida pelo webservice (Simulador), protocolo SIM-00SINT1.',
+    );
     await expect(linha.getByTestId('aut-situacao')).toHaveText('Enviada');
+    await expect(linha.getByTestId('aut-protocolo-ws')).toContainText('SIM-00SINT1');
+    await expect(linha.getByTestId('aut-protocolo-ws')).toContainText('Simulador');
 
     // Resposta por item: a negativa (zero) pede o motivo, conferido na hora; depois, parcial com a senha.
     const resposta = linha.getByTestId('aut-resposta');
@@ -188,11 +202,11 @@ test.describe('Autorização prévia à operadora @C2-081 @fase7', () => {
     expect(pedidos.map((p) => p.caminho)).toEqual([
       '',
       '91/envio',
-      '91/transmissao',
+      '91/transmissao-webservice',
       '91/resposta',
       '91/conta',
     ]);
-    expect(pedidos[2]!.corpo).toEqual({ versao: 2, canal: 'portal' });
+    expect(pedidos[2]!.corpo).toEqual({ versao: 2 });
     expect(pedidos[3]!.corpo).toMatchObject({
       senha: 'SNSINT01',
       itens: [{ sequencia: 1, quantidadeAutorizada: 1 }],

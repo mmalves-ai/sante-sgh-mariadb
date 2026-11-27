@@ -21,6 +21,9 @@ const esquemaPedido = z.object({
   enviadaEm: z.string().nullable(),
   observacao: z.string().nullable(),
   xmlGuardado: z.boolean(),
+  transmissaoModo: z.string().nullable().default(null),
+  protocoloTransmissao: z.string().nullable().default(null),
+  falhaTransmissao: z.string().nullable().default(null),
   versao: z.number(),
   itensDaContaCobertos: z.number().default(0),
   diagnosticos: z
@@ -78,6 +81,17 @@ export const enviarPedidoAutorizacao = (id: number, versao: number) =>
   enviar(`${A}/${id}/envio`, { versao }, mudou, chave('envio'));
 export const registrarTransmissaoAutorizacao = (id: number, versao: number, canal: string) =>
   enviar(`${A}/${id}/transmissao`, { versao, canal }, mudou, chave('transmissao'));
+const transmitiu = z
+  .object({
+    situacao: z.string(),
+    modo: z.string(),
+    protocolo: z.string().nullable(),
+    falha: z.string().nullable(),
+  })
+  .passthrough();
+/** Transmissão automática ao webservice da operadora pela central de integrações externas (simulador ou real). */
+export const transmitirAutorizacaoWebservice = (id: number, versao: number) =>
+  enviar(`${A}/${id}/transmissao-webservice`, { versao }, transmitiu, chave('transmissao-webservice'));
 export const responderPedidoAutorizacao = (id: number, corpo: unknown) =>
   enviar(`${A}/${id}/resposta`, corpo, mudou, chave('resposta'));
 export const consultarAndamentoAutorizacao = (id: number) =>

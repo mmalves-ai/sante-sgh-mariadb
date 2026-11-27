@@ -559,7 +559,27 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
     expect((await porta.xml(ctx(), i.id)).xml).toContain(`<ans:diagnosticoCID>${m.cid}</ans:diagnosticoCID>`);
     const vI = async () =>
       Number((await um('SELECT versao FROM solicitacao_autorizacao WHERE id = ?', [i.id]))['versao']);
-    await porta.registrarTransmissao(ctx(), i.id, { versao: await vI(), canal: 'portal' });
+    // Transmissão automática pela central de integrações externas (sem configuração: simulador, determinístico).
+    const ws = await porta.transmitirWebservice(ctx(), i.id, { versao: await vI() });
+    expect(ws).toMatchObject({ situacao: 'enviada', modo: 'simulador', falha: null });
+    expect(ws.protocolo).toMatch(/^SIM-[0-9A-Z]{7,}$/);
+    expect(
+      await um(
+        'SELECT situacao, canal, transmissao_modo, protocolo_transmissao, falha_transmissao, enviada_em IS NOT NULL AS saiu FROM solicitacao_autorizacao WHERE id = ?',
+        [i.id],
+      ),
+    ).toMatchObject({
+      situacao: 'enviada',
+      canal: 'webservice',
+      transmissao_modo: 'simulador',
+      protocolo_transmissao: ws.protocolo,
+      falha_transmissao: null,
+      saiu: 1,
+    });
+    // O que já saiu não é transmitido de novo.
+    await expect(porta.transmitirWebservice(ctx(), i.id, { versao: await vI() })).rejects.toMatchObject(
+      recusa,
+    );
     // Antes da resposta, a conta não se liga.
     await expect(porta.ligarConta(ctx(), i.id)).rejects.toMatchObject(recusa);
     await porta.responder(ctx(), i.id, {
