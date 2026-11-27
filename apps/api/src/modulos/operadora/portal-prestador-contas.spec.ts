@@ -56,6 +56,7 @@ const pre = (recurso: string, tipo: PrerequisitoRecurso['tipo']): PrerequisitoRe
 });
 
 const agora = '2026-10-26T10:00:00';
+const portasContas: PortaContasOperadoraMemoria[] = [];
 const novaApp = async (contasLigadas: boolean) => {
   const trilha = new RegistradorTrilhaMemoria();
   const operadora = new PortaOperadoraMemoria(trilha);
@@ -63,6 +64,7 @@ const novaApp = async (contasLigadas: boolean) => {
   const autorizacao = new PortaAutorizacaoOperadoraMemoria(operadora, rede);
   const atendimento = new PortaAtendimentoOperadoraMemoria(operadora, rede, autorizacao);
   const contas = new PortaContasOperadoraMemoria(operadora, rede, autorizacao);
+  portasContas.push(contas);
   autorizacao.agora = () => agora;
   atendimento.agora = () => agora;
   contas.agora = () => agora;
@@ -272,6 +274,17 @@ describe('W0-10 (M8): contas médicas pelo portal do prestador, pela HTTP', { ti
     expect(r.protocolo).toMatch(/^202610\d{6}$/);
     expect(r.mensagem).toContain('Pagamento previsto até 25/11/2026');
     expect(r.avisos.join(' ')).toContain('Glosa automática');
+    // C2-074: o XML ficou na porta de arquivos e o envio registrado (arquivo_enviado_prestador) ligado ao lote gerado.
+    const arq = portasContas[0]!.arquivosDoPortal();
+    expect(arq.guardados).toHaveLength(1);
+    expect(arq.enviados).toEqual([
+      expect.objectContaining({
+        lote: r.id,
+        arquivo: arq.guardados[0]!.id,
+        nome: 'lote-p200.xml',
+        versaoPadrao: '4.03.00',
+      }),
+    ]);
     expect((await pp.post(`${PP}/contas`, { arquivo: b64(lote.bytes), nome: null })).json().codigo).toBe(
       'lote-ja-recebido',
     );

@@ -376,6 +376,8 @@ export async function limparNegocio(nucleo: NucleoProprio, m: MassaOperadora): P
       est,
     );
     await e.executar('DELETE FROM guia_conta_recebida WHERE estabelecimento_id IN (?, ?)', est);
+    // C2-074: o envio pelo portal aponta para o lote e para a conta do portal.
+    await e.executar('DELETE FROM arquivo_enviado_prestador WHERE estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM lote_conta_recebida WHERE estabelecimento_id IN (?, ?)', est);
     await e.executar(
       'DELETE r FROM protocolo_beneficiario_resposta r JOIN protocolo_beneficiario p ON p.id = r.protocolo_beneficiario_id WHERE p.estabelecimento_id IN (?, ?)',

@@ -46,10 +46,28 @@ interface AcaoPorta {
 
 type Feito = Promise<{ id: number; versao: number }>;
 
+/** C2-074: o arquivo do lote enviado pelo portal do prestador (arquivo_enviado_prestador), ligado ao lote gerado. */
+export interface ArquivoEnviadoPortal {
+  readonly prestador: number;
+  /** A conta do portal que enviou. */
+  readonly contaPortal: number;
+  /** O binário na porta de arquivos (disco local, ADR 0004). */
+  readonly arquivo: number;
+  readonly nome: string;
+  readonly sha256: string;
+  readonly versaoPadrao: string | null;
+  readonly guias: number;
+  readonly valor: number;
+  /** O lote gerado (lote_conta_recebida). */
+  readonly lote: number;
+}
+
 /** O que a gravação das contas faz dentro da transação (com a trilha junto). */
 export interface GravadorContas {
   proximoProtocolo(): Promise<number>;
   receber(r: SemHospital<EntradaRecebimentoConta>): Feito;
+  /** C2-074: o registro do arquivo enviado pelo portal, na mesma transação do lote. */
+  registrarArquivoEnviado(a: ArquivoEnviadoPortal): Feito;
   glosar(a: AcaoPorta & { itens: readonly EntradaGlosaItem[]; texto: string; desfeita: boolean }): Feito;
   concluir(
     a: AcaoPorta & {
@@ -128,6 +146,15 @@ export interface PortaContasOperadora {
     c: ContextoContas,
     f: FiltroPagamentosPorta,
   ): Promise<{ itens: DadosContaResumo[]; proxima: number | null }>;
+  /** C2-074: guarda o XML do lote na porta de arquivos antes da transação (sem armazenamento: 503). */
+  guardarArquivoLote(
+    c: ContextoContas,
+    e: { conteudo: Uint8Array; nome: string },
+  ): Promise<{ id: number; reaproveitado: boolean }>;
+  /** C2-074: remove o arquivo novo que ficou sem dono (a transação do lote falhou). */
+  descartarArquivoLote(c: ContextoContas, id: number): Promise<void>;
+  /** C2-074: a guarda legal do XML (5 anos) depois do COMMIT do lote (antes dele, o arquivo ainda pode ser descartado). */
+  fixarGuardaArquivoLote(c: ContextoContas, id: number): Promise<void>;
   gravar<T>(
     c: ContextoContas,
     trilha: RegistroTrilhaTela | ((r: T) => RegistroTrilhaTela),
@@ -154,5 +181,8 @@ export const METODOS_PORTA_CONTAS: ReadonlySet<string> = new Set([
   'eventos',
   'recursosItens',
   'pagamentos',
+  'guardarArquivoLote',
+  'descartarArquivoLote',
+  'fixarGuardaArquivoLote',
   'gravar',
 ]);

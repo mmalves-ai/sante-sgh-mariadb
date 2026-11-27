@@ -3,7 +3,11 @@
 // guia_conta_recebida_item), a glosa com o motivo da terminologia (glosa_conta_recebida) e os totais recalculados,
 // a conclusão da análise, o pagamento e a devolução; versão, trilha e outbox; e as recusas (glosa maior que o
 // apresentado, glosa sem motivo, lote repetido, conflito de versão, outro estabelecimento). SGH_NUCLEO_SEM_BANCO=1 pula.
-import { NucleoProprio } from '@sgh/nucleo';
+import { randomUUID } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { criarArmazemLocal, NucleoProprio, type NucleoArmazem } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaContasOperadoraPropria } from './contas-porta-propria.js';
 import { ServicoContasOperadora } from './contas-servico.js';
@@ -470,5 +474,95 @@ describe.skipIf(SEM_BANCO)('porta própria das contas médicas recebidas (MariaD
       valorAcatado: 80,
       por: 'L0209AUD2',
     });
+  });
+
+  it('C2-074: o XML do lote do portal vai à porta de arquivos e o envio fica em arquivo_enviado_prestador, ligado ao lote', async () => {
+    const raiz = mkdtempSync(join(tmpdir(), 'c2074-lote-'));
+    try {
+      // A porta de arquivos sobre o armazém local do núcleo (o código de teste não está no mapa de estabelecimentos).
+      const armazem = criarArmazemLocal(nucleo as unknown as NucleoArmazem, {
+        raiz,
+        executor: nucleo.criarExecutor(),
+      });
+      const ctx = (s: string) => ({
+        cliente: CLIENTE,
+        estabelecimento: m.est,
+        usuario: m.usuario,
+        correlacao: `c2074-${s}`,
+        chaveIdempotencia: `c2074-${s}-${randomUUID()}`,
+      });
+      const guardas: [number, string][] = [];
+      porta.arquivos = {
+        async guardar(_h, e) {
+          const g = await armazem.guardar(e, ctx('arq'));
+          return { id: g.id, hash: g.hash, reaproveitado: g.reaproveitado };
+        },
+        metadado: async (_h, id) => armazem.metadado(ctx('md'), id),
+        ler: async () => null,
+        excluir: async () => undefined,
+        fixarRetencao: async (_h, id, ate) => {
+          guardas.push([id, ate]);
+        },
+      };
+      const conta = await nucleo.escrever({ cliente: CLIENTE, correlacao: 't2074' }, (e) =>
+        e.inserir(
+          `INSERT INTO conta_portal_prestador (operadora_saude_id, prestador_rede_id, login, situacao, ativada_em, criado_em, versao)
+           VALUES (?, ?, 'portal.c2074', 'ativa', NOW(3), NOW(3), 1)`,
+          [m.operadora, m.prestador],
+        ),
+      );
+      const conteudo = new Uint8Array(Buffer.from('<?xml version="1.0"?><lote>c2074</lote>', 'latin1'));
+      const a = await porta.guardarArquivoLote(contexto(m), { conteudo, nome: 'lote-c2074.xml' });
+      const r = await porta.gravar(contexto(m), T('operadora.contas.recebida'), async (g) => {
+        const protocolo = await g.proximoProtocolo();
+        const lote = await g.receber({
+          operadora: m.operadora,
+          prestador: m.prestador,
+          protocolo: `C2074-${protocolo}`,
+          numeroLote: '907401',
+          tipoGuia: 'sp-sadt',
+          competencia: '2026-10',
+          prazoPagamento: prazo,
+          arquivo: {
+            nome: 'lote-c2074.xml',
+            bytes: conteudo.length,
+            sha256: 'h907401',
+            base64: '',
+            hashEpilogo: 'e907401',
+          },
+          apresentado: 0,
+          guias: [],
+        });
+        await g.registrarArquivoEnviado({
+          prestador: m.prestador,
+          contaPortal: conta,
+          arquivo: a.id,
+          nome: 'lote-c2074.xml',
+          sha256: 'a'.repeat(64),
+          versaoPadrao: '4.03.00',
+          guias: 0,
+          valor: 0,
+          lote: lote.id,
+        });
+        return lote;
+      });
+      await porta.fixarGuardaArquivoLote(contexto(m), a.id);
+      const [x] = await ler(
+        `SELECT arquivo_id, lote_conta_recebida_id, conta_portal_prestador_id, tipo_conteudo, situacao, esquema_valido
+           FROM arquivo_enviado_prestador WHERE lote_conta_recebida_id = ?`,
+        [r.id],
+      );
+      expect(x).toMatchObject({ tipo_conteudo: 'lote_guias', situacao: 'processado' });
+      expect([Number(x!['arquivo_id']), Number(x!['conta_portal_prestador_id'])]).toEqual([a.id, conta]);
+      const [arq] = await ler('SELECT finalidade, entidade FROM arquivo WHERE id = ?', [a.id]);
+      expect(arq).toMatchObject({ finalidade: 'xml_faturamento', entidade: 'arquivo_enviado_prestador' });
+      // A guarda legal de 5 anos só depois do COMMIT do lote.
+      expect(guardas).toEqual([
+        [a.id, `${new Date().getUTCFullYear() + 5}-${new Date().toISOString().slice(5, 10)}`],
+      ]);
+    } finally {
+      porta.arquivos = undefined;
+      rmSync(raiz, { recursive: true, force: true });
+    }
   });
 });

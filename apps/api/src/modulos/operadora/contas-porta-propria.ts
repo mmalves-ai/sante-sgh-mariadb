@@ -21,7 +21,8 @@ import {
   rateioDoAcatado,
   situacaoDoRecurso,
 } from '@sgh/dominio-operadora';
-import { type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
+import { type Leitor, type Linha, type NucleoArmazem, recusa, type TxOperacao } from '@sgh/nucleo';
+import { type ArquivosDoModulo, arquivosDoAmbiente, dataDaqui } from '../arquivos-locais.js';
 import {
   BasePortaOperadoraPropria,
   competenciaDe,
@@ -69,7 +70,12 @@ export const TABELAS_CONTAS = [
   'recurso_glosa_recebido',
   'recurso_glosa_recebido_item',
   'critica_conta_recebida',
+  'arquivo_enviado_prestador',
 ] as const;
+
+/** C2-074: finalidade do XML do lote do portal na porta de arquivos; guarda legal de 5 anos (como o lote recebido). */
+export const FINALIDADE_LOTE_PORTAL = 'xml_faturamento';
+const ANOS_GUARDA_LOTE = 5;
 
 /** Situação do recurso no banco → na tela (recebido e em análise: pendente). */
 const SITUACAO_RECURSO: Readonly<Record<string, 'pendente' | 'acatado' | 'parcial' | 'mantido'>> = {
@@ -167,6 +173,36 @@ export class PortaContasOperadoraPropria
     },
   ) {
     super(nucleo, cliente, 'operadora.contas', TABELAS_CONTAS);
+  }
+
+  /** Porta de arquivos (disco local, ADR 0004); `undefined` até o primeiro uso, nos testes injetada. */
+  arquivos?: ArquivosDoModulo | null;
+
+  private arquivosDe(): ArquivosDoModulo {
+    if (this.arquivos === undefined)
+      this.arquivos = arquivosDoAmbiente(this.nucleo as unknown as NucleoArmazem, this.cliente);
+    if (!this.arquivos)
+      throw recusa('armazenamento-indisponivel', 'O armazenamento de arquivos não está configurado.');
+    return this.arquivos;
+  }
+
+  async guardarArquivoLote(c: ContextoContas, e: { conteudo: Uint8Array; nome: string }) {
+    const a = await this.arquivosDe().guardar(c.hospital, {
+      conteudo: e.conteudo,
+      nomeOriginal: e.nome,
+      tipoMime: 'application/xml',
+      finalidade: FINALIDADE_LOTE_PORTAL,
+      entidade: 'arquivo_enviado_prestador',
+    });
+    return { id: a.id, reaproveitado: a.reaproveitado };
+  }
+
+  async descartarArquivoLote(c: ContextoContas, id: number): Promise<void> {
+    await this.arquivosDe().excluir(c.hospital, id);
+  }
+
+  async fixarGuardaArquivoLote(c: ContextoContas, id: number): Promise<void> {
+    await this.arquivosDe().fixarRetencao(c.hospital, id, dataDaqui(ANOS_GUARDA_LOTE));
   }
 
   private async hojeDo(l: Leitor): Promise<string> {
@@ -679,6 +715,26 @@ export class PortaContasOperadoraPropria
     return {
       proximoProtocolo: async () => (await tx.proximoNumero('protocolo_conta')).valor,
       receber: (r) => receberLote(tx, est, r),
+      async registrarArquivoEnviado(a) {
+        const id = await tx.incluir('arquivo_enviado_prestador', {
+          estabelecimento_id: est,
+          prestador_rede_id: a.prestador,
+          conta_portal_prestador_id: a.contaPortal,
+          arquivo_id: a.arquivo,
+          tipo_conteudo: 'lote_guias',
+          nome_arquivo: a.nome.slice(0, 255),
+          hash_sha256: a.sha256,
+          versao_padrao: a.versaoPadrao ? a.versaoPadrao.slice(0, 10) : null,
+          recebido_em: new Date(),
+          validado_em: new Date(),
+          esquema_valido: true,
+          quantidade_guias: a.guias,
+          valor_informado: a.valor,
+          lote_conta_recebida_id: a.lote,
+          situacao: 'processado',
+        });
+        return { id, versao: 1 };
+      },
       async glosar(a) {
         const x = await lote(a.id);
         if (txt(x['situacao']) !== 'recebida')

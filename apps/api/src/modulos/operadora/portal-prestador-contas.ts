@@ -17,6 +17,7 @@ import {
   type RegistrarRecursoItensEntrada,
   type ResultadoConta,
 } from '@sgh/contratos';
+import { PADRAO_TISS } from '@sgh/dominio-faturamento';
 import { protocoloConta } from '@sgh/dominio-operadora';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro } from '../cadastro/comum.js';
@@ -77,6 +78,13 @@ export class ServicoContasPortalPrestador {
     if (x.recebimento.prestador !== s.prestador || x.recebimento.operadora !== s.operadora)
       throw recusaDasContas([{ codigo: 'lote-de-outro-prestador', campo: 'arquivo' }]);
     const { hoje } = await this.porta.relogio(c);
+    // C2-074: o XML vai sem edição à porta de arquivos antes da transação; o registro do envio
+    // (arquivo_enviado_prestador) entra junto com o lote. Falhou a transação: o arquivo novo sem dono é removido.
+    const nome = x.recebimento.arquivo.nome ?? e.nome ?? `lote-${x.recebimento.numeroLote}.xml`;
+    const conteudo = new Uint8Array(Buffer.from(e.arquivo.replace(/\s+/g, ''), 'base64'));
+    const guardado = await this.porta.guardarArquivoLote(c, { conteudo, nome }).catch((err: unknown) => {
+      throw problemaDoCadastro(err);
+    });
     let protocolo = '';
     const r = await this.porta
       .gravar(
@@ -92,17 +100,32 @@ export class ServicoContasPortalPrestador {
           ),
         async (g) => {
           protocolo = protocoloConta(hoje, await g.proximoProtocolo());
-          return g.receber({
+          const lote = await g.receber({
             ...x.recebimento,
             protocolo,
             texto: `Enviado pelo portal do prestador. ${ServicoContasOperadora.textoDoRecebimento(protocolo, x)}`,
             usuario: USUARIO_PORTAL_PRESTADOR,
           });
+          await g.registrarArquivoEnviado({
+            prestador: s.prestador,
+            contaPortal: s.acesso,
+            arquivo: guardado.id,
+            nome,
+            sha256: x.recebimento.arquivo.sha256,
+            versaoPadrao: PADRAO_TISS,
+            guias: x.guias,
+            valor: x.recebimento.apresentado,
+            lote: lote.id,
+          });
+          return lote;
         },
       )
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
+        if (!guardado.reaproveitado)
+          await this.porta.descartarArquivoLote(c, guardado.id).catch(() => undefined);
         throw problemaDoCadastro(err);
       });
+    await this.porta.fixarGuardaArquivoLote(c, guardado.id);
     const prazo = x.recebimento.prazoPagamento.split('-').reverse().join('/');
     return {
       ok: true,

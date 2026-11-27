@@ -22,7 +22,12 @@ import {
   LIMITE_PAGINA_CONTAS,
   type SituacaoContaPorta,
 } from './dados-portas.js';
-import type { ContextoContas, GravadorContas, PortaContasOperadora } from './contas-porta.js';
+import type {
+  ArquivoEnviadoPortal,
+  ContextoContas,
+  GravadorContas,
+  PortaContasOperadora,
+} from './contas-porta.js';
 import type { PortaOperadora } from './porta.js';
 import type { PortaRedeOperadora } from './rede-porta.js';
 
@@ -90,11 +95,23 @@ interface Estado {
   /** W0-10 (M8): o recurso por item (a decisão entra na mesma linha, como a junção da devolve). */
   recursosItens: (DadosRecursoItem & { hospital: string; conta: number })[];
   seq: Record<string, number>;
+  /** C2-074: os XML guardados (a porta de arquivos da memória) e o registro do envio pelo portal. */
+  arquivos: { hospital: string; id: number; nome: string; bytes: number }[];
+  arquivosEnviados: (ArquivoEnviadoPortal & { hospital: string; id: number })[];
 }
 
 export class PortaContasOperadoraMemoria implements PortaContasOperadora {
   readonly destino = 'memoria' as const;
-  private estado: Estado = { contas: [], guias: [], itens: [], eventos: [], recursosItens: [], seq: {} };
+  private estado: Estado = {
+    contas: [],
+    guias: [],
+    itens: [],
+    eventos: [],
+    recursosItens: [],
+    seq: {},
+    arquivos: [],
+    arquivosEnviados: [],
+  };
 
   /** O relógio da memória (os testes o fixam). */
   agora: () => string = agoraLocal;
@@ -345,6 +362,27 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
       });
   }
 
+  async guardarArquivoLote(c: ContextoContas, x: { conteudo: Uint8Array; nome: string }) {
+    const id = (this.estado.seq['arquivo'] = (this.estado.seq['arquivo'] ?? 0) + 1);
+    this.estado.arquivos.push({ hospital: c.hospital, id, nome: x.nome, bytes: x.conteudo.length });
+    return { id, reaproveitado: false };
+  }
+
+  async descartarArquivoLote(c: ContextoContas, id: number): Promise<void> {
+    this.estado.arquivos = this.estado.arquivos.filter((x) => !(x.hospital === c.hospital && x.id === id));
+  }
+
+  async fixarGuardaArquivoLote(): Promise<void> {}
+
+  /** C2-074 (testes): os arquivos enviados pelo portal e os guardados (de um estabelecimento ou de todos). */
+  arquivosDoPortal(hospital?: string) {
+    const doH = (x: { hospital: string }) => hospital === undefined || x.hospital === hospital;
+    return {
+      enviados: this.estado.arquivosEnviados.filter(doH),
+      guardados: this.estado.arquivos.filter(doH),
+    };
+  }
+
   private gravador(c: ContextoContas, depois: (() => Promise<void>)[]): GravadorContas {
     const e = this.estado;
     const h = c.hospital;
@@ -388,6 +426,15 @@ export class PortaContasOperadoraMemoria implements PortaContasOperadora {
     };
     const gv: GravadorContas = {
       proximoProtocolo: async () => prox('protocolo'),
+      registrarArquivoEnviado: async (a) => {
+        if (e.arquivosEnviados.some((x) => x.prestador === a.prestador && x.sha256 === a.sha256))
+          throw recusa('lote-ja-recebido', 'Este arquivo do prestador já foi recebido.');
+        if (!e.arquivos.some((x) => x.hospital === h && x.id === a.arquivo))
+          throw recusa('arquivo-inexistente', 'O arquivo do lote não está guardado.');
+        const id = prox('arquivoEnviado');
+        e.arquivosEnviados.push({ ...a, hospital: h, id });
+        return { id, versao: 1 };
+      },
       receber: async (r) => {
         if (
           e.contas.some(
