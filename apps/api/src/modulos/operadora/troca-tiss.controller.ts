@@ -10,8 +10,13 @@
 //                                               - CANCELA_GUIA: o resultado guia a guia e o protocolo da resposta;
 //                                               - COMUNICACAO_BENEFICIARIO: a internação ou a alta comunicada.
 //                                             A mensagem que não vira pedido fica registrada como rejeitada, com o motivo.
+//   GET  /api/operadora/troca-tiss/comunicacoes                 as comunicações de internação e alta recebidas
+//                                                               (04-INT linha 80, C1-108), a pendente primeiro
+//   GET  /api/operadora/troca-tiss/comunicacoes/motivos-recusa  os motivos de recusa vigentes (terminologia de glosas)
+//   POST /api/operadora/troca-tiss/comunicacoes/:id/carteira    a central identifica a carteira da pendente
+//   POST /api/operadora/troca-tiss/comunicacoes/:id/resposta    aceita (beneficiário identificado) ou recusa com motivo
 // Cada gravação é uma operação do Executor com a trilha_auditoria na mesma transação.
-import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   CHAVE_OPERADORA_AUTORIZACAO,
   CHAVE_OPERADORA_CONTAS,
@@ -59,6 +64,7 @@ import { ServicoAutorizacaoOperadora } from './autorizacao-servico.js';
 import { contextoGravacao } from './contexto-gravacao.js';
 import {
   type ApoioRecebimentoTroca,
+  type ComunicacaoRecebidaResumo,
   PORTA_TROCA_TISS,
   type PortaTrocaTissPropria,
   type TrocaRecebida,
@@ -76,7 +82,34 @@ const MAXIMO_BYTES = 2_000_000;
 export const ROTAS_TROCA_TISS = {
   lista: 'operadora/troca-tiss',
   receber: 'operadora/troca-tiss/mensagens',
+  comunicacoes: 'operadora/troca-tiss/comunicacoes',
+  motivosRecusa: 'operadora/troca-tiss/comunicacoes/motivos-recusa',
+  identificar: 'operadora/troca-tiss/comunicacoes/:id/carteira',
+  responder: 'operadora/troca-tiss/comunicacoes/:id/resposta',
 } as const;
+
+const idRota = z.coerce.number().int().positive();
+const esquemaFiltroComunicacao = z
+  .object({ situacao: z.enum(['recebida', 'aceita', 'recusada']).optional() })
+  .strict();
+const esquemaIdentificar = z
+  .object({ versao: z.number().int().positive(), carteira: z.string().trim().min(1).max(30) })
+  .strict();
+const esquemaResposta = z.discriminatedUnion('acao', [
+  z.object({ versao: z.number().int().positive(), acao: z.literal('aceitar') }).strict(),
+  z
+    .object({
+      versao: z.number().int().positive(),
+      acao: z.literal('recusar'),
+      motivoRecusa: z.number().int().positive().nullable(),
+    })
+    .strict(),
+]);
+const idDaRota = (v: string): number => {
+  const r = idRota.safeParse(v);
+  if (!r.success) throw new ErroProblema('entrada-invalida', 400, 'Parâmetros inválidos', 'Identificador inválido.');
+  return r.data;
+};
 
 const esquemaMensagem = z
   .object({
@@ -185,6 +218,80 @@ export class TrocaTissOperadoraController {
       throw problemaDoCadastro(e);
     });
     return { itens };
+  }
+
+  @Get(ROTAS_TROCA_TISS.comunicacoes)
+  @Permissao(PERM_LER)
+  async comunicacoes(@Query() q: Record<string, string | undefined>, @Req() req: RequisicaoAutorizada) {
+    const f = esquemaFiltroComunicacao.safeParse(q ?? {});
+    if (!f.success)
+      throw new ErroProblema('entrada-invalida', 400, 'Parâmetros inválidos', 'Filtro inválido.');
+    const s = await this.exigir(req, CHAVE_OPERADORA_CONTAS);
+    const itens: ComunicacaoRecebidaResumo[] = await this.porta
+      .comunicacoes(s.porta, f.data)
+      .catch((e: unknown) => {
+        throw problemaDoCadastro(e);
+      });
+    return { itens };
+  }
+
+  @Get(ROTAS_TROCA_TISS.motivosRecusa)
+  @Permissao(PERM_LER)
+  async motivosRecusa(@Req() req: RequisicaoAutorizada) {
+    const s = await this.exigir(req, CHAVE_OPERADORA_CONTAS);
+    const itens = await this.porta.motivosRecusaComunicacao(s.porta).catch((e: unknown) => {
+      throw problemaDoCadastro(e);
+    });
+    return { itens };
+  }
+
+  @Post(ROTAS_TROCA_TISS.identificar)
+  @HttpCode(200)
+  @Permissao(PERM_RECEBER)
+  @AuditadoNoHandler('operadora.troca-tiss.comunicacao.identificar (comunicacao_internacao_recebida) com a trilha')
+  async identificar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const n = idDaRota(id);
+    const e = corpo(esquemaIdentificar, b);
+    const s = await this.exigir(req, CHAVE_OPERADORA_CONTAS);
+    return this.porta
+      .identificarComunicacao(
+        s.porta,
+        n,
+        e.versao,
+        e.carteira,
+        this.linha(
+          s,
+          E.operadoraContaRecebida.codigo,
+          'operadora.troca-tiss.comunicacao.identificar',
+          'comunicacao_internacao_recebida',
+        ),
+      )
+      .catch((x: unknown) => {
+        throw problemaDoCadastro(x);
+      });
+  }
+
+  @Post(ROTAS_TROCA_TISS.responder)
+  @HttpCode(200)
+  @Permissao(PERM_RECEBER)
+  @AuditadoNoHandler('operadora.troca-tiss.comunicacao.aceitar|recusar (comunicacao_internacao_recebida) com a trilha')
+  async responder(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const n = idDaRota(id);
+    const e = corpo(esquemaResposta, b);
+    const s = await this.exigir(req, CHAVE_OPERADORA_CONTAS);
+    const op =
+      e.acao === 'aceitar' ? 'operadora.troca-tiss.comunicacao.aceitar' : 'operadora.troca-tiss.comunicacao.recusar';
+    return this.porta
+      .responderComunicacao(
+        s.porta,
+        n,
+        e.versao,
+        e.acao === 'aceitar' ? { acao: 'aceitar' } : { acao: 'recusar', motivoRecusa: e.motivoRecusa },
+        this.linha(s, E.operadoraContaRecebida.codigo, op, 'comunicacao_internacao_recebida'),
+      )
+      .catch((x: unknown) => {
+        throw problemaDoCadastro(x);
+      });
   }
 
   @Post(ROTAS_TROCA_TISS.receber)

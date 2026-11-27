@@ -12,9 +12,14 @@
 import {
   type CabecalhoTroca,
   type CancelamentoLido,
+  carteiraNormalizada,
   type ComunicacaoLida,
   type PrestadorDaOrigem,
+  problemasDaIdentificacaoComunicacao,
+  problemasDaRespostaComunicacao,
+  type ProblemaTroca,
   protocoloDaTroca,
+  type RespostaComunicacao,
   resultadoDoCancelamento,
   type ResultadoCancelamento,
   situacaoDaComunicacao,
@@ -99,6 +104,32 @@ export interface ResultadoComunicacaoRecebida extends Gravado {
   readonly beneficiarioIdentificado: boolean;
 }
 
+/** A comunicação de internação ou alta recebida, como a central da operadora confere (04-INT linha 80, C1-108). */
+export interface ComunicacaoRecebidaResumo {
+  readonly id: number;
+  readonly versao: number;
+  readonly prestador: string | null;
+  readonly numeroTransacao: string | null;
+  readonly numeroCarteira: string;
+  readonly beneficiario: number | null;
+  readonly matricula: string | null;
+  readonly recemNascido: boolean;
+  readonly tipoEvento: 'internacao' | 'alta';
+  readonly eventoEm: string | null;
+  readonly tipoInternacao: string | null;
+  readonly motivoEncerramento: string | null;
+  readonly recebidoEm: string;
+  readonly situacao: 'recebida' | 'aceita' | 'recusada';
+  readonly motivoRecusa: { readonly id: number; readonly codigo: string; readonly descricao: string } | null;
+  readonly respondidoEm: string | null;
+}
+
+export interface MotivoRecusaComunicacao {
+  readonly id: number;
+  readonly codigo: string;
+  readonly descricao: string;
+}
+
 export interface TrocaTissResumo {
   readonly id: number;
   readonly direcao: 'recebida' | 'enviada';
@@ -119,6 +150,21 @@ const naoEncontrado = (o: string) =>
     'Registro não encontrado',
     `${o} não existe neste estabelecimento.`,
   );
+
+const MOTIVOS_RESPOSTA: Readonly<Record<string, string>> = {
+  'comunicacao-ja-respondida': 'A comunicação já foi respondida.',
+  'carteira-nao-identificada': 'A carteira não corresponde a um beneficiário desta operadora.',
+  'carteira-vazia': 'Informe a carteira do beneficiário.',
+  'recusa-sem-motivo': 'A recusa precisa do motivo.',
+};
+
+/** A recusa de negócio pelos códigos do domínio (409, com o campo). */
+function recusarSe(p: readonly ProblemaTroca[]): void {
+  if (!p.length) return;
+  throw new ErroOperacao(409, p[0]!.codigo, 'Comunicação recusada', p.map((x) => MOTIVOS_RESPOSTA[x.codigo] ?? x.codigo).join(' '), {
+    campos: p.map((x) => x.campo ?? 'situacao'),
+  });
+}
 
 const instante = (t: string) => new Date(`${t.replace(' ', 'T')}${t.length <= 19 ? 'Z' : ''}`);
 
@@ -143,6 +189,20 @@ export class PortaTrocaTissPropria {
         return fn(l, est);
       },
     );
+  }
+
+  /** O beneficiário do estabelecimento pela carteira normalizada (sem pontuação, maiúsculas); nulo se não houver. */
+  private static async beneficiarioPelaCarteira(tx: Pick<TxOperacao, 'uma'>, est: number, carteira: string): Promise<number | null> {
+    const n = carteiraNormalizada(carteira);
+    if (!n) return null;
+    const b = await tx.uma(
+      `SELECT b.id FROM beneficiario_plano b JOIN contrato_plano k ON k.id = b.contrato_plano_id
+        WHERE UPPER(REGEXP_REPLACE(b.matricula, '[^0-9A-Za-z]', '')) = ? AND k.estabelecimento_id = ?
+          AND b.excluido_em IS NULL
+        ORDER BY b.id LIMIT 1`,
+      [n, est],
+    );
+    return b ? inteiro(b['id']) : null;
   }
 
   private async gravar<T extends Gravado>(
@@ -257,6 +317,74 @@ export class PortaTrocaTissPropria {
         registradaEm: instanteIso(x['registrada_em']) ?? '',
         situacao: textoObrigatorio(x['situacao']),
         mensagemErro: texto(x['mensagem_erro']),
+      }));
+    });
+  }
+
+  /** As comunicações de internação e alta recebidas (a pendente primeiro), com a carteira e o beneficiário. */
+  comunicacoes(
+    c: ContextoPorta,
+    f: { readonly situacao?: string | undefined } = {},
+  ): Promise<ComunicacaoRecebidaResumo[]> {
+    return this.ler(c, async (l, est) => {
+      const filtros = ['r.estabelecimento_id = ?', 'r.excluido_em IS NULL'];
+      const p: unknown[] = [est];
+      if (f.situacao) {
+        filtros.push('r.situacao = ?');
+        p.push(f.situacao);
+      }
+      const linhas = await l.consultar(
+        `SELECT r.id, r.versao, pr.nome AS prestador, r.numero_transacao, r.numero_carteira, r.beneficiario_plano_id,
+                b.matricula, r.recem_nascido, r.tipo_evento, r.evento_em, r.tipo_internacao,
+                r.codigo_motivo_encerramento, r.recebido_em, r.situacao, r.motivo_glosa_id, mg.codigo_tuss,
+                mg.descricao AS motivo_descricao, r.respondido_em
+           FROM comunicacao_internacao_recebida r
+           LEFT JOIN prestador_rede pr ON pr.id = r.prestador_rede_id
+           LEFT JOIN beneficiario_plano b ON b.id = r.beneficiario_plano_id
+           LEFT JOIN motivo_glosa mg ON mg.id = r.motivo_glosa_id
+          WHERE ${filtros.join(' AND ')}
+          ORDER BY r.situacao = 'recebida' DESC, r.recebido_em DESC, r.id DESC LIMIT 200`,
+        p,
+      );
+      return linhas.map((x) => ({
+        id: inteiro(x['id'])!,
+        versao: inteiro(x['versao'])!,
+        prestador: texto(x['prestador']),
+        numeroTransacao: texto(x['numero_transacao']),
+        numeroCarteira: textoObrigatorio(x['numero_carteira']),
+        beneficiario: inteiro(x['beneficiario_plano_id']),
+        matricula: texto(x['matricula']),
+        recemNascido: !!Number(x['recem_nascido']),
+        tipoEvento: textoObrigatorio(x['tipo_evento']) as 'internacao' | 'alta',
+        eventoEm: dataIso(x['evento_em']),
+        tipoInternacao: texto(x['tipo_internacao']),
+        motivoEncerramento: texto(x['codigo_motivo_encerramento']),
+        recebidoEm: instanteIso(x['recebido_em']) ?? '',
+        situacao: textoObrigatorio(x['situacao']) as 'recebida' | 'aceita' | 'recusada',
+        motivoRecusa: x['motivo_glosa_id']
+          ? {
+              id: inteiro(x['motivo_glosa_id'])!,
+              codigo: textoObrigatorio(x['codigo_tuss']),
+              descricao: textoObrigatorio(x['motivo_descricao']),
+            }
+          : null,
+        respondidoEm: instanteIso(x['respondido_em']),
+      }));
+    });
+  }
+
+  /** Os motivos de recusa: os da terminologia de glosas vigentes hoje. */
+  motivosRecusaComunicacao(c: ContextoPorta): Promise<MotivoRecusaComunicacao[]> {
+    return this.ler(c, async (l) => {
+      const linhas = await l.consultar(
+        `SELECT id, codigo_tuss, descricao FROM motivo_glosa
+          WHERE vigencia_inicio <= CURRENT_DATE() AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE())
+          ORDER BY codigo_tuss LIMIT 500`,
+      );
+      return linhas.map((x) => ({
+        id: inteiro(x['id'])!,
+        codigo: textoObrigatorio(x['codigo_tuss']),
+        descricao: textoObrigatorio(x['descricao']),
       }));
     });
   }
@@ -518,12 +646,7 @@ export class PortaTrocaTissPropria {
       trilha,
       async (tx, est) => {
         if (!t.prestador) throw naoEncontrado('O prestador');
-        const b = await tx.uma(
-          `SELECT b.id FROM beneficiario_plano b JOIN contrato_plano k ON k.id = b.contrato_plano_id
-            WHERE b.matricula = ? AND k.estabelecimento_id = ? AND b.excluido_em IS NULL LIMIT 1`,
-          [x.carteira, est],
-        );
-        const beneficiario = b ? inteiro(b['id']) : null;
+        const beneficiario = await PortaTrocaTissPropria.beneficiarioPelaCarteira(tx, est, x.carteira);
         const situacao = situacaoDaComunicacao(beneficiario !== null);
         const troca = await PortaTrocaTissPropria.incluirTroca(tx, est, t, { situacao: 'processada' });
         const id = await tx.incluir('comunicacao_internacao_recebida', {
@@ -548,6 +671,79 @@ export class PortaTrocaTissPropria {
         return { id, versao: 1, troca, situacao, beneficiarioIdentificado: beneficiario !== null };
       },
     );
+  }
+
+  /**
+   * A central identifica a carteira da comunicação pendente: o beneficiário do estabelecimento pela carteira digitada
+   * (normalizada). A carteira informada pelo prestador fica como chegou; a não encontrada é recusada sem gravar.
+   */
+  identificarComunicacao(
+    c: ContextoPorta,
+    id: number,
+    versao: number,
+    carteira: string,
+    trilha: Trilha,
+  ): Promise<Gravado & { readonly beneficiario: number }> {
+    return this.gravar(
+      c,
+      'operadora.troca-tiss.comunicacao.identificar',
+      'comunicacao_internacao_recebida',
+      trilha,
+      async (tx, est) => {
+        const atual = await PortaTrocaTissPropria.comunicacaoDoEst(tx, est, id);
+        recusarSe(problemasDaIdentificacaoComunicacao(atual.situacao, carteira));
+        const beneficiario = await PortaTrocaTissPropria.beneficiarioPelaCarteira(tx, est, carteira);
+        if (beneficiario === null) recusarSe([{ codigo: 'carteira-nao-identificada', campo: 'numeroCarteira' }]);
+        const v = await tx.alterar('comunicacao_internacao_recebida', id, versao, {
+          beneficiario_plano_id: beneficiario,
+        });
+        return { id, versao: v, beneficiario: beneficiario! };
+      },
+    );
+  }
+
+  /**
+   * A resposta da central à comunicação pendente: aceita (com o beneficiário identificado) ou recusada com o motivo da
+   * terminologia de glosas; grava quando respondeu. A já respondida nunca muda.
+   */
+  responderComunicacao(
+    c: ContextoPorta,
+    id: number,
+    versao: number,
+    r: RespostaComunicacao,
+    trilha: Trilha,
+  ): Promise<Gravado & { readonly situacao: 'aceita' | 'recusada' }> {
+    return this.gravar(
+      c,
+      r.acao === 'aceitar' ? 'operadora.troca-tiss.comunicacao.aceitar' : 'operadora.troca-tiss.comunicacao.recusar',
+      'comunicacao_internacao_recebida',
+      trilha,
+      async (tx, est) => {
+        const atual = await PortaTrocaTissPropria.comunicacaoDoEst(tx, est, id);
+        recusarSe(problemasDaRespostaComunicacao(atual, r));
+        const motivo = r.acao === 'recusar' ? r.motivoRecusa : null;
+        if (motivo !== null) {
+          const m = await tx.uma('SELECT id FROM motivo_glosa WHERE id = ?', [motivo]);
+          if (!m) throw naoEncontrado('O motivo de recusa');
+        }
+        const situacao = r.acao === 'aceitar' ? ('aceita' as const) : ('recusada' as const);
+        const v = await tx.alterar('comunicacao_internacao_recebida', id, versao, {
+          situacao,
+          motivo_glosa_id: motivo,
+          respondido_em: new Date(),
+        });
+        return { id, versao: v, situacao };
+      },
+    );
+  }
+
+  private static async comunicacaoDoEst(tx: Pick<TxOperacao, 'uma'>, est: number, id: number) {
+    const x = await tx.uma(
+      'SELECT situacao, beneficiario_plano_id FROM comunicacao_internacao_recebida WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [id, est],
+    );
+    if (!x) throw naoEncontrado('A comunicação recebida');
+    return { situacao: textoObrigatorio(x['situacao']), beneficiarioIdentificado: x['beneficiario_plano_id'] != null };
   }
 
   private static async loteDoEst(l: Leitor | Escritor, est: number, lote: number) {
@@ -810,6 +1006,10 @@ export const METODOS_TROCA_TISS: ReadonlySet<string> = new Set([
   'concluirRecebida',
   'receberCancelamento',
   'receberComunicacao',
+  'comunicacoes',
+  'motivosRecusaComunicacao',
+  'identificarComunicacao',
+  'responderComunicacao',
   'registrarEnvioAnalise',
   'registrarDemonstrativoPagamento',
 ]);

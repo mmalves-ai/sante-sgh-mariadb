@@ -302,6 +302,37 @@ export function situacaoDaComunicacao(beneficiarioIdentificado: boolean): 'aceit
   return beneficiarioIdentificado ? 'aceita' : 'recebida';
 }
 
+/** A carteira como chave de identificação: sem espaços, pontos, traços ou barras, em maiúsculas. */
+export function carteiraNormalizada(carteira: string): string {
+  return carteira.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+}
+
+export type RespostaComunicacao =
+  | { readonly acao: 'aceitar' }
+  | { readonly acao: 'recusar'; readonly motivoRecusa: number | null };
+
+/**
+ * A resposta da central à comunicação recebida: só a ainda 'recebida' é respondida; o aceite exige o beneficiário
+ * identificado pela carteira; a recusa exige o motivo (da terminologia de glosas).
+ */
+export function problemasDaRespostaComunicacao(
+  atual: { readonly situacao: string; readonly beneficiarioIdentificado: boolean },
+  r: RespostaComunicacao,
+): ProblemaTroca[] {
+  if (atual.situacao !== 'recebida') return [{ codigo: 'comunicacao-ja-respondida', campo: 'situacao' }];
+  if (r.acao === 'aceitar' && !atual.beneficiarioIdentificado)
+    return [{ codigo: 'carteira-nao-identificada', campo: 'numeroCarteira' }];
+  if (r.acao === 'recusar' && !r.motivoRecusa) return [{ codigo: 'recusa-sem-motivo', campo: 'motivoRecusa' }];
+  return [];
+}
+
+/** A identificação da carteira só vale para a comunicação ainda pendente. */
+export function problemasDaIdentificacaoComunicacao(situacao: string, carteira: string): ProblemaTroca[] {
+  if (situacao !== 'recebida') return [{ codigo: 'comunicacao-ja-respondida', campo: 'situacao' }];
+  if (!carteiraNormalizada(carteira)) return [{ codigo: 'carteira-vazia', campo: 'numeroCarteira' }];
+  return [];
+}
+
 // ── Pedido de autorização (SOLICITACAO_PROCEDIMENTOS) ───────────────────────────────────────────────
 
 /** Conselho profissional da terminologia TISS (dm_conselhoProfissional) na sigla. */

@@ -5,13 +5,15 @@
 //   - quem recebe contas (`operadora.conta.receber`) envia a mensagem TISS 4.03 que o prestador mandou em arquivo e vê
 //     o resultado na hora: o protocolo do pedido, o resultado guia a guia do cancelamento, se o beneficiário da
 //     comunicação foi identificado, ou os motivos da rejeitada. A recusa do arquivo (versão, XSD, hash, destino,
-//     prestador, sequencial repetido) aparece com o que o XSD apontou, sem registro.
+//     prestador, sequencial repetido) aparece com o que o XSD apontou, sem registro;
+//   - as comunicações de internação e alta recebidas, com a resposta da central (04-INT linha 80, C1-108).
 // O arquivo é conferido antes do envio (extensão .xml e o teto de 2 MB): nada sai da tela que o servidor recusaria.
 import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import ComunicacoesRecebidas from '../componentes/ComunicacoesRecebidas.vue';
 import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { pode } from '../../../casca/sessao/pode.js';
 import { arquivoEmBase64 } from '../api-contas.js';
@@ -316,6 +318,7 @@ async function receber(): Promise<void> {
         </tbody>
       </table>
     </section>
+    <ComunicacoesRecebidas />
   </section>
 </template>
 

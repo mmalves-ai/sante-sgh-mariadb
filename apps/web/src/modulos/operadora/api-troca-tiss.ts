@@ -72,3 +72,57 @@ export async function lerTrocas(f: { tipo?: TipoTroca | null; direcao?: DirecaoT
 
 export const receberMensagem = (arquivo: string): Promise<ResultadoTroca> =>
   enviar(`${C}/mensagens`, { arquivo, canal: 'arquivo' }, esquemaResultadoTroca, novaChave('troca-tiss'));
+
+// ── Comunicações de internação e alta recebidas (04-INT linha 80, C1-108) ─────────────────────────────
+
+export const esquemaComunicacaoRecebida = z.object({
+  id: z.number(),
+  versao: z.number(),
+  prestador: z.string().nullable(),
+  numeroTransacao: z.string().nullable(),
+  numeroCarteira: z.string(),
+  beneficiario: z.number().nullable(),
+  matricula: z.string().nullable(),
+  recemNascido: z.boolean(),
+  tipoEvento: z.enum(['internacao', 'alta']),
+  eventoEm: z.string().nullable(),
+  tipoInternacao: z.string().nullable(),
+  motivoEncerramento: z.string().nullable(),
+  recebidoEm: z.string(),
+  situacao: z.enum(['recebida', 'aceita', 'recusada']),
+  motivoRecusa: z.object({ id: z.number(), codigo: z.string(), descricao: z.string() }).nullable(),
+  respondidoEm: z.string().nullable(),
+});
+export type ComunicacaoRecebida = z.infer<typeof esquemaComunicacaoRecebida>;
+export type SituacaoComunicacao = ComunicacaoRecebida['situacao'];
+const esquemaMotivo = z.object({ id: z.number(), codigo: z.string(), descricao: z.string() });
+export type MotivoRecusa = z.infer<typeof esquemaMotivo>;
+
+export async function lerComunicacoes(situacao: SituacaoComunicacao | null) {
+  const q = situacao ? `?situacao=${situacao}` : '';
+  return (await ler(`${C}/comunicacoes${q}`, z.object({ itens: z.array(esquemaComunicacaoRecebida) }))).itens;
+}
+
+export async function lerMotivosRecusa() {
+  return (await ler(`${C}/comunicacoes/motivos-recusa`, z.object({ itens: z.array(esquemaMotivo) }))).itens;
+}
+
+export const identificarCarteira = (id: number, versao: number, carteira: string) =>
+  enviar(
+    `${C}/comunicacoes/${id}/carteira`,
+    { versao, carteira },
+    z.object({ id: z.number(), versao: z.number(), beneficiario: z.number() }),
+    novaChave('comunicacao-carteira'),
+  );
+
+export const responderComunicacao = (
+  id: number,
+  versao: number,
+  r: { acao: 'aceitar' } | { acao: 'recusar'; motivoRecusa: number | null },
+) =>
+  enviar(
+    `${C}/comunicacoes/${id}/resposta`,
+    { versao, ...r },
+    z.object({ id: z.number(), versao: z.number(), situacao: z.enum(['aceita', 'recusada']) }),
+    novaChave('comunicacao-resposta'),
+  );
