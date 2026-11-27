@@ -4307,7 +4307,9 @@ opcao_menu	2961	sadt.utilitariosAtualizaFaturamento.ambulatorio
 opcao_menu	2962	sadt.utilitariosAtualizaFaturamento.convenios
 opcao_menu	2963	sadt.utilitariosAtualizaFaturamento.aih
 opcao_menu	2964	integracao.hl7.ler
+opcao_menu	2964	sadt.apoio.configurar
 opcao_menu	2964	sadt.apoio.ler
+opcao_menu	2964	sadt.apoio.remessa
 opcao_menu	2964	sadt.apoioElemento.criar
 opcao_menu	2964	sadt.apoioElemento.editar
 opcao_menu	2964	sadt.apoioElemento.exportar

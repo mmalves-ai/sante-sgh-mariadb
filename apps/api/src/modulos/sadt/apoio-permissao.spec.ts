@@ -104,9 +104,14 @@ describe('laboratório de apoio: permissões do pessoal do laboratório (C1-092)
     );
   });
 
-  // Falta (1) da ficha: as linhas 'opcao_menu 2964 sadt.apoio.remessa' e 'opcao_menu 2964 sadt.apoio.configurar' em
-  // conector/mapa/permissoes.tsv (sessão do conector). Com elas, este caso vira teste: só as opções da conta, sem perfil.
-  it.todo('o biomédico migrado com a opção 2964, sem perfil concedido, monta a remessa e mantém o de-para');
+  // As linhas 'opcao_menu 2964 sadt.apoio.remessa' e 'opcao_menu 2964 sadt.apoio.configurar' de
+  // conector/mapa/permissoes.tsv levam a remessa e o de-para a quem tinha a opção na origem, sem perfil concedido.
+  it('o biomédico migrado com a opção 2964, sem perfil concedido, monta a remessa e mantém o de-para', () => {
+    const p = permissoesDa('SINT.BIOMEDICO');
+    expect(p).toEqual(
+      expect.arrayContaining(['sadt.apoio.ler', 'sadt.apoio.remessa', 'sadt.apoio.configurar']),
+    );
+  });
 
   it('o laboratório sem o perfil não monta remessa nem mexe no de-para', () => {
     const p = permissoesDa('SINT.LABORATORIO');
