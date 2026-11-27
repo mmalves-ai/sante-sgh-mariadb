@@ -113,7 +113,7 @@ def baixar(nome: str) -> dict:
 
 
 # fontes oficiais sem endereço fixo: só por --registrar (o carregador lê o arquivo registrado)
-MANUAIS = {"cfop", "tiss", "ciap2", "taco"}
+MANUAIS = {"cfop", "tiss", "ciap2", "taco", "rol_ans"}
 
 
 def registrar(nome: str, origem: str, versao: str | None = None) -> dict:
