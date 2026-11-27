@@ -293,6 +293,16 @@ const SQL_LAUDOS = `
     LEFT JOIN lote_laudo_sus lt ON lt.id = l.lote_laudo_sus_id
    WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL`;
 
+/** C1-051: o setor do laudo `l` (o do atendimento da internação; sem internação, o do atendimento do laudo). */
+const SQL_SETOR_LAUDO = `(SELECT COALESCE(ati.setor_funcional_id, atl.setor_funcional_id) FROM laudo_internacao_sus sx
+    LEFT JOIN internacao si ON si.id = sx.internacao_id
+    LEFT JOIN atendimento ati ON ati.id = si.atendimento_id
+    LEFT JOIN atendimento atl ON atl.id = sx.atendimento_id
+   WHERE sx.id = l.id)`;
+
+const marcas = (n: readonly unknown[]) => n.map(() => '?').join(',');
+const setorOuNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+
 const SQL_LOTES = `SELECT id, numero, situacao, quantidade_laudos, gerado_em, exportado_em, recebido_autorizacao_em,
        observacao, versao FROM lote_laudo_sus WHERE estabelecimento_id = ? AND excluido_em IS NULL`;
 
@@ -380,11 +390,20 @@ export class PortaLaudoInternacaoSusPropria extends PortaEstabelecimentoPropria 
   }
 
   /** Os laudos do estabelecimento (da AIH, os sem lote ou por situação), mais recentes primeiro, com os especiais. */
-  listar(c: ContextoPortaPropria, filtro: unknown = {}): Promise<LaudoInternacaoSusLido[]> {
+  listar(
+    c: ContextoPortaPropria,
+    filtro: unknown = {},
+    setores: readonly number[] | null = null,
+  ): Promise<LaudoInternacaoSusLido[]> {
     const f = entradaValida(esquemaFiltro, filtro);
     return this.ler(c, 'listar', async (l, est) => {
       const cond: string[] = [];
       const par: unknown[] = [est.id];
+      // C1-051: com permissão por setor, só os laudos de um setor permitido (sem setor, fora).
+      if (setores) {
+        cond.push(setores.length ? `${SQL_SETOR_LAUDO} IN (${marcas(setores)})` : '1 = 0');
+        par.push(...setores);
+      }
       if (f.autorizacao) {
         cond.push('COALESCE(a.id, ae.id) = ?');
         par.push(f.autorizacao);
@@ -440,9 +459,23 @@ export class PortaLaudoInternacaoSusPropria extends PortaEstabelecimentoPropria 
     });
   }
 
-  listarLotes(c: ContextoPortaPropria): Promise<LoteLaudoSusLido[]> {
+  listarLotes(
+    c: ContextoPortaPropria,
+    setores: readonly number[] | null = null,
+  ): Promise<LoteLaudoSusLido[]> {
     return this.ler(c, 'lotes', async (l, est) => {
-      const lotes = await l.consultar(`${SQL_LOTES} ORDER BY id DESC LIMIT 200`, [est.id]);
+      // C1-051: com permissão por setor, só os lotes com todos os laudos em setor permitido.
+      const filtro = !setores
+        ? ''
+        : setores.length === 0
+          ? ' AND 1 = 0'
+          : ` AND NOT EXISTS (SELECT 1 FROM item_lote_laudo_sus fi JOIN laudo_internacao_sus l ON l.id = fi.laudo_internacao_sus_id
+              WHERE fi.lote_laudo_sus_id = lote_laudo_sus.id
+                AND COALESCE(${SQL_SETOR_LAUDO}, 0) NOT IN (${marcas(setores)}))`;
+      const lotes = await l.consultar(`${SQL_LOTES}${filtro} ORDER BY id DESC LIMIT 200`, [
+        est.id,
+        ...(setores ?? []),
+      ]);
       const ids = lotes.map((r) => num(r['id']));
       const itens = ids.length
         ? await l.consultar(
@@ -455,6 +488,60 @@ export class PortaLaudoInternacaoSusPropria extends PortaEstabelecimentoPropria 
   }
 
   /** O gestor devolve o laudo da AIH solicitada para correção. */
+  /**
+   * C1-051: o setor do atendimento da internação, pela AIH ou pelo laudo (a permissão por usuário e setor); null,
+   * registro fora do estabelecimento da sessão.
+   */
+  setor(
+    c: ContextoPortaPropria,
+    ref: { readonly aih: number } | { readonly laudo: number },
+  ): Promise<{ setor: number | null } | null> {
+    return this.ler(c, 'setor', async (l, est) => {
+      const x =
+        'aih' in ref
+          ? await l.uma(
+              `SELECT at.setor_funcional_id FROM autorizacao_internacao_sus a
+                 LEFT JOIN internacao i ON i.id = a.internacao_id
+                 LEFT JOIN atendimento at ON at.id = i.atendimento_id
+                WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
+              [ref.aih, est.id],
+            )
+          : await l.uma(
+              `SELECT ${SQL_SETOR_LAUDO} AS setor_funcional_id FROM laudo_internacao_sus l
+                WHERE l.id = ? AND l.estabelecimento_id = ? AND l.excluido_em IS NULL`,
+              [ref.laudo, est.id],
+            );
+      return x ? { setor: setorOuNull(x['setor_funcional_id']) } : null;
+    });
+  }
+
+  /**
+   * C1-051: os setores dos laudos de um lote (pelo lote, ou pelos laudos pedidos na geração); o lote é um envio ao
+   * gestor e exige 'faturamento' em todos. Entrada inválida: nenhum (a porta recusa em seguida).
+   */
+  setoresDoLote(c: ContextoPortaPropria, ref: { readonly lote: number } | { readonly entrada: unknown }) {
+    let laudos: number[] | null = null;
+    if ('entrada' in ref) {
+      const e = esquemaLote.safeParse(ref.entrada);
+      if (!e.success || e.data.laudos.length === 0) return Promise.resolve<(number | null)[]>([]);
+      laudos = e.data.laudos;
+    }
+    return this.ler(c, 'setores', async (l, est) =>
+      (
+        await l.consultar(
+          laudos
+            ? `SELECT DISTINCT ${SQL_SETOR_LAUDO} AS setor_funcional_id FROM laudo_internacao_sus l
+                WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL AND l.id IN (${marcas(laudos)})`
+            : `SELECT DISTINCT ${SQL_SETOR_LAUDO} AS setor_funcional_id FROM item_lote_laudo_sus i
+                 JOIN laudo_internacao_sus l ON l.id = i.laudo_internacao_sus_id
+                 JOIN lote_laudo_sus lt ON lt.id = i.lote_laudo_sus_id
+                WHERE lt.estabelecimento_id = ? AND lt.id = ?`,
+          laudos ? [est.id, ...laudos] : [est.id, 'lote' in ref ? ref.lote : 0],
+        )
+      ).map((x) => setorOuNull(x['setor_funcional_id'])),
+    );
+  }
+
   devolver(c: ContextoPortaPropria, aih: number, entrada: unknown) {
     const e = entradaValida(esquemaDevolver, entrada);
     return this.gravar(c, 'faturamento.sus.laudo.devolver', TABELAS, async (tx, est) => {

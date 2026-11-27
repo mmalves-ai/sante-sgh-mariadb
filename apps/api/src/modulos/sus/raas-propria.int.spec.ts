@@ -428,5 +428,28 @@ describe.skipIf(SEM_BANCO)('PortaRaasPropria contra o MariaDB (contrato de efeit
     const comp = await porta.painel(ctx(), '202601', 'atencao_psicossocial', null);
     expect(comp.remessas.map((x) => x.situacao)).toEqual(['gerada', 'substituida']);
     expect(comp.criticadaEm).not.toBeNull();
+
+    // C1-051: o registro sem atendimento fica sem setor (pelo registro e pela ação); fora do estabelecimento, nada.
+    expect(await porta.setor(ctx(), { registro: r.id })).toEqual({ setor: null });
+    expect(await porta.setor(ctx(), { acao: a1.id })).toEqual({ setor: null });
+    expect(await porta.setor(ctx(P2), { registro: r.id })).toBeNull();
+    expect(await porta.setor(ctx(), { acao: -1 })).toBeNull();
+    expect(await porta.setor(ctx(), { atendimento: null })).toEqual({ setor: null });
+    const [at] = await ler<{ id: number; setor_funcional_id: number }>(
+      'SELECT id, setor_funcional_id FROM atendimento WHERE setor_funcional_id IS NOT NULL AND excluido_em IS NULL LIMIT 1',
+    );
+    if (at)
+      expect(await porta.setor(ctx(), { atendimento: at.id })).toEqual({
+        setor: Number(at.setor_funcional_id),
+      });
+    // Os setores da competência e tipo (criticar e gerar exigem 'faturamento' em todos); entrada inválida, nenhum.
+    expect(
+      await porta.setoresDaCompetencia(ctx(), { competencia: '202601', tipo: 'atencao_psicossocial' }),
+    ).toEqual([null]);
+    expect(await porta.setoresDaCompetencia(ctx(), { competencia: 'x' })).toEqual([]);
+    // A listagem com permissão por setor: só os registros do atendimento num setor permitido.
+    expect((await porta.painel(ctx(), '202601', null, m.paciente, [])).registros).toEqual([]);
+    expect((await porta.painel(ctx(), '202601', null, m.paciente, [1, 2])).registros).toEqual([]);
+    expect((await porta.painel(ctx(), '202601', null, m.paciente, null)).registros).toHaveLength(3);
   });
 });

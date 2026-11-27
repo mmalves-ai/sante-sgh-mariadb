@@ -1146,6 +1146,17 @@ export class ServicoSus {
     return setoresPermitidosSus(s.permissoesSetor ?? [], { usuario: s.usuario ?? null, acao, hoje: s.hoje });
   }
 
+  /** C1-051: exige a ação em todos os setores informados (os de uma competência, de um lote); null entra como não informado. */
+  exigirSetoresSus(s: SessaoSus, setores: readonly (number | null)[], acao: AcaoSetorSus): void {
+    const r = decidirSetoresProducaoSus(s.permissoesSetor ?? [], {
+      usuario: s.usuario ?? null,
+      setores,
+      acao,
+      hoje: s.hoje,
+    });
+    if (r) throw recusaConfiguracaoSus(r);
+  }
+
   /** C1-051: confere o setor do atendimento (ou da internação) antes de ler ou gravar o registro dele. */
   async exigirSetorDe(
     s: SessaoSus,

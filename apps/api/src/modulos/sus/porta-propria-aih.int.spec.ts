@@ -1488,6 +1488,29 @@ describe.skipIf(SEM_BANCO)('AIH própria contra o MariaDB (cliente f22_o3)', () 
     ).toBe(2);
     await porta.retornarLote(c, lote, { versao: 2, observacao: 'Lista do gestor recebida' });
 
+    // C1-051: o setor do laudo é o do atendimento da internação; com permissão por setor, a listagem e os lotes filtram.
+    const setorLaudo = await porta.setor(c, { laudo: idLaudo });
+    expect(setorLaudo).not.toBeNull();
+    expect(await porta.setor(c, { aih: id })).toEqual(setorLaudo);
+    expect(await porta.setor(c, { laudo: -1 })).toBeNull();
+    expect(await porta.setor(c, { aih: -1 })).toBeNull();
+    expect(await porta.setoresDoLote(c, { lote })).toEqual([setorLaudo?.setor ?? null]);
+    expect(await porta.setoresDoLote(c, { entrada: { laudos: [idLaudo] } })).toEqual([
+      setorLaudo?.setor ?? null,
+    ]);
+    expect(await porta.setoresDoLote(c, { entrada: { laudos: 'x' } })).toEqual([]);
+    expect(await porta.listar(c, {}, [])).toEqual([]);
+    expect(await porta.listarLotes(c, [])).toEqual([]);
+    const setorDoLaudo = setorLaudo?.setor ?? null;
+    if (setorDoLaudo !== null) {
+      expect((await porta.listar(c, {}, [setorDoLaudo])).map((x) => x.id)).toContain(idLaudo);
+      expect((await porta.listarLotes(c, [setorDoLaudo])).map((x) => x.id)).toContain(lote);
+      expect((await porta.listar(c, {}, [setorDoLaudo + 1000000])).map((x) => x.id)).not.toContain(idLaudo);
+    } else {
+      // Sem setor, o laudo fica fora de qualquer filtro por setor.
+      expect((await porta.listar(c, {}, [1])).map((x) => x.id)).not.toContain(idLaudo);
+    }
+
     // Autorizar leva o número ao laudo.
     const numero = numeroAih(BASE + 60n);
     await gravar(ids.est, (g) =>

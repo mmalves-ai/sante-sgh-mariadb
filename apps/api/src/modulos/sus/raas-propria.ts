@@ -257,7 +257,13 @@ export class PortaRaasPropria extends PortaEstabelecimentoPropria {
   }
 
   /** O painel da competência: registros (com contagens de ação e crítica) e remessas do tipo, ou de um paciente. */
-  painel(c: ContextoPortaPropria, comp: string, tipoRaas: TipoRaas | null, paciente: number | null) {
+  painel(
+    c: ContextoPortaPropria,
+    comp: string,
+    tipoRaas: TipoRaas | null,
+    paciente: number | null,
+    setores: readonly number[] | null = null,
+  ) {
     if (!competencia.safeParse(comp).success)
       throw recusaRegra('Competência inválida', [
         { campo: 'competencia', mensagem: 'Use a competência AAAAMM.' },
@@ -275,6 +281,17 @@ export class PortaRaasPropria extends PortaEstabelecimentoPropria {
       if (tipoRaas) {
         filtros.push('r.tipo_raas = ?');
         p.push(tipoRaas);
+      }
+      // C1-051: com permissão por setor, só os registros do atendimento num setor permitido (sem atendimento, fora).
+      if (setores) {
+        if (setores.length === 0) filtros.push('1 = 0');
+        else {
+          filtros.push(
+            `EXISTS (SELECT 1 FROM atendimento sa WHERE sa.id = r.atendimento_id
+                        AND sa.setor_funcional_id IN (${setores.map(() => '?').join(',')}))`,
+          );
+          p.push(...setores);
+        }
       }
       const registros = (
         await l.consultar(
@@ -318,6 +335,60 @@ export class PortaRaasPropria extends PortaEstabelecimentoPropria {
         remessas,
       };
     });
+  }
+
+  /**
+   * C1-051: o setor do atendimento do registro (pelo registro, pela ação dele ou pelo atendimento informado na inclusão);
+   * registro sem atendimento fica sem setor; null, registro ou ação fora do estabelecimento da sessão.
+   */
+  setor(
+    c: ContextoPortaPropria,
+    ref: { readonly registro: number } | { readonly acao: number } | { readonly atendimento: number | null },
+  ): Promise<{ setor: number | null } | null> {
+    if ('atendimento' in ref && ref.atendimento === null) return Promise.resolve({ setor: null });
+    return this.ler(c, 'setor', async (l, est) => {
+      const x =
+        'registro' in ref
+          ? await l.uma(
+              `SELECT at.setor_funcional_id FROM registro_raas r LEFT JOIN atendimento at ON at.id = r.atendimento_id
+                WHERE r.id = ? AND r.estabelecimento_id = ? AND r.excluido_em IS NULL`,
+              [ref.registro, est.id],
+            )
+          : 'acao' in ref
+            ? await l.uma(
+                `SELECT at.setor_funcional_id FROM registro_raas_procedimento a
+                   JOIN registro_raas r ON r.id = a.registro_raas_id
+                   LEFT JOIN atendimento at ON at.id = r.atendimento_id
+                  WHERE a.id = ? AND r.estabelecimento_id = ? AND r.excluido_em IS NULL`,
+                [ref.acao, est.id],
+              )
+            : await l.uma('SELECT setor_funcional_id FROM atendimento WHERE id = ? AND excluido_em IS NULL', [
+                ref.atendimento,
+              ]);
+      if (!x) return 'atendimento' in ref ? { setor: null } : null;
+      const v = x['setor_funcional_id'];
+      return { setor: v === null || v === undefined ? null : Number(v) };
+    });
+  }
+
+  /**
+   * C1-051: os setores com registro RAAS na competência e tipo pedidos (criticar e gerar a remessa exigem 'faturamento'
+   * em todos); o registro sem atendimento entra como setor não informado. Entrada inválida: nenhum (a porta recusa).
+   */
+  setoresDaCompetencia(c: ContextoPortaPropria, entrada: unknown): Promise<(number | null)[]> {
+    const e = z.object({ competencia, tipo }).safeParse(entrada);
+    if (!e.success) return Promise.resolve([]);
+    return this.ler(c, 'setores', async (l, est) =>
+      (
+        await l.consultar(
+          `SELECT DISTINCT at.setor_funcional_id FROM registro_raas r
+             JOIN competencia_sus cs ON cs.id = r.competencia_sus_id
+             LEFT JOIN atendimento at ON at.id = r.atendimento_id
+            WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL AND cs.competencia = ? AND r.tipo_raas = ?`,
+          [est.id, e.data.competencia, e.data.tipo],
+        )
+      ).map((x) => (x['setor_funcional_id'] === null ? null : Number(x['setor_funcional_id']))),
+    );
   }
 
   /** O registro com as ações e as críticas abertas. */

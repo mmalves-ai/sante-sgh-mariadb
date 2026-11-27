@@ -29,6 +29,7 @@ import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
+import { GuardaSetorSus } from './guarda-setor-sus.js';
 import { PORTA_RAAS, type PortaRaasPropria } from './raas-propria.js';
 
 export const PERMISSOES_RAAS = {
@@ -49,7 +50,40 @@ export class RaasSusController {
     @Optional()
     @Inject(PORTA_RAAS)
     private readonly porta: PortaRaasPropria | null = null,
+    @Optional() private readonly setor: GuardaSetorSus | null = null,
   ) {}
+
+  /**
+   * C1-051: a permissão por usuário e setor. A digitação do registro e das ações confere o setor do atendimento do
+   * registro; a inclusão, o do atendimento informado (sem atendimento, setor não informado).
+   */
+  private async exigirSetor(
+    req: RequisicaoAutorizada,
+    ref: { registro: number } | { acao: number } | { atendimento: number | null },
+  ) {
+    const porta = this.porta;
+    if (!porta || !this.setor) return;
+    await this.setor.exigir(req, 'digitacao', () => porta.setor(sessaoDe(req).porta, ref));
+  }
+
+  /** C1-051: criticar e gerar a remessa exigem 'faturamento' em todos os setores da competência e tipo. */
+  private async exigirFaturamento(req: RequisicaoAutorizada, corpo: unknown) {
+    const porta = this.porta;
+    if (!porta || !this.setor) return;
+    await this.setor.exigirTodos(req, 'faturamento', () =>
+      porta.setoresDaCompetencia(sessaoDe(req).porta, corpo),
+    );
+  }
+
+  private async setoresDaListagem(req: RequisicaoAutorizada) {
+    return this.porta && this.setor ? this.setor.setores(req, 'digitacao') : null;
+  }
+
+  private static atendimentoDe(corpo: unknown): number | null {
+    const v =
+      typeof corpo === 'object' && corpo !== null ? (corpo as Record<string, unknown>)['atendimento'] : null;
+    return typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : null;
+  }
 
   private async com<T>(
     req: RequisicaoAutorizada,
@@ -64,7 +98,7 @@ export class RaasSusController {
 
   @Get()
   @Permissao(PERMISSOES_RAAS.ler)
-  painel(
+  async painel(
     @Req() req: RequisicaoAutorizada,
     @Query('competencia') competencia?: string,
     @Query('tipo') tipo?: string,
@@ -72,7 +106,10 @@ export class RaasSusController {
   ) {
     const t = TIPOS_RAAS.includes(tipo as TipoRaas) ? (tipo as TipoRaas) : null;
     const p = /^\d+$/.test(paciente ?? '') ? Number(paciente) : null;
-    return this.com(req, (x, c) => x.painel(c, (competencia ?? '').trim() || competenciaAtual(), t, p));
+    const setores = await this.setoresDaListagem(req);
+    return this.com(req, (x, c) =>
+      x.painel(c, (competencia ?? '').trim() || competenciaAtual(), t, p, setores),
+    );
   }
 
   @Get('opcoes')
@@ -89,7 +126,8 @@ export class RaasSusController {
 
   @Get('registros/:id')
   @Permissao(PERMISSOES_RAAS.ler)
-  detalhe(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
+  async detalhe(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
+    await this.exigirSetor(req, { registro: id });
     return this.com(req, (p, c) => p.detalhe(c, id));
   }
 
@@ -97,7 +135,8 @@ export class RaasSusController {
   @HttpCode(201)
   @Permissao(PERMISSOES_RAAS.registrar)
   @AuditadoNoHandler(TRILHA)
-  incluir(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+  async incluir(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+    await this.exigirSetor(req, { atendimento: RaasSusController.atendimentoDe(corpo) });
     return this.com(req, (p, c) => p.incluirRegistro(c, corpo));
   }
 
@@ -105,7 +144,12 @@ export class RaasSusController {
   @HttpCode(201)
   @Permissao(PERMISSOES_RAAS.registrar)
   @AuditadoNoHandler(TRILHA)
-  lancar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
+  async lancar(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    await this.exigirSetor(req, { registro: id });
     return this.com(req, (p, c) => p.lancarAcao(c, id, corpo));
   }
 
@@ -113,7 +157,12 @@ export class RaasSusController {
   @HttpCode(200)
   @Permissao(PERMISSOES_RAAS.registrar)
   @AuditadoNoHandler(TRILHA)
-  retirar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
+  async retirar(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    await this.exigirSetor(req, { acao: id });
     return this.com(req, (p, c) => p.retirarAcao(c, id, corpo));
   }
 
@@ -121,7 +170,12 @@ export class RaasSusController {
   @HttpCode(200)
   @Permissao(PERMISSOES_RAAS.registrar)
   @AuditadoNoHandler(TRILHA)
-  concluir(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
+  async concluir(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    await this.exigirSetor(req, { registro: id });
     return this.com(req, (p, c) => p.concluir(c, id, corpo));
   }
 
@@ -129,7 +183,12 @@ export class RaasSusController {
   @HttpCode(201)
   @Permissao(PERMISSOES_RAAS.registrar)
   @AuditadoNoHandler(TRILHA)
-  continuar(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number, @Body() corpo: unknown) {
+  async continuar(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() corpo: unknown,
+  ) {
+    await this.exigirSetor(req, { registro: id });
     return this.com(req, (p, c) => p.continuar(c, id, corpo));
   }
 
@@ -137,7 +196,8 @@ export class RaasSusController {
   @HttpCode(200)
   @Permissao(PERMISSOES_RAAS.registrar)
   @AuditadoNoHandler(TRILHA)
-  criticar(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+  async criticar(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+    await this.exigirFaturamento(req, corpo);
     return this.com(req, (p, c) => p.criticar(c, corpo));
   }
 
@@ -145,7 +205,8 @@ export class RaasSusController {
   @HttpCode(201)
   @Permissao(PERMISSOES_RAAS.gerar)
   @AuditadoNoHandler(TRILHA)
-  gerar(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+  async gerar(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+    await this.exigirFaturamento(req, corpo);
     return this.com(req, (p, c) => p.gerarRemessa(c, corpo));
   }
 }

@@ -90,4 +90,23 @@ export class GuardaSetorSus {
     if (!x) return;
     this.base.servico.exigirSetorSus(s, x.setor, acao);
   }
+
+  /** Os setores em que a sessão pode a ação (o filtro das listagens); null, sem restrição. */
+  async setores(req: RequisicaoAutorizada, acao: AcaoSetorSus): Promise<readonly number[] | null> {
+    return this.base.servico.setoresSus(await this.base.sessao(req), acao);
+  }
+
+  /**
+   * Exige a ação em todos os setores do conjunto (a competência e tipo da RAAS, o lote de laudos): lê os setores só
+   * quando a sessão tem permissão por setor vigente.
+   */
+  async exigirTodos(
+    req: RequisicaoAutorizada,
+    acao: AcaoSetorSus,
+    setoresDe: () => Promise<readonly (number | null)[]>,
+  ): Promise<void> {
+    const s = await this.base.sessao(req);
+    if (this.base.servico.setoresSus(s, acao) === null) return;
+    this.base.servico.exigirSetoresSus(s, await setoresDe(), acao);
+  }
 }
