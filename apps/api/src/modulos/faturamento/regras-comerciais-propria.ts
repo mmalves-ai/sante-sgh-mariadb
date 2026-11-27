@@ -39,6 +39,7 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { criticarCoberturaDoItemConta } from './cobertura-item-conta.js';
 import { totalDosItens } from './operacoes.js';
 import { precoVigente, tabelasDePreco } from './preco-conta.js';
 import { regrasContaDo } from './regras-conta-leitura.js';
@@ -1072,6 +1073,14 @@ async function lancarItem(
     'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?',
     [c['id']],
   );
+  // F7 (09-AREA linha 76): a cobertura da fonte pagadora antes de incluir o item da regra (o bloqueio recusa).
+  await criticarCoberturaDoItemConta(tx, est, {
+    conta: n(c['id']),
+    item,
+    realizado: `${data} 00:00`,
+    quantidade,
+    valorTotal: total,
+  });
   const agora = new Date();
   const novo = await tx.incluir('conta_hospitalar_item', {
     conta_hospitalar_id: c['id'],
