@@ -406,9 +406,10 @@ describe('privilégio mínimo por módulo: artefatos do repositório', () => {
   });
 
   it('constante de tabelas importada de outro módulo segue o import até a definição (repasse no faturamento)', () => {
-    // faturamento/operacoes.ts declara `...TABELAS_PRODUCAO_CONTA`, definida em repasse/producao-conta.ts.
+    // faturamento/operacoes.ts declara `...TABELAS_SINCRONIZACAO_PRODUCAO`, definida em repasse/producao-conta.ts a partir
+    // da TABELAS_PRODUCAO_CONTA da persistência (outro pacote) e das tabelas do fato contábil: dois saltos de import.
     expect(ler('apps/api/src/modulos/faturamento/operacoes.ts')).toMatch(
-      /import \{[^}]*\bTABELAS_PRODUCAO_CONTA\b[^}]*\} from '\.\.\/repasse\/producao-conta\.js'/,
+      /import \{[^}]*\bTABELAS_SINCRONIZACAO_PRODUCAO\b[^}]*\} from '\.\.\/repasse\/producao-conta\.js'/,
     );
     for (const t of ['producao_repasse', 'estorno_repasse'])
       expect(porModulo.get('faturamento')?.[t]).toEqual(['SELECT', 'INSERT', 'UPDATE']);
