@@ -32,6 +32,13 @@ const SENHA = 'Sintetico#2026';
 const SENHA_MED = 'senha-longa-sintetica-w010m';
 const SENHA_MED_NOVA = 'outra-senha-longa-sintetica-w010m';
 const NUMERO = '77010';
+/** CPF sintético válido (verificadores conferidos) por número do conselho: o autocadastro exige o CPF do médico. */
+const CPF_DO_NUMERO: Record<string, string> = {
+  '77010': '770.100.010-06',
+  '77011': '770.110.011-31',
+  '77012': '770.120.012-67',
+  '77013': '770.130.013-92',
+};
 const EMAIL = 'cirurgiao.w010@exemplo.invalid';
 const EMAIL_NOVO = 'cirurgiao.novo.w010@exemplo.invalid';
 
@@ -164,6 +171,7 @@ async function autocadastroAprovado(page: Page, med: Page, NUM: string, email: s
   await med.getByTestId('medico-nome').fill('Clinico Externo W010');
   await med.getByTestId('medico-uf').fill('SP');
   await med.getByTestId('medico-numero').fill(NUM);
+  await med.getByTestId('medico-cpf').fill(CPF_DO_NUMERO[NUM]!);
   await med.getByTestId('medico-email').fill(email);
   await med.getByTestId('medico-senha').fill(SENHA_MED);
   await med.getByTestId('medico-aceite').check();
@@ -219,6 +227,7 @@ test.describe('portal do médico externo: conta e pedido de cirurgia @W0-10', ()
     await med.getByTestId('medico-nome').fill('Cirurgiao Externo W010');
     await med.getByTestId('medico-uf').fill('SP');
     await med.getByTestId('medico-numero').fill(NUMERO);
+    await med.getByTestId('medico-cpf').fill(CPF_DO_NUMERO[NUMERO]!);
     await med.getByTestId('medico-email').fill(EMAIL);
     await med.getByTestId('medico-senha').fill(SENHA_MED);
     await med.getByTestId('medico-aceite').check();
