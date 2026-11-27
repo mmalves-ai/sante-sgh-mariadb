@@ -22,10 +22,13 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-/** Admite o paciente sintético num leito livre da enfermaria e devolve o número da internação. */
+/**
+ * Admite o paciente sintético num leito livre e devolve o número da internação. O movimento sintético é gerado pela data do
+ * dia: em alguns dias a enfermaria fica toda ocupada, por isso vale qualquer leito livre do mapa (enfermaria primeiro).
+ */
 async function admitir(page: Page): Promise<number> {
   await page.goto('/leitos/mapa');
-  const cartoes = page.locator('[data-testid^="leito-1|ENF1|"][data-situacao="livre"]');
+  const cartoes = page.locator('[data-testid^="leito-"][data-testid*="|"][data-situacao="livre"]');
   await expect(cartoes.first()).toBeVisible();
   const origem = ((await cartoes.first().getAttribute('data-testid')) ?? '').replace(/^leito-/, '');
   await page.getByTestId(`admitir-${origem}`).click();
