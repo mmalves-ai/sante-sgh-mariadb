@@ -114,8 +114,7 @@ export async function modulo(
   const rede = ctx.configuracao.rede ?? 'rede-sintetica';
   return {
     module: ModuloAssinatura,
-    // Global: a fila de assinatura remota do portal do médico externo (W0-10, M6) e o login por certificado usam o
-    // serviço deste módulo.
+    // Global: a fila de assinatura remota do portal do médico externo (W0-10, M6) usa o serviço deste módulo.
     global: true,
     controllers: [AssinaturaIcpController, AssinaturaDocumentosController, VerificadorController],
     providers: [
@@ -178,14 +177,9 @@ export async function modulo(
         inject: [CONFIG_DOCUMENTOS_ICP, { token: FONTE_CONFIGURACAO, optional: true }],
       },
     ],
-    exports: [
-      PORTA_ASSINATURA_ICP,
-      CONFIG_ASSINATURA_ICP,
-      SERVICO_ASSINATURA_ICP,
-      SERVICO_LOGIN_CERTIFICADO,
-      CONFIG_DOCUMENTOS_ICP,
-      SERVICO_DOCUMENTOS_ICP,
-      SERVICO_VERIFICADOR,
-    ],
+    // Global só para a fila do portal do médico externo: exporta só os três símbolos que ela usa. O login por
+    // certificado e os demais provedores não vazam para o resto da API (a sessão do AcessoController volta a ser a de
+    // antes de 6b18fddb).
+    exports: [CONFIG_ASSINATURA_ICP, SERVICO_ASSINATURA_ICP, SERVICO_DOCUMENTOS_ICP],
   };
 }
