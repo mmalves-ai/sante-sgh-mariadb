@@ -3,8 +3,11 @@
 // sistema fechada e o banco de perguntas pelos tipos do construtor. As recusas do ciclo rodam contra o MariaDB no
 // .int.spec.
 import { ErroOperacao, type Executor, type Leitor, type Linha } from '@sgh/nucleo';
+import { esquemaDefinicaoFormularioNovo } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import {
+  type CampoMigrado,
+  definicaoDaVersaoMigrada,
   type NucleoFormularioNovo,
   OPERACAO_PONTE,
   PortaFormularioNovoPropria,
@@ -104,7 +107,9 @@ describe('PortaFormularioNovoPropria (dublê)', () => {
       casos: [{ ordem: 1, caso: { nome: 'caso' } }],
     });
     const sql = d.chamadas.find((x) => x.sql.includes('FROM modelo_documento_versao'))!.sql;
-    expect(sql).toMatch(/v\.formato IS NOT NULL AND v\.situacao <> 'descartada' AND m\.excluido_em IS NULL/);
+    expect(sql).toMatch(
+      /\(v\.formato IS NOT NULL OR v\.situacao IN \('publicada', 'substituida', 'aposentada'\)\)\s+AND v\.situacao <> 'descartada' AND m\.excluido_em IS NULL/,
+    );
   });
 
   it('usa o cliente da configuração quando a sessão não traz, e o fuso padrão sem estabelecimento', async () => {
@@ -199,5 +204,83 @@ describe('PortaFormularioNovoPropria (dublê)', () => {
     expect([...plano.codigosExistentes]).toEqual(['ENF02']);
     expect(plano.banco).toEqual([]);
     expect(plano.respostasCadastradas).toEqual([]);
+  });
+});
+
+describe('definição derivada da versão migrada (decisão 61: nova versão a partir do modelo migrado)', () => {
+  const campo = (c: Partial<CampoMigrado> & Pick<CampoMigrado, 'id' | 'identificador' | 'tipoCampo'>) => ({
+    pai: null,
+    sequencia: c.id,
+    titulo: `Campo sintético ${c.id}`,
+    obrigatorio: false,
+    unidade: null,
+    minimo: null,
+    maximo: null,
+    opcoes: [],
+    ...c,
+  });
+
+  it('os campos viram perguntas na árvore e na ordem, válidas no contrato do construtor', () => {
+    const d = definicaoDaVersaoMigrada({
+      codigo: '4711',
+      titulo: 'Evolução sintética migrada',
+      tipoRegistro: 'outro',
+      campos: [
+        campo({ id: 1, identificador: 'campo_10', tipoCampo: 'grupo' }),
+        campo({
+          id: 2,
+          pai: 1,
+          identificador: 'campo_11',
+          tipoCampo: 'decimal',
+          unidade: 'mg/dL',
+          minimo: 0,
+          obrigatorio: true,
+        }),
+        campo({ id: 3, pai: 1, identificador: '12', tipoCampo: 'booleano' }),
+        campo({
+          id: 4,
+          pai: 99,
+          identificador: 'campo_13',
+          tipoCampo: 'escolha',
+          opcoes: [
+            { codigo: 'A', rotulo: 'Opção sintética A', pontos: 1 },
+            { codigo: 'a', rotulo: 'Opção sintética a', pontos: null },
+          ],
+        }),
+        campo({ id: 5, identificador: 'campo_10', tipoCampo: 'assinatura' }),
+      ],
+    });
+    expect(esquemaDefinicaoFormularioNovo.safeParse(d).success).toBe(true);
+    expect(d).toMatchObject({ codigo: '4711', tipoRegistro: 'evolucao', especialidades: [] });
+    expect(d.perguntas.map((p) => [p.linkId, p.tipo, p.itens.map((i) => [i.linkId, i.tipo])])).toEqual([
+      [
+        'campo_10',
+        'secao',
+        [
+          ['campo_11', 'decimal'],
+          ['c_12', 'escolha'],
+        ],
+      ],
+      ['campo_13', 'escolha', []],
+      ['campo_10_2', 'texto', []],
+    ]);
+    expect(d.perguntas[0]!.itens[0]).toMatchObject({ obrigatorio: true, unidade: 'mg/dL', minimo: 0 });
+    expect(d.perguntas[0]!.itens[1]!.opcoes.map((o) => o.codigo)).toEqual(['sim', 'nao']);
+    expect(d.perguntas[1]!.opcoes).toEqual([
+      { codigo: 'a', texto: 'Opção sintética A', pontos: 1 },
+      { codigo: 'a_2', texto: 'Opção sintética a', pontos: null },
+    ]);
+  });
+
+  it('sem campos: o formato vazio com o mesmo código (uma pergunta de texto livre)', () => {
+    const d = definicaoDaVersaoMigrada({
+      codigo: '7',
+      titulo: 'X',
+      tipoRegistro: 'resumo_clinico',
+      campos: [],
+    });
+    expect(esquemaDefinicaoFormularioNovo.safeParse(d).success).toBe(true);
+    expect(d).toMatchObject({ codigo: '7', titulo: 'Modelo 7', tipoRegistro: 'resumo-clinico' });
+    expect(d.perguntas.map((p) => [p.linkId, p.tipo, p.titulo])).toEqual([['texto', 'texto', 'Modelo 7']]);
   });
 });

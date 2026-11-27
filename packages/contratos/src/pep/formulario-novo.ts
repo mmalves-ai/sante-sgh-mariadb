@@ -64,6 +64,11 @@ export const LIMITES_FORMULARIO_NOVO = {
 
 /** Código do modelo: maiúsculas, dígitos e sublinhado (todos os 67 modelos da cópia seguem a forma). */
 export const FORMATO_CODIGO_FORMULARIO_NOVO = /^[A-Z][A-Z0-9_]{1,9}$/;
+/**
+ * Código de um modelo na definição: o criado no construtor segue o formato acima; o modelo migrado guarda a chave
+ * numérica da origem como código, e a nova versão a partir dele mantém esse código (a linhagem do modelo).
+ */
+export const FORMATO_CODIGO_MODELO_FORMULARIO_NOVO = /^[A-Z0-9][A-Z0-9_]{0,9}$/;
 /** Identificador estável da pergunta na definição (as regras citam por ele). */
 export const FORMATO_LINK_ID = /^[a-z][a-z0-9_]{0,39}$/;
 
@@ -117,7 +122,7 @@ export const esquemaPerguntaFormularioNovo: z.ZodType<PerguntaFormularioNovo> = 
 );
 
 export const esquemaDefinicaoFormularioNovo = z.object({
-  codigo: z.string().regex(FORMATO_CODIGO_FORMULARIO_NOVO),
+  codigo: z.string().regex(FORMATO_CODIGO_MODELO_FORMULARIO_NOVO),
   titulo: textoCp1252(LIMITES_FORMULARIO_NOVO.titulo).pipe(z.string().trim().min(3)),
   tipoRegistro: z.enum(TIPOS_REGISTRO_FORMULARIO_NOVO),
   /** Especialidades em que o modelo é visível (vazio: livre, como no formulário de origem). */

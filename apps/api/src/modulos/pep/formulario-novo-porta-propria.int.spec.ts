@@ -8,11 +8,12 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
+import { esquemaDefinicaoFormularioNovo } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import type { GravadorFormularioNovo } from './formulario-novo-porta.js';
 import { PortaFormularioNovoPropria } from './formulario-novo-porta-propria.js';
-import type { PassoFormularioNovo } from './tipos-pep.js';
+import { FORMATO_VERSAO_MIGRADA, type PassoFormularioNovo } from './tipos-pep.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -56,6 +57,9 @@ describe.skipIf(SEM_BANCO)('PortaFormularioNovoPropria contra o MariaDB (cliente
     await e.executar(
       `DELETE o FROM modelo_campo_opcao o JOIN modelo_campo c ON c.id = o.modelo_campo_id
         WHERE c.modelo_documento_versao_id ${dos}`,
+    );
+    await e.executar(
+      `UPDATE modelo_campo SET pai_modelo_campo_id = NULL WHERE modelo_documento_versao_id ${dos}`,
     );
     await e.executar(`DELETE FROM modelo_campo WHERE modelo_documento_versao_id ${dos}`);
     await e.executar('DELETE FROM unidade_resposta WHERE codigo LIKE ?', [`${COD}%`]);
@@ -528,5 +532,139 @@ describe.skipIf(SEM_BANCO)('PortaFormularioNovoPropria contra o MariaDB (cliente
     expect(plano.banco).toEqual([glicemia]);
     expect(plano.codigosExistentes.has(`${COD}Q2`)).toBe(true);
     expect(plano.codigosExistentes.has(`${COD}Q1`)).toBe(false);
+  });
+
+  /** Modelo migrado posto em uso pela carga (decisão 61): versão 1000 publicada sem formato, com campos; e uma histórica. */
+  const migrado = (codigo: string) =>
+    nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}-${codigo}` }, async (e) => {
+      const agora = new Date();
+      const tipo = await e.uma<{ id: number }>('SELECT id FROM tipo_documento_clinico WHERE codigo = ?', [
+        `${COD}_EVOL`,
+      ]);
+      const modeloId = await e.inserir(
+        `INSERT INTO modelo_documento_clinico (codigo, titulo, tipo_documento_clinico_id, tipo_registro, situacao,
+           origem, criado_em) VALUES (?, ?, ?, 'outro', 'rascunho', 'migracao', ?)`,
+        [codigo, `Evolução migrada sintética ${codigo}`, Number(tipo!.id), agora],
+      );
+      const versao = (numero: number, situacao: string) =>
+        e.inserir(
+          `INSERT INTO modelo_documento_versao (modelo_documento_clinico_id, numero_versao, situacao, operacao, dados,
+             ocorrido_em, usuario_id, publicada_em, publicacao_usuario_id, hash_definicao, criado_em)
+           VALUES (?, ?, ?, 'inclusao', '{}', ?, ?, ?, ?, ?, ?)`,
+          situacao === 'publicada'
+            ? [
+                modeloId,
+                numero,
+                situacao,
+                agora,
+                contas['servico'],
+                agora,
+                contas['servico'],
+                'd'.repeat(64),
+                agora,
+              ]
+            : [modeloId, numero, situacao, agora, contas['servico'], null, null, null, agora],
+        );
+      const historica = await versao(1, 'rascunho');
+      const id = await versao(1000, 'publicada');
+      await e.executar(
+        "UPDATE modelo_documento_clinico SET publicada_modelo_documento_versao_id = ?, situacao = 'publicado' WHERE id = ?",
+        [id, modeloId],
+      );
+      const campo = (seq: number, ident: string, tipoCampo: string, pai: number | null) =>
+        e.inserir(
+          `INSERT INTO modelo_campo (modelo_documento_versao_id, sequencia, pai_modelo_campo_id, identificador, titulo,
+             tipo_campo, obrigatorio, valor_minimo, origem, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'migracao', ?)`,
+          [
+            id,
+            seq,
+            pai,
+            ident,
+            `Pergunta sintética ${ident}`,
+            tipoCampo,
+            seq === 2,
+            seq === 2 ? 0 : null,
+            agora,
+          ],
+        );
+      const grupo = await campo(1, 'campo_1', 'grupo', null);
+      await campo(2, 'campo_2', 'decimal', grupo);
+      const escolha = await campo(3, 'campo_3', 'escolha', null);
+      for (const [seq, cod, ativo] of [
+        [1, 'sim', true],
+        [2, 'nao', true],
+        [3, 'velha', false],
+      ] as const)
+        await e.inserir(
+          `INSERT INTO modelo_campo_opcao (modelo_campo_id, sequencia, codigo, rotulo, ativo, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [escolha, seq, cod, `Opção sintética ${cod}`, ativo, agora],
+        );
+      return { id, historica };
+    });
+  const versaoNoBanco = (id: number) =>
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: P }, (l) =>
+      l.uma<{ situacao: string; numero_versao: number; origem: number | null; formato: string | null }>(
+        `SELECT situacao, numero_versao, origem_modelo_documento_versao_id AS origem, formato
+           FROM modelo_documento_versao WHERE id = ?`,
+        [id],
+      ),
+    );
+
+  it('modelo migrado (decisão 61): a comissão o abre, parte dele numa nova versão que o substitui, mantendo o código', async () => {
+    const codigo = `${COD}MIG`;
+    const m = await migrado(codigo);
+    const lista = (await porta.versoes(C)).filter((v) => v.codigo === codigo);
+    // Só a versão posta em uso aparece; a histórica (rascunho sem formato) fica fora.
+    expect(lista.map((v) => [v.id, v.versao, v.estado, v.formato])).toEqual([
+      [m.id, 1000, 'publicado', FORMATO_VERSAO_MIGRADA],
+    ]);
+    expect(await porta.versao(C, m.historica)).toBeNull();
+    const lida = await porta.versao(C, m.id);
+    const def = esquemaDefinicaoFormularioNovo.parse(lida!.definicao);
+    expect(def).toMatchObject({
+      codigo,
+      titulo: `Evolução migrada sintética ${codigo}`,
+      tipoRegistro: 'evolucao',
+    });
+    expect(
+      def.perguntas.map((p) => [p.linkId, p.tipo, p.itens.map((i) => [i.linkId, i.obrigatorio, i.minimo])]),
+    ).toEqual([
+      ['campo_1', 'secao', [['campo_2', true, 0]]],
+      ['campo_3', 'escolha', []],
+    ]);
+    expect(def.perguntas[1]!.opcoes.map((o) => o.codigo)).toEqual(['sim', 'nao']);
+    expect(lida!.contentHash).toBe('d'.repeat(64));
+    // A versão migrada é imutável: corrigir é a nova versão a partir dela.
+    expect(await codigoDaRecusa(novo(codigo, { id: m.id }))).toBe('imutavel');
+    const v2 = await novo(codigo, { baseadoEm: m.id });
+    expect(v2.versao).toBe(1001);
+    expect(await versaoNoBanco(v2.id)).toEqual({
+      situacao: 'rascunho',
+      numero_versao: 1001,
+      origem: m.id,
+      formato: 'formulario-novo/1',
+    });
+    await mudar(v2.id, 'autora', { tipo: 'revisao' });
+    await mudar(v2.id, 'revisor', { tipo: 'aprovado', parecer: 'Parecer sintético' });
+    await mudar(v2.id, 'publicador', publicar);
+    expect(await modelo(codigo)).toEqual({ situacao: 'publicado', pub: v2.id });
+    expect((await versaoNoBanco(m.id))!.situacao).toBe('substituida');
+    expect((await porta.versao(C, m.id))!.estado).toBe('publicado');
+  });
+
+  it('modelo migrado (decisão 61): a comissão aposenta a versão migrada em uso e o modelo sai de uso', async () => {
+    const codigo = `${COD}MAP`;
+    const m = await migrado(codigo);
+    await mudar(m.id, 'publicador', { tipo: 'aposentado', motivo: 'Revisão da comissão sintética' });
+    expect(await versaoNoBanco(m.id)).toMatchObject({ situacao: 'aposentada', formato: null });
+    expect(await modelo(codigo)).toEqual({ situacao: 'aposentado', pub: m.id });
+    const lida = await porta.versao(C, m.id);
+    expect([lida!.estado, lida!.motivoAposentadoria, lida!.aposentadoPor]).toEqual([
+      'aposentado',
+      'Revisão da comissão sintética',
+      `${P}.publicador`,
+    ]);
+    expect((await porta.eventos(C, m.id)).map((e) => e.tipo)).toEqual(['aposentado']);
   });
 });

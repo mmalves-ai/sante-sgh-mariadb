@@ -7,6 +7,7 @@ import {
   esquemaCasoFormularioNovo,
   esquemaDefinicaoFormularioNovo,
   type EspecialidadeFormularioNovo,
+  FORMATO_CODIGO_FORMULARIO_NOVO,
   type PerguntaDoBanco,
   TIPOS_PERGUNTA_FORMULARIO_NOVO,
   type VersaoFormularioNovoDetalhe,
@@ -33,7 +34,11 @@ import {
   tipoDoCodigoDeCampo,
   type VersaoNoCiclo,
 } from '@sgh/dominio-pep';
-import type { EventoFormularioNovoLido, FormularioNovoLido } from './tipos-pep.js';
+import {
+  type EventoFormularioNovoLido,
+  FORMATO_VERSAO_MIGRADA,
+  type FormularioNovoLido,
+} from './tipos-pep.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoFormularioNovo, PortaFormularioNovo } from './formulario-novo-porta.js';
 
@@ -148,8 +153,11 @@ export class ServicoFormularioNovo {
       versaoLinha: v.versaoLinha,
       autor: v.autor,
       contentHashAtual: await contentHashFormularioNovo(definicao),
+      // A versão migrada guarda o hash do retrato da origem, não o da definição derivada: não há o que conferir aqui.
       integro:
-        v.contentHash === null ? null : await publicadoIntegro({ definicao, contentHash: v.contentHash }),
+        v.contentHash === null || v.formato === FORMATO_VERSAO_MIGRADA
+          ? null
+          : await publicadoIntegro({ definicao, contentHash: v.contentHash }),
       codigoModelo: v.codModelo,
       eventos,
       definicao,
@@ -165,6 +173,14 @@ export class ServicoFormularioNovo {
 
   /** Código novo: nem do prontuário nem de outro formulário novo (nunca reaproveitado). */
   async conferirCodigoNovo(c: ContextoFormularioNovo, codigo: string): Promise<void> {
+    if (!FORMATO_CODIGO_FORMULARIO_NOVO.test(codigo))
+      throw new ErroProblema(
+        'recusa-de-negocio',
+        409,
+        'Não gravado',
+        'O código de um formulário novo começa por letra: maiúsculas, dígitos e sublinhado, até 10.',
+        { codigo: 'codigo-invalido', campos: ['definicao.codigo'] },
+      );
     if ((await this.porta.codigosEmUso(c)).has(codigo.toUpperCase()))
       throw new ErroProblema(
         'recusa-de-negocio',

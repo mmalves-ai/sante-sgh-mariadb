@@ -16,6 +16,14 @@
 // Melhoria: o banco de perguntas são os campos das versões publicadas dos modelos (modelo_campo), com as opções na
 // ordem, a unidade e em quantos modelos o mesmo campo aparece.
 import { randomUUID } from 'node:crypto';
+import {
+  type DefinicaoFormularioNovo,
+  type OpcaoFormularioNovo,
+  type PerguntaFormularioNovo,
+  type TipoPerguntaFormularioNovo,
+  TIPOS_REGISTRO_FORMULARIO_NOVO,
+  LIMITES_FORMULARIO_NOVO,
+} from '@sgh/contratos';
 import { CODIGO_DO_TIPO_DE_CAMPO } from '@sgh/dominio-pep';
 import {
   type ContextoOperacao,
@@ -42,6 +50,7 @@ import type {
   PerguntaDoBancoLida,
   PonteFormularioNovo,
 } from './tipos-pep.js';
+import { FORMATO_VERSAO_MIGRADA } from './tipos-pep.js';
 
 /** O que a porta usa do NucleoProprio (os testes trocam). */
 export interface NucleoFormularioNovo extends NucleoLeituraPep {
@@ -112,19 +121,241 @@ const COLUNAS_VERSAO = `v.id, m.id AS modelo_id, m.codigo, m.versao AS versao_mo
   v.usuario_id AS autor_id, v.aprovacao_usuario_id AS aprovador_id,
   ua.login AS autor, uap.login AS aprovador, v.aprovada_em, v.parecer, up.login AS publicador, v.publicada_em,
   upo.login AS aposentador, v.aposentada_em, v.motivo_aposentadoria, v.versao,
-  COALESCE(v.alterado_em, v.criado_em) AS atualizado_em`;
+  COALESCE(v.alterado_em, v.criado_em) AS atualizado_em, m.titulo AS titulo_modelo,
+  m.tipo_registro AS tipo_registro_modelo`;
 const DE_VERSAO = `FROM modelo_documento_versao v
   JOIN modelo_documento_clinico m ON m.id = v.modelo_documento_clinico_id
   LEFT JOIN usuario ua ON ua.id = v.usuario_id
   LEFT JOIN usuario uap ON uap.id = v.aprovacao_usuario_id
   LEFT JOIN usuario up ON up.id = v.publicacao_usuario_id
   LEFT JOIN usuario upo ON upo.id = v.aposentadoria_usuario_id`;
-/** Só as versões do construtor (formato preenchido), nunca as descartadas nem as de modelo excluído. */
-const SO_DO_CONSTRUTOR = `v.formato IS NOT NULL AND v.situacao <> 'descartada' AND m.excluido_em IS NULL`;
+/**
+ * As versões do construtor (formato preenchido) e a versão migrada que foi posta em uso (sem formato; publicada,
+ * substituída ou aposentada, decisão 61): a comissão a revisa, parte dela numa nova versão e a aposenta. Nunca as
+ * descartadas nem as de modelo excluído; as versões históricas migradas (rascunho) ficam fora.
+ */
+const SO_DO_CONSTRUTOR = `(v.formato IS NOT NULL OR v.situacao IN ('publicada', 'substituida', 'aposentada'))
+  AND v.situacao <> 'descartada' AND m.excluido_em IS NULL`;
 
 type Linha = Record<string, unknown>;
 
-function versaoLida(x: Linha, casos: FormularioNovoLido['casos'], fuso: string): FormularioNovoLido {
+/** Campo de uma versão migrada, como a porta o lê (com as opções ativas na ordem). */
+export interface CampoMigrado {
+  readonly id: number;
+  readonly pai: number | null;
+  readonly sequencia: number;
+  readonly identificador: string;
+  readonly titulo: string;
+  readonly tipoCampo: string;
+  readonly obrigatorio: boolean;
+  readonly unidade: string | null;
+  readonly minimo: number | null;
+  readonly maximo: number | null;
+  readonly opcoes: readonly {
+    readonly codigo: string;
+    readonly rotulo: string;
+    readonly pontos: number | null;
+  }[];
+}
+
+/** Tipo do campo do modelo → tipo de pergunta do construtor (o que o construtor não oferece vai ao mais próximo). */
+const TIPO_DO_CAMPO_MIGRADO: Readonly<Record<string, TipoPerguntaFormularioNovo>> = {
+  secao: 'secao',
+  grupo: 'secao',
+  texto: 'texto',
+  texto_formatado: 'texto-formatado',
+  decimal: 'decimal',
+  calculado: 'decimal',
+  inteiro: 'inteiro',
+  data: 'data',
+  data_hora: 'data',
+  hora: 'hora',
+  booleano: 'escolha',
+  escolha: 'escolha',
+  escala: 'escolha',
+  escolha_com_texto: 'escolha-com-texto',
+  multipla: 'multipla',
+};
+
+/** Identificador no formato do construtor (minúsculas, dígitos e sublinhado, começando por letra), sem repetir. */
+function identificadorUnico(bruto: string, usados: Set<string>, prefixo: string): string {
+  let base = bruto.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  if (!/^[a-z]/.test(base)) base = `${prefixo}_${base}`;
+  base = base.slice(0, 40);
+  let id = base;
+  for (let n = 2; usados.has(id); n++) id = `${base.slice(0, 40 - String(n).length - 1)}_${n}`;
+  usados.add(id);
+  return id;
+}
+
+const cortar = (t: string, limite: number) => t.trim().slice(0, limite).trim();
+
+/**
+ * Definição do construtor derivada da versão migrada (que não tem formato do construtor): as perguntas são os campos
+ * da versão, na árvore e na ordem gravadas, com as opções ativas. É o ponto de partida da nova versão: o que o
+ * construtor não oferece (tipo, classificação do registro) vai ao mais próximo e a comissão revisa antes de publicar.
+ * Sem campos, a definição traz uma pergunta de texto livre com o título do modelo (o formato vazio com o mesmo código).
+ */
+export function definicaoDaVersaoMigrada(m: {
+  readonly codigo: string;
+  readonly titulo: string;
+  readonly tipoRegistro: string;
+  readonly campos: readonly CampoMigrado[];
+}): DefinicaoFormularioNovo {
+  const titulo = cortar(m.titulo, LIMITES_FORMULARIO_NOVO.titulo);
+  const tituloModelo = titulo.length >= 3 ? titulo : `Modelo ${m.codigo}`;
+  const tipo = doBanco(m.tipoRegistro);
+  const tipoRegistro =
+    (TIPOS_REGISTRO_FORMULARIO_NOVO as readonly string[]).find((t) => t === tipo) ?? 'evolucao';
+  const ids = new Set(m.campos.map((c) => c.id));
+  const filhos = new Map<number | null, CampoMigrado[]>();
+  for (const c of m.campos) {
+    const pai = c.pai !== null && ids.has(c.pai) ? c.pai : null;
+    filhos.set(pai, [...(filhos.get(pai) ?? []), c]);
+  }
+  const usados = new Set<string>();
+  const pergunta = (c: CampoMigrado): PerguntaFormularioNovo => {
+    const tipoPergunta = TIPO_DO_CAMPO_MIGRADO[c.tipoCampo] ?? 'texto';
+    const codigos = new Set<string>();
+    const opcoes: OpcaoFormularioNovo[] =
+      tipoPergunta === 'escolha' || tipoPergunta === 'escolha-com-texto' || tipoPergunta === 'multipla'
+        ? (c.opcoes.length === 0 && c.tipoCampo === 'booleano'
+            ? [
+                { codigo: 'sim', rotulo: 'Sim', pontos: null },
+                { codigo: 'nao', rotulo: 'Não', pontos: null },
+              ]
+            : c.opcoes
+          )
+            .slice(0, LIMITES_FORMULARIO_NOVO.opcoesPorPergunta)
+            .map((o) => ({
+              codigo: identificadorUnico(o.codigo, codigos, 'o'),
+              texto: cortar(o.rotulo, LIMITES_FORMULARIO_NOVO.textoOpcao) || o.codigo,
+              pontos: o.pontos,
+            }))
+        : [];
+    return {
+      linkId: identificadorUnico(c.identificador, usados, 'c'),
+      tipo: tipoPergunta,
+      titulo: cortar(c.titulo, LIMITES_FORMULARIO_NOVO.tituloPergunta) || c.identificador,
+      obrigatorio: c.obrigatorio,
+      unidade: c.unidade === null ? null : cortar(c.unidade, LIMITES_FORMULARIO_NOVO.unidade) || null,
+      minimo: c.minimo,
+      maximo: c.maximo,
+      opcoes,
+      habilitar: null,
+      calcular: null,
+      reuso: null,
+      itens: tipoPergunta === 'secao' ? (filhos.get(c.id) ?? []).map(pergunta) : [],
+    };
+  };
+  const perguntas = (filhos.get(null) ?? []).map(pergunta);
+  return {
+    codigo: m.codigo,
+    titulo: tituloModelo,
+    tipoRegistro,
+    especialidades: [],
+    perguntas:
+      perguntas.length > 0
+        ? perguntas
+        : [
+            {
+              linkId: 'texto',
+              tipo: 'texto',
+              titulo: cortar(tituloModelo, LIMITES_FORMULARIO_NOVO.tituloPergunta),
+              obrigatorio: false,
+              unidade: null,
+              minimo: null,
+              maximo: null,
+              opcoes: [],
+              habilitar: null,
+              calcular: null,
+              reuso: null,
+              itens: [],
+            },
+          ],
+  };
+}
+
+/** Campos das versões migradas pedidas, com a unidade e as opções ativas, na ordem gravada. */
+async function camposMigrados(l: Leitor, ids: readonly number[]): Promise<Map<number, CampoMigrado[]>> {
+  const r = new Map<number, CampoMigrado[]>();
+  if (ids.length === 0) return r;
+  const marcas = ids.map(() => '?').join(', ');
+  const campos = await l.consultar(
+    `SELECT c.id, c.modelo_documento_versao_id AS v, c.pai_modelo_campo_id AS pai, c.sequencia, c.identificador,
+            c.titulo, c.tipo_campo, c.obrigatorio, u.sigla AS unidade, c.valor_minimo, c.valor_maximo
+       FROM modelo_campo c LEFT JOIN unidade_resposta u ON u.id = c.unidade_resposta_id
+      WHERE c.modelo_documento_versao_id IN (${marcas}) AND c.excluido_em IS NULL
+      ORDER BY c.modelo_documento_versao_id, c.sequencia, c.id`,
+    [...ids],
+  );
+  const opcoes = await l.consultar(
+    `SELECT o.modelo_campo_id AS campo, o.codigo, o.rotulo, o.pontuacao
+       FROM modelo_campo_opcao o JOIN modelo_campo c ON c.id = o.modelo_campo_id
+      WHERE c.modelo_documento_versao_id IN (${marcas}) AND c.excluido_em IS NULL
+        AND o.excluido_em IS NULL AND o.ativo
+      ORDER BY o.modelo_campo_id, o.sequencia, o.id`,
+    [...ids],
+  );
+  const porCampo = new Map<number, CampoMigrado['opcoes'][number][]>();
+  for (const o of opcoes) {
+    const c = num(o['campo']);
+    porCampo.set(c, [
+      ...(porCampo.get(c) ?? []),
+      { codigo: String(o['codigo']), rotulo: String(o['rotulo']), pontos: numOuNull(o['pontuacao']) },
+    ]);
+  }
+  for (const c of campos) {
+    const v = num(c['v']);
+    r.set(v, [
+      ...(r.get(v) ?? []),
+      {
+        id: num(c['id']),
+        pai: numOuNull(c['pai']),
+        sequencia: num(c['sequencia']),
+        identificador: String(c['identificador']),
+        titulo: String(c['titulo']),
+        tipoCampo: String(c['tipo_campo']),
+        obrigatorio: Boolean(num(c['obrigatorio'])),
+        unidade: textoOuNull(c['unidade']),
+        minimo: numOuNull(c['valor_minimo']),
+        maximo: numOuNull(c['valor_maximo']),
+        opcoes: porCampo.get(num(c['id'])) ?? [],
+      },
+    ]);
+  }
+  return r;
+}
+
+/** Definição de cada versão migrada entre as linhas lidas (as do construtor não entram). */
+async function derivadasDe(
+  l: Leitor,
+  linhas: readonly Linha[],
+): Promise<Map<number, DefinicaoFormularioNovo>> {
+  const migradas = linhas.filter((x) => x['formato'] === null || x['formato'] === undefined);
+  const campos = await camposMigrados(
+    l,
+    migradas.map((x) => num(x['id'])),
+  );
+  return new Map(
+    migradas.map((x) => [
+      num(x['id']),
+      definicaoDaVersaoMigrada({
+        codigo: String(x['codigo']),
+        titulo: String(x['titulo'] ?? x['titulo_modelo'] ?? ''),
+        tipoRegistro: String(x['tipo_registro'] ?? x['tipo_registro_modelo'] ?? ''),
+        campos: campos.get(num(x['id'])) ?? [],
+      }),
+    ]),
+  );
+}
+
+function versaoLida(
+  x: Linha,
+  casos: FormularioNovoLido['casos'],
+  fuso: string,
+  derivada?: DefinicaoFormularioNovo,
+): FormularioNovoLido {
   const estado = ESTADO_DA_SITUACAO[String(x['situacao'])];
   if (!estado)
     throw new ErroOperacao(
@@ -138,10 +369,10 @@ function versaoLida(x: Linha, casos: FormularioNovoLido['casos'], fuso: string):
     codigo: String(x['codigo']),
     versao: num(x['numero_versao']),
     estado,
-    titulo: String(x['titulo'] ?? ''),
-    tipoRegistro: doBanco(x['tipo_registro'] ?? ''),
-    formato: String(x['formato']),
-    definicao: json(x['dados']),
+    titulo: derivada ? derivada.titulo : String(x['titulo'] ?? ''),
+    tipoRegistro: derivada ? derivada.tipoRegistro : doBanco(x['tipo_registro'] ?? ''),
+    formato: derivada ? FORMATO_VERSAO_MIGRADA : String(x['formato']),
+    definicao: derivada ?? json(x['dados']),
     contentHash: textoOuNull(x['hash_definicao']),
     ponte: PONTE_DO_DESTINO[String(x['destino_publicacao'])] ?? 'so-sante',
     baseadoEm: numOuNull(x['baseado_em']),
@@ -272,8 +503,9 @@ export class PortaFormularioNovoPropria implements PortaFormularioNovo {
         l,
         linhas.map((x) => num(x['id'])),
       );
+      const derivadas = await derivadasDe(l, linhas);
       return linhas
-        .map((x) => versaoLida(x, casos.get(num(x['id'])) ?? [], fuso))
+        .map((x) => versaoLida(x, casos.get(num(x['id'])) ?? [], fuso, derivadas.get(num(x['id']))))
         .sort((a, b) => a.codigo.localeCompare(b.codigo) || b.versao - a.versao);
     });
   }
@@ -284,7 +516,8 @@ export class PortaFormularioNovoPropria implements PortaFormularioNovo {
         id,
       ]);
       if (!x) return null;
-      return versaoLida(x, (await casosDe(l, [id])).get(id) ?? [], fuso);
+      const derivada = (await derivadasDe(l, [x])).get(id);
+      return versaoLida(x, (await casosDe(l, [id])).get(id) ?? [], fuso, derivada);
     });
   }
 
@@ -553,9 +786,11 @@ function gravador(tx: TxOperacao, usuarioDaSessao: number | null): GravadorFormu
         modeloId = num(b['modelo_id']);
         const aberta = await tx.uma(
           `SELECT id FROM modelo_documento_versao
-            WHERE modelo_documento_clinico_id = ? AND situacao IN ('rascunho', 'revisao') LIMIT 1`,
+            WHERE modelo_documento_clinico_id = ? AND situacao IN ('rascunho', 'revisao')
+              AND formato IS NOT NULL LIMIT 1`,
           [modeloId],
         );
+        // As versões históricas migradas (rascunho sem formato) são retrato da origem, não trabalho aberto.
         if (aberta)
           throw recusa(
             'versao-aberta',

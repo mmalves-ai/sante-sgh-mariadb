@@ -334,6 +334,12 @@ export type PonteFormularioNovo = 'modelo-legado' | 'registro-resumo' | 'so-sant
 export type TipoEventoFormularioNovo =
   'salvo' | 'revisao' | 'aprovado' | 'devolvido' | 'publicado' | 'aposentado';
 
+/**
+ * Formato da versão migrada (sem formato do construtor no banco): a definição é derivada dos campos da versão, para a
+ * comissão abrir, aposentar e partir dela numa nova versão; o hash guardado é o do retrato da origem.
+ */
+export const FORMATO_VERSAO_MIGRADA = 'versao-migrada';
+
 export interface FormularioNovoLido {
   readonly id: number;
   readonly codigo: string;
