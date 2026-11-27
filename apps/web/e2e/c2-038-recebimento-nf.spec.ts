@@ -1,19 +1,153 @@
-// E2E @C2-038 (05-SUP linha 21): recebimento por nota fiscal com a conferência física e os impostos por item, sobre a
-// porta PRÓPRIA (MariaDB, cliente de teste). O almoxarife abre "Entrada por nota fiscal" pelo menu, segue o atalho da
-// conferência física, registra a entrega de um item com avaria (a divergência aparece na hora, pela regra do domínio) e
-// grava: a conferência fica "Divergente". Outra pessoa (o comprador) valida: sem justificativa, a regra avisa e trava o
-// botão; com a justificativa, fica "Validada". Depois a nota entra pelo XML SINTÉTICO com ICMS e IPI no item: o item do
-// estoque é ligado à linha do XML (quantidade, unitário e impostos vêm dela), o custo de entrada aparece na hora (produtos
-// + IPI, sem crédito de ICMS, padrão do hospital) e a conferência validada é escolhida. A API depois mostra a
-// conferência ligada à nota: o que prova que ficou no banco. axe sem violação séria. Precisa de um fornecedor ativo, um
-// item sem lote e um local de entrada no cliente do E2E; sem isso, o teste é pulado com o motivo dito. A sessão
-// sintética sem banco próprio responde 503 e também pula. Massa SINTÉTICA; nenhum dado de pessoa.
-import { expect, type Page, test } from '@playwright/test';
+// E2E @C2-038 (05-SUP linha 21): recebimento por nota fiscal com a conferência física e os impostos por item. As rotas
+// `/api/suprimentos/conferencias-recebimento` só existem no banco do cliente (na fonte sintética do E2E e do CI
+// respondem 503), então este E2E as simula com um estado em memória que segue a regra do servidor (a divergência do item
+// é o apontamento; a divergente só se valida com justificativa; a nota liga a conferência validada). O que fica no banco
+// (conferência, itens, impostos por item, custo de entrada e a ligação com a nota) é provado no contrato de efeito
+// `apps/api/src/modulos/suprimentos/recebimento-nf.int.spec.ts`; o resto (fornecedor, busca de itens, leitura do XML e o
+// POST da nota) é a API real da porta sintética. Aqui se prova o fluxo da tela: o almoxarife abre "Entrada por nota
+// fiscal" pelo menu, segue o atalho da conferência física, registra a entrega de um item com avaria (a regra do domínio
+// avisa na hora e trava o botão até a descrição) e grava: a conferência fica "Divergente". Outra pessoa (o comprador)
+// valida: sem justificativa, a regra avisa e trava o botão; com a justificativa, fica "Validada". Depois a nota entra pelo
+// XML SINTÉTICO com ICMS e IPI no item: o item do estoque é ligado à linha do XML (quantidade e impostos vêm dela), o
+// custo de entrada aparece na hora (produtos + IPI, sem crédito de ICMS, padrão do hospital) e a conferência validada é
+// escolhida e vai no POST da nota. axe sem violação séria. Massa SINTÉTICA; nenhum dado de pessoa.
+import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
 const C = '/api/suprimentos/conferencias-recebimento';
+const json = (rota: Route, corpo: unknown, status = 200) =>
+  rota.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
+
+interface ItemConf {
+  sequencia: number;
+  item: number;
+  nome: string;
+  esperada: number | null;
+  conferida: number;
+  lote: string | null;
+  validade: string | null;
+  divergencia: string;
+  observacao: string | null;
+}
+interface Conf {
+  id: number;
+  tipo: string;
+  fornecedor: number;
+  fornecedorNome: string;
+  local: number;
+  localNome: string;
+  numeroNota: string | null;
+  chegadaEm: string;
+  situacao: string;
+  conferente: string | null;
+  validador: string | null;
+  nota: number | null;
+  itens: number;
+  divergentes: number;
+  observacao: string | null;
+  motivoCancelamento: string | null;
+  itensDetalhe: ItemConf[];
+}
+const problema = (rota: Route, titulo: string) =>
+  rota.fulfill({
+    status: 422,
+    contentType: 'application/problem+json',
+    body: JSON.stringify({ type: 'about:blank', title: titulo, status: 422, detail: titulo }),
+  });
+
+interface Estado {
+  login: string;
+  confs: Conf[];
+  notas: Record<string, unknown>[];
+}
+/** Simula a conferência do recebimento como o servidor (estado em memória) e observa o POST real da nota. */
+async function simularConferencias(page: Page, estado: Estado) {
+  await page.route(`**${C}**`, async (rota) => {
+    const req = rota.request();
+    const url = new URL(req.url());
+    const caminho = url.pathname;
+    const id = Number(/conferencias-recebimento\/(\d+)/.exec(caminho)?.[1] ?? 0);
+    const conf = estado.confs.find((c) => c.id === id);
+    if (req.method() === 'GET') {
+      if (caminho.includes('/pedido/')) return json(rota, []);
+      if (id) return conf ? json(rota, conf) : json(rota, { title: 'Conferência inexistente' }, 404);
+      const situacao = url.searchParams.get('situacao');
+      return json(
+        rota,
+        estado.confs.filter((c) => !situacao || c.situacao === situacao),
+      );
+    }
+    const corpo = (req.postDataJSON() ?? {}) as Record<string, unknown>;
+    if (caminho.endsWith('/validar')) {
+      if (!conf) return json(rota, { title: 'Conferência inexistente' }, 404);
+      if (conf.conferente === estado.login)
+        return problema(rota, 'Quem conferiu não valida a própria conferência.');
+      if (conf.situacao === 'divergente' && !String(corpo['justificativa'] ?? '').trim())
+        return problema(rota, 'A conferência divergente só se valida com justificativa.');
+      conf.situacao = 'validada';
+      conf.validador = estado.login;
+      return json(rota, { id: conf.id, situacao: conf.situacao, divergentes: conf.divergentes });
+    }
+    if (caminho.endsWith('/cancelar')) return problema(rota, 'Fora deste teste.');
+    const itens = (corpo['itens'] ?? []) as {
+      item: number;
+      esperada: number | null;
+      conferida: number;
+      lote?: string | null;
+      validade?: string | null;
+      apontamento?: string | null;
+      observacao?: string | null;
+    }[];
+    const detalhe: ItemConf[] = itens.map((i, k) => ({
+      sequencia: k + 1,
+      item: i.item,
+      nome: `ITEM ${i.item}`,
+      esperada: i.esperada,
+      conferida: i.conferida,
+      lote: i.lote ?? null,
+      validade: i.validade ?? null,
+      divergencia: i.apontamento ?? 'nenhuma',
+      observacao: i.observacao ?? null,
+    }));
+    const divergentes = detalhe.filter((i) => i.divergencia !== 'nenhuma').length;
+    const nova: Conf = {
+      id: 3800 + estado.confs.length + 1,
+      tipo: String(corpo['tipo'] ?? 'compra'),
+      fornecedor: Number(corpo['fornecedor']),
+      fornecedorNome: 'FORNECEDOR SINTÉTICO',
+      local: Number(corpo['local']),
+      localNome: 'ALMOXARIFADO SINTÉTICO',
+      numeroNota: (corpo['numeroNota'] as string | null) ?? null,
+      chegadaEm: new Date().toISOString(),
+      situacao: divergentes ? 'divergente' : 'conferida',
+      conferente: estado.login,
+      validador: null,
+      nota: null,
+      itens: detalhe.length,
+      divergentes,
+      observacao: null,
+      motivoCancelamento: null,
+      itensDetalhe: detalhe,
+    };
+    estado.confs.push(nova);
+    return json(rota, { id: nova.id, situacao: nova.situacao, divergentes });
+  });
+  // O POST da nota vai à API real; quando grava, a conferência levada fica ligada a ela (como faz o servidor).
+  await page.route('**/api/suprimentos/notas', async (rota) => {
+    const req = rota.request();
+    if (req.method() !== 'POST') return rota.continue();
+    const corpo = (req.postDataJSON() ?? {}) as Record<string, unknown>;
+    const resposta = await rota.fetch();
+    if (resposta.ok()) {
+      estado.notas.push(corpo);
+      const ligada = estado.confs.find((c) => c.id === Number(corpo['conferencia']));
+      if (ligada && ligada.situacao === 'validada') ligada.nota = Number(corpo['numero']);
+    }
+    return rota.fulfill({ response: resposta });
+  });
+}
 
 async function entrar(page: Page, login: string): Promise<void> {
   await page.context().clearCookies();
@@ -46,15 +180,15 @@ test.describe('Recebimento por nota fiscal com conferência física e impostos @
     page,
   }) => {
     const externas = vigiarExternas(page);
+    const estado: Estado = { login: 'SINT.ALMOXARIFE', confs: [], notas: [] };
+    await simularConferencias(page, estado);
     await entrar(page, 'SINT.ALMOXARIFE');
 
-    const sonda = await page.request.get(C);
-    test.skip(sonda.status() === 503, 'Sessão sem banco próprio: a conferência grava só no MariaDB.');
     const fornecedores = (await (await page.request.get('/api/suprimentos/fornecedores?termo=a')).json()) as
       { itens?: { codigo?: number; id?: number }[] } | { codigo?: number; id?: number }[];
     const lista = Array.isArray(fornecedores) ? fornecedores : (fornecedores.itens ?? []);
     const fornecedor = lista[0]?.codigo ?? lista[0]?.id ?? null;
-    test.skip(fornecedor === null, 'Sem fornecedor ativo no cliente do E2E.');
+    expect(fornecedor, 'fornecedor ativo na porta sintética').not.toBeNull();
 
     // ── Conferência física pela tela ──
     await page.getByRole('link', { name: 'Entrada por nota fiscal' }).first().click();
@@ -69,7 +203,7 @@ test.describe('Recebimento por nota fiscal com conferência física e impostos @
     await tela.getByTestId('conf-busca-termo').fill('a');
     await tela.getByTestId('conf-busca-buscar').click();
     const opcoes = tela.locator('[data-testid^="conf-busca-opcao-"]');
-    test.skip((await opcoes.count()) === 0, 'Sem item de estoque na busca do cliente do E2E.');
+    await expect(opcoes.first()).toBeVisible();
     const testid = (await opcoes.first().getAttribute('data-testid'))!;
     const item = Number(testid.replace('conf-busca-opcao-', ''));
     await opcoes.first().click();
@@ -98,6 +232,7 @@ test.describe('Recebimento por nota fiscal com conferência física e impostos @
     expect(conferencia).toBeGreaterThan(0);
 
     // ── Validação por outra pessoa ──
+    estado.login = 'SINT.COMPRADOR';
     await entrar(page, 'SINT.COMPRADOR');
     await page.goto('/suprimentos/notas-fiscais/conferencias');
     await escolher(tela.getByTestId('conf-filtro'), { rotulo: 'Divergente' });
@@ -111,6 +246,7 @@ test.describe('Recebimento por nota fiscal com conferência física e impostos @
     await semViolacaoAxe(page, '/suprimentos/notas-fiscais/conferencias');
 
     // ── A nota pelo XML sintético, com os impostos e a conferência ligada ──
+    estado.login = 'SINT.ALMOXARIFE';
     await entrar(page, 'SINT.ALMOXARIFE');
     await page.goto('/suprimentos/notas-fiscais');
     const nf = page.getByTestId('tela-suprimentos-notas');
@@ -142,13 +278,13 @@ test.describe('Recebimento por nota fiscal com conferência física e impostos @
     await nf.getByTestId('nf-gravar').click();
     await expect(page.getByTestId('nf-mensagem')).toBeVisible();
 
-    // A conferência ficou ligada à nota no banco.
-    const depois = (await (await page.request.get(`${C}/${conferencia}`)).json()) as {
-      situacao: string;
-      nota: number | null;
-    };
-    expect(depois.situacao).toBe('validada');
-    expect(depois.nota).not.toBeNull();
+    // A nota gravou levando a conferência validada (a ligação no banco é do contrato de efeito).
+    await expect.poll(() => estado.notas.length).toBe(1);
+    expect(estado.notas[0]?.['conferencia']).toBe(conferencia);
+    const depois = estado.confs.find((c) => c.id === conferencia);
+    expect(depois?.situacao).toBe('validada');
+    expect(depois?.validador).toBe('SINT.COMPRADOR');
+    expect(depois?.nota).not.toBeNull();
     expect(externas).toEqual([]);
   });
 });
