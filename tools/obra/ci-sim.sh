@@ -14,7 +14,8 @@ cd "$W"
 E=(env -i PATH="$N:/usr/local/bin:/usr/bin:/bin" HOME="$HOME" CI=true NX_LOAD_DOT_ENV_FILES=false NX_NO_CLOUD=true
    NX_DAEMON=false SGH_NUCLEO_SEM_BANCO=1 GOTENBERG_URL=http://127.0.0.1:3318 TERM=dumb
    SGH_MEM_ALTA="${SGH_MEM_ALTA:-9G}" SGH_MEM_MAX="${SGH_MEM_MAX:-12G}")
-passo() { local nome=$1; shift; echo "=== PASSO: $nome"; if "$@"; then echo "=== OK: $nome"; else echo "=== FALHOU: $nome"; echo "RESULTADO: FALHOU em $nome"; exit 1; fi; }
+# Os passos rodam em 4 CPUs (taskset), como o runner do GitHub de 4 vCPU: tempo e concorrência dos testes ficam iguais.
+passo() { local nome=$1; shift; echo "=== PASSO: $nome"; if taskset -c 0-3 "$@"; then echo "=== OK: $nome"; else echo "=== FALHOU: $nome"; echo "RESULTADO: FALHOU em $nome"; exit 1; fi; }
 passo instalar "${E[@]}" ./pnpm install --frozen-lockfile
 passo verificar-tudo "${E[@]}" ./pnpm verificar:tudo
 passo fronteiras "${E[@]}" ./pnpm fronteiras:provar

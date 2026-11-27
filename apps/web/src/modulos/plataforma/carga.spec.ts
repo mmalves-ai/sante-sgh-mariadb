@@ -4,7 +4,7 @@
 // tabela atual animada só com a execução ativa, batimento atrasado, top recusas, polling de 2 s só enquanto ativa,
 // senha write-only, Testar conexão, Pausar). Dados sintéticos.
 import { criarI18n, instalarUi, resolverMarca } from '@sgh/ui';
-import { flushPromises, mount } from '@vue/test-utils';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { App } from 'vue';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
@@ -155,6 +155,9 @@ function servidor(rotasDadas: Record<string, Rota>) {
 const B = '/api/plataforma/carga';
 const Vazia = { template: '<div />' };
 let roteador: Router;
+/** Telas montadas no teste: o afterEach desmonta a que ficou (asserção que falhou antes do unmount), para nenhuma
+ * atualização da tela (Portal da SanteSelecao no body) correr depois de o DOM ser limpo. */
+const montadas: VueWrapper[] = [];
 const montar = () => {
   roteador = createRouter({
     history: createMemoryHistory(),
@@ -164,11 +167,15 @@ const montar = () => {
     ],
   });
   void roteador.push('/plataforma/carga');
-  return mount(CargaSincronismoTela, {
+  const w = mount(CargaSincronismoTela, {
     global: { plugins: [i18n(), ui, roteador] },
     attachTo: document.body,
   });
+  montadas.push(w);
+  return w;
 };
+/** Espera a tela registrar o acompanhamento de 2 s (a primeira leitura terminou), sem contar ciclos de promessa. */
+const acompanhamentoArmado = () => vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
 const chamadas = (f: ReturnType<typeof servidor>, chave: string) =>
   f.mock.calls.filter(([u, i]) => `${(i as RequestInit | undefined)?.method ?? 'GET'} ${u}` === chave);
 /** Responde com o erro (Problem Details) na rota dada. */
@@ -186,6 +193,7 @@ async function confirmar() {
 }
 
 afterEach(() => {
+  for (const w of montadas.splice(0)) if (!w.vm.$.isUnmounted) w.unmount();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   document.body.innerHTML = '';
@@ -383,11 +391,10 @@ describe('tela Carga e sincronismo', () => {
       },
     });
     const w = montar();
-    await flushPromises();
-    await flushPromises();
+    await acompanhamentoArmado();
     expect(w.find('[data-testid="carga-batimento"]').exists()).toBe(true);
     vi.advanceTimersByTime(2000);
-    await flushPromises();
+    await vi.waitFor(() => expect(chamadas(f, `GET ${B}/conectores`)).toHaveLength(2));
     await flushPromises();
     expect(w.find('[data-testid="carga-estado"]').text()).toBe('Concluída');
     expect(w.find('[data-testid="carga-conciliacao"]').text()).toContain(
@@ -512,6 +519,9 @@ describe('tela Carga e sincronismo', () => {
     expect(JSON.parse(String((posts[0] as unknown as [string, RequestInit])[1].body))).toEqual({
       modo: 'completa',
     });
+    // Depois do POST a tela relê o andamento e os conectores: desmonta só com essas leituras terminadas.
+    await vi.waitFor(() => expect(chamadas(f, `GET ${B}/conectores`)).toHaveLength(2));
+    await flushPromises();
     w.unmount();
   });
 
@@ -529,17 +539,13 @@ describe('tela Carga e sincronismo', () => {
       },
     });
     const w = montar();
-    await flushPromises();
-    await flushPromises();
+    await acompanhamentoArmado();
     vi.advanceTimersByTime(2000);
-    await flushPromises();
-    await flushPromises();
-    expect(w.find('[data-testid="carga-erro"]').exists()).toBe(true);
+    await vi.waitFor(() => expect(w.find('[data-testid="carga-erro"]').exists()).toBe(true));
+    expect(vi.getTimerCount()).toBe(1);
     vi.advanceTimersByTime(2000);
-    await flushPromises();
-    await flushPromises();
+    await vi.waitFor(() => expect(w.find('[data-testid="carga-erro"]').exists()).toBe(false));
     expect(chamadas(f, `GET ${B}/clientes/prontocardio/carga`)).toHaveLength(3);
-    expect(w.find('[data-testid="carga-erro"]').exists()).toBe(false);
     expect(w.find('[data-testid="carga-tabela-atual"]').text()).toContain('internacao');
     w.unmount();
   });
