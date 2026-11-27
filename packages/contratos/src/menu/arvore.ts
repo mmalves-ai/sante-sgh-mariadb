@@ -175,7 +175,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7); a contagem acompanha.
 // C2-024 (05-SUP linha 14, F3): o item "Etiquetas de identificação" do estoque e almoxarifado entrou à mão (mesmo
 // motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":526,"M":198,"P":57,"N":271};
+// C2-113 (08-SGO linha 95, F7): o item "Declaração de saúde, CPT e portabilidade" da operadora própria entrou à mão
+// (mesmo motivo; F7 vai como fase 7); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":527,"M":198,"P":57,"N":272};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -473,6 +475,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.desconto-em-folha","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Desconto em folha"],"titulo":"Desconto em folha","selo":"N","fase":7,"rota":"/operadora/desconto-folha","permissao":"operadora.cobranca.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.regras-de-coparticipacao","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Regras de coparticipação"],"titulo":"Regras de coparticipação","selo":"N","fase":7,"rota":"/operadora/coparticipacao-regras","permissao":"operadora.beneficiario.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.promocao-da-saude-e-cronicos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Promoção da saúde e crônicos"],"titulo":"Promoção da saúde e crônicos","selo":"N","fase":7,"rota":"/operadora/programas-saude","permissao":"operadora.promocao.ler"},
+  {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.declaracao-de-saude-cpt-e-portabilidade","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Declaração de saúde, CPT e portabilidade"],"titulo":"Declaração de saúde, CPT e portabilidade","selo":"N","fase":7,"rota":"/operadora/beneficiarios/saude","permissao":"operadora.beneficiario.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.aditivos-e-cancelamento-de-contratos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Aditivos e cancelamento de contratos"],"titulo":"Aditivos e cancelamento de contratos","selo":"N","fase":7,"rota":"/operadora/contratos","permissao":"operadora.beneficiario.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.envios-a-ans-sib-sip-e-exportacoes","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Envios à ANS e exportações"],"titulo":"Envios à ANS e exportações","selo":"N","fase":6,"rota":"/operadora/ans","permissao":"operadora.ans.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.dominios-da-operadora-e-do-plano-proprio","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Domínios da operadora e do plano próprio"],"titulo":"Domínios da operadora e do plano próprio","selo":"N","fase":6,"rota":"/consultas/item/faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.dominios-da-operadora-e-do-plano-proprio","permissao":"operadora.dominio.ler"},
