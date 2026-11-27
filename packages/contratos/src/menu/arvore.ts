@@ -183,7 +183,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // acompanha.
 // C2-113 (08-SGO linha 95, F7): o item "Declaração de saúde, CPT e portabilidade" da operadora própria entrou à mão
 // (mesmo motivo; F7 vai como fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":530,"M":198,"P":57,"N":275};
+// C1-055 (02-REC linha 35): o item "Regras de impressão das fichas" da recepção entrou à mão (mesmo motivo); a
+// contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":531,"M":198,"P":57,"N":276};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -236,6 +238,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"recepcao.atendimento.fluxo-do-paciente-por-local-fila-de-consultorio","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Fluxo do paciente por local"],"titulo":"Fluxo do paciente por local","selo":"M","fase":2,"rota":"/consultorio/fila","permissao":"atendimento.fila.ler"},
   {"id":"recepcao.atendimento.alta-saida-e-cancelamento-do-atendimento","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Alta, saída e cancelamento do atendimento"],"titulo":"Alta, saída e cancelamento do atendimento","selo":"M","fase":2,"rota":"/recepcao/atendimento?acao=encerrar","permissao":"atendimento.atendimento.ler"},
   {"id":"recepcao.atendimento.fichas-etiquetas-e-pulseiras-zpl","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Fichas, etiquetas e pulseiras"],"titulo":"Fichas, etiquetas e pulseiras","selo":"M","fase":2,"rota":"/recepcao/atendimento?acao=impressos","permissao":"atendimento.atendimento.ler"},
+  {"id":"recepcao.atendimento.regras-de-impressao-das-fichas","area":"ATENDIMENTO AO PACIENTE","grupo":"Recepção","caminho":["Recepção","Atendimento","Regras de impressão das fichas"],"titulo":"Regras de impressão das fichas","selo":"N","fase":2,"rota":"/recepcao/atendimento/regras-impressao","permissao":"documento.cadastro.editar"},
   {"id":"pronto-atendimento.classificacao-de-risco-manchester-ou-accr-proprio","area":"ATENDIMENTO AO PACIENTE","grupo":"Pronto atendimento","caminho":["Pronto atendimento","Classificação de risco"],"titulo":"Classificação de risco","selo":"N","fase":5,"rota":"/pa/classificacao","permissao":"recepcao.classificacao.ler"},
   {"id":"pronto-atendimento.reclassificacao-por-estouro-do-tempo-alvo","area":"ATENDIMENTO AO PACIENTE","grupo":"Pronto atendimento","caminho":["Pronto atendimento","Reclassificação por estouro do tempo-alvo"],"titulo":"Reclassificação por estouro do tempo-alvo","selo":"N","fase":5,"rota":"/pa/classificacao?lista=reclassificar","permissao":"recepcao.classificacao.ler"},
   {"id":"pronto-atendimento.quadro-de-acompanhamento-do-pa-por-etapa-cor-de-risco-na-f5","area":"ATENDIMENTO AO PACIENTE","grupo":"Pronto atendimento","caminho":["Pronto atendimento","Quadro de acompanhamento do PA"],"titulo":"Quadro de acompanhamento do PA","selo":"N","fase":2,"rota":"/pa/quadro","permissao":"pa.quadro.ler"},
