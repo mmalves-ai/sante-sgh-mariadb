@@ -18,7 +18,7 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-test.describe('TISS, competência, demonstrativos, glosa e recurso @M31', () => {
+test.describe('TISS, competência, demonstrativos, glosa e recurso @M31 @jornada', () => {
   test.setTimeout(300_000);
 
   test('lote 04.03.00, envio ao simulador, protocolo, competência, demonstrativo, recurso e desfecho; axe', async ({

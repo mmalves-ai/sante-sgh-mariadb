@@ -85,7 +85,7 @@ passo 01 instalar 'Instalar (lockfile congelado)' ./pnpm install --frozen-lockfi
 passo 02 verificar-tudo 'Verificar tudo (pnpm verificar:tudo)' ./pnpm verificar:tudo
 passo 03 fronteiras 'Prova das fronteiras' ./pnpm fronteiras:provar
 passo 04 ambiente 'Trava de saídas (ambiente:verificar)' ./pnpm ambiente:verificar
-passo 05 e2e 'E2E do marco (@M00)' ./pnpm e2e -- --grep @M00
+passo 05 e2e 'E2E do marco e das jornadas (@M00|@jornada)' ./pnpm e2e -- --grep '@M00|@jornada'
 passo 06 seguranca 'Segurança (gitleaks, Semgrep, OSV, Trivy, SBOM)' ./pnpm seguranca:verificar
 
 {

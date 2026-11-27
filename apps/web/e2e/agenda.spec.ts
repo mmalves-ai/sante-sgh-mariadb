@@ -37,7 +37,7 @@ async function escolherPaciente(page: Page): Promise<void> {
   await expect(page.getByTestId('paciente-escolhido')).toBeVisible();
 }
 
-test.describe('Agenda de consultas @M17 @fase2', () => {
+test.describe('Agenda de consultas @M17 @fase2 @jornada', () => {
   test.setTimeout(120_000);
   test('marcar, confirmar, remarcar e cancelar; painel do dia; axe', async ({ page }) => {
     const externas = vigiarExternas(page);

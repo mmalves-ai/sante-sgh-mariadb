@@ -20,7 +20,7 @@ async function entrarPelaTela(page: Page, login: string, senha = SENHA): Promise
   await page.getByTestId('botao-entrar').click();
 }
 
-test.describe('porta de entrada @M05', () => {
+test.describe('porta de entrada @M05 @jornada', () => {
   test('sem sessão (401), a tela de entrada mostra o formulário, não "Sessão encerrada"', async ({
     page,
   }) => {

@@ -22,7 +22,7 @@ async function entrar(page: Page, login: string): Promise<void> {
 const linhaCom = (page: Page, tabela: string, texto: string) =>
   page.getByTestId(tabela).locator('tbody tr', { hasText: texto });
 
-test.describe('financeiro: contas a pagar, a receber e tesouraria @M32', () => {
+test.describe('financeiro: contas a pagar, a receber e tesouraria @M32 @jornada', () => {
   test.setTimeout(300_000);
 
   test('lançar → aprovar (outro usuário) → borderô → pagar; aprovar o próprio título é recusado; axe', async ({

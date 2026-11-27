@@ -16,7 +16,7 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-test.describe('Prontuário ao vivo (consulta) @M15', () => {
+test.describe('Prontuário ao vivo (consulta) @M15 @jornada', () => {
   test('médico: Ctrl+K, motivo, registro de 2021 e de 2026, suspenso; axe', async ({ page }) => {
     const externas = vigiarExternas(page);
     await entrar(page, 'SINT.MEDICO');
