@@ -8,9 +8,6 @@
 // Divergência intencional da porta de memória (W0-04): a memória não recusa a competência já sorteada
 // ('competencia-ja-sorteada'); a regra de um sorteio ativo por competência e comissão é do banco próprio e se prova aqui.
 // A memória serve à tela e ao E2E, que sorteiam competências diferentes ou cancelam antes.
-// Divergência intencional da porta de memória (W0-04): a memória não recusa a competência já sorteada
-// ('competencia-ja-sorteada'); a regra de um sorteio ativo por competência e comissão é do banco próprio e se prova aqui.
-// A memória serve à tela e ao E2E, que sorteiam competências diferentes ou cancelam antes.
 import { randomInt } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarAbility, regrasDeAcesso } from '@sgh/dominio-acesso';
@@ -558,6 +555,36 @@ describe.skipIf(SEM_BANCO_QUA)(
         [mb[1]!['id'], 1],
         [mb[2]!['id'], 0],
       ]);
+      // A tela lê a composição de 12/11 (quem saiu depois aparece): a posição 2 é o homônimo, não a Dora.
+      const naData = await new LeiturasGestaoComplementoQ2(m.nucleo).comissao(c, r.id, '2026-11-12');
+      expect((JSON.parse(naData!.membros) as { nome: string }[]).map((y) => y.nome)[2]).toBe(nomeProf);
+      // Outro dia que não o da reunião nem hoje não vale para as posições.
+      expect(
+        await codigoDe(
+          reuniao({ composicaoEm: '2026-11-11', presentesPosicoes: [2], realizadaEm: '2026-11-12T15:00:00' }),
+        ),
+      ).toBe('409:versao-desatualizada');
+      const h = await reuniao({
+        composicaoEm: '2026-11-12',
+        presentesPosicoes: [0, 2],
+        presentesTotal: 2,
+        realizadaEm: '2026-11-12T16:00:00',
+      });
+      const ph = await consulta(
+        'SELECT comissao_membro_id, presente FROM reuniao_comissao_participante WHERE reuniao_comissao_id = ? ORDER BY comissao_membro_id',
+        [h.id],
+      );
+      expect(ph.map((y) => [y['comissao_membro_id'], Number(y['presente'])])).toEqual([
+        [mb[0]!['id'], 1],
+        [mb[1]!['id'], 0],
+        [mb[2]!['id'], 1],
+      ]);
+      const [rh] = await consulta(
+        'SELECT membros_quantidade, presentes_quantidade, quorum_atingido FROM reuniao_comissao WHERE id = ?',
+        [h.id],
+      );
+      expect(rh).toMatchObject({ membros_quantidade: 3, presentes_quantidade: 2 });
+      expect(Number(rh!['quorum_atingido'])).toBe(1);
     });
 
     it('rota POST qualidade/gestao/comissoes: grava a comissão, a composição e a trilha pelo controller; recusa da rota sem gravar', async () => {
