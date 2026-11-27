@@ -36,8 +36,9 @@ test.describe('@C2-104 restrições da prescrição: ajuste renal, posologia e a
 
     await page.getByTestId('rp-busca').fill('sint');
     await page.getByTestId('rp-buscar').click();
+    // A busca responde depois do clique: espera o primeiro item (a fonte sintética tem itens "SINTETICO").
     const primeiro = page.locator('[data-testid^="rp-item-"]').first();
-    test.skip((await primeiro.count()) === 0, 'A fonte sintética não tem item prescritível com "sint".');
+    await expect(primeiro).toBeVisible();
     await primeiro.click();
     await expect(page.getByTestId('rp-escolhido')).toBeVisible();
     await escolher(page.getByTestId('rp-alvo-tipo'), 'principio');

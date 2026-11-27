@@ -106,6 +106,13 @@ describe('prescrição eletrônica (M24)', () => {
     expect((await get(medico, '/api/pep/prescricao/999999/contexto')).statusCode).toBe(404);
   });
 
+  it('C2-104: a farmácia clínica (restrições da prescrição) busca produto sem poder prescrever', async () => {
+    const farm = await entrar('SINT.FARMACIA');
+    const r = await get(farm, '/api/pep/prescricao/produtos?termo=sint');
+    expect(r.statusCode, r.body).toBe(200);
+    expect(r.json().length).toBeGreaterThan(0);
+  });
+
   it('busca de produto: padronizado primeiro, alto alerta, controlado e antimicrobiano', async () => {
     const r = (await get(medico, '/api/pep/prescricao/produtos?termo=sintetico')).json();
     // Sem acento e em minúsculas: "cloreto de sodio" acha "CLORETO DE SÓDIO".

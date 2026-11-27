@@ -97,7 +97,7 @@ import {
 import { z } from 'zod';
 import { TIPOS_FAVORITO_PRESCRICAO } from '@sgh/dominio-pep';
 import type { FavoritoPrescritorLido } from './prescricao-propria-favoritos.js';
-import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
+import { AuditadoNoHandler, Auditar, Permissao, PermissaoOu } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { reautenticar } from '../../autorizacao/reautenticacao.js';
 import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
@@ -454,6 +454,8 @@ export class PrescricaoController {
 
   @Get('pep/prescricao/produtos')
   @Permissao('pep.prescricao.criar')
+  // 03-PEP L108 (C2-104): a farmácia clínica busca no catálogo para cadastrar as restrições da prescrição, sem prescrever.
+  @PermissaoOu('pep.regraAlerta.editar')
   async produtos(
     @Query('termo') termo: string | undefined,
     @Req() req: RequisicaoAutorizada,
