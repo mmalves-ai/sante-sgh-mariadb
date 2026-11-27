@@ -72,6 +72,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
+import { OPERACAO_CADASTRAR_SOLICITANTE } from '../cadastro/porta-propria.js';
 import { OPERACOES_SADT_DIRETAS, OPERACOES_SADT_PENDENTES } from './operacoes.js';
 import {
   type AcessoPortalLido,
@@ -719,6 +720,15 @@ async function laudosDoPortal(
   };
 }
 
+/**
+ * A recepção do SADT cadastra o médico solicitante do autocadastro pela operação do cadastro: as tabelas declaradas
+ * aqui levam o papel do SADT a gravar nelas (gerador de privilégios).
+ */
+const GRAVACAO_SOLICITANTE = {
+  operacao: OPERACAO_CADASTRAR_SOLICITANTE,
+  tabelas: [...OPERACAO_CADASTRAR_SOLICITANTE.tabelas],
+} as const;
+
 export class PortaSadtPropria implements PortaSadt {
   readonly destino = 'banco' as const;
   private readonly executor: Executor;
@@ -760,7 +770,8 @@ export class PortaSadtPropria implements PortaSadt {
   // ── Gravação ──────────────────────────────────────────────────────────────────────────────────────────────
 
   async podeGravar(_c: ContextoSadt, op: string): Promise<LiberacaoGravacao> {
-    if (OPERACOES_SADT_DIRETAS.has(op)) return { pode: true, codigo: null, motivo: null };
+    if (OPERACOES_SADT_DIRETAS.has(op) || op === 'cadastro.cadastrarSolicitante')
+      return { pode: true, codigo: null, motivo: null };
     const motivo = OPERACOES_SADT_PENDENTES[op];
     if (motivo)
       return {
@@ -771,8 +782,21 @@ export class PortaSadtPropria implements PortaSadt {
     return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação desconhecida no SADT.' };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async executar(_c: ContextoSadt, op: string, _entrada: unknown, _ctx: ContextoOperacao): Promise<never> {
+  async executar(c: ContextoSadt, op: string, entrada: unknown, ctx: ContextoOperacao) {
+    // A recepção do SADT cadastra o médico solicitante do autocadastro (sadt.solicitanteWeb.aprovar, conferida pelo
+    // apoio do portal) pela mesma gravação do cadastro: a deduplicação por conselho + UF + número e a trilha na transação.
+    if (op === 'cadastro.cadastrarSolicitante') {
+      const r = await this.executor.executar(GRAVACAO_SOLICITANTE.operacao, c.cliente, entrada, {
+        ...ctx,
+        cliente: c.cliente,
+        estabelecimento: c.estabelecimento,
+      });
+      return {
+        resultado: { solicitante: Number(r.resultado.solicitante) },
+        repetida: r.repetida,
+        trilha: r.trilha,
+      };
+    }
     const motivo = OPERACOES_SADT_PENDENTES[op];
     throw motivo ? pendente(motivo) : recusa('operacao-desconhecida', 'Operação desconhecida no SADT.');
   }

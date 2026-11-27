@@ -69,4 +69,52 @@ describe.skipIf(SEM_BANCO)('liberação do exame no banco (pendência explícita
     // A tentativa recusada não escreve trilha de resultado (a contagem do cliente fica como estava).
     expect(Number(depois?.n)).toBe(Number(antes?.n));
   });
+
+  it('cadastro.cadastrarSolicitante (autocadastro do portal): grava pela operação do cadastro, com trilha e chave', async () => {
+    const c = contexto(m!);
+    const crm = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't' }, (l) =>
+      l.uma<{ id: number }>("SELECT id FROM conselho_classe WHERE sigla = 'CRM' AND ativo"),
+    );
+    const numero = 700_000_000 + (Date.now() % 100_000_000);
+    const entrada = { nome: `SOLICITANTE ${m!.marca}`, conselho: Number(crm!.id), uf: 'MG', numero };
+    expect(await porta.podeGravar(c, 'cadastro.cadastrarSolicitante')).toEqual({
+      pode: true,
+      codigo: null,
+      motivo: null,
+    });
+    const ctx = { ...c, chaveIdempotencia: `t-s09sol-${numero}` };
+    try {
+      const r = await porta.executar(c, 'cadastro.cadastrarSolicitante', entrada, ctx);
+      expect(r.repetida).toBe(false);
+      const id = Number(r.resultado['solicitante']);
+      expect(id).toBeGreaterThan(0);
+      const linha = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: 't' }, (l) =>
+        l.uma<{ nome: string; numero_conselho: string; trilha: number }>(
+          `SELECT s.nome, s.numero_conselho,
+                  (SELECT COUNT(*) FROM trilha_auditoria t WHERE t.entidade = 'solicitante_externo' AND t.entidade_id = s.id) AS trilha
+             FROM solicitante_externo s WHERE s.id = ?`,
+          [id],
+        ),
+      );
+      expect(linha).toMatchObject({ nome: entrada.nome, numero_conselho: String(numero) });
+      expect(Number(linha?.trilha)).toBeGreaterThan(0);
+      // A mesma chave com a mesma entrada: o resultado da primeira, sem gravar de novo.
+      const deNovo = await porta.executar(c, 'cadastro.cadastrarSolicitante', entrada, ctx);
+      expect(deNovo).toMatchObject({ repetida: true, resultado: { solicitante: id } });
+      // Outra chave, o mesmo conselho + UF + número: a deduplicação do cadastro recusa.
+      await expect(
+        porta.executar(c, 'cadastro.cadastrarSolicitante', entrada, {
+          ...ctx,
+          chaveIdempotencia: `${ctx.chaveIdempotencia}-2`,
+        }),
+      ).rejects.toMatchObject({ problema: { codigo: 'solicitante-existente' } });
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 't' }, (e) =>
+        e.executar('DELETE FROM solicitante_externo WHERE numero_conselho = ? AND nome = ?', [
+          String(numero),
+          entrada.nome,
+        ]),
+      );
+    }
+  });
 });

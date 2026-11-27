@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.aplicar (alcance 9d0bd06abfc5). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.aplicar (alcance 6d3b0d9b591c). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -4247,7 +4247,7 @@ GRANT SELECT ON setor_publicado_portal TO sgh_mod_sadt;
 GRANT SELECT ON sexo TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON sinal_vigilancia_iras TO sgh_mod_sadt;
 GRANT SELECT ON situacao_documento_prontuario TO sgh_mod_sadt;
-GRANT SELECT ON solicitante_externo TO sgh_mod_sadt;
+GRANT SELECT, INSERT, UPDATE ON solicitante_externo TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON substancia_interferente TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON suporte_guarda_amostra TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON texto_padrao_resultado TO sgh_mod_sadt;
