@@ -799,13 +799,13 @@ function alternarRegra(x: RegraLida) {
   align-items: center;
 }
 /* Alvo de toque de 24 px (axe target-size): a caixa de marcar nativa tem 13 px. Sem flex: none, a caixa encolhe
-   na linha do rótulo longo e volta a ficar abaixo de 24 px. */
+   na linha do rótulo longo. Em px e não em rem: na densidade compacta a fonte base é 14 px e 1.5rem dá 21 px. */
 .marca input[type='checkbox'] {
   flex: none;
-  inline-size: 1.5rem;
-  block-size: 1.5rem;
-  min-inline-size: 1.5rem;
-  min-block-size: 1.5rem;
+  inline-size: 24px;
+  block-size: 24px;
+  min-inline-size: 24px;
+  min-block-size: 24px;
   padding: 0;
   margin: 0;
 }
