@@ -1,7 +1,9 @@
 // E2E F3.9 registrarAuditoria (gestão da qualidade: auditoria interna pela tela). A pessoa da qualidade registra a
 // auditoria no formulário (título, área, referencial, auditores e o checklist com a seção de cada requisito); a
 // auditoria abre no detalhe com o referencial, os auditores, a seção do item e a conformidade calculada pelo domínio.
-// axe sem violação séria. Sessão real sobre a fonte sintética (dados SINTÉTICOS; nada vai à cópia).
+// axe sem violação séria. Roda na fonte sintética (como o CI) e no banco próprio (tools/obra/e2e-vm.sh --banco, cliente
+// descartável): lá o cliente nasce sem setores, e o setor UTI da área é cadastrado antes pela API da estrutura (o
+// administrador edita a estrutura; CSRF da sessão, como a tela). Dados SINTÉTICOS; nada vai à cópia.
 import { expect, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -17,8 +19,21 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
+/** O setor UTI do estabelecimento: na fonte sintética já existe (a rota responde 503 sem banco); no banco próprio
+ * descartável é cadastrado; se já existe, a recusa do código repetido basta. */
+async function garantirSetorUti(page: Page): Promise<void> {
+  await entrar(page, 'SINT.ADMIN');
+  const csrf = (await page.context().cookies()).find((c) => c.name === 'sgh_csrf')?.value ?? '';
+  const r = await page.request.post('/api/cadastros/estrutura-gestao/setores', {
+    headers: { 'x-csrf': csrf, 'idempotency-key': `e2e-f39-setor-${Date.now()}` },
+    data: { codigo: 'UTI', nome: 'UTI', tipo: 'assistencial', aceitaLancamentoConta: false, ramais: [] },
+  });
+  expect([201, 409, 503], `setor UTI: ${r.status()} ${await r.text()}`).toContain(r.status());
+}
+
 test.describe('Qualidade: auditoria interna registrada pela tela com referencial, auditores e seção', () => {
   test('nova auditoria → checklist com seção → detalhe com conformidade; axe', async ({ page }) => {
+    await garantirSetorUti(page);
     const externas = vigiarExternas(page);
     await entrar(page, 'SINT.QUALIDADE');
     await page.goto('/qualidade/gestao/auditorias');
