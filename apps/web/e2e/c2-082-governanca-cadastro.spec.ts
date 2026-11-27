@@ -58,10 +58,12 @@ const solicitacao = (id: number, numero: number, descricao: string) => ({
 async function simular(page: Page, st: Estado): Promise<void> {
   // A sessão lida pela tela recebe a decisão da comissão (no servidor ela vem do perfil administrador do sistema).
   await page.route('**/api/sessao', async (r) => {
-    if (r.request().method() !== 'GET') return r.fallback();
+    // GET (revalidação) e POST (o login devolve a sessão): as duas respostas levam a permissão.
+    if (!['GET', 'POST'].includes(r.request().method())) return r.fallback();
     const real = await r.fetch();
     if (!real.ok()) return r.fulfill({ response: real });
     const corpo = (await real.json()) as { permissoes?: string[] };
+    if (!Array.isArray(corpo.permissoes)) return r.fulfill({ response: real });
     return json(r, {
       ...corpo,
       permissoes: [...(corpo.permissoes ?? []), 'suprimentos.padronizacao.aprovar'],
