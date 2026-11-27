@@ -33,6 +33,7 @@ import {
 } from './tipos.js';
 import { recusa } from '@sgh/nucleo';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
+import { conferirRetirada } from './porta-propria-documentos.js';
 import type {
   ContextoGestao,
   GravadorGestao,
@@ -1149,7 +1150,8 @@ export class PortaGestaoMemoria implements PortaGestao {
       },
       retirarDocumento: async (r) => {
         const v = versao(s.documentos, r.id, r.versao, 'O documento');
-        if (v.situacao !== 'vigente') throw recusaVersaoGestao('O documento');
+        // A mesma regra da porta própria (conferirRetirada): só a vigente, na versão lida, com motivo escrito.
+        if (conferirRetirada(v, r)) throw recusaVersaoGestao('O documento');
         s.documentos = troca(s.documentos, {
           ...v,
           situacao: 'retirado',
