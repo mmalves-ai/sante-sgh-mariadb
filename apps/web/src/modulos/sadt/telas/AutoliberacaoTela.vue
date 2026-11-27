@@ -302,7 +302,7 @@ const resumoCondicao = (c: {
   <section class="autolib" data-testid="autoliberacao">
     <h1>{{ t('sadt.autoliberacao.titulo') }}</h1>
     <p>{{ t('sadt.autoliberacao.explicacao') }}</p>
-    <div class="linha" role="tablist">
+    <div class="linha" role="group" :aria-label="t('sadt.autoliberacao.titulo')">
       <SanteBotao
         v-for="a in ['fila', 'regras', 'deltas', 'interferentes'] as const"
         :key="a"
