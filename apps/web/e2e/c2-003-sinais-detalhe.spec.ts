@@ -120,6 +120,7 @@ async function simularSinaisDetalhe(page: Page): Promise<void> {
     if (r.request().method() === 'GET') return json(r, { paciente: PACIENTE, itens: afericoes });
     const corpo = r.request().postDataJSON() as { valores: Record<string, unknown>[] };
     const afericao = ++seq;
+    const novos: Record<string, unknown>[] = [];
     const valores = corpo.valores.map((v) => {
       const lim = limites.find((l) => l.parametro === v.tipo);
       const x = v.valor as number | null;
@@ -149,7 +150,7 @@ async function simularSinaisDetalhe(page: Page): Promise<void> {
         motivo: CATALOGOS.motivos.find((i) => i.id === v.motivo)?.descricao ?? null,
         justificativa: (v.justificativa as string | null) ?? null,
       };
-      afericoes.unshift(item);
+      novos.push(item);
       return { id: item.id, tipo: item.tipo, nivel, limite: lim?.id ?? null };
     });
     return json(
