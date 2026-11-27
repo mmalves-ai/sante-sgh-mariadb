@@ -46,6 +46,8 @@ import {
   esquemaFiltroManifestacoes,
   esquemaGerarEnvioRegulatorio,
   esquemaPublicarDocumento,
+  esquemaSubmeterDocumento,
+  esquemaDecidirEtapaDocumento,
   esquemaRegistrarAnaliseIndicador,
   esquemaRegistrarAuditoria,
   esquemaRegistrarCiencia,
@@ -75,6 +77,9 @@ import {
   competenciaAnterior,
   competenciaFechada,
   conferirPublicacao,
+  montarEtapasAprovacao,
+  MENSAGENS_RECUSA_APROVACAO_DOCUMENTO,
+  type RecusaAprovacaoDocumento,
   diasDaCompetenciaQualidade,
   limitarPelaAlta,
   membrosRepetidos,
@@ -173,6 +178,22 @@ const recusaGestao = (motivo: RecusaGestaoQualidade, status = 409) =>
     'Gestão da qualidade',
     MENSAGENS_RECUSA_GESTAO[motivo],
     { codigo: motivo, bloqueios: [motivo] },
+  );
+const recusarAprovacao = (motivo: RecusaAprovacaoDocumento): never => {
+  throw new ErroProblema(
+    motivo === 'submissao-pendente' ? 'recusa-de-negocio' : 'entrada-invalida',
+    motivo === 'submissao-pendente' ? 409 : 422,
+    'Gestão da qualidade',
+    MENSAGENS_RECUSA_APROVACAO_DOCUMENTO[motivo],
+    { codigo: motivo, bloqueios: [motivo] },
+  );
+};
+const fluxoIndisponivel = () =>
+  new ErroProblema(
+    'indisponivel',
+    503,
+    'Gestão da qualidade',
+    'O fluxo de aprovação dos documentos não está disponível nesta instalação.',
   );
 /** As recusas de conflito (o registro mudou) são 409; as de conteúdo, 422. */
 const CONFLITO: ReadonlySet<RecusaGestaoQualidade> = new Set([
@@ -412,6 +433,117 @@ export class GestaoQualidadeController {
         }),
     );
     return { id: g.id, revisao, hash };
+  }
+
+  // ── Fluxo de aprovação por etapas (F3.9 publicarDocumento, C2-060): o autor submete nomeando o revisor e o
+  // aprovador; cada um decide na própria sessão; a última etapa aprovada publica (nada vigente antes). ──
+
+  @Post('qualidade/documentos/submissoes')
+  @Permissao(P.documentoPublicar)
+  @AuditadoNoHandler(
+    'qualidade.submeterDocumento: documento_qualidade_versao em revisão, as etapas e a trilha_auditoria',
+  )
+  async submeter(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    const e = corpo(esquemaSubmeterDocumento, b);
+    await this.apoio.exigirLiberacao(s);
+    const agora = await this.agora(s);
+    const doCodigo = await this.porta.documentosDoCodigo(s.porta, e.codigo);
+    const r = conferirPublicacao({
+      entrada: { ...e, elaboradoPor: s.login.toUpperCase(), revisadoPor: e.revisor },
+      aprovador: e.aprovador,
+      hoje: agora.slice(0, 10),
+      doCodigo: doCodigo.map((d) => ({
+        id: d.id,
+        versao: d.versao,
+        codigo: d.codigo,
+        revisao: d.revisao,
+        situacao: d.situacao as 'vigente' | 'obsoleto' | 'retirado',
+      })),
+    });
+    if ('recusa' in r) recusar(r.recusa);
+    const m = montarEtapasAprovacao(s.login, e.revisor, e.aprovador);
+    if ('recusa' in m) return recusarAprovacao(m.recusa);
+    return this.apoio.sgh(
+      s,
+      E.qualidadeDocumentoSubmetido.codigo,
+      P.documentoPublicar,
+      (x: { id: number }) => ({ tabela: 'documento_qualidade_versao', id: String(x.id) }),
+      (gr) => {
+        if (!gr.submeterDocumento) throw fluxoIndisponivel();
+        return gr.submeterDocumento({
+          codigo: e.codigo,
+          tipo: e.tipo,
+          titulo: e.titulo.trim(),
+          area: e.area.trim(),
+          setorId: e.setorId ?? null,
+          conteudo: e.conteudo,
+          resumoAlteracao: e.resumoAlteracao?.trim() || null,
+          vigenciaAte: e.vigenciaAte,
+          exigeCiencia: e.exigeCiencia,
+          substitui: e.substitui,
+          etapas: m.etapas,
+          resumo: (revisao) =>
+            resumoSha256Texto(
+              textoParaResumoDocumento({ codigo: e.codigo, revisao, titulo: e.titulo, conteudo: e.conteudo }),
+            ),
+          agora,
+          usuario: s.login,
+        });
+      },
+    );
+  }
+
+  /** As etapas que esperam a decisão do login da sessão (qualquer pessoa pode ser revisora ou aprovadora). */
+  @Get('qualidade/aprovacoes-documento')
+  @Permissao(P.documentoLer)
+  async aprovacoesPendentes(@Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    if (!this.porta.aprovacoesPendentes) throw fluxoIndisponivel();
+    return { itens: await this.porta.aprovacoesPendentes(s.porta, s.login) };
+  }
+
+  /** A revisão submetida com as etapas: para quem publica e para os designados no fluxo. */
+  @Get('qualidade/documentos/submissoes/:id')
+  @Permissao(P.documentoLer)
+  async submissao(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    if (!this.porta.submissaoDocumento) throw fluxoIndisponivel();
+    const x = await this.porta.submissaoDocumento(s.porta, idDaRota(id));
+    const eu = s.login.toUpperCase();
+    if (!x || (!s.pode(P.documentoPublicar) && !x.etapas.some((e) => e.responsavel === eu)))
+      throw naoEncontrado('Revisão submetida');
+    return x;
+  }
+
+  @Post('qualidade/documentos/submissoes/:id/etapas')
+  @Permissao(P.documentoLer)
+  @AuditadoNoHandler(
+    'qualidade.decidirEtapaDocumento: documento_qualidade_aprovacao, a revisão e a trilha_auditoria',
+  )
+  async decidirEtapa(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    const e = corpo(esquemaDecidirEtapaDocumento, b);
+    await this.apoio.exigirLiberacao(s);
+    const agora = await this.agora(s);
+    const submissao = idDaRota(id);
+    return this.apoio.sgh(
+      s,
+      E.qualidadeDocumentoEtapaDecidida.codigo,
+      P.documentoLer,
+      { tabela: 'documento_qualidade_versao', id: String(submissao) },
+      (gr) => {
+        if (!gr.decidirEtapaDocumento) throw fluxoIndisponivel();
+        return gr.decidirEtapaDocumento({
+          submissao,
+          sequencia: e.sequencia,
+          decisao: e.decisao,
+          parecer: e.parecer?.trim() || null,
+          agora,
+          usuario: s.login,
+        });
+      },
+    );
   }
 
   @Post('qualidade/documentos/:id/retirada')

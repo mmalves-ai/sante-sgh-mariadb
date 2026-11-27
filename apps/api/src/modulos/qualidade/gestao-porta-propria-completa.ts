@@ -33,6 +33,12 @@ import { PortaGestaoPropria, TABELAS_GESTAO } from './porta-gestao-propria.js';
 import { comVersoesAnteriores, LeiturasGestaoComplementoD } from './porta-propria-complemento-d.js';
 import { gravacoesDocumentos, TABELAS_DOCUMENTOS } from './porta-propria-documentos.js';
 import {
+  gravacoesAprovacaoDocumento,
+  lerAprovacoesPendentes,
+  lerSubmissaoDocumento,
+  TABELAS_APROVACAO_DOCUMENTO,
+} from './porta-propria-aprovacao-documento.js';
+import {
   gravacoesComplementoQ1,
   LeiturasGestaoComplementoQ1,
   TABELAS_COMPLEMENTO_Q1,
@@ -79,6 +85,7 @@ export const TABELAS_GESTAO_COMPLETA = [
     ...TABELAS_REVISAR_PRONTUARIO,
     ...TABELAS_COMPLEMENTO_Q6,
     ...TABELAS_DOCUMENTOS,
+    ...TABELAS_APROVACAO_DOCUMENTO,
     ...TABELAS_COMISSAO_SORTEIO,
   ]),
 ] as const;
@@ -206,6 +213,7 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
         ...gravacaoRevisarProntuario(tx, est, anotacao),
         ...gravacoesComplementoQ6(tx, est, anotacao),
         ...gravacoesDocumentos(tx, est),
+        ...gravacoesAprovacaoDocumento(tx, est),
         gerarEnvioRegulatorio: (g: GeracaoEnvioComArquivo) => this.gerarEnvio(tx, est, g),
         registrarTransmissaoEnvio: (t) => this.transmitirEnvio(tx, est, t),
       },
@@ -238,6 +246,15 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
 
   override documentosDoCodigo(c: ContextoGestao, codigo: string) {
     return this.complementoQ2.documentosDoCodigo(c, codigo);
+  }
+
+  /** Fluxo de aprovação por etapas (F3.9 publicarDocumento, C2-060). */
+  submissaoDocumento(c: ContextoGestao, id: number) {
+    return lerNoEstabelecimento(this.nucleoCompleta, c, (l, est) => lerSubmissaoDocumento(l, est, id));
+  }
+
+  aprovacoesPendentes(c: ContextoGestao, login: string) {
+    return lerNoEstabelecimento(this.nucleoCompleta, c, (l, est) => lerAprovacoesPendentes(l, est, login));
   }
 
   override ciencias(c: ContextoGestao, documentos: readonly number[], usuario: string) {

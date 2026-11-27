@@ -1,3 +1,9 @@
+import type {
+  AprovacaoPendenteDocumento,
+  DecisaoEtapaDocumento,
+  SubmissaoDocumentoLida,
+} from '@sgh/contratos';
+import type { EfeitoDecisaoEtapa, EtapaParaDecidir } from '@sgh/dominio-qualidade';
 // Porta da gestão da qualidade (M48, etapa 5) e da revisão de prontuários (W0-04): documentos, indicadores, auditorias,
 // comissões, riscos, não conformidades, ouvidoria, envios regulatórios e a comissão de revisão, com as gravações numa
 // transação com a trilha junto. Três implementações: a própria sobre o MariaDB do cliente (porta-gestao-propria.ts), em
@@ -55,8 +61,39 @@ export interface IncidenteParaNotivisaLido {
 }
 
 /** Gravações só do novo (as regras puras conferidas antes, na API). */
+/** A submissão ao fluxo (as regras puras conferidas na API; o número da revisão e o resumo saem na porta). */
+export interface SubmissaoDocumentoNova {
+  readonly codigo: string;
+  readonly tipo: string;
+  readonly titulo: string;
+  readonly area: string;
+  readonly setorId: number | null;
+  readonly conteudo: string;
+  readonly resumoAlteracao: string | null;
+  readonly vigenciaAte: string;
+  readonly exigeCiencia: boolean;
+  readonly substitui: { readonly id: number; readonly versao: number } | null;
+  readonly etapas: readonly EtapaParaDecidir[];
+  /** O resumo SHA-256 do texto da revisão, pelo número que a porta atribui. */
+  readonly resumo: (revisao: number) => string;
+  readonly agora: string;
+  readonly usuario: string;
+}
+
+export interface DecisaoEtapaDocumentoNova {
+  readonly submissao: number;
+  readonly sequencia: number;
+  readonly decisao: DecisaoEtapaDocumento;
+  readonly parecer: string | null;
+  readonly agora: string;
+  readonly usuario: string;
+}
+
 export interface GravadorGestao {
   publicarDocumento(d: SemHospital<DocumentoQualidadeNovo>): Promise<{ id: number }>;
+  /** Fluxo por etapas (opcional: a porta sem o fluxo responde 503 na rota). */
+  submeterDocumento?(d: SubmissaoDocumentoNova): Promise<{ id: number; revisao: number }>;
+  decidirEtapaDocumento?(d: DecisaoEtapaDocumentoNova): Promise<EfeitoDecisaoEtapa>;
   retirarDocumento(r: {
     readonly id: number;
     readonly versao: number;
@@ -258,6 +295,9 @@ export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
   ): Promise<{ readonly id: number; readonly codigo: string | null; readonly nome: string }[]>;
   documento(c: C, id: number): Promise<DocumentoQualidadeRegistrado | null>;
   documentosDoCodigo(c: C, codigo: string): Promise<DocumentoQualidadeRegistrado[]>;
+  /** Fluxo por etapas: a revisão submetida com as etapas, e as etapas que esperam o login (opcionais). */
+  submissaoDocumento?(c: C, id: number): Promise<SubmissaoDocumentoLida | null>;
+  aprovacoesPendentes?(c: C, login: string): Promise<AprovacaoPendenteDocumento[]>;
   ciencias(
     c: C,
     documentos: readonly number[],

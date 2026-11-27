@@ -1030,3 +1030,66 @@ export interface ResumoGestaoQualidade {
   readonly motivo: string | null;
   readonly agora: string;
 }
+
+// ── Fluxo de aprovação por etapas do documento da qualidade (F3.9 publicarDocumento, C2-060) ──
+/** As etapas do fluxo: a elaboração (quem submete), a revisão e a aprovação, cada uma decidida na própria sessão. */
+export const ETAPAS_APROVACAO_DOCUMENTO = ['elaboracao', 'revisao', 'aprovacao'] as const;
+export type EtapaAprovacaoDocumentoCodigo = (typeof ETAPAS_APROVACAO_DOCUMENTO)[number];
+export const DECISOES_ETAPA_DOCUMENTO = ['aprovada', 'devolvida', 'reprovada'] as const;
+export type DecisaoEtapaDocumento = (typeof DECISOES_ETAPA_DOCUMENTO)[number];
+export type SituacaoEtapaDocumento = 'pendente' | DecisaoEtapaDocumento;
+/** A situação da revisão submetida: em revisão, em aprovação, publicada (vigente) ou devolvida ao autor. */
+export type SituacaoSubmissaoDocumento = 'em_revisao' | 'em_aprovacao' | 'vigente' | 'devolvida';
+
+/**
+ * `qualidade.submeterDocumento`: o autor (a sessão) submete a revisão nova ao fluxo, nomeando o revisor e o aprovador
+ * (contas do cliente). Nada fica vigente até a última etapa aprovada; os mesmos campos da publicação direta.
+ */
+export const esquemaSubmeterDocumento = esquemaPublicarDocumento
+  .omit({ elaboradoPor: true, revisadoPor: true })
+  .extend({ revisor: login, aprovador: login });
+export type SubmeterDocumentoEntrada = z.infer<typeof esquemaSubmeterDocumento>;
+
+/** `qualidade.decidirEtapaDocumento`: o responsável da etapa decide na própria sessão; devolver e reprovar pedem parecer. */
+export const esquemaDecidirEtapaDocumento = z.object({
+  sequencia: z.number().int().min(1).max(10),
+  decisao: z.enum(DECISOES_ETAPA_DOCUMENTO),
+  parecer: textoOpcional(2000).optional(),
+});
+export type DecidirEtapaDocumentoEntrada = z.infer<typeof esquemaDecidirEtapaDocumento>;
+
+export interface EtapaAprovacaoDocumento {
+  readonly sequencia: number;
+  readonly etapa: EtapaAprovacaoDocumentoCodigo;
+  readonly responsavel: string;
+  readonly situacao: SituacaoEtapaDocumento;
+  readonly parecer: string | null;
+  readonly decididoEm: string | null;
+  readonly decisor: string | null;
+}
+
+/** A revisão submetida com as etapas (o id é o da revisão; vira o id do documento quando publicada). */
+export interface SubmissaoDocumentoLida {
+  readonly id: number;
+  readonly codigo: string;
+  readonly revisao: number;
+  readonly titulo: string;
+  readonly tipo: string;
+  readonly conteudo: string;
+  readonly elaboradoPor: string;
+  readonly submetidoEm: string;
+  readonly situacao: SituacaoSubmissaoDocumento;
+  readonly etapas: readonly EtapaAprovacaoDocumento[];
+}
+
+/** A etapa que espera a decisão do login da sessão (as anteriores já aprovadas). */
+export interface AprovacaoPendenteDocumento {
+  readonly submissao: number;
+  readonly codigo: string;
+  readonly revisao: number;
+  readonly titulo: string;
+  readonly etapa: EtapaAprovacaoDocumentoCodigo;
+  readonly sequencia: number;
+  readonly elaboradoPor: string;
+  readonly submetidoEm: string;
+}

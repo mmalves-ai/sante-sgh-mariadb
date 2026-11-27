@@ -4039,6 +4039,18 @@ export const EVENTOS_AUDITAVEIS = {
     descricao: 'Documento da qualidade publicado ou revisado (DOCUMENTO_PUBLICADO)',
     legado: null,
   },
+  qualidadeDocumentoSubmetido: {
+    codigo: 'qualidade.documento.submetido',
+    descricao:
+      'Revisão de documento da qualidade submetida ao fluxo de aprovação (revisor e aprovador designados)',
+    legado: null,
+  },
+  qualidadeDocumentoEtapaDecidida: {
+    codigo: 'qualidade.documento.etapa.decidida',
+    descricao:
+      'Etapa do fluxo de aprovação do documento da qualidade decidida pelo responsável (com o parecer)',
+    legado: null,
+  },
   qualidadeDocumentoRetirado: {
     codigo: 'qualidade.documento.retirado',
     descricao: 'Documento da qualidade retirado de uso, com o motivo',

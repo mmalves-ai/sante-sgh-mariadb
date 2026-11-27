@@ -17,3 +17,5 @@ export * from './comissao-composicao.js';
 export * from './controles-risco.js';
 // C2-066: gestão estratégica (mapa BSC, iniciativas com ações e horas, reunião de análise crítica).
 export * from './gestao-estrategica.js';
+// Fluxo de aprovação por etapas do documento (F3.9 publicarDocumento, C2-060).
+export * from './aprovacao-documento.js';

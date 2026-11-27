@@ -2,6 +2,12 @@
 // real): três respostas da pesquisa do portal e dois incidentes no mês anterior ao do relógio, um paciente do cadastro e
 // os feriados nacionais fixos. As gravações seguem as travas do banco (versão, chaves únicas, a revisão vigente
 // substituída, a geração que substitui a anterior, a transmissão só com o mesmo resumo).
+import {
+  aprovacoesPendentesMemoria,
+  gravacoesAprovacaoMemoria,
+  submissaoMemoria,
+  type SubmissaoMemoria,
+} from './aprovacao-documento-memoria.js';
 import type {
   ControleRiscoGravado,
   ControleRiscoNovo,
@@ -57,6 +63,8 @@ function buscaManifestacao(m: ManifestacaoRegistrada, busca: string): boolean {
 }
 
 interface Estado {
+  /** Fluxo de aprovação por etapas dos documentos (C2-060). */
+  submissoes?: SubmissaoMemoria[];
   documentos: (DocumentoQualidadeRegistrado & { conteudo: string })[];
   ciencias: { id: number; documento: number; usuario: string; cienteEm: string }[];
   analises: AnaliseIndicadorRegistrada[];
@@ -256,6 +264,12 @@ export class PortaGestaoMemoria implements PortaGestao {
   documento(_c: ContextoGestao, id: number) {
     const d = this.estado.documentos.find((x) => x.id === id);
     return Promise.resolve(d ? { ...d } : null);
+  }
+  submissaoDocumento(_c: ContextoGestao, id: number) {
+    return Promise.resolve(submissaoMemoria(this.estado, id));
+  }
+  aprovacoesPendentes(_c: ContextoGestao, login: string) {
+    return Promise.resolve(aprovacoesPendentesMemoria(this.estado, login));
   }
   documentosDoCodigo(_c: ContextoGestao, codigo: string) {
     return Promise.resolve(
@@ -1111,6 +1125,7 @@ export class PortaGestaoMemoria implements PortaGestao {
           );
         return { versao: m.versao + 1 };
       },
+      ...gravacoesAprovacaoMemoria(s, id),
       publicarDocumento: async (d) => {
         if (d.substitui) {
           const v = versao(s.documentos, d.substitui.id, d.substitui.versao, 'O documento');
