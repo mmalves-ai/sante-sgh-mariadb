@@ -19,6 +19,8 @@ import {
   FONTE_CONFIGURACAO,
   type FonteConfiguracao,
 } from '../config/public-api.js';
+import { PORTA_DOCUMENTOS, type PortaDocumentos } from '../pep/documentos-porta.js';
+import { PortaDocumentosMemoria } from '../pep/documentos-porta-memoria.js';
 import { LiberacaoPep } from '../pep/liberacao-pep.js';
 import type { ContextoModulo } from '../registro.js';
 import {
@@ -36,7 +38,7 @@ import { configAssinaturaDoAmbiente } from './infra/ambiente.js';
 import { configDocumentosIcpDoAmbiente } from './infra/documentos-ambiente.js';
 import { SimuladorSncr } from './infra/simulador-sncr.js';
 import { PORTA_ASSINATURA_ICP, type PortaAssinaturaIcp, portaAssinaturaIndisponivel } from './porta.js';
-import { PortaAssinaturaMemoria } from './porta-memoria.js';
+import { type DocumentosMemoriaIcp, PortaAssinaturaMemoria } from './porta-memoria.js';
 import { PortaAssinaturaPropria } from './porta-propria.js';
 import {
   ARMAZEM_PDF_ICP,
@@ -80,11 +82,31 @@ export function estabelecimentosComCache(
   };
 }
 
+/**
+ * W0-10: os documentos do prontuário da sessão sintética (a porta em memória do PEP), ligados na montagem do Nest pelo
+ * provedor LIGACAO_DOCUMENTOS_MEMORIA (o PEP é global e monta a porta dele à parte). Sem a ligação, a fila do autor sai
+ * vazia, como no boot antigo sem o PEP.
+ */
+class DocumentosMemoriaLigados implements DocumentosMemoriaIcp {
+  alvo: PortaDocumentosMemoria | null = null;
+  todos(hospital: string) {
+    return this.alvo?.documentosParaIcp(hospital) ?? [];
+  }
+  marcarAssinadoIcp(hospital: string, documento: number) {
+    this.alvo?.marcarAssinadoIcp(hospital, documento);
+  }
+}
+
+const LIGACAO_DOCUMENTOS_MEMORIA = Symbol('LIGACAO_DOCUMENTOS_MEMORIA');
+
 /** A porta da assinatura pela regra do módulo. */
-export function portaDaAssinatura(ctx: ContextoModulo): PortaAssinaturaIcp {
+export function portaDaAssinatura(
+  ctx: ContextoModulo,
+  documentos: DocumentosMemoriaIcp | null = null,
+): PortaAssinaturaIcp {
   const cliente = ctx.configuracao.clientePadrao;
   if (ctx.nucleo && cliente) return new PortaAssinaturaPropria(ctx.nucleo, cliente);
-  if (!ctx.nucleo && fontesSinteticas(ctx.env)) return new PortaAssinaturaMemoria();
+  if (!ctx.nucleo && fontesSinteticas(ctx.env)) return new PortaAssinaturaMemoria(documentos);
   return portaAssinaturaIndisponivel();
 }
 
@@ -96,7 +118,8 @@ export async function modulo(
   opcoes: OpcoesModuloAssinatura = {},
 ): Promise<DynamicModule> {
   const env = ctx.env as NodeJS.ProcessEnv;
-  const porta = opcoes.porta ?? portaDaAssinatura(ctx);
+  const documentosMemoria = new DocumentosMemoriaLigados();
+  const porta = opcoes.porta ?? portaDaAssinatura(ctx, documentosMemoria);
   const sintetico = fontesSinteticas(ctx.env);
   const config =
     opcoes.config ??
@@ -138,6 +161,14 @@ export async function modulo(
           env,
           config.modo === 'simulador' ? new SimuladorSncr() : null,
         ),
+      },
+      {
+        provide: LIGACAO_DOCUMENTOS_MEMORIA,
+        useFactory: (documentos: PortaDocumentos | null) => {
+          if (documentos instanceof PortaDocumentosMemoria) documentosMemoria.alvo = documentos;
+          return documentosMemoria;
+        },
+        inject: [{ token: PORTA_DOCUMENTOS, optional: true }],
       },
       {
         provide: SERVICO_DOCUMENTOS_ICP,
