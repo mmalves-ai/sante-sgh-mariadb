@@ -45,6 +45,13 @@ export const rotasOperadora: RouteRecordRaw[] = [
     component: () => import('./telas/RegrasCoparticipacaoTela.vue'),
     meta: { permissao: 'operadora.beneficiario.ler' },
   },
+  // 08-SGO L106 (C2-047): reembolso ao beneficiário (pedido, análise com glosa, pagamento, tabela por município).
+  {
+    path: '/operadora/reembolsos',
+    name: 'operadora.reembolsos',
+    component: () => import('./telas/ReembolsoOperadoraTela.vue'),
+    meta: { permissao: 'operadora.reembolso.ler' },
+  },
   // 08-SGO L100 (C2-095): comercial (proposta de adesão, força de venda, metas, campanhas, comissão com estorno).
   {
     path: '/operadora/comercial',

@@ -62,6 +62,10 @@ const visiveis = computed(() =>
         t('operadoraReajuste.titulo')
       }}</RouterLink>
       ·
+      <RouterLink to="/operadora/reembolsos" data-testid="link-reembolso">{{
+        t('operadoraReembolso.atalho')
+      }}</RouterLink>
+      ·
       <RouterLink to="/operadora/comercial" data-testid="link-comercial">{{
         t('operadoraComercial.atalho')
       }}</RouterLink>
