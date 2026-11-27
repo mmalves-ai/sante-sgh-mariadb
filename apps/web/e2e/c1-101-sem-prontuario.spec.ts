@@ -134,9 +134,9 @@ test.describe('Marcação sem prontuário e conversão ali mesmo @C1-101 @F3.2',
     await entrar(page, 'SINT.SENHAS');
     await page.goto('/recepcao/guiche');
     await expect(page.getByTestId('tela-guiche')).toBeVisible();
-    await page.getByTestId('guiche-numero').fill('8');
+    await page.getByTestId('guiche-numero').fill('5');
     await page.getByTestId('guiche-abrir').click();
-    await expect(page.getByTestId('guiche-situacao')).toContainText('Guichê 8 aberto');
+    await expect(page.getByTestId('guiche-situacao')).toContainText('Guichê 5 aberto');
     await page.getByTestId('guiche-emitir').click();
     await escolher(page.getByTestId('emissao-servico'), '1');
     await page.getByTestId('confirmar-emissao').click();
