@@ -37,7 +37,7 @@ import { ReceberAcordosController } from './receber-acordos.controller.js';
 import { ReinfEventosController } from './reinf-eventos.controller.js';
 import { EntradaServicoController } from './entrada-servico.controller.js';
 import { PORTA_FINANCEIRO, type PortaFinanceiro } from './porta.js';
-import { PortaFinanceiroMemoria } from './porta-memoria.js';
+import { financeiroMemoriaDoContexto } from './porta-memoria.js';
 import { portaFinanceiroIndisponivel, PortaFinanceiroPropria } from './porta-propria.js';
 import { ARMAZEM_FINANCEIRO } from './simbolos.js';
 
@@ -58,7 +58,7 @@ export function moduloFinanceiro(ctx: ContextoModulo, opcoes: OpcoesModuloFinanc
       ? // F3.8 (07-FIN linha 89): as parcelas previstas de cartão entram no fluxo de caixa projetado.
         comCartaoNoFluxo(new PortaFinanceiroPropria(ctx.nucleo), ctx.nucleo)
       : memoria
-        ? new PortaFinanceiroMemoria(null)
+        ? financeiroMemoriaDoContexto(ctx)
         : portaFinanceiroIndisponivel());
   const armazem: ArmazemFinanceiro =
     opcoes.armazem ??

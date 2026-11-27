@@ -11,6 +11,7 @@ import {
   parametrosIniciaisSinteticos,
   prerequisitosIniciaisSinteticos,
 } from '../config/public-api.js';
+import { financeiroMemoriaDoContexto } from '../financeiro/porta-memoria.js';
 import { converterHtmlEmPdfA } from '../documento/infra/gotenberg.js';
 import type { ContextoModulo } from '../registro.js';
 import { PORTA_REPASSE, type PortaRepasse } from './porta.js';
@@ -49,7 +50,8 @@ export async function portaDoRepasse(ctx: ContextoModulo): Promise<PortaRepasse>
     await ligarMapaEstabelecimentos(cliente, ctx.nucleo);
     return new PortaRepassePropria(ctx.nucleo);
   }
-  if (!ctx.nucleo && fontesSinteticas(ctx.env)) return new PortaRepasseMemoria(null);
+  if (!ctx.nucleo && fontesSinteticas(ctx.env))
+    return new PortaRepasseMemoria(null, financeiroMemoriaDoContexto(ctx));
   return portaRepasseIndisponivel();
 }
 

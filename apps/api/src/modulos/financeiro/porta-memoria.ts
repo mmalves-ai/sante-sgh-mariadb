@@ -2159,3 +2159,18 @@ export class PortaFinanceiroMemoria implements PortaFinanceiro {
   /** Para os testes: o mesmo usuário? */
   static mesmo = mesmaPessoa;
 }
+
+/**
+ * A porta financeira em memória única do contexto dos módulos (a sessão sintética de dev/ci): o financeiro e o repasse
+ * recebem a mesma instância, para o título do RPA emitido no repasse em memória aparecer no contas a pagar (M33), como
+ * na mesma transação do banco próprio.
+ */
+const financeiroMemoriaPorContexto = new WeakMap<object, PortaFinanceiroMemoria>();
+export function financeiroMemoriaDoContexto(contexto: object): PortaFinanceiroMemoria {
+  let porta = financeiroMemoriaPorContexto.get(contexto);
+  if (!porta) {
+    porta = new PortaFinanceiroMemoria(null);
+    financeiroMemoriaPorContexto.set(contexto, porta);
+  }
+  return porta;
+}
