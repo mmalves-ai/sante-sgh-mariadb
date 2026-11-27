@@ -65,6 +65,18 @@ import {
 } from './referencia-empenho.js';
 
 export const PORTA_ATA_EMPENHO = Symbol('PORTA_ATA_EMPENHO');
+import {
+  esquemaSolicitacaoCompraPublica,
+  type EntradaSolicitacaoCompraPublica,
+  type ApoioSolicitacaoCompra,
+  lerApoioSolicitacao,
+  lerSolicitacoesCompraPublica,
+  OPERACAO_SOLICITAR_COMPRA_PUBLICA,
+  type SolicitacaoCompraPublicaVisao,
+  solicitarCompraPublica,
+  TABELAS_SOLICITACAO_COMPRA,
+} from './solicitacao-compra-fonte.js';
+
 export const OPERACAO_ATA = 'suprimentos.ata-registro-preco.registrar';
 export const OPERACAO_EMPENHO = 'suprimentos.empenho.emitir';
 export const OPERACAO_ANULAR_EMPENHO = 'suprimentos.empenho.anular';
@@ -218,6 +230,14 @@ export interface PortaAtaEmpenho {
     c: ContextoPortaM18,
     adesao: number,
     e: EntradaDecisaoAdesao,
+    chave: string,
+  ): Promise<ResultadoAtaEmpenho>;
+  /** C2-017 (09-AREA linha 81): solicitação de compra pública com a fonte de recurso de cada item. */
+  apoioSolicitacaoCompra(c: ContextoPortaM18, termo: string): Promise<ApoioSolicitacaoCompra>;
+  solicitacoesCompra(c: ContextoPortaM18): Promise<SolicitacaoCompraPublicaVisao[]>;
+  solicitarCompra(
+    c: ContextoPortaM18,
+    e: EntradaSolicitacaoCompraPublica,
     chave: string,
   ): Promise<ResultadoAtaEmpenho>;
 }
@@ -750,6 +770,30 @@ export class PortaAtaEmpenhoPropria implements PortaAtaEmpenho {
       (x) => ({ adesao, decisao: x.decisao }),
     );
   }
+
+  apoioSolicitacaoCompra(c: ContextoPortaM18, termo: string): Promise<ApoioSolicitacaoCompra> {
+    const ctx = this.contexto(c);
+    return this.nucleo.lerSomente(ctx, (l) => lerApoioSolicitacao(l, ctx.estabelecimento, termo));
+  }
+
+  solicitacoesCompra(c: ContextoPortaM18): Promise<SolicitacaoCompraPublicaVisao[]> {
+    const ctx = this.contexto(c);
+    return this.nucleo.lerSomente(ctx, (l) => lerSolicitacoesCompraPublica(l, ctx.estabelecimento));
+  }
+
+  solicitarCompra(c: ContextoPortaM18, e: EntradaSolicitacaoCompraPublica, chave: string) {
+    return this.executar(
+      c,
+      chave,
+      OPERACAO_SOLICITAR_COMPRA_PUBLICA,
+      TABELAS_SOLICITACAO_COMPRA,
+      esquemaSolicitacaoCompraPublica,
+      e,
+      (tx, est, x) => solicitarCompraPublica(tx, est, x),
+      'solicitacao_compra',
+      (x) => ({ tipo: x.tipo, itens: x.itens.length, processo: x.processo ?? null }),
+    );
+  }
 }
 
 export function portaAtaEmpenhoIndisponivel(): PortaAtaEmpenho {
@@ -776,5 +820,8 @@ export function portaAtaEmpenhoIndisponivel(): PortaAtaEmpenho {
     adesoes: falha,
     solicitarAdesao: falha,
     decidirAdesao: falha,
+    apoioSolicitacaoCompra: falha,
+    solicitacoesCompra: falha,
+    solicitarCompra: falha,
   };
 }

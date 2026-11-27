@@ -117,4 +117,26 @@ export const mensagensAtaEmpenho = {
       encerrada: 'Encerrada',
     },
   },
+  solicitacaoFonte: {
+    titulo: 'Solicitação de compra com fonte de recurso',
+    texto:
+      'Cada item diz qual fonte de recurso o custeia, por percentual ou por quantidade, e a soma fecha o item (Lei 14.133, art. 150). As fontes vêm do cadastro de origens de recurso.',
+    local: 'Local que recebe',
+    justificativa: 'Justificativa da compra',
+    buscaInsumo: 'Buscar insumo',
+    insumo: 'Insumo',
+    quantidade: 'Quantidade',
+    valor: 'Valor unitário estimado',
+    fonte: 'Fonte de recurso',
+    percentual: 'Percentual (%)',
+    adicionarFonte: 'Adicionar fonte',
+    adicionarItem: 'Adicionar item',
+    itemMontado: 'Item {n}: {insumo}, {quantidade}, fontes: {fontes}',
+    registrar: 'Registrar solicitação',
+    registrada: 'Solicitação {numero} registrada.',
+    nenhuma: 'Nenhuma solicitação com fonte de recurso.',
+    semFonte:
+      'Nenhuma fonte de recurso ativa: cadastre em Administração > Cadastros (origem de recurso da compra).',
+    linha: 'Solicitação {numero} · fonte principal: {fonte} · {situacao}',
+  },
 };

@@ -58,6 +58,7 @@ NUMERACOES = (
     "requisicao_transfusao",
     "senha_autorizacao",
     "sessao_caixa",
+    "solicitacao_compra",
     "solicitacao_limpeza",
     "solicitacao_opme",
     "surto_infeccao",

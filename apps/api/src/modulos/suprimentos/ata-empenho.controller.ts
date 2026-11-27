@@ -13,6 +13,9 @@
 //   GET  /api/suprimentos/adesoes-ata                             as adesões do estabelecimento (C2-017, art. 86)
 //   POST /api/suprimentos/adesoes-ata                             solicitar a adesão (participante ou carona)
 //   POST /api/suprimentos/adesoes-ata/:id/decisao                 autorizar (aceites e limites) ou negar com motivo
+//   GET  /api/suprimentos/solicitacoes-compra-publica/apoio?termo  fontes ativas, locais e insumos que casam com o termo
+//   GET  /api/suprimentos/solicitacoes-compra-publica             as solicitações com a fonte de cada item (C2-017)
+//   POST /api/suprimentos/solicitacoes-compra-publica             registrar a solicitação com as fontes por item
 // A ata é ato de quem conduz a contratação; o empenho e a anulação, da autoridade (suprimentos.licitacao.homologar).
 // A gravação exige a Idempotency-Key: a repetição do mesmo pedido devolve o resultado da primeira.
 import { Body, Controller, Get, Header, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
@@ -29,6 +32,7 @@ import {
   PORTA_ATA_EMPENHO,
   type PortaAtaEmpenho,
 } from './ata-empenho.js';
+import { esquemaSolicitacaoCompraPublica } from './solicitacao-compra-fonte.js';
 import { esquemaPeriodoExportacao, esquemaReferenciaEmpenho } from './referencia-empenho.js';
 
 const CHAVE = /^[A-Za-z0-9._:-]{8,80}$/;
@@ -171,6 +175,30 @@ export class AtaEmpenhoController {
       sessaoDe(req).porta,
       idDaRota(id),
       corpo(esquemaDecisaoAdesao, b),
+      chaveDe(req),
+    );
+  }
+
+  @Get('solicitacoes-compra-publica/apoio')
+  @Permissao('suprimentos.licitacao.ler')
+  apoioSolicitacaoCompra(@Query('termo') termo: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.porta.apoioSolicitacaoCompra(sessaoDe(req).porta, typeof termo === 'string' ? termo : '');
+  }
+
+  @Get('solicitacoes-compra-publica')
+  @Permissao('suprimentos.licitacao.ler')
+  solicitacoesCompra(@Req() req: RequisicaoAutorizada) {
+    return this.porta.solicitacoesCompra(sessaoDe(req).porta);
+  }
+
+  @Post('solicitacoes-compra-publica')
+  @HttpCode(201)
+  @Permissao('suprimentos.licitacao.conduzir')
+  @AuditadoNoHandler('suprimentos.solicitacao-compra.registrar pelo executor (trilha na mesma transação)')
+  solicitarCompra(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.porta.solicitarCompra(
+      sessaoDe(req).porta,
+      corpo(esquemaSolicitacaoCompraPublica, b),
       chaveDe(req),
     );
   }

@@ -163,3 +163,39 @@ export const solicitarAdesao = (corpo: Record<string, unknown>, chave: string) =
   enviar<ResultadoAtaEmpenhoTela>(`${S}/adesoes-ata`, corpo, chave);
 export const decidirAdesao = (id: number, corpo: Record<string, unknown>, chave: string) =>
   enviar<ResultadoAtaEmpenhoTela>(`${S}/adesoes-ata/${id}/decisao`, corpo, chave);
+
+// C2-017 (09-AREA linha 81): solicitação de compra pública com a fonte de recurso de cada item (Lei 14.133, art. 150).
+export interface ApoioSolicitacaoCompraTela {
+  readonly origens: readonly { id: number; codigo: string; descricao: string; esfera: string | null }[];
+  readonly locais: readonly { id: number; nome: string }[];
+  readonly insumos: readonly { id: number; nome: string }[];
+}
+export interface SolicitacaoCompraPublicaTela {
+  readonly id: number;
+  readonly numero: number;
+  readonly situacao: string;
+  readonly solicitadoEm: string;
+  readonly processo: string | null;
+  readonly fontePrincipal: string | null;
+  readonly valorEstimado: number | null;
+  readonly itens: readonly {
+    sequencia: number;
+    insumoNome: string;
+    quantidade: number;
+    valorUnitarioEstimado: number | null;
+    fontes: readonly {
+      codigo: string;
+      descricao: string;
+      quantidade: number | null;
+      percentual: number | null;
+    }[];
+  }[];
+}
+export const lerApoioSolicitacaoCompra = (termo: string) =>
+  ler<ApoioSolicitacaoCompraTela>(
+    `${S}/solicitacoes-compra-publica/apoio?termo=${encodeURIComponent(termo)}`,
+  );
+export const listarSolicitacoesCompraPublica = () =>
+  ler<SolicitacaoCompraPublicaTela[]>(`${S}/solicitacoes-compra-publica`);
+export const registrarSolicitacaoCompraPublica = (corpo: Record<string, unknown>, chave: string) =>
+  enviar<ResultadoAtaEmpenhoTela>(`${S}/solicitacoes-compra-publica`, corpo, chave);
