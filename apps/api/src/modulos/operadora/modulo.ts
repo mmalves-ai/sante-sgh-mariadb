@@ -53,6 +53,12 @@ import {
 } from './beneficiario-saude-propria.js';
 import { DeclaracoesAnsController } from './ans-declaracoes.controller.js';
 import { RegrasCoparticipacaoController } from './regras-coparticipacao.controller.js';
+import { RegrasFranquiaController } from './regras-franquia.controller.js';
+import {
+  METODOS_REGRAS_FRANQUIA,
+  PORTA_REGRAS_FRANQUIA,
+  PortaRegrasFranquiaPropria,
+} from './regras-franquia-propria.js';
 import { RemuneracaoRedeController } from './remuneracao-rede.controller.js';
 import {
   METODOS_REMUNERACAO_REDE,
@@ -320,6 +326,7 @@ export async function moduloOperadora(
       CadastroComplementarOperadoraController,
       DeclaracoesAnsController,
       RegrasCoparticipacaoController,
+      RegrasFranquiaController,
       ReajusteColetivoOperadoraController,
       ProvisaoTecnicaOperadoraController,
       ProgramaSaudeOperadoraController,
@@ -474,6 +481,14 @@ export async function moduloOperadora(
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaRegrasCoparticipacaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : portaIndisponivel<PortaRegrasCoparticipacaoPropria>(METODOS_REGRAS_COPARTICIPACAO),
+      },
+      // 08-SGO L98 (C2-116): regras de franquia do plano e do contrato, só no banco do cliente (sem núcleo, 503).
+      {
+        provide: PORTA_REGRAS_FRANQUIA,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaRegrasFranquiaPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : portaIndisponivel<PortaRegrasFranquiaPropria>(METODOS_REGRAS_FRANQUIA),
       },
       {
         provide: SERVICO_PORTAL_PRESTADOR,
