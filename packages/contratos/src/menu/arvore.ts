@@ -5,6 +5,8 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 
 // C2-072 (07-FIN L149, F8): os itens "Imobilizado em andamento" e "Seguro dos bens" do patrimônio entraram à mão
 // (mesmo motivo); a contagem acompanha.
+// C2-101 (07-FIN L127, F8): o item "Consolidação gerencial" da contabilidade entrou à mão (mesmo motivo); a contagem
+// acompanha.
 // C3-018 (04-HOT L142, F8): o item "Composição nutricional dos alimentos" do serviço de nutrição entrou à mão (mesmo
 // motivo); a contagem acompanha.
 // C2-098 (04-HOT L141, F8): o item "Cardápio, ficha técnica e produção" do serviço de nutrição entrou à mão (mesmo
@@ -179,7 +181,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // mão (mesmo motivo); a contagem acompanha.
 // C2-113 (08-SGO linha 95, F7): o item "Declaração de saúde, CPT e portabilidade" da operadora própria entrou à mão
 // (mesmo motivo; F7 vai como fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":528,"M":198,"P":57,"N":273};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":529,"M":198,"P":57,"N":274};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -580,6 +582,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"controladoria.contabilidade.lancamentos-automaticos-dos-modulos-e-razao","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","Lançamentos automáticos dos módulos e razão"],"titulo":"Lançamentos automáticos dos módulos e razão","selo":"N","fase":6,"rota":"/contabil/lancamentos","permissao":"contabil.lancamento.ler"},
   {"id":"controladoria.contabilidade.balancete-dre-e-balanco","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","Balancete, DRE e balanço"],"titulo":"Balancete, DRE e balanço","selo":"N","fase":6,"rota":"/contabil/demonstracoes","permissao":"contabil.demonstracao.ler"},
   {"id":"controladoria.contabilidade.sped-ecd-ecf","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","SPED ECD/ECF"],"titulo":"SPED ECD/ECF","selo":"N","fase":6,"rota":"/contabil/sped","permissao":"contabil.sped.ler"},
+  {"id":"controladoria.contabilidade.consolidacao-gerencial","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","Consolidação gerencial"],"titulo":"Consolidação gerencial","selo":"N","fase":7,"rota":"/contabil/consolidacao","permissao":"contabil.consolidacao.ler"},
   {"id":"controladoria.contabilidade.lalur-e-apuracao-do-irpj-e-da-csll","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Contabilidade","LALUR e apuração do IRPJ e da CSLL"],"titulo":"LALUR e apuração do IRPJ e da CSLL","selo":"N","fase":7,"rota":"/contabil/lalur","permissao":"contabil.lalur.ler"},
   {"id":"controladoria.custos-hospitalares.centros-de-custo-e-criterios-de-rateio","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Centros de custo e critérios de rateio"],"titulo":"Centros de custo e critérios de rateio","selo":"N","fase":6,"rota":"/custos/centros","permissao":"custos.centro.ler"},
   {"id":"controladoria.custos-hospitalares.custo-por-procedimento-e-por-paciente","area":"CONTROLADORIA","grupo":null,"caminho":["Controladoria","Custos hospitalares","Custo por procedimento e por paciente"],"titulo":"Custo por procedimento e por paciente","selo":"N","fase":6,"rota":"/custos/apuracao","permissao":"custos.apuracao.ler"},
