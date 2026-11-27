@@ -74,6 +74,9 @@ async function abrirPedido(page: Page, exame: { valor: number }): Promise<void> 
 }
 
 test.describe('Restrição clínica do exame no pedido do prontuário @C2-006 @F3.5', () => {
+  // Login, avaliação na hora e axe somam perto dos 30 s padrão com a VM carregada (rodada de cba7afeab).
+  test.setTimeout(90_000);
+
   test('o bloqueio que aceita exceção pede a justificativa; sem quem autorize, o envio fica travado', async ({
     page,
   }) => {
