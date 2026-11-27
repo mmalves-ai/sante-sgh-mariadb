@@ -417,9 +417,12 @@ async function lancar() {
             {{ k('equipe.adicionar') }}
           </button>
         </fieldset>
-        <ul v-if="problemasEquipe.length" role="status" data-testid="vf-equipe-problemas">
-          <li v-for="p in problemasEquipe" :key="p">{{ p }}</li>
-        </ul>
+        <!-- role="status" no invólucro: na própria lista ele tira a semântica de lista (axe listitem). -->
+        <div v-if="problemasEquipe.length" role="status">
+          <ul data-testid="vf-equipe-problemas">
+            <li v-for="p in problemasEquipe" :key="p">{{ p }}</li>
+          </ul>
+        </div>
         <button
           type="submit"
           :disabled="gravando || problemasEquipe.length > 0"
@@ -669,9 +672,12 @@ async function lancar() {
             {{ k('regra.adicionarFaixa') }}
           </button>
         </fieldset>
-        <ul v-if="problemasRegra.length" role="status" data-testid="vf-regra-problemas">
-          <li v-for="p in problemasRegra" :key="p">{{ p }}</li>
-        </ul>
+        <!-- role="status" no invólucro: na própria lista ele tira a semântica de lista (axe listitem). -->
+        <div v-if="problemasRegra.length" role="status">
+          <ul data-testid="vf-regra-problemas">
+            <li v-for="p in problemasRegra" :key="p">{{ p }}</li>
+          </ul>
+        </div>
         <button
           type="submit"
           :disabled="gravando || problemasRegra.length > 0"
@@ -725,9 +731,12 @@ async function lancar() {
                     {{ p.lancado ? k('apuracao.lancado') : k('apuracao.aLancar') }}
                   </li>
                 </ul>
-                <ul v-if="r.pendencias.length" role="status" :data-testid="`vf-sim-${r.regra}-pendencias`">
-                  <li v-for="p in r.pendencias" :key="p">{{ p }}</li>
-                </ul>
+                <!-- role="status" no invólucro: na própria lista ele tira a semântica de lista (axe listitem). -->
+                <div v-if="r.pendencias.length" role="status">
+                  <ul :data-testid="`vf-sim-${r.regra}-pendencias`">
+                    <li v-for="p in r.pendencias" :key="p">{{ p }}</li>
+                  </ul>
+                </div>
               </td>
             </tr>
           </tbody>
