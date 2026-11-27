@@ -2855,7 +2855,9 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     ativo: true,
     bloqueado: false,
     senhaAlteradaEm: new Date(),
-    concessoes: { grupo: 'ENFERMAGEM_SUPERVISAO', opcoesGrupo: [2582], conselho: true },
+    // C2-003 (03-PEP L115): a coordenação lê os sinais vitais (opção 2642, enfermagem.sinalVital.ler) para manter os
+    // limites de alerta, que grava pelo perfil assistencial-com-conselho (enfermagem.limiteSinal.editar).
+    concessoes: { grupo: 'ENFERMAGEM_SUPERVISAO', opcoesGrupo: [2582, 2642], conselho: true },
     perfisConcedidos: ['coordenador-enfermagem'],
   },
   /**

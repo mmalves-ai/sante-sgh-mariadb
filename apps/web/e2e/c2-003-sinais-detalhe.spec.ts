@@ -1,6 +1,7 @@
-// E2E @C2-003 (F3.3, 03-PEP linha 115): limites de alerta e aferição detalhada dos sinais vitais. A enfermeira com
-// conselho aplica o padrão do adulto (NEWS2) e inclui um limite por setor na tela de limites (a ordem das faixas é
-// conferida na hora, sem pedido ao servidor); depois, na tela de sinais vitais do paciente sintético, registra a
+// E2E @C2-003 (F3.3, 03-PEP linha 115): limites de alerta e aferição detalhada dos sinais vitais. A coordenação de
+// enfermagem (com conselho) aplica o padrão do adulto (NEWS2) e inclui um limite por setor na tela de limites (a
+// ordem das faixas é conferida na hora, sem pedido ao servidor); depois, a enfermeira do plantão, na tela de sinais
+// vitais do paciente sintético, registra a
 // aferição detalhada com instrumento, local e posição, mais um parâmetro não aferido com o motivo, e confere o nível
 // do alerta em texto na lista das recentes. Fonte sintética; combos por e2e/combos.ts; axe nas duas telas.
 import { expect, test, type Page } from '@playwright/test';
@@ -21,7 +22,8 @@ async function entrar(page: Page, login: string): Promise<void> {
 test.describe('Limites de alerta e aferição detalhada dos sinais vitais @C2-003 @fase3', () => {
   test('NEWS2, limite por setor, aferição com detalhe e não aferido com motivo; axe', async ({ page }) => {
     const externas = vigiarExternas(page);
-    await entrar(page, 'SINT.ENF.PLANTAO');
+    // Os limites são da coordenação de enfermagem (perfil com conselho: enfermagem.limiteSinal.editar).
+    await entrar(page, 'SINT.COORD.ENF');
 
     // Tela de limites: padrão NEWS2 num clique.
     await page.goto('/enfermagem/limites-sinais');
@@ -59,7 +61,9 @@ test.describe('Limites de alerta e aferição detalhada dos sinais vitais @C2-00
     await expect(page.getByTestId('ls-feito')).toBeVisible();
     await expect(page.getByTestId('ls-ativos')).toContainText('130');
 
-    // Sinais vitais do paciente: aferição detalhada.
+    // Sinais vitais do paciente: aferição detalhada, pela enfermeira do plantão.
+    await page.context().clearCookies();
+    await entrar(page, 'SINT.ENF.PLANTAO');
     await page.goto(`/enfermagem/paciente/${PACIENTE}/sinais-vitais`);
     const painel = page.getByTestId('sd-painel');
     await expect(painel.getByRole('heading', { name: 'Aferição detalhada' })).toBeVisible();
