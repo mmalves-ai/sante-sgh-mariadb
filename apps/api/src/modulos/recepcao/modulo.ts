@@ -17,6 +17,7 @@ import {
   prerequisitosIniciaisSinteticos,
 } from '../config/public-api.js';
 import { FONTE_RISCO_PA, PORTA_ATENDIMENTO, type PortaAtendimento } from '../atendimento/public-api.js';
+import { agendaMemoriaAtual } from '../agenda/public-api.js';
 import type { ContextoModulo } from '../registro.js';
 import {
   type PortaGuias,
@@ -70,7 +71,12 @@ export function moduloRecepcao(ctx: ContextoModulo, opcoes: OpcoesModuloRecepcao
     (propria && nucleo && cliente
       ? new PortaRecepcaoPropria(nucleo, executor ?? nucleo.criarExecutor(), cliente)
       : memoria
-        ? lembrarRecepcaoMemoria(new PortaRecepcaoMemoria({ estado: () => 'verde' }))
+        ? lembrarRecepcaoMemoria(
+            new PortaRecepcaoMemoria(
+              { estado: () => 'verde' },
+              { agendadosExternos: (h) => agendaMemoriaAtual()?.agendadosDeHojeMemoria(h) ?? [] },
+            ),
+          )
         : portaRecepcaoIndisponivel());
   const classificacao: PortaClassificacao =
     opcoes.classificacao ??

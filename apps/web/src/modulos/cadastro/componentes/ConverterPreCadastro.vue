@@ -74,7 +74,7 @@ void carregar();
         :rotulo="t('vinculos.pre.ligar')"
         :desabilitado="gravando"
         data-testid="converter-ligar"
-        @acionar="converter()"
+        @acionar="converter(escolhido?.id)"
       />
     </template>
     <template v-else-if="previa">

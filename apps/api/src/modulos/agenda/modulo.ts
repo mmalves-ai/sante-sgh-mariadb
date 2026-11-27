@@ -30,7 +30,7 @@ import { PerfisMarcacaoPropria } from './perfil-marcacao.js';
 import { PORTA_AGENDA, type PortaAgenda } from './porta.js';
 import { TURMAS_ATIVIDADE, TurmasAtividadeController } from './turma-atividade.controller.js';
 import { TurmasAtividadePropria } from './turma-atividade.js';
-import { PortaAgendaMemoria, type PacienteSintetico } from './porta-memoria.js';
+import { lembrarAgendaMemoria, PortaAgendaMemoria, type PacienteSintetico } from './porta-memoria.js';
 import { PortaAgendaPropria } from './porta-propria.js';
 import { USUARIOS_AGENDA, UsuariosAgendaController } from './usuarios-agenda.controller.js';
 import { UsuariosAgendaPropria } from './usuarios-agenda.js';
@@ -91,7 +91,7 @@ export function moduloAgenda(ctx: ContextoModulo, opcoes: OpcoesModuloAgenda = {
     (ctx.nucleo && cliente
       ? new PortaAgendaPropria(ctx.nucleo, cliente)
       : memoria
-        ? new PortaAgendaMemoria(null, async (_c, ids) => pacientesSinteticos(ids))
+        ? lembrarAgendaMemoria(new PortaAgendaMemoria(null, async (_c, ids) => pacientesSinteticos(ids)))
         : portaAgendaIndisponivel());
   const configuracao =
     opcoes.configuracao ??

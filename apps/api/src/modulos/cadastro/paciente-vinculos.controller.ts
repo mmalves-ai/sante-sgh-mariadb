@@ -39,6 +39,11 @@ import {
   type PreCadastroResumo,
 } from './paciente-vinculos-proprio.js';
 import { semIndefinidos } from '../../entrada-exata.js';
+import {
+  conversaoEmMemoria,
+  converterPreCadastroMemoria,
+  previaConversaoMemoria,
+} from './pre-cadastro-memoria.js';
 
 export const VINCULOS_CADASTRO = Symbol('VINCULOS_CADASTRO');
 
@@ -298,6 +303,8 @@ export class PacienteVinculosController {
   ) {
     const s = sessaoDe(req);
     try {
+      if (!this.v && conversaoEmMemoria())
+        return await previaConversaoMemoria(s, idDaRota(id), paciente ? idDaRota(paciente) : null);
       return await this.servico().previaConversao(
         s.porta,
         idDaRota(id),
@@ -327,6 +334,15 @@ export class PacienteVinculosController {
         .strict(),
       corpo ?? {},
     );
+    if (!this.v && conversaoEmMemoria())
+      try {
+        return await converterPreCadastroMemoria(
+          s,
+          semIndefinidos({ id: idDaRota(id), paciente: b.paciente, motivoDivergencia: b.motivoDivergencia }),
+        );
+      } catch (x) {
+        throw problemaDoCadastro(x);
+      }
     const ctx = contextoOperacao(s, 'cadastro.converterPreCadastro');
     const t = this.trilha(
       s,

@@ -460,6 +460,29 @@ function semear(r: RelogioM): Estado {
   return e;
 }
 
+/** 02-AGE 42: a porta da agenda em memória do processo (a conversão do pré-cadastro e os agendados da recepção). */
+let agendaMemoriaDoProcesso: PortaAgendaMemoria | null = null;
+export function lembrarAgendaMemoria(porta: PortaAgendaMemoria): PortaAgendaMemoria {
+  agendaMemoriaDoProcesso = porta;
+  return porta;
+}
+export function agendaMemoriaAtual(): PortaAgendaMemoria | null {
+  return agendaMemoriaDoProcesso;
+}
+
+/** 02-AGE 42: o agendado do dia como a recepção em memória o lista (marcação da agenda que já tem paciente). */
+export interface AgendadoDaAgendaMemoria {
+  readonly tipo: 'consulta';
+  readonly marcacao: number;
+  readonly hora: string;
+  readonly agenda: string;
+  readonly paciente: string;
+  readonly nomeSocial: null;
+  readonly prontuario: number;
+  readonly senha: null;
+  readonly cpf: string;
+}
+
 export class PortaAgendaMemoria implements PortaAgenda {
   readonly destino = 'memoria' as const;
   private readonly porHospital = new Map<string, Estado>();
@@ -1723,6 +1746,54 @@ export class PortaAgendaMemoria implements PortaAgenda {
       porCanal: [...canal.entries()].map(([k, marcados]) => ({ canal: k, marcados })),
     };
   }
+  /** 02-AGE 42 (memória): o pré-cadastro da marcação sem prontuário, para a prévia e a conversão. */
+  preCadastroMemoria(hospital: string, id: number): Readonly<PreCadastroM> | null {
+    return this.e({ rede: '', hospital }).preCadastros?.find((x) => x.id === id) ?? null;
+  }
+
+  /**
+   * 02-AGE 42 (memória): converte o pré-cadastro pendente no paciente conferido pelo cadastro e liga a ele as marcações
+   * do pré-cadastro (como a porta própria: paciente na marcação e pré-cadastro 'convertido'). Devolve quantas ligou.
+   */
+  converterPreCadastroMemoria(
+    hospital: string,
+    id: number,
+    p: { readonly id: number; readonly nome: string; readonly prontuario: number },
+  ): number {
+    const s = this.e({ rede: '', hospital });
+    const pre = s.preCadastros?.find((x) => x.id === id);
+    if (!pre || pre.situacao !== 'pendente') return 0;
+    pre.situacao = 'convertido';
+    let n = 0;
+    for (const m of s.marcacoes.filter((x) => x.preCadastro === id && x.idPaciente === null)) {
+      Object.assign(m, { idPaciente: p.id, pront: p.prontuario, paciente: p.nome });
+      const h = s.horarios.find((x) => x.agenda === m.agenda && x.data === m.data && x.hora === m.hora);
+      if (h) h.paciente = p.nome;
+      n++;
+    }
+    return n;
+  }
+
+  /** 02-AGE 42 (memória): as consultas de hoje que já têm paciente, para a lista de agendados da recepção. */
+  agendadosDeHojeMemoria(hospital: string): AgendadoDaAgendaMemoria[] {
+    const s = this.e({ rede: '', hospital });
+    const hoje = this.rel().hoje;
+    return s.marcacoes
+      .filter((m) => m.data === hoje && m.idPaciente !== null && m.pront !== null)
+      .sort((x, y) => x.hora.localeCompare(y.hora))
+      .map((m) => ({
+        tipo: 'consulta',
+        marcacao: m.id,
+        hora: `${m.hora.slice(0, 2)}:${m.hora.slice(2, 4)}`,
+        agenda: s.agendas.find((a) => a.id === m.agenda)?.nome ?? '',
+        paciente: m.paciente,
+        nomeSocial: null,
+        prontuario: m.pront ?? 0,
+        senha: null,
+        cpf: '',
+      }));
+  }
+
   async pacientes(c: ContextoAgenda, ids: readonly number[]): Promise<PacienteDaAgenda[]> {
     return (await this.lerPacientes(c, ids)).map((p) => ({
       id: p.id,

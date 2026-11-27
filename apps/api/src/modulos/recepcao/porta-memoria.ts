@@ -206,7 +206,14 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
 
   constructor(
     private readonly catalogo: CatalogoOperacoes,
-    private readonly opcoes: { readonly agora?: () => Date } = {},
+    private readonly opcoes: {
+      readonly agora?: () => Date;
+      /**
+       * 02-AGE 42: os agendados de hoje que vêm da agenda em memória (marcações que já têm paciente, inclusive a
+       * marcação sem prontuário depois da conversão do pré-cadastro), somados aos da semente.
+       */
+      readonly agendadosExternos?: (hospital: string) => readonly (AgendadoRecepcao & { cpf: string })[];
+    } = {},
   ) {}
 
   private relogioAtual() {
@@ -221,6 +228,9 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
       s = this.semente();
       this.estados.set(k, s);
     }
+    for (const a of this.opcoes.agendadosExternos?.(k) ?? [])
+      if (!s.agendados.some((y) => y.tipo === a.tipo && y.marcacao === a.marcacao))
+        s.agendados.push({ ...a });
     return s;
   }
 
