@@ -555,6 +555,7 @@ export const VARIAVEIS: readonly Variavel[] = [
       ['PACS_WORKLIST', 'Lista de trabalho do PACS.'],
       ['PESSOAS_CONSELHO_DIARIO', 'Conferência diária dos conselhos profissionais.'],
       ['CONTRATOS_ALERTA_DIARIO', 'Alerta diário de vencimento dos contratos com fornecedores.'],
+      ['CANCELAMENTO_CONTRATO_DIARIO', 'Efetivação diária dos cancelamentos de contrato de plano vencidos.'],
       ['REDE_MPI_NOTURNO', 'Carga noturna do índice de pacientes da rede.'],
       ['ENFERMAGEM_VIGIA', 'Vigia dos horários da enfermagem.'],
       [

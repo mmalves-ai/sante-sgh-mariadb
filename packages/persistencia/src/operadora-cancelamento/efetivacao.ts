@@ -13,6 +13,8 @@ export const TABELAS_EFETIVACAO_CANCELAMENTO = [
   'beneficiario_plano',
   'movimento_cadastral_beneficiario',
   'credito_fatura_plano',
+  // O número do crédito de fatura sai da sequência de negócio (garantirSequencia).
+  'sequencia_negocio',
 ] as const;
 
 export interface ProblemaEfetivacao {
