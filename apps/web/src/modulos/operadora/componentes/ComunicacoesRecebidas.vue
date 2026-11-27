@@ -146,7 +146,7 @@ const quando = (v: string) => (v ? new Date(v).toLocaleString('pt-BR') : '');
         data-testid="comunicacoes-filtro"
       />
     </div>
-    <SanteAlerta v-if="aviso" variante="info" data-testid="comunicacao-aviso">{{ aviso }}</SanteAlerta>
+    <SanteAlerta v-if="aviso" :texto="aviso" variante="info" anunciar data-testid="comunicacao-aviso" />
     <MensagemErro v-if="lista.isError.value" :erro="lista.error.value" />
     <p v-else-if="!lista.data.value" role="status">{{ t('carregando') }}</p>
     <p v-else-if="lista.data.value.length === 0" data-testid="comunicacoes-vazia">{{ t('nenhuma') }}</p>
