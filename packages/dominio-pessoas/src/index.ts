@@ -79,6 +79,7 @@ export * from './esocial/eventos-tabela.js';
 export * from './esocial/eventos-trabalhador.js';
 export * from './esocial/eventos-sst.js';
 export * from './esocial/eventos-periodicos.js';
+export * from './esocial/eventos-autonomo.js';
 export * from './esocial/transmissor-unico.js';
 export * from './esocial/ciclo.js';
 export * from './esocial/xsd.js';
