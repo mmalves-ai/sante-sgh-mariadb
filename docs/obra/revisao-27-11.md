@@ -19,7 +19,7 @@ com as migrações aplicadas. Evolução: 163 (36%) em 25/11 de manhã; 326 (70%
 `docs/obra/decisoes-tomadas.md`, 49 decisões numeradas, cada uma com o que, por quê e como desfazer. As que mais pedem o
 seu olhar (produto e regra de negócio, não processo da obra):
 
-- 13 a 28: decisões de classe C da construir-3 (assinatura ICP-Brasil do laudo, central de regulação com SISREG como
+- 13, 14 e 18 a 34: decisões de classe C da construir-3 e da completar-4 (assinatura ICP-Brasil do laudo, central de regulação com SISREG como
   primeiro adaptador, foto facial na identificação, segundo fator por chave de dispositivo, LALUR/LACS, plano de contas
   da ANS, catálogo TACO na nutrição, pesquisa clínica que só sugere candidatos).
 - 36 a 40: decisões de produto da completar-5 (restrição de exame por sexo com justificativa por padrão, grade diária da
