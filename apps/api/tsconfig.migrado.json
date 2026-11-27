@@ -1697,6 +1697,7 @@
     "src/modulos/financeiro/periodo-propria.ts",
     "src/modulos/financeiro/periodo.controller.ts",
     "src/modulos/financeiro/periodo-permissao.spec.ts",
+    "src/modulos/financeiro/escrituracao-efd-permissao.spec.ts",
     "src/modulos/financeiro/conta-credor-permissao.spec.ts",
     "src/modulos/financeiro/nfe-transmissao.ts",
     "src/modulos/financeiro/nfe-assinatura.ts",

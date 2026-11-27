@@ -40,10 +40,10 @@ test.describe('financeiro: receitas da EFD-Contribuições e arquivo entregue gu
     await expect(page.getByTestId('ef-receitas-notas')).toHaveText('0');
     await expect(page.getByTestId('ef-recolher-PIS')).toHaveText('0,00');
     await expect(page.getByTestId('ef-receitas-tabela')).toContainText('Não cumulativo');
-    await escolher(page.getByTestId('ef-regime'), 'Misto');
+    await escolher(page.getByTestId('ef-regime'), 'misto');
     // No misto, a receita hospitalar fica no cumulativo.
     await expect(page.getByTestId('ef-receitas-tabela')).toContainText('Cumulativo');
-    await escolher(page.getByTestId('ef-regime'), 'Não cumulativo');
+    await escolher(page.getByTestId('ef-regime'), 'nao_cumulativo');
     await semViolacaoAxe(page, '/financeiro/fiscal/entradas (receitas)');
 
     // Classifica as duas entradas pelo padrão e gera o arquivo.
