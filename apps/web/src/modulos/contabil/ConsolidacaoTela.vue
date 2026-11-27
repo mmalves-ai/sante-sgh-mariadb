@@ -244,8 +244,9 @@ const soPendentes = ref(false);
 const nomeEst = computed(
   () => new Map((apoio.data.value?.estabelecimentos ?? []).map((e) => [e.id, e.nome] as const)),
 );
+// O filtro olha o de-para gravado: a conta escolhida agora continua na lista até salvar (não some debaixo do combo).
 const contasDePara = computed(() =>
-  (detalhe.data.value?.depara ?? []).filter((x) => !soPendentes.value || escolhas[x.conta] == null),
+  (detalhe.data.value?.depara ?? []).filter((x) => !soPendentes.value || x.gerencial === null),
 );
 const semDePara = computed(
   () => (detalhe.data.value?.depara ?? []).filter((x) => x.gerencial === null).length,
