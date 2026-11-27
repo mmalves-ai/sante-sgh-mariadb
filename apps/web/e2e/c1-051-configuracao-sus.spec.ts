@@ -1,5 +1,5 @@
-// E2E @C1-051 (06-SUS linha 53): a configuração do faturamento SUS. O administrador abre Faturamento > Faturamento SUS
-// > Configuração pelo menu, dá a permissão por usuário e setor (combos, validação na hora: o fim antes do início trava o
+// E2E @C1-051 (06-SUS linha 53): a configuração do faturamento SUS. A supervisão do SUS abre Faturamento > Faturamento SUS
+// > Configuração pelo menu (supervisão do faturamento SUS), dá a permissão por usuário e setor (combos, validação na hora: o fim antes do início trava o
 // botão), vê a linha vigente e a encerra pela vigência na própria linha (nada apagado: a linha continua na lista). Nos
 // parâmetros por instrumento, o CNPJ inválido do BPA mostra o erro ao lado do campo antes de gravar; corrigido, grava e
 // a origem passa a "Gravado por". Quem só lê o faturamento SUS vê a tela sem os formulários e a API recusa a gravação.
@@ -22,11 +22,12 @@ async function entrar(page: Page, login: string): Promise<void> {
 test.describe('@C1-051 Faturamento SUS: permissão por setor e parâmetros por instrumento', () => {
   test.describe.configure({ timeout: 180_000 });
 
-  test('o administrador dá e encerra a permissão por setor e grava os parâmetros do BPA', async ({
+  test('a supervisão do SUS dá e encerra a permissão por setor e grava os parâmetros do BPA', async ({
     page,
   }) => {
     const externas = vigiarExternas(page);
-    await entrar(page, 'SINT.ADMIN');
+    // A supervisão do faturamento SUS (o administrador não tem permissão de faturamento: segregação).
+    await entrar(page, 'SINT.SUS.CONFIGURACAO');
     await (await itemDoMenu(page, 'Configuração (permissões por setor e parâmetros)')).click();
     await expect(page).toHaveURL(/\/faturamento\/sus\/configuracao/);
     const tela = page.getByTestId('tela-configuracao-sus');

@@ -3553,6 +3553,22 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       opcoesGrupo: opcoesDasPermissoes('atendimento.atendimento.ler', 'documento.cadastro.editar'),
     },
   },
+  /**
+   * C1-051 (06-SUS linha 53; no fim da lista): a supervisão do faturamento SUS, que lê o faturamento SUS e mantém a
+   * configuração dele (permissões por usuário e setor e parâmetros por instrumento). O administrador não tem permissão
+   * de faturamento (segregação) e o faturista lê sem configurar.
+   */
+  'SINT.SUS.CONFIGURACAO': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'SUSCONFIG',
+      opcoesGrupo: opcoesSus('faturamento.sus.*', 'faturamento.susConfiguracao.*'),
+    },
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */
