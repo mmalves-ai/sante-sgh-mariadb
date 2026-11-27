@@ -318,6 +318,26 @@ describe('laudo de imagem, parâmetros, orçamento e autocadastro', () => {
     expect((await post(s, '/sadt/orcamentos', antigo)).statusCode).toBe(404);
     expect((await post(s, '/sadt/orcamentos/1/converter', { atendimento: 1 })).statusCode).toBe(404);
   });
+
+  it('autocadastro: cadastrar o médico solicitante (cadastro.cadastrarSolicitante) grava sem o banco; o repetido é recusado', async () => {
+    const cs = {
+      cliente: 'sintetico',
+      estabelecimento: null,
+      usuario: null,
+      correlacao: 'sol',
+      hospital: 'aa',
+    };
+    const entrada = { nome: 'MEDICO SOLICITANTE SINTETICO', conselho: 1, uf: 'MG', numero: 7_010_103 };
+    expect(await sadt.podeGravar(cs, 'cadastro.cadastrarSolicitante')).toMatchObject({ pode: true });
+    const r = await sadt.executar(cs, 'cadastro.cadastrarSolicitante', entrada, {
+      ...cs,
+      chaveIdempotencia: 'sol-1',
+    });
+    expect(Number(r.resultado['solicitante'])).toBeGreaterThan(0);
+    await expect(
+      sadt.executar(cs, 'cadastro.cadastrarSolicitante', entrada, { ...cs, chaveIdempotencia: 'sol-2' }),
+    ).rejects.toMatchObject({ problema: { codigo: 'solicitante-duplicado' } });
+  });
 });
 
 describe('portal de resultados', () => {

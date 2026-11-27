@@ -7,6 +7,7 @@
 // no banco com o motivo exposto à tela (podeGravar), nunca em silêncio.
 import {
   esquemaAbrirRequisicao,
+  esquemaCadastrarSolicitante,
   esquemaCriarOrcamento,
   esquemaEmitirLaudo,
   esquemaLancarExame,
@@ -30,6 +31,8 @@ export const ENTRADAS_SADT: Readonly<Record<string, ZodType<unknown>>> = {
   'sadt.criarOrcamento': esquemaCriarOrcamento,
   'sadt.registrarVisualizacaoPortal': esquemaRegistrarVisualizacaoPortal,
   'sadt.abrirRequisicao': esquemaAbrirRequisicao,
+  // O médico solicitante do autocadastro do portal (a recepção aprova sem cadastro; porta própria: a operação do cadastro).
+  'cadastro.cadastrarSolicitante': esquemaCadastrarSolicitante,
 };
 
 const CONTRATO =
