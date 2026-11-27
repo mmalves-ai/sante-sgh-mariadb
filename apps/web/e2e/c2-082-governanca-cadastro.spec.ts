@@ -170,7 +170,7 @@ test.describe('Governança do cadastro de itens @C2-082', () => {
     await semViolacaoAxe(page, '/suprimentos/governanca-cadastro');
 
     // Pedido de item novo: a justificativa curta trava o envio na hora.
-    await escolher(page.getByTestId('gov-tipo'), { rotulo: /inclus/i });
+    await escolher(page.getByTestId('gov-tipo'), { rotulo: 'Item novo' });
     await page.getByTestId('gov-descricao').fill('SERINGA SINTETICA 3ML SEM AGULHA');
     await page.getByTestId('gov-justificativa').fill('Uso na UTI');
     await expect(page.getByTestId('gov-falta')).toBeVisible();
