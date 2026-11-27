@@ -2,7 +2,8 @@
 // novo) e a tela do vínculo da conta ao estabelecimento (abre da ficha com o login; o botão só libera com o
 // formulário completo; a recusa do servidor aparece na tela; a senha não fica no campo). Sessão real sobre a fonte
 // sintética de dev (SINT.GESTOR), que tem um estabelecimento só: nela, dar acesso a quem já tem e encerrar o único
-// vínculo são recusados pela regra. O efeito no banco está no contrato vinculo-estabelecimento-propria.int.spec.
+// vínculo são recusados pela regra; a conta SINT.MULTIUNIDADE tem também o outro estabelecimento da rede
+// (memória), para o caminho feliz. O efeito no banco está no contrato vinculo-estabelecimento-propria.int.spec.
 // Nenhum dado real.
 import { expect, test, type Page } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
@@ -72,5 +73,28 @@ test.describe('Escopo do usuário: tipo de agenda e vínculo ao estabelecimento 
     await expect(form).toContainText('Não há conta com este login');
     await page.getByTestId('vinculo-voltar').click();
     await expect(page).toHaveURL(/\/administracao\/acesso\/usuarios$/);
+  });
+
+  test('vínculo, caminho feliz: encerrar o acesso e dar de novo à conta que tem outro estabelecimento @C2-051', async ({
+    page,
+  }) => {
+    // SINT.MULTIUNIDADE tem, na memória da fonte sintética, também um vínculo vigente no outro estabelecimento da
+    // rede: o encerramento aqui passa pela regra do domínio; dar o acesso de novo exige o grupo.
+    await entrar(page, 'SINT.GESTOR');
+    await page.goto('/administracao/acesso/vinculo-conta?login=SINT.MULTIUNIDADE');
+    const form = page.getByTestId('form-vinculo');
+    await expect(form.getByLabel('Login da conta')).toHaveValue('SINT.MULTIUNIDADE');
+    await page.getByTestId('vinculo-senha').fill(SENHA);
+    await page.getByTestId('vinculo-gravar').click();
+    await expect(page.getByTestId('vinculo-feito')).toContainText('SINT.MULTIUNIDADE');
+    await expect(page.getByTestId('vinculo-senha')).toHaveValue('');
+    await escolher(page.getByTestId('vinculo-acao'), 'dar');
+    await form.getByLabel('Login da conta').fill('SINT.MULTIUNIDADE');
+    await escolher(page.getByTestId('vinculo-grupo'), { indice: 1 });
+    await page.getByTestId('vinculo-senha').fill(SENHA);
+    await page.getByTestId('vinculo-gravar').click();
+    await expect(page.getByTestId('vinculo-feito')).toContainText('SINT.MULTIUNIDADE');
+    await expect(page.getByTestId('vinculo-feito').getByRole('link')).toBeVisible();
+    await semViolacaoAxe(page, 'vínculo feito');
   });
 });

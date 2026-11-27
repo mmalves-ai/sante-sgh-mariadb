@@ -1137,6 +1137,7 @@
     "src/modulos/administracao/estrutura.controller.spec.ts",
     "src/modulos/administracao/estrutura.controller.ts",
     "src/modulos/administracao/preferencias-memoria.spec.ts",
+    "src/modulos/administracao/fonte-memoria-vinculo.spec.ts",
     "src/modulos/administracao/preferencias-memoria.ts",
     "src/modulos/administracao/fonte-memoria.ts",
     "src/modulos/administracao/fonte.ts",

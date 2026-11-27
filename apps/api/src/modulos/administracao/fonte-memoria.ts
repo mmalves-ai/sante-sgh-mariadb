@@ -7,7 +7,11 @@
 import { flagAceita } from '@sgh/contratos';
 import { z } from 'zod';
 import { ErroOperacao } from '@sgh/nucleo';
-import { MENSAGEM_VINCULO_ESTABELECIMENTO, type RecusaVinculoEstabelecimento } from '@sgh/dominio-acesso';
+import {
+  MENSAGEM_VINCULO_ESTABELECIMENTO,
+  conferirVinculoEstabelecimento,
+  planoEncerramentoVinculo,
+} from '@sgh/dominio-acesso';
 import { CATALOGO_COMPLETO, opcoesDasPermissoes } from '../../autorizacao/catalogo.js';
 import type { RegistradorTrilha, RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import {
@@ -91,6 +95,9 @@ interface PedidoMem extends Omit<
  * de privacidade, como a SGH_AUD_PEDIDO_TITULAR única na cópia (sem a ponte, o pedido de portabilidade do portal nunca
  * chegava a 'atendido' na sessão sintética e o download do pacote IPS ficava sem caminho de ponta a ponta).
  */
+
+/** 01-ADM L59: contas da memória com vínculo vigente também no outro estabelecimento da rede. */
+const CONTAS_EM_OUTRO = new Set(['SINT.MULTIUNIDADE']);
 export interface PedidoPortalParaPrivacidade {
   readonly id: string;
   readonly protocolo: string;
@@ -634,6 +641,16 @@ export function fonteAdministracaoMemoria(
 ): FonteAdministracao {
   const m = () => estadoM10Sintetico();
   const acesso = () => estadoAcessoSintetico();
+  // 01-ADM L59: vínculos da memória (o estabelecimento da sessão e o outro da rede, só como contagem).
+  const vinculos = new Map<string, { aqui: { inicio: string } | null; fora: number }>();
+  const vinculoMemoria = (login: string) => {
+    let v = vinculos.get(login);
+    if (!v) {
+      v = { aqui: { inicio: '2020-01-01' }, fora: CONTAS_EM_OUTRO.has(login) ? 1 : 0 };
+      vinculos.set(login, v);
+    }
+    return v;
+  };
   const registrar = async (t: TrilhaGestao, tabela: string, id: string) => {
     await trilha.registrar({
       evento: t.evento,
@@ -821,19 +838,39 @@ export function fonteAdministracaoMemoria(
             )
           : preferenciasMemoria.gravarVisaoTela(ctx.login, e);
       }
-      // 01-ADM L59: vínculo da conta ao estabelecimento. A fonte sintética tem um estabelecimento só: toda conta
-      // dela já está vinculada, e o único vínculo não se encerra (as mesmas recusas do domínio).
+      // 01-ADM L59: vínculo da conta ao estabelecimento, em memória com as regras do domínio
+      // (conferirVinculoEstabelecimento e planoEncerramentoVinculo). Toda conta sintética tem vínculo aqui desde
+      // antes; SINT.MULTIUNIDADE tem também um vínculo vigente no outro estabelecimento da rede (CONTAS_EM_OUTRO).
       if (nome === 'acesso.vincularEstabelecimentoUsuario' || nome === 'acesso.encerrarVinculoUsuario') {
-        const alvo = String((entrada as { login?: unknown } | null)?.login ?? '');
-        const existe = acesso().contas.has(alvo);
-        const r: RecusaVinculoEstabelecimento = !existe
-          ? 'usuario-inexistente'
-          : nome === 'acesso.vincularEstabelecimentoUsuario'
-            ? 'ja-vinculado'
-            : alvo === ctx.login
-              ? 'proprio-vinculo'
-              : 'unico-vinculo';
-        throw recusa(r, MENSAGEM_VINCULO_ESTABELECIMENTO[r]);
+        const e = (entrada ?? {}) as { login?: unknown; grupo?: unknown };
+        const alvo = String(e.login ?? '');
+        const conta = acesso().contas.get(alvo);
+        const v = vinculoMemoria(alvo);
+        const hoje = hojeIso();
+        if (nome === 'acesso.vincularEstabelecimentoUsuario') {
+          const grupo = String(e.grupo ?? '');
+          const bloqueado = acesso().bloqueio.get(alvo) ?? CONTAS_SINTETICAS[alvo]?.bloqueado ?? false;
+          const r = conferirVinculoEstabelecimento({
+            situacaoConta: conta ? (bloqueado ? 'bloqueado' : 'ativo') : null,
+            jaVinculada: v.aqui !== null,
+            grupoAtivo: acesso().grupos.get(grupo) ?? null,
+          });
+          if (r) throw recusa(r, MENSAGEM_VINCULO_ESTABELECIMENTO[r]);
+          // O perfil da conta na memória fica o que era (a gravação do perfil principal é do banco próprio).
+          v.aqui = { inicio: hoje };
+          return { idUsuario: conta!.id, modo: 'vinculado' };
+        }
+        if (!conta)
+          throw recusa('usuario-inexistente', MENSAGEM_VINCULO_ESTABELECIMENTO['usuario-inexistente']);
+        const plano = planoEncerramentoVinculo({
+          inicio: v.aqui?.inicio ?? null,
+          hoje,
+          proprio: alvo === ctx.login,
+          outrosVigentes: v.fora,
+        });
+        if ('recusa' in plano) throw recusa(plano.recusa, MENSAGEM_VINCULO_ESTABELECIMENTO[plano.recusa]);
+        v.aqui = null;
+        return { idUsuario: conta.id, modo: plano.modo };
       }
       const escopo =
         /^acesso\.(conceder|retirar)(Unidade|Local|Convenio|ConvenioFaturamento|TipoAgenda|TipoProntuario)Usuario$/.test(
