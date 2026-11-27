@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.recolher (alcance 6d3b0d9b591c). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.recolher (alcance 2956b45d8bcc). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -2302,6 +2302,7 @@ REVOKE SELECT, INSERT, UPDATE ON classificacao_externa_recebida FROM sgh_mod_int
 REVOKE SELECT, INSERT, UPDATE ON classificacao_risco FROM sgh_mod_integracao;
 REVOKE SELECT, INSERT, UPDATE ON cliente_api FROM sgh_mod_integracao;
 REVOKE SELECT ON cobertura_paciente FROM sgh_mod_integracao;
+REVOKE SELECT, INSERT, UPDATE ON configuracao_integracao_externa FROM sgh_mod_integracao;
 REVOKE SELECT, INSERT ON confirmacao_marcacao FROM sgh_mod_integracao;
 REVOKE SELECT ON consentimento_titular FROM sgh_mod_integracao;
 REVOKE SELECT ON conta_hospitalar FROM sgh_mod_integracao;
@@ -4639,6 +4640,7 @@ REVOKE SELECT, INSERT, UPDATE ON conta_hospitalar FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON conta_hospitalar_item FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT ON conta_hospitalar_item_autorizacao FROM sgh_mod_tiss;
 REVOKE SELECT ON conta_hospitalar_item_participante FROM sgh_mod_tiss;
+REVOKE SELECT ON conta_hospitalar_periodo FROM sgh_mod_tiss;
 REVOKE SELECT ON credenciamento_cobranca FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT ON decisao_aprovacao FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON demonstrativo_analise_conta FROM sgh_mod_tiss;

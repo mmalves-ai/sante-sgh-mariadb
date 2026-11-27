@@ -925,6 +925,7 @@
     "src/modulos/integracao/fachada/porta-propria.ts",
     "src/modulos/integracao/fachada/porta.ts",
     "src/modulos/integracao/fachada/servico.spec.ts",
+    "src/modulos/integracao/externas/servico.spec.ts",
     "src/modulos/integracao/fachada/servico.ts",
     "src/modulos/integracao/infra/armazem-conteudo.ts",
     "src/modulos/integracao/infra/massa-integracao.spec-util.ts",

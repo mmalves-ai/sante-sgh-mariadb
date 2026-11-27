@@ -46,6 +46,15 @@ import { FilaErpController } from './fila-erp.controller.js';
 import { PORTA_FILA_ERP, PortaFilaErpPropria } from './fila-erp-propria.js';
 import { PORTA_PRESCRICAO_DIGITAL, PortaPrescricaoDigitalPropria } from './prescricao-digital-propria.js';
 import { RndsEnvioController } from './rnds-envio.controller.js';
+import { CofreMemoria } from '../assinatura/infra/cofre.js';
+import { cofreEmailDoAmbiente } from '../administracao/email-teste-conexao.js';
+import { IntegracoesExternasController, SERVICO_INTEGRACOES_EXTERNAS } from './externas/controller.js';
+import {
+  type PortaIntegracoesExternas,
+  PortaIntegracoesExternasMemoria,
+  PortaIntegracoesExternasPropria,
+} from './externas/porta.js';
+import { ligarCentralIntegracoes, ServicoIntegracoesExternas } from './externas/servico.js';
 import { PORTA_RNDS_ENVIO, PortaRndsEnvioPropria } from './rnds-envio-propria.js';
 
 export interface OpcoesModuloIntegracao {
@@ -57,6 +66,8 @@ export interface OpcoesModuloIntegracao {
   readonly configuracao?: FonteConfiguracao;
   /** Estabelecimentos aceitos na entrada do parceiro (vazio: todos os do cliente). */
   readonly estabelecimentosEntrada?: readonly string[];
+  /** Testes: a porta da central de integrações externas. */
+  readonly externas?: PortaIntegracoesExternas;
 }
 
 export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao = {}): DynamicModule {
@@ -97,6 +108,24 @@ export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao 
           parametrosIniciais: parametrosIniciaisSinteticos,
         })
       : null);
+  // Central de integrações externas (decisão 53): banco do cliente com o cofre do deploy; na fonte sintética, memória
+  // (o real fica neutralizado fora de produção de qualquer forma). O helper modoDaIntegracao passa a responder por ela.
+  const portaExternas: PortaIntegracoesExternas | null =
+    o.externas ??
+    (nucleo && cliente
+      ? new PortaIntegracoesExternasPropria(nucleo, cliente)
+      : sintetica
+        ? new PortaIntegracoesExternasMemoria()
+        : null);
+  const externas = portaExternas
+    ? new ServicoIntegracoesExternas(
+        portaExternas,
+        portaExternas.destino === 'banco' ? cofreEmailDoAmbiente(ctx.env) : new CofreMemoria(),
+        cliente ?? 'sintetico',
+        ctx.configuracao.ambiente === 'producao',
+      )
+    : null;
+  ligarCentralIntegracoes(externas);
   return {
     module: class ModuloIntegracao {},
     controllers: [
@@ -107,10 +136,12 @@ export function moduloIntegracao(ctx: ContextoModulo, o: OpcoesModuloIntegracao 
       PrescricaoDigitalController,
       FilaErpController,
       RndsEnvioController,
+      IntegracoesExternasController,
     ],
     providers: [
       { provide: PORTA_INTEGRACAO, useValue: porta },
       { provide: PORTA_FACHADA, useValue: fachada },
+      { provide: SERVICO_INTEGRACOES_EXTERNAS, useValue: externas },
       { provide: ARMAZEM_CONTEUDO, useValue: armazem },
       { provide: ESTABELECIMENTOS_ENTRADA, useValue: o.estabelecimentosEntrada ?? [] },
       // F3.9-6 (L133, L134, L140): mensagens ao paciente, pacotes de parceiros e classificação externa; sem núcleo, 503.

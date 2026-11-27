@@ -31,6 +31,9 @@ export const PERMISSOES_M10_CODIGOS = {
   // C2-065: alcance do cliente nas rotinas sem estabelecimento (acionar, suspender, histórico de todos).
   rotinaCliente: 'config.rotinaCliente.gerir',
   emailEditar: 'config.email.editar',
+  // Central de integrações externas (decisão 53): o painel e a gestão (parâmetros, credencial ao cofre, modo real).
+  integracaoExternaLer: 'config.integracaoExterna.ler',
+  integracaoExternaGerir: 'config.integracaoExterna.gerir',
   empresaLer: 'organizacao.empresa.ler',
   estruturaLer: 'organizacao.estrutura.ler',
   leitoLer: 'organizacao.leito.ler',
@@ -201,6 +204,24 @@ export const PERMISSOES_M10: readonly DeclaracaoPermissao[] = [
     codigo: C.emailEditar,
     descricao:
       'Gravar os modelos de mensagem e os servidores de e-mail (a senha só como referência do cofre) e testar a conexão',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ADMIN,
+    categoria: 'tecnica',
+  },
+  {
+    codigo: C.integracaoExternaLer,
+    descricao:
+      'Consultar a central de integrações externas: modo simulador ou real, situação e o que falta (credencial só "definida / não definida")',
+
+    concessaoPorPerfil: 'por-perfil',
+    perfis: ADMIN,
+    categoria: 'tecnica',
+  },
+  {
+    codigo: C.integracaoExternaGerir,
+    descricao:
+      'Gravar os parâmetros das integrações externas, guardar a credencial no cofre e ligar ou desligar o real (senha de novo)',
 
     concessaoPorPerfil: 'por-perfil',
     perfis: ADMIN,

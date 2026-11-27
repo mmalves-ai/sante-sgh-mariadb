@@ -32,3 +32,4 @@ export * from './rotinas-agendadas.js';
 // F8 (08-INTG L132): prescrição digital por plataforma externa (envio, retorno validável, cancelamento, simulador).
 export * from './prescricao-digital.js';
 export * from './fila-erp.js';
+export * from './integracoes-externas.js';

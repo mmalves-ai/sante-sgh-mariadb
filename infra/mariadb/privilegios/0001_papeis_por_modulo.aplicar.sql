@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.aplicar (alcance 6d3b0d9b591c). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.aplicar (alcance 2956b45d8bcc). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -2352,6 +2352,7 @@ GRANT SELECT, INSERT, UPDATE ON classificacao_externa_recebida TO sgh_mod_integr
 GRANT SELECT, INSERT, UPDATE ON classificacao_risco TO sgh_mod_integracao;
 GRANT SELECT, INSERT, UPDATE ON cliente_api TO sgh_mod_integracao;
 GRANT SELECT ON cobertura_paciente TO sgh_mod_integracao;
+GRANT SELECT, INSERT, UPDATE ON configuracao_integracao_externa TO sgh_mod_integracao;
 GRANT SELECT, INSERT ON confirmacao_marcacao TO sgh_mod_integracao;
 GRANT SELECT ON consentimento_titular TO sgh_mod_integracao;
 GRANT SELECT ON conta_hospitalar TO sgh_mod_integracao;
@@ -4689,6 +4690,7 @@ GRANT SELECT, INSERT, UPDATE ON conta_hospitalar TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON conta_hospitalar_item TO sgh_mod_tiss;
 GRANT SELECT, INSERT ON conta_hospitalar_item_autorizacao TO sgh_mod_tiss;
 GRANT SELECT ON conta_hospitalar_item_participante TO sgh_mod_tiss;
+GRANT SELECT ON conta_hospitalar_periodo TO sgh_mod_tiss;
 GRANT SELECT ON credenciamento_cobranca TO sgh_mod_tiss;
 GRANT SELECT, INSERT ON decisao_aprovacao TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON demonstrativo_analise_conta TO sgh_mod_tiss;

@@ -10,7 +10,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { lerReferenciaSegredoLegado } from '@sgh/contratos';
+import { lerReferenciaCofreIntegracao, lerReferenciaSegredoLegado } from '@sgh/contratos';
 import { chaveCofreEmailValida } from '@sgh/dominio-acesso';
 import { lerReferenciaCofre, lerReferenciaCofreConector } from '@sgh/dominio-documento';
 
@@ -62,7 +62,9 @@ function exigirReferencia(r: string): void {
     !lerReferenciaCofreConector(r) &&
     // 01-ADM L77: a senha do servidor de e-mail cadastrado, presa ao cliente
     // (email/cliente/<cliente>/<servidor_email.referencia_cofre>; chaveCofreEmail do domínio).
-    !chaveCofreEmailValida(r)
+    !chaveCofreEmailValida(r) &&
+    // Central de integrações externas (decisão 53): cofre:integracao/<cliente>/<integração>/<campo>.
+    !lerReferenciaCofreIntegracao(r)
   )
     throw new Error('Referência de cofre inválida.');
 }

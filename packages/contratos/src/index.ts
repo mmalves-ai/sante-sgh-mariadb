@@ -315,6 +315,7 @@ export * from './coexistencia/retrocompatibilidade.js';
 export * from './permissoes/desligamento.js';
 // M58-F4: a fachada de compatibilidade da API de integração da Hal-AI (contrato, catálogo, erros, limites, painel).
 export * from './integracao/fachada.js';
+export * from './integracao/externas.js';
 // M38: onda 0 (consultas ao vivo): público, telas, gravações admitidas, primeira liberação e vigilância.
 export * from './onda0/onda0.js';
 // M55-F1: manutenção e engenharia clínica (equipamento, OS corretiva e predial com SLA, plano de manutenção com laudo,
