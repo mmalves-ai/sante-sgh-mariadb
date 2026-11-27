@@ -19,6 +19,9 @@ REGRAS = {
     "codigo_char": "código de 1 caractere: preenchimento aparado, caixa preservada (origem com comparação binária: 'a' e "
                    "'A' são códigos distintos); o de-para próprio do lote dá o valor de destino; colisão de caixa num "
                    "mesmo domínio: pendência codigo_colisao_caixa",
+    "codigo_maiusculo": "código de negócio da origem (decisão 61: o código que o hospital e o produto usam, ex. o do "
+                        "modelo de documento): pontas aparadas e em maiúsculas; fora de [A-Z0-9_] vira NULL com "
+                        "pendência valor_fora_do_dominio (a concorrente seguinte, se houver, preenche); vazio vira NULL",
     "booleano_sn": "S/N, T/F, V/F, Y/N e 1/0 viram booleano; vazio vira NULL; outro valor: pendência valor_fora_do_dominio",
     "booleano_01": "inteiro 0/1 vira booleano; outro valor: pendência valor_fora_do_dominio",
     "booleano": "booleano nativo da origem",
@@ -351,6 +354,9 @@ def _data(v):
     return d in SENTINELAS_DATA or d.year < 1800
 
 
+_CODIGO_NEGOCIO = re.compile(r"[A-Za-z0-9_]+")
+
+
 def aplicar(regra, v):
     """Converte um valor cru da origem pela regra. Devolve (valor, regra_de_pendencia_ou_None); nunca o valor na
     pendência. Regra desconhecida é erro de programa (o verificador do mapa recusa antes)."""
@@ -508,6 +514,12 @@ def aplicar(regra, v):
         return _txt(v, "nome"), None
     if regra in ("texto_char", "codigo_char"):
         return _txt(v, "preenchimento"), None
+    if regra == "codigo_maiusculo":
+        s = _txt(v, "pontas")
+        if not s:
+            return None, None
+        # o padrão vale para o texto ORIGINAL (só ASCII): 'maß'.upper() seria 'MASS' e colidiria com outro código
+        return (s.upper(), None) if _CODIGO_NEGOCIO.fullmatch(s) else (None, "valor_fora_do_dominio")
     if regra == "texto_longo":
         return _txt(v, "integral"), None
     if regra == "booleano_sn":

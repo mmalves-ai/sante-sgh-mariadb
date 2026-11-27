@@ -90,7 +90,9 @@ SELECT 'conta_hospitalar_franquia', COUNT(*) FROM conta_hospitalar_franquia;
 
 def modelos(a, out):
     out.append("## Modelos de documento clínico (C3-002)\n")
-    o_mod = {r[0]: n(r[1]) for r in origem(a.porta, "SELECT ID_EVOLUCAO||'|0' FROM PREVOLUCAO;")}
+    # código do modelo no cliente: o da origem em maiúsculas (decisão 61) ou, na carga anterior a ela, a chave
+    o_cod = {r[0]: r[1] for r in origem(a.porta,
+                                        "SELECT ID_EVOLUCAO||'|'||COALESCE(UPPER(TRIM(COD)),'') FROM PREVOLUCAO;")}
     o_ver = n(origem(a.porta, "SELECT 'v|'||COUNT(*) FROM HTCABECFORMULCOMP;")[0][1])
     o_reg = {r[0]: n(r[1]) for r in origem(a.porta,
                                             "SELECT ID_EVOLUCAO||'|'||COUNT(*) FROM PRCABEVOL GROUP BY ID_EVOLUCAO;")}
@@ -103,18 +105,23 @@ SELECT m.codigo, m.situacao, (SELECT COUNT(*) FROM modelo_documento_versao v WHE
   FROM modelo_documento_clinico m WHERE m.origem='migracao' AND m.excluido_em IS NULL;
 """)
     d_mod = {r[0]: r for r in d}
+    # chave da origem -> código do modelo no cliente
+    o_mod = {i: (c if c and c in d_mod else i) for i, c in o_cod.items()}
     d_reg = {r[0]: n(r[1]) for r in cliente(a.banco, """
 SELECT m.codigo, COUNT(*) FROM registro_assistencial r JOIN modelo_documento_clinico m ON m.id=r.modelo_documento_clinico_id
  GROUP BY m.codigo;""")}
     d_resp = {r[0]: n(r[1]) for r in cliente(a.banco, """
 SELECT m.codigo, COUNT(*) FROM registro_assistencial_resposta x JOIN registro_assistencial r ON r.id=x.registro_assistencial_id
   JOIN modelo_documento_clinico m ON m.id=r.modelo_documento_clinico_id GROUP BY m.codigo;""")}
-    faltam = sorted(set(o_mod) - set(d_mod), key=int)
-    extras = sorted(set(d_mod) - set(o_mod))
-    publicados = sum(1 for k in o_mod if k in d_mod and d_mod[k][1] == "publicado")
+    faltam = sorted((i for i, k in o_mod.items() if k not in d_mod), key=int)
+    extras = sorted(set(d_mod) - set(o_mod.values()))
+    publicados = sum(1 for k in o_mod.values() if k in d_mod and d_mod[k][1] == "publicado")
+    pelo_codigo = sum(1 for i, k in o_mod.items() if k != i)
     versoes = sum(n(r[2]) for r in d)
     out.append(f"- Modelos na origem (PREVOLUCAO): {len(o_mod)}; no cliente, migrados: {len(d_mod)} "
                f"(da origem: {len(o_mod) - len(faltam)}; a mais: {len(extras)} {extras}); faltando: {len(faltam)} {faltam}")
+    out.append(f"- Código do modelo no cliente igual ao código da origem (decisão 61): {pelo_codigo} de {len(o_mod)} "
+               "(os demais ainda com a chave da origem: mudam no próximo Sincronizar)")
     out.append(f"- Versões: origem {o_ver} históricas (HTCABECFORMULCOMP) + 1 atual por modelo = {o_ver + len(o_mod)}; "
                f"cliente {versoes} (inclui a do banco de perguntas da migração)")
     out.append(f"- Publicados (o registro clínico novo só abre modelo publicado): {publicados} de {len(o_mod)}")
@@ -122,16 +129,17 @@ SELECT m.codigo, COUNT(*) FROM registro_assistencial_resposta x JOIN registro_as
                                       sum(d_resp.values()))
     out.append(f"- Registros: origem {fmt(tot_or)}, cliente {fmt(tot_dr)}; respostas: origem {fmt(tot_oa)}, "
                f"cliente {fmt(tot_da)}\n")
-    out.append("| Modelo (código) | Registros origem | Registros cliente | Taxa | Respostas origem | Respostas cliente | Taxa |")
+    out.append("| Modelo (chave na origem / código no cliente) | Registros origem | Registros cliente | Taxa | Respostas origem | Respostas cliente | Taxa |")
     out.append("|---|---:|---:|---:|---:|---:|---:|")
     abaixo = 0
-    for k in sorted(o_mod, key=int):
-        orr, dr, oa, da = o_reg.get(k, 0), d_reg.get(k, 0), o_resp.get(k, 0), d_resp.get(k, 0)
+    for i in sorted(o_mod, key=int):
+        k = o_mod[i]
+        orr, dr, oa, da = o_reg.get(i, 0), d_reg.get(k, 0), o_resp.get(i, 0), d_resp.get(k, 0)
         tr = 100.0 * dr / orr if orr else 100.0
         ta = 100.0 * da / oa if oa else 100.0
         marca = " **<**" if min(tr, ta) < TAXA_MINIMA else ""
         abaixo += 1 if marca else 0
-        out.append(f"| {k} | {fmt(orr)} | {fmt(dr)} | {tr:.1f}%{marca} | {fmt(oa)} | {fmt(da)} | {ta:.1f}% |")
+        out.append(f"| {i} / {k} | {fmt(orr)} | {fmt(dr)} | {tr:.1f}%{marca} | {fmt(oa)} | {fmt(da)} | {ta:.1f}% |")
     out.append(f"\nModelos com taxa abaixo de {TAXA_MINIMA}% em registros ou respostas: {abaixo} de {len(o_mod)}.\n")
 
 

@@ -33,7 +33,7 @@ import pymysql
 
 from . import (banco, caminho, carga, carga_mapa, continuar, controle, disco, imagem, mapa, origem, plataforma,
                situacao_base,
-               preco_origem, registro_log, relatorio)
+               preco_origem, publicar_modelos, registro_log, relatorio)
 from .leitor import Leitor
 from .servico_abridor import abrir_remoto
 
@@ -397,6 +397,12 @@ def _carregar(conn, eid, ex, ctl, usuario, senha, iid, tabelas, contagens, sha_a
             if de:
                 rel["continuacao"]["carga_propria_pulada"] = sorted(pular_p)
                 rel.setdefault("pular", {}).update(pular_p)
+            # decisão 61 / L7-08: a conta de serviço da migração existe antes da carga (o mapa a presume onde a origem
+            # não diz o usuário; a publicação dos modelos migrados a usa como autora). A falha não derruba a carga.
+            try:
+                cont["conta_migracao"] = publicar_modelos.garantir_conta(cc)
+            except Exception as e:  # noqa: BLE001 - só o tipo do erro
+                cont["conta_migracao"] = {"falhou": type(e).__name__}
             resumo = carga.Carga(lt, cc, ctl, eid, iid, painel.carga, pular=pular_p,
                                  placar=painel.placar).executar(carregar, contagens) or {
                 "versao_mapa": carga.VERSAO_MAPA, "entidades": {},
@@ -438,6 +444,15 @@ def _carregar(conn, eid, ex, ctl, usuario, senha, iid, tabelas, contagens, sha_a
                 pend = resumo["pendencias"]
                 pend["total"] += 1
                 pend["por_regra"]["agenda:estruturar_texto_falhou:alta"] = 1
+            # Decisão 61 (27/11): os modelos de documento migrados entram em uso (versão atual publicada pela conta
+            # de migração; a comissão revisa depois). A falha não derruba a carga: vira pendência visível.
+            try:
+                cont["modelos_publicados"] = publicar_modelos.executar(cc)
+            except Exception as e:  # noqa: BLE001 - só o tipo do erro
+                cont["modelos_publicados"] = {"falhou": type(e).__name__}
+                pend = resumo["pendencias"]
+                pend["total"] += 1
+                pend["por_regra"]["modelo:publicar_migrados_falhou:alta"] = 1
     finally:
         cc.close()
     cont["entidades"] = {k: {x: v[x] for x in ("tabela_origem", "registros_origem", "registros_destino",

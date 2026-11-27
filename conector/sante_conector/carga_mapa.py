@@ -835,6 +835,36 @@ class CargaMapa(carga.Carga):
                     saida.update(cods[cod])
         return saida
 
+    def _colisoes_maiusculo(self, p):
+        """{(coluna, chave)} das linhas cujo `codigo_maiusculo` repete o de outra linha num destino de chave única de
+        uma coluna (decisão 61): 'Evam' e 'EVAM' viram o mesmo código. Essas linhas não gravam o código (NULL com a
+        pendência média codigo_colisao_reserva) e a concorrente seguinte (a reserva) preenche; nenhuma é recusada."""
+        alvo = []
+        for dt in p["destinos"]:
+            unicos = None
+            for c in p["colunas"][dt]:
+                if c["regra"] != "codigo_maiusculo" or _especial(c["coluna"]):
+                    continue
+                if unicos is None:
+                    idx = {}
+                    for nome, col in self._todas("SELECT INDEX_NAME, COLUMN_NAME FROM information_schema.STATISTICS"
+                                                 " WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s AND NON_UNIQUE=0",
+                                                 (dt,)):
+                        idx.setdefault(nome, []).append(col)
+                    unicos = {cols[0] for cols in idx.values() if len(cols) == 1}
+                if c["destino"] in unicos:
+                    alvo.append(c["coluna"])
+        if not alvo:
+            return set()
+        por_col = {c: {} for c in alvo}
+        for linha, ch_sem in self._linhas_mapa(p):
+            chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
+            for c in alvo:
+                x = sentinela.aplicar("codigo_maiusculo", linha[c])[0]
+                if x is not None:
+                    por_col[c].setdefault(x, []).append(chave)
+        return {(c, k) for c, cods in por_col.items() for ks in cods.values() if len(ks) > 1 for k in ks}
+
     def _depara(self, cat):
         if cat not in self.deparas:
             existe = self._um("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND"
@@ -1130,6 +1160,9 @@ class CargaMapa(carga.Carga):
         valores e regra. (valor, recusa ou None, chave do pai adiada ou None)."""
         nome = c["coluna"]
         regra = sentinela.regra_efetiva(c["regra"] or "texto", self.subtipo.get(nome, 0))
+        if regra == "codigo_maiusculo" and (nome, chave) in getattr(self, "_colide_maiusculo", ()):
+            pend.append(("codigo_colisao_reserva", "media"))
+            return None, None, None  # decisão 61: o código repetido não grava; a concorrente (reserva) preenche
         if c.get("passos"):
             raw, alvo, pr = self._seguir(linha, nome, c["passos"], pend, zero=bool(c.get("zero_e_chave")))
             if pr:
@@ -1342,7 +1375,8 @@ class CargaMapa(carga.Carga):
         """JSON estável das colunas do retrato, convertidas (sem segredo)."""
         d = {}
         for n, r in sorted(self._regras_retrato(p, spec).items()):
-            r = "texto" if r == "chave_origem" else r
+            # a evidência guarda a origem: chave e código de negócio (decisão 61) entram como texto, sem normalizar
+            r = "texto" if r in ("chave_origem", "codigo_maiusculo") else r
             x = sentinela.aplicar(sentinela.regra_efetiva(r, self.subtipo.get(n, 0)), linha[n])[0]
             if isinstance(x, (bytes, bytearray)):
                 x = "sha256:" + hashlib.sha256(x).hexdigest()
@@ -2004,7 +2038,8 @@ class CargaMapa(carga.Carga):
                         if col in p.get("segredos", ()) or mapa.SEGREDO_NOME.search(col):
                             continue
                         r = (p.get("regras_geradas") or {}).get(col) or "texto"
-                        r = "texto" if r == "chave_origem" else r
+                        # a evidência guarda a origem: chave e código de negócio (decisão 61) entram como texto, sem normalizar
+                        r = "texto" if r in ("chave_origem", "codigo_maiusculo") else r
                         d[col] = _valor_json(sentinela.aplicar(sentinela.regra_efetiva(r, self.subtipo.get(col, 0)),
                                                                linha[col])[0])
                     vals.setdefault((g, c["coluna"]), []).append(d)
@@ -2756,6 +2791,7 @@ class CargaMapa(carga.Carga):
             self._carregar_existente(t)
         self._preparar(p)
         colide = self._colisoes(p)
+        self._colide_maiusculo = self._colisoes_maiusculo(p)
         self._montar_grupos(p)
         self._montar_leituras(p)
         self._preparar_completar(p)

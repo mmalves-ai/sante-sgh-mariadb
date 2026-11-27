@@ -200,7 +200,11 @@ class FatiaL611(unittest.TestCase):
             p = self.plano[t]
             return {c["destino"]: (c["coluna"], c["regra"]) for c in p["colunas"][p["destinos"][0]]}
         self.assertEqual(dest("PREVOLUCAO")["tipo_registro"][0], "=~outro")
-        self.assertEqual(dest("PREVOLUCAO")["codigo"], ("ID_EVOLUCAO", "texto"))
+        # decisão 61: o código do modelo é o COD da origem em maiúsculas; a chave como texto é a concorrente de reserva
+        p0 = self.plano["PREVOLUCAO"]
+        self.assertEqual([(c["coluna"], c["regra"]) for c in p0["colunas"][p0["destinos"][0]] if c["destino"] == "codigo"],
+                         [("COD", "codigo_maiusculo"), ("ID_EVOLUCAO", "texto")])
+        self.assertIn("COD", p0["lidas"])
         self.assertEqual(dest("TBCBARAREACAOADVERSA")["codigo"], ("CODIGO", "codigo_char"))
         self.assertEqual(dest("TBCBARAREACAOADVERSA")["ativo"][1], "booleano_sn")
         self.assertEqual(dest("PRLOCAL_ASSISTENCIA")["ativo"], ("SITUACAO", "booleano_ai"))
@@ -211,7 +215,7 @@ class FatiaL611(unittest.TestCase):
         self.assertEqual(dest("PRMANCHESTER")["ordem"], ("COR", "texto"))  # ordem pela cor, nunca pelo ID
         for c in ("TP_ATENDIMENTO", "CODCAB", "LAYOUT_VISUALIZACAO_IMPRESSAO", "FASE", "OLD_TIPOCOMP"):
             self.assertNotIn(c, self.plano["PREVOLUCAO"]["lidas"])
-        for t, c in (("TBCBARAREACAOADVERSA", "ID_DIGITAL"), ("PREVOLTIPOACO", "NOME"), ("PREVOLUCAO", "COD")):
+        for t, c in (("TBCBARAREACAOADVERSA", "ID_DIGITAL"), ("PREVOLTIPOACO", "NOME")):
             self.assertNotIn(c, self.plano[t]["lidas"])
 
     def test_regras_de_valor(self):

@@ -17,11 +17,11 @@ TBCBARAREACAOADVERSA	ID_TBVERSAOCBARA		chave_origem			não carregada: pai fora d
 TBCBARAREACAOADVERSA	ID_DIGITAL		texto			descartada: identificador técnico da origem, sem destino no modelo
 PRPROTGERALESP	ID_PROTGERAL	protocolo_prescricao_especialidade.protocolo_prescricao_id	chave_origem		ref:PRPROTGERAL	protocolo de prescrição (pai de fora da fatia, chave ID_PROTGERAL)
 PRPROTGERALESP	ESPEC	protocolo_prescricao_especialidade.especialidade_medica_id	chave_origem		ref:TBESPEC	especialidade médica pela chave COD do pai
-PREVOLUCAO	ID_EVOLUCAO	modelo_documento_clinico.codigo	texto			código do modelo como texto (atende o CHECK ^[A-Z0-9_]+$); o código livre COD da origem pode ter caixa e símbolos fora do CHECK, pedido de coluna de código de exibição em saida/L6-11.json
+PREVOLUCAO	COD	modelo_documento_clinico.codigo	codigo_maiusculo			decisão 61 (27/11): o código do modelo é o código da origem em maiúsculas (o que o hospital usa e o que a liberação de modelos do registro e a lista dos fora da liberação conhecem, ex. EVAM); na ProntoCardio, 67 de 67 cabem no CHECK ^[A-Z0-9_]+$ e nenhum se repete. Fora do padrão: NULL com valor_fora_do_dominio e a concorrente seguinte preenche
+PREVOLUCAO	ID_EVOLUCAO	modelo_documento_clinico.codigo	texto			reserva (concorrente): sem código da origem no padrão, o código do modelo é a chave da origem como texto (atende o CHECK); a pendência da COD continua visível
 PREVOLUCAO	DESCRICAO	modelo_documento_clinico.titulo	texto			título do modelo (sem título: NOT NULL do destino recusa)
 PREVOLUCAO	ID_PRTPCOMP	modelo_documento_clinico.tipo_documento_clinico_id	chave_origem			tipo de documento clínico (referência gerada PRTPCOMP; sem tipo: NOT NULL recusa)
 PREVOLUCAO	=~outro	modelo_documento_clinico.tipo_registro				a origem não classifica o registro: entra como outro, presumido (pendência baixa valor_presumido) e o cliente reclassifica na tela
-PREVOLUCAO	COD		texto			não carregada por ora: código livre fora do CHECK do destino; coluna pedida em saida/L6-11.json
 PREVOLUCAO	ID_TBEDITREL		chave_origem			não carregada por ora: o cabeçalho de impressão do destino não é o relatório da origem; ligação pedida em saida/L6-11.json
 PREVOLESPEC	ID_EVOLUCAO	modelo_especialidade.modelo_documento_clinico_id	chave_origem		ref:PREVOLUCAO	modelo de documento (mesma fatia)
 PREVOLESPEC	ESPEC	modelo_especialidade.especialidade_medica_id	chave_origem		ref:TBESPEC	especialidade médica pela chave COD do pai

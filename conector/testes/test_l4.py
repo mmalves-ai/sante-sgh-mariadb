@@ -76,6 +76,15 @@ class Sentinelas(unittest.TestCase):
         self.assertEqual(a("texto", b"   "), (None, None))
         self.assertEqual(a("codigo_char", b"m"), ("m", None))  # caixa preservada: 'm' e 'M' são códigos distintos
         self.assertEqual(a("codigo_char", b"M"), ("M", None))
+        # decisão 61: código de negócio da origem em maiúsculas; fora de [A-Z0-9_] vira NULL (a concorrente preenche)
+        self.assertEqual(a("codigo_maiusculo", b"  evam "), ("EVAM", None))
+        self.assertEqual(a("codigo_maiusculo", b"Enf0411"), ("ENF0411", None))
+        self.assertEqual(a("codigo_maiusculo", b"FISI_UTI"), ("FISI_UTI", None))
+        self.assertEqual(a("codigo_maiusculo", b"   "), (None, None))
+        self.assertEqual(a("codigo_maiusculo", b"EV-AM"), (None, "valor_fora_do_dominio"))
+        self.assertEqual(a("codigo_maiusculo", b"EV AM"), (None, "valor_fora_do_dominio"))
+        self.assertEqual(a("codigo_maiusculo", "Ação".encode("cp1252")), (None, "valor_fora_do_dominio"))
+        self.assertEqual(a("codigo_maiusculo", "maß".encode("cp1252")), (None, "valor_fora_do_dominio"))  # não 'MASS'
         self.assertEqual(sentinela.colisoes_caixa(["a", "A", "b", None, "c", "C", "c"]), [["A", "a"], ["C", "c"]])
         self.assertEqual(sentinela.colisoes_caixa(["a", "b"]), [])
         longo = "Observação:\r\n  item 1\r\n\r\n  item 2  ".encode("cp1252")

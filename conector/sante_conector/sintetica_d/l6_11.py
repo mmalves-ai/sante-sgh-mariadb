@@ -670,11 +670,13 @@ def linhas(r, ins):
     for prot, esp in [(10, 1), (10, 2), (11, 1), (12, 1), (11, 8)]:
         _ins(ins, "PRPROTGERALESP", ID_PROTGERAL=prot, ESPEC=esp)
     # modelos: 3 sem descrição (1048); 4 com tipo de documento inexistente (pai_inexistente + 1048); 5 com quebra de
-    # linha e espaços internos (texto só apara as pontas); todos com o tipo de registro presumido (valor_presumido)
-    for i, desc, tp in [(1, "Evolução médica exemplo", 1), (2, "Anamnese exemplo", 2), (3, None, 1),
-                        (4, "Modelo órfão exemplo", 9), (5, "  Evolução   diária\r\nexemplo ", 1),
-                        (6, "Admissão exemplo", 2)]:
-        _ins(ins, "PREVOLUCAO", ID_EVOLUCAO=i, COD="M%d" % i, DESCRICAO=desc, ID_PRTPCOMP=tp)
+    # linha e espaços internos (texto só apara as pontas); todos com o tipo de registro presumido (valor_presumido).
+    # Código do modelo (decisão 61): 1 em minúsculas vira M1; 2 fora do padrão (valor_fora_do_dominio) fica com a
+    # chave '2' (reserva); 5 e 6 colidem pela caixa (codigo_colisao_reserva) e ficam com as chaves '5' e '6'
+    for i, cod, desc, tp in [(1, "m1", "Evolução médica exemplo", 1), (2, "M-2", "Anamnese exemplo", 2),
+                             (3, "M3", None, 1), (4, "M4", "Modelo órfão exemplo", 9),
+                             (5, "ev5", "  Evolução   diária\r\nexemplo ", 1), (6, "EV5", "Admissão exemplo", 2)]:
+        _ins(ins, "PREVOLUCAO", ID_EVOLUCAO=i, COD=cod, DESCRICAO=desc, ID_PRTPCOMP=tp)
     # conferidor r4: imagem de base do modelo (#arquivo): 1 PNG do modelo 1; 2 o MESMO binário no modelo 2 (um arquivo
     # só no armazenamento); 3 imagem vazia (1048); 4 do modelo 3 recusado (pai_pendente)
     for i, nome, img, mod in [(1, "Mapa do corpo exemplo", b"\x89PNG\r\n\x1a\nimagem falsa 1", 1),
@@ -760,7 +762,8 @@ def linhas(r, ins):
                                                               "valor_fora_do_dominio": 1}},
         "PRPROTGERALESP": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2}},
         "PREVOLUCAO": {"gravados": 4, "pendencias": {"valor_presumido": 6, "pai_inexistente": 1,
-                                                    "restricao_destino_1048": 2}},
+                                                    "restricao_destino_1048": 2, "valor_fora_do_dominio": 1,
+                                                    "codigo_colisao_reserva": 2}},
         "PREVOLESPEC": {"gravados": 5, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                      "restricao_destino_1048": 1}},
         "PREVOLTIPOACO": {"gravados": 3, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1}},
