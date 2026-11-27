@@ -25,6 +25,7 @@ import {
   type ProcessoParaAtaTela,
   registrarAta,
 } from '../api-ata-empenho.js';
+import AdesaoAtaPainel from '../componentes/AdesaoAtaPainel.vue';
 import ErroSuprimentos from '../componentes/ErroSuprimentos.vue';
 import ReferenciaEmpenhoPainel from '../componentes/ReferenciaEmpenhoPainel.vue';
 import { data, numero, qtd, reais } from '../usar-suprimentos.js';
@@ -380,6 +381,8 @@ async function confirmarAnulacao(e: EmpenhoTela): Promise<void> {
         />
       </form>
     </article>
+
+    <AdesaoAtaPainel :atas="atas" :hoje="hoje" />
 
     <h2>{{ t('ataEmpenho.empenhos') }}</h2>
     <p v-if="!carregando && empenhos.length === 0">{{ t('ataEmpenho.nenhumEmpenho') }}</p>

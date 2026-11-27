@@ -34,6 +34,19 @@ import {
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
+import {
+  type AdesaoVisao,
+  decidirAdesao,
+  type EntradaAdesao,
+  type EntradaDecisaoAdesao,
+  esquemaAdesao,
+  esquemaDecisaoAdesao,
+  lerAdesoes,
+  OPERACAO_DECIDIR_ADESAO,
+  OPERACAO_SOLICITAR_ADESAO,
+  solicitarAdesao,
+  TABELAS_ADESAO,
+} from './adesao-ata.js';
 import { hojeNoEstabelecimento, insumoAtivo } from './porta-propria.js';
 import {
   type CandidatosReferenciaVisao,
@@ -198,6 +211,15 @@ export interface PortaAtaEmpenho {
     chave: string,
   ): Promise<ResultadoAtaEmpenho>;
   exportacao(c: ContextoPortaM18, inicio: string, fim: string): Promise<string>;
+  /** C2-017 (09-AREA linha 81): adesão à ata de registro de preços (Lei 14.133, art. 86). */
+  adesoes(c: ContextoPortaM18): Promise<AdesaoVisao[]>;
+  solicitarAdesao(c: ContextoPortaM18, e: EntradaAdesao, chave: string): Promise<ResultadoAtaEmpenho>;
+  decidirAdesao(
+    c: ContextoPortaM18,
+    adesao: number,
+    e: EntradaDecisaoAdesao,
+    chave: string,
+  ): Promise<ResultadoAtaEmpenho>;
 }
 
 const n = (v: unknown) => Number(v ?? 0);
@@ -695,6 +717,39 @@ export class PortaAtaEmpenhoPropria implements PortaAtaEmpenho {
       (x) => ({ empenho, titulo: x.id }),
     );
   }
+
+  adesoes(c: ContextoPortaM18): Promise<AdesaoVisao[]> {
+    const ctx = this.contexto(c);
+    return this.nucleo.lerSomente(ctx, (l) => lerAdesoes(l, ctx.estabelecimento));
+  }
+
+  solicitarAdesao(c: ContextoPortaM18, e: EntradaAdesao, chave: string) {
+    return this.executar(
+      c,
+      chave,
+      OPERACAO_SOLICITAR_ADESAO,
+      TABELAS_ADESAO,
+      esquemaAdesao,
+      e,
+      solicitarAdesao,
+      'adesao_ata_registro_preco',
+      (x) => ({ numero: x.numero, tipo: x.tipo, ata: x.ata, insumo: x.insumo }),
+    );
+  }
+
+  decidirAdesao(c: ContextoPortaM18, adesao: number, e: EntradaDecisaoAdesao, chave: string) {
+    return this.executar(
+      c,
+      chave,
+      OPERACAO_DECIDIR_ADESAO,
+      TABELAS_ADESAO,
+      esquemaDecisaoAdesao,
+      e,
+      (tx, est, x) => decidirAdesao(tx, est, adesao, x),
+      'adesao_ata_registro_preco',
+      (x) => ({ adesao, decisao: x.decisao }),
+    );
+  }
 }
 
 export function portaAtaEmpenhoIndisponivel(): PortaAtaEmpenho {
@@ -718,5 +773,8 @@ export function portaAtaEmpenhoIndisponivel(): PortaAtaEmpenho {
     referirPedido: falha,
     referirTitulo: falha,
     exportacao: falha,
+    adesoes: falha,
+    solicitarAdesao: falha,
+    decidirAdesao: falha,
   };
 }

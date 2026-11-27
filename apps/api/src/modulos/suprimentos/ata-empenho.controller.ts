@@ -10,6 +10,9 @@
 //   GET  /api/suprimentos/empenhos/:id/candidatos?termo           pedidos e títulos do mesmo credor ainda sem empenho
 //   POST /api/suprimentos/empenhos/:id/pedidos                    referir o empenho no pedido de compra
 //   POST /api/suprimentos/empenhos/:id/titulos                    referir o empenho no título a pagar
+//   GET  /api/suprimentos/adesoes-ata                             as adesões do estabelecimento (C2-017, art. 86)
+//   POST /api/suprimentos/adesoes-ata                             solicitar a adesão (participante ou carona)
+//   POST /api/suprimentos/adesoes-ata/:id/decisao                 autorizar (aceites e limites) ou negar com motivo
 // A ata é ato de quem conduz a contratação; o empenho e a anulação, da autoridade (suprimentos.licitacao.homologar).
 // A gravação exige a Idempotency-Key: a repetição do mesmo pedido devolve o resultado da primeira.
 import { Body, Controller, Get, Header, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
@@ -18,6 +21,7 @@ import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { idDaRota, sessaoDe } from '../cadastro/comum.js';
 import { corpo } from '../exames/public-api.js';
+import { esquemaAdesao, esquemaDecisaoAdesao } from './adesao-ata.js';
 import {
   esquemaAnulacaoEmpenho,
   esquemaAta,
@@ -140,6 +144,33 @@ export class AtaEmpenhoController {
       sessaoDe(req).porta,
       idDaRota(id),
       corpo(esquemaAnulacaoEmpenho, b),
+      chaveDe(req),
+    );
+  }
+
+  @Get('adesoes-ata')
+  @Permissao('suprimentos.licitacao.ler')
+  adesoes(@Req() req: RequisicaoAutorizada) {
+    return this.porta.adesoes(sessaoDe(req).porta);
+  }
+
+  @Post('adesoes-ata')
+  @HttpCode(201)
+  @Permissao('suprimentos.licitacao.conduzir')
+  @AuditadoNoHandler('suprimentos.adesao-ata.solicitar pelo executor (trilha na mesma transação)')
+  solicitarAdesao(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.porta.solicitarAdesao(sessaoDe(req).porta, corpo(esquemaAdesao, b), chaveDe(req));
+  }
+
+  @Post('adesoes-ata/:id/decisao')
+  @HttpCode(200)
+  @Permissao('suprimentos.licitacao.homologar')
+  @AuditadoNoHandler('suprimentos.adesao-ata.decidir pelo executor (trilha na mesma transação)')
+  decidirAdesao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
+    return this.porta.decidirAdesao(
+      sessaoDe(req).porta,
+      idDaRota(id),
+      corpo(esquemaDecisaoAdesao, b),
       chaveDe(req),
     );
   }

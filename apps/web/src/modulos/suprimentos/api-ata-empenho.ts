@@ -136,3 +136,30 @@ export const referirEmpenho = (
 ) => enviar<ResultadoAtaEmpenhoTela>(`${S}/empenhos/${empenho}/${alvo}`, corpo, chave);
 export const urlExportacaoEmpenhos = (inicio: string, fim: string) =>
   `${S}/empenhos/exportacao?inicio=${encodeURIComponent(inicio)}&fim=${encodeURIComponent(fim)}`;
+
+// C2-017 (09-AREA linha 81): adesão à ata de registro de preços (Lei 14.133, art. 86).
+export interface AdesaoTela {
+  readonly id: number;
+  readonly numero: string;
+  readonly tipo: 'participante' | 'carona';
+  readonly ata: string | null;
+  readonly orgaoGerenciador: string | null;
+  readonly numeroPregao: string | null;
+  readonly insumoNome: string;
+  readonly fornecedorNome: string;
+  readonly quantidadeRegistrada: number | null;
+  readonly quantidadeSolicitada: number;
+  readonly quantidadeAderida: number | null;
+  readonly valorUnitario: number;
+  readonly dataSolicitacao: string;
+  readonly situacao: 'solicitada' | 'em_analise' | 'autorizada' | 'negada' | 'cancelada' | 'encerrada';
+  readonly numeroOficio: string | null;
+  readonly aceiteFornecedor: boolean;
+  readonly motivoDecisao: string | null;
+  readonly versao: number;
+}
+export const listarAdesoes = () => ler<AdesaoTela[]>(`${S}/adesoes-ata`);
+export const solicitarAdesao = (corpo: Record<string, unknown>, chave: string) =>
+  enviar<ResultadoAtaEmpenhoTela>(`${S}/adesoes-ata`, corpo, chave);
+export const decidirAdesao = (id: number, corpo: Record<string, unknown>, chave: string) =>
+  enviar<ResultadoAtaEmpenhoTela>(`${S}/adesoes-ata/${id}/decisao`, corpo, chave);
