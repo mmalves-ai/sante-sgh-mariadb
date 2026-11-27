@@ -57,13 +57,15 @@ const ROTULO_SITUACAO = Object.fromEntries(
 ) as Record<Situacao, string>;
 
 async function tentar<T>(fn: () => Promise<T>, ok?: string): Promise<T | null> {
+  // Só a gravação troca o aviso; a leitura que vem logo depois não o apaga (o erro apaga).
   erro.value = null;
-  aviso.value = null;
+  if (ok) aviso.value = null;
   try {
     const r = await fn();
     if (ok) aviso.value = ok;
     return r;
   } catch (e) {
+    aviso.value = null;
     erro.value = e instanceof Error ? e.message : String(e);
     return null;
   }
