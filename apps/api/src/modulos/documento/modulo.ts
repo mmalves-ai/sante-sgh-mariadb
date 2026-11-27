@@ -13,6 +13,7 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import {
   ARMAZEM_PDF_ICP,
+  type ContextoAssinatura,
   armazemPdfIcp,
   FONTE_CONTEUDO_ICP,
   type FonteConteudoIcp,
@@ -28,6 +29,23 @@ import { armazemArquivosDoAmbiente, estabelecimentoDoCliente } from './infra/arq
 export interface OpcoesModuloDocumento {
   /** Testes: a fonte já montada. */
   readonly fonte?: FonteDocumento;
+}
+
+/**
+ * O contexto da assinatura ICP traz rede e hospital e, do núcleo, só o que a sessão tiver; a porta dos documentos pede o
+ * contexto completo. Como no boot antigo (que passava só rede e hospital), o que falta vem neutro: o cliente pela rede,
+ * sem estabelecimento nem usuário, e uma correlação própria.
+ */
+function contextoDaAssinatura(c: ContextoAssinatura) {
+  return {
+    rede: c.rede,
+    hospital: c.hospital,
+    cliente: c.cliente ?? c.rede,
+    estabelecimento: c.estabelecimento ?? null,
+    usuario: c.usuario ?? null,
+    correlacao: c.correlacao ?? 'assinatura-icp',
+    ...(c.enderecoIp !== undefined ? { enderecoIp: c.enderecoIp } : {}),
+  };
 }
 
 @Module({})
@@ -66,8 +84,8 @@ export function moduloDocumento(ctx: ContextoModulo, opcoes: OpcoesModuloDocumen
         ): FonteConteudoIcp | null =>
           servico && porta
             ? {
-                conteudo: (c, d) => servico.conteudoParaAssinatura(c, d),
-                nomes: (c, ps) => porta.nomes(c, ps),
+                conteudo: (c, d) => servico.conteudoParaAssinatura(contextoDaAssinatura(c), d),
+                nomes: (c, ps) => porta.nomes(contextoDaAssinatura(c), ps),
               }
             : null,
         inject: [
