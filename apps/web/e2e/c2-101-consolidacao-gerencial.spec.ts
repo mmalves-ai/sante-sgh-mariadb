@@ -280,7 +280,7 @@ test.describe('Consolidação gerencial do grupo @C2-101 @fase7', () => {
 
     // Grupo: a consolidadora é única e a falta aparece na hora.
     await page.getByTestId('consolidacao-aba-grupo').click();
-    await expect(page.getByTestId('consolidacao-membros')).toContainText('80');
+    await expect(page.getByTestId('consolidacao-membro-1-percentual')).toHaveValue('80');
     await expect(page.getByTestId('consolidacao-problemas-grupo')).toHaveCount(0);
     await page.getByTestId('consolidacao-codigo').fill('');
     await expect(page.getByTestId('consolidacao-problemas-grupo')).toContainText('código');
