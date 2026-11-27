@@ -34,7 +34,19 @@ async function ligarContasPagar(page: Page): Promise<void> {
   const recurso = 'financeiro.contasPagar';
   await expect(page.getByTestId(`recurso-${recurso}`)).toBeVisible({ timeout: 30_000 });
   if ((await page.getByTestId(`recurso-${recurso}`).innerText()).includes('Ligada')) return;
+  const cartao = await page.getByTestId(`recurso-${recurso}`).innerText();
   await page.getByTestId(`abrir-${recurso}`).click();
+  if (!cartao.includes('Sem pré-requisito externo')) {
+    // A conferência pelos chave-usuários do setor, registrada com a evidência (sintética) antes de ligar.
+    const pre = page.getByTestId('form-prerequisito');
+    await pre
+      .getByLabel('Evidência (protocolo ou número; nunca o certificado ou a senha)')
+      .fill('Conferência sintética dos chave-usuários (E2E C1-026)');
+    await pre.locator('#prereq-senha').fill(SENHA);
+    await pre.getByRole('button', { name: 'Registrar pré-requisito' }).click();
+    await expect(page.getByTestId('mensagem-liberacao')).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId(`abrir-${recurso}`).click();
+  }
   const form = page.getByTestId('form-liberacao');
   await form.getByTestId('opcao-ligar').check();
   await form.getByLabel('Justificativa').fill('Ciclo sintético do pagamento eletrônico (E2E C1-026)');
