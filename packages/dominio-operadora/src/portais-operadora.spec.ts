@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  efeitoDaAprovacaoPortal,
+  problemasDoEfeitoPortal,
   avisoDaSolicitacao,
   cartaoDigitalValido,
   criticarExclusaoLote,
@@ -270,5 +272,28 @@ describe('cartão digital e mensagens', () => {
     expect(
       avisoDaSolicitacao({ recebeNotificacoes: true, celular: null, email: null }, 'aprovada').motivo,
     ).toBe('sem-contato');
+  });
+});
+
+describe('efeito da aprovação no cadastro (C3-027)', () => {
+  it('só a segunda via e a reativação mexem no cadastro; os demais seguem pela tela própria', () => {
+    expect(efeitoDaAprovacaoPortal('segunda_via_cartao')).toBe('segunda_via');
+    expect(efeitoDaAprovacaoPortal('reativacao_beneficiario')).toBe('reativacao');
+    expect(efeitoDaAprovacaoPortal('inclusao_beneficiario')).toBeNull();
+    expect(efeitoDaAprovacaoPortal('reembolso')).toBeNull();
+  });
+  it('via só ao ativo; reativação só ao excluído sem motivo que a impeça', () => {
+    const f = (situacaoBeneficiario: string | null, motivoImpedeReativacao = false) => ({
+      situacaoBeneficiario,
+      motivoImpedeReativacao,
+    });
+    expect(problemasDoEfeitoPortal('segunda_via', f(null))[0]?.codigo).toBe('beneficiario-obrigatorio');
+    expect(problemasDoEfeitoPortal('segunda_via', f('ativo'))).toEqual([]);
+    expect(problemasDoEfeitoPortal('segunda_via', f('excluido'))[0]?.codigo).toBe('beneficiario-inativo');
+    expect(problemasDoEfeitoPortal('reativacao', f('ativo'))[0]?.codigo).toBe('beneficiario-ativo');
+    expect(problemasDoEfeitoPortal('reativacao', f('excluido'))).toEqual([]);
+    expect(problemasDoEfeitoPortal('reativacao', f('excluido', true))[0]?.codigo).toBe(
+      'motivo-impede-reativacao',
+    );
   });
 });

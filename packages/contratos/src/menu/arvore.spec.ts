@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 529, M: 198, P: 57, N: 274 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 530, M: 198, P: 57, N: 275 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(529);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(530);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -439,6 +439,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/operadora/troca-tiss', // C2-061 (08-SGO L107)
         '/operadora/comercial', // C2-095 (08-SGO L100)
         '/operadora/remuneracao-rede', // C2-120 (08-SGO L102)
+        '/operadora/portais', // C3-027 (08-SGO L114)
         '/pa/classificacao', // M44
         '/pa/classificacao-externa', // M34
         '/pa/classificacao?lista=reclassificar', // M44

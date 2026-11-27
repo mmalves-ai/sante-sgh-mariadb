@@ -544,7 +544,7 @@ export class PortaCadastroComplementarPropria {
     if (!r) throw naoEncontrado();
     return r;
   }
-  private static async parametro(l: Leitor, op: number, chave: ChaveParametroOperadora, data: string) {
+  static async parametro(l: Leitor, op: number, chave: ChaveParametroOperadora, data: string) {
     const r = await l.uma<{ valor: unknown }>(
       `SELECT valor FROM parametro_operadora WHERE operadora_saude_id = ? AND chave = ? AND excluido_em IS NULL
           AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?) ORDER BY vigencia_inicio DESC, id DESC LIMIT 1`,
@@ -1399,7 +1399,7 @@ export class PortaCadastroComplementarPropria {
     });
   }
 
-  private static async situacaoCartao(l: Leitor, codigo: string): Promise<number> {
+  static async situacaoCartao(l: Leitor, codigo: string): Promise<number> {
     const r = await l.uma('SELECT id FROM situacao_solicitacao_cartao WHERE codigo = ? AND ativo = TRUE', [
       codigo,
     ]);
@@ -1483,7 +1483,7 @@ export class PortaCadastroComplementarPropria {
    * A emissão do pedido gera a via de fato, pela mesma regra da segunda via do cadastro: via seguinte, as anteriores
    * canceladas (nunca apagadas), validade pelo parâmetro da operadora limitada ao fim do contrato de prazo determinado.
    */
-  private static async novaVia(
+  static async novaVia(
     tx: TxOperacao,
     hoje: string,
     pedido: number,

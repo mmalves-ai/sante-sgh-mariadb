@@ -179,9 +179,11 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // motivo); a contagem acompanha.
 // C1-030 (04-HOT linha 133): o item "Refeição do acompanhante: direito e cobrança" do serviço de nutrição entrou à
 // mão (mesmo motivo); a contagem acompanha.
+// C3-027 (08-SGO L114, F8): o item "Portais externos" da operadora própria entrou à mão (mesmo motivo); a contagem
+// acompanha.
 // C2-113 (08-SGO linha 95, F7): o item "Declaração de saúde, CPT e portabilidade" da operadora própria entrou à mão
 // (mesmo motivo; F7 vai como fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":529,"M":198,"P":57,"N":274};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":530,"M":198,"P":57,"N":275};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -487,6 +489,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.trocas-tiss-com-os-prestadores","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Trocas TISS com os prestadores"],"titulo":"Trocas TISS com os prestadores","selo":"N","fase":7,"rota":"/operadora/troca-tiss","permissao":"operadora.conta.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.comercial-propostas-e-comissoes","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Comercial: propostas e comissões"],"titulo":"Comercial: propostas e comissões","selo":"N","fase":7,"rota":"/operadora/comercial","permissao":"operadora.comercial.ler"},
   {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.remuneracao-e-pagamento-do-prestador","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Remuneração e pagamento do prestador"],"titulo":"Remuneração e pagamento do prestador","selo":"N","fase":7,"rota":"/operadora/remuneracao-rede","permissao":"operadora.prestador.ler"},
+  {"id":"faturamento.operadora-propria-sgo-se-a-rede-tiver-plano.portais-externos","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Operadora própria","Portais externos"],"titulo":"Portais externos","selo":"N","fase":7,"rota":"/operadora/portais","permissao":"operadora.beneficiario.ler"},
   {"id":"financeiro.contas-a-pagar.titulos-a-pagar-fornecedores-medicos-prestadores","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Títulos a pagar"],"titulo":"Títulos a pagar","selo":"M","fase":3,"rota":"/financeiro/pagar/titulos","permissao":"financeiro.tituloPagar.ler"},
   {"id":"financeiro.contas-a-pagar.borderos-de-pagamento","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Borderôs de pagamento"],"titulo":"Borderôs de pagamento","selo":"M","fase":3,"rota":"/financeiro/pagar/borderos","permissao":"financeiro.bordero.ler"},
   {"id":"financeiro.contas-a-pagar.adiantamentos-a-fornecedores-e-medicos","area":"FINANCEIRO","grupo":null,"caminho":["Financeiro","Contas a pagar","Adiantamentos a fornecedores e médicos"],"titulo":"Adiantamentos a fornecedores e médicos","selo":"M","fase":3,"rota":"/financeiro/pagar/adiantamentos","permissao":"financeiro.adiantamento.ler"},

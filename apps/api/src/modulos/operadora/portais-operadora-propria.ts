@@ -5,7 +5,8 @@
 //   A conta liga a identidade única da plataforma (usuario_id) ao titular; senha e segundo fator nunca ficam aqui.
 // - Solicitações (solicitacao_portal_beneficiario): abertas pelo portal, sempre sobre o beneficiário da conta (o próprio
 //   e os dependentes dele, ou os da contratante), com o número SP; decididas pela operadora; canceladas só pelo dono.
-//   A solicitação nunca altera o cadastro sozinha.
+//   A solicitação nunca altera o cadastro sozinha: só a aprovação da operadora aplica o efeito (C3-027) — a segunda via
+//   gera o pedido de cartão (canal portal) e a via nova, e a reativação volta o beneficiário ao ativo com o movimento.
 // - Exclusão em lote da contratante (movimentacao_lote_contratante e _item): crítica linha a linha pelo domínio e, no
 //   processamento, a exclusão dos aceitos em beneficiario_plano (situação, data e motivo) com a versão de cada um.
 // - Cartão digital: leitura do beneficiário da conta. Mensagens: o canal da plataforma está desligado (DP-44 a).
@@ -20,9 +21,11 @@ import {
   celularNormalizado,
   type ContaPortalEntrada,
   criticarExclusaoLote,
+  efeitoDaAprovacaoPortal,
   type LinhaExclusaoLote,
   problemasDaContaPortal,
   problemasDaSolicitacaoPortal,
+  problemasDoEfeitoPortal,
   proximaSituacaoContaPortal,
   proximaSituacaoSolicitacaoPortal,
   type SituacaoContaPortal,
@@ -30,9 +33,17 @@ import {
   situacaoDoLoteCriticado,
   situacaoDoLoteProcessado,
   type SolicitacaoPortalEntrada,
+  type TipoSolicitacaoPortal,
   type TipoPortalOperadora,
 } from '@sgh/dominio-operadora';
-import { definirOperacao, type Executor, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
+import {
+  definirOperacao,
+  type Executor,
+  garantirSequencia,
+  type Leitor,
+  recusa,
+  type TxOperacao,
+} from '@sgh/nucleo';
 import { z } from 'zod';
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
@@ -49,6 +60,7 @@ import {
   texto,
   textoObrigatorio,
 } from './apoio-banco.js';
+import { PortaCadastroComplementarPropria } from './cadastro-complementar-porta-propria.js';
 
 export const PORTA_PORTAIS_OPERADORA = Symbol('PORTA_PORTAIS_OPERADORA');
 
@@ -60,6 +72,10 @@ export const TABELAS_PORTAIS_OPERADORA = [
   'movimentacao_lote_contratante',
   'movimentacao_lote_contratante_item',
   'beneficiario_plano',
+  'solicitacao_cartao_beneficiario',
+  'cartao_beneficiario',
+  'movimento_cadastral_beneficiario',
+  'sequencia_negocio',
 ] as const;
 
 export const METODOS_PORTAIS_OPERADORA = new Set([
@@ -561,7 +577,8 @@ export class PortaPortaisOperadoraPropria {
       trilha,
       async (tx, est) => {
         const [x] = await tx.consultarParaAtualizar(
-          `SELECT id, situacao, conta_portal_beneficiario_id, conta_portal_contratante_id
+          `SELECT id, situacao, conta_portal_beneficiario_id, conta_portal_contratante_id, tipo_solicitacao,
+                  beneficiario_plano_id, data_efeito, dados_solicitados
              FROM solicitacao_portal_beneficiario WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
           [a.id, est],
         );
@@ -577,7 +594,12 @@ export class PortaPortaisOperadoraPropria {
           a.resultado,
         );
         if ('problema' in r) throw recusaDe([r.problema]);
+        const efeito =
+          r.situacao === 'aprovada' && !a.dono
+            ? await PortaPortaisOperadoraPropria.aplicarAprovacao(tx, est, a.id, x)
+            : {};
         const versao = await tx.alterar('solicitacao_portal_beneficiario', a.id, a.versao, {
+          ...efeito,
           situacao: r.situacao,
           ...(a.dono ? {} : { analisado_em: new Date(), analisado_por_usuario_id: a.analista }),
           ...(a.resultado?.trim() ? { resultado: a.resultado.trim().slice(0, 1000) } : {}),
@@ -585,6 +607,117 @@ export class PortaPortaisOperadoraPropria {
         return { id: a.id, versao, situacao: r.situacao };
       },
     );
+  }
+
+  /**
+   * O efeito da aprovação no cadastro, na mesma transação da decisão. Segunda via: o pedido de cartão (canal portal,
+   * motivo pedido nos dados ou o primeiro motivo ativo, taxa pelo parâmetro da operadora) já emitido pela mesma regra do
+   * balcão (via seguinte, anteriores canceladas, via_cartao sobe). Reativação: o excluído volta ao ativo, sem data nem
+   * motivo de exclusão, com o movimento cadastral de reativação (canal portal) na data pedida.
+   */
+  private static async aplicarAprovacao(
+    tx: TxOperacao,
+    est: number,
+    solicitacao: number,
+    x: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const efeito = efeitoDaAprovacaoPortal(textoObrigatorio(x['tipo_solicitacao']) as TipoSolicitacaoPortal);
+    if (efeito === null) return {};
+    const ben = inteiro(x['beneficiario_plano_id']);
+    const [b] =
+      ben === null
+        ? []
+        : await tx.consultarParaAtualizar(
+            `SELECT b.id, b.versao, b.situacao, b.contrato_plano_id, cp.produto_plano_id, cp.operadora_saude_id,
+                    COALESCE(m.impede_reativacao, FALSE) AS impede
+               FROM beneficiario_plano b JOIN contrato_plano cp ON cp.id = b.contrato_plano_id
+               LEFT JOIN motivo_movimento_cadastral m ON m.id = b.motivo_movimento_cadastral_id
+              WHERE b.id = ? AND cp.estabelecimento_id = ? AND b.excluido_em IS NULL`,
+            [ben, est],
+          );
+    const problemas = problemasDoEfeitoPortal(efeito, {
+      situacaoBeneficiario: b ? textoObrigatorio(b['situacao']) : null,
+      motivoImpedeReativacao: b ? booleano(b['impede']) : false,
+    });
+    if (problemas.length || !b || ben === null) throw recusaDe(problemas);
+    const hoje = await hojeDe(tx);
+    if (efeito === 'reativacao') {
+      await tx.alterar('beneficiario_plano', ben, Number(b['versao']), {
+        situacao: 'ativo',
+        data_exclusao: null,
+        motivo_movimento_cadastral_id: null,
+      });
+      await tx.incluir('movimento_cadastral_beneficiario', {
+        beneficiario_plano_id: ben,
+        operacao: 'alteracao',
+        dados: JSON.stringify({ tipo: 'reativacao', solicitacaoPortal: solicitacao }),
+        ocorrido_em: new Date(),
+        usuario_id: tx.contexto.usuario,
+        tipo_movimento: 'reativacao',
+        motivo_movimento_cadastral_id: null,
+        data_efeito: dataIso(x['data_efeito']) ?? hoje,
+        situacao: 'efetivado',
+        contrato_plano_id: inteiro(b['contrato_plano_id']),
+        produto_plano_id: inteiro(b['produto_plano_id']),
+        canal: 'portal',
+      });
+      return {};
+    }
+    const dados = (() => {
+      try {
+        const v: unknown =
+          typeof x['dados_solicitados'] === 'string'
+            ? JSON.parse(x['dados_solicitados'])
+            : x['dados_solicitados'];
+        return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+      } catch {
+        return {};
+      }
+    })();
+    const pedido = inteiro(dados['motivoCartao']);
+    const [motivo] = await tx.consultar(
+      `SELECT id, cobra_taxa FROM motivo_solicitacao_cartao WHERE ativo = TRUE
+          ${pedido !== null ? 'AND id = ?' : ''} ORDER BY id LIMIT 1`,
+      pedido !== null ? [pedido] : [],
+    );
+    if (!motivo)
+      throw recusa('dominio-nao-cadastrado', 'O motivo da segunda via do cartão não está cadastrado.', {
+        campos: ['motivo'],
+      });
+    const op = Number(b['operadora_saude_id']);
+    const cobra = Boolean(
+      await PortaCadastroComplementarPropria.parametro(tx, op, 'cobra_segunda_via_cartao', hoje),
+    );
+    const valor = cobra
+      ? Number(await PortaCadastroComplementarPropria.parametro(tx, op, 'valor_taxa_segunda_via', hoje))
+      : null;
+    await garantirSequencia(
+      tx,
+      { tipo: 'solicitacao_cartao_beneficiario', estabelecimento: est },
+      { usuario: tx.contexto.usuario, agora: new Date() },
+    );
+    const numero = await tx.proximoNumero('solicitacao_cartao_beneficiario');
+    const pedidoCartao = await tx.incluir('solicitacao_cartao_beneficiario', {
+      estabelecimento_id: est,
+      numero: numero.formatado,
+      beneficiario_plano_id: ben,
+      primeira_via: false,
+      motivo_solicitacao_cartao_id: Number(motivo['id']),
+      situacao_solicitacao_cartao_id: await PortaCadastroComplementarPropria.situacaoCartao(tx, 'emitido'),
+      canal: 'portal',
+      cobra_taxa: cobra,
+      valor_taxa: valor,
+      solicitado_em: new Date(),
+      emitido_em: new Date(),
+      observacao: `Solicitação do portal SP${String(solicitacao).padStart(8, '0')}`,
+    });
+    const cartao = await PortaCadastroComplementarPropria.novaVia(tx, hoje, pedidoCartao, {
+      beneficiario_plano_id: ben,
+      motivo_solicitacao_cartao_id: Number(motivo['id']),
+      cobra_taxa: cobra,
+    });
+    await tx.alterar('solicitacao_cartao_beneficiario', pedidoCartao, 1, { cartao_beneficiario_id: cartao });
+    return { solicitacao_cartao_beneficiario_id: pedidoCartao };
   }
 
   // ── Exclusão em lote da contratante ─────────────────────────────────────────────────────────────

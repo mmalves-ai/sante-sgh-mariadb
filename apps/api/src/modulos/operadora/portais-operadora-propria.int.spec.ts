@@ -42,6 +42,17 @@ describe.skipIf(SEM_BANCO)('porta própria dos portais da operadora (MariaDB)', 
       await e.executar("DELETE FROM conta_portal_beneficiario WHERE login LIKE 'c3027%'");
       await e.executar("DELETE FROM conta_portal_contratante WHERE login LIKE 'c3027%'");
       await e.executar("DELETE FROM conta_portal_corretor WHERE login LIKE 'c3027%'");
+      const doClone = "(SELECT id FROM beneficiario_plano WHERE matricula = 'C3027-L1')";
+      await e.executar(
+        `UPDATE solicitacao_cartao_beneficiario SET cartao_beneficiario_id = NULL WHERE beneficiario_plano_id IN ${doClone}`,
+      );
+      await e.executar(`DELETE FROM cartao_beneficiario WHERE beneficiario_plano_id IN ${doClone}`);
+      await e.executar(
+        `DELETE FROM solicitacao_cartao_beneficiario WHERE beneficiario_plano_id IN ${doClone}`,
+      );
+      await e.executar(
+        `DELETE FROM movimento_cadastral_beneficiario WHERE beneficiario_plano_id IN ${doClone}`,
+      );
       await e.executar("DELETE FROM beneficiario_plano WHERE matricula = 'C3027-L1'");
     });
 
@@ -443,5 +454,82 @@ describe.skipIf(SEM_BANCO)('porta própria dos portais da operadora (MariaDB)', 
       T('movimentacao_lote_contratante', 'x'),
     );
     expect(r2).toMatchObject({ situacao: 'rejeitado', aceitos: 0, rejeitados: 1 });
+  });
+
+  it('aprovação aplica o efeito: reativação volta o excluído ao ativo; segunda via gera o pedido e a via nova', async () => {
+    const c = contexto(m);
+    const abrir = (tipo: string) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'tc3027' }, async (e) => {
+        const n = await e.uma<{ n: number }>(
+          'SELECT COUNT(*) AS n FROM motivo_solicitacao_cartao WHERE ativo = TRUE',
+        );
+        if (!Number(n?.n))
+          await e.inserir(
+            "INSERT INTO motivo_solicitacao_cartao (codigo, descricao, criado_em) VALUES ('C3027-2V', 'Perda sintética', NOW(3))",
+          );
+        const conta = await e.uma<{ id: number }>(
+          "SELECT id FROM conta_portal_contratante WHERE login LIKE 'c3027%' ORDER BY id LIMIT 1",
+        );
+        return e.inserir(
+          `INSERT INTO solicitacao_portal_beneficiario (estabelecimento_id, numero, tipo_solicitacao, situacao,
+             conta_portal_contratante_id, beneficiario_plano_id, data_efeito, criado_em)
+           VALUES (?, ?, ?, 'aberta', ?, ?, '2026-12-01', NOW(3))`,
+          [m.est, `C3027-${Math.random().toString(36).slice(2, 12)}`, tipo, Number(conta?.id), clone],
+        );
+      });
+    const aprovar = (id: number) =>
+      porta.decidirSolicitacao(
+        c,
+        { id, versao: 1, acao: 'aprovar', resultado: null, analista: m.usuario },
+        T('solicitacao_portal_beneficiario', 'operadora.portal.solicitacao-aprovada'),
+      );
+    // o clone saiu excluído pelo lote do teste anterior
+    const [antes] = await ler('SELECT situacao, via_cartao FROM beneficiario_plano WHERE id = ?', [clone]);
+    expect(antes?.['situacao']).toBe('excluido');
+    const segundaNoExcluido = await abrir('segunda_via_cartao');
+    expect(await aprovar(segundaNoExcluido).catch(codigoDe)).toBe('beneficiario-inativo');
+
+    const re = await aprovar(await abrir('reativacao_beneficiario'));
+    expect(re.situacao).toBe('aprovada');
+    const [b] = await ler(
+      'SELECT situacao, data_exclusao, motivo_movimento_cadastral_id FROM beneficiario_plano WHERE id = ?',
+      [clone],
+    );
+    expect(b).toMatchObject({ situacao: 'ativo', data_exclusao: null, motivo_movimento_cadastral_id: null });
+    const mov = await ler(
+      "SELECT tipo_movimento, canal, data_efeito, situacao FROM movimento_cadastral_beneficiario WHERE beneficiario_plano_id = ? AND tipo_movimento = 'reativacao'",
+      [clone],
+    );
+    expect(mov).toHaveLength(1);
+    expect(mov[0]).toMatchObject({ canal: 'portal', situacao: 'efetivado' });
+    expect(String(mov[0]?.['data_efeito'])).toContain('2026');
+    expect(await trilhas('solicitacao_portal_beneficiario', re.id)).toBe(1);
+    const reDeNovo = await abrir('reativacao_beneficiario');
+    expect(await aprovar(reDeNovo).catch(codigoDe)).toBe('beneficiario-ativo');
+
+    const via = Number(antes?.['via_cartao'] ?? 1);
+    const sv = await aprovar(await abrir('segunda_via_cartao'));
+    const [d] = await ler(
+      'SELECT situacao, solicitacao_cartao_beneficiario_id AS pedido FROM solicitacao_portal_beneficiario WHERE id = ?',
+      [sv.id],
+    );
+    expect(d?.['situacao']).toBe('aprovada');
+    const [pc] = await ler(
+      `SELECT p.canal, p.primeira_via, p.beneficiario_plano_id, p.cartao_beneficiario_id, s.codigo
+         FROM solicitacao_cartao_beneficiario p JOIN situacao_solicitacao_cartao s ON s.id = p.situacao_solicitacao_cartao_id
+        WHERE p.id = ?`,
+      [Number(d?.['pedido'])],
+    );
+    expect(pc).toMatchObject({ canal: 'portal', codigo: 'emitido' });
+    expect(Number(pc?.['primeira_via'])).toBe(0);
+    expect(Number(pc?.['beneficiario_plano_id'])).toBe(clone);
+    const [cv] = await ler('SELECT via, situacao FROM cartao_beneficiario WHERE id = ?', [
+      Number(pc?.['cartao_beneficiario_id']),
+    ]);
+    const [depois] = await ler('SELECT via_cartao FROM beneficiario_plano WHERE id = ?', [clone]);
+    expect(Number(depois?.['via_cartao'])).toBeGreaterThan(via);
+    expect(cv).toMatchObject({ situacao: 'emitido' });
+    expect(Number(cv?.['via'])).toBe(Number(depois?.['via_cartao']));
+    expect(await trilhas('solicitacao_portal_beneficiario', sv.id)).toBe(1);
   });
 });

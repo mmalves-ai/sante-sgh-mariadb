@@ -219,6 +219,33 @@ export function problemasDaSolicitacaoPortal(
   return p;
 }
 
+/**
+ * O efeito da aprovação no cadastro (C3-027). A segunda via gera o pedido de cartão pelo portal e a via nova (a via do
+ * beneficiário sobe); a reativação volta o beneficiário excluído ao ativo, com o movimento cadastral. Os demais tipos
+ * (inclusão, alteração, exclusão, transferência, reembolso) seguem pela tela própria do cadastro, com a solicitação
+ * como protocolo.
+ */
+export type EfeitoAprovacaoPortal = 'segunda_via' | 'reativacao' | null;
+export function efeitoDaAprovacaoPortal(tipo: TipoSolicitacaoPortal): EfeitoAprovacaoPortal {
+  if (tipo === 'segunda_via_cartao') return 'segunda_via';
+  if (tipo === 'reativacao_beneficiario') return 'reativacao';
+  return null;
+}
+
+/** O que impede aplicar a aprovação ao beneficiário: a via só ao ativo; a reativação só ao excluído sem motivo que a impeça. */
+export function problemasDoEfeitoPortal(
+  efeito: Exclude<EfeitoAprovacaoPortal, null>,
+  f: { readonly situacaoBeneficiario: string | null; readonly motivoImpedeReativacao: boolean },
+): ProblemaPortalOperadora[] {
+  if (f.situacaoBeneficiario === null) return [{ codigo: 'beneficiario-obrigatorio', campo: 'beneficiario' }];
+  if (efeito === 'segunda_via')
+    return f.situacaoBeneficiario === 'ativo'
+      ? []
+      : [{ codigo: 'beneficiario-inativo', campo: 'beneficiario' }];
+  if (f.situacaoBeneficiario !== 'excluido') return [{ codigo: 'beneficiario-ativo', campo: 'beneficiario' }];
+  return f.motivoImpedeReativacao ? [{ codigo: 'motivo-impede-reativacao', campo: 'beneficiario' }] : [];
+}
+
 const DECIDIDAS: readonly SituacaoSolicitacaoPortal[] = ['aprovada', 'reprovada', 'cancelada', 'concluida'];
 export const solicitacaoDecidida = (s: SituacaoSolicitacaoPortal): boolean => DECIDIDAS.includes(s);
 
