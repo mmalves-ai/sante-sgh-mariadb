@@ -5,6 +5,7 @@ export const mensagensRegrasCoparticipacao = {
   ajuda:
     'A regra geral vale para todo evento; a de tipo de guia, grupo, procedimento ou regime vale só para ele e prevalece sobre a geral. Os tetos limitam o que o beneficiário paga por evento, no mês e no ano.',
   voltar: 'Voltar à cobrança',
+  franquia: 'Regras de franquia',
   somenteLeitura: 'Somente leitura: gravar exige a permissão de editar produto e contrato.',
   operadora: 'Operadora',
   regraDo: 'Regra do',

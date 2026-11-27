@@ -290,6 +290,8 @@ export interface EntradaCobranca {
   readonly parcela: number | null;
   readonly parcelas: number | null;
   readonly itens: readonly EntradaItemCobranca[];
+  /** O tipo de lançamento dos itens (id); sem ele, o do tipo da cobrança (a franquia usa o da regra, C2-116). */
+  readonly lancamento?: number;
   readonly reajustes?: readonly { readonly competencia: string; readonly percentual: number }[];
 }
 

@@ -45,6 +45,13 @@ export const rotasOperadora: RouteRecordRaw[] = [
     component: () => import('./telas/RegrasCoparticipacaoTela.vue'),
     meta: { permissao: 'operadora.beneficiario.ler' },
   },
+  // 08-SGO L98 (C2-116, decisão 56): regras de franquia do plano e do contrato (limite da janela, teto por guia).
+  {
+    path: '/operadora/franquia-regras',
+    name: 'operadora.franquia-regras',
+    component: () => import('./telas/RegrasFranquiaTela.vue'),
+    meta: { permissao: 'operadora.beneficiario.ler' },
+  },
   // 08-SGO L106 (C2-047): reembolso ao beneficiário (pedido, análise com glosa, pagamento, tabela por município).
   {
     path: '/operadora/reembolsos',

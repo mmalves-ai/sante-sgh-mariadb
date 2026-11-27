@@ -6,7 +6,7 @@
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
 // Melhoria: o contexto é o do @sgh/nucleo (cliente, estabelecimento e usuário por id) e o estabelecimento de cada
 // gravação vem da sessão, nunca da entrada.
-import type { EventoCoparticipacao } from '@sgh/dominio-operadora';
+import type { EventoCoparticipacao, RegraFranquia } from '@sgh/dominio-operadora';
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import {
@@ -46,6 +46,15 @@ export interface GravadorCobranca {
     regra: DadosContratoCobranca['coparticipacao'];
     acumulado: { mes: number; ano: number };
   }>;
+  /**
+   * A regra de franquia vigente na data do evento (a do contrato prevalece sobre a do plano), o tipo de lançamento dos
+   * itens dela e o que o beneficiário já acumulou na janela, lidos com o beneficiário travado (C2-116). Nulo: sem regra.
+   */
+  franquiaTravada(x: { contrato: number; beneficiario: number; dataEvento: string }): Promise<{
+    regra: RegraFranquia & { readonly id: number; readonly codigo: string };
+    lancamento: number;
+    acumulado: number;
+  } | null>;
   baixar(b: {
     id: number;
     versao: number;

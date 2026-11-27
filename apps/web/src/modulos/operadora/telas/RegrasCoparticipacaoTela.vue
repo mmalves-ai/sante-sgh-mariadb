@@ -210,6 +210,7 @@ const cobranca = (r: RegraCoparticipacao) =>
     <h1 id="copart-titulo">{{ t('titulo') }}</h1>
     <p class="copart__ajuda">{{ t('ajuda') }}</p>
     <RouterLink to="/operadora/cobranca" data-testid="link-cobranca">{{ t('voltar') }}</RouterLink>
+    <RouterLink to="/operadora/franquia-regras" data-testid="link-franquia">{{ t('franquia') }}</RouterLink>
     <SanteAlerta
       v-if="!podeGravar"
       :texto="t('somenteLeitura')"

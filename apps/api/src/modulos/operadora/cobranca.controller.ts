@@ -8,6 +8,7 @@
 //   POST /api/operadora/cobrancas/mensalidades/previa      prévia das mensalidades da competência (nada é gravado)
 //   POST /api/operadora/cobrancas/mensalidades             operadora.gerarMensalidades
 //   POST /api/operadora/cobrancas/coparticipacao           operadora.lancarCoparticipacao
+//   POST /api/operadora/cobrancas/franquia                 operadora.lancarFranquia (C2-116)
 //   POST /api/operadora/cobrancas/avulsa                   operadora.lancarCobrancaAvulsa
 //   POST /api/operadora/cobrancas/:id/baixa                operadora.baixarCobranca
 //   POST /api/operadora/cobrancas/:id/cancelamento         operadora.cancelarCobranca
@@ -34,6 +35,7 @@ import {
   esquemaGerarMensalidades,
   esquemaLancarAvulsa,
   esquemaLancarCoparticipacao,
+  esquemaLancarFranquia,
   esquemaMotivoCobranca,
   esquemaNotificacao,
   esquemaReajuste,
@@ -154,6 +156,14 @@ export class CobrancaOperadoraController {
   @AuditadoNoHandler('operadora.cobranca.gerada (coparticipação) com a trilha_auditoria na mesma transação')
   coparticipacao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCobranca> {
     return this.servico.coparticipacao(sessaoDe(req), corpo(esquemaLancarCoparticipacao, b));
+  }
+
+  @Post(R.franquia.caminho)
+  @HttpCode(201)
+  @Permissao(R.franquia.permissao)
+  @AuditadoNoHandler('operadora.cobranca.gerada (franquia) com a trilha_auditoria na mesma transação')
+  franquia(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCobranca> {
+    return this.servico.franquia(sessaoDe(req), corpo(esquemaLancarFranquia, b));
   }
 
   @Post(R.avulsa.caminho)

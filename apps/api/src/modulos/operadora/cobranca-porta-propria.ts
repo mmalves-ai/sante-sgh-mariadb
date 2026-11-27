@@ -58,6 +58,7 @@ import {
   type TotaisCobranca,
   LIMITE_CONTRATOS_GERACAO,
 } from './dados-portas.js';
+import { acumuladoDaFranquia, franquiaVigenteDoContrato } from './regras-franquia-propria.js';
 
 export const TABELAS_COBRANCA = [
   'fatura_plano',
@@ -850,6 +851,33 @@ export class PortaCobrancaOperadoraPropria
           acumulado: await acumuladoCoparticipacao(tx, est, x.beneficiario, x.competencia, tx),
         };
       },
+      async franquiaTravada(x) {
+        const [b] = await tx.consultarParaAtualizar(
+          `SELECT b.id FROM beneficiario_plano b
+            WHERE b.id = ? AND b.contrato_plano_id = ? AND b.excluido_em IS NULL`,
+          [x.beneficiario, x.contrato],
+        );
+        if (!b) throw inexistente('O beneficiário');
+        const v = await franquiaVigenteDoContrato(tx, est, x.contrato, x.dataEvento);
+        if (!v) return null;
+        let lancamento = v.regra.tipoLancamento;
+        if (lancamento === null) {
+          const t = await tx.uma(
+            "SELECT id FROM tipo_lancamento_fatura WHERE codigo = 'franquia' AND ativo = TRUE LIMIT 1",
+          );
+          if (!t)
+            throw recusa(
+              'tipo-lancamento-ausente',
+              'O tipo de lançamento "franquia" não está cadastrado. Cadastre-o na configuração da cobrança ou informe-o na regra.',
+            );
+          lancamento = num(t['id']);
+        }
+        return {
+          regra: v.regra,
+          lancamento,
+          acumulado: await acumuladoDaFranquia(tx, est, x.beneficiario, v.regra, v.janela),
+        };
+      },
       async baixar(b) {
         const f = await fatura(b.id);
         if (!['aberta', 'emitida'].includes(txt(f['situacao'])))
@@ -957,9 +985,9 @@ async function incluirFatura(
       'forma-cobranca-ausente',
       'O contrato não tem forma de cobrança vigente. Cadastre-a no contrato.',
     );
-  const lanc = await tx.uma('SELECT id FROM tipo_lancamento_fatura WHERE codigo = ? AND ativo = TRUE', [
-    tipo,
-  ]);
+  const lanc = e.lancamento
+    ? { id: e.lancamento }
+    : await tx.uma('SELECT id FROM tipo_lancamento_fatura WHERE codigo = ? AND ativo = TRUE', [tipo]);
   if (!lanc)
     throw recusa(
       'tipo-lancamento-ausente',

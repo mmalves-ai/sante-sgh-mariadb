@@ -440,35 +440,104 @@ export class PortaRegrasFranquiaPropria {
         inicio: dataIso(b['inicio']) ?? dataEvento,
         fim: dataIso(b['fim']),
       });
-      let acumulado = 0;
-      if (regra.periodoAcumulo !== 'evento') {
-        const porDia = regra.periodoAcumulo === 'dia';
-        const s = await l.uma(
-          `SELECT COALESCE(SUM(i.valor), 0) AS total
-             FROM fatura_plano_item i
-             JOIN fatura_plano f ON f.id = i.fatura_plano_id
-            WHERE i.beneficiario_plano_id = ? AND f.estabelecimento_id = ?
-              AND f.situacao <> 'cancelada' AND f.excluido_em IS NULL AND i.excluido_em IS NULL
-              AND i.natureza = 'debito'
-              AND (i.tipo_lancamento_fatura_id = ?
-                   OR (? IS NULL AND i.tipo_lancamento_fatura_id IN (SELECT t.id FROM tipo_lancamento_fatura t WHERE t.codigo = 'franquia')))
-              AND ${porDia ? 'DATE(i.criado_em)' : 'COALESCE(i.competencia_referencia, f.competencia)'} BETWEEN ? AND ?`,
-          [
-            beneficiario,
-            est,
-            inteiro(r['tipo_lancamento_fatura_id']),
-            inteiro(r['tipo_lancamento_fatura_id']),
-            porDia ? janela.inicio : `${janela.inicio.slice(0, 7)}-01`,
-            janela.fim,
-          ],
-        );
-        acumulado = numero(s?.['total']) ?? 0;
-      }
+      const acumulado = await acumuladoDaFranquia(
+        l,
+        est,
+        beneficiario,
+        { ...regra, tipoLancamento: inteiro(r['tipo_lancamento_fatura_id']) },
+        janela,
+      );
       const restante =
         regra.valor === null ? null : Math.round(Math.max(0, regra.valor - acumulado) * 100) / 100;
       return { regra: regra.id, janela, acumulado, restante };
     });
   }
+}
+
+/**
+ * O que o beneficiário já acumulou de franquia na janela: só lançamentos válidos (fatura cancelada ou item excluído não
+ * contam), do tipo de lançamento da regra ou, sem ele, do "franquia". Na janela por evento é sempre zero.
+ */
+export async function acumuladoDaFranquia(
+  l: Leitor,
+  est: number,
+  beneficiario: number,
+  regra: { readonly periodoAcumulo: PeriodoAcumulo; readonly tipoLancamento: number | null },
+  janela: { inicio: string; fim: string },
+): Promise<number> {
+  if (regra.periodoAcumulo === 'evento') return 0;
+  const porDia = regra.periodoAcumulo === 'dia';
+  const s = await l.uma(
+    `SELECT COALESCE(SUM(i.valor), 0) AS total
+       FROM fatura_plano_item i
+       JOIN fatura_plano f ON f.id = i.fatura_plano_id
+      WHERE i.beneficiario_plano_id = ? AND f.estabelecimento_id = ?
+        AND f.situacao <> 'cancelada' AND f.excluido_em IS NULL AND i.excluido_em IS NULL
+        AND i.natureza = 'debito'
+        AND (i.tipo_lancamento_fatura_id = ?
+             OR (? IS NULL AND i.tipo_lancamento_fatura_id IN (SELECT t.id FROM tipo_lancamento_fatura t WHERE t.codigo = 'franquia')))
+        AND ${porDia ? 'DATE(i.criado_em)' : 'COALESCE(i.competencia_referencia, f.competencia)'} BETWEEN ? AND ?`,
+    [
+      beneficiario,
+      est,
+      regra.tipoLancamento,
+      regra.tipoLancamento,
+      porDia ? janela.inicio : `${janela.inicio.slice(0, 7)}-01`,
+      janela.fim,
+    ],
+  );
+  return numero(s?.['total']) ?? 0;
+}
+
+/**
+ * A regra de franquia vigente na data do evento para o contrato (C2-116, decisão 56): a do contrato prevalece sobre a
+ * do plano comercializado do produto dele; entre as do mesmo alvo, a de início mais recente. Só a regra geral (sem grupo
+ * nem regime) entra no lançamento avulso. Nulo: sem regra, nada é lançado e nada trava.
+ */
+export async function franquiaVigenteDoContrato(
+  l: Leitor,
+  est: number,
+  contrato: number,
+  dataEvento: string,
+): Promise<{
+  regra: RegraFranquia & {
+    readonly id: number;
+    readonly codigo: string;
+    readonly tipoLancamento: number | null;
+  };
+  janela: { inicio: string; fim: string };
+} | null> {
+  const k = await l.uma(
+    `SELECT k.id, k.produto_plano_id, k.inicio_vigencia AS inicio, k.fim_vigencia AS fim
+       FROM contrato_plano k WHERE k.id = ? AND k.estabelecimento_id = ? AND k.excluido_em IS NULL`,
+    [contrato, est],
+  );
+  if (!k) return null;
+  const r = await l.uma(
+    `${SELECT_REGRA}
+      WHERE r.ativo = TRUE AND r.vigencia_inicio <= ? AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= ?)
+        AND r.grupo_procedimento_operadora_id IS NULL AND r.regime_atendimento_rede_id IS NULL
+        AND (r.contrato_plano_id = ?
+             OR (r.contrato_plano_id IS NULL AND r.plano_comercializado_id IN (
+                   SELECT pc.id FROM plano_comercializado pc WHERE pc.produto_plano_id = ? AND pc.estabelecimento_id = ?)))
+      ORDER BY r.contrato_plano_id IS NULL, r.vigencia_inicio DESC, r.id DESC
+      LIMIT 1`,
+    [dataEvento, dataEvento, contrato, inteiro(k['produto_plano_id']) ?? 0, est],
+  );
+  if (!r) return null;
+  const lida = regraLida(r);
+  return {
+    regra: {
+      ...regraDoDominio(lida),
+      id: lida.id,
+      codigo: lida.codigo,
+      tipoLancamento: inteiro(r['tipo_lancamento_fatura_id']),
+    },
+    janela: janelaDeAcumulo(lida.periodoAcumulo, dataEvento, {
+      inicio: dataIso(k['inicio']) ?? dataEvento,
+      fim: dataIso(k['fim']),
+    }),
+  };
 }
 
 export const METODOS_REGRAS_FRANQUIA: ReadonlySet<string> = new Set([

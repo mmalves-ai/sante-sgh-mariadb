@@ -22,6 +22,7 @@ import {
   type Inadimplente,
   type LancarAvulsaEntrada,
   type LancarCoparticipacaoEntrada,
+  type LancarFranquiaEntrada,
   MENSAGENS_COBRANCA,
   type MotivoCobrancaEntrada,
   type NotificacaoEntrada,
@@ -55,6 +56,8 @@ import {
   type CalculoCoparticipacao,
   calcularCoparticipacao,
   problemasDaCoparticipacao,
+  calcularFranquia,
+  type ResultadoFranquia,
 } from '@sgh/dominio-operadora';
 import { recusa } from '@sgh/nucleo';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
@@ -601,6 +604,79 @@ export class ServicoCobrancaOperadora {
     };
   }
 
+  /**
+   * Franquia do evento (C2-116, decisão 56): a regra vigente na data do atendimento e o acumulado da janela, lidos com o
+   * beneficiário travado, dão o que ele paga (calcularFranquia); a cobrança sai como fator moderador (tipo 2) com o item
+   * no tipo de lançamento da regra, que é o que o acumulado soma. Sem regra ou com franquia zero, recusa e nada grava.
+   */
+  async franquia(s: SessaoCadastro, e: LancarFranquiaEntrada): Promise<ResultadoCobranca> {
+    await this.exigirFatia(s);
+    const b = await this.porta.beneficiario(s.porta, e.beneficiario);
+    if (!b) throw naoEncontrada('Beneficiário');
+    const k = await this.contratoDe(s, b.contrato);
+    recusar(
+      problemasDoLancamento({ competencia: e.competencia, vencimento: e.vencimento }),
+      'Franquia não lançada',
+    );
+    const pagador = k.tipo === 1 ? (b.titular ?? b.id) : null;
+    let calculo: (ResultadoFranquia & { codigo: string }) | null = null;
+    const r = await this.gravar(
+      s,
+      E.operadoraCobrancaGerada.codigo,
+      'operadora.lancarFranquia',
+      T.cobranca,
+      () => `contrato:${k.id};competencia:${e.competencia};tipo:2;franquia`,
+      async (g) => {
+        const f = await g.franquiaTravada({ contrato: k.id, beneficiario: b.id, dataEvento: e.dataEvento });
+        if (!f) throw recusa('franquia-sem-regra', MENSAGENS_COBRANCA['franquia-sem-regra']!);
+        const x = calcularFranquia(
+          f.regra,
+          {
+            valor: e.valorEvento,
+            data: e.dataEvento,
+            diasInternacao: e.diasInternacao ?? null,
+            ambulatorialDuranteInternacao: e.ambulatorialDuranteInternacao ?? false,
+          },
+          f.acumulado,
+        );
+        if (x.cobrado <= 0) throw recusa('franquia-zero', MENSAGENS_COBRANCA['franquia-zero']!);
+        calculo = { ...x, codigo: f.regra.codigo };
+        return g.incluir({
+          operadora: k.operadora,
+          contrato: k.id,
+          beneficiario: pagador,
+          tipo: 2,
+          competencia: e.competencia,
+          descricao: `Franquia: ${e.descricao}`.slice(0, 200),
+          valor: x.cobrado,
+          vencimento: e.vencimento,
+          acordoOrigem: null,
+          parcela: null,
+          parcelas: null,
+          lancamento: f.lancamento,
+          itens: [
+            {
+              beneficiario: b.id,
+              descricao: `Franquia: ${e.descricao}`.slice(0, 200),
+              idade: null,
+              faixa: null,
+              valorBase: e.valorEvento,
+              valor: x.cobrado,
+            },
+          ],
+          por: s.login,
+        });
+      },
+    );
+    const feito = calculo as (ResultadoFranquia & { codigo: string }) | null;
+    const avisos: string[] = [];
+    if (feito && feito.motivo !== 'cobrada')
+      avisos.push(`${MENSAGENS_FRANQUIA_MOTIVO[feito.motivo]} Lançado R$ ${feito.cobrado.toFixed(2)}.`);
+    if (feito && feito.restante !== null)
+      avisos.push(`Falta R$ ${feito.restante.toFixed(2)} para o limite da franquia na janela.`);
+    return { ok: true, id: r.id, versao: r.versao, mensagem: 'Franquia lançada.', avisos };
+  }
+
   async avulsa(s: SessaoCadastro, e: LancarAvulsaEntrada): Promise<ResultadoCobranca> {
     await this.exigirFatia(s);
     const k = await this.contratoDe(s, e.contrato);
@@ -1035,6 +1111,16 @@ export class ServicoCobrancaOperadora {
 }
 
 /** Por que a mensagem ao beneficiário não sai (regra 6; a decisão de @sgh/dominio-operadora). */
+/** O motivo do cálculo da franquia, em texto da tela (aviso do lançamento). */
+export const MENSAGENS_FRANQUIA_MOTIVO: Readonly<Record<ResultadoFranquia['motivo'], string>> = {
+  cobrada: 'Franquia cobrada.',
+  'limite-atingido': 'A franquia foi limitada ao que faltava do limite da janela.',
+  'teto-por-guia': 'A franquia foi limitada ao teto por guia.',
+  'internacao-alem-dos-dias': 'A franquia alcançou só os dias de internação da regra.',
+  'ambulatorial-na-internacao': 'A guia ambulatorial na internação não entra na franquia.',
+  'fora-da-vigencia': 'O evento está fora da vigência da regra.',
+};
+
 export const MENSAGENS_MOTIVO_MENSAGEM: Readonly<
   Record<'chave-desligada' | 'sem-base-legal' | 'fora-de-producao', string>
 > = {

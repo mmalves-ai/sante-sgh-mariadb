@@ -143,6 +143,25 @@ export const esquemaLancarCoparticipacao = z
   .strict();
 export type LancarCoparticipacaoEntrada = z.infer<typeof esquemaLancarCoparticipacao>;
 
+/**
+ * Franquia do evento (C2-116, decisão 56): a regra de franquia vigente na data do atendimento (a do contrato prevalece
+ * sobre a do plano) e o que o beneficiário já acumulou na janela dizem quanto ele paga. Sem regra, nada é lançado.
+ */
+export const esquemaLancarFranquia = z
+  .object({
+    beneficiario: id,
+    competencia: esquemaCompetencia,
+    vencimento: data,
+    /** AAAA-MM-DD do atendimento: escolhe a regra vigente e a janela de acúmulo. */
+    dataEvento: data,
+    valorEvento: dinheiro,
+    descricao: textoMinimo(200, 5, 'Descreva o evento (5 caracteres ou mais).'),
+    diasInternacao: z.number().int().positive().nullable().optional(),
+    ambulatorialDuranteInternacao: z.boolean().optional(),
+  })
+  .strict();
+export type LancarFranquiaEntrada = z.infer<typeof esquemaLancarFranquia>;
+
 /** Cobrança avulsa ao contrato (por exemplo, a taxa de uma via da carteirinha), opcionalmente de um beneficiário. */
 export const esquemaLancarAvulsa = z
   .object({
@@ -504,6 +523,7 @@ export const ROTAS_OPERADORA_F2 = {
   },
   gerarMensalidades: { caminho: 'operadora/cobrancas/mensalidades', permissao: 'operadora.cobranca.gerar' },
   coparticipacao: { caminho: 'operadora/cobrancas/coparticipacao', permissao: 'operadora.cobranca.gerar' },
+  franquia: { caminho: 'operadora/cobrancas/franquia', permissao: 'operadora.cobranca.gerar' },
   avulsa: { caminho: 'operadora/cobrancas/avulsa', permissao: 'operadora.cobranca.gerar' },
   baixar: { caminho: 'operadora/cobrancas/:id/baixa', permissao: 'operadora.cobranca.gerar' },
   cancelar: { caminho: 'operadora/cobrancas/:id/cancelamento', permissao: 'operadora.cobranca.gerar' },
@@ -545,6 +565,10 @@ export const MENSAGENS_COBRANCA: Readonly<Record<string, string>> = {
   'beneficiario-de-outro-contrato': 'O beneficiário não é deste contrato.',
   'beneficiario-excluido': 'O beneficiário está excluído desde antes da competência.',
   'produto-sem-coparticipacao': 'O produto do beneficiário não tem coparticipação.',
+  'franquia-sem-regra':
+    'Não há regra de franquia vigente para o beneficiário na data do evento: nada a lançar.',
+  'franquia-zero':
+    'A franquia deste evento dá zero (limite da janela atingido, fora da vigência ou guia fora da regra).',
   'coparticipacao-zero': 'A coparticipação deste evento dá zero.',
   'coparticipacao-teto-atingido':
     'O beneficiário já atingiu o teto de coparticipação do mês ou do ano: nada a lançar neste evento.',

@@ -515,6 +515,8 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
         regra: (await this.contrato(c, x.contrato))?.coparticipacao ?? { tipo: 1, valor: null },
         acumulado: await this.coparticipacaoAcumulada(c, x.beneficiario, x.competencia),
       }),
+      // A sessão sintética não tem regra de franquia: sem regra, nada é lançado (decisão 56).
+      franquiaTravada: async () => null,
       incluir: async (d: EntradaCobranca & { por: string }) => {
         if (
           d.tipo === 1 &&
