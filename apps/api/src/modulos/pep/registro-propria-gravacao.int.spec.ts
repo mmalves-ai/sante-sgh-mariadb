@@ -113,6 +113,39 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
     );
     await e.executar(`DELETE FROM documento_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar('DELETE FROM situacao_documento_prontuario WHERE codigo = ?', [`${P}-aguarda`]);
+    // 03-PEP L96: a classificação de risco gravada com o registro e o protocolo sintético do lote.
+    await e.executar(
+      `DELETE v FROM afericao_valor v JOIN afericao a ON a.id = v.afericao_id WHERE a.estabelecimento_id IN ${est}`,
+      [P],
+    );
+    await e.executar(`DELETE FROM afericao WHERE estabelecimento_id IN ${est}`, [P]);
+    for (const t of ['classificacao_risco_resposta', 'classificacao_risco_evento'])
+      await e.executar(
+        `DELETE x FROM ${t} x JOIN classificacao_risco c ON c.id = x.classificacao_risco_id
+          WHERE c.estabelecimento_id IN ${est}`,
+        [P],
+      );
+    await e.executar(`DELETE FROM classificacao_risco WHERE estabelecimento_id IN ${est}`, [P]);
+    const prot = 'IN (SELECT id FROM protocolo_classificacao_risco WHERE codigo = ?)';
+    const versaoProt = `IN (SELECT id FROM protocolo_classificacao_risco_versao WHERE protocolo_classificacao_risco_id ${prot})`;
+    await e.executar(
+      `DELETE d FROM discriminador_classificacao_risco d JOIN fluxograma_classificacao_risco f
+          ON f.id = d.fluxograma_classificacao_risco_id WHERE f.protocolo_classificacao_risco_versao_id ${versaoProt}`,
+      [`${PM}_PROT`],
+    );
+    await e.executar(
+      `DELETE FROM fluxograma_classificacao_risco WHERE protocolo_classificacao_risco_versao_id ${versaoProt}`,
+      [`${PM}_PROT`],
+    );
+    await e.executar(
+      `DELETE FROM protocolo_classificacao_estabelecimento WHERE protocolo_classificacao_risco_id ${prot}`,
+      [`${PM}_PROT`],
+    );
+    await e.executar(
+      `DELETE FROM protocolo_classificacao_risco_versao WHERE protocolo_classificacao_risco_id ${prot}`,
+      [`${PM}_PROT`],
+    );
+    await e.executar('DELETE FROM protocolo_classificacao_risco WHERE codigo = ?', [`${PM}_PROT`]);
     await e.executar(`DELETE FROM registro_assistencial WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN ${est}`, [P]);
     await e.executar(`DELETE FROM configuracao_setor_prontuario WHERE estabelecimento_id IN ${est}`, [P]);
@@ -568,10 +601,6 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
       sequencia: 1,
       respondente: m.profissional,
       registro: resp.registro,
-    });
-    // A classificação de risco grava pela recepção: no registro, recusa fechada.
-    await expect(g.registrar(C, { ...registro(), classificacao: {} } as never, ctx())).rejects.toMatchObject({
-      problema: { codigo: 'pendente-modelo-proprio' },
     });
   }, 60_000);
 
@@ -1114,6 +1143,164 @@ describe.skipIf(SEM_BANCO)('RegistroPropriaGravacao contra o MariaDB (cliente f2
         e.executar('UPDATE atendimento SET setor_funcional_id = NULL WHERE id = ?', [m.atendimento]),
       );
     }
+  }, 90_000);
+
+  it('classificação de risco com o registro: classificacao_risco ligada ao registro, respostas, evento e aferição', async () => {
+    const prep = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${P}-classificacao` }, async (e) => {
+      const agora = new Date();
+      const nivel = async (cor: string) =>
+        Number(
+          (
+            await e.consultar(
+              "SELECT id FROM nivel_prioridade WHERE codigo = ? AND contexto = 'classificacao_risco' AND ativo = TRUE",
+              [cor],
+            )
+          )[0]?.['id'] ?? 0,
+        );
+      const protocolo = await e.inserir(
+        'INSERT INTO protocolo_classificacao_risco (codigo, nome, tipo, origem, criado_em) VALUES (?, ?, ?, ?, ?)',
+        [`${PM}_PROT`, 'Protocolo sintético do lote', 'manchester', 'sistema', agora],
+      );
+      const conteudo = {
+        discriminadores: [
+          { fluxograma: 'DOR_TORACICA', codigo: 'DOR_INTENSA' },
+          { fluxograma: 'DOR_TORACICA', codigo: 'SAT_BAIXA' },
+        ],
+      };
+      const versao = await e.inserir(
+        `INSERT INTO protocolo_classificacao_risco_versao (protocolo_classificacao_risco_id, operacao, dados, ocorrido_em,
+           numero_versao, vigencia_inicio, motivo_publicacao, publicado_por_usuario_id, criado_em)
+         VALUES (?, 'inclusao', ?, ?, '1', ?, 'Versão sintética', ?, ?)`,
+        [protocolo, JSON.stringify(conteudo), agora, agora, m.medico, agora],
+      );
+      await e.inserir(
+        `INSERT INTO protocolo_classificacao_estabelecimento (protocolo_classificacao_risco_id, estabelecimento_id,
+           vigencia_inicio, criado_em) VALUES (?, ?, ?, ?)`,
+        [protocolo, m.estabelecimento, agora, agora],
+      );
+      const fluxo = await e.inserir(
+        `INSERT INTO fluxograma_classificacao_risco (protocolo_classificacao_risco_versao_id, sequencia, codigo, nome,
+           criado_em) VALUES (?, 1, 'DOR_TORACICA', 'Dor torácica', ?)`,
+        [versao, agora],
+      );
+      for (const [i, cor] of [
+        [1, 'laranja'],
+        [2, 'amarelo'],
+      ] as const)
+        await e.inserir(
+          `INSERT INTO discriminador_classificacao_risco (fluxograma_classificacao_risco_id, sequencia, pergunta,
+             nivel_prioridade_id, criado_em) VALUES (?, ?, ?, ?, ?)`,
+          [fluxo, i, `Pergunta sintética ${i}`, await nivel(cor), agora],
+        );
+      return { versao };
+    });
+    const classificacao = {
+      cabecalho: String(m.atendimento),
+      reg: m.paciente,
+      versaoProtocolo: prep.versao,
+      fluxograma: 'Dor torácica',
+      discriminadores: ['DOR_INTENSA'],
+      automaticos: ['SAT_BAIXA', 'DOR_INTENSA'],
+      sinais: {
+        pas: 120,
+        pad: 80,
+        fc: 88,
+        fr: null,
+        temperatura: null,
+        saturacao: 91,
+        glicemia: null,
+        dor: 8,
+        glasgow: null,
+      },
+      corProposta: 'laranja',
+      corFinal: 'amarelo',
+      justificativa: 'Reavaliação sintética com dor controlada',
+      motivo: 'inicial',
+      descricaoMudanca: null,
+      anterior: null,
+      tempoAlvoMin: 60,
+      comPrioridade: false,
+      eventos: [],
+    };
+    // Atendimento diferente do registro: recusa fechada, nada gravado.
+    const antes = await contarRegistros();
+    await expect(
+      g.registrar(
+        C,
+        { ...registro(), classificacao: { ...classificacao, cabecalho: String(m.atendimento + 1) } } as never,
+        ctx(),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'classificacao-de-outro-atendimento' } });
+    // Fluxograma fora da versão: recusa da recepção, nada gravado.
+    await expect(
+      g.registrar(
+        C,
+        { ...registro(), classificacao: { ...classificacao, fluxograma: 'Cefaleia' } } as never,
+        ctx(),
+      ),
+    ).rejects.toMatchObject({ problema: { codigo: 'fluxograma-inexistente' } });
+    expect(await contarRegistros()).toBe(antes);
+
+    const { registro: id } = await g.registrar(C, { ...registro(), classificacao } as never, ctx());
+    const efeito = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `${P}-conf` }, async (l) => {
+      const c = await l.uma(
+        `SELECT c.id, c.atendimento_id, c.paciente_id, c.protocolo_classificacao_risco_versao_id AS versao,
+                f.codigo AS fluxo, np.codigo AS proposta, nf.codigo AS final, c.sobreposta,
+                c.justificativa_sobreposicao AS justificativa, c.tempo_alvo_minutos AS tempo, c.situacao,
+                c.classificador_profissional_id AS classificador, c.queixa_principal AS queixa
+           FROM classificacao_risco c JOIN fluxograma_classificacao_risco f ON f.id = c.fluxograma_classificacao_risco_id
+           JOIN nivel_prioridade np ON np.id = c.proposto_nivel_prioridade_id
+           JOIN nivel_prioridade nf ON nf.id = c.nivel_prioridade_id
+          WHERE c.registro_assistencial_id = ?`,
+        [id],
+      );
+      const cid = Number(c?.['id']);
+      const respostas = await l.consultar(
+        `SELECT d.sequencia, r.resposta, r.decisivo FROM classificacao_risco_resposta r
+           JOIN discriminador_classificacao_risco d ON d.id = r.discriminador_classificacao_risco_id
+          WHERE r.classificacao_risco_id = ? ORDER BY r.sequencia`,
+        [cid],
+      );
+      const evento = await l.consultar(
+        'SELECT marco, usuario_id FROM classificacao_risco_evento WHERE classificacao_risco_id = ?',
+        [cid],
+      );
+      const afericao = await l.uma(
+        `SELECT COUNT(v.id) AS n, MAX(a.profissional_id) AS profissional FROM afericao a
+           JOIN afericao_valor v ON v.afericao_id = a.id WHERE a.classificacao_risco_id = ?`,
+        [cid],
+      );
+      return { c, respostas, evento, afericao };
+    });
+    expect(efeito.c).toMatchObject({
+      atendimento_id: m.atendimento,
+      paciente_id: m.paciente,
+      versao: prep.versao,
+      fluxo: 'DOR_TORACICA',
+      proposta: 'laranja',
+      final: 'amarelo',
+      justificativa: 'Reavaliação sintética com dor controlada',
+      tempo: 60,
+      situacao: 'concluida',
+      classificador: m.profissional,
+    });
+    expect(Boolean(efeito.c?.['sobreposta'])).toBe(true);
+    expect(String(efeito.c?.['queixa'])).toContain('Quadro sintético estável');
+    expect(
+      efeito.respostas.map((r) => [Number(r['sequencia']), r['resposta'], Boolean(r['decisivo'])]),
+    ).toEqual([
+      [1, 'sim', true],
+      [2, 'sim', false],
+    ]);
+    expect(efeito.evento.map((x) => [x['marco'], Number(x['usuario_id'])])).toEqual([
+      ['conclusao', m.medico],
+    ]);
+    expect(Number(efeito.afericao?.['n'])).toBe(5);
+    expect(Number(efeito.afericao?.['profissional'])).toBe(m.profissional);
+    // O mesmo atendimento já classificado: a segunda classificação inicial é recusada pela regra da recepção.
+    await expect(g.registrar(C, { ...registro(), classificacao } as never, ctx())).rejects.toMatchObject({
+      problema: { codigo: 'ja-classificado' },
+    });
   }, 90_000);
 
   async function contarRegistros(): Promise<number> {

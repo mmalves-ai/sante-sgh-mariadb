@@ -38,6 +38,7 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { gravarClassificacaoNaTx } from '../recepcao/classificacao-operacoes.js';
 import { z } from 'zod';
 import type { ContextoRegistro, ProvaLida } from './registro-porta.js';
 import { dataHora, fusoValido, type NucleoLeituraPep } from './registro-propria-comum.js';
@@ -77,6 +78,12 @@ export const TABELAS_REGISTRO = [
   'assinatura_icp',
   // 03-PEP L96: a versão anterior guardada na suspensão e ligada à correção; o pedido e a resposta de parecer.
   'registro_assistencial_versao',
+  // 03-PEP L96: a classificação de risco gravada com o registro (cadastros da recepção).
+  'classificacao_risco',
+  'classificacao_risco_resposta',
+  'classificacao_risco_evento',
+  'afericao',
+  'afericao_valor',
   'interconsulta',
   'interconsulta_resposta',
 ] as const;
@@ -1333,18 +1340,8 @@ export class RegistroPropriaGravacao {
     e: GravacaoEvolucao,
     ctx: ContextoOperacao,
   ): Promise<{ registro: number; trilha: string | null }> {
-    // A classificação de risco grava pela recepção (protocolo, níveis e fluxograma do cadastro): no registro, recusa
-    // fechada (nada gravado pela metade). A coassinatura e o pedido ou a resposta de parecer gravam aqui, na mesma
-    // transação (03-PEP L96).
-    if (e.classificacao)
-      return Promise.reject(
-        recusa(
-          501,
-          'pendente-modelo-proprio',
-          'Ainda não disponível no banco próprio',
-          'O registro com classificação de risco grava pela tela de classificação da recepção.',
-        ),
-      );
+    // A coassinatura, o pedido ou a resposta de parecer e a classificação de risco (protocolo, níveis e fluxograma do
+    // cadastro da recepção) gravam aqui, na mesma transação do registro (03-PEP L96).
     return this.gravar(c, ctx, OP_REGISTRAR, false, conteudoDoRegistro(e), async (tx, est, prof) => {
       if (prof.profissional !== e.cbo)
         throw recusa(
@@ -1452,6 +1449,39 @@ export class RegistroPropriaGravacao {
         origem: 'sistema',
       });
       if (e.corrige !== undefined) await ligarCorrecao(tx, e.corrige, id, prof.usuario, agora);
+      if (e.classificacao) {
+        const k = e.classificacao;
+        if (Number(k.cabecalho) !== e.atendimento)
+          throw recusa(
+            422,
+            'classificacao-de-outro-atendimento',
+            'Operação recusada',
+            'A classificação é do atendimento do registro.',
+          );
+        await gravarClassificacaoNaTx(tx, {
+          estabelecimento: est.id,
+          fuso: est.fuso,
+          atendimento: e.atendimento,
+          paciente: e.paciente,
+          autorUsuario: prof.usuario,
+          classificador: prof.profissional,
+          versaoProtocolo: k.versaoProtocolo,
+          fluxograma: k.fluxograma,
+          // Os discriminadores marcados e os que os sinais disparam entram como respostas "sim" (sem repetição).
+          discriminadores: [...k.discriminadores, ...k.automaticos],
+          sinais: k.sinais,
+          horaSinais: e.dataHoraClinica,
+          corProposta: k.corProposta,
+          corFinal: k.corFinal,
+          justificativa: k.justificativa,
+          motivo: k.motivo,
+          descricaoMudanca: k.descricaoMudanca,
+          anterior: k.anterior,
+          tempoAlvoMin: k.tempoAlvoMin,
+          queixa: texto || null,
+          registro: id,
+        });
+      }
       if (e.fluxo) await gravarParecer(tx, est.id, { ...e, fluxo: e.fluxo }, id, prof, texto, agora);
       for (const [i, r] of respostas.entries())
         await tx.incluir('registro_assistencial_resposta', {

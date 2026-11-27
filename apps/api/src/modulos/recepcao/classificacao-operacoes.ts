@@ -493,6 +493,170 @@ export const opPublicarProtocolo = definirOperacao({
 
 // ── classificacao.classificar ────────────────────────────────────────────────────────────────────
 
+/** Dados da classificação estruturada gravada na transação de quem chama (recepção ou registro clínico do PEP). */
+export interface ClassificacaoNaTx {
+  estabelecimento: number;
+  fuso: string;
+  atendimento: number;
+  paciente: number;
+  autorUsuario: number;
+  classificador: number;
+  versaoProtocolo: number;
+  /** Código do fluxograma na versão; o registro clínico pode mandar o nome. */
+  fluxograma: string;
+  discriminadores: readonly string[];
+  sinais: SinaisVitais;
+  horaSinais: string;
+  corProposta: string;
+  corFinal: string;
+  justificativa: string | null;
+  motivo: MotivoClassificacao;
+  descricaoMudanca: string | null;
+  anterior: number | null;
+  tempoAlvoMin: number;
+  /** Sem queixa digitada, vale o nome do fluxograma (a queixa do protocolo). */
+  queixa: string | null;
+  registro: number | null;
+}
+
+/**
+ * Grava classificacao_risco, as respostas dos discriminadores, o evento e a aferição dos sinais, na transação de quem
+ * chama: a recepção (classificacao.classificar) e o registro clínico com classificação (03-PEP L96).
+ */
+export async function gravarClassificacaoNaTx(
+  tx: TxOperacao,
+  x: ClassificacaoNaTx,
+): Promise<{ id: number; sinais: number }> {
+  const agora = new Date();
+  let motivo: number | null = null;
+  if (x.anterior === null) {
+    const ja = await tx.consultarParaAtualizar(
+      `SELECT id FROM classificacao_risco WHERE atendimento_id = ? AND anterior_classificacao_risco_id IS NULL
+            AND excluido_em IS NULL AND situacao <> 'cancelada'`,
+      [x.atendimento],
+    );
+    if (ja.length > 0)
+      throw recusa(
+        'ja-classificado',
+        'Este atendimento acabou de ser classificado por outra pessoa. Abra de novo.',
+      );
+  } else {
+    const [ant] = await tx.consultarParaAtualizar(
+      `SELECT id, versao, situacao FROM classificacao_risco
+          WHERE id = ? AND atendimento_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+      [x.anterior, x.atendimento, x.estabelecimento],
+      { teto: 1 },
+    );
+    if (!ant || txt(ant['situacao']) !== 'concluida')
+      throw recusa(
+        'anterior-desatualizada',
+        'A classificação mudou depois que você abriu. Abra de novo antes de reclassificar.',
+      );
+    const m = await tx.uma(
+      'SELECT id FROM motivo_reclassificacao WHERE tipo = ? AND ativo = TRUE ORDER BY id LIMIT 1',
+      [TIPO_DO_MOTIVO[x.motivo as Exclude<MotivoClassificacao, 'inicial'>] ?? 'outro'],
+    );
+    if (!m) throw recusa('motivo-nao-cadastrado', 'O motivo da reclassificação não está cadastrado.');
+    motivo = num(m['id']);
+    await tx.alterar('classificacao_risco', x.anterior, num(ant['versao']), { situacao: 'reclassificada' });
+  }
+  // A versão do protocolo, o fluxograma escolhido e os discriminadores marcados, todos da versão publicada.
+  const v = await tx.uma(
+    `SELECT v.dados FROM protocolo_classificacao_risco_versao v
+        WHERE v.id = ? AND EXISTS (SELECT 1 FROM protocolo_classificacao_estabelecimento pe
+              WHERE pe.protocolo_classificacao_risco_id = v.protocolo_classificacao_risco_id
+                AND pe.estabelecimento_id = ? AND pe.excluido_em IS NULL)`,
+    [x.versaoProtocolo, x.estabelecimento],
+  );
+  if (!v) throw recusa('protocolo-inexistente', 'A versão do protocolo não existe neste estabelecimento.');
+  // O fluxograma vem pelo código (recepção) ou pelo nome (registro clínico); o código é a chave dos discriminadores.
+  const fluxo = await tx.uma(
+    `SELECT id, codigo, nome FROM fluxograma_classificacao_risco
+        WHERE protocolo_classificacao_risco_versao_id = ? AND (codigo = ? OR nome = ?) AND excluido_em IS NULL
+        ORDER BY (codigo = ?) DESC, id LIMIT 1`,
+    [x.versaoProtocolo, x.fluxograma, x.fluxograma, x.fluxograma],
+  );
+  if (!fluxo)
+    throw recusa(
+      'fluxograma-inexistente',
+      'O fluxograma escolhido não está na versão publicada do protocolo.',
+    );
+  const codigoFluxo = txt(fluxo['codigo']) || x.fluxograma;
+  const seqs = sequenciasDosDiscriminadores(json(v['dados']));
+  const ds = await tx.consultar(
+    'SELECT id, sequencia FROM discriminador_classificacao_risco WHERE fluxograma_classificacao_risco_id = ? AND excluido_em IS NULL',
+    [num(fluxo['id'])],
+  );
+  const marcados = [...new Set(x.discriminadores)].map((cod) => {
+    const seq = seqs.get(`${codigoFluxo}\u0000${cod}`);
+    const d = seq === undefined ? undefined : ds.find((y) => num(y['sequencia']) === seq);
+    if (!d)
+      throw recusa(
+        'discriminador-inexistente',
+        `O discriminador "${cod}" não é do fluxograma escolhido nesta versão do protocolo. Abra de novo.`,
+      );
+    return num(d['id']);
+  });
+  const sobreposta = x.corProposta !== x.corFinal;
+  const id = await tx.incluir('classificacao_risco', {
+    estabelecimento_id: x.estabelecimento,
+    atendimento_id: x.atendimento,
+    paciente_id: x.paciente,
+    protocolo_classificacao_risco_versao_id: x.versaoProtocolo,
+    fluxograma_classificacao_risco_id: num(fluxo['id']),
+    proposto_nivel_prioridade_id: await nivel(tx, x.corProposta),
+    nivel_prioridade_id: await nivel(tx, x.corFinal),
+    sobreposta,
+    justificativa_sobreposicao: sobreposta ? (x.justificativa ?? '').slice(0, 500) || null : null,
+    tempo_alvo_minutos: x.tempoAlvoMin,
+    prazo_atendimento_em: new Date(agora.getTime() + x.tempoAlvoMin * 60_000),
+    queixa_principal: x.queixa ?? txt(fluxo['nome']),
+    classificador_profissional_id: x.classificador,
+    inicio_em: agora,
+    classificado_em: agora,
+    situacao: 'concluida',
+    anterior_classificacao_risco_id: x.anterior,
+    motivo_reclassificacao_id: motivo,
+    descricao_mudanca_quadro: x.descricaoMudanca?.slice(0, 500) ?? null,
+    registro_assistencial_id: x.registro,
+  });
+  let n = 0;
+  for (const d of marcados)
+    await tx.incluir('classificacao_risco_resposta', {
+      classificacao_risco_id: id,
+      sequencia: ++n,
+      discriminador_classificacao_risco_id: d,
+      resposta: 'sim',
+      decisivo: n === 1,
+      respondido_em: agora,
+    });
+  await tx.incluir('classificacao_risco_evento', {
+    classificacao_risco_id: id,
+    operacao: 'inclusao',
+    marco: x.anterior === null ? 'conclusao' : 'reclassificacao',
+    ocorrido_em: agora,
+    usuario_id: x.autorUsuario,
+  });
+  const sinais =
+    x.motivo === 'estouro'
+      ? 0
+      : (
+          await gravarAfericao(
+            tx,
+            { estabelecimento: x.estabelecimento, usuario: x.autorUsuario, fuso: x.fuso },
+            {
+              atendimento: x.atendimento,
+              paciente: x.paciente,
+              sinais: x.sinais,
+              hora: x.horaSinais,
+              profissional: x.classificador,
+              classificacao: id,
+            },
+          )
+        ).sinais;
+  return { id, sinais };
+}
+
 export const opClassificar = definirOperacao({
   nome: 'classificacao.classificar',
   tabelas: [
@@ -505,132 +669,34 @@ export const opClassificar = definirOperacao({
   entrada: esquemaClassificar,
   async gravar(tx, x) {
     const s = await sessao(tx);
-    const agora = new Date();
     const autor = await exigirUsuario(tx, x.autor);
     const prof = await vinculoDoLogin(tx, x.autor);
     if (!prof)
       throw recusa('sem-vinculo-assistencial', 'O usuário não tem vínculo profissional ativo no cadastro.');
     const atendimento = Number(x.cabecalho);
     await exigirAtendimento(tx, s, atendimento, x.paciente);
-    let motivo: number | null = null;
-    if (x.anterior === null) {
-      const ja = await tx.consultarParaAtualizar(
-        `SELECT id FROM classificacao_risco WHERE atendimento_id = ? AND anterior_classificacao_risco_id IS NULL
-            AND excluido_em IS NULL AND situacao <> 'cancelada'`,
-        [atendimento],
-      );
-      if (ja.length > 0)
-        throw recusa(
-          'ja-classificado',
-          'Este atendimento acabou de ser classificado por outra pessoa. Abra de novo.',
-        );
-    } else {
-      const [ant] = await tx.consultarParaAtualizar(
-        `SELECT id, versao, situacao FROM classificacao_risco
-          WHERE id = ? AND atendimento_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
-        [x.anterior, atendimento, s.estabelecimento],
-        { teto: 1 },
-      );
-      if (!ant || txt(ant['situacao']) !== 'concluida')
-        throw recusa(
-          'anterior-desatualizada',
-          'A classificação mudou depois que você abriu. Abra de novo antes de reclassificar.',
-        );
-      const m = await tx.uma(
-        'SELECT id FROM motivo_reclassificacao WHERE tipo = ? AND ativo = TRUE ORDER BY id LIMIT 1',
-        [TIPO_DO_MOTIVO[x.motivo as Exclude<MotivoClassificacao, 'inicial'>] ?? 'outro'],
-      );
-      if (!m) throw recusa('motivo-nao-cadastrado', 'O motivo da reclassificação não está cadastrado.');
-      motivo = num(m['id']);
-      await tx.alterar('classificacao_risco', x.anterior, num(ant['versao']), { situacao: 'reclassificada' });
-    }
-    // A versão do protocolo, o fluxograma escolhido e os discriminadores marcados, todos da versão publicada.
-    const v = await tx.uma(
-      `SELECT v.dados FROM protocolo_classificacao_risco_versao v
-        WHERE v.id = ? AND EXISTS (SELECT 1 FROM protocolo_classificacao_estabelecimento pe
-              WHERE pe.protocolo_classificacao_risco_id = v.protocolo_classificacao_risco_id
-                AND pe.estabelecimento_id = ? AND pe.excluido_em IS NULL)`,
-      [x.versaoProtocolo, s.estabelecimento],
-    );
-    if (!v) throw recusa('protocolo-inexistente', 'A versão do protocolo não existe neste estabelecimento.');
-    const fluxo = await tx.uma(
-      'SELECT id FROM fluxograma_classificacao_risco WHERE protocolo_classificacao_risco_versao_id = ? AND codigo = ? AND excluido_em IS NULL',
-      [x.versaoProtocolo, x.fluxograma],
-    );
-    if (!fluxo)
-      throw recusa(
-        'fluxograma-inexistente',
-        'O fluxograma escolhido não está na versão publicada do protocolo.',
-      );
-    const seqs = sequenciasDosDiscriminadores(json(v['dados']));
-    const ds = await tx.consultar(
-      'SELECT id, sequencia FROM discriminador_classificacao_risco WHERE fluxograma_classificacao_risco_id = ? AND excluido_em IS NULL',
-      [num(fluxo['id'])],
-    );
-    const marcados = x.discriminadores.map((cod) => {
-      const seq = seqs.get(`${x.fluxograma}\u0000${cod}`);
-      const d = seq === undefined ? undefined : ds.find((y) => num(y['sequencia']) === seq);
-      if (!d)
-        throw recusa(
-          'discriminador-inexistente',
-          `O discriminador "${cod}" não é do fluxograma escolhido nesta versão do protocolo. Abra de novo.`,
-        );
-      return num(d['id']);
+    return gravarClassificacaoNaTx(tx, {
+      estabelecimento: s.estabelecimento,
+      fuso: s.fuso,
+      atendimento,
+      paciente: x.paciente,
+      autorUsuario: autor,
+      classificador: prof.vinculo,
+      versaoProtocolo: x.versaoProtocolo,
+      fluxograma: x.fluxograma,
+      discriminadores: x.discriminadores,
+      sinais: x.sinais,
+      horaSinais: x.horaSinais,
+      corProposta: x.corProposta,
+      corFinal: x.corFinal,
+      justificativa: x.justificativa,
+      motivo: x.motivo,
+      descricaoMudanca: x.descricaoMudanca,
+      anterior: x.anterior,
+      tempoAlvoMin: x.tempoAlvoMin,
+      queixa: x.queixa,
+      registro: x.e08.situacao === 'desligado' ? null : x.e08.registro,
     });
-    const sobreposta = x.corProposta !== x.corFinal;
-    const id = await tx.incluir('classificacao_risco', {
-      estabelecimento_id: s.estabelecimento,
-      atendimento_id: atendimento,
-      paciente_id: x.paciente,
-      protocolo_classificacao_risco_versao_id: x.versaoProtocolo,
-      fluxograma_classificacao_risco_id: num(fluxo['id']),
-      proposto_nivel_prioridade_id: await nivel(tx, x.corProposta),
-      nivel_prioridade_id: await nivel(tx, x.corFinal),
-      sobreposta,
-      justificativa_sobreposicao: sobreposta ? (x.justificativa ?? '').slice(0, 500) || null : null,
-      tempo_alvo_minutos: x.tempoAlvoMin,
-      prazo_atendimento_em: new Date(agora.getTime() + x.tempoAlvoMin * 60_000),
-      queixa_principal: x.queixa,
-      classificador_profissional_id: prof.vinculo,
-      inicio_em: agora,
-      classificado_em: agora,
-      situacao: 'concluida',
-      anterior_classificacao_risco_id: x.anterior,
-      motivo_reclassificacao_id: motivo,
-      descricao_mudanca_quadro: x.descricaoMudanca?.slice(0, 500) ?? null,
-      registro_assistencial_id: x.e08.situacao === 'desligado' ? null : x.e08.registro,
-    });
-    let n = 0;
-    for (const d of marcados)
-      await tx.incluir('classificacao_risco_resposta', {
-        classificacao_risco_id: id,
-        sequencia: ++n,
-        discriminador_classificacao_risco_id: d,
-        resposta: 'sim',
-        decisivo: n === 1,
-        respondido_em: agora,
-      });
-    await tx.incluir('classificacao_risco_evento', {
-      classificacao_risco_id: id,
-      operacao: 'inclusao',
-      marco: x.anterior === null ? 'conclusao' : 'reclassificacao',
-      ocorrido_em: agora,
-      usuario_id: autor,
-    });
-    const sinais =
-      x.motivo === 'estouro'
-        ? 0
-        : (
-            await gravarAfericao(tx, s, {
-              atendimento,
-              paciente: x.paciente,
-              sinais: x.sinais,
-              hora: x.horaSinais,
-              profissional: prof.vinculo,
-              classificacao: id,
-            })
-          ).sinais;
-    return { id, sinais };
   },
   eventos: (x, r) => [
     {
