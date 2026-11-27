@@ -146,6 +146,7 @@ servidor, nunca em repositório, e-mail ou chamado.
 | `VIGIA_ARQUIVOS_MS` | opcional |  | Intervalo do vigia dos arquivos, em ms (padrão 6 h). |
 | `OUTBOX_RELAY` | opcional |  | Envio da caixa de saída (e-mails, avisos e integrações). Vazio: o padrão do ambiente. |
 | `TRANSMISSOR_TISS` | opcional |  | Transmissor TISS da elegibilidade e da comunicação de beneficiário (destino falso fora de produção). Vazio: o padrão do ambiente. |
+| `ENTREGA_EQUIPAMENTO` | opcional |  | Entrega dos pedidos aos equipamentos do laboratório e recolhimento do resultado (simulador fora de produção). Vazio: o padrão do ambiente. |
 | `INTEGRACAO` | opcional |  | Integrações de saída do worker. Vazio: o padrão do ambiente. |
 | `VIGIA_BANCO` | opcional |  | Vigia do banco (transações, travas e conexões; desligado desliga). Vazio: o padrão do ambiente. |
 | `RELATORIO_ENVIO` | opcional |  | Envio agendado de relatórios. Vazio: o padrão do ambiente. |
@@ -178,6 +179,7 @@ servidor, nunca em repositório, e-mail ou chamado.
 | `VIGIA_TRANSACAO_LIMITE_MS` | opcional |  | Intervalo ou tamanho: limite da transação longa no vigia do banco. Vazio: o padrão. |
 | `OUTBOX_INTERVALO_MS` | opcional |  | Intervalo ou tamanho: caixa de saída. Vazio: o padrão. |
 | `TRANSMISSOR_TISS_INTERVALO_MS` | opcional |  | Intervalo ou tamanho: transmissor TISS. Vazio: o padrão. |
+| `ENTREGA_EQUIPAMENTO_INTERVALO_MS` | opcional |  | Intervalo ou tamanho: entrega aos equipamentos do laboratório. Vazio: o padrão. |
 | `INTEGRACAO_INTERVALO_MS` | opcional |  | Intervalo ou tamanho: integrações. Vazio: o padrão. |
 | `INTEGRACAO_LOTE_FATOS` | opcional |  | Intervalo ou tamanho: lote das integrações (fatos por ciclo). Vazio: o padrão. |
 | `BUSCA_VIGIA_MS` | opcional |  | Intervalo ou tamanho: índice de busca. Vazio: o padrão. |
