@@ -2,11 +2,107 @@
 // cliente inteiro (com a conferência das variáveis na hora), a regra da véspera da marcação ligada a ele, gera os avisos
 // dos eventos pelo botão e abre a visão por paciente com a coluna do efeito da resposta na marcação. axe sem violação
 // séria. Fonte sintética de dev (nomes e números fictícios); nada sai da VM (sem rede externa).
-import { expect, test, type Page } from '@playwright/test';
+// O E2E padrão roda sem banco (fonte sintética): as rotas das mensagens só têm a porta própria e responderiam 503. A
+// resposta da API é simulada aqui seguindo o contrato de comunicacao.controller.ts (itens, { id }, resumo do disparo e
+// visão por paciente com o efeito da resposta); as regras do banco são provadas no contrato de efeito
+// mensagens-paciente-eventos-propria.int.spec.ts.
+import { expect, test, type Page, type Route } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
+
+const json = (rota: Route, corpo: unknown, status = 200) =>
+  rota.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
+
+/** A API das mensagens pelo contrato, com estado: modelos e regras gravados, disparo uma vez por regra e marcação. */
+async function simularApiMensagens(page: Page): Promise<void> {
+  const modelos: Record<string, unknown>[] = [];
+  const regras: Record<string, unknown>[] = [];
+  let disparos = 0;
+  await page.route(/\/api\/integracoes\/mensagens\//, async (rota) => {
+    const req = rota.request();
+    const caminho = new URL(req.url()).pathname.replace(/^.*\/api\/integracoes\/mensagens\//, '');
+    const corpo = (req.postDataJSON() as Record<string, unknown> | null) ?? {};
+    const metodo = req.method();
+    if (metodo === 'GET' && caminho === 'modelos') return json(rota, { itens: modelos });
+    if (metodo === 'GET' && caminho === 'regras') return json(rota, { itens: regras });
+    if (metodo === 'PUT' && (caminho === 'modelos' || caminho === 'modelos/cliente')) {
+      const id = modelos.length + 1;
+      modelos.push({
+        id,
+        doCliente: caminho === 'modelos/cliente',
+        codigo: corpo['codigo'],
+        descricao: corpo['descricao'],
+        finalidade: corpo['finalidade'],
+        canal: corpo['canal'],
+        assunto: corpo['assunto'] ?? null,
+        corpo: corpo['corpo'],
+        respostaConfirmacao: corpo['respostaConfirmacao'] ?? null,
+        respostaRecusa: corpo['respostaRecusa'] ?? null,
+        janelaInicio: null,
+        janelaFim: null,
+        ativo: true,
+        versao: 1,
+      });
+      return json(rota, { id });
+    }
+    if (metodo === 'PUT' && caminho === 'regras') {
+      const m = modelos.find((x) => x['id'] === Number(corpo['modeloId']));
+      if (!m) return json(rota, { title: 'Regra recusada', detail: 'Modelo não encontrado.' }, 422);
+      const id = regras.length + 1;
+      regras.push({
+        id,
+        codigo: corpo['codigo'],
+        descricao: corpo['descricao'],
+        modeloId: m['id'],
+        modelo: m['descricao'],
+        gatilho: corpo['gatilho'],
+        canal: m['canal'],
+        antecedenciaMinutos: corpo['antecedenciaMinutos'] ?? null,
+        horaInicio: corpo['horaInicio'] ?? null,
+        horaFim: corpo['horaFim'] ?? null,
+        maximoEnviosPaciente: null,
+        exigeConsentimento: true,
+        ativo: true,
+        versao: 1,
+      });
+      return json(rota, { id });
+    }
+    if (metodo === 'POST' && caminho === 'disparo') {
+      disparos += 1;
+      return json(
+        rota,
+        disparos === 1 ? { pedidos: 2, recusados: { 'sem-contato': 1 } } : { pedidos: 0, recusados: {} },
+      );
+    }
+    if (metodo === 'GET' && caminho.startsWith('paciente/'))
+      return json(rota, {
+        itens: [
+          {
+            id: 1,
+            motivo: 'confirmacao',
+            canal: 'whatsapp',
+            regra: regras[0]?.['codigo'] ?? null,
+            situacao: 'enviado',
+            agendadoPara: '2026-11-27T11:00:00.000Z',
+            enviadoEm: '2026-11-27T11:00:05.000Z',
+            canceladoEm: null,
+            motivoCancelamento: null,
+            retornos: [
+              {
+                tipo: 'resposta',
+                recebidoEm: '2026-11-27T11:10:00.000Z',
+                respostaInterpretada: 'confirmacao',
+                efeitoResposta: 'confirmar_presenca',
+              },
+            ],
+          },
+        ],
+      });
+    return json(rota, { title: 'Não simulado', detail: `${metodo} ${caminho}` }, 404);
+  });
+}
 
 async function entrar(page: Page, login: string): Promise<void> {
   await page.goto('/entrar');
@@ -21,6 +117,7 @@ test.describe('Mensagens ao paciente pelos eventos @C2-023', () => {
     page,
   }) => {
     const externas = vigiarExternas(page);
+    await simularApiMensagens(page);
     const sufixo = Date.now().toString(36).slice(-6);
     await entrar(page, 'SINT.ADMIN');
     await page.goto('/admin/integracoes/mensagens');
@@ -73,7 +170,10 @@ test.describe('Mensagens ao paciente pelos eventos @C2-023', () => {
     const pedidos = page.getByTestId('mensagens-pedidos');
     const nenhum = painel.getByText('Nenhuma mensagem para este paciente.');
     await expect(pedidos.or(nenhum)).toBeVisible();
-    if (await pedidos.isVisible()) await expect(pedidos).toContainText('Efeito na marcação');
+    if (await pedidos.isVisible()) {
+      await expect(pedidos).toContainText('Efeito na marcação');
+      await expect(pedidos).toContainText('Presença confirmada');
+    }
 
     await semViolacaoAxe(page, '/admin/integracoes/mensagens');
     expect(externas).toEqual([]);
