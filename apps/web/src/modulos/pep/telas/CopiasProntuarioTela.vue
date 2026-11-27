@@ -415,6 +415,12 @@ label {
   display: grid;
   gap: 2px;
 }
+/* WCAG 2.2 (2.5.8): todo campo com alvo mínimo, para não colar no vizinho da mesma linha. */
+input,
+select,
+textarea {
+  min-height: var(--sgh-alvo-minimo);
+}
 .pedido {
   border: 1px solid var(--sgh-borda);
   border-radius: 6px;
