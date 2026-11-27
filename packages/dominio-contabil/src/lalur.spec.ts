@@ -62,6 +62,47 @@ describe('LALUR e apuração do lucro real', () => {
     expect(r.memoria.join('\n')).toContain('115.000,00 × 15% = 17.250,00');
   });
 
+  it('estimativa mensal pela receita bruta: presunção de 8% e 12% mais as demais receitas, sem exclusões', () => {
+    const r = apurarLucroReal({
+      ...base,
+      forma: 'estimativa_mensal',
+      inicio: '2198-03-01',
+      fim: '2198-03-31',
+      receitaBrutaCentavos: 1_000_000_00,
+    });
+    expect(r.baseEstimativa).toBe('receita_bruta');
+    expect(r.baseIrpj).toBe(105_000_00);
+    expect(r.limiteAdicional).toBe(20_000_00);
+    expect(r.irpjRecolher).toBe(15_750_00 + 8_500_00);
+    expect(r.baseCsll).toBe(140_000_00);
+    expect(r.csllRecolher).toBe(12_600_00);
+    expect(r.memoria.join('\n')).toContain(
+      '1.000.000,00 × 8% (80.000,00) + demais receitas 25.000,00 = 105.000,00',
+    );
+  });
+
+  it('balancete de suspensão ou redução: acumulado desde janeiro menos o devido nos meses anteriores', () => {
+    const bal = {
+      ...base,
+      forma: 'estimativa_mensal' as const,
+      inicio: '2198-03-01',
+      fim: '2198-03-31',
+      baseEstimativa: 'balancete' as const,
+      estimativasAnterioresIrpjCentavos: 20_000_00,
+      estimativasAnterioresCsllCentavos: 9_900_00,
+    };
+    const r = apurarLucroReal(bal);
+    expect(r.meses).toBe(3);
+    expect(r.limiteAdicional).toBe(60_000_00);
+    expect(r.irpjRecolher).toBe(2_750_00);
+    expect(r.csllRecolher).toBe(0);
+    expect(r.balancete).toBe('reducao');
+    expect(r.prejuizoDoPeriodo).toBe(0);
+    const s = apurarLucroReal({ ...bal, estimativasAnterioresIrpjCentavos: 30_000_00 });
+    expect([s.irpjRecolher, s.balancete]).toEqual([0, 'suspensao']);
+    expect(s.memoria.join('\n')).toContain('devido nos meses anteriores 30.000,00');
+  });
+
   it('compensação do prejuízo e da base negativa limitada a 30% e ao saldo; deduções sem negativo', () => {
     const r = apurarLucroReal({
       ...base,

@@ -18,7 +18,9 @@ import {
   conferirPeriodoApuracao,
   type ContaParteB,
   type ContaParteBEcf,
+  BASES_ESTIMATIVA_MENSAL,
   FORMAS_APURACAO_LUCRO_REAL,
+  PRESUNCAO_PADRAO,
   type FormaApuracaoLucroReal,
   ladoParteB,
   type LinhaParteAEcf,
@@ -150,6 +152,31 @@ async function lucroAntesDosTributos(l: Consulta, est: number, inicio: string, f
   return centavos(r?.['resultado']);
 }
 
+/** A receita bruta do mês (estimativa mensal): crédito menos débito (devoluções e cancelamentos) das contas de receita. */
+async function receitaBruta(l: Consulta, est: number, inicio: string, fim: string) {
+  const [r] = await l.consultar(
+    `SELECT COALESCE(SUM(CASE WHEN p.lado = 'credito' THEN p.valor ELSE -p.valor END), 0) AS receita
+       FROM partida_contabil p JOIN lancamento_contabil l ON l.id = p.lancamento_contabil_id
+       JOIN conta_contabil c ON c.id = p.conta_contabil_id
+      WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL AND p.excluido_em IS NULL AND l.tipo <> 'apuracao'
+        AND l.data_lancamento BETWEEN ? AND ? AND c.natureza = 'receita'`,
+    [est, inicio, fim],
+  );
+  return Math.max(0, centavos(r?.['receita']));
+}
+
+/** Balancete: o IRPJ (com adicional) e a CSLL devidos nas estimativas dos meses anteriores do mesmo ano. */
+async function estimativasAnteriores(l: Consulta, est: number, inicio: string) {
+  const [r] = await l.consultar(
+    `SELECT COALESCE(SUM(valor_irpj + valor_adicional_irpj), 0) AS irpj, COALESCE(SUM(valor_csll), 0) AS csll
+       FROM apuracao_irpj_csll
+      WHERE estabelecimento_id = ? AND forma_apuracao = 'estimativa_mensal' AND situacao <> 'aberta'
+        AND excluido_em IS NULL AND periodo_inicio >= ? AND periodo_fim < ?`,
+    [est, `${inicio.slice(0, 4)}-01-01`, inicio],
+  );
+  return { irpj: centavos(r?.['irpj']), csll: centavos(r?.['csll']) };
+}
+
 async function ajustesDa(l: Consulta, apuracao: number) {
   return (
     await l.consultar(
@@ -185,6 +212,12 @@ function apuracaoDaLinha(a: Record<string, unknown>) {
     inicio: dia(a['periodo_inicio']),
     fim: dia(a['periodo_fim']),
     forma: txt(a['forma_apuracao']) as FormaApuracaoLucroReal,
+    baseEstimativa: txtOuNulo(a['base_estimativa']),
+    receitaBruta: a['receita_bruta'] == null ? null : centavos(a['receita_bruta']),
+    presuncaoIrpj: a['percentual_presuncao_irpj'] == null ? null : num(a['percentual_presuncao_irpj']),
+    presuncaoCsll: a['percentual_presuncao_csll'] == null ? null : num(a['percentual_presuncao_csll']),
+    anterioresIrpj: centavos(a['estimativas_anteriores_irpj']),
+    anterioresCsll: centavos(a['estimativas_anteriores_csll']),
     situacao: txt(a['situacao']) as SituacaoApuracaoLucroReal,
     versao: num(a['versao']),
     lucroAntes: centavos(a['lucro_antes_tributos']),
@@ -332,6 +365,21 @@ export async function apuracoesParaEcf(
 function memoriaDa(ap: ReturnType<typeof apuracaoDaLinha>): string[] {
   if (ap.situacao === 'aberta') return [];
   const r = (c: number) => (c / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  if (ap.baseEstimativa === 'receita_bruta')
+    return [
+      `Estimativa mensal pela receita bruta ${r(ap.receitaBruta ?? 0)} × ${ap.presuncaoIrpj ?? 0}% (IRPJ) e × ${ap.presuncaoCsll ?? 0}% (CSLL), mais as demais receitas ${r(ap.totalAdicoes)}: base do IRPJ ${r(ap.baseIrpj)}, base da CSLL ${r(ap.baseCsll)}`,
+      `IRPJ ${r(ap.irpj)} + adicional ${r(ap.adicional)} − deduções ${r(ap.deducoesIrpj)} = ${r(ap.irpjRecolher)} a recolher`,
+      `CSLL ${r(ap.csll)} − deduções ${r(ap.deducoesCsll)} = ${r(ap.csllRecolher)} a recolher`,
+    ];
+  if (ap.baseEstimativa === 'balancete')
+    return [
+      `Balancete de suspensão ou redução: lucro acumulado desde janeiro ${r(ap.lucroAntes)} + adições ${r(ap.totalAdicoes)} − exclusões ${r(ap.totalExclusoes)} − compensação ${r(ap.compensacaoPrejuizo)} = base do IRPJ ${r(ap.baseIrpj)}`,
+      `IRPJ ${r(ap.irpj)} + adicional ${r(ap.adicional)} − devido nos meses anteriores ${r(ap.anterioresIrpj)} − deduções ${r(ap.deducoesIrpj)} = ${r(ap.irpjRecolher)} a recolher`,
+      `CSLL ${r(ap.csll)} − devida nos meses anteriores ${r(ap.anterioresCsll)} − deduções ${r(ap.deducoesCsll)} = ${r(ap.csllRecolher)} a recolher`,
+      ap.irpjRecolher + ap.csllRecolher === 0
+        ? 'Suspensão: nada a recolher no mês'
+        : 'Redução: recolhe a diferença do acumulado',
+    ];
   return [
     `Lucro antes dos tributos ${r(ap.lucroAntes)} + adições ${r(ap.totalAdicoes)} − exclusões ${r(ap.totalExclusoes)} − compensação ${r(ap.compensacaoPrejuizo)} = base do IRPJ ${r(ap.baseIrpj)}`,
     `IRPJ ${r(ap.irpj)} + adicional ${r(ap.adicional)} − deduções ${r(ap.deducoesIrpj)} = ${r(ap.irpjRecolher)} a recolher`,
@@ -650,6 +698,10 @@ const esquemaApurar = z.object({
   contaBaseNegativa: id.nullable().default(null),
   deducoesIrpj: dinheiro.default(0),
   deducoesCsll: dinheiro.default(0),
+  /** Só na estimativa mensal: receita bruta (padrão) ou balancete de suspensão ou redução. */
+  baseEstimativa: z.enum(BASES_ESTIMATIVA_MENSAL).default('receita_bruta'),
+  percentualPresuncaoIrpj: z.number().min(0).max(100).default(PRESUNCAO_PADRAO.irpj),
+  percentualPresuncaoCsll: z.number().min(0).max(100).default(PRESUNCAO_PADRAO.csll),
 });
 const apurar = definirOperacao<z.infer<typeof esquemaApurar>, ResultadoOperacao>({
   nome: 'contabil.lalur_apurar',
@@ -685,14 +737,28 @@ const apurar = definirOperacao<z.infer<typeof esquemaApurar>, ResultadoOperacao>
     const manuais = (await ajustesDa(tx, ap.id)).filter(
       (x): x is typeof x & { tipo: 'adicao' | 'exclusao' } => x.tipo !== 'compensacao_prejuizo',
     );
+    const estimativa = ap.forma === 'estimativa_mensal' ? e.baseEstimativa : null;
+    // O balancete apura o lucro acumulado desde janeiro; as outras formas, o do próprio período.
     const lucroAntes = await lucroAntesDosTributos(
       tx,
       ap.estabelecimento,
-      ap.inicio,
+      estimativa === 'balancete' ? `${ap.inicio.slice(0, 4)}-01-01` : ap.inicio,
       ap.fim,
       cfg ? [cfg.irpjDebito, cfg.csllDebito] : [],
     );
+    const receita =
+      estimativa === 'receita_bruta' ? await receitaBruta(tx, ap.estabelecimento, ap.inicio, ap.fim) : null;
+    const anteriores =
+      estimativa === 'balancete'
+        ? await estimativasAnteriores(tx, ap.estabelecimento, ap.inicio)
+        : { irpj: 0, csll: 0 };
     const r = apurarLucroReal({
+      baseEstimativa: estimativa ?? undefined,
+      receitaBrutaCentavos: receita ?? undefined,
+      percentualPresuncaoIrpj: e.percentualPresuncaoIrpj,
+      percentualPresuncaoCsll: e.percentualPresuncaoCsll,
+      estimativasAnterioresIrpjCentavos: anteriores.irpj,
+      estimativasAnterioresCsllCentavos: anteriores.csll,
       forma: ap.forma,
       inicio: ap.inicio,
       fim: ap.fim,
@@ -712,7 +778,8 @@ const apurar = definirOperacao<z.infer<typeof esquemaApurar>, ResultadoOperacao>
       [prejuizo, r.compensacaoPrejuizo, true, 'Compensação de prejuízo fiscal (limite de 30%)'],
       [baseNeg, r.compensacaoBaseNegativa, false, 'Compensação de base negativa da CSLL (limite de 30%)'],
     ] as const) {
-      if (!conta || valor <= 0) continue;
+      // Na estimativa mensal a compensação só reduz a base do mês: a parte B se baixa no ajuste anual.
+      if (!conta || valor <= 0 || estimativa) continue;
       const ajuste = await tx.incluir('ajuste_lalur', {
         apuracao_irpj_csll_id: ap.id,
         sequencia: seq++,
@@ -735,6 +802,12 @@ const apurar = definirOperacao<z.infer<typeof esquemaApurar>, ResultadoOperacao>
     }
     await tx.alterar('apuracao_irpj_csll', ap.id, e.versao, {
       lucro_antes_tributos: reais(lucroAntes),
+      base_estimativa: estimativa,
+      receita_bruta: receita === null ? null : reais(receita),
+      percentual_presuncao_irpj: estimativa === 'receita_bruta' ? e.percentualPresuncaoIrpj : null,
+      percentual_presuncao_csll: estimativa === 'receita_bruta' ? e.percentualPresuncaoCsll : null,
+      estimativas_anteriores_irpj: reais(anteriores.irpj),
+      estimativas_anteriores_csll: reais(anteriores.csll),
       total_adicoes: reais(r.adicoesIrpj),
       total_exclusoes: reais(r.exclusoesIrpj),
       compensacao_prejuizo: reais(r.compensacaoPrejuizo),
@@ -753,6 +826,9 @@ const apurar = definirOperacao<z.infer<typeof esquemaApurar>, ResultadoOperacao>
     return {
       apuracao: ap.id,
       lucroAntes,
+      baseEstimativa: estimativa,
+      receitaBruta: receita,
+      balancete: r.balancete,
       baseIrpj: r.baseIrpj,
       baseCsll: r.baseCsll,
       compensacaoPrejuizo: r.compensacaoPrejuizo,
@@ -902,8 +978,14 @@ const fechar = definirOperacao<z.infer<typeof esquemaFechar>, ResultadoOperacao>
     const manuais = (await ajustesDa(tx, ap.id)).filter((x) => x.tipo !== 'compensacao_prejuizo');
     const soma = (t: string, trib: 'irpj' | 'csll') =>
       manuais.filter((x) => x.tipo === t && x[trib]).reduce((s, x) => s + x.valorCentavos, 0);
-    const prejuizo = Math.max(0, -(ap.lucroAntes + soma('adicao', 'irpj') - soma('exclusao', 'irpj')));
-    const baseNegativa = Math.max(0, -(ap.lucroAntes + soma('adicao', 'csll') - soma('exclusao', 'csll')));
+    // A estimativa mensal não constitui prejuízo na parte B: quem apura o prejuízo do ano é o ajuste anual.
+    const mensal = ap.forma === 'estimativa_mensal';
+    const prejuizo = mensal
+      ? 0
+      : Math.max(0, -(ap.lucroAntes + soma('adicao', 'irpj') - soma('exclusao', 'irpj')));
+    const baseNegativa = mensal
+      ? 0
+      : Math.max(0, -(ap.lucroAntes + soma('adicao', 'csll') - soma('exclusao', 'csll')));
     const constituidos: string[] = [];
     for (const [conta, valor, campo, texto] of [
       [e.contaPrejuizo, prejuizo, 'contaPrejuizo', 'Prejuízo fiscal do período'],

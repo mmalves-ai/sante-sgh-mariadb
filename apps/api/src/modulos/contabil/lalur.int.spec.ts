@@ -354,4 +354,62 @@ describe.skipIf(SEM_BANCO)('LALUR/LACS, apuração e provisão do IRPJ e da CSLL
     );
     expect(Number(s?.['liquido'])).toBe(-58000);
   }, 120_000);
+  it('estimativa mensal: receita bruta com presunção e balancete acumulado menos o devido antes; fecha sem parte B', async () => {
+    const abrir = async (mes: string, fim: string) =>
+      Number(
+        (
+          await executar('abrirApuracao', {
+            estabelecimento: est,
+            forma: 'estimativa_mensal',
+            inicio: `${ANO}-${mes}-01`,
+            fim: `${ANO}-${mes}-${fim}`,
+          })
+        )['apuracao'],
+      );
+    // Fevereiro pela receita bruta: 500.000 × 8% = 40.000 (IRPJ 6.000 + adicional 2.000); × 12% = 60.000 (CSLL 5.400).
+    const fev = await abrir('02', '28');
+    const rf = await executar('apurar', { apuracao: fev, versao: await versao(fev) });
+    expect([
+      rf['baseEstimativa'],
+      rf['receitaBruta'],
+      rf['baseIrpj'],
+      rf['irpjRecolher'],
+      rf['csllRecolher'],
+    ]).toEqual(['receita_bruta', 50_000_000, 4_000_000, 800_000, 540_000]);
+    // Março por balancete: lucro de janeiro a março 200.000; IRPJ 30.000 + adicional (200.000 − 60.000) × 10% = 14.000,
+    // menos os 8.000 de fevereiro; CSLL 18.000 menos 5.400.
+    const mar = await abrir('03', '31');
+    const rm = await executar('apurar', {
+      apuracao: mar,
+      versao: await versao(mar),
+      baseEstimativa: 'balancete',
+    });
+    expect([
+      rm['baseEstimativa'],
+      rm['lucroAntes'],
+      rm['irpjRecolher'],
+      rm['csllRecolher'],
+      rm['balancete'],
+    ]).toEqual(['balancete', 20_000_000, 3_600_000, 1_260_000, 'reducao']);
+    const [det] = await consultar(
+      'SELECT base_estimativa, estimativas_anteriores_irpj, estimativas_anteriores_csll FROM apuracao_irpj_csll WHERE id = ?',
+      [mar],
+    );
+    expect([
+      det?.['base_estimativa'],
+      Number(det?.['estimativas_anteriores_irpj']),
+      Number(det?.['estimativas_anteriores_csll']),
+    ]).toEqual(['balancete', 8000, 5400]);
+    // Suspensão: o mesmo balancete com dedução que cobre o resto não recolhe nada.
+    const rs = await executar('apurar', {
+      apuracao: mar,
+      versao: await versao(mar),
+      baseEstimativa: 'balancete',
+      deducoesIrpj: 36_000,
+      deducoesCsll: 12_600,
+    });
+    expect([rs['irpjRecolher'], rs['csllRecolher'], rs['balancete']]).toEqual([0, 0, 'suspensao']);
+    const f = await executar('fechar', { apuracao: mar, versao: await versao(mar) });
+    expect([f['prejuizo'], f['baseNegativa'], f['constituidos']]).toEqual([0, 0, '']);
+  });
 });

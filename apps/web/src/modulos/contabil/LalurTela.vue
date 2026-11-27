@@ -168,8 +168,15 @@ const calc = reactive({
   contaBaseNegativa: null as number | null,
   deducoesIrpj: 0,
   deducoesCsll: 0,
+  baseEstimativa: 'receita_bruta',
+  percentualPresuncaoIrpj: 8,
+  percentualPresuncaoCsll: 12,
 });
+const opBasesEstimativa = computed(() =>
+  ['receita_bruta', 'balancete'].map((b) => ({ valor: b, rotulo: k(`apurar.bases.${b}`) })),
+);
 const ap = computed(() => detalhe.data.value?.apuracao);
+const mensal = computed(() => ap.value?.forma === 'estimativa_mensal');
 const situacao = computed(() => ap.value?.situacao ?? '');
 const versao = computed(() => ap.value?.versao ?? 1);
 const apurar = () => acao.mutate(() => apurarLalur(apuracao.value!, { versao: versao.value, ...calc }));
@@ -324,6 +331,36 @@ const ajustavel = computed(() => situacao.value === 'aberta' || situacao.value =
         <dd>{{ reais(detalhe.data.value.apuracao.csllRecolher) }}</dd>
       </dl>
       <div v-if="podeApurar && situacao !== 'fechada'" class="formulario">
+        <template v-if="mensal">
+          <SanteSelecao
+            v-model="calc.baseEstimativa"
+            :rotulo="k('apurar.baseEstimativa')"
+            :opcoes="opBasesEstimativa"
+            data-testid="lalur-base-estimativa"
+          />
+          <template v-if="calc.baseEstimativa === 'receita_bruta'">
+            <label
+              >{{ k('apurar.presuncaoIrpj') }}
+              <input
+                v-model.number="calc.percentualPresuncaoIrpj"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                data-testid="lalur-presuncao-irpj"
+            /></label>
+            <label
+              >{{ k('apurar.presuncaoCsll') }}
+              <input
+                v-model.number="calc.percentualPresuncaoCsll"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                data-testid="lalur-presuncao-csll"
+            /></label>
+          </template>
+        </template>
         <SanteSelecao
           v-model="calc.contaPrejuizo"
           :rotulo="k('apurar.contaPrejuizo')"

@@ -11,6 +11,11 @@
 //   o ciclo da apuração: aberta e apurada aceitam ajustes e nova apuração; a provisão (lançamento contábil) só na
 //   apurada; o fechamento na provisionada, ou na apurada sem tributo a recolher;
 //   os registros do bloco M da ECF (M010, M300, M350, M410, M500) saem das linhas gravadas.
+// A forma mensal por estimativa (Lei 9.430/1996, art. 2º; IN RFB 1.700/2017, arts. 32 a 47) tem duas bases:
+//   receita bruta: a receita do mês vezes os percentuais de presunção (serviços hospitalares: 8% no IRPJ e 12% na
+//   CSLL, Lei 9.249/1995, arts. 15 e 20), mais as demais receitas e ganhos de capital (as adições), sem exclusões;
+//   balancete de suspensão ou redução: o lucro real acumulado desde janeiro, com o adicional sobre o limite vezes os
+//   meses do ano, menos os tributos devidos nos meses anteriores; zero é suspensão, menor que a receita bruta é redução.
 // Os imunes e isentos continuam pelas formas 8 e 9 da ECF (sped.ts).
 import type { PartidaGerada } from '@sgh/contratos';
 
@@ -29,6 +34,10 @@ export type SituacaoApuracaoLucroReal = (typeof SITUACOES_APURACAO_LUCRO_REAL)[n
 export type TributoParteB = 'irpj' | 'csll' | 'ambos';
 export type NaturezaSaldoParteB = 'devedor' | 'credor';
 export type EfeitoParteB = 'constitui' | 'baixa';
+export const BASES_ESTIMATIVA_MENSAL = ['receita_bruta', 'balancete'] as const;
+export type BaseEstimativaMensal = (typeof BASES_ESTIMATIVA_MENSAL)[number];
+/** Presunção dos serviços hospitalares (Lei 9.249/1995, art. 15, § 1º, III, a, e art. 20). */
+export const PRESUNCAO_PADRAO = { irpj: 8, csll: 12 } as const;
 export type AcaoApuracaoLucroReal = 'ajustar' | 'apurar' | 'provisionar' | 'estornar' | 'fechar';
 
 export interface RecusaLalur {
@@ -217,9 +226,22 @@ export interface EntradaLucroReal {
   readonly aliquotaCsll: number;
   readonly deducoesIrpjCentavos: number;
   readonly deducoesCsllCentavos: number;
+  /** Só na estimativa mensal: a base escolhida (receita bruta, o padrão, ou balancete de suspensão ou redução). */
+  readonly baseEstimativa?: BaseEstimativaMensal;
+  /** Receita bruta do mês (base receita bruta). */
+  readonly receitaBrutaCentavos?: number;
+  readonly percentualPresuncaoIrpj?: number;
+  readonly percentualPresuncaoCsll?: number;
+  /** Balancete: IRPJ (com adicional) e CSLL devidos nos meses anteriores do ano; o lucro de entrada é o acumulado. */
+  readonly estimativasAnterioresIrpjCentavos?: number;
+  readonly estimativasAnterioresCsllCentavos?: number;
 }
 
 export interface ResultadoLucroReal {
+  /** Só na estimativa mensal. */
+  readonly baseEstimativa: BaseEstimativaMensal | null;
+  /** Balancete: suspensão (nada a recolher) ou redução. */
+  readonly balancete: 'suspensao' | 'reducao' | null;
   readonly meses: number;
   readonly adicoesIrpj: number;
   readonly exclusoesIrpj: number;
@@ -252,7 +274,17 @@ const r$ = (c: number): string =>
 
 /** A apuração do lucro real e da base da CSLL, com a compensação limitada a 30% e o adicional do IRPJ. */
 export function apurarLucroReal(e: EntradaLucroReal): ResultadoLucroReal {
-  const meses = mesesDoPeriodo(e.inicio, e.fim);
+  if (e.forma === 'estimativa_mensal') {
+    if ((e.baseEstimativa ?? 'receita_bruta') === 'receita_bruta') return estimativaPelaReceita(e);
+    return estimativaPorBalancete(e);
+  }
+  return lucroRealDoPeriodo(e);
+}
+
+function lucroRealDoPeriodo(
+  e: EntradaLucroReal,
+  meses = mesesDoPeriodo(e.inicio, e.fim),
+): ResultadoLucroReal {
   const soma = (tipo: 'adicao' | 'exclusao', tributo: 'irpj' | 'csll') =>
     e.ajustes.filter((a) => a.tipo === tipo && a[tributo]).reduce((s, a) => s + a.valorCentavos, 0);
   const adicoesIrpj = soma('adicao', 'irpj');
@@ -284,6 +316,8 @@ export function apurarLucroReal(e: EntradaLucroReal): ResultadoLucroReal {
     `CSLL a recolher = ${r$(baseCsll)} × ${e.aliquotaCsll}% − deduções ${r$(e.deducoesCsllCentavos)} = ${r$(csllRecolher)}`,
   ];
   return {
+    baseEstimativa: null,
+    balancete: null,
     meses,
     adicoesIrpj,
     exclusoesIrpj,
@@ -304,6 +338,92 @@ export function apurarLucroReal(e: EntradaLucroReal): ResultadoLucroReal {
     irpjRecolher,
     csllRecolher,
     memoria,
+  };
+}
+
+/** Estimativa pela receita bruta do mês: presunção mais as demais receitas (adições), sem exclusão nem compensação. */
+function estimativaPelaReceita(e: EntradaLucroReal): ResultadoLucroReal {
+  const receita = e.receitaBrutaCentavos ?? 0;
+  const pIrpj = e.percentualPresuncaoIrpj ?? PRESUNCAO_PADRAO.irpj;
+  const pCsll = e.percentualPresuncaoCsll ?? PRESUNCAO_PADRAO.csll;
+  const soma = (tributo: 'irpj' | 'csll') =>
+    e.ajustes.filter((a) => a.tipo === 'adicao' && a[tributo]).reduce((s, a) => s + a.valorCentavos, 0);
+  const adicoesIrpj = soma('irpj');
+  const adicoesCsll = soma('csll');
+  const presumidoIrpj = pct(receita, pIrpj);
+  const presumidoCsll = pct(receita, pCsll);
+  const baseIrpj = Math.max(0, presumidoIrpj + adicoesIrpj);
+  const baseCsll = Math.max(0, presumidoCsll + adicoesCsll);
+  const limiteAdicional = e.limiteAdicionalMensalCentavos;
+  const irpj = pct(baseIrpj, e.aliquotaIrpj);
+  const adicional = pct(Math.max(0, baseIrpj - limiteAdicional), e.aliquotaAdicional);
+  const csll = pct(baseCsll, e.aliquotaCsll);
+  const irpjRecolher = Math.max(0, irpj + adicional - e.deducoesIrpjCentavos);
+  const csllRecolher = Math.max(0, csll - e.deducoesCsllCentavos);
+  return {
+    baseEstimativa: 'receita_bruta',
+    balancete: null,
+    meses: 1,
+    adicoesIrpj,
+    exclusoesIrpj: 0,
+    adicoesCsll,
+    exclusoesCsll: 0,
+    ajustadoIrpj: baseIrpj,
+    ajustadoCsll: baseCsll,
+    compensacaoPrejuizo: 0,
+    compensacaoBaseNegativa: 0,
+    prejuizoDoPeriodo: 0,
+    baseNegativaDoPeriodo: 0,
+    baseIrpj,
+    baseCsll,
+    limiteAdicional,
+    irpj,
+    adicional,
+    csll,
+    irpjRecolher,
+    csllRecolher,
+    memoria: [
+      `Estimativa mensal pela receita bruta de ${r$(receita)}`,
+      `Base do IRPJ = ${r$(receita)} × ${pIrpj}% (${r$(presumidoIrpj)}) + demais receitas ${r$(adicoesIrpj)} = ${r$(baseIrpj)}`,
+      `IRPJ = ${r$(baseIrpj)} × ${e.aliquotaIrpj}% = ${r$(irpj)}`,
+      `Adicional = (${r$(baseIrpj)} − limite ${r$(limiteAdicional)}) × ${e.aliquotaAdicional}% = ${r$(adicional)}`,
+      `IRPJ a recolher = ${r$(irpj)} + ${r$(adicional)} − deduções ${r$(e.deducoesIrpjCentavos)} = ${r$(irpjRecolher)}`,
+      `Base da CSLL = ${r$(receita)} × ${pCsll}% (${r$(presumidoCsll)}) + demais receitas ${r$(adicoesCsll)} = ${r$(baseCsll)}`,
+      `CSLL a recolher = ${r$(baseCsll)} × ${e.aliquotaCsll}% − deduções ${r$(e.deducoesCsllCentavos)} = ${r$(csllRecolher)}`,
+    ],
+  };
+}
+
+/**
+ * Balancete de suspensão ou redução: o lucro real acumulado de janeiro até o fim do mês (o lucro de entrada já é o
+ * acumulado), o limite do adicional vezes os meses do ano, menos os tributos devidos nos meses anteriores.
+ */
+function estimativaPorBalancete(e: EntradaLucroReal): ResultadoLucroReal {
+  const meses = Number(e.fim.slice(5, 7));
+  const r = lucroRealDoPeriodo(e, meses);
+  const antIrpj = e.estimativasAnterioresIrpjCentavos ?? 0;
+  const antCsll = e.estimativasAnterioresCsllCentavos ?? 0;
+  const irpjRecolher = Math.max(0, r.irpj + r.adicional - antIrpj - e.deducoesIrpjCentavos);
+  const csllRecolher = Math.max(0, r.csll - antCsll - e.deducoesCsllCentavos);
+  return {
+    ...r,
+    baseEstimativa: 'balancete',
+    balancete: irpjRecolher + csllRecolher === 0 ? 'suspensao' : 'reducao',
+    // O prejuízo do balancete não se constitui na parte B: o ajuste anual é que apura o lucro real do ano.
+    prejuizoDoPeriodo: 0,
+    baseNegativaDoPeriodo: 0,
+    irpjRecolher,
+    csllRecolher,
+    memoria: [
+      `Balancete de suspensão ou redução, acumulado de janeiro a ${e.fim} (${meses} mês(es))`,
+      ...r.memoria.slice(0, 5),
+      `IRPJ a recolher = ${r$(r.irpj)} + ${r$(r.adicional)} − devido nos meses anteriores ${r$(antIrpj)} − deduções ${r$(e.deducoesIrpjCentavos)} = ${r$(irpjRecolher)}`,
+      r.memoria[6]!,
+      `CSLL a recolher = ${r$(r.csll)} − devida nos meses anteriores ${r$(antCsll)} − deduções ${r$(e.deducoesCsllCentavos)} = ${r$(csllRecolher)}`,
+      irpjRecolher + csllRecolher === 0
+        ? 'Suspensão: nada a recolher no mês'
+        : 'Redução: recolhe a diferença do acumulado',
+    ],
   };
 }
 

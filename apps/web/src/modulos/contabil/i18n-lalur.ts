@@ -74,6 +74,13 @@ export const mensagensLalur = {
     nenhuma: 'Nenhuma',
     deducoesIrpj: 'Deduções do IRPJ (R$)',
     deducoesCsll: 'Deduções da CSLL (R$)',
+    baseEstimativa: 'Base da estimativa mensal',
+    bases: {
+      receita_bruta: 'Receita bruta com os percentuais de presunção',
+      balancete: 'Balancete de suspensão ou redução (lucro acumulado desde janeiro)',
+    },
+    presuncaoIrpj: 'Presunção do IRPJ (%)',
+    presuncaoCsll: 'Presunção da CSLL (%)',
     botao: 'Apurar',
     provisionar: 'Provisionar',
     fechar: 'Fechar',
