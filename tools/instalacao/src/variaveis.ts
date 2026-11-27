@@ -537,6 +537,10 @@ export const VARIAVEIS: readonly Variavel[] = [
         'TRANSMISSOR_TISS',
         'Transmissor TISS da elegibilidade e da comunicação de beneficiário (destino falso fora de produção).',
       ],
+      [
+        'ENTREGA_EQUIPAMENTO',
+        'Entrega dos pedidos aos equipamentos do laboratório e recolhimento do resultado (simulador fora de produção).',
+      ],
       ['INTEGRACAO', 'Integrações de saída do worker.'],
       ['VIGIA_BANCO', 'Vigia do banco (transações, travas e conexões; desligado desliga).'],
       ['RELATORIO_ENVIO', 'Envio agendado de relatórios.'],
@@ -582,6 +586,7 @@ export const VARIAVEIS: readonly Variavel[] = [
       ['VIGIA_TRANSACAO_LIMITE_MS', 'limite da transação longa no vigia do banco'],
       ['OUTBOX_INTERVALO_MS', 'caixa de saída'],
       ['TRANSMISSOR_TISS_INTERVALO_MS', 'transmissor TISS'],
+      ['ENTREGA_EQUIPAMENTO_INTERVALO_MS', 'entrega aos equipamentos do laboratório'],
       ['INTEGRACAO_INTERVALO_MS', 'integrações'],
       ['INTEGRACAO_LOTE_FATOS', 'lote das integrações (fatos por ciclo)'],
       ['BUSCA_VIGIA_MS', 'índice de busca'],

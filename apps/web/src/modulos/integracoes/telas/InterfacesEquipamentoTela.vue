@@ -647,7 +647,7 @@ const quando = (v: string | null) => (v ? new Date(v).toLocaleString('pt-BR') : 
               · {{ t('integracoes.interfaces.mensagens.pendencia') }}: {{ g.erro }}</template
             >
             <SanteBotao
-              v-if="g.direcao === 'entrada' && g.situacao === 'erro'"
+              v-if="g.direcao === 'entrada' && (g.situacao === 'erro' || g.situacao === 'pendente')"
               :rotulo="t('integracoes.interfaces.mensagens.reprocessar')"
               :data-testid="`mensagem-reprocessar-${g.id}`"
               @acionar="reprocessar(g.id)"

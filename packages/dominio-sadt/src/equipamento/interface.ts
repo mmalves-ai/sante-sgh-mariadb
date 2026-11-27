@@ -368,3 +368,125 @@ export function lerAstmResultado(conteudo: string): { readonly amostras: readonl
   }
   return { amostras };
 }
+
+// Protocolo de baixo nível ASTM E1381 (LIS01-A2): a mensagem vai em quadros de até 240 caracteres, cada um com o número
+// do quadro (1 a 7 e 0, em ciclo), o texto, o fim do quadro (ETB, intermediário; ETX, o último do registro), a soma de
+// conferência em dois dígitos hexadecimais e CR LF. O remetente abre com ENQ e fecha com EOT; o receptor responde ACK
+// (aceito) ou NAK (repetir o quadro).
+export const ASTM_CONTROLE = {
+  ENQ: '\x05',
+  ACK: '\x06',
+  NAK: '\x15',
+  EOT: '\x04',
+  STX: '\x02',
+  ETX: '\x03',
+  ETB: '\x17',
+} as const;
+/** Texto máximo de um quadro (E1381). */
+export const ASTM_TAMANHO_QUADRO = 240;
+/** Tentativas de um quadro recusado com NAK antes de desistir (E1381: seis). */
+export const ASTM_TENTATIVAS_QUADRO = 6;
+
+/** Soma de conferência do quadro: soma dos bytes do número do quadro até o ETB/ETX, módulo 256, em hexadecimal. */
+export function somaAstm(corpo: string): string {
+  let s = 0;
+  for (let i = 0; i < corpo.length; i++) s = (s + (corpo.charCodeAt(i) & 0xff)) % 256;
+  return s.toString(16).toUpperCase().padStart(2, '0');
+}
+
+/** Os quadros E1381 da mensagem (cada registro termina em quadro com ETX; o registro longo é partido com ETB). */
+export function quadrosAstm(mensagem: string): string[] {
+  const { STX, ETX, ETB } = ASTM_CONTROLE;
+  const quadros: string[] = [];
+  let numero = 1;
+  for (const registro of mensagem.split('\r').filter((r) => r !== '')) {
+    const texto = `${registro}\r`;
+    for (let i = 0; i < texto.length; i += ASTM_TAMANHO_QUADRO) {
+      const parte = texto.slice(i, i + ASTM_TAMANHO_QUADRO);
+      const corpo = `${numero}${parte}${i + ASTM_TAMANHO_QUADRO >= texto.length ? ETX : ETB}`;
+      quadros.push(`${STX}${corpo}${somaAstm(corpo)}\r\n`);
+      numero = (numero + 1) % 8;
+    }
+  }
+  return quadros;
+}
+
+/** Confere um quadro recebido: a soma bate? Devolve o texto (sem o número) e se fecha o registro. */
+export function lerQuadroAstm(
+  quadro: string,
+): { readonly valido: true; readonly texto: string; readonly fim: boolean } | { readonly valido: false } {
+  const { STX, ETX, ETB } = ASTM_CONTROLE;
+  const ini = quadro.indexOf(STX);
+  const fimEtx = quadro.indexOf(ETX, ini + 1);
+  const fimEtb = quadro.indexOf(ETB, ini + 1);
+  const fim = fimEtx >= 0 && (fimEtb < 0 || fimEtx < fimEtb) ? fimEtx : fimEtb;
+  if (ini < 0 || fim < 0 || quadro.length < fim + 3) return { valido: false };
+  const corpo = quadro.slice(ini + 1, fim + 1);
+  const soma = quadro.slice(fim + 1, fim + 3).toUpperCase();
+  if (!/^[0-7]/.test(corpo) || somaAstm(corpo) !== soma) return { valido: false };
+  return { valido: true, texto: corpo.slice(1, -1), fim: quadro[fim] === ETX };
+}
+
+// HL7 v2 (2.5.1): o pedido vai como ORM^O01 (um OBR por teste, a amostra no número do pedido) e o resultado volta como
+// ORU^R01 (OBR com a amostra; cada OBX traz o código do teste e o valor). PID vai vazio: nenhum dado da pessoa sai.
+
+/** O pedido de uma amostra em HL7 v2 (ORM^O01). */
+export function montarHl7Pedido(p: {
+  readonly amostra: string;
+  readonly testes: readonly string[];
+  readonly urgente: boolean;
+  readonly controle: string;
+  readonly quando: string;
+}): string {
+  const segmentos = [
+    `MSH|^~\\&|SGH|LAB|EQUIPAMENTO|LAB|${p.quando}||ORM^O01|${p.controle}|P|2.5.1`,
+    'PID|1',
+    `ORC|NW|${p.amostra}`,
+    ...p.testes.map((t, i) => `OBR|${i + 1}|${p.amostra}||^^^${t}|${p.urgente ? 'S' : 'R'}`),
+  ];
+  return segmentos.join('\r') + '\r';
+}
+
+/**
+ * Lê o resultado em HL7 v2 (ORU^R01): cada OBR abre a amostra (pedido do sistema, OBR-2, ou do executante, OBR-3) e cada
+ * OBX traz o código (OBX-3, o identificador ou o 4º componente quando o equipamento usa o formato ^^^código) e o valor
+ * (OBX-5). O PID é ignorado. Devolve também o controle da mensagem (MSH-10), que serve de chave contra repetição.
+ */
+export function lerHl7Resultado(conteudo: string): {
+  readonly controle: string;
+  readonly amostras: readonly AmostraLida[];
+} {
+  const amostras: { amostra: string; leituras: LeituraEquipamento[] }[] = [];
+  let campo = '|';
+  let componente = '^';
+  let controle = '';
+  for (const bruta of conteudo.split(/[\r\n]+/)) {
+    const linha = bruta.replace(/^[^A-Za-z]*/, '').trim();
+    if (linha.length < 4) continue;
+    const tipo = linha.slice(0, 3).toUpperCase();
+    if (tipo === 'MSH') {
+      campo = linha[3] ?? '|';
+      componente = linha[4] ?? '^';
+      // No MSH o separador é o campo 1: o controle (MSH-10) fica na posição 9 do split.
+      controle = (linha.split(campo)[9] ?? '').trim();
+      continue;
+    }
+    const campos = linha.split(campo);
+    if (tipo === 'OBR') {
+      const amostra = (
+        (campos[2] ?? '').split(componente)[0] ||
+        (campos[3] ?? '').split(componente)[0] ||
+        ''
+      ).trim();
+      if (amostra) amostras.push({ amostra, leituras: [] });
+    } else if (tipo === 'OBX') {
+      const atual = amostras[amostras.length - 1];
+      if (!atual) continue;
+      const partes = (campos[3] ?? '').split(componente).map((x) => x.trim());
+      const codigo = partes[0] || partes[3] || partes.find((x) => x !== '') || '';
+      const valor = (campos[5] ?? '').split(componente)[0]!.trim();
+      if (codigo && valor) atual.leituras.push({ codigo, valor });
+    }
+  }
+  return { controle, amostras };
+}

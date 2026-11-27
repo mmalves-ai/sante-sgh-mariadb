@@ -19,6 +19,7 @@ import { EmailService } from './email.service.js';
 import { IndiceBuscaService } from './indice-busca.service.js';
 import { PublicadorCatalogosService } from './publicador-catalogos.service.js';
 import { RelayOutboxService } from './relay-outbox.service.js';
+import { EntregaEquipamentoService } from './sadt-equipamento/entrega-equipamento.service.js';
 import { TransmissorTissService } from './transmissor-tiss.service.js';
 import { Relogio } from './relogio.js';
 import { SinalDeVidaService } from './sinal-de-vida.service.js';
@@ -73,6 +74,8 @@ const SERVICOS: Readonly<Record<string, Provider>> = {
   'fila-erp': FilaErpService,
   // 06-FAT L26: o transmissor TISS da elegibilidade e da comunicação de beneficiário (destino falso fora de produção).
   'transmissor-tiss': TransmissorTissService,
+  // 05-SADT L13: a entrega aos equipamentos do laboratório e o recolhimento do resultado (simulador fora de produção).
+  'entrega-equipamento': EntregaEquipamentoService,
   'relatorio-envio': EnvioRelatorioService,
   integracao: IntegracaoService,
 };
@@ -101,6 +104,8 @@ export function servicosDoWorker(env: NodeJS.ProcessEnv = process.env): Provider
     RelayOutboxService,
     // 06-FAT L26: transmissor TISS (destino falso fora de produção; TRANSMISSOR_TISS=desligado nos testes).
     TransmissorTissService,
+    // 05-SADT L13: entrega aos equipamentos do laboratório (ENTREGA_EQUIPAMENTO=desligado nos testes).
+    EntregaEquipamentoService,
     EmailService,
     IndiceBuscaService,
     PublicadorCatalogosService,

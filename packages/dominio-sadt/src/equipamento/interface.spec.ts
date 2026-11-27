@@ -1,6 +1,11 @@
 // Regras da interface com os equipamentos do laboratório (F3.5, 05-SADT linha 13). Massa sintética.
 import { describe, expect, it } from 'vitest';
 import {
+  lerHl7Resultado,
+  lerQuadroAstm,
+  montarHl7Pedido,
+  quadrosAstm,
+  somaAstm,
   conferirDeParaAnalito,
   conferirDeParaExame,
   conferirInterface,
@@ -191,5 +196,61 @@ describe('resultado do equipamento', () => {
       { amostra: 'B2', leituras: [{ codigo: 'WBC', valor: '7.5' }] },
     ]);
     expect(lerAstmResultado('lixo sem registro').amostras).toEqual([]);
+  });
+});
+
+describe('ASTM E1381 e HL7 v2 do equipamento (C3-004)', () => {
+  it('parte a mensagem em quadros numerados com soma de conferência e lê de volta', () => {
+    const msg = montarAstmPedido({ amostra: 'A1', testes: ['GLI'], urgente: false });
+    const q = quadrosAstm(msg);
+    expect(q).toHaveLength(4);
+    expect(q[0]!.startsWith('\x021H|')).toBe(true);
+    expect(q[3]!.slice(1, 2)).toBe('4');
+    const lidos = q.map((x) => lerQuadroAstm(x));
+    expect(lidos.every((l) => l.valido)).toBe(true);
+    expect(lidos.map((l) => (l.valido ? l.texto : '')).join('')).toBe(msg);
+    expect(lerQuadroAstm(q[0]!.replace('H|', 'X|')).valido).toBe(false);
+    // soma conhecida: "1H|\^&\r" + ETX
+    expect(somaAstm('1H\x03')).toBe(((0x31 + 0x48 + 0x03) % 256).toString(16).toUpperCase());
+  });
+
+  it('registro longo vai em vários quadros (ETB e depois ETX) e o número cicla de 7 para 0', () => {
+    const longo = `O|1|A1||${'^^^T'.repeat(100)}\r`;
+    const q = quadrosAstm(`H|\\^&\r${'P|1\r'.repeat(6)}${longo}`);
+    expect(q.length).toBeGreaterThan(8);
+    expect(q[7]!.slice(1, 2)).toBe('0');
+    const l = lerQuadroAstm(q[7]!);
+    expect(l.valido && !l.fim).toBe(true);
+  });
+
+  it('monta o pedido ORM^O01 sem dado da pessoa e lê o ORU^R01 do equipamento', () => {
+    const ped = montarHl7Pedido({
+      amostra: 'A9',
+      testes: ['GLI', 'URE'],
+      urgente: true,
+      controle: 'C1',
+      quando: '20261127',
+    });
+    expect(ped.split('\r')).toContain('PID|1');
+    expect(ped).toContain('OBR|2|A9||^^^URE|S');
+    const oru = [
+      'MSH|^~\\&|EQ|LAB|SGH|LAB|20261127||ORU^R01|M77|P|2.5.1',
+      'PID|1||X',
+      'OBR|1|A9|',
+      'OBX|1|NM|GLI^Glicose||98|mg/dL',
+      'OBX|2|NM|^^^URE||30',
+      'OBX|3|NM|CRE||',
+    ].join('\r');
+    const r = lerHl7Resultado(oru);
+    expect(r.controle).toBe('M77');
+    expect(r.amostras).toEqual([
+      {
+        amostra: 'A9',
+        leituras: [
+          { codigo: 'GLI', valor: '98' },
+          { codigo: 'URE', valor: '30' },
+        ],
+      },
+    ]);
   });
 });
