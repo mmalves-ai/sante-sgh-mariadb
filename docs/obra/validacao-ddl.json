@@ -1,15 +1,15 @@
 {
  "resumo": {
   "banco": "validacao",
-  "tabelas_criadas": 3720,
-  "catalogo": 3714,
+  "tabelas_criadas": 3750,
+  "catalogo": 3744,
   "faltam": 0,
   "fora_catalogo": 0,
   "arquivos_com_erro": 0,
   "erros_sql": 0,
   "tabelas_com_erro": 0,
-  "colunas_id_sem_fk": 76,
-  "fks": 14272,
+  "colunas_id_sem_fk": 80,
+  "fks": 14416,
   "gatilhos": 0,
   "plataforma_erros": 0,
   "total_erros": 0
@@ -36,12 +36,18 @@
   "sinal_vigilancia_iras": [
    "fato_id sem FK"
   ],
+  "turma_participante": [
+   "paciente_vigente_id sem FK"
+  ],
   "reavaliacao_escala": [
    "estabelecimento_id sem FK",
    "paciente_id sem FK",
    "internacao_id sem FK",
    "escala_clinica_id sem FK",
    "aplicacao_escala_id sem FK"
+  ],
+  "evento_processo_licitatorio": [
+   "documento_id sem FK"
   ],
   "profissional_especialidade": [
    "principal_profissional_id sem FK"
@@ -73,6 +79,9 @@
   ],
   "emissao_documento": [
    "origem_registro_id sem FK"
+  ],
+  "membro_agrupador_aprovacao": [
+   "valor_id sem FK"
   ],
   "devolucao_pix": [
    "end_to_end_id sem FK"
@@ -177,6 +186,9 @@
   ],
   "documento_prontuario": [
    "entidade_origem_id sem FK"
+  ],
+  "registro_hemodinamica": [
+   "exame_item_vigente_id sem FK"
   ],
   "item_lote_exportacao": [
    "entidade_origem_id sem FK"

@@ -10,8 +10,8 @@ ALTER TABLE destino_campo_estruturado
     COMMENT 'Pergunta do registro clínico cujas respostas alimentam o destino (confirmada pelo hospital)' AFTER parametro_vital_id,
   ADD KEY IF NOT EXISTS ix_destino_campo_estruturado_modelo_campo (modelo_campo_id);
 ALTER TABLE destino_campo_estruturado
-  ADD CONSTRAINT IF NOT EXISTS fk_destino_campo_estruturado_modelo_campo_id
-    FOREIGN KEY (modelo_campo_id) REFERENCES modelo_campo (id) ON DELETE RESTRICT;
+  ADD CONSTRAINT fk_destino_campo_estruturado_modelo_campo_id
+    FOREIGN KEY IF NOT EXISTS (modelo_campo_id) REFERENCES modelo_campo (id) ON DELETE RESTRICT;
 
 CREATE TABLE IF NOT EXISTS destino_campo_extracao (
   id                                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS destino_campo_extracao (
   afericao_id                       BIGINT UNSIGNED NULL,
   criado_em                         DATETIME(3) NOT NULL,
   criado_por                        BIGINT UNSIGNED NULL,
+  alterado_em                       DATETIME(3) NULL,
+  alterado_por                      BIGINT UNSIGNED NULL,
+  versao                            INT UNSIGNED NOT NULL DEFAULT 1,
   CONSTRAINT ck_destino_campo_extracao_situacao CHECK (situacao IN ('gerada','pendente')),
   CONSTRAINT ck_destino_campo_extracao_coerencia CHECK ((situacao = 'gerada' AND afericao_id IS NOT NULL AND motivo IS NULL)
     OR (situacao = 'pendente' AND afericao_id IS NULL AND motivo IS NOT NULL)),
@@ -34,3 +37,9 @@ CREATE TABLE IF NOT EXISTS destino_campo_extracao (
   CONSTRAINT fk_destino_campo_extracao_resposta FOREIGN KEY (registro_assistencial_resposta_id) REFERENCES registro_assistencial_resposta (id) ON DELETE RESTRICT,
   CONSTRAINT fk_destino_campo_extracao_afericao FOREIGN KEY (afericao_id) REFERENCES afericao (id) ON DELETE RESTRICT
 ) COMMENT='Rastro da extração das respostas históricas do registro para o destino estruturado confirmado (gerada ou pendente)';
+
+-- Colunas de auditoria (convenção do DDL) para o banco que já criou a tabela sem elas.
+ALTER TABLE destino_campo_extracao
+  ADD COLUMN IF NOT EXISTS alterado_em DATETIME(3) NULL AFTER criado_por,
+  ADD COLUMN IF NOT EXISTS alterado_por BIGINT UNSIGNED NULL AFTER alterado_em,
+  ADD COLUMN IF NOT EXISTS versao INT UNSIGNED NOT NULL DEFAULT 1 AFTER alterado_por;
