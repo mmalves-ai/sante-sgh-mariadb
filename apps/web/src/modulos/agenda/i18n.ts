@@ -329,7 +329,7 @@ export const mensagensAgenda = {
     abrirAtendimento: 'Abrir atendimento',
     semProntuario: 'Sem prontuário',
     converter: 'Converter em paciente',
-    converterDe: 'Converter o pré-cadastro de {paciente} em paciente',
+    converterDe: 'Converter em paciente: pré-cadastro de {paciente}',
     convertido: 'Pré-cadastro convertido: {marcacoes} marcação(ões) passaram ao paciente.',
     abrirAtendimentoDe: 'Abrir o atendimento de {paciente} pelo agendamento',
     agora: 'Agora: {agora}',
