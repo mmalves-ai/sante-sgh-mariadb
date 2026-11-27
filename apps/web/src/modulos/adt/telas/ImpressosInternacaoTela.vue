@@ -21,11 +21,29 @@ import { emitirDocumento, lerFichasDoMomento } from '../api-documentos-internaca
 import ErroAdt from '../componentes/ErroAdt.vue';
 import ResumoInternacao from '../componentes/ResumoInternacao.vue';
 import { usarInternacao } from '../usar-internacao.js';
+import { pode as podeSessao } from '../../../casca/sessao/pode.js';
 
 const props = defineProps<{ reg: string }>();
+const podeAutorizar = podeSessao('faturamento.autorizacao.ler');
 const { t } = useI18n();
 const reg = computed(() => Number(props.reg));
 const { ficha } = usarInternacao(reg);
+// Passo 3 da linha 69: a guia TISS de solicitação de internação nasce da internação (convênio pela carteira do
+// paciente, CID, procedimento, regime e admissão), na autorização prévia; o PDF da guia sai do pedido gravado.
+const guiaTiss = computed(() => {
+  const f = ficha.data.value;
+  if (!f || !podeAutorizar) return null;
+  const query: Record<string, string> = {
+    paciente: String(f.paciente),
+    tipo: 'internacao',
+    internacao: String(reg.value),
+    regime: 'hospitalar',
+    admissao: f.entrada.slice(0, 10),
+    procedimento: String(f.procedimento),
+  };
+  if (f.cid) query['cid'] = f.cid;
+  return { path: '/faturamento/autorizacoes', query };
+});
 const IMPRESSOS = [
   { codigo: 'ficha', formato: 'pdf' },
   { codigo: 'pulseira', formato: 'zpl' },
@@ -261,6 +279,12 @@ const configuracao = rotaDoSubitem('internacao');
           data-testid="imp-configurar-documentos"
           >{{ t('adt.impressos.configurar') }}</RouterLink
         >
+        <template v-if="guiaTiss">
+          ·
+          <RouterLink :to="guiaTiss" data-testid="imp-guia-tiss">{{
+            t('adt.impressos.guiaTiss')
+          }}</RouterLink>
+        </template>
       </p>
     </template>
   </section>

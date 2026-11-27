@@ -25,6 +25,7 @@ import {
   ParseIntPipe,
   Post,
   Req,
+  Res,
 } from '@nestjs/common';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -34,6 +35,8 @@ import {
   PORTA_AUTORIZACAO_PREVIA,
   type PortaAutorizacaoPreviaPropria,
 } from './autorizacao-previa-propria.js';
+import { guiaSolicitacaoHtml, nomeGuiaSolicitacao } from './guia-solicitacao-impressao.js';
+import { GERADOR_PDF_TISS, type GeradorPdfTiss } from './tiss.controller.js';
 
 export const PERMISSOES_AUTORIZACAO_PREVIA = {
   ler: 'faturamento.autorizacao.ler',
@@ -49,6 +52,7 @@ export class AutorizacaoPreviaController {
     @Optional()
     @Inject(PORTA_AUTORIZACAO_PREVIA)
     private readonly porta: PortaAutorizacaoPreviaPropria | null = null,
+    @Optional() @Inject(GERADOR_PDF_TISS) private readonly geradorPdf: GeradorPdfTiss | null = null,
   ) {}
 
   private async com<T>(
@@ -107,6 +111,27 @@ export class AutorizacaoPreviaController {
   @Permissao(PERMISSOES_AUTORIZACAO_PREVIA.ler)
   xml(@Req() req: RequisicaoAutorizada, @Param('id', ParseIntPipe) id: number) {
     return this.com(req, (p, c) => p.xml(c, id));
+  }
+
+  /** C2-034: a guia TISS de solicitação impressa a partir do pedido (PDF; sem gerador, o HTML). */
+  @Get(':id/guia')
+  @Permissao(PERMISSOES_AUTORIZACAO_PREVIA.ler)
+  async guia(
+    @Req() req: RequisicaoAutorizada,
+    @Param('id', ParseIntPipe) id: number,
+    @Res({ passthrough: false }) res: { header(n: string, v: string): unknown; send(c: unknown): unknown },
+  ): Promise<void> {
+    const p = await this.com(req, (porta, c) => porta.detalhe(c, id));
+    const html = guiaSolicitacaoHtml(p);
+    if (!this.geradorPdf) {
+      res.header('content-type', 'text/html; charset=utf-8');
+      res.send(html);
+      return;
+    }
+    const pdf = await this.geradorPdf(html, `Guia ${nomeGuiaSolicitacao(p.tipo)} ${p.numero}`);
+    res.header('content-type', 'application/pdf');
+    res.header('content-disposition', `inline; filename="guia-solicitacao-${id}.pdf"`);
+    res.send(Buffer.from(pdf));
   }
 
   @Post()

@@ -294,6 +294,21 @@ const ehResposta = (s: string) => s === 'enviada' || s === 'em_analise';
 const autorizada = (s: string) => s === 'autorizada' || s === 'autorizada_parcial';
 const cancelavel = (s: string) => !['negada', 'cancelada'].includes(s);
 
+// C2-034 (04-INT linha 69): vindo dos documentos da internação, o pedido nasce do tipo internação com o CID, o
+// procedimento, o regime e a data de admissão da internação (nada redigitado).
+const daInternacao = String(rota.query['internacao'] ?? '');
+const avisoInternacao =
+  rota.query['tipo'] === 'internacao' && daInternacao ? k('daInternacao', { reg: daInternacao }) : null;
+if (rota.query['tipo'] === 'internacao' && daInternacao) {
+  form.tipo = 'internacao';
+  const regime = String(rota.query['regime'] ?? '');
+  if (regime === 'hospitalar' || regime === 'hospital_dia' || regime === 'domiciliar') form.regime = regime;
+  form.dataAdmissao = String(rota.query['admissao'] ?? '').slice(0, 10);
+  const cid = String(rota.query['cid'] ?? '').trim();
+  if (cid) form.cids = [cid];
+  const proc = String(rota.query['procedimento'] ?? '').trim();
+  if (proc) form.itens = [{ ...itemVazio(), codigoProcedimento: proc }];
+}
 if (pacienteTexto.value) void abrir();
 </script>
 
@@ -312,6 +327,7 @@ if (pacienteTexto.value) void abrir();
     </form>
     <p v-if="erro" role="alert" class="erro" data-testid="aut-erro">{{ erro }}</p>
     <p v-if="aviso" role="status" data-testid="aut-aviso">{{ aviso }}</p>
+    <p v-if="avisoInternacao" data-testid="aut-da-internacao">{{ avisoInternacao }}</p>
 
     <template v-if="dados">
       <p v-if="!dados.coberturas.length">{{ k('nenhumaCobertura') }}</p>
@@ -510,6 +526,13 @@ if (pacienteTexto.value) void abrir();
                 data-testid="aut-enviar"
                 @acionar="enviar(p)"
               />
+              <a
+                :href="`/api/tiss/autorizacoes/${p.id}/guia`"
+                target="_blank"
+                rel="noopener"
+                data-testid="aut-guia-pdf"
+                >{{ k('guiaPdf') }}</a
+              >
               <a v-if="p.xmlGuardado" :href="`/api/tiss/autorizacoes/${p.id}/xml`" data-testid="aut-xml">{{
                 k('verXml')
               }}</a>

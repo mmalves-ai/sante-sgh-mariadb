@@ -5,6 +5,9 @@ export const mensagensAutorizacaoPrevia = {
     'Peça à operadora a autorização de SP/SADT, internação, prorrogação, quimioterapia, radioterapia ou OPME a partir da carteira do paciente. O pedido é conferido na hora; a guia eletrônica é validada e guardada no envio.',
   paciente: 'Paciente (número)',
   abrir: 'Abrir',
+  daInternacao:
+    'Pedido de internação preenchido com a internação {reg}: confira a cobertura, a quantidade de diárias e a indicação clínica antes de gravar.',
+  guiaPdf: 'Guia de solicitação (PDF)',
   nenhumaCobertura: 'O paciente não tem cobertura ativa.',
   novo: 'Novo pedido',
   tipo: 'Tipo do pedido',

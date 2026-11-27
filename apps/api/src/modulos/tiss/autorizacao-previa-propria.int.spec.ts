@@ -13,6 +13,7 @@
 // prorrogação pelo webservice na guia própria, com a guia referenciada pelo número da operadora; a autorização ligada
 // aos itens da conta (quantidade coberta, refazer não duplica).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+import { guiaSolicitacaoHtml } from './guia-solicitacao-impressao.js';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
@@ -233,13 +234,24 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
     expect((await um('SELECT situacao FROM solicitacao_autorizacao WHERE id = ?', [p.id]))['situacao']).toBe(
       'rascunho',
     );
+    const versaoExistente = await um(
+      "SELECT id, descricao FROM versao_padrao_tiss WHERE codigo_tiss = '04.03.00' AND componente = 'troca'",
+      [],
+    );
+    const descricaoPadrao = versaoExistente
+      ? String(versaoExistente['descricao'])
+      : 'Versão sintética f7862aut';
     await nucleo.escrever({ cliente: CLIENTE, correlacao: `config-${P}` }, async (w) => {
       const agora = new Date();
-      const versao = await w.inserir(
-        `INSERT INTO versao_padrao_tiss (codigo_tiss, descricao, vigencia_inicio, versao_fonte, criado_em)
+      // A versão 04.03.00 é única por componente no banco de teste compartilhado: reaproveita a de outro teste.
+      const versao =
+        versaoExistente !== null
+          ? Number(versaoExistente['id'])
+          : await w.inserir(
+              `INSERT INTO versao_padrao_tiss (codigo_tiss, descricao, vigencia_inicio, versao_fonte, criado_em)
          VALUES ('04.03.00', 'Versão sintética f7862aut', '2026-01-01', 'sintetica', ?)`,
-        [agora],
-      );
+              [agora],
+            );
       await w.inserir(
         `INSERT INTO configuracao_tiss_fonte_pagadora (estabelecimento_id, fonte_pagadora_id, versao_padrao_tiss_id, vigencia_inicio,
                                                        registro_ans, codigo_prestador_operadora, criado_em)
@@ -262,7 +274,7 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
       situacao: 'pronta_envio',
       enviada_em: null,
       sequencial_transacao: String(p.id),
-      padrao: 'Versão sintética f7862aut',
+      padrao: descricaoPadrao,
       entidade: 'solicitacao_autorizacao',
       tipo_mime: 'application/xml',
     });
@@ -596,5 +608,13 @@ describe.skipIf(SEM_BANCO)('PortaAutorizacaoPreviaPropria contra o MariaDB (cont
     expect(lig[0]).toMatchObject({ item: m.itemConta, seq: 1, guia: null });
     expect(Number(lig[0]!['q'])).toBe(1);
     expect((await porta.detalhe(ctx(), i.id)).itensDaContaCobertos).toBe(1);
+    // C2-034: a guia TISS de solicitação de internação sai do pedido gravado (CID, procedimento, carteira mascarada).
+    const det = await porta.detalhe(ctx(), i.id);
+    const guia = guiaSolicitacaoHtml(det);
+    expect(guia).toContain('GUIA DE SOLICITAÇÃO DE INTERNAÇÃO');
+    expect(guia).toContain(det.numero);
+    expect(guia).toContain(det.diagnosticos[0]!.cid);
+    expect(guia).toContain(det.itens[0]!.codigoProcedimento);
+    if (det.carteira.length > 4) expect(guia).not.toContain(det.carteira);
   });
 });

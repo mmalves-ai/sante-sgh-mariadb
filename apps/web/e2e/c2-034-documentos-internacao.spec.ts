@@ -106,4 +106,71 @@ test.describe('@C2-034 documentos da internação conforme o convênio', () => {
 
     expect(externas).toEqual([]);
   });
+
+  test('passo 3: a guia TISS de solicitação de internação nasce da internação e o pedido traz o PDF da guia', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    // A visão do paciente na autorização prévia é simulada (massa SINTÉTICA); o efeito está no contrato de efeito
+    // apps/api/src/modulos/tiss/autorizacao-previa-propria.int.spec.ts (guia da internação a partir do pedido gravado).
+    await page.route('**/api/tiss/autorizacoes/pacientes/1001', (rota) =>
+      rota.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          coberturas: [
+            { id: 5, fontePagadora: 'Operadora sintética', carteira: '0000555566667777', validade: null },
+          ],
+          pedidos: [
+            {
+              id: 91,
+              numero: 'SA000091',
+              tipo: 'internacao',
+              situacao: 'rascunho',
+              canal: 'webservice',
+              fontePagadora: 'Operadora sintética',
+              carteira: '0000555566667777',
+              conta: null,
+              solicitadaEm: '2026-11-27T10:00:00.000Z',
+              enviadaEm: null,
+              observacao: null,
+              xmlGuardado: false,
+              versao: 1,
+              diagnosticos: [
+                { sequencia: 1, principal: true, cid: 'I21', descricao: 'Diagnóstico sintético' },
+              ],
+              itens: [
+                {
+                  sequencia: 1,
+                  codigoTabela: '22',
+                  codigoProcedimento: '303010037',
+                  descricao: 'Procedimento sintético',
+                  quantidade: 1,
+                  quantidadeAutorizada: null,
+                  opme: false,
+                },
+              ],
+              respostas: [],
+              consultas: [],
+            },
+          ],
+        }),
+      }),
+    );
+    await entrar(page, 'SINT.FIN.GESTOR');
+    await page.goto(
+      '/faturamento/autorizacoes?paciente=1001&tipo=internacao&internacao=77&regime=hospitalar&admissao=2026-11-27&procedimento=303010037&cid=I21',
+    );
+    const tela = page.getByTestId('autorizacao-previa');
+    await expect(tela).toBeVisible();
+    await expect(page.getByTestId('aut-da-internacao')).toContainText('internação 77');
+    await expect(page.getByTestId('aut-novo')).toBeVisible();
+    await expect(page.getByTestId('aut-tipo')).toContainText('Internação');
+    await expect(page.getByTestId('aut-cid-0').locator('input')).toHaveValue('I21');
+    await expect(page.getByTestId('aut-item-codigo').locator('input')).toHaveValue('303010037');
+    await expect(page.getByTestId('aut-guia-pdf')).toHaveAttribute('href', '/api/tiss/autorizacoes/91/guia');
+    await esperarSemSelectNativo(tela);
+    await semViolacaoAxe(page, '/faturamento/autorizacoes (da internação)');
+    expect(externas).toEqual([]);
+  });
 });

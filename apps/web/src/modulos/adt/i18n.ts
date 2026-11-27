@@ -295,6 +295,7 @@ export const mensagensAdt = {
     abrirPdf: 'Abrir o PDF',
     configuradas: 'Fichas a imprimir para o convênio e a especialidade desta internação',
     configurar: 'Configurar os documentos por convênio e especialidade',
+    guiaTiss: 'Solicitar a autorização da internação (guia TISS)',
     momento: 'Momento da internação',
     emitirSelecionados: 'Emitir os marcados e os obrigatórios',
     obrigatoriosPendentes: 'Obrigatórios ainda não emitidos nesta internação:',
