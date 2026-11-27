@@ -12,6 +12,7 @@ Como cada função externa liga o seu adaptador à central. Leitura obrigatória
 | Porta (banco pelo Executor, memória na fonte sintética), serviço e helper | `apps/api/src/modulos/integracao/externas/` |
 | Rotas | `GET /api/administracao/integracoes-externas`; `POST .../parametros`, `.../credencial` e `.../modo` (as duas últimas com a senha de novo) |
 | Permissões (perfil `administrador-sistema`) | `config.integracaoExterna.ler` e `config.integracaoExterna.gerir` |
+| Tela (Administração > Integrações > Integrações externas, `/administracao/integracoes-externas`): selo Simulador/Real, aviso do fornecedor com o que pedir, parâmetros, credencial (só "definida") e chave do real com justificativa e senha, aviso "neutralizado neste ambiente" | `apps/web/src/modulos/integracoes/telas/IntegracoesExternasTela.vue`, cliente `api-integracoes-externas.ts`; provas `integracoes-externas.spec.ts` (9/9) e E2E `e2e/d53-integracoes-externas.spec.ts` (verde em 27/11) |
 
 Entradas do catálogo: `operadora-tiss-webservice` (elegibilidade, autorização, comunicação de internação e alta, envio de
 lote), `pix`, `esocial`, `nfse`, `equipamentos-laboratorio`, `sus-webservices`, `push-paciente`, `cnes`,
