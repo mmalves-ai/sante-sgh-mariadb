@@ -12,7 +12,7 @@
 // custo de entrada aparece na hora (produtos + IPI, sem crédito de ICMS, padrão do hospital) e a conferência validada é
 // escolhida e vai no POST da nota. axe sem violação séria. Massa SINTÉTICA; nenhum dado de pessoa.
 import { expect, type Page, type Route, test } from '@playwright/test';
-import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
+import { itemDoMenu, semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
@@ -191,7 +191,7 @@ test.describe('Recebimento por nota fiscal com conferência física e impostos @
     expect(fornecedor, 'fornecedor ativo na porta sintética').not.toBeNull();
 
     // ── Conferência física pela tela ──
-    await page.getByRole('link', { name: 'Entrada por nota fiscal' }).first().click();
+    await (await itemDoMenu(page, 'Entrada por nota fiscal')).click();
     await expect(page).toHaveURL(/\/suprimentos\/notas-fiscais$/);
     await page.getByTestId('nf-conferencias').click();
     const tela = page.getByTestId('tela-conferencia-recebimento');
