@@ -2,7 +2,7 @@
 
 uso: python3 -I catalogos/carregar.py <codigo_cliente> [fonte ...]
      python3 -I catalogos/carregar.py --espelho <banco_espelho> [fonte ...]   (ADR 0006: o caminho padrão)
-     fontes, na ordem de dependência: ibge, ddd, logradouro, esocial, etnia, bcb, cid10, ciap2, sigtap, cfop, tiss, curvas, taco   (sem argumento: todas)
+     fontes, na ordem de dependência: ibge, ddd, logradouro, esocial, etnia, idioma, bcb, cid10, ciap2, sigtap, cfop, tiss, curvas, taco   (sem argumento: todas)
      opcionais, só quando nomeadas: snomed (terminologia clínica licenciada, pacote RF2 fornecido pela plataforma),
        cnes (base mensal do cadastro nacional de estabelecimentos; filtro em catalogos/carregadores/cnes.py)
 
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-ORDEM = ["ibge", "ddd", "logradouro", "esocial", "etnia", "bcb", "cid10", "ciap2", "sigtap", "cfop", "tiss", "curvas", "taco", "snomed", "cnes"]
+ORDEM = ["ibge", "ddd", "logradouro", "esocial", "etnia", "idioma", "bcb", "cid10", "ciap2", "sigtap", "cfop", "tiss", "curvas", "taco", "snomed", "cnes"]
 # Fontes que só carregam quando nomeadas (o pacote não é público: vem da plataforma).
 OPCIONAIS = {"snomed", "cnes"}
 PADRAO = [f for f in ORDEM if f not in OPCIONAIS]

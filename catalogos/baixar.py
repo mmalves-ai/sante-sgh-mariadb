@@ -70,6 +70,8 @@ FONTES = {
     # Cadastro nacional de estabelecimentos (C3-011): base mensal completa, cerca de 1 GB; só quando nomeada.
     "cnes": (cnes_url, 1500, None),
     "etnia_indigena": ("ftp://ftp.datasus.gov.br/dissemin/publicos/SIASUS/200801_/Auxiliar/TAB_SIA.zip", 150, None),
+    # Línguas indígenas (C1-099): classificação 2105 do Censo Demográfico 2022, nos metadados do agregado 10423 do IBGE.
+    "idioma_indigena": ("https://servicodados.ibge.gov.br/api/v3/agregados/10423/metadados", 5, "ibge-censo-2022"),
 }
 
 
