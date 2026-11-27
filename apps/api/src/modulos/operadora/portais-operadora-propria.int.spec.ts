@@ -15,7 +15,7 @@ import {
   SEM_BANCO,
   trilhaTela,
 } from './infra/massa-operadora.spec-util.js';
-import { PortaPortaisOperadoraPropria } from './portais-operadora-propria.js';
+import { type ContaPortalLida, PortaPortaisOperadoraPropria } from './portais-operadora-propria.js';
 
 const NOME_INCLUSAO = 'Inclusão Sintética C3027';
 
@@ -620,6 +620,26 @@ describe.skipIf(SEM_BANCO)('porta própria dos portais da operadora (MariaDB)', 
     );
     expect(mov).toEqual([expect.objectContaining({ canal: 'portal', situacao: 'efetivado' })]);
     expect(await trilhas('solicitacao_portal_beneficiario', r.id)).toBe(1);
+
+    // as opções do portal: os motivos de exclusão visíveis no portal e os contratos da contratante da conta
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'tc3027' }, (e) =>
+      e.executar('UPDATE motivo_movimento_cadastral SET visivel_portal = TRUE WHERE id = ?', [motivo]),
+    );
+    const [cc] = await ler(
+      "SELECT id, contratante_plano_id AS k FROM conta_portal_contratante WHERE login LIKE 'c3027%' ORDER BY id LIMIT 1",
+    );
+    const op = await porta.opcoesDoPortal(c, {
+      id: Number(cc?.['id']),
+      portal: 'contratante',
+      contratante: Number(cc?.['k']),
+    } as unknown as ContaPortalLida);
+    expect(op.motivosExclusao.map((x) => x.id)).toContain(motivo);
+    expect(op.contratos.map((x) => x.id)).toContain(contrato);
+    const doBenef = await porta.opcoesDoPortal(c, { portal: 'beneficiario' } as unknown as ContaPortalLida);
+    expect(doBenef.contratos).toEqual([]);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'tc3027' }, (e) =>
+      e.executar('UPDATE motivo_movimento_cadastral SET visivel_portal = FALSE WHERE id = ?', [motivo]),
+    );
     await limpar();
   });
 });

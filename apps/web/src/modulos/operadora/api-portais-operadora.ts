@@ -163,6 +163,13 @@ export const lerCartao = (beneficiario: number | null) =>
   ler(`${PO}/beneficiario/cartao${beneficiario ? `?beneficiario=${beneficiario}` : ''}`, esquemaCartao);
 export const lerMinhasSolicitacoes = (portal: TipoPortal) =>
   itens(ler(`${PO}/${portal}/solicitacoes`, lista(esquemaSolicitacao)));
+export const esquemaOpcoesPortal = z.object({
+  motivosExclusao: z.array(z.object({ id: n, codigo: z.string(), descricao: z.string() })),
+  contratos: z.array(z.object({ id: n, numero: z.string(), produto: tn })),
+});
+export type OpcoesPortal = z.infer<typeof esquemaOpcoesPortal>;
+/** Os motivos de exclusão visíveis no portal e, na contratante, os contratos dela (para a inclusão). */
+export const lerOpcoesPortal = (portal: TipoPortal) => ler(`${PO}/${portal}/opcoes`, esquemaOpcoesPortal);
 export interface NovaSolicitacao {
   tipo: string;
   beneficiario: number | null;

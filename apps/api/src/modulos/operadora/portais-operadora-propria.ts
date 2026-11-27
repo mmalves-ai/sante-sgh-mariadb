@@ -88,6 +88,7 @@ export const TABELAS_PORTAIS_OPERADORA = [
 export const METODOS_PORTAIS_OPERADORA = new Set([
   'contas',
   'contaDoUsuario',
+  'opcoesDoPortal',
   'convidarConta',
   'mudarSituacaoConta',
   'solicitacoes',
@@ -562,6 +563,48 @@ export class PortaPortaisOperadoraPropria {
         return { id, versao, numero, aviso: avisoDaSolicitacao(conta, 'aberta').motivo };
       },
     );
+  }
+
+  /**
+   * As opções da conta para abrir solicitação (C3-027): os motivos de exclusão que a operadora mostra no portal
+   * (ativos, tipo exclusão, visíveis no portal) e, para a contratante, os contratos dela (para a inclusão).
+   */
+  opcoesDoPortal(
+    c: ContextoPorta,
+    conta: ContaPortalLida,
+  ): Promise<{
+    motivosExclusao: { id: number; codigo: string; descricao: string }[];
+    contratos: { id: number; numero: string; produto: string | null }[];
+  }> {
+    return this.ler(c, async (l, est) => {
+      const motivos = await l.consultar(
+        `SELECT id, codigo, descricao FROM motivo_movimento_cadastral
+          WHERE ativo = TRUE AND visivel_portal = TRUE AND tipo_movimento = 'exclusao'
+          ORDER BY descricao, id LIMIT 200`,
+      );
+      const contratos =
+        conta.portal === 'contratante'
+          ? await l.consultar(
+              `SELECT cp.id, cp.numero, pr.nome AS produto FROM contrato_plano cp
+                 LEFT JOIN produto_plano pr ON pr.id = cp.produto_plano_id
+                WHERE cp.estabelecimento_id = ? AND cp.contratante_plano_id = ? AND cp.excluido_em IS NULL
+                ORDER BY cp.numero, cp.id LIMIT 500`,
+              [est, conta.contratante],
+            )
+          : [];
+      return {
+        motivosExclusao: motivos.map((x) => ({
+          id: Number(x['id']),
+          codigo: textoObrigatorio(x['codigo']),
+          descricao: textoObrigatorio(x['descricao']),
+        })),
+        contratos: contratos.map((x) => ({
+          id: Number(x['id']),
+          numero: textoObrigatorio(x['numero']),
+          produto: texto(x['produto']),
+        })),
+      };
+    });
   }
 
   /** A decisão da operadora, ou o cancelamento pelo dono (`dono`: a conta tem de ser a da solicitação). */

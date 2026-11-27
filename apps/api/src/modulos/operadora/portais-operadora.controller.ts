@@ -45,6 +45,7 @@ const PERM_PORTAL = 'operadora.portal.acessar';
 
 export const ROTAS_PORTAIS_OPERADORA = {
   contaPortal: 'portal-operadora/:portal/conta',
+  opcoesPortal: 'portal-operadora/:portal/opcoes',
   cartaoPortal: 'portal-operadora/beneficiario/cartao',
   solicitacoesPortal: 'portal-operadora/:portal/solicitacoes',
   cancelarPortal: 'portal-operadora/:portal/solicitacoes/:id/cancelar',
@@ -175,6 +176,13 @@ export class PortaisOperadoraController {
   async contaPortal(@Param('portal') p: string, @Req() req: RequisicaoAutorizada) {
     const { c } = await this.conta(req, portalRota(p));
     return contaPublica(c);
+  }
+
+  @Get(R.opcoesPortal)
+  @Permissao(PERM_PORTAL)
+  async opcoesPortal(@Param('portal') p: string, @Req() req: RequisicaoAutorizada) {
+    const { s, c } = await this.conta(req, portalRota(p));
+    return this.porta.opcoesDoPortal(s.porta, c).catch(this.falha);
   }
 
   @Get(R.cartaoPortal)

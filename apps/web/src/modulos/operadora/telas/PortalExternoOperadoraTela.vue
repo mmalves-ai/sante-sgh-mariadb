@@ -25,6 +25,7 @@ import {
   lerMeusLotes,
   lerMinhaConta,
   lerMinhasSolicitacoes,
+  lerOpcoesPortal,
 } from '../api-portais-operadora.js';
 import { mensagensPortaisOperadora } from '../i18n-portais-operadora.js';
 
@@ -90,15 +91,52 @@ const solicitacoes = useQuery({
 const opcoesTipo = computed(() =>
   (conta.data.value?.tipos ?? []).map((v) => ({ valor: v, rotulo: t(`tipos.${v}`) })),
 );
-const nova = reactive({
+const opcoes = useQuery({
+  queryKey: computed(() => ['portal-operadora', portal.value, 'opcoes']),
+  queryFn: () => lerOpcoesPortal(portal.value),
+  enabled: temSolicitacoes,
+});
+const opcoesMotivo = computed(() =>
+  (opcoes.data.value?.motivosExclusao ?? []).map((m) => ({ valor: String(m.id), rotulo: m.descricao })),
+);
+const opcoesContrato = computed(() =>
+  (opcoes.data.value?.contratos ?? []).map((k) => ({
+    valor: String(k.id),
+    rotulo: k.produto ? `${k.numero} · ${k.produto}` : k.numero,
+  })),
+);
+const opcoesSexo = computed(() =>
+  (['F', 'M', 'I'] as const).map((v) => ({ valor: v, rotulo: t(`externo.sexo${v}`) })),
+);
+const NOVA_VAZIA = {
   tipo: '',
   beneficiario: '',
   motivo: '',
   dataEfeito: '',
   pedidoReembolso: '',
   observacao: '',
-});
+  contrato: '',
+  nome: '',
+  nascimento: '',
+  sexo: 'I',
+  nomeMae: '',
+  cpf: '',
+  titular: '',
+  vinculo: '',
+};
+const nova = reactive({ ...NOVA_VAZIA });
 const pedeMotivo = computed(() => nova.tipo === 'exclusao_beneficiario');
+const pedeInclusao = computed(() => nova.tipo === 'inclusao_beneficiario');
+/** Os dados da inclusão, como a operadora os confere na abertura e na aprovação. */
+const dadosInclusao = (): Record<string, unknown> => ({
+  contrato: num(nova.contrato),
+  nome: nova.nome.trim(),
+  nascimento: nova.nascimento,
+  sexo: nova.sexo,
+  nomeMae: nova.nomeMae.trim(),
+  ...(nova.cpf.trim() ? { cpf: nova.cpf.trim() } : {}),
+  ...(nova.titular.trim() ? { titular: num(nova.titular), vinculo: num(nova.vinculo) } : {}),
+});
 const pedeData = computed(() =>
   ['exclusao_beneficiario', 'reativacao_beneficiario', 'inclusao_beneficiario'].includes(nova.tipo),
 );
@@ -108,6 +146,13 @@ const faltaNova = computed(() => {
   if (pedeMotivo.value && !nova.motivo.trim()) f.push(t('externo.motivo'));
   if (pedeMotivo.value && !nova.dataEfeito) f.push(t('solicitacao.dataEfeito'));
   if (nova.tipo === 'reembolso' && !nova.pedidoReembolso.trim()) f.push(t('externo.pedidoReembolso'));
+  if (pedeInclusao.value) {
+    if (!nova.contrato) f.push(t('externo.contrato'));
+    if (!nova.nome.trim()) f.push(t('externo.nome'));
+    if (!nova.nascimento) f.push(t('externo.nascimento'));
+    if (!nova.nomeMae.trim()) f.push(t('externo.nomeMae'));
+    if (nova.titular.trim() && !nova.vinculo.trim()) f.push(t('externo.vinculo'));
+  }
   return f;
 });
 async function enviarSolicitacao(): Promise<void> {
@@ -118,19 +163,11 @@ async function enviarSolicitacao(): Promise<void> {
       motivo: pedeMotivo.value ? num(nova.motivo) : null,
       dataEfeito: pedeData.value && nova.dataEfeito ? nova.dataEfeito : null,
       pedidoReembolso: nova.tipo === 'reembolso' ? num(nova.pedidoReembolso) : null,
-      dados: null,
+      dados: pedeInclusao.value ? dadosInclusao() : null,
       observacao: nova.observacao.trim() || null,
     }),
   );
-  if (ok)
-    Object.assign(nova, {
-      tipo: '',
-      beneficiario: '',
-      motivo: '',
-      dataEfeito: '',
-      pedidoReembolso: '',
-      observacao: '',
-    });
+  if (ok) Object.assign(nova, NOVA_VAZIA);
 }
 const cancelar = (s: SolicitacaoPortal) => gravar(() => cancelarSolicitacao(portal.value, s.id, s.versao));
 
@@ -295,13 +332,61 @@ async function enviarLoteExclusao(): Promise<void> {
               :rotulo="t('externo.beneficiario')"
               :max-bytes="18"
             />
-            <SanteCampoTexto
+            <SanteSelecao
               v-if="pedeMotivo"
-              id="portal-nova-motivo"
               v-model="nova.motivo"
               :rotulo="t('externo.motivo')"
-              :max-bytes="18"
+              :opcoes="opcoesMotivo"
+              obrigatorio
+              data-testid="portal-nova-motivo"
             />
+            <template v-if="pedeInclusao">
+              <SanteSelecao
+                v-model="nova.contrato"
+                :rotulo="t('externo.contrato')"
+                :opcoes="opcoesContrato"
+                obrigatorio
+                data-testid="portal-nova-contrato"
+              />
+              <SanteCampoTexto
+                id="portal-nova-nome"
+                v-model="nova.nome"
+                :rotulo="t('externo.nome')"
+                :max-bytes="150"
+              />
+              <SanteData v-model="nova.nascimento" :rotulo="t('externo.nascimento')" editavel />
+              <SanteSelecao
+                v-model="nova.sexo"
+                :rotulo="t('externo.sexo')"
+                :opcoes="opcoesSexo"
+                data-testid="portal-nova-sexo"
+              />
+              <SanteCampoTexto
+                id="portal-nova-mae"
+                v-model="nova.nomeMae"
+                :rotulo="t('externo.nomeMae')"
+                :max-bytes="150"
+              />
+              <SanteCampoTexto
+                id="portal-nova-cpf"
+                v-model="nova.cpf"
+                :rotulo="t('externo.cpf')"
+                :max-bytes="14"
+              />
+              <SanteCampoTexto
+                id="portal-nova-titular"
+                v-model="nova.titular"
+                :rotulo="t('externo.titular')"
+                :max-bytes="18"
+              />
+              <SanteCampoTexto
+                v-if="nova.titular.trim()"
+                id="portal-nova-vinculo"
+                v-model="nova.vinculo"
+                :rotulo="t('externo.vinculo')"
+                :max-bytes="1"
+              />
+            </template>
             <SanteData
               v-if="pedeData"
               v-model="nova.dataEfeito"
