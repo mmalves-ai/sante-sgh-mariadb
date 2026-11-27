@@ -22,6 +22,8 @@ import {
   type ContaPortalEntrada,
   criticarExclusaoLote,
   efeitoDaAprovacaoPortal,
+  inclusaoDoPortal,
+  numeroCarteirinha,
   type LinhaExclusaoLote,
   problemasDaContaPortal,
   problemasDaSolicitacaoPortal,
@@ -35,6 +37,7 @@ import {
   type SolicitacaoPortalEntrada,
   type TipoSolicitacaoPortal,
   type TipoPortalOperadora,
+  validadeDaVia,
 } from '@sgh/dominio-operadora';
 import {
   definirOperacao,
@@ -45,6 +48,9 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import { nomeDeBusca } from '@sgh/dominio-operadora';
+import { GravadorOperadoraBanco } from './porta-propria.js';
+import { TIPO_VIGENCIA } from './vocabulario-banco.js';
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import {
@@ -76,6 +82,7 @@ export const TABELAS_PORTAIS_OPERADORA = [
   'cartao_beneficiario',
   'movimento_cadastral_beneficiario',
   'sequencia_negocio',
+  'pessoa_fisica',
 ] as const;
 
 export const METODOS_PORTAIS_OPERADORA = new Set([
@@ -610,6 +617,65 @@ export class PortaPortaisOperadoraPropria {
   }
 
   /**
+   * A inclusão aprovada (C3-027): o contrato pedido tem de ser da contratante da conta que abriu a solicitação; o
+   * beneficiário nasce pela mesma gravação do cadastro (pessoa do cadastro único, beneficiário ativo, carteirinha na via 1
+   * com a validade do contrato e o movimento de inclusão, canal portal) na data de efeito pedida ou hoje, e a solicitação
+   * fica ligada a ele e ao contrato.
+   */
+  private static async incluirPelaAprovacao(
+    tx: TxOperacao,
+    est: number,
+    solicitacao: number,
+    x: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const r = inclusaoDoPortal(PortaPortaisOperadoraPropria.dadosPedidos(x));
+    if ('problemas' in r) throw recusaDe(r.problemas);
+    const d = r.inclusao;
+    const conta = inteiro(x['conta_portal_contratante_id']);
+    const [k] =
+      conta === null
+        ? []
+        : await tx.consultar(
+            `SELECT cp.id, cp.operadora_saude_id, cp.tipo_vigencia, cp.fim_vigencia, o.registro_ans
+               FROM contrato_plano cp
+               JOIN conta_portal_contratante cc ON cc.contratante_plano_id = cp.contratante_plano_id
+               JOIN operadora_saude o ON o.id = cp.operadora_saude_id
+              WHERE cp.id = ? AND cp.estabelecimento_id = ? AND cc.id = ? AND cp.excluido_em IS NULL`,
+            [d.contrato, est, conta],
+          );
+    if (!k) throw recusaDe([{ codigo: 'inclusao-contrato-fora-da-conta', campo: 'dados.contrato' }]);
+    const hoje = await hojeDe(tx);
+    const inclusao = dataIso(x['data_efeito']) ?? hoje;
+    const g = new GravadorOperadoraBanco(tx, est);
+    const carteirinha = numeroCarteirinha(
+      textoObrigatorio(k['registro_ans']),
+      await g.proximaSequenciaCarteirinha(),
+    );
+    const determinada = TIPO_VIGENCIA.codigo(k['tipo_vigencia']) === 1;
+    const { id } = await g.incluirBeneficiario({
+      operadora: Number(k['operadora_saude_id']),
+      dados: { ...d, nomeBusca: nomeDeBusca(d.nome), inclusao, pacienteHospital: null },
+      carteirinha,
+      validade: validadeDaVia(hoje, determinada ? dataIso(k['fim_vigencia']) : null),
+      por: `portal:${solicitacao}`,
+      canal: 'portal',
+    });
+    return { beneficiario_plano_id: id, contrato_plano_id: d.contrato };
+  }
+
+  private static dadosPedidos(x: Record<string, unknown>): Record<string, unknown> {
+    try {
+      const v: unknown =
+        typeof x['dados_solicitados'] === 'string'
+          ? JSON.parse(x['dados_solicitados'])
+          : x['dados_solicitados'];
+      return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /**
    * O efeito da aprovação no cadastro, na mesma transação da decisão. Segunda via: o pedido de cartão (canal portal,
    * motivo pedido nos dados ou o primeiro motivo ativo, taxa pelo parâmetro da operadora) já emitido pela mesma regra do
    * balcão (via seguinte, anteriores canceladas, via_cartao sobe). Reativação: o excluído volta ao ativo, sem data nem
@@ -623,6 +689,8 @@ export class PortaPortaisOperadoraPropria {
   ): Promise<Record<string, unknown>> {
     const efeito = efeitoDaAprovacaoPortal(textoObrigatorio(x['tipo_solicitacao']) as TipoSolicitacaoPortal);
     if (efeito === null) return {};
+    if (efeito === 'inclusao')
+      return PortaPortaisOperadoraPropria.incluirPelaAprovacao(tx, est, solicitacao, x);
     const ben = inteiro(x['beneficiario_plano_id']);
     const [b] =
       ben === null

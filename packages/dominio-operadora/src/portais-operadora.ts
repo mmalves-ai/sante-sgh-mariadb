@@ -181,6 +181,10 @@ export function problemasDaSolicitacaoPortal(
     else if (f.situacaoBeneficiario === null)
       p.push({ codigo: 'beneficiario-fora-da-conta', campo: 'beneficiario' });
   } else if (!e.dados || vazio(e.dados['nome'])) p.push({ codigo: 'dados-obrigatorios', campo: 'dados' });
+  else {
+    const r = inclusaoDoPortal(e.dados);
+    if ('problemas' in r) p.push(...r.problemas);
+  }
   if (e.dataEfeito !== null && !DATA.test(e.dataEfeito))
     p.push({ codigo: 'data-invalida', campo: 'dataEfeito' });
   switch (e.tipo) {
@@ -221,20 +225,99 @@ export function problemasDaSolicitacaoPortal(
 
 /**
  * O efeito da aprovação no cadastro (C3-027). A segunda via gera o pedido de cartão pelo portal e a via nova (a via do
- * beneficiário sobe); a reativação volta o beneficiário excluído ao ativo, com o movimento cadastral. Os demais tipos
- * (inclusão, alteração, exclusão, transferência, reembolso) seguem pela tela própria do cadastro, com a solicitação
- * como protocolo.
+ * beneficiário sobe); a reativação volta o beneficiário excluído ao ativo, com o movimento cadastral; a inclusão cria o
+ * beneficiário a partir dos dados pedidos (pessoa, beneficiário, carteirinha e movimento). Os demais tipos (alteração,
+ * exclusão, transferência, reembolso) seguem pela tela própria do cadastro, com a solicitação como protocolo.
  */
-export type EfeitoAprovacaoPortal = 'segunda_via' | 'reativacao' | null;
+export type EfeitoAprovacaoPortal = 'segunda_via' | 'reativacao' | 'inclusao' | null;
 export function efeitoDaAprovacaoPortal(tipo: TipoSolicitacaoPortal): EfeitoAprovacaoPortal {
+  if (tipo === 'inclusao_beneficiario') return 'inclusao';
   if (tipo === 'segunda_via_cartao') return 'segunda_via';
   if (tipo === 'reativacao_beneficiario') return 'reativacao';
   return null;
 }
 
+/** Os dados da inclusão pedida pelo portal da contratante, já conferidos: o beneficiário que a aprovação cria. */
+export interface InclusaoPortal {
+  readonly contrato: number;
+  /** O titular do mesmo contrato (nulo: o incluído é titular). */
+  readonly titular: number | null;
+  /** 1 titular; 2 a 8 o vínculo do dependente com o titular. */
+  readonly vinculo: number;
+  readonly nome: string;
+  readonly nomeSocial: string | null;
+  readonly cpf: string | null;
+  readonly nascimento: string;
+  /** 'F' | 'M' | 'I'. */
+  readonly sexo: string;
+  readonly cns: string | null;
+  readonly nomeMae: string;
+}
+
+const textoDe = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
+const idDe = (v: unknown): number | null => {
+  const n = typeof v === 'string' && v.trim() ? Number(v) : v;
+  return typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : null;
+};
+
+/**
+ * Os dados da inclusão (C3-027): contrato, nome, nascimento, sexo e mãe obrigatórios; CPF com 11 dígitos e CNS com 15
+ * quando vierem; o dependente traz o titular e o vínculo de 2 a 8; o titular não traz vínculo além de 1.
+ */
+export function inclusaoDoPortal(
+  dados: Readonly<Record<string, unknown>> | null,
+): { readonly inclusao: InclusaoPortal } | { readonly problemas: ProblemaPortalOperadora[] } {
+  const d = dados ?? {};
+  const p: ProblemaPortalOperadora[] = [];
+  const contrato = idDe(d['contrato']);
+  if (contrato === null) p.push({ codigo: 'inclusao-sem-contrato', campo: 'dados.contrato' });
+  const nome = textoDe(d['nome']);
+  if (nome === null) p.push({ codigo: 'dados-obrigatorios', campo: 'dados.nome' });
+  const nascimento = textoDe(d['nascimento']);
+  if (nascimento === null || !DATA.test(nascimento))
+    p.push({ codigo: 'inclusao-sem-nascimento', campo: 'dados.nascimento' });
+  const sexo = textoDe(d['sexo']) ?? 'I';
+  if (!['F', 'M', 'I'].includes(sexo)) p.push({ codigo: 'inclusao-sexo-invalido', campo: 'dados.sexo' });
+  const nomeMae = textoDe(d['nomeMae']);
+  if (nomeMae === null) p.push({ codigo: 'inclusao-sem-nome-mae', campo: 'dados.nomeMae' });
+  const cpf = textoDe(d['cpf'])?.replace(/\D/g, '') || null;
+  if (cpf !== null && cpf.length !== 11) p.push({ codigo: 'inclusao-cpf-invalido', campo: 'dados.cpf' });
+  const cns = textoDe(d['cns'])?.replace(/\D/g, '') || null;
+  if (cns !== null && cns.length !== 15) p.push({ codigo: 'inclusao-cns-invalido', campo: 'dados.cns' });
+  const titular = vazio(d['titular']) ? null : idDe(d['titular']);
+  if (!vazio(d['titular']) && titular === null)
+    p.push({ codigo: 'inclusao-titular-invalido', campo: 'dados.titular' });
+  const vinculo = vazio(d['vinculo']) ? (titular === null ? 1 : null) : idDe(d['vinculo']);
+  if (titular === null ? vinculo !== 1 : vinculo === null || vinculo < 2 || vinculo > 8)
+    p.push({ codigo: 'inclusao-vinculo-invalido', campo: 'dados.vinculo' });
+  if (
+    p.length ||
+    contrato === null ||
+    nome === null ||
+    nascimento === null ||
+    nomeMae === null ||
+    vinculo === null
+  )
+    return { problemas: p };
+  return {
+    inclusao: {
+      contrato,
+      titular,
+      vinculo,
+      nome,
+      nomeSocial: textoDe(d['nomeSocial']),
+      cpf,
+      nascimento,
+      sexo,
+      cns,
+      nomeMae,
+    },
+  };
+}
+
 /** O que impede aplicar a aprovação ao beneficiário: a via só ao ativo; a reativação só ao excluído sem motivo que a impeça. */
 export function problemasDoEfeitoPortal(
-  efeito: Exclude<EfeitoAprovacaoPortal, null>,
+  efeito: Exclude<EfeitoAprovacaoPortal, null | 'inclusao'>,
   f: { readonly situacaoBeneficiario: string | null; readonly motivoImpedeReativacao: boolean },
 ): ProblemaPortalOperadora[] {
   if (f.situacaoBeneficiario === null) return [{ codigo: 'beneficiario-obrigatorio', campo: 'beneficiario' }];

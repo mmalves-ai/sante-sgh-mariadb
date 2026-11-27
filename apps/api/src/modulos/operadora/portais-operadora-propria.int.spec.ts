@@ -17,6 +17,8 @@ import {
 } from './infra/massa-operadora.spec-util.js';
 import { PortaPortaisOperadoraPropria } from './portais-operadora-propria.js';
 
+const NOME_INCLUSAO = 'Inclusão Sintética C3027';
+
 describe.skipIf(SEM_BANCO)('porta própria dos portais da operadora (MariaDB)', () => {
   let nucleo: NucleoProprio;
   let porta: PortaPortaisOperadoraPropria;
@@ -54,6 +56,17 @@ describe.skipIf(SEM_BANCO)('porta própria dos portais da operadora (MariaDB)', 
         `DELETE FROM movimento_cadastral_beneficiario WHERE beneficiario_plano_id IN ${doClone}`,
       );
       await e.executar("DELETE FROM beneficiario_plano WHERE matricula = 'C3027-L1'");
+      const incluidos = `(SELECT b.id FROM beneficiario_plano b JOIN pessoa_fisica p ON p.id = b.pessoa_fisica_id
+                           WHERE p.nome = '${NOME_INCLUSAO}')`;
+      await e.executar(`DELETE FROM cartao_beneficiario WHERE beneficiario_plano_id IN ${incluidos}`);
+      await e.executar(
+        `DELETE FROM movimento_cadastral_beneficiario WHERE beneficiario_plano_id IN ${incluidos}`,
+      );
+      await e.executar(
+        `DELETE b FROM beneficiario_plano b JOIN pessoa_fisica p ON p.id = b.pessoa_fisica_id WHERE p.nome = ?`,
+        [NOME_INCLUSAO],
+      );
+      await e.executar('DELETE FROM pessoa_fisica WHERE nome = ?', [NOME_INCLUSAO]);
     });
 
   beforeAll(async () => {
@@ -531,5 +544,82 @@ describe.skipIf(SEM_BANCO)('porta própria dos portais da operadora (MariaDB)', 
     expect(cv).toMatchObject({ situacao: 'emitido' });
     expect(Number(cv?.['via'])).toBe(Number(depois?.['via_cartao']));
     expect(await trilhas('solicitacao_portal_beneficiario', sv.id)).toBe(1);
+  });
+  it('aprovação da inclusão cria o beneficiário: pessoa, carteirinha, movimento do portal e a solicitação ligada', async () => {
+    const c = contexto(m);
+    const abrirInclusao = (dados: Record<string, unknown>) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: 'tc3027' }, async (e) => {
+        const conta = await e.uma<{ id: number }>(
+          "SELECT id FROM conta_portal_contratante WHERE login LIKE 'c3027%' ORDER BY id LIMIT 1",
+        );
+        return e.inserir(
+          `INSERT INTO solicitacao_portal_beneficiario (estabelecimento_id, numero, tipo_solicitacao, situacao,
+             conta_portal_contratante_id, data_efeito, dados_solicitados, criado_em)
+           VALUES (?, ?, 'inclusao_beneficiario', 'aberta', ?, '2026-12-01', ?, NOW(3))`,
+          [
+            m.est,
+            `C3027-${Math.random().toString(36).slice(2, 12)}`,
+            Number(conta?.id),
+            JSON.stringify(dados),
+          ],
+        );
+      });
+    const aprovar = (id: number) =>
+      porta.decidirSolicitacao(
+        c,
+        { id, versao: 1, acao: 'aprovar', resultado: null, analista: m.usuario },
+        T('solicitacao_portal_beneficiario', 'operadora.portal.solicitacao-aprovada'),
+      );
+    const [k] = await ler(
+      `SELECT cp.id FROM contrato_plano cp JOIN conta_portal_contratante cc ON cc.contratante_plano_id = cp.contratante_plano_id
+        WHERE cc.login LIKE 'c3027%' AND cp.estabelecimento_id = ? AND cp.excluido_em IS NULL ORDER BY cc.id, cp.id LIMIT 1`,
+      [m.est],
+    );
+    const contrato = Number(k?.['id']);
+    expect(contrato).toBeGreaterThan(0);
+    const dados = {
+      contrato,
+      nome: NOME_INCLUSAO,
+      nascimento: '1990-05-04',
+      sexo: 'F',
+      nomeMae: 'Mãe Sintética',
+    };
+    const fora = await abrirInclusao({ ...dados, contrato: 999999999 });
+    expect(await aprovar(fora).catch(codigoDe)).toBe('inclusao-contrato-fora-da-conta');
+    const semMae = await abrirInclusao({ ...dados, nomeMae: '' });
+    expect(await aprovar(semMae).catch(codigoDe)).toBe('inclusao-sem-nome-mae');
+    expect(await ler('SELECT id FROM pessoa_fisica WHERE nome = ?', [NOME_INCLUSAO])).toHaveLength(0);
+
+    const r = await aprovar(await abrirInclusao(dados));
+    expect(r.situacao).toBe('aprovada');
+    const [sol] = await ler(
+      'SELECT beneficiario_plano_id AS b, contrato_plano_id AS k FROM solicitacao_portal_beneficiario WHERE id = ?',
+      [r.id],
+    );
+    const ben = Number(sol?.['b']);
+    expect(ben).toBeGreaterThan(0);
+    expect(Number(sol?.['k'])).toBe(contrato);
+    const [b] = await ler(
+      `SELECT b.situacao, b.tipo, b.contrato_plano_id, b.via_cartao, b.data_adesao, b.matricula, p.nome
+         FROM beneficiario_plano b JOIN pessoa_fisica p ON p.id = b.pessoa_fisica_id WHERE b.id = ?`,
+      [ben],
+    );
+    expect(b).toMatchObject({ situacao: 'ativo', tipo: 'titular', nome: NOME_INCLUSAO });
+    expect(Number(b?.['contrato_plano_id'])).toBe(contrato);
+    expect(Number(b?.['via_cartao'])).toBe(1);
+    expect(String(b?.['data_adesao'])).toContain('2026');
+    const cartoes = await ler(
+      'SELECT numero_cartao, via, situacao FROM cartao_beneficiario WHERE beneficiario_plano_id = ?',
+      [ben],
+    );
+    expect(cartoes).toHaveLength(1);
+    expect(cartoes[0]).toMatchObject({ numero_cartao: b?.['matricula'], situacao: 'emitido' });
+    const mov = await ler(
+      "SELECT canal, situacao FROM movimento_cadastral_beneficiario WHERE beneficiario_plano_id = ? AND tipo_movimento = 'inclusao'",
+      [ben],
+    );
+    expect(mov).toEqual([expect.objectContaining({ canal: 'portal', situacao: 'efetivado' })]);
+    expect(await trilhas('solicitacao_portal_beneficiario', r.id)).toBe(1);
+    await limpar();
   });
 });

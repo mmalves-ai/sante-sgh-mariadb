@@ -926,7 +926,7 @@ function resultadoSimples(r: unknown): ResultadoOperacao {
 }
 
 /** O gravador da F1 sobre a transação da operação (o estabelecimento é o da sessão). */
-class GravadorOperadoraBanco implements GravadorOperadora {
+export class GravadorOperadoraBanco implements GravadorOperadora {
   private hojeLido: string | null = null;
 
   constructor(
@@ -1562,6 +1562,7 @@ class GravadorOperadoraBanco implements GravadorOperadora {
     efeito: string,
     contrato: Linha | null,
     motivo: number | null = null,
+    canal: 'manual' | 'portal' = 'manual',
   ): Promise<void> {
     await this.tx.incluir('movimento_cadastral_beneficiario', {
       beneficiario_plano_id: beneficiario,
@@ -1575,7 +1576,7 @@ class GravadorOperadoraBanco implements GravadorOperadora {
       situacao: 'efetivado',
       contrato_plano_id: contrato ? Number(contrato['id']) : null,
       produto_plano_id: contrato ? inteiro(contrato['produto_plano_id']) : null,
-      canal: 'manual',
+      canal,
     });
   }
 
@@ -1585,6 +1586,8 @@ class GravadorOperadoraBanco implements GravadorOperadora {
     carteirinha: string;
     validade: string;
     por: string;
+    /** O canal do movimento de inclusão (o portal, quando vem da solicitação aprovada). */
+    canal?: 'portal';
   }) {
     const d = x.dados;
     const contrato = await this.contratoDoEstabelecimento(d.contrato, x.operadora);
@@ -1645,7 +1648,7 @@ class GravadorOperadoraBanco implements GravadorOperadora {
       validade: x.validade,
       situacao: 'emitido',
     });
-    await this.movimento(id, 'inclusao', d.inclusao, contrato);
+    await this.movimento(id, 'inclusao', d.inclusao, contrato, null, x.canal ?? 'manual');
     return { id };
   }
 

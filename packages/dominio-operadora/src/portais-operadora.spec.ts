@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   efeitoDaAprovacaoPortal,
+  inclusaoDoPortal,
   problemasDoEfeitoPortal,
   avisoDaSolicitacao,
   cartaoDigitalValido,
@@ -276,11 +277,75 @@ describe('cartão digital e mensagens', () => {
 });
 
 describe('efeito da aprovação no cadastro (C3-027)', () => {
-  it('só a segunda via e a reativação mexem no cadastro; os demais seguem pela tela própria', () => {
+  it('a segunda via, a reativação e a inclusão mexem no cadastro; os demais seguem pela tela própria', () => {
     expect(efeitoDaAprovacaoPortal('segunda_via_cartao')).toBe('segunda_via');
     expect(efeitoDaAprovacaoPortal('reativacao_beneficiario')).toBe('reativacao');
-    expect(efeitoDaAprovacaoPortal('inclusao_beneficiario')).toBeNull();
+    expect(efeitoDaAprovacaoPortal('inclusao_beneficiario')).toBe('inclusao');
     expect(efeitoDaAprovacaoPortal('reembolso')).toBeNull();
+  });
+  it('inclusão: contrato, nome, nascimento e mãe obrigatórios; documentos e vínculo conferidos', () => {
+    const ok = {
+      contrato: '7',
+      nome: ' Ana ',
+      nascimento: '1990-01-02',
+      sexo: 'F',
+      nomeMae: 'Maria',
+      cpf: '123.456.789-01',
+    };
+    const r = inclusaoDoPortal(ok);
+    expect(r).toEqual({
+      inclusao: {
+        contrato: 7,
+        titular: null,
+        vinculo: 1,
+        nome: 'Ana',
+        nomeSocial: null,
+        cpf: '12345678901',
+        nascimento: '1990-01-02',
+        sexo: 'F',
+        cns: null,
+        nomeMae: 'Maria',
+      },
+    });
+    const cods = (d: Record<string, unknown> | null) => {
+      const x = inclusaoDoPortal(d);
+      return 'problemas' in x ? x.problemas.map((p) => p.codigo) : [];
+    };
+    expect(cods(null)).toEqual([
+      'inclusao-sem-contrato',
+      'dados-obrigatorios',
+      'inclusao-sem-nascimento',
+      'inclusao-sem-nome-mae',
+    ]);
+    expect(cods({ ...ok, cpf: '123', cns: '1', sexo: 'X' })).toEqual([
+      'inclusao-sexo-invalido',
+      'inclusao-cpf-invalido',
+      'inclusao-cns-invalido',
+    ]);
+    expect(cods({ ...ok, titular: 5 })).toEqual(['inclusao-vinculo-invalido']);
+    expect(cods({ ...ok, titular: 5, vinculo: 3 })).toEqual([]);
+    expect(cods({ ...ok, vinculo: 3 })).toEqual(['inclusao-vinculo-invalido']);
+    expect(cods({ ...ok, titular: 'x', vinculo: 3 })).toEqual([
+      'inclusao-titular-invalido',
+      'inclusao-vinculo-invalido',
+    ]);
+    expect(
+      codigos(
+        problemasDaSolicitacaoPortal(
+          {
+            portal: 'contratante',
+            tipo: 'inclusao_beneficiario',
+            beneficiario: null,
+            motivo: null,
+            dataEfeito: null,
+            pedidoReembolso: null,
+            dados: { nome: 'Ana' },
+            observacao: null,
+          },
+          fatos,
+        ),
+      ),
+    ).toEqual(['inclusao-sem-contrato', 'inclusao-sem-nascimento', 'inclusao-sem-nome-mae']);
   });
   it('via só ao ativo; reativação só ao excluído sem motivo que a impeça', () => {
     const f = (situacaoBeneficiario: string | null, motivoImpedeReativacao = false) => ({
