@@ -101,9 +101,40 @@ function regraDaLinha(x: Linha, hoje: string): RegraPlanoVisao {
   };
 }
 
-async function hojeDoBanco(l: Leitor): Promise<string> {
-  const r = await l.uma<Linha>("SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS hoje", []);
-  return r?.['hoje'] ? String(r['hoje']) : new Date().toISOString().slice(0, 10);
+async function fusoDoEstabelecimento(l: Leitor, estabelecimento: number): Promise<string> {
+  const r = await l.uma<Linha>('SELECT fuso_horario AS f FROM estabelecimento WHERE id = ?', [
+    estabelecimento,
+  ]);
+  return r?.['f'] ? String(r['f']) : 'America/Sao_Paulo';
+}
+
+const formatoNoFuso = (fuso: string, d: Date): string =>
+  new Intl.DateTimeFormat('sv-SE', {
+    timeZone: fuso,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  })
+    .format(d)
+    .replace(' ', 'T');
+
+/** O instante UTC da meia-noite do dia (AAAA-MM-DD) no fuso; o atendimento.entrada_em é gravado em UTC. */
+function meiaNoiteNoFuso(data: string, fuso: string): Date {
+  const g = new Date(`${data}T00:00:00Z`);
+  const local = new Date(`${formatoNoFuso(fuso, g)}Z`);
+  return new Date(g.getTime() - (local.getTime() - g.getTime()));
+}
+
+/**
+ * "Hoje" no fuso do estabelecimento, o mesmo da abertura do atendimento. O CURDATE() do banco (UTC) virava o dia às 21h
+ * de Brasília: a regra incluída nessa faixa começava "amanhã" para a abertura e não valia.
+ */
+async function hojeDoEstabelecimento(l: Leitor, estabelecimento: number): Promise<string> {
+  return formatoNoFuso(await fusoDoEstabelecimento(l, estabelecimento), new Date()).slice(0, 10);
 }
 
 /** As regras da fonte pagadora (todas as vigências), as mais recentes primeiro. */
@@ -165,15 +196,18 @@ export async function criticarPlano(l: Leitor, p: PedidoCriticaPlano): Promise<C
   const regra = escolherRegraPlano(await lerRegrasDaFonte(l, p.fontePagadoraId, p.data), chave);
   let atendimentosNoPeriodo = 0;
   if (regra?.tetoPeriodoDias && p.pacienteId !== null) {
-    const inicio = inicioPeriodoTeto(p.data, regra.tetoPeriodoDias);
+    // A janela do teto vai em dias do estabelecimento, convertidos para os instantes UTC da entrada_em.
+    const fuso = await fusoDoEstabelecimento(l, p.estabelecimentoId);
+    const inicio = meiaNoiteNoFuso(inicioPeriodoTeto(p.data, regra.tetoPeriodoDias), fuso);
+    const fim = new Date(meiaNoiteNoFuso(p.data, fuso).getTime() + 86_400_000);
     const porPlano = regra.planoId !== null && p.planoId !== null;
     const r = await l.uma<Linha>(
       `SELECT COUNT(*) AS n FROM atendimento a
          LEFT JOIN cobertura_atendimento c ON c.atendimento_id = a.id AND c.ordem = 1
         WHERE a.paciente_id = ? AND a.fonte_pagadora_id = ? AND a.situacao <> 'cancelado'
-          AND a.entrada_em >= ? AND a.entrada_em < DATE_ADD(?, INTERVAL 1 DAY)
+          AND a.entrada_em >= ? AND a.entrada_em < ?
           AND (? = 0 OR c.plano_fonte_pagadora_id = ?)`,
-      [p.pacienteId, p.fontePagadoraId, inicio, p.data, porPlano ? 1 : 0, p.planoId ?? 0],
+      [p.pacienteId, p.fontePagadoraId, inicio, fim, porPlano ? 1 : 0, p.planoId ?? 0],
     );
     atendimentosNoPeriodo = num(r?.['n'] ?? 0);
   }
@@ -377,7 +411,7 @@ async function encerrarRegra(tx: TxOperacao, e: Encerrar, est: number): Promise<
     dataIso(r['vigencia_inicio']) ?? '',
     dataIso(r['vigencia_fim']),
     e.vigenciaFim,
-    await hojeDoBanco(tx),
+    await hojeDoEstabelecimento(tx, est),
   );
   const campos = Object.keys(erros);
   if (campos.length) throw recusa('entrada-invalida', Object.values(erros).join(' '), { campos });
@@ -513,7 +547,7 @@ export class RegraPlanoPropria {
         [fonte],
       );
       if (!f) throw new ErroOperacao(404, 'nao-encontrado', 'Fonte pagadora', 'A fonte pagadora não existe.');
-      const hoje = await hojeDoBanco(l);
+      const hoje = await hojeDoEstabelecimento(l, estabelecimento);
       const planos = (
         await l.consultar<Linha>(
           `SELECT id, codigo, descricao FROM plano_fonte_pagadora
@@ -577,7 +611,7 @@ export class RegraPlanoPropria {
         servicoId: e.servicoId,
         setorId: e.setorId,
         pacienteId: e.pacienteId,
-        data: e.data ?? (await hojeDoBanco(l)),
+        data: e.data ?? (await hojeDoEstabelecimento(l, estabelecimento)),
         carteira: e.carteira,
         validadeCarteira: e.validadeCarteira,
         guia: e.guia,

@@ -121,7 +121,13 @@ describe.skipIf(SEM_BANCO)('regra própria do plano na recepção (MariaDB)', ()
         contextoGravacao(m),
       )
     ).resultado.idPaciente;
-    hoje = String((await ler<{ d: unknown }>("SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS d", []))?.d);
+    // "Hoje" no fuso do estabelecimento, como a abertura e a regra (o CURDATE() do banco é UTC).
+    hoje = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
     await escrever(async (e) => {
       for (const k of Object.keys(planos) as (keyof typeof planos)[]) {
         const x = await e.uma<{ id: unknown }>(
@@ -260,8 +266,7 @@ describe.skipIf(SEM_BANCO)('regra própria do plano na recepção (MariaDB)', ()
   it('pendência em bloqueio recusa; encerrar a vigência (pela versão) libera; o passado não muda', async () => {
     const dia = async (n: number) =>
       String(
-        (await ler<{ d: unknown }>(`SELECT DATE_FORMAT(CURDATE() - INTERVAL ${n} DAY, '%Y-%m-%d') AS d`, []))
-          ?.d,
+        (await ler<{ d: unknown }>(`SELECT DATE_FORMAT(? - INTERVAL ${n} DAY, '%Y-%m-%d') AS d`, [hoje]))?.d,
       );
     const ontem = await dia(1);
     const tres = await dia(3);
