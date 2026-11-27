@@ -146,8 +146,17 @@ export interface CorpoPedido {
   atendimento: number;
   setor: number;
   prioridade: 'rotina' | 'urgente' | 'emergencia';
-  /** Setor executante próprio do exame (nulo: o setor do pedido); o material nulo usa o padrão do cadastro. */
-  exames: { exame: number; setor: number | null; material: number | null; urgente: boolean }[];
+  /**
+   * Setor executante próprio do exame (nulo: o setor do pedido); o material nulo usa o padrão do cadastro; a região
+   * anatômica nula usa a padrão do exame (09-AREA linha 84).
+   */
+  exames: {
+    exame: number;
+    setor: number | null;
+    material: number | null;
+    regiao: number | null;
+    urgente: boolean;
+  }[];
   kits: number[];
   indicacaoClinica: string | null;
   confirmado: boolean;

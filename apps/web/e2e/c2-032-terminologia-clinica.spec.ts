@@ -7,6 +7,11 @@
 //    em cada gravação; nada é apagado).
 // 2) Regiões anatômicas na ficha do exame do catálogo do SADT: liga uma região como padrão e outra sem; "Tornar
 //    padrão" faz UMA gravação (acao 'padrao', sem retirar e religar); retirar só tira da lista.
+// 3) Pedido do exame no SADT: ao marcar o exame de imagem, a tela lê as regiões que ele admite (GET
+//    /regioes?exame=), já sugere a padrão e deixa trocar; o pedido leva a região escolhida (o exame sem região ligada
+//    não mostra o seletor e vai com região nula). O efeito no banco (exame_item.regiao_anatomica_codificada_id, a
+//    padrão sem região informada e a recusa da região não admitida) está em
+//    apps/api/src/modulos/sadt/aplicacao/pedido-regiao.int.spec.ts.
 // Combos pelo e2e/combos.ts (nada de select nativo). Paciente e exames SINTÉTICOS. axe sem violação séria.
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
@@ -317,6 +322,117 @@ test.describe('Terminologia clínica: diagnósticos e regiões do exame @C2-032 
 
     await esperarSemSelectNativo(secao);
     await semViolacaoAxe(page, '/sadt/catalogo (regiões anatômicas do exame)');
+    expect(externas).toEqual([]);
+  });
+
+  test('pedido do exame: regiões admitidas com a padrão sugerida, troca e grava a escolhida; axe', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    const avaliados: Corpo[] = [];
+    const gravados: Corpo[] = [];
+    const pedidasRegioes: string[] = [];
+    const ATD = {
+      id: 900,
+      numero: 'AT-900',
+      paciente: 800,
+      nome: 'PACIENTE SINTETICO',
+      prontuario: 'P-800',
+      sexo: 'feminino',
+      nascimento: '1990-01-01',
+      idadeAnos: 36,
+    };
+    await page.route('**/api/sadt/apoio**', (r) =>
+      json(r, {
+        prestadores: [],
+        executantes: [],
+        locais: {},
+        exames: [
+          { id: 900, ato: 1, codigo: 'RXS', nome: 'RADIOGRAFIA SINTETICA', material: null, recipiente: null },
+          { id: 901, ato: 2, codigo: 'GLS', nome: 'GLICOSE SINTETICA', material: null, recipiente: null },
+        ],
+        kits: [],
+        recipientes: [],
+        convenios: [],
+        motivosRejeicao: [],
+      }),
+    );
+    await page.route('**/api/sadt/kits**', (r) => json(r, { itens: [] }));
+    await page.route('**/api/pep/terminologia-clinica/regioes**', (r) => {
+      const exame = new URL(r.request().url()).searchParams.get('exame') ?? '';
+      pedidasRegioes.push(exame);
+      return json(
+        r,
+        exame === '900'
+          ? [
+              { ...REGIOES[1], padrao: true },
+              { ...REGIOES[0], padrao: false },
+            ]
+          : [],
+      );
+    });
+    await page.route('**/api/sadt/pedidos**', (r) => {
+      const req = r.request();
+      const caminho = new URL(req.url()).pathname.replace(/^\/api\/sadt\/pedidos\/?/, '');
+      if (caminho === 'motivos')
+        return json(r, { setores: [{ id: 601, nome: 'IMAGEM SINTETICA' }], cancelamento: [], recoleta: [] });
+      if (caminho === 'atendimentos') return json(r, { itens: [ATD] });
+      if (caminho === 'atendimentos/900')
+        return json(r, {
+          atendimento: { ...ATD, estabelecimento: 'HOSPITAL SINTETICO' },
+          podeAutorizarExcecao: false,
+          requisicoes: [],
+        });
+      const corpo = (req.postDataJSON() ?? {}) as Corpo;
+      if (caminho === 'avaliar') {
+        avaliados.push(corpo);
+        return json(r, { itens: [], restricoes: [], limites: [], materiais: [] });
+      }
+      if (caminho === '' && req.method() === 'POST') {
+        gravados.push(corpo);
+        return json(r, {
+          requisicao: 500,
+          numero: 'RQ-500',
+          itens: [{ id: 701, exame: 900, sequencia: 1 }],
+          excecoes: 0,
+        });
+      }
+      return r.fulfill({ status: 404, contentType: 'application/json', body: '{"status":404}' });
+    });
+    await entrar(page, 'SINT.BIOMEDICO');
+
+    await page.goto('/sadt/pedido');
+    await expect(page.getByTestId('pedido-exames')).toBeVisible();
+    await page.getByTestId('pedido-busca').fill('SINTETICO');
+    await page.getByTestId('pedido-buscar').click();
+    await page.getByTestId('pedido-escolher-900').click();
+    await page.getByTestId('pedido-paciente-confirmado').check();
+    await escolher(page.getByTestId('pedido-setor'), '601');
+
+    // O exame de imagem traz as regiões admitidas, com a padrão (o dedo) já escolhida.
+    await page.getByTestId('pedido-exame-900').check();
+    const regiao = page.getByTestId('pedido-regiao-900');
+    await esperarValor(regiao, '42');
+    await expect
+      .poll(() => avaliados.at(-1)?.['exames'])
+      .toEqual([{ exame: 900, setor: null, material: null, regiao: 42, urgente: false }]);
+    // O exame sem região ligada não mostra o seletor.
+    await page.getByTestId('pedido-exame-901').check();
+    await expect.poll(() => pedidasRegioes).toEqual(['900', '901']);
+    await expect(page.getByTestId('pedido-regiao-901')).toHaveCount(0);
+
+    // Troca para a mão e grava: o pedido leva a região escolhida.
+    await escolher(regiao, '41');
+    await page.getByTestId('pedido-gravar').click();
+    await expect(page.getByTestId('pedido-mensagem')).toContainText('RQ-500');
+    expect(gravados).toHaveLength(1);
+    expect(gravados[0]?.['exames']).toEqual([
+      { exame: 900, setor: null, material: null, regiao: 41, urgente: false },
+      { exame: 901, setor: null, material: null, regiao: null, urgente: false },
+    ]);
+
+    await esperarSemSelectNativo(page.getByTestId('pedido-exames'));
+    await semViolacaoAxe(page, '/sadt/pedido (região anatômica do exame)');
     expect(externas).toEqual([]);
   });
 });

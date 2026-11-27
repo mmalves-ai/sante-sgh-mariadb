@@ -172,6 +172,27 @@ export function validarPadraoDoExame(
   return [];
 }
 
+/**
+ * A região anatômica do exame pedido: a informada tem de estar entre as regiões ligadas e ativas no exame; sem região
+ * informada, vale a padrão do exame (nula quando o exame não tem padrão ou não tem região ligada).
+ */
+export function regiaoDoItemPedido(
+  pedida: number | null,
+  admitidas: readonly { readonly regiao: number; readonly padrao: boolean }[],
+): { readonly regiao: number | null; readonly falhas: FalhaTerminologia[] } {
+  if (pedida === null) return { regiao: admitidas.find((a) => a.padrao)?.regiao ?? null, falhas: [] };
+  if (admitidas.some((a) => a.regiao === pedida)) return { regiao: pedida, falhas: [] };
+  return {
+    regiao: null,
+    falhas: [
+      {
+        codigo: 'regiao-nao-admitida',
+        mensagem: 'A região anatômica pedida não está ligada a este exame ou foi retirada dele.',
+      },
+    ],
+  };
+}
+
 /** Sugestões do conceito para a CID: equivalências em vigor, a principal primeiro, depois as exatas, depois o resto. */
 export function ordenarSugestoesConceito<
   T extends { readonly principal: boolean; readonly tipoEquivalencia: string; readonly descricao: string },

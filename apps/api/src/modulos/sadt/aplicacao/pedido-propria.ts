@@ -41,6 +41,7 @@ import {
   recusa,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { regiaoDoItemPedido } from '@sgh/dominio-pep';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { FUSO_PADRAO, relogioNoFuso } from '../../exames/relogio.js';
@@ -64,6 +65,8 @@ const exameDoPedido = z.object({
   material: id.nullable().default(null),
   quantidade: z.number().int().min(1).max(99).default(1),
   urgente: z.boolean().default(false),
+  /** Região anatômica pedida, entre as que o exame admite (nula: a padrão do exame, se houver). */
+  regiao: id.nullable().default(null),
 });
 
 export const esquemaPedidoExames = z.object({
@@ -111,7 +114,7 @@ export const esquemaVersaoKit = z.object({
     .nullable()
     .default(null),
   itens: z
-    .array(exameDoPedido.omit({ urgente: true }))
+    .array(exameDoPedido.omit({ urgente: true, regiao: true }))
     .min(1)
     .max(100),
 });
@@ -782,9 +785,33 @@ export class ServicoPedidoSadt {
         }))
         .filter((x) => !vistos.has(x.material) && vistos.add(x.material));
     };
+    // A região anatômica do item (09-AREA linha 84): a pedida tem de estar ligada e ativa no exame; sem região
+    // informada (e nos itens de kit), vale a padrão do exame.
+    const ligadas = await l.consultar(
+      `SELECT x.exame_id, x.regiao_anatomica_codificada_id, x.padrao
+         FROM exame_regiao_anatomica x JOIN regiao_anatomica_codificada r ON r.id = x.regiao_anatomica_codificada_id
+        WHERE x.ativo = TRUE AND r.ativo = TRUE AND (r.vigencia_fim IS NULL OR r.vigencia_fim >= CURRENT_DATE)
+          AND x.exame_id IN (${lista(exames.length)})`,
+      exames,
+    );
+    const regiaoDe = (exame: number, pedida: number | null): number | null => {
+      const r = regiaoDoItemPedido(
+        pedida,
+        ligadas
+          .filter((x) => n(x['exame_id']) === exame)
+          .map((x) => ({ regiao: n(x['regiao_anatomica_codificada_id']), padrao: Boolean(x['padrao']) })),
+      );
+      const f = r.falhas[0];
+      if (f) throw recusa(f.codigo, f.mensagem);
+      return r.regiao;
+    };
     const itens = montados.map((i) => ({
       ...i,
       material: daRegra(() => materialDoItem(i.material, aceitosDe(i.exame))),
+      regiao: regiaoDe(
+        i.exame,
+        i.kitVersao === null ? (p.exames.find((e) => e.exame === i.exame)?.regiao ?? null) : null,
+      ),
     }));
     const materiais: MateriaisDoExame[] = itens
       .filter((i) => i.kitVersao === null)
@@ -914,6 +941,7 @@ export class ServicoPedidoSadt {
         exame_id: i.exame,
         setor_diagnostico_id: i.setor ?? p.setor,
         material_biologico_id: i.material,
+        regiao_anatomica_codificada_id: i.regiao,
         quantidade: i.quantidade,
         urgente: i.urgente,
         situacao: 'solicitado',

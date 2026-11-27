@@ -24,6 +24,7 @@ import {
   lerPedidosDoAtendimento,
   listarKits,
 } from '../api-pedido.js';
+import { buscarRegioes } from '../../pep/api-terminologia-clinica.js';
 import { novaChave } from '../api-sadt.js';
 import ErroSadt from '../componentes/ErroSadt.vue';
 import { quando, usarSadt } from '../usar-sadt.js';
@@ -86,6 +87,9 @@ const urgenteDoExame = ref<Record<number, boolean>>({});
 // Material por exame: as opções vêm da avaliação (os materiais ativos do cadastro do exame); vazio = o padrão.
 const materialDoExame = ref<Record<number, string>>({});
 const materiaisDoExame = ref<Record<number, { valor: string; rotulo: string }[]>>({});
+// A região anatômica do exame (09-AREA linha 84): as regiões admitidas pelo exame, com a padrão já sugerida.
+const regiaoDoExame = ref<Record<number, string>>({});
+const regioesDoExame = ref<Record<number, { valor: string; rotulo: string }[]>>({});
 const kitsEscolhidos = ref<number[]>([]);
 const indicacao = ref('');
 const confirmado = ref(false);
@@ -121,6 +125,7 @@ const corpo = (): CorpoPedido | null => {
       exame,
       setor: Number(setorDoExame.value[exame] ?? '') || null,
       material: Number(materialDoExame.value[exame] ?? '') || null,
+      regiao: Number(regiaoDoExame.value[exame] ?? '') || null,
       urgente: urgenteDoExame.value[exame] ?? false,
     })),
     kits: kitsEscolhidos.value,
@@ -131,7 +136,7 @@ const corpo = (): CorpoPedido | null => {
 };
 // Validação na hora: cada mudança do pedido reavalia as restrições.
 watch(
-  [atendimento, setor, exames, kitsEscolhidos, setorDoExame, urgenteDoExame, materialDoExame],
+  [atendimento, setor, exames, kitsEscolhidos, setorDoExame, urgenteDoExame, materialDoExame, regiaoDoExame],
   async () => {
     const c = corpo();
     avaliacao.value = null;
@@ -158,6 +163,29 @@ watch(
   },
   { deep: true },
 );
+// Ao marcar um exame, lê as regiões que ele admite (uma vez por exame) e já sugere a padrão. Sem permissão de leitura
+// da terminologia ou sem região ligada, o seletor não aparece e o servidor aplica a padrão do exame.
+watch(exames, async (lista) => {
+  for (const exame of lista) {
+    if (regioesDoExame.value[exame]) continue;
+    regioesDoExame.value = { ...regioesDoExame.value, [exame]: [] };
+    try {
+      const regioes = await buscarRegioes({ exame });
+      regioesDoExame.value = {
+        ...regioesDoExame.value,
+        [exame]: regioes.map((r) => ({
+          valor: String(r.id),
+          rotulo: r.padrao ? t('sadt.pedido.regiaoPadraoOpcao', { nome: r.descricao }) : r.descricao,
+        })),
+      };
+      const padrao = regioes.find((r) => r.padrao);
+      if (padrao && !regiaoDoExame.value[exame])
+        regiaoDoExame.value = { ...regiaoDoExame.value, [exame]: String(padrao.id) };
+    } catch {
+      // Sem a lista: o pedido segue com a padrão do exame, aplicada no servidor.
+    }
+  }
+});
 const pedeJustificativa = computed(
   () =>
     (avaliacao.value?.restricoes ?? []).some(
@@ -207,6 +235,8 @@ async function gravar(): Promise<void> {
     avisoCobranca.value = resumoPendencias(r.cobranca);
     exames.value = [];
     materialDoExame.value = {};
+    regiaoDoExame.value = {};
+    regioesDoExame.value = {};
     kitsEscolhidos.value = [];
     justificativa.value = '';
     confirmado.value = false;
@@ -340,6 +370,14 @@ async function verEventos(item: number): Promise<void> {
               :opcoes="materiaisDoExame[e.id] ?? []"
               :data-testid="`pedido-material-${e.id}`"
               @update:model-value="(v: string) => (materialDoExame = { ...materialDoExame, [e.id]: v })"
+            />
+            <SanteSelecao
+              v-if="(regioesDoExame[e.id] ?? []).length > 0"
+              :model-value="regiaoDoExame[e.id] ?? ''"
+              :rotulo="t('sadt.pedido.regiaoDoExame')"
+              :opcoes="regioesDoExame[e.id] ?? []"
+              :data-testid="`pedido-regiao-${e.id}`"
+              @update:model-value="(v: string) => (regiaoDoExame = { ...regiaoDoExame, [e.id]: v })"
             />
             <label>
               <input

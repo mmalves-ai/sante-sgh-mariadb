@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  regiaoDoItemPedido,
   nivelRegiaoPorProfundidade,
   ordenarSugestoesConceito,
   type TermoCatalogo,
@@ -141,5 +142,22 @@ describe('troca do conceito e região do exame', () => {
       { principal: false, tipoEquivalencia: 'equivalente', descricao: 'B' },
     ]);
     expect(r.map((x) => x.descricao)).toEqual(['Z', 'B', 'C', 'A']);
+  });
+});
+
+describe('região anatômica do exame pedido', () => {
+  const admitidas = [
+    { regiao: 41, padrao: true },
+    { regiao: 42, padrao: false },
+  ];
+  it('sem região informada vale a padrão; sem padrão ou sem ligação, fica sem região', () => {
+    expect(regiaoDoItemPedido(null, admitidas)).toEqual({ regiao: 41, falhas: [] });
+    expect(regiaoDoItemPedido(null, [{ regiao: 42, padrao: false }])).toEqual({ regiao: null, falhas: [] });
+    expect(regiaoDoItemPedido(null, [])).toEqual({ regiao: null, falhas: [] });
+  });
+  it('a região informada tem de estar ligada e ativa no exame', () => {
+    expect(regiaoDoItemPedido(42, admitidas)).toEqual({ regiao: 42, falhas: [] });
+    expect(codigos(regiaoDoItemPedido(99, admitidas).falhas)).toEqual(['regiao-nao-admitida']);
+    expect(codigos(regiaoDoItemPedido(41, []).falhas)).toEqual(['regiao-nao-admitida']);
   });
 });

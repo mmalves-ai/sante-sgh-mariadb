@@ -22,6 +22,8 @@ export const mensagensPedido = {
   materialPadrao:
     'O material é o padrão do cadastro do exame; quando o exame aceita mais de um, escolha o material ao lado do exame.',
   materialDoExame: 'Material',
+  regiaoDoExame: 'Região anatômica',
+  regiaoPadraoOpcao: '{nome} (padrão)',
   materialPadraoOpcao: '{nome} (padrão)',
   urgenteExame: 'Urgente',
   semPermissaoExcecao:
