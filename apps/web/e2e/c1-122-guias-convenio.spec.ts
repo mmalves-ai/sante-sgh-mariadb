@@ -342,6 +342,8 @@ test.describe('@C1-122 Guias do convênio no hospital @fase3', () => {
     await arquivo.setInputFiles({ name: 'laudo-sintetico.pdf', mimeType: 'application/pdf', buffer: pdf });
     await expect(formAnexo.getByRole('alert')).toHaveCount(0);
     await formAnexo.getByRole('button', { name: 'Anexar' }).click();
+    // O 'Gravado.' da resposta ainda está na tela: espera o pedido do anexo chegar à simulação.
+    await expect.poll(() => s.st.corpos.length).toBe(5);
     await expect(page.getByTestId('gc-aviso')).toHaveText('Gravado.');
     expect(s.st.corpos[4]).toEqual({
       rota: '/guias/70/anexos',
