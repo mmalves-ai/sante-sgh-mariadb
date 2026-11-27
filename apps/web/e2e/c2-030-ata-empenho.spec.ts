@@ -6,7 +6,7 @@
 // no cliente do E2E (o fluxo @M55.4 deixa a dispensa homologada); sem ele, o teste é pulado com o motivo dito.
 // Massa SINTÉTICA, nenhum dado de pessoa.
 import { expect, type Page, test } from '@playwright/test';
-import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
+import { itemDoMenu, semViolacaoAxe, vigiarExternas } from './ajuda.js';
 import { escolher } from './combos.js';
 
 const SENHA = 'Sintetico#2026';
@@ -39,8 +39,8 @@ test.describe('Ata de registro de preços e empenho @C2-030', () => {
     const externas = vigiarExternas(page);
     await entrar(page, 'SINT.AUTORIDADE');
 
-    // Pelo menu.
-    await page.getByRole('link', { name: 'Ata de registro de preços e empenho' }).first().click();
+    // Pelo menu (as áreas começam recolhidas: a busca do menu abre a área com o item).
+    await (await itemDoMenu(page, 'Ata de registro de preços e empenho')).click();
     await expect(page).toHaveURL(/\/suprimentos\/atas-registro-preco/);
     await expect(page.getByTestId('tela-atas-registro-preco')).toBeVisible();
     await semViolacaoAxe(page, '/suprimentos/atas-registro-preco');
