@@ -186,7 +186,7 @@ test.describe('Reajuste coletivo e índices da operadora @C1-086 @fase7', () => 
       .fill('Nota atuarial sintética do agrupamento');
     await page.getByTestId('agr-calcular').click();
     await expect(page.getByTestId('agrupamento-situacao-5')).toHaveText('Calculado');
-    await page.getByTestId('agrupamento-abrir-5').click();
+    // O painel do agrupamento segue aberto depois do cálculo: a aplicação aparece nele (outro clique o fecharia).
     await page.getByTestId('agr-competencia').locator('input').fill('2027-05');
     await page.getByTestId('agr-aplicar').click();
     await expect(page.getByTestId('reajuste-aviso')).toContainText('1 contrato');
