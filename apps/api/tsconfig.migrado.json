@@ -417,6 +417,8 @@
     "src/modulos/enfermagem/balanco-porta.ts",
     "src/modulos/enfermagem/balanco-servico.ts",
     "src/modulos/enfermagem/balanco.controller.ts",
+    "src/modulos/enfermagem/extracao-destino-propria.ts",
+    "src/modulos/enfermagem/extracao-destino-propria.spec.ts",
     "src/modulos/enfermagem/balanco.spec.ts",
     "src/modulos/enfermagem/aplicacao/checar.idempotencia.int.spec.ts",
     "src/modulos/enfermagem/contencao-servico.ts",
