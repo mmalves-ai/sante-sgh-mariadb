@@ -260,12 +260,13 @@ describe('recusas antes da transação', () => {
       ),
     ).rejects.toMatchObject({ problema: { status: 401, codigo: 'reautenticacao-necessaria' } });
   });
-  // A coassinatura e o parecer gravam no banco próprio (L96, C2-076 daef9582; contrato de efeito no .int.spec); só a
-  // classificação de risco segue fechada com 501 (grava pela recepção).
-  it('registro com classificação de risco: 501 fechado', async () => {
+  // A coassinatura, o parecer e, desde o C2-076 (completar-8, 27/11), a classificação de risco gravam no banco próprio,
+  // na mesma transação (contrato de efeito no .int.spec): a recusa 501 pendente-modelo-proprio saiu. Aqui, sem banco, o
+  // registro com classificação passa das recusas anteriores e chega à leitura da transação.
+  it('registro com classificação de risco: não é mais recusado com 501, segue para a transação', async () => {
     await expect(
       g.registrar(c as never, { classificacao: { cor: 'vermelho' } } as never, ctx),
-    ).rejects.toMatchObject({ problema: { status: 501, codigo: 'pendente-modelo-proprio' } });
+    ).rejects.toThrow('não deveria ler');
   });
   it('rascunhos de lista vazia de profissionais: nada lido', async () => {
     await expect(g.rascunhosDoProfissional(c as never, [])).resolves.toEqual([]);
