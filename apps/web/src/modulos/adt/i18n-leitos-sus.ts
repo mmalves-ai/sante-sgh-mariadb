@@ -79,6 +79,10 @@ export const mensagensLeitosSus = {
     transmitir: 'Enviar pelo serviço web',
     lerRetorno: 'Ler retorno',
     aguardando: 'A operadora ainda não respondeu.',
+    desfeita: 'Desfeita em {quando}: {motivo}',
+    retificacaoPendente: 'A operadora recebeu esta comunicação: cancele junto a ela e registre aqui.',
+    cancelarOperadora: 'Cancelar junto à operadora',
+    motivoCancelamento: 'Motivo do cancelamento',
     pelaIntegracao: 'Serviço web: {situacao}',
     envios: {
       pendente: 'na fila',

@@ -5,6 +5,9 @@
 // tabela de transições do domínio); o motivo é pedido na hora quando a ação exige.
 // C1-108: a pendente de internação, alta ou óbito sai pelo serviço web da operadora num clique (a mensagem montada dos
 // dados gravados vai à fila de integração); a enviada por ele lê o retorno (confirma, rejeita ou falha sozinha).
+// C2-070: a comunicação desfeita (alta cancelada ou internação excluída) mostra quando e por quê; a que a operadora já
+// recebeu fica com a retificação pendente e oferece 'Cancelar junto à operadora' (o 'cancelar' com o motivo, que a
+// regra do domínio admite na enviada e na confirmada só nesse caso).
 import {
   eventoDaMensagem,
   TIPOS_COMUNICACAO_OPERADORA,
@@ -62,6 +65,7 @@ const problemasDe = (c: Comunicacao, a: AcaoComunicacao) =>
     acao: a,
     protocolo: campo(c.id).protocolo || c.protocolo,
     resposta: campo(c.id).resposta,
+    retificacaoPendente: c.retificacaoPendente,
   }).problemas.map((p) => p.mensagem);
 const mensagem = ref<string | null>(null);
 const erro = ref<unknown>(null);
@@ -88,6 +92,7 @@ const aplicar = (c: Comunicacao, a: AcaoComunicacao) => {
     }),
   );
 };
+const quando = (iso: string | null) => iso?.slice(0, 16).replace('T', ' ') ?? '—';
 const podeTransmitir = (c: Comunicacao) =>
   c.situacao === 'pendente' && eventoDaMensagem(c.tipo as TipoComunicacaoOperadora) !== null;
 const transmitir = (c: Comunicacao) => {
@@ -154,10 +159,18 @@ const verMensagem = async (c: Comunicacao) => {
                 })
               }}
             </span>
+            <span v-if="c.desfeitaEm" class="secundario" :data-testid="`com-op-desfeita-${c.id}`">
+              <br />
+              {{ t('adt.leitosSus.comunicacao.desfeita', { quando: quando(c.desfeitaEm), motivo: c.motivoDesfeita }) }}
+            </span>
+            <strong v-if="c.retificacaoPendente" :data-testid="`com-op-retificacao-${c.id}`">
+              <br />
+              {{ t('adt.leitosSus.comunicacao.retificacaoPendente') }}
+            </strong>
           </td>
           <td>{{ c.protocolo ?? '—' }}</td>
-          <td>{{ c.enviadoEm?.slice(0, 16).replace('T', ' ') ?? '—' }}</td>
-          <td>{{ c.respondidoEm?.slice(0, 16).replace('T', ' ') ?? '—' }}</td>
+          <td>{{ quando(c.enviadoEm) }}</td>
+          <td>{{ quando(c.respondidoEm) }}</td>
           <td>
             <template v-if="acoesDe(c).length">
               <label
@@ -170,6 +183,23 @@ const verMensagem = async (c: Comunicacao) => {
               /></label>
               <button v-for="a in acoesDe(c)" :key="a" type="button" @click="aplicar(c, a)">
                 {{ t(`adt.leitosSus.comunicacao.acoes.${a}`) }}
+              </button>
+            </template>
+            <template v-if="c.retificacaoPendente">
+              <label v-if="!acoesDe(c).length"
+                >{{ t('adt.leitosSus.comunicacao.motivoCancelamento') }}
+                <input
+                  v-model="campo(c.id).resposta"
+                  maxlength="2000"
+                  :data-testid="`com-op-motivo-cancelamento-${c.id}`"
+              /></label>
+              <button
+                type="button"
+                :disabled="acao.isPending.value"
+                :data-testid="`com-op-cancelar-operadora-${c.id}`"
+                @click="aplicar(c, 'cancelar')"
+              >
+                {{ t('adt.leitosSus.comunicacao.cancelarOperadora') }}
               </button>
             </template>
             <button

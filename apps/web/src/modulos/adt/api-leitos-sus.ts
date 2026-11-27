@@ -98,6 +98,11 @@ export const esquemaComunicacao = z.object({
   versao: z.number(),
   pelaIntegracao: z.boolean(),
   situacaoEnvio: z.string().nullable(),
+  // C2-070: o evento comunicado foi desfeito (alta cancelada ou internação excluída); a recebida pela operadora fica
+  // com a retificação pendente até a equipe registrar o cancelamento junto a ela.
+  desfeitaEm: z.string().nullable().default(null),
+  motivoDesfeita: z.string().nullable().default(null),
+  retificacaoPendente: z.boolean().default(false),
 });
 export type Comunicacao = z.infer<typeof esquemaComunicacao>;
 
