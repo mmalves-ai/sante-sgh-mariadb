@@ -53,7 +53,7 @@ const alvo = {
   principio: nulo(id),
 };
 
-const esquemaAjuste = z
+export const esquemaAjuste = z
   .object({
     id: id.optional(),
     versao: id.optional(),
@@ -74,7 +74,7 @@ const esquemaAjuste = z
   })
   .strict();
 
-const esquemaRestricao = z
+export const esquemaRestricao = z
   .object({
     id: id.optional(),
     versao: id.optional(),
@@ -100,7 +100,7 @@ const esquemaRestricao = z
   })
   .strict();
 
-const esquemaConfiguracao = z
+export const esquemaConfiguracao = z
   .object({
     id: id.optional(),
     versao: id.optional(),
@@ -119,7 +119,7 @@ export type EntradaAjusteRenal = z.infer<typeof esquemaAjuste>;
 export type EntradaRestricaoPosologia = z.infer<typeof esquemaRestricao>;
 export type EntradaConfiguracaoAlerta = z.infer<typeof esquemaConfiguracao>;
 
-const recusar = (status: number, codigo: string, detalhe: string, campo?: string): never => {
+export const recusar = (status: number, codigo: string, detalhe: string, campo?: string): never => {
   throw new ErroOperacao(
     status,
     codigo,
@@ -129,7 +129,7 @@ const recusar = (status: number, codigo: string, detalhe: string, campo?: string
   );
 };
 
-const MENSAGENS: Record<string, string> = {
+export const MENSAGENS: Record<string, string> = {
   'faixa-invertida': 'A faixa mínima passa da máxima.',
   'classe-hepatica-obrigatoria': 'Informe a classe de Child-Pugh.',
   'modalidade-dialise-obrigatoria': 'Informe a modalidade de diálise.',
@@ -143,7 +143,7 @@ const MENSAGENS: Record<string, string> = {
   'idade-invertida': 'A idade mínima passa da máxima.',
   'peso-invertido': 'O peso mínimo passa do máximo.',
 };
-const recusarProblemas = (ps: readonly string[]) => {
+export const recusarProblemas = (ps: readonly string[]) => {
   if (ps.length) recusar(422, ps[0]!, ps.map((p) => MENSAGENS[p] ?? p).join(' '));
 };
 
@@ -294,6 +294,12 @@ export async function lerRestricoesAlertas(
     })),
   };
 }
+
+/** O que as rotas usam: a porta própria (banco) e a em memória (fonte sintética) seguem o mesmo contrato. */
+export type PortaRestricoesPrescricao = Pick<
+  CadastroRestricoesPrescricaoPropria,
+  'cadastro' | 'gravarAjusteRenal' | 'gravarRestricao' | 'gravarConfiguracao'
+>;
 
 export class CadastroRestricoesPrescricaoPropria {
   private executorCache: Executor | null = null;

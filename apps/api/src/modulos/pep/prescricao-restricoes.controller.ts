@@ -1,5 +1,5 @@
 // Rotas do cadastro das restrições próprias do hospital no apoio à decisão da prescrição (03-PEP L108). Sem banco
-// próprio, 503.
+// próprio, a porta em memória da fonte sintética (mesmas regras do domínio); sem nenhuma porta, 503.
 //   GET  pep/prescricao/restricoes                 pep.regraAlerta.ler: ajustes por faixa, restrições, configurações
 //   POST pep/prescricao/restricoes/ajustes-renais  pep.regraAlerta.editar: inclui ou altera (com a versão lida)
 //   POST pep/prescricao/restricoes/posologia       pep.regraAlerta.editar
@@ -13,7 +13,7 @@ import { contextoGravacao } from '../agenda/apoio.js';
 import { sessaoDe } from '../cadastro/comum.js';
 import {
   CADASTRO_RESTRICOES_PRESCRICAO,
-  type CadastroRestricoesPrescricaoPropria,
+  type PortaRestricoesPrescricao,
 } from './prescricao-propria-restricoes.js';
 
 const AUD = 'pep.restricoes pelo executor (trilha na mesma transação)';
@@ -23,10 +23,10 @@ export class PrescricaoRestricoesController {
   constructor(
     @Optional()
     @Inject(CADASTRO_RESTRICOES_PRESCRICAO)
-    private readonly cadastro: CadastroRestricoesPrescricaoPropria | null = null,
+    private readonly cadastro: PortaRestricoesPrescricao | null = null,
   ) {}
 
-  private banco(): CadastroRestricoesPrescricaoPropria {
+  private banco(): PortaRestricoesPrescricao {
     if (!this.cadastro)
       throw new ErroProblema(
         'indisponivel',

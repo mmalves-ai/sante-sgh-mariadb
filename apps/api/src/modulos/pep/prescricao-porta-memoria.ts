@@ -65,7 +65,7 @@ const GRADE_I: ReadonlyMap<number, readonly string[]> = new Map([
   [24, Array.from({ length: 24 }, (_, i) => `${String((17 + i) % 24).padStart(2, '0')}00`)],
 ]);
 
-const PRODUTOS: readonly ProdutoLido[] = [
+export const PRODUTOS: readonly ProdutoLido[] = [
   produto(501, `DIPIRONA ${M} 500 MG/ML`, 'ML', [{ id: 11, nome: 'DIPIRONA' }], ['EV', 'IM', 'VO']),
   produto(502, `CEFTRIAXONA ${M} 1 G`, 'G', [{ id: 12, nome: 'CEFTRIAXONA' }], ['EV', 'IM'], {
     antimicrobiano: true,
