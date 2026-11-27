@@ -145,3 +145,11 @@ cada uma com construir, revisão adversarial e correção.
 | completar-6 | 2,5 M | 3,5 M | cerca de 1,5 M | 2 (~0,75 M cada); a prova do C2-024 rodou por script |
 
 - As duas abaixo da estimativa: commit antes da prova, uma prova só, uma função por agente.
+
+| Rodada (26/11 22h a 27/11 03h) | Estimativa | Teto | Gasto | Agentes |
+|---|---|---|---|---|
+| completar-7 (F7) | 24 M | 31 M | cerca de 19 M | 24 (~0,8 M cada); travamento da VM no meio, retomada do cache |
+| esteira-github | 1,5 M | 2 M | cerca de 0,1 M | 1 (dois testes dependentes de tempo; ci-sim com 4 CPUs) |
+| completar-8 (F3/F8) | 42 M | 55 M | cerca de 38,6 M | 50 (~0,77 M cada); 30 cobertas |
+
+- Todas abaixo da estimativa. Consolidações (tipos, prettier, anexos) feitas pelo orquestrador sem agente.

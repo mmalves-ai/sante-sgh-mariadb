@@ -650,3 +650,14 @@ corrente de CronCreate morre com a sessão; ao retomar, recriar (formato na mem�
 - Regra (Painel de Injeção): migração nova sempre em arquivo novo e idempotente; o aplicador para no primeiro "já existe"
   dos arquivos antigos, então mudança em arquivo antigo não chega a cliente existente.
 - Nenhuma rodada aberta. Próximo: o que o dono priorizar na revisão de 27/11.
+
+## Passagem de 27/11 04h (Sessão de Construção)
+- Push: origin/main = 215c37da (ci-sim com 4 CPUs VERDE; GitHub conferido a cada push pela API actions/runs). Fichas
+  411/467 (88%): F3 225/254, F7 89/109, F8 97/104. Painel 5310/API 3310 em 215c37da; migrações aplicadas no
+  cliente_prontocardio.
+- 26/11 ~22h: a VM travou; processos Node caíram (3310/5310 religados), completar-7 retomada do cache.
+- GitHub ficou vermelho em 5 pushes (testes dependentes de tempo); corrigido em 0d5eb8cf e o ci-sim passou a usar
+  taskset -c 0-3. Depois de cada rodada: consolidação (tipos api/web um de cada vez com SGH_MEM_ALTA=16G
+  SGH_MEM_MAX=20G, prettier, privilegios:gerar, instalacao:gerar, implantacao:listas) antes do ci-sim.
+- Restam 56 (25 externas, 31 internas com três tentativas): lista em docs/obra/revisao-27-11.md. Próximo: revisão com o
+  dono; quarta tentativa só com informação nova ou prioridade dele.
