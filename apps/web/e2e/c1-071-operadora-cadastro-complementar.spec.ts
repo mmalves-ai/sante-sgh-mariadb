@@ -316,9 +316,9 @@ test.describe('operadora: responsáveis, setores e parâmetros por operadora @C1
       // Parâmetro: fora da faixa recusado na hora; 18 grava e deixa de ser o padrão.
       await compl.getByTestId('compl-par-alterar-prazo_cpt_meses').click();
       const fp = compl.getByTestId('form-parametro');
-      await fp.getByLabel('Novo valor').fill('30');
+      await fp.getByLabel('Novo valor', { exact: true }).fill('30');
       await expect(fp.getByTestId('compl-par-problema')).toContainText('de 1 a 24');
-      await fp.getByLabel('Novo valor').fill('18');
+      await fp.getByLabel('Novo valor', { exact: true }).fill('18');
       await fp.getByLabel('Justificativa').fill('Revisão sintética do contrato (E2E)');
       await fp.getByTestId('compl-par-gravar').click();
       await expect(compl.getByTestId('compl-mensagem')).toContainText('valor anterior fica no histórico');
