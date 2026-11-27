@@ -410,13 +410,16 @@ export function gravacoesComissaoSorteio(
       );
       if (!c || n(c['versao']) !== r.versaoComissao) throw recusaVersaoGestao('A comissão');
       if (texto(c['situacao']) !== 'ativa') throw recusa('comissao-inativa', 'A comissão está inativa.');
-      // A tela marcou posições da composição que leu (a de hoje): o total confere a versão que ela viu. A presença e o
-      // quórum são da composição vigente NA DATA da reunião (a retroativa não ganha quem entrou depois).
+      // A tela marcou posições da composição que leu (a do dia da reunião, ou a de hoje): o total confere a versão que
+      // ela viu. A presença e o quórum são da composição vigente NA DATA da reunião (a retroativa não ganha quem entrou
+      // depois e mostra quem saiu entre a reunião e hoje).
       const hoje = r.agora.slice(0, 10);
       const diaReuniao = r.realizadaEm.slice(0, 10);
-      const daTela = await composicao(tx, r.comissao, hoje);
+      const diaTela = r.composicaoEm ?? hoje;
+      if (diaTela !== hoje && diaTela !== diaReuniao) throw recusaVersaoGestao('A comissão');
+      const daTela = await composicao(tx, r.comissao, diaTela);
       if (daTela.length !== r.membrosTotal) throw recusaVersaoGestao('A comissão');
-      const naData = diaReuniao === hoje ? daTela : await composicao(tx, r.comissao, diaReuniao);
+      const naData = diaReuniao === diaTela ? daTela : await composicao(tx, r.comissao, diaReuniao);
       const posicoes = r.presentesPosicoes ?? posicoesPelosNomes(JSON.parse(r.presentes) as string[], daTela);
       const escolha = presentesDaReuniao(posicoes, daTela, naData);
       if ('recusa' in escolha)

@@ -115,6 +115,8 @@ export interface GravadorGestao {
     readonly presentesTotal: number;
     /** As posições dos presentes na composição que a tela leu (a presença é do membro, nunca do nome). */
     readonly presentesPosicoes?: readonly number[];
+    /** O dia da composição em que as posições foram marcadas (o da reunião); sem ele, a de hoje. */
+    readonly composicaoEm?: string;
     readonly convidados: string | null;
     readonly deliberacoes: string | null;
     readonly agora: string;
@@ -270,7 +272,8 @@ export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
   auditoria(c: C, id: number): Promise<AuditoriaRegistrada | null>;
   naoConformidadesPorOrigem(c: C, origem: string, ids: readonly number[]): Promise<Map<number, number>>;
   comissoes(c: C): Promise<ComissaoRegistrada[]>;
-  comissao(c: C, id: number): Promise<ComissaoRegistrada | null>;
+  /** A comissão com a composição vigente em `dia` (AAAA-MM-DD; sem ele, a de hoje no relógio do estabelecimento). */
+  comissao(c: C, id: number, dia?: string): Promise<ComissaoRegistrada | null>;
   reunioes(c: C, comissao: number): Promise<ReuniaoComissaoRegistrada[]>;
   riscos(c: C, f: Pg & { readonly situacao?: string | undefined }): Promise<PaginaGestao<RiscoRegistrado>>;
   risco(c: C, id: number): Promise<RiscoRegistrado | null>;

@@ -537,10 +537,17 @@ export const esquemaRegistrarReuniaoComissao = z.object({
   versaoComissao: versao,
   /** As posições (base 0) dos membros presentes na composição lida. */
   presentes: z.array(z.number().int().min(0).max(39)).max(40),
+  /**
+   * O dia da composição em que as posições foram marcadas: o da reunião (a retroativa mostra quem era membro naquela
+   * data, inclusive quem saiu depois) ou, sem ele, a de hoje.
+   */
+  composicaoEm: data.optional(),
   convidados: textoOpcional(400),
   deliberacoes: textoOpcional(2000),
 });
 export type RegistrarReuniaoComissaoEntrada = z.infer<typeof esquemaRegistrarReuniaoComissao>;
+/** O dia (AAAA-MM-DD) da composição da comissão que a tela lê para marcar a presença da reunião. */
+export const esquemaDiaComposicaoComissao = z.object({ dia: data });
 
 const pontoGut = z.number().int().min(1).max(5);
 

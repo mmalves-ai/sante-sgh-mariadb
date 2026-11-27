@@ -425,6 +425,8 @@ export const mensagensGestaoQualidade = {
       extraordinaria: 'Extraordinária',
       presenca: 'Presença dos membros',
       previa: 'Quórum: {conta}',
+      composicaoNaData: 'Membros vigentes na data da reunião (inclui quem saiu depois dela).',
+      composicaoCarregando: 'Aguarde a composição da comissão na data da reunião.',
       gravada: 'Reunião registrada.',
     },
   },

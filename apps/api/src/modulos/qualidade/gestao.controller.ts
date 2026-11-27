@@ -53,6 +53,7 @@ import {
   esquemaRegistrarManifestacao,
   esquemaRegistrarNaoConformidade,
   esquemaRegistrarReuniaoComissao,
+  esquemaDiaComposicaoComissao,
   esquemaRegistrarRisco,
   esquemaRegistrarTransmissaoEnvio,
   esquemaResponderManifestacao,
@@ -825,6 +826,21 @@ export class GestaoQualidadeController {
     return { itens: (await this.porta.reunioes(s.porta, c.id)).map(reuniaoLida) };
   }
 
+  /** A composição da comissão vigente no dia (AAAA-MM-DD): a tela da reunião retroativa marca a presença nela. */
+  @Get('qualidade/gestao/comissoes/:id/composicao')
+  @Permissao(P.gestaoLer)
+  async composicaoComissao(
+    @Param('id') id: string,
+    @Query('dia') dia: unknown,
+    @Req() req: RequisicaoAutorizada,
+  ) {
+    const s = sessaoDe(req);
+    const d = corpo(esquemaDiaComposicaoComissao, { dia }).dia;
+    const c = await this.porta.comissao(s.porta, idDaRota(id), d);
+    if (!c) throw naoEncontrado('Comissão');
+    return { comissao: c.id, versao: c.versao, dia: d, membros: membrosDaComissao(c.membros) };
+  }
+
   @Post('qualidade/gestao/comissoes')
   @Permissao(P.gestaoRegistrar)
   @AuditadoNoHandler('qualidade.registrarComissao: comissao_hospitalar e a trilha_auditoria')
@@ -873,7 +889,10 @@ export class GestaoQualidadeController {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarReuniaoComissao, { ...(b as object), comissao: idDaRota(id) });
     await this.apoio.exigirLiberacao(s);
-    const c = await this.porta.comissao(s.porta, e.comissao);
+    // A composição que a tela leu: a do dia da reunião (retroativa) ou a de hoje; outro dia não vale.
+    if (e.composicaoEm !== undefined && e.composicaoEm !== e.realizadaEm.slice(0, 10))
+      recusar('versao-desatualizada');
+    const c = await this.porta.comissao(s.porta, e.comissao, e.composicaoEm);
     if (!c) throw naoEncontrado('Comissão');
     // As posições dos presentes valem para a composição que a tela leu: a comissão alterada depois é recusada.
     if (c.versao !== e.versaoComissao) recusar('versao-desatualizada');
@@ -898,6 +917,7 @@ export class GestaoQualidadeController {
           membrosTotal: membros.length,
           presentesTotal: presentes.length,
           presentesPosicoes: e.presentes,
+          ...(e.composicaoEm === undefined ? {} : { composicaoEm: e.composicaoEm }),
           convidados: e.convidados?.trim() || null,
           deliberacoes: e.deliberacoes?.trim() || null,
           agora,

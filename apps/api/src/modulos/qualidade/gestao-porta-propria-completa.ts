@@ -260,8 +260,8 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
     return this.complementoQ2.comissoes(c);
   }
 
-  override comissao(c: ContextoGestao, id: number) {
-    return this.complementoQ2.comissao(c, id);
+  override comissao(c: ContextoGestao, id: number, dia?: string) {
+    return this.complementoQ2.comissao(c, id, dia);
   }
 
   override contagem(c: ContextoGestao, agora: string, usuario: string) {

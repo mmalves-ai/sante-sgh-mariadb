@@ -555,6 +555,36 @@ describe.skipIf(SEM_BANCO_QUA)(
         [mb[1]!['id'], 1],
         [mb[2]!['id'], 0],
       ]);
+      // A tela lê a composição de 12/11 (quem saiu depois aparece): a posição 2 é o homônimo, não a Dora.
+      const naData = await new LeiturasGestaoComplementoQ2(m.nucleo).comissao(c, r.id, '2026-11-12');
+      expect((JSON.parse(naData!.membros) as { nome: string }[]).map((y) => y.nome)[2]).toBe(nomeProf);
+      // Outro dia que não o da reunião nem hoje não vale para as posições.
+      expect(
+        await codigoDe(
+          reuniao({ composicaoEm: '2026-11-11', presentesPosicoes: [2], realizadaEm: '2026-11-12T15:00:00' }),
+        ),
+      ).toBe('409:versao-desatualizada');
+      const h = await reuniao({
+        composicaoEm: '2026-11-12',
+        presentesPosicoes: [0, 2],
+        presentesTotal: 2,
+        realizadaEm: '2026-11-12T16:00:00',
+      });
+      const ph = await consulta(
+        'SELECT comissao_membro_id, presente FROM reuniao_comissao_participante WHERE reuniao_comissao_id = ? ORDER BY comissao_membro_id',
+        [h.id],
+      );
+      expect(ph.map((y) => [y['comissao_membro_id'], Number(y['presente'])])).toEqual([
+        [mb[0]!['id'], 1],
+        [mb[1]!['id'], 0],
+        [mb[2]!['id'], 1],
+      ]);
+      const [rh] = await consulta(
+        'SELECT membros_quantidade, presentes_quantidade, quorum_atingido FROM reuniao_comissao WHERE id = ?',
+        [h.id],
+      );
+      expect(rh).toMatchObject({ membros_quantidade: 3, presentes_quantidade: 2 });
+      expect(Number(rh!['quorum_atingido'])).toBe(1);
     });
 
     it('rota POST qualidade/gestao/comissoes: grava a comissão, a composição e a trilha pelo controller; recusa da rota sem gravar', async () => {
@@ -645,6 +675,99 @@ describe.skipIf(SEM_BANCO_QUA)(
           ),
         ).rejects.toMatchObject({ extras: { codigo: 'membro-repetido' } });
         expect(await qtd()).toBe(1);
+      } finally {
+        desligarMapaEstabelecimentos();
+      }
+    });
+
+    it('rota POST qualidade/gestao/comissoes/:id/reunioes: a retroativa marca a presença na composição da data lida pela rota da composição; outro dia recusa sem gravar', async () => {
+      desligarMapaEstabelecimentos();
+      await ligarMapaEstabelecimentos(CLIENTE_QUA, m.nucleo);
+      try {
+        const configuracao = {
+          chaves: async () => [
+            { chave: CHAVE_QUALIDADE_GESTAO, tipo: 'recurso', ligada: true, escopo: 'hospital', valor: '*' },
+          ],
+          prerequisitos: async () => [
+            { recurso: CHAVE_QUALIDADE_GESTAO, tipo: 'aprovacao', situacao: 'cumprido', validade: null },
+          ],
+          parametros: async () => [],
+        } as unknown as FonteConfiguracao;
+        const ctrl = new GestaoQualidadeController(
+          new PortaGestaoPropriaCompleta(m.nucleo),
+          new RegistradorTrilhaPropria(m.nucleo, CLIENTE_QUA),
+          configuracao,
+        );
+        const perms = ['qualidade.gestao.ler', 'qualidade.gestao.registrar'];
+        const req = () =>
+          ({
+            headers: { 'idempotency-key': `k3-reu-${NUM}-${randomInt(1e9)}`, 'x-correlation-id': 'k3-reu' },
+            ip: '127.0.0.1',
+            sgh: {
+              real: false,
+              ability: criarAbility(regrasDeAcesso([...perms], null)),
+              sessao: {
+                usuario: { id: String(m.usuario), nome: 'Conta sintética', login: m.login },
+                rede: 'teste',
+                estabelecimentos: [],
+                estabelecimentoAtivo: m.codigoEst,
+                unidadeAtiva: null,
+                permissoes: [...perms],
+                sintetica: true,
+                bloqueioInatividadeSegundos: 0,
+                expiraEm: '',
+              },
+            },
+          }) as unknown as RequisicaoAutorizada;
+        // A comissão do caso anterior: em 12/11 o homônimo era membro; depois de 15/11, a Dora.
+        const [cr] = await consulta('SELECT id, versao FROM comissao_hospitalar WHERE nome = ?', [
+          `${nomeComissao} R`,
+        ]);
+        const idR = Number(cr!['id']);
+        const comp = await ctrl.composicaoComissao(String(idR), '2026-11-12', req());
+        expect(comp.membros).toHaveLength(3);
+        expect(comp.membros[2]!.nome).toBe(nomeProf);
+        const corpo = {
+          tipo: 'extraordinaria',
+          realizadaEm: '2026-11-12T18:00',
+          pauta: 'Pauta sintética da rota',
+          ata: 'Ata sintética retroativa pela rota',
+          versaoComissao: Number(cr!['versao']),
+          presentes: [2],
+          composicaoEm: '2026-11-12',
+          convidados: null,
+          deliberacoes: null,
+        };
+        const qtd = async () =>
+          (await consulta('SELECT id FROM reuniao_comissao WHERE comissao_hospitalar_id = ?', [idR])).length;
+        const antes = await qtd();
+        await expect(
+          ctrl.registrarReuniao(String(idR), { ...corpo, composicaoEm: '2026-11-11' }, req()),
+        ).rejects.toMatchObject({ extras: { codigo: 'versao-desatualizada' } });
+        expect(await qtd()).toBe(antes);
+        const x = (await ctrl.registrarReuniao(String(idR), corpo, req())) as { id: number };
+        const [ru] = await consulta(
+          'SELECT membros_quantidade, presentes_quantidade, presentes_registrados FROM reuniao_comissao WHERE id = ?',
+          [x.id],
+        );
+        expect(ru).toMatchObject({ membros_quantidade: 3, presentes_quantidade: 1 });
+        expect(JSON.parse(String(ru!['presentes_registrados']))).toEqual([nomeProf]);
+        const pa = await consulta(
+          `SELECT cm.nome_externo, p.presente FROM reuniao_comissao_participante p
+             JOIN comissao_membro cm ON cm.id = p.comissao_membro_id
+            WHERE p.reuniao_comissao_id = ? ORDER BY cm.id`,
+          [x.id],
+        );
+        expect(pa.map((y) => [y['nome_externo'], Number(y['presente'])])).toEqual([
+          [null, 0],
+          [null, 0],
+          [nomeProf, 1],
+        ]);
+        const tr = await consulta(
+          "SELECT estabelecimento_id FROM trilha_auditoria WHERE entidade = 'reuniao_comissao' AND entidade_id = ?",
+          [String(x.id)],
+        );
+        expect(tr.length).toBeGreaterThan(0);
       } finally {
         desligarMapaEstabelecimentos();
       }

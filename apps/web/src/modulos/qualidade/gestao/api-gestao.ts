@@ -501,6 +501,12 @@ export const registrarAuditoria = (e: RegistrarAuditoriaEntrada, chave: string) 
   enviar(`${G}/auditorias`, e, esquemaId, chave);
 
 export const lerComissoes = () => ler(`${G}/comissoes`, z.object({ itens: z.array(esquemaComissao) }));
+/** A composição da comissão vigente no dia (AAAA-MM-DD): a reunião retroativa marca a presença nela. */
+export const lerComposicaoComissao = (id: number, dia: string) =>
+  ler(
+    `${G}/comissoes/${String(id)}/composicao?dia=${encodeURIComponent(dia)}`,
+    z.object({ comissao: n, versao: n, dia: s, membros: z.array(esquemaMembro) }),
+  );
 export const lerReunioes = (id: number) =>
   ler(`${G}/comissoes/${String(id)}/reunioes`, z.object({ itens: z.array(esquemaReuniao) }));
 export const registrarComissao = (e: RegistrarComissaoEntrada, chave: string) =>

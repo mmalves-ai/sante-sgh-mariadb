@@ -397,6 +397,8 @@ export function previaQuorum(membros: number, presentes: number): { quorum: bool
 export function montarReuniao(
   f: FormularioReuniao,
   c: Pick<ComissaoTela, 'id' | 'versao' | 'membros'>,
+  /** O dia da composição lida, quando a tela marcou a presença na composição da data da reunião (retroativa). */
+  composicaoEm?: string,
 ): Montagem<Omit<RegistrarReuniaoComissaoEntrada, 'comissao'>> {
   const extras: Record<string, string> = {};
   const realizadaEm = instanteDosCampos(f.data, f.hora);
@@ -414,6 +416,7 @@ export function montarReuniao(
       pauta: f.pauta,
       ata: f.ata,
       presentes: [...f.presentes].filter((p) => p < c.membros.length).sort((a, b) => a - b),
+      ...(composicaoEm === undefined ? {} : { composicaoEm }),
       convidados: ouNulo(f.convidados),
       deliberacoes: ouNulo(f.deliberacoes),
     },

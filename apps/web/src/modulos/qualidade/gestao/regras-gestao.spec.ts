@@ -270,6 +270,9 @@ describe('comissões', () => {
       convidados: null,
       deliberacoes: null,
     });
+    // A retroativa leva o dia da composição em que a presença foi marcada.
+    const r = montarReuniao(f, c, '2026-10-20');
+    expect(r.ok && r.entrada.composicaoEm).toBe('2026-10-20');
     const sem = montarReuniao({ ...f, presentes: [], hora: null }, c);
     expect(sem.ok).toBe(false);
     if (!sem.ok) expect(Object.keys(sem.erros)).toEqual(expect.arrayContaining(['presentes', 'realizadaEm']));

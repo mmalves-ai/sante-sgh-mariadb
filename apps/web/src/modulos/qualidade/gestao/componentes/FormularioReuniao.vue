@@ -3,9 +3,15 @@
 // maioria simples aparece com as parcelas), convidados e deliberações.
 import { TIPOS_REUNIAO_COMISSAO } from '@sgh/contratos';
 import { SanteBotao, SanteCampoTexto, SanteData, SanteHora, SanteSelecao } from '@sgh/ui';
-import { computed, reactive, ref } from 'vue';
+import { useQuery } from '@tanstack/vue-query';
+import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { type ComissaoTela, novaChaveGestao, registrarReuniao } from '../api-gestao.js';
+import {
+  type ComissaoTela,
+  lerComposicaoComissao,
+  novaChaveGestao,
+  registrarReuniao,
+} from '../api-gestao.js';
 import { montarReuniao, previaQuorum } from '../regras-gestao.js';
 import ErroGestao from './ErroGestao.vue';
 import ErrosFormulario from './ErrosFormulario.vue';
@@ -25,14 +31,44 @@ const f = reactive({
   deliberacoes: '',
 });
 const opTipo = TIPOS_REUNIAO_COMISSAO.map((x) => ({ valor: x.codigo as string, rotulo: x.rotulo }));
-const quorum = computed(() => previaQuorum(props.comissao.membros.length, f.presentes.length));
+// A reunião retroativa marca a presença na composição vigente NA DATA escolhida (inclusive quem saiu depois); a de
+// hoje usa a composição já lida da comissão.
+const hoje = props.agora.slice(0, 10);
+const diaRetroativo = computed(() =>
+  f.data && /^\d{4}-\d{2}-\d{2}$/.test(f.data) && f.data !== hoje ? f.data : null,
+);
+const composicao = useQuery({
+  queryKey: computed(() => ['gestaoQualidade', 'composicao', props.comissao.id, diaRetroativo.value]),
+  queryFn: () => lerComposicaoComissao(props.comissao.id, diaRetroativo.value as string),
+  enabled: computed(() => diaRetroativo.value !== null),
+});
+const membros = computed(() =>
+  diaRetroativo.value === null ? props.comissao.membros : (composicao.data.value?.membros ?? []),
+);
+// Trocar a data troca a composição: as posições marcadas deixam de valer.
+watch(diaRetroativo, () => {
+  f.presentes = [];
+});
+const quorum = computed(() => previaQuorum(membros.value.length, f.presentes.length));
 const erros = ref<Record<string, string>>({});
 const erro = ref<unknown>(null);
 const gravando = ref(false);
 let chave = novaChaveGestao('reuniao');
 async function gravar(): Promise<void> {
   erro.value = null;
-  const m = montarReuniao(f, props.comissao);
+  const dia = diaRetroativo.value;
+  if (dia !== null && composicao.data.value?.dia !== dia) {
+    erros.value = { presentes: t('gestaoQualidade.comissoes.reuniao.composicaoCarregando') };
+    return;
+  }
+  const m =
+    dia === null
+      ? montarReuniao(f, props.comissao)
+      : montarReuniao(
+          f,
+          { id: props.comissao.id, versao: props.comissao.versao, membros: membros.value },
+          dia,
+        );
   if (!m.ok) {
     erros.value = { ...m.erros };
     return;
@@ -74,7 +110,11 @@ async function gravar(): Promise<void> {
     />
     <fieldset class="painel-ccih">
       <legend>{{ t('gestaoQualidade.comissoes.reuniao.presenca') }}</legend>
-      <label v-for="(m, k) in comissao.membros" :key="k" class="marcar-gestao"
+      <p v-if="diaRetroativo" class="secundario" data-testid="reu-composicao-data">
+        {{ t('gestaoQualidade.comissoes.reuniao.composicaoNaData') }}
+      </p>
+      <ErroGestao v-if="composicao.isError.value" :erro="composicao.error.value" />
+      <label v-for="(m, k) in membros" :key="`${diaRetroativo ?? 'hoje'}-${k}`" class="marcar-gestao"
         ><input v-model="f.presentes" type="checkbox" :value="k" :data-testid="`reu-presente-${k}`" />
         {{ m.nome }} ({{ m.funcao }})</label
       >
