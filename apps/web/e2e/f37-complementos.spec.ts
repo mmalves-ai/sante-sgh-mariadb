@@ -74,7 +74,7 @@ async function simular(page: Page, enviados: Record<string, unknown>[]): Promise
   await page.route(`**/api/faturamento/contas/${CONTA}/segurado`, (rota) => {
     if (rota.request().method() === 'POST') {
       enviados.push({ segurado: rota.request().postDataJSON() });
-      return json(rota, { id: 2, versao: 1, substituido: 1, alertas: [] });
+      return json(rota, { id: 2, versao: 1, substituido: 1, alertas: '' });
     }
     return json(rota, {
       contaId: CONTA,
