@@ -261,8 +261,8 @@ test.describe('Contratação pública na porta própria @C2-017', () => {
       await painel.getByTestId('scf-quantidade').fill(quantidade);
       await painel.getByTestId('scf-valor').fill(valor);
     };
-    const fonte = async (codigo: string, percentual: string) => {
-      await escolher(painel.getByTestId('scf-fonte'), { rotulo: new RegExp(codigo.replace(/\./g, '\\.')) });
+    const fonte = async (codigo: RegExp, percentual: string) => {
+      await escolher(painel.getByTestId('scf-fonte'), { rotulo: codigo });
       await painel.getByTestId('scf-percentual').fill(percentual);
       await painel.getByTestId('scf-adicionar-fonte').click();
     };
@@ -282,12 +282,12 @@ test.describe('Contratação pública na porta própria @C2-017', () => {
     await escolher(painel.getByTestId('scf-local'), { rotulo: /ALMOXARIFADO SINTETICO/ });
     await painel.getByTestId('scf-justificativa').fill('Reposição do almoxarifado para o semestre');
     await item('luva', /LUVA PROCEDIMENTO/, '200', '0,42');
-    await fonte('1.500.1002', '60');
-    await fonte('1.500.1001', '40');
+    await fonte(/1\.500\.1002/, '60');
+    await fonte(/1\.500\.1001/, '40');
     await expect(painel.getByTestId('scf-fontes-item')).toContainText('1.500.1002 60% + 1.500.1001 40%');
     await painel.getByTestId('scf-adicionar-item').click();
     await item('seringa', /SERINGA SINTETICA/, '100', '1,10');
-    await fonte('1.500.1001', '100');
+    await fonte(/1\.500\.1001/, '100');
     await painel.getByTestId('scf-adicionar-item').click();
     await expect(painel.getByTestId('scf-itens').locator('li')).toHaveCount(2);
     await painel.getByTestId('scf-registrar').click();
