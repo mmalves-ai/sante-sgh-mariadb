@@ -42,6 +42,8 @@ interface Feito {
 
 export const lerRelogioInternado = (unidade: string) =>
   ler<RelogioInternado>(`${C}/relogio?unidade=${encodeURIComponent(unidade)}`);
+/** Só as versões vigentes por tipo (a inclusão a partir do alerta de elegível). */
+export const lerVigentesInternado = () => ler<{ vigentes: RelogioInternado['vigentes'] }>(`${C}/vigentes`);
 export const lerIndicadoresProtocolo = (de: string, ate: string) =>
   ler<{ periodo: { desde: string; ate: string }; indicadores: IndicadorOrigemProtocolo[] }>(
     `${C}/indicadores?de=${encodeURIComponent(de)}&ate=${encodeURIComponent(ate)}`,

@@ -51,6 +51,8 @@ export interface DefinicaoProtocolo {
   etapas: EtapaLida[];
   formulaVigente: string;
   problemaFormula: string | null;
+  /** Os parâmetros vitais ativos do cliente (opções do campo do critério de sinal vital). */
+  sinaisVitais: { codigo: string; descricao: string }[];
 }
 
 export interface AlertaElegivel {

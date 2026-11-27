@@ -5,7 +5,7 @@
   meta perdida pede a justificativa na hora). Abaixo, a configuração (critérios, fórmula, etapas, metas de mercado).
 -->
 <script setup lang="ts">
-import { TIPOS_SINAL_VITAL } from '@sgh/contratos';
+import { TIPOS_PROTOCOLO_INTERNADO } from '@sgh/contratos';
 import { problemaDaFormula, TIPOS_ETAPA } from '@sgh/dominio-enfermagem';
 import { SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
@@ -27,8 +27,10 @@ import {
   lerEtapas,
   lerInclusoes,
   lerProtocolos,
+  type AlertaElegivel,
   type PedidoCriterio,
 } from '../api-protocolo-criterios.js';
+import { incluirProtocoloInternado, lerVigentesInternado } from '../api-protocolo-internado.js';
 import ErroEnfermagem from '../componentes/ErroEnfermagem.vue';
 
 const { t } = useI18n();
@@ -56,6 +58,35 @@ async function gravar(acao: () => Promise<{ mensagem: string }>): Promise<boolea
     erro.value = e;
     return false;
   }
+}
+
+// ── Inclusão a partir do alerta (o horário zero sugerido é quando o critério passou a ser atendido) ──
+const vigentes = useQuery({ queryKey: ['protocolo-criterios', 'vigentes'], queryFn: lerVigentesInternado });
+const chaveAlerta = (a: AlertaElegivel) => `${a.atendimento}-${a.protocolo}`;
+const alertaAberto = ref<string | null>(null);
+const horarioZero = ref('');
+const vigenteDoAlerta = (a: AlertaElegivel) =>
+  (TIPOS_PROTOCOLO_INTERNADO as readonly string[]).includes(a.tipo)
+    ? (vigentes.data.value?.vigentes.find((v) => v.tipo === a.tipo) ?? null)
+    : null;
+function abrirInclusao(a: AlertaElegivel) {
+  alertaAberto.value = chaveAlerta(a);
+  horarioZero.value = (a.desde ?? '').slice(0, 16);
+}
+async function incluirDoAlerta(a: AlertaElegivel) {
+  const v = vigenteDoAlerta(a);
+  if (!v) return;
+  const ok = await gravar(() =>
+    incluirProtocoloInternado({
+      atendimento: a.atendimento,
+      tipo: v.tipo,
+      versao: v.id,
+      origem: 'suspeita',
+      reconhecidoEm: horarioZero.value,
+      criterios: v.criterios.map((c) => c.codigo),
+    }),
+  );
+  if (ok) alertaAberto.value = null;
 }
 
 // ── Etapas do paciente ──
@@ -101,7 +132,7 @@ const problemaFormula = computed(() =>
 const novo = ref({
   grupo: '',
   categoria: 'sinal_vital',
-  campo: 'fc',
+  campo: '',
   termo: '',
   minimo: '',
   maximo: '',
@@ -114,7 +145,14 @@ const opcoesCategoria = computed(() =>
     rotulo: t(k(`categorias.${c}`)),
   })),
 );
-const opcoesCampo = computed(() => TIPOS_SINAL_VITAL.map((c) => ({ valor: c, rotulo: c })));
+const opcoesCampo = computed(() =>
+  (definicao.data.value?.sinaisVitais ?? []).map((s) => ({ valor: s.codigo, rotulo: `${s.descricao} (${s.codigo})` })),
+);
+// O campo do sinal vital nasce com o primeiro parâmetro do catálogo do cliente (nunca um código fora dele).
+watch(opcoesCampo, (o) => {
+  if (novo.value.categoria === 'sinal_vital' && !o.some((x) => x.valor === novo.value.campo))
+    novo.value.campo = o[0]?.valor ?? '';
+});
 const numero = (v: string): number | null => (v.trim() === '' ? null : Number(v.replace(',', '.')));
 const problemaCriterio = computed(() => {
   const n = novo.value;
@@ -122,6 +160,7 @@ const problemaCriterio = computed(() => {
   const [mi, ma] = [numero(n.minimo), numero(n.maximo)];
   if (mi !== null && ma !== null && ma < mi) return t(k('problemas.faixa'));
   if (n.categoria !== 'diagnostico' && mi === null && ma === null) return t(k('problemas.valor'));
+  if (n.categoria === 'sinal_vital' && !opcoesCampo.value.some((x) => x.valor === n.campo)) return t(k('semSinais'));
   return null;
 });
 function incluirNovoCriterio() {
@@ -180,6 +219,26 @@ const metas = ref<Record<number, string>>({});
           <span v-if="a.mensagem"> · {{ a.mensagem }}</span>
           <br />
           {{ t(k('criterios')) }}: {{ a.criteriosAtendidos.join('; ') }}
+          <br />
+          <SanteBotao
+            v-if="alertaAberto !== chaveAlerta(a)"
+            :rotulo="t(k('incluirDoAlerta'))"
+            :data-testid="`pc-incluir-${a.atendimento}`"
+            @acionar="abrirInclusao(a)"
+          />
+          <div v-else class="inclusao-alerta">
+            <p v-if="vigentes.isSuccess.value && !vigenteDoAlerta(a)" role="alert">{{ t(k('semVigente')) }}</p>
+            <label
+              >{{ t(k('horarioZeroSugerido')) }}
+              <input v-model="horarioZero" type="datetime-local" :data-testid="`pc-horario-zero-${a.atendimento}`"
+            /></label>
+            <SanteBotao
+              :rotulo="t(k('confirmarInclusao'))"
+              :desabilitado="!vigenteDoAlerta(a) || !horarioZero"
+              :data-testid="`pc-confirmar-${a.atendimento}`"
+              @acionar="incluirDoAlerta(a)"
+            />
+          </div>
         </li>
       </ul>
     </template>

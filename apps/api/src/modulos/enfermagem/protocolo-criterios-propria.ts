@@ -104,6 +104,8 @@ export interface DefinicaoProtocolo {
   /** A fórmula que vale (a gravada ou a padrão) e o problema dela, se houver. */
   readonly formulaVigente: string;
   readonly problemaFormula: string | null;
+  /** Os parâmetros vitais ativos do cliente: as opções do campo do critério de sinal vital (o código é o gravado). */
+  readonly sinaisVitais: readonly { readonly codigo: string; readonly descricao: string }[];
 }
 
 const SQL_PROTOCOLO = `SELECT id, codigo, nome, tipo, situacao, publico, formula_entrada, mensagem_alerta, versao
@@ -190,7 +192,13 @@ async function protocoloDoEstabelecimento(l: Leitor, est: number, id: number): P
 export async function definicaoProtocolo(l: Leitor, est: number, id: number): Promise<DefinicaoProtocolo> {
   const protocolo = await protocoloDoEstabelecimento(l, est, id);
   const criterios = (await criteriosDe(l, [id])).get(id) ?? [];
-  const etapas = await etapasDe(l, id);
+  const [etapas, sinais] = await Promise.all([
+    etapasDe(l, id),
+    l.consultar<{ codigo: unknown; descricao: unknown }>(
+      'SELECT codigo, descricao FROM parametro_vital WHERE ativo ORDER BY descricao, codigo',
+      [],
+    ),
+  ]);
   const grupos = criterios.filter((c) => c.ativo && c.finalidade === 'entrada').map(grupoDoCriterio);
   const formulaVigente = protocolo.formula?.trim() || formulaPadrao(grupos);
   return {
@@ -199,6 +207,7 @@ export async function definicaoProtocolo(l: Leitor, est: number, id: number): Pr
     etapas,
     formulaVigente,
     problemaFormula: grupos.length ? problemaDaFormula(formulaVigente, grupos) : null,
+    sinaisVitais: sinais.map((r) => ({ codigo: String(r.codigo), descricao: String(r.descricao) })),
   };
 }
 

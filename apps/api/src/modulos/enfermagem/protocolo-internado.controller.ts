@@ -98,6 +98,23 @@ const vigenteDe = (versoes: readonly VersaoComConteudo[], tipo: string) =>
     .filter((x) => x.v.tipo === tipo)
     .reduce<VersaoComConteudo | undefined>((m, x) => (!m || x.v.versao > m.v.versao ? x : m), undefined);
 
+/** As versões vigentes por tipo, com os critérios a conferir (o id vai na inclusão). */
+const vigentesDe = (versoes: readonly VersaoComConteudo[]): RelogioInternado['vigentes'] =>
+  TIPOS_PROTOCOLO_INTERNADO.flatMap((tipo) => {
+    const v = vigenteDe(versoes, tipo);
+    return v
+      ? [
+          {
+            tipo,
+            id: v.v.id,
+            versao: v.v.versao,
+            nome: v.conteudo.nome,
+            criterios: v.conteudo.criterios.map((c) => ({ codigo: c.codigo, titulo: c.titulo })),
+          },
+        ]
+      : [];
+  });
+
 /** A fonte do PA não é usada aqui (só as versões publicadas): qualquer chamada é erro de programação. */
 const SEM_PA = {
   paAbertos: () => Promise.reject(new Error('fonte do PA não usada no internado')),
@@ -251,20 +268,7 @@ export class ProtocoloInternadoController {
         leito: i.leito,
         local: localDaUnidade(i.unidade, p.unidadesUti),
       })),
-      vigentes: TIPOS_PROTOCOLO_INTERNADO.flatMap((tipo) => {
-        const v = vigenteDe(versoes, tipo);
-        return v
-          ? [
-              {
-                tipo,
-                id: v.v.id,
-                versao: v.v.versao,
-                nome: v.conteudo.nome,
-                criterios: v.conteudo.criterios.map((c) => ({ codigo: c.codigo, titulo: c.titulo })),
-              },
-            ]
-          : [];
-      }),
+      vigentes: vigentesDe(versoes),
       indicadores,
       periodo: { desde: de, ate: hoje },
       acoes: {
@@ -274,6 +278,13 @@ export class ProtocoloInternadoController {
       },
       lidoEm: agora.slice(0, 16),
     };
+  }
+
+  /** Só as versões vigentes: a inclusão a partir do alerta de elegível (tela de critérios e metas, C2-042). */
+  @Get('vigentes')
+  @Permissao(P.horarioLer)
+  async vigentes(@Req() req: RequisicaoAutorizada): Promise<{ vigentes: RelogioInternado['vigentes'] }> {
+    return { vigentes: vigentesDe(await this.versoes(sessaoDe(req))) };
   }
 
   @Get('indicadores')

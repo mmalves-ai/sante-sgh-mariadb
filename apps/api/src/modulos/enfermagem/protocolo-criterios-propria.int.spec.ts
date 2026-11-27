@@ -219,6 +219,11 @@ describe.skipIf(SEM_BANCO)(
       const def = await lerNoBanco<Awaited<ReturnType<typeof definicaoProtocolo>>>((l, est) =>
         definicaoProtocolo(l, est, protocolo),
       );
+      // As opções do campo do critério de sinal vital são o catálogo parametro_vital ativo do cliente (C2-042).
+      expect(def.sinaisVitais.length).toBe(
+        await contar('SELECT COUNT(*) AS n FROM parametro_vital WHERE ativo', []),
+      );
+      expect(def.sinaisVitais.length).toBeGreaterThan(0);
       await expect(
         config('enfermagem.gravar-formula-protocolo', (tx, est, an) =>
           gravarFormulaTx(tx, est, an, protocolo, def.protocolo.versao, 'temperatura E lactato'),
