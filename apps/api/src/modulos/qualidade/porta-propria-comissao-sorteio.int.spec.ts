@@ -5,9 +5,17 @@
 // a composição na trilha), a reunião com a presença de cada membro e o quórum apurado, o sorteio com a amostra em
 // revisão e as recusas sem gravar (versão, presente de fora, checklist ausente, competência já sorteada, amostra
 // repetida, atendimento de fora, dependentes na inativação).
+// Divergência intencional da porta de memória (W0-04): a memória não recusa a competência já sorteada
+// ('competencia-ja-sorteada'); a regra de um sorteio ativo por competência e comissão é do banco próprio e se prova aqui.
+// A memória serve à tela e ao E2E, que sorteiam competências diferentes ou cancelam antes.
 import { randomInt } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { criarAbility, regrasDeAcesso } from '@sgh/dominio-acesso';
 import { ErroOperacao } from '@sgh/nucleo';
+import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
+import { RegistradorTrilhaPropria } from '../../autorizacao/trilha-propria.js';
+import { desligarMapaEstabelecimentos, ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
+import type { FonteConfiguracao } from '../config/configuracao-fonte.js';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import { gravacaoDireta } from '../enfermagem/gravacao-direta.js';
 import type { GravadorGestao } from './porta-gestao.js';
@@ -26,6 +34,8 @@ import {
   gravacoesComissaoSorteio,
   TABELAS_COMISSAO_SORTEIO,
 } from './porta-propria-comissao-sorteio.js';
+import { PortaGestaoPropriaCompleta } from './gestao-porta-propria-completa.js';
+import { CHAVE_QUALIDADE_GESTAO, GestaoQualidadeController } from './gestao.controller.js';
 
 const T: TrilhaDaGravacao = {
   estabelecimento: null,
@@ -545,6 +555,99 @@ describe.skipIf(SEM_BANCO_QUA)(
         [mb[1]!['id'], 1],
         [mb[2]!['id'], 0],
       ]);
+    });
+
+    it('rota POST qualidade/gestao/comissoes: grava a comissão, a composição e a trilha pelo controller; recusa da rota sem gravar', async () => {
+      desligarMapaEstabelecimentos();
+      await ligarMapaEstabelecimentos(CLIENTE_QUA, m.nucleo);
+      try {
+        const configuracao = {
+          chaves: async () => [
+            { chave: CHAVE_QUALIDADE_GESTAO, tipo: 'recurso', ligada: true, escopo: 'hospital', valor: '*' },
+          ],
+          prerequisitos: async () => [
+            { recurso: CHAVE_QUALIDADE_GESTAO, tipo: 'aprovacao', situacao: 'cumprido', validade: null },
+          ],
+          parametros: async () => [],
+        } as unknown as FonteConfiguracao;
+        const ctrl = new GestaoQualidadeController(
+          new PortaGestaoPropriaCompleta(m.nucleo),
+          new RegistradorTrilhaPropria(m.nucleo, CLIENTE_QUA),
+          configuracao,
+        );
+        const req = (perms: string[]) =>
+          ({
+            headers: { 'idempotency-key': `k3-rota-${NUM}-${randomInt(1e9)}`, 'x-correlation-id': 'k3-rota' },
+            ip: '127.0.0.1',
+            sgh: {
+              real: false,
+              ability: criarAbility(regrasDeAcesso([...perms], null)),
+              sessao: {
+                usuario: { id: String(m.usuario), nome: 'Conta sintética', login: m.login },
+                rede: 'teste',
+                estabelecimentos: [],
+                estabelecimentoAtivo: m.codigoEst,
+                unidadeAtiva: null,
+                permissoes: [...perms],
+                sintetica: true,
+                bloqueioInatividadeSegundos: 0,
+                expiraEm: '',
+              },
+            },
+          }) as unknown as RequisicaoAutorizada;
+        const nome = `${nomeComissao} ROTA`;
+        const corpo = {
+          comissao: null,
+          versao: null,
+          tipo: 'prontuario',
+          nome,
+          periodicidade: 'mensal',
+          membros: [
+            { nome: 'Quem tem a conta', funcao: 'Presidente', login: m.loginGestor },
+            { nome: 'Eva Externa', funcao: 'Secretária', login: null },
+          ],
+          ativa: true,
+        };
+        const qtd = async () =>
+          (await consulta('SELECT id FROM comissao_hospitalar WHERE nome = ?', [nome])).length;
+        expect(await qtd()).toBe(0);
+        const r = (await ctrl.registrarComissao(corpo, req(['qualidade.gestao.registrar']))) as {
+          id: number;
+          versao: number;
+          criada: boolean;
+        };
+        expect(r).toMatchObject({ versao: 1, criada: true });
+        const mb = await consulta(
+          'SELECT colaborador_id, profissional_id, nome_externo, papel FROM comissao_membro WHERE comissao_hospitalar_id = ? AND excluido_em IS NULL ORDER BY id',
+          [r.id],
+        );
+        // A conta do gestor é pessoa do cadastro (o caso anterior lhe deu um colaborador, que prevalece ao vínculo).
+        expect(mb).toHaveLength(2);
+        expect(mb[0]).toMatchObject({ nome_externo: null, papel: 'presidente' });
+        expect(mb[0]!['colaborador_id'] ?? mb[0]!['profissional_id']).not.toBeNull();
+        expect(mb[1]).toMatchObject({
+          colaborador_id: null,
+          profissional_id: null,
+          nome_externo: 'Eva Externa',
+          papel: 'secretario',
+        });
+        const tr = await consulta(
+          "SELECT estabelecimento_id FROM trilha_auditoria WHERE entidade = 'comissao_hospitalar' AND entidade_id = ?",
+          [String(r.id)],
+        );
+        expect(tr.length).toBeGreaterThan(0);
+        expect(Number(tr[0]!['estabelecimento_id'])).toBe(m.est);
+        // Pela rota: membro repetido e alteração sem a versão são recusados antes da gravação.
+        await expect(
+          ctrl.registrarComissao(
+            { ...corpo, nome: `${nome} B`, membros: [corpo.membros[1], corpo.membros[1]] },
+            req(['qualidade.gestao.registrar']),
+          ),
+        ).rejects.toMatchObject({ extras: { codigo: 'membro-repetido' } });
+        expect(await qtd()).toBe(1);
+      } finally {
+        desligarMapaEstabelecimentos();
+      }
     });
   },
 );
