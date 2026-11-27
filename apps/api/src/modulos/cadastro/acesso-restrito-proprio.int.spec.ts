@@ -293,6 +293,59 @@ describe.skipIf(SEM_BANCO)('paciente com acesso restrito no banco próprio (f22_
     expect(rodou).toBe(false);
   });
 
+  it('porta comum do nome: a lista clínica mostra o paciente marcado pelas iniciais; o liberado da rota, por inteiro', async () => {
+    const exib = await s.exibicoesRestritas(hospital, [paciente, 999_999_999]);
+    expect([...exib.entries()]).toEqual([[paciente, { exibicao: 'iniciais', pseudonimo: null }]]);
+    expect((await s.exibicoesRestritas(hospital, [999_999_999])).size).toBe(0);
+    const pf = await um<{ nome: string }>(
+      'SELECT pf.nome FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?',
+      [paciente],
+    );
+    const nome = pf!.nome;
+    const iniciais = nome
+      .split(/\s+/)
+      .filter((x) => x.length > 2)
+      .map((x) => `${x[0]!.toUpperCase()}.`)
+      .join(' ');
+    const lista = {
+      leitos: [{ leito: 'F8-101', pacienteId: paciente, pacienteNome: nome }, { leito: 'F8-102' }],
+    };
+    const req = (params: Record<string, string>) => ({
+      method: 'GET',
+      originalUrl: '/api/enfermagem/central-comando',
+      url: '/api/enfermagem/central-comando',
+      params,
+      query: {},
+      headers: {},
+      sgh: {
+        sessao: {
+          estabelecimentoAtivo: hospital,
+          rede: '',
+          usuario: { id: String(m!.usuario), login: m!.login, ator: 'plataforma' },
+        },
+      },
+    });
+    const rodar = (r: ReturnType<typeof req>) =>
+      lastValueFrom(
+        new InterceptadorAcessoRestrito(s).intercept(
+          {
+            getType: () => 'http',
+            getClass: () => Object,
+            getHandler: () => () => undefined,
+            switchToHttp: () => ({ getRequest: () => r }),
+          } as unknown as ExecutionContext,
+          { handle: () => of(lista) },
+        ),
+      ) as Promise<typeof lista>;
+    const painel = await rodar(req({}));
+    expect(painel.leitos[0]!.pacienteNome).toBe(iniciais);
+    expect(painel.leitos[0]!.pacienteNome).not.toBe(nome);
+    expect(lista.leitos[0]!.pacienteNome).toBe(nome);
+    // A plataforma abre o prontuário (rota por :p): o paciente liberado pela decisão aparece por inteiro.
+    const aberto = await rodar(req({ p: String(paciente) }));
+    expect(aberto.leitos[0]!.pacienteNome).toBe(nome);
+  });
+
   it('liberação por equipe: vale com o membro em vigor; com o membro fora de vigência, volta à quebra de vidro', async () => {
     equipe = await nucleo.escrever({ cliente: CLIENTE_F22, correlacao: COR }, (e) =>
       e.inserir(

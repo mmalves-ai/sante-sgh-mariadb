@@ -11,6 +11,8 @@ import {
   decidirAcessoRestrito,
   errosLiberacaoRestrita,
   errosMarcaRestrita,
+  type ExibicaoRestrita,
+  exibicaoMaisRestrita,
   type LiberacaoRestrita,
   type MarcaRestrita,
   marcaViva,
@@ -580,6 +582,63 @@ export class AcessoRestritoProprio {
       }
     });
     return r ? Number(r['paciente_id']) : null;
+  }
+
+  /**
+   * Porta comum do nome do paciente nas listas e painéis clínicos: a exibição (iniciais, pseudônimo ou oculto) das
+   * marcas vivas dos pacientes, no estabelecimento da sessão (pelo código). Sem marca com exibição diferente da normal
+   * (o caso comum), uma só leitura indexada e mapa vazio.
+   */
+  async exibicoesRestritas(
+    hospital: string,
+    pacientes: readonly number[],
+  ): Promise<Map<number, ExibicaoRestrita>> {
+    const ids = [...new Set(pacientes)];
+    const saida = new Map<number, ExibicaoRestrita>();
+    if (!ids.length) return saida;
+    const agora = this.agora();
+    return this.ler('acesso-restrito-nomes', async (l) => {
+      const ms: Record<string, unknown>[] = [];
+      for (let i = 0; i < ids.length; i += 1000) {
+        const lote = ids.slice(i, i + 1000);
+        ms.push(
+          ...(await l.consultar(
+            `SELECT m.id, m.paciente_id, m.estabelecimento_id, m.situacao, m.vigencia_inicio, m.vigencia_fim,
+                    m.exige_quebra_vidro, m.exibicao_nome, m.pseudonimo
+               FROM paciente_acesso_restrito m
+              WHERE m.paciente_id IN (${lote.map(() => '?').join(',')}) AND m.situacao = 'ativa'
+                AND m.excluido_em IS NULL AND m.exibicao_nome <> 'normal'`,
+            lote,
+            { teto: 5000 },
+          )),
+        );
+      }
+      if (!ms.length) return saida;
+      const e = await l.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [
+        hospital,
+      ]);
+      const est = e ? Number(e['id']) : 0;
+      for (const m of ms) {
+        const marca: MarcaRestrita = {
+          id: Number(m['id']),
+          estabelecimentoId: num(m['estabelecimento_id']),
+          situacao: String(m['situacao']),
+          inicio: instanteLocal(m['vigencia_inicio'])!,
+          fim: instanteLocal(m['vigencia_fim']),
+          exigeQuebraVidro: bool(m['exige_quebra_vidro']),
+        };
+        if (!marcaViva(marca, agora, est)) continue;
+        const p = Number(m['paciente_id']);
+        saida.set(
+          p,
+          exibicaoMaisRestrita(saida.get(p), {
+            exibicao: String(m['exibicao_nome']),
+            pseudonimo: m['pseudonimo'] === null ? null : String(m['pseudonimo']),
+          }),
+        );
+      }
+      return saida;
+    });
   }
 
   /**

@@ -4,6 +4,9 @@ import {
   decidirAcessoRestrito,
   errosLiberacaoRestrita,
   errosMarcaRestrita,
+  exibicaoMaisRestrita,
+  mascararNomesRestritos,
+  pacientesNaResposta,
   instante,
   type MarcaRestrita,
   marcaViva,
@@ -146,5 +149,48 @@ describe('nome exibido', () => {
       'Paciente Azul',
     );
     expect(nomeExibidoRestrito('Ana', { exibicao: 'oculto', pseudonimo: null })).toBe('Paciente reservado');
+  });
+});
+
+describe('nome do paciente marcado nas listas e painéis clínicos', () => {
+  const painel = {
+    leitos: [
+      { leito: '101', pacienteId: 7, pacienteNome: 'Ana Souza Lima' },
+      { leito: '102', paciente: 8, nomePaciente: 'Bruno Reis' },
+      { leito: '103', pacienteId: 9, paciente: 'Carla Dias' },
+    ],
+    mapa: [{ sala: 'S1', paciente: { id: 7, nome: 'Ana Souza Lima', nomeSocial: 'Ana' } }],
+    outro: { paciente: '7' },
+  };
+  const exib = new Map([
+    [7, { exibicao: 'iniciais', pseudonimo: null }],
+    [8, { exibicao: 'pseudonimo', pseudonimo: 'Leito reservado' }],
+  ]);
+
+  it('acha os pacientes mostrados pelo nome (id ao lado do nome, ou paciente { id, nome })', () => {
+    expect(pacientesNaResposta(painel).sort()).toEqual([7, 8, 9]);
+    expect(pacientesNaResposta([{ pacienteId: 3, total: 2 }, 'x', null])).toEqual([]);
+  });
+
+  it('troca o nome pela exibição da marca sem mexer no original; o paciente liberado da rota fica por inteiro', () => {
+    const r = mascararNomesRestritos(painel, exib);
+    expect(r.leitos[0]!.pacienteNome).toBe('A. S. L.');
+    expect(r.leitos[1]!.nomePaciente).toBe('Leito reservado');
+    expect(r.leitos[2]).toBe(painel.leitos[2]);
+    expect(r.mapa[0]!.paciente).toEqual({ id: 7, nome: 'A. S. L.', nomeSocial: 'A. S. L.' });
+    expect(r.outro).toBe(painel.outro);
+    expect(painel.leitos[0]!.pacienteNome).toBe('Ana Souza Lima');
+    const e = mascararNomesRestritos(painel, exib, 7);
+    expect(e.leitos[0]!.pacienteNome).toBe('Ana Souza Lima');
+    expect(e.leitos[1]!.nomePaciente).toBe('Leito reservado');
+    expect(mascararNomesRestritos(painel, new Map())).toBe(painel);
+  });
+
+  it('com várias marcas vivas, vale a exibição mais restritiva', () => {
+    const i = { exibicao: 'iniciais', pseudonimo: null };
+    const o = { exibicao: 'oculto', pseudonimo: null };
+    expect(exibicaoMaisRestrita(undefined, i)).toBe(i);
+    expect(exibicaoMaisRestrita(i, o)).toBe(o);
+    expect(exibicaoMaisRestrita(o, i)).toBe(o);
   });
 });

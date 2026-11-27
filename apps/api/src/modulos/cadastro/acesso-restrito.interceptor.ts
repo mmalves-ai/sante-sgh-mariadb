@@ -8,6 +8,10 @@
 // a quebra de vidro vigente; o resto recebe 403 `sem-vinculo` com o código `paciente-restrito` (com a oferta da quebra de vidro quando a marca a
 // admite) e a tentativa vai à trilha. Falha fechada: sem poder decidir (banco fora), 503 e nada mostrado.
 // Sem marca no paciente (o caso comum), uma só leitura indexada. Rotas sem paciente (catálogos, listas gerais) seguem.
+// Nas leituras (GET), o nome dos pacientes marcados que a resposta mostra (listas e painéis: censo, mapa de leitos,
+// central de comando, mapa cirúrgico, etiquetas) sai pela exibição da marca (iniciais, pseudônimo ou oculto), pela porta
+// comum exibicoesRestritas + mascararNomesRestritos; só o paciente cujo prontuário a rota abriu e a decisão liberou
+// aparece por inteiro. Falha fechada também aqui: sem conferir, 503.
 import {
   type CallHandler,
   type ExecutionContext,
@@ -17,9 +21,9 @@ import {
   Optional,
 } from '@nestjs/common';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
-import { acessoRestritoPermite } from '@sgh/dominio-cadastro';
+import { acessoRestritoPermite, mascararNomesRestritos, pacientesNaResposta } from '@sgh/dominio-cadastro';
 import { PATH_METADATA } from '@nestjs/common/constants';
-import { from, type Observable, of, switchMap } from 'rxjs';
+import { from, type Observable, switchMap } from 'rxjs';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/auditoria.interceptor.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -169,13 +173,41 @@ export class InterceptadorAcessoRestrito implements NestInterceptor {
         proximo.handle().pipe(
           switchMap((resposta) => {
             const depois = idValido(req.sghAlvo?.paciente);
+            const liberado = depois ?? conferido;
             return depois === null || depois === conferido
-              ? of(resposta)
-              : from(this.conferir(req, { paciente: depois, recurso: null }).then(() => resposta));
+              ? from(this.mascarar(req, resposta, liberado))
+              : from(
+                  this.conferir(req, { paciente: depois, recurso: null }).then(() =>
+                    this.mascarar(req, resposta, liberado),
+                  ),
+                );
           }),
         ),
       ),
     );
+  }
+
+  /** Nas leituras, o nome dos pacientes marcados pela exibição da marca (o liberado pela rota fica por inteiro). */
+  private async mascarar(
+    req: RequisicaoAutorizada,
+    resposta: unknown,
+    liberado: number | null,
+  ): Promise<unknown> {
+    if ((req as { method?: string }).method !== 'GET') return resposta;
+    const ids = pacientesNaResposta(resposta).filter((p) => p !== liberado);
+    if (!ids.length) return resposta;
+    let exibicoes;
+    try {
+      exibicoes = await this.porta!.exibicoesRestritas(req.sgh!.sessao.estabelecimentoAtivo ?? '', ids);
+    } catch {
+      throw new ErroProblema(
+        'indisponivel',
+        503,
+        'Acesso restrito não conferido',
+        'Não foi possível conferir como o nome dos pacientes aparece; nada foi mostrado.',
+      );
+    }
+    return mascararNomesRestritos(resposta, exibicoes, liberado);
   }
 
   /** Decide pelo paciente do alvo; devolve o paciente conferido (null: o recurso não leva a paciente nenhum). */

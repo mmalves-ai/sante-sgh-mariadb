@@ -185,3 +185,122 @@ export function nomeExibidoRestrito(
     .map((p) => `${p[0]!.toUpperCase()}.`)
     .join(' ');
 }
+
+/** Exibição do nome de um paciente com marca viva (a mais restritiva, quando há várias). */
+export interface ExibicaoRestrita {
+  readonly exibicao: string;
+  readonly pseudonimo: string | null;
+}
+
+const RIGOR_EXIBICAO: Readonly<Record<string, number>> = { normal: 0, iniciais: 1, pseudonimo: 2, oculto: 3 };
+/** A exibição mais restritiva entre duas marcas vivas do mesmo paciente. */
+export const exibicaoMaisRestrita = (
+  a: ExibicaoRestrita | undefined,
+  b: ExibicaoRestrita,
+): ExibicaoRestrita => (!a || (RIGOR_EXIBICAO[b.exibicao] ?? 3) > (RIGOR_EXIBICAO[a.exibicao] ?? 3) ? b : a);
+
+/** Chaves do nome do paciente ao lado do id dele nas listas e painéis clínicos. */
+const CHAVES_NOME_PACIENTE = ['pacienteNome', 'nomePaciente', 'paciente_nome', 'nome_paciente'] as const;
+const LIMITE_NOS = 50_000;
+
+const objetoSimples = (v: unknown): v is Record<string, unknown> => {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return false;
+  const p = Object.getPrototypeOf(v) as unknown;
+  return p === Object.prototype || p === null;
+};
+const idInteiro = (v: unknown): number | null => {
+  const n = typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : v;
+  return typeof n === 'number' && Number.isSafeInteger(n) && n > 0 ? n : null;
+};
+/** O paciente de um item: `pacienteId`, `paciente_id` ou `paciente` numérico. */
+const pacienteDoItem = (o: Record<string, unknown>): number | null =>
+  idInteiro(o['pacienteId']) ?? idInteiro(o['paciente_id']) ?? idInteiro(o['paciente']);
+/** `paciente` em texto que não é id: o nome. */
+const nomeEmPaciente = (o: Record<string, unknown>): boolean =>
+  typeof o['paciente'] === 'string' && idInteiro(o['paciente']) === null;
+/** O objeto `paciente: { id, nome }` aninhado. */
+const pacienteAninhado = (o: Record<string, unknown>): number | null => {
+  const p = o['paciente'];
+  return objetoSimples(p) && typeof p['nome'] === 'string' ? idInteiro(p['id']) : null;
+};
+
+/**
+ * Os pacientes que uma resposta de lista ou painel clínico mostra pelo nome: itens com o id do paciente (`pacienteId`,
+ * `paciente_id` ou `paciente` numérico) ao lado do nome (`pacienteNome`, `nomePaciente`...) ou com o nome em `paciente`
+ * (texto), e o objeto `paciente: { id, nome }`. Varredura limitada (respostas enormes param no teto).
+ */
+export function pacientesNaResposta(r: unknown): number[] {
+  const ids = new Set<number>();
+  let nos = 0;
+  const visitar = (v: unknown): void => {
+    if (++nos > LIMITE_NOS) return;
+    if (Array.isArray(v)) {
+      for (const x of v) visitar(x);
+      return;
+    }
+    if (!objetoSimples(v)) return;
+    const id = pacienteDoItem(v);
+    if (id !== null && (CHAVES_NOME_PACIENTE.some((k) => typeof v[k] === 'string') || nomeEmPaciente(v)))
+      ids.add(id);
+    const an = pacienteAninhado(v);
+    if (an !== null) ids.add(an);
+    for (const x of Object.values(v)) if (x !== null && typeof x === 'object') visitar(x);
+  };
+  visitar(r);
+  return [...ids];
+}
+
+/**
+ * Troca o nome dos pacientes marcados pela exibição da marca (iniciais, pseudônimo ou oculto, por nomeExibidoRestrito)
+ * nas listas e painéis clínicos, sem mexer no original (cópia só do que muda). `exceto`: o paciente cujo prontuário a
+ * própria rota abriu e a decisão liberou (o nome aparece por inteiro).
+ */
+export function mascararNomesRestritos<T>(
+  r: T,
+  exibicoes: ReadonlyMap<number, ExibicaoRestrita>,
+  exceto: number | null = null,
+): T {
+  if (!exibicoes.size) return r;
+  let nos = 0;
+  const marca = (id: number | null): ExibicaoRestrita | null =>
+    id === null || id === exceto ? null : (exibicoes.get(id) ?? null);
+  const trocar = (v: unknown): unknown => {
+    if (++nos > LIMITE_NOS) return v;
+    if (Array.isArray(v)) {
+      let mudou = false;
+      const n = v.map((x) => {
+        const y = trocar(x);
+        if (y !== x) mudou = true;
+        return y;
+      });
+      return mudou ? n : v;
+    }
+    if (!objetoSimples(v)) return v;
+    let saida: Record<string, unknown> | null = null;
+    const por = (k: string, valor: unknown) => {
+      saida ??= { ...v };
+      saida[k] = valor;
+    };
+    const m = marca(pacienteDoItem(v));
+    if (m) {
+      for (const k of CHAVES_NOME_PACIENTE)
+        if (typeof v[k] === 'string') por(k, nomeExibidoRestrito(v[k], m));
+      if (nomeEmPaciente(v)) por('paciente', nomeExibidoRestrito(String(v['paciente']), m));
+    }
+    for (const [k, x] of Object.entries(v)) {
+      if (x === null || typeof x !== 'object') continue;
+      let y = trocar(x);
+      if (k === 'paciente' && objetoSimples(y)) {
+        const mp = marca(typeof y['nome'] === 'string' ? idInteiro(y['id']) : null);
+        if (mp) {
+          const p: Record<string, unknown> = { ...y, nome: nomeExibidoRestrito(String(y['nome']), mp) };
+          if (typeof p['nomeSocial'] === 'string') p['nomeSocial'] = p['nome'];
+          y = p;
+        }
+      }
+      if (y !== x) por(k, y);
+    }
+    return saida ?? v;
+  };
+  return trocar(r) as T;
+}
