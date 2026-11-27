@@ -122,6 +122,7 @@ import {
 } from './worklist-porta.js';
 import { PortaWorklistPropria } from './worklist-porta-propria.js';
 import { PrescricaoRestricoesController } from './prescricao-restricoes.controller.js';
+import { CadastroRestricoesPrescricaoMemoria } from './prescricao-restricoes-memoria.js';
 import {
   CADASTRO_RESTRICOES_PRESCRICAO,
   CadastroRestricoesPrescricaoPropria,
@@ -318,11 +319,13 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
             ? new CadastroProtocolosPrescricaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
-      // 03-PEP L108 (C2-104): ajuste renal por faixa, restrição de posologia e alerta por setor; sem núcleo, 503.
+      // 03-PEP L108 (C2-104): ajuste renal por faixa, restrição de posologia e alerta por setor; sem núcleo (fonte
+      // sintética), a porta em memória com as mesmas regras; com núcleo e sem cliente, 503.
       {
         provide: CADASTRO_RESTRICOES_PRESCRICAO,
-        useValue:
-          ctx.nucleo && ctx.configuracao.clientePadrao
+        useValue: !ctx.nucleo
+          ? new CadastroRestricoesPrescricaoMemoria(ctx.trilha)
+          : ctx.configuracao.clientePadrao
             ? new CadastroRestricoesPrescricaoPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
             : null,
       },
