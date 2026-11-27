@@ -22,7 +22,11 @@ const VAZIO = {
   tiposProntuario: [],
 };
 
-function permissoesDa(login: string, perfisExtras: readonly string[] = []): readonly string[] {
+function permissoesDa(
+  login: string,
+  perfisExtras: readonly string[] = [],
+  semOpcoes: readonly number[] = [],
+): readonly string[] {
   const conta = CONTAS_SINTETICAS[login];
   if (!conta) throw new Error(`conta ausente: ${login}`);
   const c = conta.concessoes;
@@ -30,7 +34,7 @@ function permissoesDa(login: string, perfisExtras: readonly string[] = []): read
     {
       concessoes: {
         grupo: c?.grupo ?? null,
-        opcoesGrupo: c?.opcoesGrupo ?? [],
+        opcoesGrupo: (c?.opcoesGrupo ?? []).filter((o) => !semOpcoes.includes(o)),
         opcoesPapel: [],
         papeis: [],
         flags: [],
@@ -113,9 +117,20 @@ describe('laboratório de apoio: permissões do pessoal do laboratório (C1-092)
     );
   });
 
-  it('o laboratório sem o perfil não monta remessa nem mexe no de-para', () => {
-    const p = permissoesDa('SINT.LABORATORIO');
+  // Sem o perfil, a remessa e o de-para chegam só pela opção de interfaceamento da origem (2964). A conta sintética
+  // do laboratório recebe todas as opções da área S.A.D.T., a 2964 inclusive: sem ela, não monta nem mexe no de-para.
+  it('o laboratório sem o perfil e sem a opção 2964 não monta remessa nem mexe no de-para', () => {
+    expect(CONTAS_SINTETICAS['SINT.LABORATORIO']?.perfisConcedidos ?? []).not.toContain(PERFIL);
+    const p = permissoesDa('SINT.LABORATORIO', [], [2964]);
     expect(p).not.toContain('sadt.apoio.remessa');
     expect(p).not.toContain('sadt.apoio.configurar');
+    expect(p).not.toContain('sadt.apoio.ler');
+  });
+
+  it('o laboratório com a opção 2964 da origem, sem o perfil, monta a remessa e mantém o de-para', () => {
+    expect(CONTAS_SINTETICAS['SINT.LABORATORIO']?.concessoes?.opcoesGrupo).toContain(2964);
+    const p = permissoesDa('SINT.LABORATORIO');
+    expect(p).toEqual(expect.arrayContaining(['sadt.apoio.remessa', 'sadt.apoio.configurar']));
+    expect(p).not.toContain('sadt.apoio.conferir');
   });
 });
