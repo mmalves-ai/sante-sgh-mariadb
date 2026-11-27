@@ -1,0 +1,11 @@
+{
+  "escopo_api": [
+    {
+      "codigo": "mensagem.paciente",
+      "descricao": "Mensagens ao paciente: pedidos pendentes, envio e retornos (plataforma de mensageria)",
+      "recurso": "mensagem",
+      "acao": "escrita",
+      "dado_sensivel": true
+    }
+  ]
+}
