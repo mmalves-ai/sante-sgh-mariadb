@@ -30,7 +30,8 @@ test.describe('financeiro: receitas da EFD-Contribuições e arquivo entregue gu
     const competencia = `${2100 + (Math.floor(Date.now() / 1000) % 60)}-${mes}`;
     await entrar(page, 'SINT.FIN.GESTOR');
     await page.goto('/financeiro/fiscal/entradas');
-    await expect(page.getByTestId('tela-fin-entradas')).toBeVisible();
+    // Primeira abertura da tela no servidor de desenvolvimento: a compilação sob demanda passa dos 5 s.
+    await expect(page.getByTestId('tela-fin-entradas')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('en-competencia').fill(competencia);
     await page.getByTestId('en-consultar').click();
     await expect(page.getByTestId('ef-painel')).toBeVisible();
