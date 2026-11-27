@@ -36,6 +36,8 @@ certificado, SISREG, carregador oficial do CNES, conector); **31 são internas q
 completar e a rodada dirigida da integrar-4/completar-7/8) sem fechar. Pela regra 5 do plano de redução, uma quarta
 tentativa só com informação nova: o que falta em cada uma está escrito na linha da ficha. Pede a sua prioridade.
 Carga (sessão Painel de Injeção): pendências em `docs/obra/passagens/RETOMADA-carga-painel.md`.
+Regressão achada em 27/11 05h50 (fora das fichas Parciais): o E2E `w0-10-medico` (portal do médico externo) cai 0/4 no
+cadastro do segundo fator (`medico-otpauth` não aparece); entra na lista da próxima rodada.
 
 | Fase | Ficha | Linha | Função | Motivo | O que o hospital faz |
 |---|---|---|---|---|---|
