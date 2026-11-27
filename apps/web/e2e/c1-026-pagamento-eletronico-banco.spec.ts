@@ -5,7 +5,7 @@
 // estabelecimento, profissional credor, classificação) vem da massa sintética apps/web/e2e/massa-banco/
 // c1-026-pagamento-eletronico.sql. Passos, cada um com o perfil certo (segregação de funções):
 //   1. SINT.FIN.CREDOR (cadastro de credores), pelo menu: grava a conta e a chave Pix do profissional;
-//   2. SINT.FIN.LANCA lança o título a pagar do profissional (API, com CSRF e Idempotency-Key, como a tela);
+//   2. SINT.ADMIN liga o contas a pagar do estabelecimento (o cliente nasce em consulta); SINT.FIN.LANCA lança o título a pagar do profissional (API, com CSRF e Idempotency-Key, como a tela);
 //   3. SINT.FIN.PAGA: o título aparece no Pix com a chave, a remessa é gerada; o retorno do banco vem do simulador do
 //      banco (fora de produção) e é processado: o título sai da fila e a remessa fica sem pendência.
 // Massa SINTÉTICA. Axe nos passos.
@@ -24,6 +24,25 @@ async function entrar(page: Page, login: string): Promise<void> {
   await page.getByTestId('campo-senha').fill(SENHA);
   await page.getByTestId('botao-entrar').click();
   await expect(page).toHaveURL(/\/inicio/);
+}
+
+/** O administrador liga o contas a pagar do estabelecimento (Funcionalidades por estabelecimento, senha de novo e
+ * justificativa); o cliente descartável nasce com ele em consulta. Se outro cenário já o ligou, segue. */
+async function ligarContasPagar(page: Page): Promise<void> {
+  await entrar(page, 'SINT.ADMIN');
+  await page.goto('/administracao/liberacao');
+  const recurso = 'financeiro.contasPagar';
+  await expect(page.getByTestId(`recurso-${recurso}`)).toBeVisible({ timeout: 30_000 });
+  if ((await page.getByTestId(`recurso-${recurso}`).innerText()).includes('Ligada')) return;
+  await page.getByTestId(`abrir-${recurso}`).click();
+  const form = page.getByTestId('form-liberacao');
+  await form.getByTestId('opcao-ligar').check();
+  await form.getByLabel('Justificativa').fill('Ciclo sintético do pagamento eletrônico (E2E C1-026)');
+  await form.getByTestId('liberacao-senha').fill(SENHA);
+  await form.getByTestId('liberacao-aplicar').click();
+  await expect(page.getByTestId('mensagem-liberacao')).toContainText('chave(s) alterada(s)', {
+    timeout: 30_000,
+  });
 }
 
 const dia = (mais: number) => new Date(Date.now() + mais * 86_400_000).toISOString().slice(0, 10);
@@ -68,7 +87,8 @@ test.describe('financeiro: pagamento eletrônico no banco do cliente, ciclo comp
     // A chave volta mascarada (nunca o valor inteiro na lista).
     await expect(page.getByTestId('pe-contas')).not.toContainText('529.982.247-25');
 
-    // 2. O título a pagar do profissional, lançado por quem lança (não por quem paga).
+    // 2. O título a pagar do profissional, lançado por quem lança (não por quem paga), com o contas a pagar ligado.
+    await ligarContasPagar(page);
     await entrar(page, 'SINT.FIN.LANCA');
     const csrf = (await page.context().cookies()).find((c) => c.name === 'sgh_csrf')?.value ?? '';
     const documento = 260_000 + Math.floor(Math.random() * 90_000);
