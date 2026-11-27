@@ -12,11 +12,12 @@ import {
   type CriterioCobertura,
   type TipoCriterioCobertura,
 } from '@sgh/dominio-faturamento';
-import { SanteBotao, SanteSelecao } from '@sgh/ui';
+import { SanteAlerta, SanteBotao, SanteSelecao } from '@sgh/ui';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import { ErroApi } from '../../../casca/erros/problem-details.js';
 import { usarSessao } from '../../../casca/sessao/sessao.js';
 import {
   gravarJustificativa,
@@ -53,6 +54,8 @@ const q = useQuery({
   queryFn: () => lerPainelCobertura(fonte.value),
 });
 const opcoes = computed(() => q.data.value?.opcoes);
+/** Sem o banco próprio a API responde 503: a tela explica o motivo em vez da mensagem geral. */
+const semBanco = computed(() => q.error.value instanceof ErroApi && q.error.value.status === 503);
 const erro = ref<unknown>(null);
 const aviso = ref('');
 const nulo = (v: number | null | undefined) => (v ? v : null);
@@ -392,7 +395,10 @@ const ABAS: Aba[] = ['restricoes', 'pares', 'justificativas', 'atendimento'];
   <section class="tela" data-testid="cobertura">
     <h1>{{ t('cobertura.titulo') }}</h1>
     <p class="secundario">{{ t('cobertura.explicacao') }}</p>
-    <ErroFaturamento v-if="q.error.value" :erro="q.error.value" />
+    <div v-if="semBanco" role="alert" data-testid="cob-sem-banco">
+      <SanteAlerta variante="alerta" :texto="t('cobertura.semBancoProprio')" />
+    </div>
+    <ErroFaturamento v-else-if="q.error.value" :erro="q.error.value" />
     <ErroFaturamento v-if="erro" :erro="erro" />
     <p v-if="aviso" role="status" data-testid="cob-aviso">{{ aviso }}</p>
 

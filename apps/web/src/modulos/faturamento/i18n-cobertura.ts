@@ -4,6 +4,8 @@ export const mensagensCobertura = {
   titulo: 'Restrição de cobertura e compatibilidade',
   explicacao:
     'O que cada fonte pagadora não cobre (por plano, setor, idade, horário ou prestador) e quais procedimentos não andam juntos. No lançamento da conta a restrição bloqueia, salvo exceção registrada no atendimento; na prescrição ela só avisa.',
+  semBancoProprio:
+    'A restrição de cobertura exige o banco próprio do hospital: este ambiente não tem o banco ligado, então não há restrição para mostrar nem gravar.',
   fonte: 'Fonte pagadora',
   todas: 'Todas',
   escolha: 'Escolha',
