@@ -166,7 +166,7 @@ test.describe('@C2-034 documentos da internação conforme o convênio', () => {
     await page.goto('/internacao/documentos');
     await expect(page.getByTestId('tela-documentos-internacao')).toBeVisible();
     await expect(page.getByTestId('doc-buscar-paciente')).toBeDisabled();
-    await page.getByTestId('doc-busca-paciente').fill('JOSE');
+    await page.getByTestId('doc-busca-paciente').fill('DA SILVA');
     await page.getByTestId('doc-buscar-paciente').click();
     await expect(page.locator('section[aria-labelledby="doc-previa"]')).toContainText(`${reg}`);
     await page.getByTestId(`doc-paciente-${reg}`).click();
