@@ -112,16 +112,20 @@ export const PERMISSOES_FATURAMENTO_M51: readonly DeclaracaoPermissao[] = [
     'Importar o espelho e o retorno do gestor (rejeições e reapresentação)',
   ),
   // F7 (08-INTG linha 131): troca por serviço web com o SUS (rastreamento de câncer, cadastro de prestador); recurso só
-  // do novo, concedido por perfil.
+  // do novo, concedido por perfil (a supervisão do faturamento SUS opera; C1-054).
   p(
     'faturamento.susServicoWeb.ler',
     'Consultar os envios ao serviço web do SUS (rastreamento de câncer, cadastro de prestador) e as respostas',
-    { concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+    { concessaoPorPerfil: 'por-perfil', perfis: ['supervisao-faturamento-sus', 'administrador-sistema'] },
   ),
   p(
     'faturamento.susServicoWeb.enviar',
     'Registrar, enviar e cancelar envios ao serviço web do SUS (simulador fora de produção)',
-    { criticidade: 'sensivel', concessaoPorPerfil: 'por-perfil', perfis: ['administrador-sistema'] },
+    {
+      criticidade: 'sensivel',
+      concessaoPorPerfil: 'por-perfil',
+      perfis: ['supervisao-faturamento-sus', 'administrador-sistema'],
+    },
   ),
   // F8 (06-SUS linha 64): RAAS da atenção psicossocial e da atenção domiciliar.
   p(

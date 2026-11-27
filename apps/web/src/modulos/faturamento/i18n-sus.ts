@@ -5,6 +5,7 @@ import { mensagensSusEstabelecimento } from './i18n-estabelecimento-sus.js';
 import { mensagensSusConfiguracao } from './i18n-sus-configuracao.js';
 import { mensagensSusAih, mensagensSusRetorno } from './i18n-sus-aih.js';
 import { mensagensSusProgramacao } from './i18n-sus-programacao.js';
+import { mensagensSusServicoWeb } from './i18n-sus-servico-web.js';
 
 export const mensagensSus = {
   titulo: 'Faturamento SUS',
@@ -12,6 +13,8 @@ export const mensagensSus = {
   aih: mensagensSusAih,
   estabelecimento: mensagensSusEstabelecimento,
   configuracao: mensagensSusConfiguracao,
+  // F7 (08-INTG linha 131, C1-054): serviços web do SUS (rastreamento de câncer e cadastro de prestador).
+  servicoWeb: mensagensSusServicoWeb,
   programacao: mensagensSusProgramacao,
   retorno: mensagensSusRetorno,
   carregando: 'Carregando…',

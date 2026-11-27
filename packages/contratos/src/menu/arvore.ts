@@ -187,7 +187,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // (mesmo motivo; F7 vai como fase 7); a contagem acompanha.
 // C1-055 (02-REC linha 35): o item "Regras de impressão das fichas" da recepção entrou à mão (mesmo motivo); a
 // contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":532,"M":198,"P":57,"N":277};
+// C1-054 (08-INTG L131, F7): o item "Serviços web do SUS" (rastreamento de câncer e cadastro de prestador) entrou à
+// mão (mesmo motivo); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":533,"M":198,"P":57,"N":278};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -471,6 +473,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.faturamento-sus.habilitacoes-e-servicos-do-estabelecimento","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Habilitações e serviços do estabelecimento"],"titulo":"Habilitações e serviços do estabelecimento","selo":"N","fase":7,"rota":"/faturamento/sus/cadastros/estabelecimento","permissao":"faturamento.sus.ler"},
   {"id":"faturamento.faturamento-sus.repasse-da-producao-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Repasse da produção SUS"],"titulo":"Repasse da produção SUS","selo":"N","fase":7,"rota":"/faturamento/sus/repasse","permissao":"repasse.apuracao.ler"},
   {"id":"faturamento.faturamento-sus.configuracao-do-faturamento-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Configuração do faturamento SUS"],"titulo":"Configuração do faturamento SUS","selo":"N","fase":7,"rota":"/faturamento/sus/configuracao","permissao":"faturamento.sus.ler"},
+  {"id":"faturamento.faturamento-sus.servicos-web-do-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Serviços web do SUS"],"titulo":"Serviços web do SUS","selo":"N","fase":7,"rota":"/faturamento/sus/servicos-web","permissao":"faturamento.susServicoWeb.ler"},
   {"id":"faturamento.repasse-medico.regras-de-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Regras de repasse"],"titulo":"Regras de repasse","selo":"M","fase":3,"rota":"/repasse/regras","permissao":"repasse.regra.ler"},
   {"id":"faturamento.repasse-medico.remuneracao-variavel","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Remuneração variável"],"titulo":"Remuneração variável","selo":"N","fase":7,"rota":"/repasse/remuneracao-variavel","permissao":"repasse.regra.ler"},
   {"id":"faturamento.repasse-medico.apuracao-faturamento-x-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Apuração"],"titulo":"Apuração","selo":"M","fase":3,"rota":"/repasse/apuracao","permissao":"repasse.apuracao.ler"},

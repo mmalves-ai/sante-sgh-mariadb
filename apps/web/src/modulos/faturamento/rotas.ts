@@ -325,6 +325,16 @@ export const rotasFaturamento: RouteRecordRaw[] = [
       menu: 'Faturamento > Faturamento SUS > Configuração do faturamento SUS',
     },
   },
+  // F7 (08-INTG linha 131, C1-054): serviços web do SUS — rastreamento de câncer e cadastro de prestador.
+  {
+    path: '/faturamento/sus/servicos-web',
+    name: 'faturamento.susServicosWeb',
+    component: () => import('./telas/ServicosWebSusTela.vue'),
+    meta: {
+      permissao: 'faturamento.susServicoWeb.ler',
+      menu: 'Faturamento > Faturamento SUS > Serviços web do SUS',
+    },
+  },
   // M51 (etapa 4): a AIH, o retorno do gestor e os leitos de UTI habilitados (desligados por estabelecimento até haver
   // contrato SUS, DP-35).
   {
