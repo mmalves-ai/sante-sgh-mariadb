@@ -642,6 +642,26 @@ describe.skipIf(SEM_BANCO)('farmácia hospitalar da porta própria (MariaDB)', (
         [r.resultado['id']],
       ),
     ).toBe(1);
+    // C2-093: a devolução (entrada sem vínculo de estorno) estorna o fato da saída do item e republica o saldo.
+    const saidaDaDose = await ler(
+      `SELECT m.id, m.valor_total, x.valor_total AS devolvido FROM movimento_estoque m
+         JOIN movimento_estoque x ON x.dispensacao_item_id = m.dispensacao_item_id AND x.documento_estoque_id = ?
+        WHERE m.natureza = 'saida' AND m.estabelecimento_id = ? ORDER BY m.id LIMIT 1`,
+      [r.resultado['id'], ids.est],
+    );
+    const fatosDaSaida = await ler(
+      `SELECT COUNT(*) AS n, SUM(f.estorno) AS estornos,
+              SUM(CASE WHEN f.estorno = 0 AND NOT EXISTS (SELECT 1 FROM fato_contabil e
+                    WHERE e.estornado_fato_contabil_id = f.id AND e.excluido_em IS NULL) THEN f.valor END) AS vivo
+         FROM fato_contabil f WHERE f.entidade_origem = 'movimento_estoque' AND f.entidade_origem_id = ?
+          AND f.excluido_em IS NULL`,
+      [saidaDaDose?.['id']],
+    );
+    expect(Number(fatosDaSaida?.['estornos'])).toBe(1);
+    expect(Number(fatosDaSaida?.['vivo'])).toBeCloseTo(
+      Number(saidaDaDose?.['valor_total']) - Number(saidaDaDose?.['devolvido']),
+      2,
+    );
     expect(
       (await porta.dosesDoAtendimento(ctx, ids.atendimento, new Date(0))).find((d) => d.dose === dose1),
     ).toMatchObject({ devolvido: 1 });

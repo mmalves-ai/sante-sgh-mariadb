@@ -410,6 +410,7 @@ export function gravadorDispensacao(
     // C2-093 (ADR 0003): o fato contábil do movimento na mesma transação (regra comum do estoque).
     const estorno = m.refs['estorno_movimento_estoque_id'];
     const centro = m.refs['centro_custo_id'];
+    const itemDevolvido = m.refs['dispensacao_item_id'];
     await publicarFatoDoMovimento(tx, est, {
       id,
       natureza: m.sentido,
@@ -419,6 +420,11 @@ export function gravadorDispensacao(
       insumo: m.insumo.id,
       centroCusto: typeof centro === 'number' ? centro : null,
       estorno: typeof estorno === 'number' ? estorno : null,
+      // A devolução da dose entra sem vínculo de estorno: reduz o fato da saída do mesmo item (C2-093).
+      devolve:
+        m.natureza === 'devolucao' && typeof itemDevolvido === 'number'
+          ? await saidaDoItem(itemDevolvido)
+          : null,
     });
     return { id, custo, tipo };
   };

@@ -21,6 +21,8 @@ export interface MovimentoComFato {
   readonly contrapartida?: number | null;
   readonly consignado?: boolean;
   readonly estorno?: number | null;
+  /** A saída que esta entrada de devolução reduz (devolução de dose da farmácia, sem vínculo de estorno; C2-093). */
+  readonly devolve?: number | null;
 }
 
 /** Publica (ou estorna) o fato do movimento de estoque gravado agora. */
@@ -29,14 +31,15 @@ export async function publicarFatoDoMovimento(
   est: number,
   m: MovimentoComFato,
 ): Promise<void> {
-  if (m.estorno) {
+  const original = m.estorno ?? m.devolve ?? null;
+  if (original) {
     const estornados = await estornarFatosDaOrigem(
       tx,
       est,
       'movimento_estoque',
-      [m.estorno],
+      [original],
       m.hoje,
-      `estorno no movimento ${m.id}`,
+      `${m.estorno ? 'estorno' : 'devolução'} no movimento ${m.id}`,
     );
     if (estornados.length === 0) return;
     // A devolução pode ser parcial: o fato estorna sempre o efeito inteiro, então o saldo ainda não devolvido do
@@ -44,9 +47,12 @@ export async function publicarFatoDoMovimento(
     const o = await tx.uma(
       `SELECT o.valor_total, o.centro_custo_id, o.insumo_id, o.tipo_movimento_estoque_id,
               (SELECT COALESCE(SUM(x.valor_total), 0) FROM movimento_estoque x
-                WHERE x.estorno_movimento_estoque_id = o.id AND x.excluido_em IS NULL) AS estornado
+                WHERE x.excluido_em IS NULL
+                  AND (x.estorno_movimento_estoque_id = o.id
+                       OR (x.estorno_movimento_estoque_id IS NULL AND x.natureza = 'entrada'
+                           AND x.dispensacao_item_id = o.dispensacao_item_id))) AS estornado
          FROM movimento_estoque o WHERE o.id = ? AND o.estabelecimento_id = ?`,
-      [m.estorno, est],
+      [original, est],
     );
     if (!o) return;
     const saldo = Math.max(0, centavos(Number(o['valor_total'])) - centavos(Number(o['estornado'])));
@@ -54,11 +60,11 @@ export async function publicarFatoDoMovimento(
       {
         tipo: 'saidaEstoque',
         entidade: 'movimento_estoque',
-        entidadeId: m.estorno,
+        entidadeId: original,
         data: m.hoje,
         valorCentavos: saldo,
         centroCusto: o['centro_custo_id'] == null ? null : Number(o['centro_custo_id']),
-        documento: `saída de estoque movimento ${m.estorno} saldo`,
+        documento: `saída de estoque movimento ${original} saldo`,
         campos: { item: Number(o['insumo_id']), tipoMovimento: Number(o['tipo_movimento_estoque_id']) },
       },
     ]);
