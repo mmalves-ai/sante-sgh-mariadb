@@ -38,6 +38,16 @@ const regra = {
   omiteGuiaSemValor: true,
   usaFaturamentoEletronico: true,
   ativo: true,
+  identificacaoContratado: 'codigo',
+  cnpjContratado: null,
+  cpfContratado: null,
+  numeracaoGuia: 'operadora',
+  prefixoNumeroGuia: null,
+  larguraNumeroGuia: 8,
+  proximoNumeroGuia: null,
+  quebraResumoInternacao: 'nao_quebra',
+  diasCorteResumo: null,
+  geracaoSpSadt: 'por_atendimento',
 };
 const item = {
   id: 41,
@@ -142,6 +152,21 @@ test.describe('apresentação TISS por fonte pagadora @C2-086', () => {
     await expect(page.getByTestId('apt-gravar-regra')).toBeDisabled();
     await page.getByTestId('apt-ans').fill('654321');
     await page.getByTestId('apt-limite').fill('50');
+    // Regras do montador: CNPJ incompleto trava na hora; série do hospital, quebra por período e SP/SADT por data.
+    await escolher(page.getByTestId('apt-identificacao'), 'cnpj');
+    await page.getByTestId('apt-documento').fill('1234567800019');
+    await expect(page.getByTestId('apt-erro-documento')).toBeVisible();
+    await expect(page.getByTestId('apt-gravar-regra')).toBeDisabled();
+    await page.getByTestId('apt-documento').fill('12345678000195');
+    await expect(page.getByTestId('apt-erro-documento')).toHaveCount(0);
+    await escolher(page.getByTestId('apt-numeracao'), 'hospital');
+    await page.getByTestId('apt-prefixo').fill('H');
+    await page.getByTestId('apt-largura').fill('6');
+    await page.getByTestId('apt-proximo').fill('41');
+    await escolher(page.getByTestId('apt-quebra'), 'por_periodo');
+    await page.getByTestId('apt-dias-corte').fill('10');
+    await escolher(page.getByTestId('apt-sp-sadt'), 'por_data');
+    await expect(page.getByTestId('apt-gravar-regra')).toBeEnabled();
     await page.getByTestId('apt-gravar-regra').click();
     await expect(page.getByTestId('apt-aviso')).toContainText('Regra gravada');
     expect(enviados.at(-1)?.url).toContain('/apresentacao/regras');
@@ -153,6 +178,15 @@ test.describe('apresentação TISS por fonte pagadora @C2-086', () => {
       registroAns: '654321',
       limiteGuiasLote: 50,
       omiteGuiaSemValor: true,
+      identificacaoContratado: 'cnpj',
+      documentoContratado: '12345678000195',
+      numeracaoGuia: 'hospital',
+      prefixoNumeroGuia: 'H',
+      larguraNumeroGuia: 6,
+      proximoNumeroGuia: 41,
+      quebraResumoInternacao: 'por_periodo',
+      diasCorteResumo: 10,
+      geracaoSpSadt: 'por_data',
     });
 
     // Item: sem alvo, travado; fora do arquivo com código, travado; com a função na equipe, incluído.
