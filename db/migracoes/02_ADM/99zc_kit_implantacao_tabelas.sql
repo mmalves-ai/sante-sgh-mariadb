@@ -1,4 +1,6 @@
 -- Kit de implantação (C2-025, 01-ADM L98, 25/11/2026): só para frente e idempotente (ADR 0002, parte 2). Sem gatilho;
+-- Em 02_ADM (27/11): estava em 01_SIS/95 e rodava antes do CREATE TABLE modulo_sistema (02_ADM/02), o que fazia o
+-- "criar novo cliente" recusar todo cliente novo (migracao-falhou).
 -- as regras ficam no domínio (@sgh/dominio-config, prontidao/implantacao) e na porta (implantacao/kit-implantacao-propria).
 --   - modulo_sistema: os módulos que o checklist padrão cita, com códigos de negócio (os que já existem ficam como estão).
 --   - modelo_item_prontidao: o checklist padrão de cadastros mínimos e conferências de um hospital novo, sem origem.

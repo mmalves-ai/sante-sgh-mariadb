@@ -89,7 +89,7 @@ describe.skipIf(SEM_BANCO)('PortaKitImplantacaoPropria contra o MariaDB (contrat
         'ADM-SETORES',
       ]);
       if (Number(modelo?.['n']) !== 1)
-        throw new Error('Aplique a migração 01_SIS/95_kit_implantacao no cliente de teste.');
+        throw new Error('Aplique a migração 02_ADM/99zc_kit_implantacao no cliente de teste.');
       est = await e.inserir(
         `INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, fuso_horario, criado_em)
          VALUES (?, ?, ?, 'America/Sao_Paulo', NOW(3))`,

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
+# Uso: tools/obra/e2e-vm.sh [--commit ref] [--banco] -- <spec>. Sem --banco, fonte sintética e nenhum banco (como o ci.yml).
+# --banco: cliente descartável cliente_e2e_<sha8> (e plataforma_e2e_<sha8>) criado pelo criar_cliente.py da árvore, com
+#   as contas sintéticas semeadas; a API do worktree sobe contra ele (núcleo real) e os dois bancos são apagados no fim.
 # E2E de um marco na VM, num comando só, sem encostar no painel do dono.
 #
-#   tools/obra/e2e-vm.sh [--commit <ref>] [--portas <web>:<api>] [--remover] [--] <argumentos do playwright>
+#   tools/obra/e2e-vm.sh [--commit <ref>] [--portas <web>:<api>] [--remover] [--banco] [--] <argumentos do playwright>
 #   ex.: tools/obra/e2e-vm.sh --grep @M00
 #        tools/obra/e2e-vm.sh prontuario.spec.ts -g "médico: Ctrl.K"
 #
@@ -33,11 +36,13 @@ WT="$BASE/arvore"
 REF=HEAD
 PORTAS=""
 REMOVER=0
+BANCO=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --commit) REF="$2"; shift 2 ;;
     --portas) PORTAS="$2"; shift 2 ;;
     --remover) REMOVER=1; shift ;;
+    --banco) BANCO=1; shift ;;
     --) shift; break ;;
     *) break ;;
   esac
@@ -95,7 +100,27 @@ else
 fi
 [[ ! -e "$WT/.env" ]] || { echo "e2e-vm: a árvore do E2E não pode ter .env" >&2; exit 1; }
 remover() { git -C "$RAIZ" worktree remove --force "$WT" >/dev/null 2>&1; git -C "$RAIZ" worktree prune; }
-[[ $REMOVER -eq 0 ]] || trap remover EXIT  # padrão: a árvore fica para a próxima rodada (instalação rápida)
+# --banco: o cliente descartável (só cliente_e2e_<sha8> e plataforma_e2e_<sha8>; o e2e_banco.py confere o prefixo antes
+# do DROP). A senha vai por arquivo 600 fora da árvore (SGH_ARQUIVO_AMBIENTE), nunca na linha de comando.
+SUF="${SHA:0:8}"
+AMB_BANCO="$BASE/ambiente-banco-$SUF.env"
+apagar_banco() {
+  python3 -I "$RAIZ/tools/obra/e2e_banco.py" apagar "$RAIZ" "$SUF" || echo "e2e-vm: ATENÇÃO, banco descartável não apagado" >&2
+  rm -f "$AMB_BANCO"
+}
+limpar() {
+  [[ $BANCO -eq 0 ]] || apagar_banco
+  [[ $REMOVER -eq 0 ]] || remover  # padrão: a árvore fica para a próxima rodada (instalação rápida)
+}
+trap limpar EXIT
+trap 'exit 130' INT TERM
+if [[ $BANCO -eq 1 ]]; then
+  MSENHA="$(grep '^MARIADB_SENHA=' "$RAIZ/.env" | cut -d= -f2-)"
+  [[ -n "$MSENHA" ]] || { echo "e2e-vm: --banco sem MARIADB_SENHA no .env" >&2; exit 2; }
+  ( umask 077; printf 'MARIADB_SENHA=%s\n' "$MSENHA" > "$AMB_BANCO" )
+  MARIADB_SENHA="$MSENHA" python3 -I "$RAIZ/tools/obra/e2e_banco.py" criar "$WT" "$SUF" \
+    || { echo "e2e-vm: criar o cliente descartável falhou" >&2; exit 1; }
+fi
 
 # Ambiente mínimo do job do ci.yml (sem .env; nada herdado da sessão). As diferenças para o ci.yml são só as da VM:
 # E2E_PORTAS (portas de teste, filas com prefixo próprio), E2E_WORKER=completo (o mesmo worker do `pnpm dev`) e o teto
@@ -103,17 +128,22 @@ remover() { git -C "$RAIZ" worktree remove --force "$WT" >/dev/null 2>&1; git -C
 PARAR_GB="${PARAR_GB:-5}"
 NODE_HEAP_MB="${NODE_HEAP_MB:-2048}"
 E=(env -i PATH="$NODE_BIN:/usr/local/bin:/usr/bin:/bin" HOME="$HOME" CI=true TERM=dumb
-   NX_LOAD_DOT_ENV_FILES=false NX_NO_CLOUD=true NX_DAEMON=false SGH_NUCLEO_SEM_BANCO=1
+   NX_LOAD_DOT_ENV_FILES=false NX_NO_CLOUD=true NX_DAEMON=false
    GOTENBERG_URL=http://127.0.0.1:3318 AMBIENTE=ci E2E_PORTAS="$PORTAS" E2E_WORKER=completo
    NODE_OPTIONS=--max-old-space-size="$NODE_HEAP_MB"
    SGH_TRAVAS_VM=/nonexistent/e2e-vm-ja-tem-pesado-lock)
+if [[ $BANCO -eq 1 ]]; then
+  E+=(SGH_ARQUIVO_AMBIENTE="$AMB_BANCO" CLIENTE_PADRAO="e2e_$SUF" SGH_BANCO_PLATAFORMA="plataforma_e2e_$SUF")
+else
+  E+=(SGH_NUCLEO_SEM_BANCO=1)
+fi
 # Sem as vagas do limite-vm (25/11): o E2E já roda sozinho na pesado.lock com vigia de memória próprio (MIN_GB/PARAR_GB);
 # api, web e worker do webServer disputavam as 3 vagas com os construtores e o Playwright desistia em 240 s.
 LOG="$BASE/ultimo.log"
 MARCA="$BASE/memoria-baixa"
 rm -f "$MARCA"
 rodada() {
-  echo "e2e-vm: commit ${SHA:0:8}, portas web:api $PORTAS, argumentos: $*"
+  echo "e2e-vm: commit ${SHA:0:8}, portas web:api $PORTAS, banco: $([[ " ${E[*]} " == *" SGH_NUCLEO_SEM_BANCO=1 "* ]] && echo nenhum || echo descartável), argumentos: $*"
   cd "$WT" && "${E[@]}" ./pnpm install --frozen-lockfile --prefer-offline --store-dir "$RAIZ/.pnpm-store" >"$BASE/instalar.log" 2>&1 \
     || { echo "e2e-vm: instalar falhou (ver $BASE/instalar.log)"; exit 1; }
   # Build antes do Playwright (25/11): o webServer tem 240 s e o build passava esse tempo esperando vaga do limite-vm
