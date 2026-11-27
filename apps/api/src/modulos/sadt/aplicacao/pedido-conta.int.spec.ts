@@ -7,6 +7,7 @@
 // Saída só com contagens.
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PortaSadtPropria } from '../porta-propria.js';
 import { ServicoPedidoSadt } from './pedido-propria.js';
 import {
   CLIENTE,
@@ -280,13 +281,9 @@ describe.skipIf(SEM_BANCO)('exame pedido na conta do paciente (MariaDB, cliente 
       ),
     );
     expect(await faturado(item)).toBe(0);
-    const versao = String(
-      (
-        await um('SELECT DATE_FORMAT(criado_em, "%Y-%m-%dT%H:%i:%s") AS v FROM exame_item WHERE id = ?', [
-          item,
-        ])
-      )?.['v'],
-    );
+    // A versão é a que a lista de exames do setor entrega à tela.
+    const versao = (await new PortaSadtPropria(nucleo).exame(c, item))?.versao ?? null;
+    expect(versao).not.toBeNull();
     expect(
       codigoDe(
         await servico
