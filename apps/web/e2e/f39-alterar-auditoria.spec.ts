@@ -61,6 +61,13 @@ test.describe('Qualidade: auditoria interna alterada pela tela com versão e jus
       .locator('input')
       .fill('Auditoria de identificação do paciente (E2E, alterada)');
     await escolher(page.getByTestId('correcao-aud-resultado-0'), { rotulo: /^Não conforme$/ });
+    // O item não conforme pede evidência (regra do domínio: ao menos 5 caracteres).
+    await page
+      .getByTestId('correcao-auditoria')
+      .locator('fieldset.item')
+      .first()
+      .getByLabel('Evidência')
+      .fill('Pulseira sem a data de nascimento (sintético)');
     await d.getByTestId('correcao-justificativa').fill('curta');
     await expect(d.getByTestId('correcao-confirmar')).toBeDisabled();
     await d
