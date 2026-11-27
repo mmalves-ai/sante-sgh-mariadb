@@ -340,26 +340,29 @@ watch(operadora, () => {
       :opcoes="operadoras"
       data-testid="reajuste-operadora"
     />
-    <div class="reajuste__linha" role="tablist">
+    <nav class="reajuste__linha" :aria-label="t('operadoraReajuste.titulo')">
       <SanteBotao
         :rotulo="t('operadoraReajuste.abas.indices')"
         :variante="aba === 'indices' ? 'primario' : 'secundario'"
+        :aria-pressed="aba === 'indices'"
         data-testid="aba-indices"
         @click="aba = 'indices'"
       />
       <SanteBotao
         :rotulo="t('operadoraReajuste.abas.agrupamento')"
         :variante="aba === 'agrupamento' ? 'primario' : 'secundario'"
+        :aria-pressed="aba === 'agrupamento'"
         data-testid="aba-agrupamento"
         @click="aba = 'agrupamento'"
       />
       <SanteBotao
         :rotulo="t('operadoraReajuste.abas.sinistralidade')"
         :variante="aba === 'sinistralidade' ? 'primario' : 'secundario'"
+        :aria-pressed="aba === 'sinistralidade'"
         data-testid="aba-sinistralidade"
         @click="aba = 'sinistralidade'"
       />
-    </div>
+    </nav>
     <SanteAlerta v-if="erro" :texto="erro" variante="alerta" anunciar data-testid="reajuste-erro" />
     <SanteAlerta v-if="aviso" :texto="aviso" variante="info" anunciar data-testid="reajuste-aviso" />
 
