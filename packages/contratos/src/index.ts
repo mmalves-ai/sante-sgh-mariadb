@@ -282,6 +282,7 @@ export * from './faturamento/sus.js';
 export * from './faturamento/sus-bpa.js';
 export * from './faturamento/sus-apac.js';
 export * from './faturamento/sus-configuracao.js';
+export * from './faturamento/sus-cnes-arquivo.js';
 export * from './faturamento/sus-aih.js';
 export * from './permissoes/faturamento-sus.js';
 // M33: repasse médico (vocabulário, entradas e permissões; as regras puras em @sgh/dominio-repasse).

@@ -19,6 +19,7 @@ const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const P = 'c2123sus';
 const P2 = 'c2123sus2';
 const FONTE = 'c2123';
+const CNES = '9912301';
 const recusa = { problema: { status: 422 } };
 
 async function limpar(e: Escritor): Promise<void> {
@@ -39,6 +40,7 @@ async function limpar(e: Escritor): Promise<void> {
     P2,
   ]);
   await e.executar("DELETE FROM habilitacao_sus WHERE codigo_cnes IN ('9871', '9872')");
+  await e.executar('DELETE FROM habilitacao_cadastro_nacional WHERE codigo_cnes = ?', [CNES]);
   await e.executar('DELETE FROM habilitacao_sigtap WHERE versao_fonte = ?', [FONTE]);
   await e.executar('DELETE FROM servico_classificacao_sigtap WHERE versao_fonte = ?', [FONTE]);
   await e.executar('DELETE FROM grupo_sigtap WHERE versao_fonte = ?', [FONTE]);
@@ -208,9 +210,17 @@ describe.skipIf(SEM_BANCO)('PortaEstabelecimentoSusPropria contra o MariaDB (con
     expect(previa.incluir.map((x) => x.codigo)).toEqual(['9872']);
     expect(previa.encerrar).toEqual([{ id: daTabela, codigo: '9871', vigenciaFim: '2026-04-30' }]);
     expect(await habs()).toHaveLength(2);
+    await expect(
+      porta.conciliarCnes(ctx(), {
+        competencia: '202605',
+        habilitacoes: [{ codigo: '9872', leitosHabilitados: 8 }],
+        aplicar: true,
+      }),
+    ).rejects.toMatchObject(recusa);
     const r = await porta.conciliarCnes(ctx(), {
       competencia: '202605',
       habilitacoes: [{ codigo: '9872', leitosHabilitados: 8 }],
+      motivoExcecao: 'Portaria publicada e ainda fora da base do mês',
       aplicar: true,
     });
     expect(r.aplicada).toBe(true);
@@ -218,6 +228,54 @@ describe.skipIf(SEM_BANCO)('PortaEstabelecimentoSusPropria contra o MariaDB (con
     expect(depois).toHaveLength(3);
     expect(depois.find((x) => x['id'] === daTabela)).toMatchObject({ f: '2026-04-30' });
     expect(depois[2]).toMatchObject({ cod: '9872', i: '2026-05-01', f: null, leitos: 8 });
+  });
+
+  it('lista oficial: sem a base da competência recusa e diz onde baixar; o arquivo do cliente carrega o catálogo', async () => {
+    await expect(porta.conciliarCnes(ctx(), { competencia: '202606' })).rejects.toMatchObject(recusa);
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: `cnes-${P}` }, (e) =>
+      e.executar('UPDATE estabelecimento SET codigo_cnes = ? WHERE codigo = ?', [CNES, P]),
+    );
+    const semBase = await porta.conciliarCnes(ctx(), { competencia: '202606' }).catch((x: unknown) => x);
+    expect(JSON.stringify(semBase)).toContain('ftp.datasus.gov.br/cnes');
+    const arquivo = {
+      competencia: '202606',
+      arquivo: 'rlEstabHabilitacao202606.csv',
+      habilitacoes: [
+        {
+          codigo: '9872',
+          competenciaInicio: '202501',
+          competenciaFim: null,
+          numeroPortaria: 'PT 1',
+          leitosHabilitados: 8,
+        },
+        {
+          codigo: '9871',
+          competenciaInicio: '202001',
+          competenciaFim: '202512',
+          numeroPortaria: null,
+          leitosHabilitados: null,
+        },
+      ],
+    };
+    expect(await porta.carregarArquivoCnes(ctx(), arquivo)).toMatchObject({
+      gravadas: 2,
+      competencia: '202606',
+    });
+    await porta.carregarArquivoCnes(ctx(), arquivo);
+    const cat = await ler(
+      `SELECT codigo_habilitacao AS cod, versao_fonte AS fonte FROM habilitacao_cadastro_nacional
+        WHERE codigo_cnes = ? ORDER BY codigo_habilitacao`,
+      [CNES],
+    );
+    expect(cat).toEqual([
+      { cod: '9871', fonte: 'arquivo-cliente 202606' },
+      { cod: '9872', fonte: 'arquivo-cliente 202606' },
+    ]);
+    const oficial = await porta.conciliarCnes(ctx(), { competencia: '202606' });
+    expect(oficial).toMatchObject({ aplicada: false, mantidas: 1, incluir: [], encerrar: [] });
+    await expect(
+      porta.carregarArquivoCnes(ctx(), { ...arquivo, competencia: '202613' }),
+    ).rejects.toMatchObject(recusa);
   });
 
   it('serviço próprio grava e encerra; terceirizado sem prestador é recusado', async () => {

@@ -32,7 +32,10 @@ export const mensagensSusEstabelecimento = {
     urgencia: 'Só no atendimento de urgência',
     prioridade: 'Prioridade (menor primeiro)',
     competenciaCnes: 'Competência do cadastro nacional',
-    codigosCnes: 'Habilitações no cadastro nacional (códigos separados por vírgula ou linha)',
+    codigosCnes:
+      'Exceção: habilitações digitadas (códigos separados por vírgula ou linha); vazio usa a lista oficial do CNES',
+    motivoExcecao: 'Motivo da exceção à lista oficial (registrado na habilitação)',
+    arquivoCnes: 'Arquivo das habilitações baixado do DATASUS (quando a base do mês não foi carregada)',
     encerrarEm: 'Encerrar na competência',
     nenhum: '(nenhum)',
   },
@@ -64,6 +67,8 @@ export const mensagensSusEstabelecimento = {
     titulo: 'Conciliar com o cadastro nacional',
     resumo: 'Entram {incluir}, encerram-se {encerrar}, ficam {mantidas}, pedem decisão {conflitos}.',
     aplicada: 'Conciliação aplicada.',
+    arquivoGravado: '{gravadas} habilitações do CNES gravadas no catálogo da competência {competencia}.',
+    arquivoVazio: 'O arquivo não traz habilitações deste estabelecimento.',
   },
   problemas: {
     codigo: 'O código da habilitação tem de 1 a 6 dígitos.',

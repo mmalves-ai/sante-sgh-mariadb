@@ -197,7 +197,10 @@ def montar_script(dados: dict, versao: str) -> tuple[str, dict]:
 def _pacote() -> Path:
     zips = sorted(CACHE.glob("*.[zZ][iI][pP]"), key=lambda p: competencia_do_pacote(p.name))
     if not zips:
-        raise SystemExit("sem pacote do cadastro nacional em catalogos/cache/cnes (python3 -I catalogos/baixar.py cnes)")
+        raise SystemExit(
+            "sem pacote do cadastro nacional em catalogos/cache/cnes (python3 -I catalogos/baixar.py cnes). Sem rede "
+            "de saída: baixe BASE_DE_DADOS_CNES_AAAAMM.ZIP em ftp.datasus.gov.br/cnes e ponha nessa pasta, ou envie o "
+            "arquivo das habilitações na tela Faturamento SUS > Estabelecimento (POST /api/sus/estabelecimento/cnes/arquivo)")
     return zips[-1]
 
 

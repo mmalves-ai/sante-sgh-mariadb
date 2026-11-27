@@ -110,6 +110,14 @@ export class EstabelecimentoSusController {
     return this.com(req, (p, c) => p.resolverCriticaCnes(c, id, corpo));
   }
 
+  @Post('cnes/arquivo')
+  @HttpCode(200)
+  @Permissao(PERMISSOES_ESTABELECIMENTO_SUS.editar)
+  @AuditadoNoHandler(TRILHA)
+  carregarArquivoCnes(@Req() req: RequisicaoAutorizada, @Body() corpo: unknown) {
+    return this.com(req, (p, c) => p.carregarArquivoCnes(c, corpo));
+  }
+
   @Post('habilitacoes/conciliar')
   @HttpCode(200)
   @Permissao(PERMISSOES_ESTABELECIMENTO_SUS.editar)

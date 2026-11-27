@@ -9,11 +9,13 @@ import { SanteSelecao } from '@sgh/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { lerHabilitacoesDoArquivoCnes, ONDE_BAIXAR_CNES } from '@sgh/contratos';
 import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import {
   type ConciliacaoCnesTela,
   type ConferenciaCnesTela,
+  carregarArquivoCnesSus,
   conciliarHabilitacoesSus,
   conferirComCnes,
   encerrarCadastroSus,
@@ -113,7 +115,7 @@ const incluirH = () =>
   );
 
 // Conciliação com o cadastro nacional
-const cn = reactive({ competencia: mesAtual(), codigos: '' });
+const cn = reactive({ competencia: mesAtual(), codigos: '', motivo: '' });
 const previa = ref<ConciliacaoCnesTela | null>(null);
 const codigosCnes = () =>
   cn.codigos
@@ -123,14 +125,44 @@ const codigosCnes = () =>
     .map((codigo) => ({ codigo }));
 const conciliar = (aplicar: boolean) =>
   acao.mutate(async () => {
+    const codigos = codigosCnes();
     const r = await conciliarHabilitacoesSus({
       competencia: cn.competencia.replace('-', ''),
-      habilitacoes: codigosCnes(),
+      ...(codigos.length ? { habilitacoes: codigos, motivoExcecao: cn.motivo.trim() } : {}),
       aplicar,
     });
     previa.value = r;
     return r;
   });
+// A lista digitada é exceção à lista oficial: aplicar pede o motivo.
+const faltaMotivo = computed(() => codigosCnes().length > 0 && cn.motivo.trim().length < 10);
+
+// Arquivo oficial baixado pelo cliente (quando a rede não alcança a fonte): a tela lê e envia só as linhas do
+// estabelecimento.
+const arquivoCnes = ref('');
+async function enviarArquivoCnes(ev: Event) {
+  const arq = (ev.target as HTMLInputElement).files?.[0];
+  if (!arq) return;
+  const cnes = cadastro.data.value?.codigoCnes ?? '';
+  const texto = new TextDecoder('latin1').decode(await arq.arrayBuffer());
+  const lido = lerHabilitacoesDoArquivoCnes(texto, cnes);
+  if (lido.problemas.length || !lido.habilitacoes.length) {
+    arquivoCnes.value = lido.problemas[0] ?? k('conciliacao.arquivoVazio');
+    return;
+  }
+  acao.mutate(async () => {
+    const r = await carregarArquivoCnesSus({
+      competencia: cn.competencia.replace('-', ''),
+      arquivo: arq.name,
+      habilitacoes: lido.habilitacoes,
+    });
+    arquivoCnes.value = t('faturamentoSus.estabelecimento.conciliacao.arquivoGravado', {
+      gravadas: r.gravadas,
+      competencia: r.competencia,
+    });
+    return r;
+  });
+}
 
 // Conferência com o cadastro nacional (C3-011): só é lida quando a aba abre.
 const conferencias = useQuery({
@@ -362,10 +394,24 @@ const alvoRegra = (x: {
           >{{ k('campos.competenciaCnes') }}
           <input v-model="cn.competencia" type="month" required data-testid="estab-sus-cnes-competencia"
         /></label>
+        <p class="ajuda" data-testid="estab-sus-cnes-onde-baixar">{{ ONDE_BAIXAR_CNES }}</p>
+        <label class="largo"
+          >{{ k('campos.arquivoCnes') }}
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            data-testid="estab-sus-cnes-arquivo"
+            @change="enviarArquivoCnes"
+        /></label>
+        <p v-if="arquivoCnes" class="ajuda" data-testid="estab-sus-cnes-arquivo-resumo">{{ arquivoCnes }}</p>
         <label class="largo"
           >{{ k('campos.codigosCnes') }}
           <textarea v-model="cn.codigos" rows="2" data-testid="estab-sus-cnes-codigos"></textarea>
         </label>
+        <label v-if="codigosCnes().length" class="largo"
+          >{{ k('campos.motivoExcecao') }}
+          <input v-model="cn.motivo" maxlength="200" data-testid="estab-sus-cnes-motivo"
+        /></label>
         <button
           type="submit"
           :disabled="!cn.competencia || acao.isPending.value"
@@ -389,7 +435,7 @@ const alvoRegra = (x: {
           <button
             v-if="!previa.aplicada"
             type="button"
-            :disabled="acao.isPending.value"
+            :disabled="acao.isPending.value || faltaMotivo"
             data-testid="estab-sus-cnes-aplicar"
             @click="conciliar(true)"
           >
@@ -575,7 +621,7 @@ const alvoRegra = (x: {
           ><input v-model="rp.permitido" type="checkbox" data-testid="estab-sus-rp-permitido" />
           {{ k('campos.permitido') }}</label
         >
-        <label
+        <label v-if="pode('faturamento.regraPrestadorGeral.editar')"
           ><input v-model="rp.geral" type="checkbox" data-testid="estab-sus-rp-geral" />
           {{ k('campos.geral') }}</label
         >

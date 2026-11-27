@@ -12,6 +12,7 @@
 //   - regra por tipo de prestador: uma linha em `regra_prestador_sus` (do estabelecimento ou geral); encerrar grava o fim;
 //   - regra do serviço automático: uma linha em `regra_servico_classificacao_sus`; inativar grava `ativo` falso.
 // A lista vigente que a crítica da competência usa sai de `habilitacoesCadastradas`. A trilha vai pelo executor.
+import { ONDE_BAIXAR_CNES } from '@sgh/contratos';
 import {
   conciliarHabilitacoesCnes,
   conferirComCadastroNacional,
@@ -55,6 +56,30 @@ const TABELAS = [
 ];
 
 const dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const aaaamm = z
+  .string()
+  .regex(/^\d{6}$/)
+  .nullable();
+const esquemaArquivoCnes = z
+  .object({
+    competencia: z.string().regex(/^\d{6}$/),
+    arquivo: z.string().trim().min(1).max(160),
+    habilitacoes: z
+      .array(
+        z
+          .object({
+            codigo: z.string().regex(/^\d{1,6}$/),
+            competenciaInicio: aaaamm,
+            competenciaFim: aaaamm,
+            numeroPortaria: z.string().trim().max(30).nullable(),
+            leitosHabilitados: z.number().int().min(0).nullable(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(2000),
+  })
+  .strict();
 const id = z.number().int().positive();
 const idOuNulo = id.nullable().default(null);
 const dataIso = (v: unknown): string | null =>
@@ -94,7 +119,10 @@ const esquemaConciliacao = z
           })
           .strict(),
       )
-      .max(500),
+      .max(500)
+      .optional(),
+    /** A lista digitada é exceção à lista oficial: aplicar pede o motivo, que fica registrado na habilitação. */
+    motivoExcecao: z.string().trim().max(200).optional(),
     aplicar: z.boolean().default(false),
   })
   .strict();
@@ -173,6 +201,8 @@ export interface CadastroSusEstabelecimento {
     vigente: boolean;
     versao: number;
   }[];
+  /** Número do estabelecimento no cadastro nacional (a tela filtra o arquivo oficial por ele). */
+  readonly codigoCnes: string | null;
   readonly regrasPrestador: readonly {
     id: number;
     geral: boolean;
@@ -248,7 +278,7 @@ export interface ConferenciaCnesLida {
 
 export class PortaEstabelecimentoSusPropria extends PortaEstabelecimentoPropria {
   constructor(nucleo: ConstructorParameters<typeof PortaEstabelecimentoPropria>[0], cliente: string) {
-    super(nucleo, cliente, TABELAS, 'faturamento.susEstabelecimento');
+    super(nucleo, cliente, [...TABELAS, 'habilitacao_cadastro_nacional'], 'faturamento.susEstabelecimento');
   }
 
   /** O cadastro SUS do estabelecimento: habilitações, serviços, regras por tipo de prestador e do serviço automático. */
@@ -299,7 +329,9 @@ export class PortaEstabelecimentoSusPropria extends PortaEstabelecimentoPropria 
           ORDER BY r.ativo DESC, r.prioridade, r.id LIMIT 1000`,
         [est.id],
       );
+      const ident = await l.uma('SELECT codigo_cnes FROM estabelecimento WHERE id = ?', [est.id]);
       return {
+        codigoCnes: txtOuNull(ident?.['codigo_cnes']),
         habilitacoes: habs.map((r) => ({
           id: num(r['id']),
           codigo: txt(r['codigo_cnes']),
@@ -625,12 +657,25 @@ export class PortaEstabelecimentoSusPropria extends PortaEstabelecimentoPropria 
       throw recusaRegra('Conciliação recusada', [
         { campo: 'competencia', mensagem: 'Competência inválida.' },
       ]);
+    const excecao = e.habilitacoes !== undefined;
+    if (excecao && e.aplicar && (e.motivoExcecao ?? '').length < 10)
+      throw recusaRegra('Conciliação recusada', [
+        {
+          campo: 'motivoExcecao',
+          mensagem:
+            'A lista digitada é exceção à lista oficial do CNES: informe o motivo (10 caracteres ou mais).',
+        },
+      ]);
+    const lista = e.habilitacoes ?? (await this.habilitacoesOficiaisCnes(c, e.competencia));
+    const origem = excecao
+      ? `Exceção à lista oficial do cadastro nacional (${e.motivoExcecao ?? 'prévia'})`
+      : 'Conciliação com o cadastro nacional';
     if (!e.aplicar) {
       const atuais = await this.habilitacoesCadastradas(c);
       return {
         ...conciliarHabilitacoesCnes(
           atuais.map((a) => ({ ...a, id: a.id ?? 0 })),
-          e.habilitacoes,
+          lista,
           e.competencia,
         ),
         aplicada: false,
@@ -651,7 +696,7 @@ export class PortaEstabelecimentoSusPropria extends PortaEstabelecimentoPropria 
         vigenciaInicio: dataIso(r['vigencia_inicio'])!,
         vigenciaFim: dataIso(r['vigencia_fim']),
       }));
-      const plano = conciliarHabilitacoesCnes(atuais, e.habilitacoes, e.competencia);
+      const plano = conciliarHabilitacoesCnes(atuais, lista, e.competencia);
       for (const x of plano.encerrar) {
         const a = atuais.find((y) => y.id === x.id)!;
         await tx.alterar('habilitacao_estabelecimento', a.id, a.versao, { vigencia_fim: x.vigenciaFim });
@@ -665,10 +710,114 @@ export class PortaEstabelecimentoSusPropria extends PortaEstabelecimentoPropria 
           vigenciaInicio: x.vigenciaInicio,
           vigenciaFim: x.vigenciaFim,
           leitosHabilitados: x.leitosHabilitados ?? null,
-          observacao: `Conciliação com o cadastro nacional, competência ${e.competencia}`,
+          observacao: `${origem}, competência ${e.competencia}`.slice(0, 250),
         });
       return { tabela: 'habilitacao_estabelecimento', id: ultimo, ...plano, aplicada: true };
     });
+  }
+
+  /**
+   * Lista oficial das habilitações vigentes na competência, lida do catálogo do cadastro nacional pelo CNES do
+   * estabelecimento (carregador versionado ou arquivo enviado pelo cliente). Sem a base da competência, recusa e diz
+   * onde baixar.
+   */
+  private async habilitacoesOficiaisCnes(c: ContextoPortaPropria, competencia: string) {
+    const dias = diasDaCompetenciaSus(competencia)!;
+    return this.ler(c, 'habilitacoes-cnes-oficiais', async (l, est) => {
+      const ident = await l.uma('SELECT codigo_cnes FROM estabelecimento WHERE id = ?', [est.id]);
+      const cnes = txtOuNull(ident?.['codigo_cnes']);
+      const linhas = cnes
+        ? await l.consultar(
+            `SELECT codigo_habilitacao, competencia_inicio, competencia_fim, numero_portaria, leitos_habilitados
+               FROM habilitacao_cadastro_nacional WHERE competencia = ? AND codigo_cnes = ?`,
+            [dias.inicio, cnes],
+          )
+        : [];
+      if (!linhas.length)
+        throw recusaRegra('Conciliação recusada', [
+          {
+            campo: 'cadastroNacional',
+            mensagem: cnes
+              ? `A base oficial do CNES da competência ${competencia} não está carregada para o CNES ${cnes}. ${ONDE_BAIXAR_CNES}`
+              : 'O estabelecimento não tem CNES no cadastro.',
+          },
+        ]);
+      return linhas
+        .filter((r) => {
+          const ini = dataIso(r['competencia_inicio']);
+          const fim = dataIso(r['competencia_fim']);
+          return (ini === null || ini <= dias.inicio) && (fim === null || fim >= dias.inicio);
+        })
+        .map((r) => ({
+          codigo: txt(r['codigo_habilitacao']),
+          numeroPortaria: txtOuNull(r['numero_portaria']),
+          leitosHabilitados: r['leitos_habilitados'] === null ? null : num(r['leitos_habilitados']),
+        }));
+    });
+  }
+
+  /**
+   * Grava no catálogo do cadastro nacional as habilitações do estabelecimento lidas do arquivo oficial que o cliente
+   * baixou (quando a rede de saída não alcança a fonte): mesma tabela e chave do carregador versionado.
+   */
+  async carregarArquivoCnes(
+    c: ContextoPortaPropria,
+    entrada: unknown,
+  ): Promise<{ id: number | null; gravadas: number; competencia: string }> {
+    const e = entradaValida(esquemaArquivoCnes, entrada);
+    const dias = diasDaCompetenciaSus(e.competencia);
+    if (!dias)
+      throw recusaRegra('Arquivo recusado', [{ campo: 'competencia', mensagem: 'Competência inválida.' }]);
+    const aaaammParaDia = (v: string | null) => (v ? `${v.slice(0, 4)}-${v.slice(4, 6)}-01` : null);
+    return this.gravar(
+      c,
+      'faturamento.sus.cnes.arquivo',
+      ['habilitacao_cadastro_nacional'],
+      async (tx, est) => {
+        const ident = await tx.uma('SELECT codigo_cnes FROM estabelecimento WHERE id = ?', [est.id]);
+        const cnes = txtOuNull(ident?.['codigo_cnes']);
+        if (!cnes || !/^\d{7}$/.test(cnes))
+          throw recusaRegra('Arquivo recusado', [
+            { campo: 'cnes', mensagem: 'O estabelecimento não tem CNES de 7 dígitos no cadastro.' },
+          ]);
+        const existentes = new Map(
+          (
+            await tx.consultarParaAtualizar<Linha>(
+              `SELECT id, versao, codigo_habilitacao FROM habilitacao_cadastro_nacional
+                WHERE competencia = ? AND codigo_cnes = ?`,
+              [dias.inicio, cnes],
+            )
+          ).map((r) => [txt(r['codigo_habilitacao']), { id: num(r['id']), versao: num(r['versao']) }]),
+        );
+        let ultimo: number | null = null;
+        for (const h of e.habilitacoes) {
+          const valores = {
+            competencia_inicio: aaaammParaDia(h.competenciaInicio),
+            competencia_fim: aaaammParaDia(h.competenciaFim),
+            numero_portaria: h.numeroPortaria,
+            leitos_habilitados: h.leitosHabilitados,
+            versao_fonte: `arquivo-cliente ${e.competencia}`,
+          };
+          const atual = existentes.get(h.codigo);
+          if (atual) {
+            await tx.alterar('habilitacao_cadastro_nacional', atual.id, atual.versao, valores);
+            ultimo = atual.id;
+          } else
+            ultimo = await tx.incluir('habilitacao_cadastro_nacional', {
+              competencia: dias.inicio,
+              codigo_cnes: cnes,
+              codigo_habilitacao: h.codigo,
+              ...valores,
+            });
+        }
+        return {
+          tabela: 'habilitacao_cadastro_nacional',
+          id: ultimo,
+          gravadas: e.habilitacoes.length,
+          competencia: e.competencia,
+        };
+      },
+    );
   }
 
   async incluirServico(c: ContextoPortaPropria, entrada: unknown): Promise<{ id: number }> {

@@ -1,4 +1,5 @@
 // Cliente das rotas do cadastro SUS do estabelecimento (F7, 06-SUS linha 61): /api/sus/estabelecimento.
+import type { HabilitacaoArquivoCnes } from '@sgh/contratos';
 import { z } from 'zod';
 import { enviar, ler, novaChave } from '../exames/api-exames.js';
 
@@ -8,6 +9,7 @@ const opcao = z.object({ id: z.number(), codigo: z.string(), descricao: z.string
 const vig = { vigenciaInicio: z.string(), vigenciaFim: z.string().nullable(), versao: z.number() };
 
 export const esquemaCadastroSus = z.object({
+  codigoCnes: z.string().nullable().default(null),
   habilitacoes: z.array(
     z.object({
       id: z.number(),
@@ -97,12 +99,27 @@ export const incluirHabilitacaoSus = (corpo: {
   vigenciaFim: string | null;
   leitosHabilitados: number | null;
 }) => enviar(`${B}/habilitacoes`, corpo, comId, novaChave('sus-habilitacao'));
+/** Sem `habilitacoes`, a API concilia com a lista oficial do catálogo do cadastro nacional; a lista digitada é
+ * exceção e, ao aplicar, pede o motivo. */
 export const conciliarHabilitacoesSus = (corpo: {
   competencia: string;
-  habilitacoes: { codigo: string }[];
+  habilitacoes?: { codigo: string }[];
+  motivoExcecao?: string;
   aplicar: boolean;
 }) =>
   enviar(`${B}/habilitacoes/conciliar`, corpo, esquemaConciliacao, novaChave('sus-habilitacao-conciliar'));
+/** Habilitações do estabelecimento lidas do arquivo oficial que o cliente baixou (C2-123). */
+export const carregarArquivoCnesSus = (corpo: {
+  competencia: string;
+  arquivo: string;
+  habilitacoes: readonly HabilitacaoArquivoCnes[];
+}) =>
+  enviar(
+    `${B}/cnes/arquivo`,
+    corpo,
+    z.object({ gravadas: z.number(), competencia: z.string() }).passthrough(),
+    novaChave('sus-cnes-arquivo'),
+  );
 export type TipoEncerravel = 'habilitacoes' | 'servicos' | 'regras-prestador';
 export const encerrarCadastroSus = (tipo: TipoEncerravel, id: number, vigenciaFim: string, versao: number) =>
   enviar(`${B}/${tipo}/${id}/encerrar`, { vigenciaFim, versao }, comId, novaChave(`sus-${tipo}-encerrar`));

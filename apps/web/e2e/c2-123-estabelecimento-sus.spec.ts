@@ -153,11 +153,21 @@ test.describe('C2-123 habilitações e serviços SUS do estabelecimento @C2-123'
     await expect(page.getByTestId('estab-sus-cnes-resumo')).toContainText('9873');
     expect(pedidos[2]).toEqual({
       caminho: '/api/sus/estabelecimento/habilitacoes/conciliar',
-      corpo: { competencia: '202605', habilitacoes: [{ codigo: '9873' }], aplicar: false },
+      corpo: {
+        competencia: '202605',
+        habilitacoes: [{ codigo: '9873' }],
+        motivoExcecao: '',
+        aplicar: false,
+      },
     });
+    // A lista digitada é exceção à lista oficial: aplicar pede o motivo.
+    await expect(page.getByTestId('estab-sus-cnes-aplicar')).toBeDisabled();
+    await page.getByTestId('estab-sus-cnes-motivo').fill('Portaria nova fora da base do mês');
     await page.getByTestId('estab-sus-cnes-aplicar').click();
     await expect(page.getByTestId('estab-sus-cnes-resumo')).toHaveText('Conciliação aplicada.');
     expect(pedidos[3]?.corpo['aplicar']).toBe(true);
+    expect(pedidos[3]?.corpo['motivoExcecao']).toBe('Portaria nova fora da base do mês');
+    await expect(page.getByTestId('estab-sus-cnes-onde-baixar')).toContainText('ftp.datasus.gov.br/cnes');
 
     // Serviço terceirizado pede o prestador.
     await page.getByTestId('estab-sus-aba-servicos').click();
