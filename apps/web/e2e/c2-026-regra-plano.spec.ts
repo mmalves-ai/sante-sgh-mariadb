@@ -2,7 +2,7 @@
 // a tela, escolhe a fonte sintética, vê a validação do domínio na hora (teto sem período e
 // pendência sem motivo travam, sem pedido ao servidor), grava uma regra com início futuro (não muda as aberturas de
 // hoje), vê a linha na tabela e encerra a vigência dela no mesmo dia (nada se apaga: a linha continua). A prévia da
-// crítica da abertura responde sem gravar. Fonte sintética; axe na tela.
+// crítica da abertura (conta da supervisão da recepção) responde sem gravar. Fonte sintética; axe na tela.
 // A regra do plano fica no banco do estabelecimento, e o E2E roda com a fonte sintética sem núcleo (503 sem banco). Por
 // isso as rotas /api/atendimento/regras-plano são simuladas pelo Playwright com massa SINTÉTICA e estado em memória; o
 // que se prova é a tela (validação na hora, corpo enviado, tabela, encerramento, prévia). O efeito no banco está no
@@ -147,7 +147,14 @@ test.describe('Regra do plano da fonte pagadora na recepção @C2-026 @fase7', (
     expect(corpos[1]).toMatchObject({ acao: 'encerrar', fonteId: FONTE.id, versao: 1, vigenciaFim: inicio });
     await expect(page.getByTestId('rp-tabela').locator('tr', { hasText: `${br} a ${br}` })).toHaveCount(1);
 
-    // A prévia da crítica responde sem gravar nada.
+    // A prévia da crítica é da supervisão da recepção (lê o contrato e abre atendimento); o faturamento edita o
+    // contrato sem abrir atendimento e não vê a prévia (segregação). Troca de conta e confere sem gravar nada.
+    await expect(page.getByTestId('rp-previa-carteira')).toHaveCount(0);
+    await page.context().clearCookies();
+    await entrar(page, 'SINT.RECEPCAO.SUPERVISAO');
+    await page.goto('/recepcao/atendimento/regras-plano');
+    await escolher(page.getByTestId('rp-fonte'), { rotulo: /alfa/i });
+    await expect(page.getByTestId('rp-form')).toHaveCount(0);
     await page.getByTestId('rp-previa-carteira').fill('X1');
     await page.getByTestId('rp-previa-conferir').click();
     await expect(page.getByTestId('rp-previa-resultado')).toBeVisible();
