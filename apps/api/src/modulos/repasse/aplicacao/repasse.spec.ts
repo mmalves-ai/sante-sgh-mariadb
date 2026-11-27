@@ -10,7 +10,7 @@ import { criarApp } from '../../../app.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
-import { PortaFinanceiroMemoria } from '../../financeiro/porta-memoria.js';
+import { financeiroMemoriaDoContexto, PortaFinanceiroMemoria } from '../../financeiro/porta-memoria.js';
 import { moduloFinanceiro } from '../../financeiro/modulo.js';
 import { moduloRepasse } from '../modulo.js';
 import { PortaRepasseMemoria } from '../porta-memoria.js';
@@ -437,5 +437,16 @@ describe('repasse médico pela HTTP (memória)', { timeout: 30_000 }, () => {
     const r = await post(a, '/repasse/apuracoes', { empresa: 1, competencia: '2026-06' });
     const p = r.json() as { title: string; detail: string };
     expect(`${p.title} ${p.detail}`).not.toMatch(SISTEMA_ANTIGO);
+  });
+});
+
+describe('financeiroMemoriaDoContexto (M33: o título do RPA em memória chega ao contas a pagar)', () => {
+  it('devolve a mesma porta financeira para o mesmo contexto dos módulos e outra para outro contexto', () => {
+    const a = {};
+    const b = {};
+    const pa = financeiroMemoriaDoContexto(a);
+    expect(pa).toBeInstanceOf(PortaFinanceiroMemoria);
+    expect(financeiroMemoriaDoContexto(a)).toBe(pa);
+    expect(financeiroMemoriaDoContexto(b)).not.toBe(pa);
   });
 });
