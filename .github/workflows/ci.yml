@@ -63,7 +63,7 @@ jobs:
         run: env -u GITHUB_API_URL -u GITHUB_GRAPHQL_URL -u GITHUB_SERVER_URL ./pnpm ambiente:verificar
       # Sem .env no runner: a API e o worker só sobem com o AMBIENTE declarado (ci: neutralizado, sem banco).
       # Decisão 59 do dono: o marco (@M00) e o pacote curto das jornadas principais (@jornada: entrada, agenda,
-      # prontuário, conta, lote TISS e financeiro: adiantamento), mesma linha do tools/obra/ci-sim.sh.
+      # prontuário, conta e lote TISS), mesma linha do tools/obra/ci-sim.sh.
       - name: E2E do marco e das jornadas (Chrome do runner, channel chrome)
         env:
           AMBIENTE: ci
