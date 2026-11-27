@@ -54,6 +54,32 @@ async function prerequisito(page: Page): Promise<void> {
 }
 const json = (rota: Route, corpo: unknown, status = 200) =>
   rota.fulfill({ status, contentType: 'application/json', body: JSON.stringify(corpo) });
+const recusa = (rota: Route, codigo: string, detail: string) =>
+  rota.fulfill({
+    status: 409,
+    contentType: 'application/problem+json',
+    body: JSON.stringify({
+      type: 'urn:sgh:problema:recusa-de-negocio',
+      title: detail,
+      status: 409,
+      detail,
+      codigo,
+      campos: ['substituto'],
+    }),
+  });
+const resultado = (id: number, mensagem: string) => ({
+  ok: true,
+  id,
+  versao: 2,
+  movimento: null,
+  mensagem,
+  avisos: [],
+});
+const hojeBr = () => {
+  const d = new Date();
+  const z = (n: number) => String(n).padStart(2, '0');
+  return `${z(d.getDate())}/${z(d.getMonth() + 1)}/${d.getFullYear()}`;
+};
 
 test.describe('Cadastro complementar do prestador da rede @C2-118 @fase7', () => {
   test.setTimeout(180_000);
@@ -267,5 +293,79 @@ test.describe('Cadastro complementar do prestador da rede @C2-118 @fase7', () =>
     ]);
     expect(pedidos[0]?.corpo).toMatchObject({ cep: '01310-100', municipioIbge: 3550308, principal: false });
     expect(pedidos[1]?.corpo).toMatchObject({ especialidade: 5, local: 21, urgencia: true });
+
+    // Descredenciamento pela tela: tipo do motivo, aviso aos beneficiários e substituto equivalente. A primeira
+    // tentativa volta com a recusa do substituto (sem a especialidade), mostrada no campo; a segunda grava.
+    const descred: Record<string, unknown>[] = [];
+    await page.route(/\/api\/operadora\/prestadores\/\d+\/descredenciar$/, async (r) => {
+      descred.push(r.request().postDataJSON() as Record<string, unknown>);
+      if (descred.length === 1)
+        return recusa(
+          r,
+          'substituto-sem-especialidade',
+          'O substituto não atende a especialidade do prestador que sai.',
+        );
+      return json(r, resultado(ficha.prestador.id, 'Descredenciamento registrado.'));
+    });
+    await page.getByTestId('rede-descredenciar').click();
+    const fd = page.getByTestId('form-descredenciar');
+    await expect(fd).toBeVisible();
+    await escolher(fd.getByTestId('rede-desc-tipo-motivo'), { rotulo: 'Qualidade' });
+    await fd
+      .getByLabel('Motivo do descredenciamento')
+      .fill('Indicadores de qualidade abaixo da meta sintética');
+    const aviso = fd.getByTestId('rede-desc-aviso').getByRole('textbox');
+    await aviso.fill(hojeBr());
+    await aviso.press('Tab');
+    await escolher(fd.getByTestId('rede-desc-substituto'), { rotulo: /Hospital sintético Gama/ });
+    await page.getByTestId('rede-desc-confirmar').click();
+    const confirmar = page.getByTestId('confirmacao').getByRole('button', { name: 'Confirmar' });
+    await confirmar.click();
+    await expect(fd.getByTestId('rede-desc-substituto-recusa')).toContainText(
+      'O substituto não atende a especialidade',
+    );
+    await expect(fd.getByTestId('rede-desc-recusa')).toHaveCount(0);
+    await semViolacaoAxe(page, 'descredenciamento com recusa do substituto');
+    await page.getByTestId('rede-desc-confirmar').click();
+    await confirmar.click();
+    await expect(fd).toHaveCount(0);
+    expect(descred).toHaveLength(2);
+    expect(descred[1]).toMatchObject({ tipoMotivo: 'qualidade' });
+    expect(descred[1]?.['avisoBeneficiariosEm']).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(typeof descred[1]?.['substituto']).toBe('number');
+
+    // Credenciamento com contratação indireta: sem o registro na ANS da intermediária, o problema aparece na hora e
+    // trava a gravação; com ele, o pedido leva contratacao=2 e operadoraIntermediaria.
+    const credenciar: Record<string, unknown>[] = [];
+    await page.route(/\/api\/operadora\/prestadores$/, async (r) => {
+      if (r.request().method() !== 'POST') return r.fallback();
+      credenciar.push(r.request().postDataJSON() as Record<string, unknown>);
+      return json(r, resultado(ficha.prestador.id, 'Prestador credenciado.'), 201);
+    });
+    await page.getByTestId('rede-credenciar').click();
+    const fp = page.getByTestId('form-prestador');
+    await expect(fp).toBeVisible();
+    await fp.getByLabel('CPF ou CNPJ').fill('11.222.333/0001-81');
+    await fp.getByLabel('Nome ou razão social').fill('Clínica sintética Delta');
+    await fp.getByLabel('CNES (7 dígitos)').fill('1234567');
+    await fp.getByLabel('Código do município (IBGE, 7 dígitos)').fill('4205407');
+    await escolher(fp.getByTestId('rede-tipo'), { indice: 1 });
+    await escolher(fp.getByTestId('rede-natureza'), { indice: 1 });
+    await escolher(fp.getByTestId('rede-classificacao'), { indice: 1 });
+    await escolher(fp.getByTestId('rede-regime'), { indice: 1 });
+    await fp.getByLabel('Número do contrato').fill('CT-SINT-0001');
+    await escolher(fp.getByTestId('rede-contratacao'), { rotulo: 'Indireta' });
+    await expect(fp.getByTestId('rede-intermediaria-problema')).toContainText(
+      'informe o registro na ANS da operadora intermediária',
+    );
+    await expect(fp.getByTestId('rede-gravar')).toBeDisabled();
+    await fp.getByLabel('Registro na ANS da operadora intermediária').fill('12AB');
+    await expect(fp.getByTestId('rede-intermediaria-problema')).toContainText('6 dígitos');
+    await fp.getByLabel('Registro na ANS da operadora intermediária').fill('123456');
+    await expect(fp.getByTestId('rede-intermediaria-problema')).toHaveCount(0);
+    await semViolacaoAxe(page, 'credenciamento com contratação indireta');
+    await fp.getByTestId('rede-gravar').click();
+    await expect.poll(() => credenciar.length).toBe(1);
+    expect(credenciar[0]).toMatchObject({ contratacao: 2, operadoraIntermediaria: '123456' });
   });
 });

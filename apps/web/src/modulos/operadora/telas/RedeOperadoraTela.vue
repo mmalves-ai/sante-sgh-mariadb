@@ -153,6 +153,8 @@ const opcoesTipoMotivo = Object.entries(TIPOS_MOTIVO_DESCREDENCIAMENTO).map(([va
 const dBusca = ref('');
 const dBuscaAplicada = ref('');
 const recusaDialogo = ref<string | null>(null);
+// C2-118: a recusa do substituto (suspenso, sem local ativo, sem a especialidade, fora do município) aparece no campo.
+const recusaSubstituto = ref<string | null>(null);
 const erroDialogo = ref<unknown>(null);
 const candidatos = useQuery({
   queryKey: computed(() => ['operadora', 'rede', 'candidatos', dBuscaAplicada.value]),
@@ -185,18 +187,22 @@ function abrirDescredenciar(p: PrestadorDetalhe): void {
   dBusca.value = '';
   dBuscaAplicada.value = '';
   recusaDialogo.value = null;
+  recusaSubstituto.value = null;
   erroDialogo.value = null;
   descredenciando.value = p;
 }
 function falhou(e: unknown): void {
-  if (e instanceof ErroApi && e.problema?.detail && [400, 403, 404, 409].includes(e.status))
-    recusaDialogo.value = e.problema.detail;
-  else erroDialogo.value = e;
+  if (e instanceof ErroApi && e.problema?.detail && [400, 403, 404, 409].includes(e.status)) {
+    if (descredenciando.value && e.problema.codigo?.startsWith('substituto-'))
+      recusaSubstituto.value = e.problema.detail;
+    else recusaDialogo.value = e.problema.detail;
+  } else erroDialogo.value = e;
 }
 async function confirmarDescredenciar(): Promise<void> {
   const p = descredenciando.value;
   if (!p || !dAviso.value || !dEfetivo.value) return;
   recusaDialogo.value = null;
+  recusaSubstituto.value = null;
   erroDialogo.value = null;
   try {
     await gravado(
@@ -694,6 +700,9 @@ watch(ligada, (v) => {
           :busca="true"
           data-testid="rede-desc-substituto"
         />
+        <p v-if="recusaSubstituto" class="secundario" role="alert" data-testid="rede-desc-substituto-recusa">
+          {{ recusaSubstituto }}
+        </p>
         <SanteCampoTexto
           v-if="descredenciando?.hospitalar"
           id="rede-desc-autorizacao"

@@ -7,6 +7,7 @@
 import {
   type ApoioRede,
   CONTRATACAO_INDIRETA,
+  MENSAGENS_REDE,
   type PrestadorDetalhe,
   type ResultadoRede,
   UFS,
@@ -77,6 +78,13 @@ const opcoesConvenio = computed(() => [
   })),
 ]);
 const indireta = computed(() => f.contratacao === CONTRATACAO_INDIRETA);
+// C2-118: na contratação indireta, o registro na ANS da intermediária aparece na hora (mesma regra do servidor).
+const problemaIntermediaria = computed(() => {
+  if (!indireta.value) return null;
+  const v = f.intermediaria.trim();
+  if (!v) return MENSAGENS_REDE['intermediaria-obrigatoria'] ?? null;
+  return /^\d{6}$/.test(v) ? null : (MENSAGENS_REDE['intermediaria-invalida'] ?? null);
+});
 
 const completo = computed(
   () =>
@@ -97,6 +105,7 @@ const completo = computed(
     f.inicio !== null &&
     f.formaReajuste !== null &&
     f.mesReajuste !== null &&
+    problemaIntermediaria.value === null &&
     (!f.ehOHospital || f.estabelecimento !== null),
 );
 
@@ -245,6 +254,14 @@ async function gravar(): Promise<void> {
         :max-bytes="6"
         obrigatorio
       />
+      <p
+        v-if="problemaIntermediaria"
+        class="secundario"
+        role="alert"
+        data-testid="rede-intermediaria-problema"
+      >
+        {{ problemaIntermediaria }}
+      </p>
       <SanteSelecao
         v-model="f.disponibilidade"
         :rotulo="t('operadoraRede.ficha.disponibilidade')"
