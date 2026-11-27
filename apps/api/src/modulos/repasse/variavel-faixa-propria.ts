@@ -14,6 +14,8 @@
 //     `lancamento_repasse` (tipo 'apuracao', favorecido próprio do profissional, evento do acréscimo ou do desconto,
 //     valor positivo, referente com o código da regra e a competência); os totais de `apuracao_repasse` somam o
 //     acréscimo no bruto e o desconto nos descontos; lançar de novo não duplica (o referente identifica o lançado).
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
+import { publicarFatosDoRepasse } from './fato-contabil-repasse.js';
 import {
   AJUSTES_FAIXA,
   type AjusteFaixa,
@@ -177,6 +179,7 @@ export class PortaVariavelFaixaPropria extends PortaEstabelecimentoPropria {
         'regra_repasse_variavel_faixa',
         'lancamento_repasse',
         'apuracao_repasse',
+        ...TABELAS_PUBLICACAO_FATO,
       ],
       'repasse.variavel-faixa',
     );
@@ -824,7 +827,8 @@ export class PortaVariavelFaixaPropria extends PortaEstabelecimentoPropria {
     return this.gravar(
       c,
       'repasse.variavel.faixa.lancar',
-      ['lancamento_repasse', 'apuracao_repasse'],
+      // C2-093: o lançamento publica o fato contábil do repasse na mesma transação.
+      ['lancamento_repasse', 'apuracao_repasse', ...TABELAS_PUBLICACAO_FATO],
       async (tx, est) => {
         const a = await this.apuracao(tx, est.id, apuracao);
         if (!SITUACOES_LANCAVEIS.includes(a.situacao))
@@ -863,7 +867,7 @@ export class PortaVariavelFaixaPropria extends PortaEstabelecimentoPropria {
               continue;
             }
             const cents = Math.round(Math.abs(pt.valor) * 100);
-            await tx.incluir('lancamento_repasse', {
+            const lanc = await tx.incluir('lancamento_repasse', {
               estabelecimento_id: est.id,
               favorecido_repasse_id: num(fav['id']),
               tipo_favorecido: 'medico',
@@ -880,6 +884,9 @@ export class PortaVariavelFaixaPropria extends PortaEstabelecimentoPropria {
               observacao: `${s.memoria}${r.equipe !== null ? ` Cota ${pt.cota}% da equipe ${s.beneficiario}.` : ''}`,
               situacao: 'aberto',
             });
+            // C2-093: a parte grava o valor sem sinal; só o crédito publica o fato `repasse` (a parte negativa
+            // gravada sem sinal viraria crédito no fato: fica pendente na ficha).
+            if (pt.valor > 0) await publicarFatosDoRepasse(tx, est.id, [lanc]);
             lancamentos += 1;
             if (pt.valor > 0) credito += cents;
             else debito += cents;

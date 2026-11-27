@@ -15,6 +15,8 @@
 //     custo do prestador vira `desconto_custo_repasse` (regra de custo, tipo de desconto, valor); os totais da apuração
 //     (`apuracao_repasse`: bruto, descontos, líquido) somam o lançado; lançar de novo não duplica (o referente e a
 //     regra de custo identificam o já lançado); apuração aprovada, liberada, paga ou cancelada: 422.
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
+import { publicarFatosDoRepasse } from './fato-contabil-repasse.js';
 import {
   calcularRemuneracaoVariavel,
   conflitoDeVigencia,
@@ -164,6 +166,7 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
         'lancamento_repasse',
         'desconto_custo_repasse',
         'apuracao_repasse',
+        ...TABELAS_PUBLICACAO_FATO,
       ],
       'repasse.remuneracao-variavel',
     );
@@ -935,7 +938,8 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
     return this.gravar(
       c,
       'repasse.variavel.lancar',
-      ['lancamento_repasse', 'desconto_custo_repasse', 'apuracao_repasse'],
+      // C2-093: o lançamento publica o fato contábil do repasse na mesma transação.
+      ['lancamento_repasse', 'desconto_custo_repasse', 'apuracao_repasse', ...TABELAS_PUBLICACAO_FATO],
       async (tx, est) => {
         const a = await this.apuracao(tx, est.id, apuracao);
         if (!SITUACOES_LANCAVEIS.includes(a.situacao))
@@ -997,7 +1001,7 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
               pendencias.push(`${p.nome}: sem favorecido próprio vigente; o crédito não foi lançado.`);
               continue;
             }
-            await tx.incluir('lancamento_repasse', {
+            const lanc = await tx.incluir('lancamento_repasse', {
               estabelecimento_id: est.id,
               favorecido_repasse_id: num(fav['id']),
               tipo_favorecido: 'medico',
@@ -1013,6 +1017,7 @@ export class PortaRemuneracaoVariavelPropria extends PortaEstabelecimentoPropria
               observacao: i.memoria,
               situacao: 'aberto',
             });
+            await publicarFatosDoRepasse(tx, est.id, [lanc]);
             lancamentos += 1;
             credito += cents;
           }

@@ -57,6 +57,12 @@ describe.skipIf(SEM_BANCO)('remuneração variável por faixa e equipe (MariaDB)
     const ap = 'SELECT id FROM apuracao_repasse WHERE estabelecimento_id = ?';
     const rg = 'SELECT id FROM regra_repasse_variavel WHERE estabelecimento_id = ?';
     const eq = 'SELECT id FROM equipe_repasse_variavel WHERE estabelecimento_id = ?';
+    // C2-093: o lançamento publica o fato contábil do repasse (estornos antes).
+    await e.executar(
+      'DELETE FROM fato_contabil WHERE estabelecimento_id = ? AND estornado_fato_contabil_id IS NOT NULL',
+      [ids.est],
+    );
+    await e.executar('DELETE FROM fato_contabil WHERE estabelecimento_id = ?', [ids.est]);
     await e.executar('DELETE FROM lancamento_repasse WHERE estabelecimento_id = ?', [ids.est]);
     await e.executar(`DELETE FROM apuracao_repasse_item WHERE apuracao_repasse_id IN (${ap})`, [ids.est]);
     await e.executar('DELETE FROM apuracao_repasse WHERE estabelecimento_id = ?', [ids.est]);
