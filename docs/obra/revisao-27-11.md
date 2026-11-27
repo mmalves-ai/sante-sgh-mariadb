@@ -37,7 +37,10 @@ completar e a rodada dirigida da integrar-4/completar-7/8) sem fechar. Pela regr
 tentativa só com informação nova: o que falta em cada uma está escrito na linha da ficha. Pede a sua prioridade.
 Carga (sessão Painel de Injeção): pendências em `docs/obra/passagens/RETOMADA-carga-painel.md`.
 Regressão achada em 27/11 05h50 (fora das fichas Parciais): o E2E `w0-10-medico` (portal do médico externo) cai 0/4 no
-cadastro do segundo fator (`medico-otpauth` não aparece); entra na lista da próxima rodada.
+cadastro do segundo fator. Corrigido em 27/11 (CPF exigido no autocadastro desde 21/11; "Cadastrar o médico" recusado como
+operação desconhecida no SADT, 9e3cadeb e f444c5d5): 2/4 verdes. Seguem 2 defeitos à parte no portal do médico externo: a
+situação do valor crítico não passa a "Já com plantonista/supervisor" depois da ciência, e a assinatura remota não mostra a
+opção "Certificado em nuvem" (pm-ass-certificado).
 
 | Fase | Ficha | Linha | Função | Motivo | O que o hospital faz |
 |---|---|---|---|---|---|
