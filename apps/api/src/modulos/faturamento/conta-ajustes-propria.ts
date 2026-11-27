@@ -47,6 +47,7 @@ import { sincronizarProducaoDaConta } from '../repasse/producao-conta.js';
 import { apurarConta, TABELAS_CONTA_ENTRADA } from './conta-entrada.js';
 import { buscarItensCobraveis } from './tarifador-propria.js';
 import { totalDosItens } from './operacoes.js';
+import { conferirLancamentoNoPeriodo } from './conta-periodos-propria.js';
 import { criticarCoberturaDoItemConta } from './cobertura-item-conta.js';
 
 type Linha = Record<string, unknown>;
@@ -1855,9 +1856,19 @@ export const opDescaracterizar = definirOperacao({
     });
     await tx.alterar('conta_hospitalar_pacote', e.id, e.versao, { descaracterizacao_pacote_id: d });
     const itens = await tx.consultar<Linha>(
-      'SELECT id, versao, tipo_valorizacao, situacao, observacao FROM conta_hospitalar_item WHERE conta_hospitalar_pacote_id = ? AND excluido_em IS NULL',
+      `SELECT id, versao, tipo_valorizacao, situacao, observacao, realizado_em, tipo_lancamento_id
+         FROM conta_hospitalar_item WHERE conta_hospitalar_pacote_id = ? AND excluido_em IS NULL`,
       [e.id],
     );
+    // 06-FAT linha 12: o estorno do item do pacote (e a volta dos inclusos) não mexe em item de período fechado.
+    for (const i of itens)
+      if (i['tipo_valorizacao'] === 'pacote' || i['situacao'] === 'sem_cobranca')
+        await conferirLancamentoNoPeriodo(
+          tx,
+          c.id,
+          i['realizado_em'] as Date,
+          i['tipo_lancamento_id'] == null ? null : n(i['tipo_lancamento_id']),
+        );
     let reabertos = 0;
     const mudados: number[] = [];
     for (const i of itens)

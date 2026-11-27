@@ -108,6 +108,22 @@ export async function faturamentoPorPeriodoPropria(l: Leitor, est: number, conta
   };
 }
 
+/**
+ * O tipo de lançamento do item faturável, pela terminologia do termo equivalente (terminologia_tipo_lancamento). Só
+ * quando a terminologia aponta um tipo só; sem termo ou com mais de um tipo, nulo (o item só esbarra no período geral).
+ */
+export async function tipoLancamentoDoItem(tx: Consulta, item: number): Promise<number | null> {
+  const r = await tx.uma<Linha>(
+    `SELECT MIN(tl.tipo_lancamento_id) AS t, COUNT(DISTINCT tl.tipo_lancamento_id) AS q
+       FROM item_faturavel i
+       JOIN termo_terminologia tt ON tt.id = i.termo_terminologia_id
+       JOIN terminologia_tipo_lancamento tl ON tl.terminologia_id = tt.terminologia_id AND tl.excluido_em IS NULL
+      WHERE i.id = ?`,
+    [item],
+  );
+  return r && Number(r['q']) === 1 ? Number(r['t']) : null;
+}
+
 /** Recusa o lançamento cuja data cai num período fechado da conta (chamado sob a transação do lançamento). */
 export async function conferirLancamentoNoPeriodo(
   tx: Consulta,

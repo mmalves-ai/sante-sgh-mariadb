@@ -55,7 +55,7 @@ import {
   TABELAS_CONTA_ENTRADA,
 } from './conta-entrada.js';
 
-import { conferirLancamentoNoPeriodo } from './conta-periodos-propria.js';
+import { conferirLancamentoNoPeriodo, tipoLancamentoDoItem } from './conta-periodos-propria.js';
 import { conferirCoberturaNoLancamento } from './restricao-cobertura-propria.js';
 import { versaoNumero } from './esquemas.js';
 import { dispararKitsDoItem } from './kit-lancamento.js';
@@ -382,7 +382,7 @@ export const conferirItem = definirOperacao<ConferirItemEntrada, ResultadoOperac
     if (r) throw recusaDe(r);
     const ids = e.itens.map((i) => i.id);
     const linhas = await tx.consultarParaAtualizar<Linha>(
-      `SELECT id, versao, situacao, conta_hospitalar_id FROM conta_hospitalar_item
+      `SELECT id, versao, situacao, conta_hospitalar_id, realizado_em, tipo_lancamento_id FROM conta_hospitalar_item
         WHERE id IN (${lista(ids.length)}) AND excluido_em IS NULL`,
       ids,
       { teto: ids.length },
@@ -401,6 +401,12 @@ export const conferirItem = definirOperacao<ConferirItemEntrada, ResultadoOperac
         });
     }
     if (mudaram.length) throw erroConflitoVersao(mudaram);
+    // 06-FAT linha 12: o item cuja data cai num período fechado da conta não muda de situação (reabra o período).
+    for (const i of e.itens) {
+      const x = porId.get(i.id)!;
+      const tipo = x['tipo_lancamento_id'] == null ? null : n(x['tipo_lancamento_id']);
+      await conferirLancamentoNoPeriodo(tx, conta.id, x['realizado_em'] as Date, tipo);
+    }
     for (const i of e.itens)
       await tx.alterar('conta_hospitalar_item', i.id, n(porId.get(i.id)?.['versao']), {
         situacao: 'conferido',
@@ -687,9 +693,10 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
     const realizado = new Date(
       dataHoraParaInstante(e.data, e.hora, texto(fuso?.['fuso_horario']) || undefined),
     );
-    // 06-FAT linha 12: a data que cai num período fechado da conta parcial é recusada (o item sem tipo de lançamento
-    // só esbarra no período geral).
-    await conferirLancamentoNoPeriodo(tx, conta.id, realizado, null);
+    // 06-FAT linha 12: a data que cai num período fechado da conta parcial é recusada. O tipo de lançamento do item
+    // (pela terminologia do termo equivalente) vale para o período por tipo; sem tipo, só o período geral conta.
+    const tipoLancamento = await tipoLancamentoDoItem(tx, n(item['id']));
+    await conferirLancamentoNoPeriodo(tx, conta.id, realizado, tipoLancamento);
     // F7 (09-AREA linha 76): restrição de cobertura da fonte e compatibilidade com a conta, antes de gravar (o bloqueio
     // recusa; a exceção do atendimento libera e fica na memória).
     const cobertura = await conferirCoberturaNoLancamento(tx, est, conta.id, {
@@ -716,6 +723,7 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
       grupo_faturamento_id: item['grupo_faturamento_id'] ?? null,
       setor_funcional_id: setor,
       realizado_em: realizado,
+      tipo_lancamento_id: tipoLancamento,
       quantidade: e.quantidade,
       valor_unitario: unitario,
       valor_honorario: comAcordo

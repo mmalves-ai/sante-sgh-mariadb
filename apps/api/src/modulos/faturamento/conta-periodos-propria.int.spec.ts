@@ -9,7 +9,13 @@ import { type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } fro
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { ServicoComplementosConta } from './conta-complementos.controller.js';
-import { conferirLancamentoNoPeriodo, faturamentoPorPeriodoPropria } from './conta-periodos-propria.js';
+import {
+  conferirLancamentoNoPeriodo,
+  faturamentoPorPeriodoPropria,
+  tipoLancamentoDoItem,
+} from './conta-periodos-propria.js';
+import { versaoTexto } from './esquemas.js';
+import { conferirItem } from './operacoes.js';
 
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -238,6 +244,33 @@ describe.skipIf(SEM_BANCO)('conta parcial por período no faturamento (MariaDB)'
       await codigoDo(escrever((e) => conferirLancamentoNoPeriodo(e, ids.conta, quando('2026-01-27'), null))),
     ).toMatch(/^periodo-fechado/);
     await escrever((e) => conferirLancamentoNoPeriodo(e, ids.conta, quando('2026-02-10'), null));
+    // A conferência do item lançado na faixa fechada também é recusada (o item segue lançado).
+    const item = await linha(
+      `SELECT id, versao, item_faturavel_id FROM conta_hospitalar_item
+        WHERE conta_hospitalar_id = ? AND situacao = 'lancado' ORDER BY realizado_em LIMIT 1`,
+      [ids.conta],
+    );
+    expect(
+      await codigoDo(
+        nucleo
+          .criarExecutor()
+          .executar(
+            conferirItem,
+            CLIENTE,
+            {
+              conta: ids.conta,
+              itens: [{ id: Number(item['id']), versao: versaoTexto(Number(item['versao'])) }],
+            },
+            op(),
+          ),
+      ),
+    ).toMatch(/^periodo-fechado/);
+    expect(
+      (await linha('SELECT situacao FROM conta_hospitalar_item WHERE id = ?', [item['id']]))['situacao'],
+    ).toBe('lancado');
+    // O tipo de lançamento do item sai da terminologia do termo equivalente (um tipo só) ou fica nulo.
+    const tipo = await escrever((e) => tipoLancamentoDoItem(e, Number(item['item_faturavel_id'])));
+    expect(tipo === null || Number.isInteger(tipo)).toBe(true);
     expect((await ler()).periodos.map((x) => x.fechado)).toEqual([true, false]);
   });
 
