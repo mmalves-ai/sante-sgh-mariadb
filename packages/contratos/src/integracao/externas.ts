@@ -244,14 +244,17 @@ export const CATALOGO_INTEGRACOES_EXTERNAS: readonly EntradaIntegracaoExterna[] 
     area: 'cadastro',
     nome: 'CNES (cadastro nacional de estabelecimentos)',
     descricao: 'Consulta e conferência do cadastro do estabelecimento e dos profissionais no CNES oficial.',
-    funcoes: ['consulta-cnes', 'conferencia-profissionais-cnes'],
+    funcoes: ['consulta-cnes', 'conferencia-profissionais-cnes', 'exportacao-profissionais-cnes'],
     camposCredencial: [USUARIO, SENHA],
     parametros: [
       ENDERECO,
       { id: 'cnes', rotulo: 'CNES do estabelecimento', tipo: 'texto', obrigatorio: true },
     ],
     dependeDefinicaoFornecedor: true,
-    oQuePedirAoFornecedor: pedir('Acesso ao serviço de consulta do CNES liberado ao estabelecimento'),
+    oQuePedirAoFornecedor: pedir(
+      'Acesso ao serviço de consulta do CNES liberado ao estabelecimento',
+      'Esquema XML (XSD) e manual de importação de profissionais da versão do sistema do CNES em uso',
+    ),
   },
   {
     id: 'regulacao-central',

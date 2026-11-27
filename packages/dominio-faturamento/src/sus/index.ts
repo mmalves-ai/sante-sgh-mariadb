@@ -28,6 +28,7 @@ export * from './servico-web.js';
 export * from './leito-uti-habilitado.js';
 export * from './estabelecimento-sus.js';
 export * from './conferencia-cnes.js';
+export * from './exportacao-cnes.js';
 // F8 (06-SUS linha 65): notificação de potencial doador e inscrição de receptor para a central estadual de transplantes.
 export * from './transplante.js';
 // F7 (06-SUS linha 54): programação físico-orçamentária, tetos financeiros e cotas (leitor, saldo, crítica, remanejamento).

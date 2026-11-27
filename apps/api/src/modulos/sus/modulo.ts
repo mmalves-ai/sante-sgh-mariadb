@@ -11,6 +11,8 @@ import { localizadorDoNucleo } from '../tiss/armazem-xml.js';
 import { LeitosUtiSusController } from './leitos-uti.controller.js';
 import { EstabelecimentoSusController } from './estabelecimento-sus.controller.js';
 import { PORTA_ESTABELECIMENTO_SUS, PortaEstabelecimentoSusPropria } from './estabelecimento-sus-propria.js';
+import { ExportacaoCnesController } from './exportacao-cnes.controller.js';
+import { PORTA_EXPORTACAO_CNES, PortaExportacaoCnesPropria } from './exportacao-cnes-propria.js';
 import { LaudoInternacaoSusController } from './laudo-internacao-sus.controller.js';
 import { GuardaSetorSus } from './guarda-setor-sus.js';
 import { ContaAihComplementoController } from './conta-aih-complemento.controller.js';
@@ -80,6 +82,7 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
       ServicoWebSusController,
       LeitosUtiSusController,
       EstabelecimentoSusController,
+      ExportacaoCnesController,
       LaudoInternacaoSusController,
       ContaAihComplementoController,
       RepasseSusController,
@@ -135,6 +138,14 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
         useValue:
           ctx.nucleo && ctx.configuracao.clientePadrao
             ? new PortaEstabelecimentoSusPropria(ctx.nucleo, ctx.configuracao.clientePadrao)
+            : null,
+      },
+      // C3-011 (02-CAD linha 29): exportação dos profissionais ao cadastro nacional, com o arquivo guardado.
+      {
+        provide: PORTA_EXPORTACAO_CNES,
+        useValue:
+          ctx.nucleo && ctx.configuracao.clientePadrao
+            ? new PortaExportacaoCnesPropria(ctx.nucleo, ctx.configuracao.clientePadrao, armazem)
             : null,
       },
       // F8 (06-SUS linha 65): notificação de doador e inscrição de receptor para a central de transplantes.

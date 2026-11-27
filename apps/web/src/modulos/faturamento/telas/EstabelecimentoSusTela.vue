@@ -11,6 +11,7 @@ import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { lerHabilitacoesDoArquivoCnes, ONDE_BAIXAR_CNES } from '@sgh/contratos';
 import MensagemErro from '../../../casca/MensagemErro.vue';
+import ExportacaoCnesPainel from '../componentes/ExportacaoCnesPainel.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import {
   type ConciliacaoCnesTela,
@@ -852,6 +853,7 @@ const alvoRegra = (x: {
           </tbody>
         </table>
       </section>
+      <ExportacaoCnesPainel :pode-editar="podeEditar" />
     </div>
   </section>
 </template>
