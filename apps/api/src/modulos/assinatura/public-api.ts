@@ -37,6 +37,7 @@ export {
   CONFIG_DOCUMENTOS_ICP,
   FONTE_CONTEUDO_ICP,
   SERVICO_ASSINATURA_ICP,
+  SERVICO_DOCUMENTOS_ICP,
 } from './simbolos.js';
 export { type DocumentosMemoriaIcp } from './porta-memoria.js';
 export { SimuladorSncr } from './infra/simulador-sncr.js';

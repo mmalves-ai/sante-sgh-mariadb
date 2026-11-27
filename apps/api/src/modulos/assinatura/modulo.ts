@@ -13,8 +13,20 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { chaveMestra } from '@sgh/dominio-acesso';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { SERVICO_LOGIN_CERTIFICADO } from '../acesso/acesso.controller.js';
-import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../config/public-api.js';
+import {
+  CACHE_CONFIG,
+  type CacheConfig,
+  FONTE_CONFIGURACAO,
+  type FonteConfiguracao,
+} from '../config/public-api.js';
+import { LiberacaoPep } from '../pep/liberacao-pep.js';
 import type { ContextoModulo } from '../registro.js';
+import {
+  type ArmazemPdfIcp,
+  type ConfigDocumentosIcp,
+  type FonteConteudoIcp,
+  ServicoAssinaturaDocumentos,
+} from './aplicacao/documentos.js';
 import { ServicoLoginCertificado } from './aplicacao/login-certificado.js';
 import { type ConfigServicoAssinatura, ServicoAssinaturaIcp } from './aplicacao/servico.js';
 import { estabelecimentosDoVerificador, ServicoVerificador } from './aplicacao/verificador.js';
@@ -26,7 +38,13 @@ import { SimuladorSncr } from './infra/simulador-sncr.js';
 import { PORTA_ASSINATURA_ICP, type PortaAssinaturaIcp, portaAssinaturaIndisponivel } from './porta.js';
 import { PortaAssinaturaMemoria } from './porta-memoria.js';
 import { PortaAssinaturaPropria } from './porta-propria.js';
-import { CONFIG_DOCUMENTOS_ICP, SERVICO_ASSINATURA_ICP } from './simbolos.js';
+import {
+  ARMAZEM_PDF_ICP,
+  CONFIG_DOCUMENTOS_ICP,
+  FONTE_CONTEUDO_ICP,
+  SERVICO_ASSINATURA_ICP,
+  SERVICO_DOCUMENTOS_ICP,
+} from './simbolos.js';
 import { SERVICO_VERIFICADOR, VerificadorController } from './verificador.controller.js';
 
 export interface OpcoesModuloAssinatura {
@@ -96,6 +114,9 @@ export async function modulo(
   const rede = ctx.configuracao.rede ?? 'rede-sintetica';
   return {
     module: ModuloAssinatura,
+    // Global: a fila de assinatura remota do portal do médico externo (W0-10, M6) e o login por certificado usam o
+    // serviço deste módulo.
+    global: true,
     controllers: [AssinaturaIcpController, AssinaturaDocumentosController, VerificadorController],
     providers: [
       { provide: PORTA_ASSINATURA_ICP, useValue: porta },
@@ -120,6 +141,33 @@ export async function modulo(
         ),
       },
       {
+        provide: SERVICO_DOCUMENTOS_ICP,
+        useFactory: (
+          icp: ServicoAssinaturaIcp,
+          cfg: ConfigDocumentosIcp,
+          fonte: FonteConteudoIcp | null,
+          armazem: ArmazemPdfIcp | null,
+          configuracao: FonteConfiguracao | null,
+          cache: CacheConfig | null,
+        ) =>
+          new ServicoAssinaturaDocumentos(
+            icp,
+            porta,
+            fonte ?? null,
+            armazem ?? null,
+            new LiberacaoPep(configuracao ?? null, cache ?? null),
+            cfg,
+          ),
+        inject: [
+          SERVICO_ASSINATURA_ICP,
+          CONFIG_DOCUMENTOS_ICP,
+          { token: FONTE_CONTEUDO_ICP, optional: true },
+          { token: ARMAZEM_PDF_ICP, optional: true },
+          { token: FONTE_CONFIGURACAO, optional: true },
+          { token: CACHE_CONFIG, optional: true },
+        ],
+      },
+      {
         provide: SERVICO_VERIFICADOR,
         useFactory: (cfg: { urlVerificador: string }, fonte: FonteConfiguracao | null) =>
           new ServicoVerificador(porta, ctx.armazem, fonte, {
@@ -136,6 +184,7 @@ export async function modulo(
       SERVICO_ASSINATURA_ICP,
       SERVICO_LOGIN_CERTIFICADO,
       CONFIG_DOCUMENTOS_ICP,
+      SERVICO_DOCUMENTOS_ICP,
       SERVICO_VERIFICADOR,
     ],
   };

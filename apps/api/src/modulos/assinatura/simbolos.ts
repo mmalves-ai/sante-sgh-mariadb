@@ -5,3 +5,5 @@ export const SERVICO_ASSINATURA_ICP = Symbol('SERVICO_ASSINATURA_ICP');
 export const FONTE_CONTEUDO_ICP = Symbol('FONTE_CONTEUDO_ICP');
 export const ARMAZEM_PDF_ICP = Symbol('ARMAZEM_PDF_ICP');
 export const CONFIG_DOCUMENTOS_ICP = Symbol('CONFIG_DOCUMENTOS_ICP');
+/** O serviço da assinatura dos documentos emitidos (um só: as rotas internas e a fila do portal do médico externo). */
+export const SERVICO_DOCUMENTOS_ICP = Symbol('SERVICO_DOCUMENTOS_ICP');

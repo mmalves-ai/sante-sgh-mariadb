@@ -5,12 +5,22 @@
 // Dependências (globais ou exportadas): SERVICO_PORTAL e PORTA_SADT (sadt), PORTA_CIRURGIA (cirurgia), PORTA_REPASSE
 // (repasse), FONTE_CONFIGURACAO (config); "meus pacientes" usa SERVICO_DOCUMENTOS, PORTA_PRESCRICAO e PORTA_WORKLIST
 // (pep) quando presentes (sem eles, 503 com o motivo). Sem sadt, cirurgia ou repasse, a partida recusa com a mensagem.
-// Pendências registradas: a fila de assinatura remota (M49) fica desligada até o módulo da assinatura de documentos ser
-// montado na API migrada; a vigia da notificação do crítico só roda na memória (no banco, o modelo da notificação por
-// conta do portal ainda falta: OPERACOES_PENDENTES).
+// A fila de assinatura remota (M49) usa o serviço dos documentos do módulo assinatura (global), quando montado.
+// Pendência registrada: a vigia da notificação do crítico só roda na memória (com SADT_VIGIA_CRITICOS=sintetica, nos
+// estabelecimentos sintéticos, como a vigia do SADT); no banco, o modelo da notificação por conta do portal ainda falta
+// (OPERACOES_PENDENTES).
 // Melhoria: o contexto do núcleo por id (cliente, estabelecimento e usuário) em toda leitura e gravação.
 import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
+import { lerEstabelecimentosSinteticos } from '../acesso/estabelecimentos-sinteticos.js';
+import {
+  CONFIG_ASSINATURA_ICP,
+  type ConfigServicoAssinatura,
+  SERVICO_ASSINATURA_ICP,
+  SERVICO_DOCUMENTOS_ICP,
+  type ServicoAssinaturaDocumentos,
+  type ServicoAssinaturaIcp,
+} from '../assinatura/public-api.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import type { PortaCirurgia } from '../cirurgia/public-api.js';
 import { PORTA_CIRURGIA } from '../cirurgia/public-api.js';
@@ -24,6 +34,7 @@ import type { ContextoModulo } from '../registro.js';
 import { PORTA_REPASSE, type PortaRepasse, ServicoRepasse } from '../repasse/public-api.js';
 import { PORTA_SADT, type PortaSadt, SERVICO_PORTAL, type ServicoPortal } from '../sadt/public-api.js';
 import { PortaSadtMemoria } from '../sadt/porta-memoria.js';
+import { retornoDoPortalMedico } from './aplicacao/assinatura-remota.js';
 import { canalMedicoDoAmbiente } from './aplicacao/canal.js';
 import { ServicoPortalMedico } from './aplicacao/servico.js';
 import { PORTA_PORTAL_MEDICO, type PortaPortalMedico } from './porta.js';
@@ -97,6 +108,9 @@ export async function moduloPortalMedico(
           documentos: ServicoDocumentos | undefined,
           prescricao: PortaPrescricao | undefined,
           worklist: PortaWorklist | undefined,
+          documentosIcp: ServicoAssinaturaDocumentos | undefined,
+          icp: ServicoAssinaturaIcp | undefined,
+          cfgIcp: ConfigServicoAssinatura | undefined,
         ) => {
           const fonte = configuracao ?? null;
           const s = new ServicoPortalMedico(
@@ -113,7 +127,24 @@ export async function moduloPortalMedico(
             documentos && prescricao && worklist
               ? new ServicoWorklistMedico(documentos, prescricao, worklist)
               : null;
-          s.hospitaisAvisoCritico = porta.destino === 'memoria' ? (opcoes.hospitaisAvisoCritico ?? []) : [];
+          // W0-10 (M6): a fila de assinatura remota pelo serviço dos documentos (M49), com o redirect_uri do portal.
+          s.assinatura =
+            documentosIcp && icp && cfgIcp
+              ? {
+                  retorno: retornoDoPortalMedico(cfgIcp.retorno),
+                  fila: (x) => documentosIcp.fila(x),
+                  prepararLote: (x, e) => documentosIcp.prepararLote(x, e),
+                  pedir: (x, e, r) => documentosIcp.pedir(x, e, r),
+                  concluir: (x, q, r) => icp.retornoPsc(x, q, r),
+                }
+              : null;
+          // W0-10 (M5): na memória, onde roda a vigia do valor crítico do SADT (SADT_VIGIA_CRITICOS=sintetica).
+          const vigiaSintetica =
+            fontesSinteticas(ctx.env) && ctx.env['SADT_VIGIA_CRITICOS'] === 'sintetica'
+              ? lerEstabelecimentosSinteticos(ctx.env).map((e) => e.codigo)
+              : [];
+          s.hospitaisAvisoCritico =
+            porta.destino === 'memoria' ? (opcoes.hospitaisAvisoCritico ?? vigiaSintetica) : [];
           s.iniciarAvisosCriticos();
           return s;
         },
@@ -127,6 +158,9 @@ export async function moduloPortalMedico(
           { token: SERVICO_DOCUMENTOS, optional: true },
           { token: PORTA_PRESCRICAO, optional: true },
           { token: PORTA_WORKLIST, optional: true },
+          { token: SERVICO_DOCUMENTOS_ICP, optional: true },
+          { token: SERVICO_ASSINATURA_ICP, optional: true },
+          { token: CONFIG_ASSINATURA_ICP, optional: true },
         ],
       },
     ],

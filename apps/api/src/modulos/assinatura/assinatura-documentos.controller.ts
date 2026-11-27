@@ -70,6 +70,7 @@ import {
   ARMAZEM_PDF_ICP,
   CONFIG_DOCUMENTOS_ICP,
   FONTE_CONTEUDO_ICP,
+  SERVICO_DOCUMENTOS_ICP,
   SERVICO_ASSINATURA_ICP,
 } from './simbolos.js';
 
@@ -116,9 +117,12 @@ export class AssinaturaDocumentosController implements OnApplicationBootstrap, O
     @Optional() @Inject(ARMAZEM_PDF_ICP) armazem: ArmazemPdfIcp | null = null,
     @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
+    // O serviço do módulo (o mesmo da fila do portal do médico externo); sem ele (testes), um próprio.
+    @Optional() @Inject(SERVICO_DOCUMENTOS_ICP) servico: ServicoAssinaturaDocumentos | null = null,
   ) {
-    const lib = new LiberacaoPep(configuracao, cache);
-    this.servico = new ServicoAssinaturaDocumentos(icp, porta, fonte, armazem, lib, cfg);
+    this.servico =
+      servico ??
+      new ServicoAssinaturaDocumentos(icp, porta, fonte, armazem, new LiberacaoPep(configuracao, cache), cfg);
   }
 
   // ── Agendador (regra 5) ───────────────────────────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import { randomBytes } from 'node:crypto';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { chaveMestra } from '@sgh/dominio-acesso';
 import { fontesSinteticas } from '../../sessao/montar.js';
+import { lerEstabelecimentosSinteticos } from '../acesso/estabelecimentos-sinteticos.js';
 import { AvisosAtendimento } from '../atendimento/public-api.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import {
@@ -109,6 +110,9 @@ export async function portasDoSadt(ctx: ContextoModulo): Promise<{ sadt: PortaSa
 /** Os códigos dos estabelecimentos ativos do cliente (a vigia percorre cada um). */
 async function estabelecimentosAtivos(ctx: ContextoModulo): Promise<string[]> {
   const cliente = ctx.configuracao.clientePadrao;
+  // Na fonte sintética (memória), os estabelecimentos sintéticos do ambiente (ESTABELECIMENTOS), os da sessão.
+  if (!ctx.nucleo && fontesSinteticas(ctx.env))
+    return lerEstabelecimentosSinteticos(ctx.env).map((e) => e.codigo);
   if (!ctx.nucleo || !cliente) return [];
   const linhas = await ctx.nucleo.lerSomente({ cliente, correlacao: 'sadt-estabelecimentos' }, (l) =>
     l.consultar<{ codigo: string }>(
