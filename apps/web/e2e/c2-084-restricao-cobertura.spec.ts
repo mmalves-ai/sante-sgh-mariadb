@@ -235,7 +235,7 @@ test.describe('restrição de cobertura e compatibilidade @C2-084', () => {
 
   test('sem banco próprio: 503 explicado na tela', async ({ page }) => {
     await simular(page, { restricoes: [], excecoes: [], gravados: [] }, true);
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.CONTAS');
     await page.goto('/faturamento/cobertura');
     await expect(page.getByTestId('cobertura')).toContainText('banco próprio');
     await expect(page.getByTestId('cob-restricoes')).toHaveCount(0);
