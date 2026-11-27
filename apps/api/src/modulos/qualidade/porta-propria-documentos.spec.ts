@@ -1,7 +1,12 @@
 // Regra pura da publicação de revisão no banco próprio (porta-propria-documentos.ts): a substituição só da revisão
 // vigente do mesmo código na versão lida, nada de segunda vigente e nada de número de revisão repetido.
 import { describe, expect, it } from 'vitest';
-import { conferirSubstituicao, escolherSetor, type RevisaoTravada } from './porta-propria-documentos.js';
+import {
+  conferirRetirada,
+  conferirSubstituicao,
+  escolherSetor,
+  type RevisaoTravada,
+} from './porta-propria-documentos.js';
 
 const vigente: RevisaoTravada = { id: 7, versao: 2, documento: 3, codigo: 'POP-1', situacao: 'vigente' };
 const base = {
@@ -82,5 +87,23 @@ describe('escolherSetor', () => {
       ]),
     ).toBe('ambigua');
     expect(escolherSetor([])).toBe('inexistente');
+  });
+});
+
+describe('conferirRetirada', () => {
+  const pedido = { versao: 4, motivo: 'Substituído pelo protocolo novo.' };
+  it('aceita a revisão vigente na versão lida, com motivo', () => {
+    expect(conferirRetirada({ versao: 4, situacao: 'vigente' }, pedido)).toBeNull();
+  });
+  it('recusa a revisão inexistente ou de outro estabelecimento (não lida), desatualizada, obsoleta ou já retirada', () => {
+    expect(conferirRetirada(null, pedido)).toBe('revisao-invalida');
+    expect(conferirRetirada({ versao: 3, situacao: 'vigente' }, pedido)).toBe('revisao-invalida');
+    expect(conferirRetirada({ versao: 4, situacao: 'obsoleta' }, pedido)).toBe('revisao-invalida');
+    expect(conferirRetirada({ versao: 4, situacao: 'cancelada' }, pedido)).toBe('revisao-invalida');
+  });
+  it('recusa a retirada sem motivo escrito', () => {
+    expect(conferirRetirada({ versao: 4, situacao: 'vigente' }, { versao: 4, motivo: '   ' })).toBe(
+      'sem-motivo',
+    );
   });
 });

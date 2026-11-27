@@ -78,6 +78,19 @@ export function escolherSetor(
   return c.length === 1 ? c[0]!.id : 'ambigua';
 }
 
+/**
+ * Confere a retirada contra a revisão travada: só a revisão vigente, na versão lida e com motivo escrito sai de uso
+ * (a obsoleta, a já retirada ou a de outro estabelecimento, que não é lida, nunca). Devolve o motivo da recusa (null:
+ * pode retirar).
+ */
+export function conferirRetirada(
+  v: { readonly versao: number; readonly situacao: string } | null,
+  pedido: { readonly versao: number; readonly motivo: string },
+): 'revisao-invalida' | 'sem-motivo' | null {
+  if (!v || v.versao !== pedido.versao || v.situacao !== 'vigente') return 'revisao-invalida';
+  return pedido.motivo.trim() ? null : 'sem-motivo';
+}
+
 const SQL_REVISAO = `
   SELECT v.id, v.versao, v.situacao, v.documento_qualidade_id AS documento, d.codigo, d.versao AS versao_documento
     FROM documento_qualidade_versao v
@@ -220,7 +233,7 @@ export function gravacoesDocumentos(tx: TxOperacao, est: number): GravacoesDocum
 
     retirarDocumento: async (r) => {
       const [v] = await tx.consultarParaAtualizar<Linha>(SQL_REVISAO, [r.id, est], { teto: 1 });
-      if (!v || n(v['versao']) !== r.versao || texto(v['situacao']) !== 'vigente')
+      if (conferirRetirada(v ? { versao: n(v['versao']), situacao: texto(v['situacao']) } : null, r))
         throw recusaVersaoGestao('O documento');
       const usuario = await exigirUsuario(tx, r.usuario);
       const versao = await tx.alterar('documento_qualidade_versao', r.id, r.versao, {
