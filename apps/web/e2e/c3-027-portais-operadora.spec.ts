@@ -2,9 +2,9 @@
 // /api/operadora/portais e /api/portal-operadora exigem o banco próprio, e o E2E roda com a fonte sintética (sem
 // núcleo); por isso as respostas são simuladas pelo Playwright com massa SINTÉTICA. O que se prova é a tela: a
 // operadora ativa a conta só com os termos aceitos, bloqueia com motivo, decide a solicitação com a versão lida e
-// processa o lote de exclusão; o beneficiário vê o cartão digital, abre a solicitação de segunda via sem mandar o
-// titular e cancela a aberta. O efeito no banco está no contrato de efeito
-// (apps/api/src/modulos/operadora/portais-operadora-propria.int.spec.ts).
+// processa o lote de exclusão; o beneficiário vê o cartão digital, escolhe o motivo da exclusão nas opções do portal
+// (envio travado sem a data), abre a solicitação de segunda via sem mandar o titular e cancela a aberta. O efeito
+// no banco está no contrato de efeito (apps/api/src/modulos/operadora/portais-operadora-propria.int.spec.ts).
 import { expect, type Page, type Route, test } from '@playwright/test';
 import { semViolacaoAxe } from './ajuda.js';
 import { escolher } from './combos.js';
@@ -197,6 +197,11 @@ test.describe('C3-027 portais da operadora @C3-027', () => {
             valido: true,
           });
         if (url.pathname.endsWith('/solicitacoes')) return json(r, { itens: lista });
+        if (url.pathname.endsWith('/beneficiario/opcoes'))
+          return json(r, {
+            motivosExclusao: [{ id: 7, codigo: 'SINT-EXC', descricao: 'Mudança sintética' }],
+            contratos: [],
+          });
         return json(r, { itens: [] });
       }
       pedidos.push({ caminho: url.pathname, corpo: req.postDataJSON() as Record<string, unknown> });
@@ -214,6 +219,10 @@ test.describe('C3-027 portais da operadora @C3-027', () => {
     await expect(page.getByTestId('portal-cartao-dados')).toContainText('M-SINT-1');
     await expect(page.getByTestId('portal-cartao-validade')).toBeVisible();
 
+    await expect(page.getByTestId('portal-nova-enviar')).toBeDisabled();
+    // exclusão: o motivo vem das opções do portal; sem a data de efeito o envio segue travado
+    await escolher(page.getByTestId('portal-nova-tipo'), 'exclusao_beneficiario');
+    await escolher(page.getByTestId('portal-nova-motivo'), '7');
     await expect(page.getByTestId('portal-nova-enviar')).toBeDisabled();
     await escolher(page.getByTestId('portal-nova-tipo'), 'segunda_via_cartao');
     await page.getByTestId('portal-nova-enviar').click();
