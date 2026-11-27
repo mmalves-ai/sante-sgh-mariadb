@@ -65,6 +65,7 @@ test.describe('Autoliberação de resultados @C2-058 @fase7', () => {
       if (req.method() === 'GET') {
         if (caminho === 'fila') return json(rota, fila);
         if (caminho === 'principios') return json(rota, []);
+        if (caminho === 'amostra') return json(rota, []);
         return json(rota, { regras, limitesDelta, interferentes, opcoes });
       }
       const corpo = (req.postDataJSON() ?? {}) as Record<string, unknown>;

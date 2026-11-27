@@ -527,6 +527,26 @@ export class ServicoAutoliberacao {
     return linhas.map((p) => ({ id: n(p['id']), nome: String(p['descricao']) }));
   }
 
+  /**
+   * Condições da amostra (substância interferente sem princípio ativo, ativa) cadastradas para o exame: a bancada as
+   * aponta na digitação (hemólise, lipemia, icterícia) e a avaliação da regra as recebe em `interferentesAmostra`.
+   */
+  async interferentesDaAmostra(c: ContextoSadt, exame: number) {
+    const linhas = await this.nucleo.lerSomente(this.ctxNucleo(c), (l) =>
+      l.consultar(
+        `SELECT id, substancia, efeito, bloqueia_autoliberacao FROM substancia_interferente
+          WHERE exame_id = ? AND principio_ativo_id IS NULL AND ativo = TRUE ORDER BY substancia, id LIMIT 50`,
+        [exame],
+      ),
+    );
+    return linhas.map((i) => ({
+      id: n(i['id']),
+      substancia: String(i['substancia']),
+      efeito: String(i['efeito']),
+      bloqueia: Boolean(i['bloqueia_autoliberacao']),
+    }));
+  }
+
   async incluirRegra(c: ContextoSadt, e: z.infer<typeof esquemaRegraAutoliberacao>) {
     this.est(c);
     return this.gravar(c, 'sadt.autoliberacao.regra.incluir', 'regra_autoliberacao', async (tx) => {

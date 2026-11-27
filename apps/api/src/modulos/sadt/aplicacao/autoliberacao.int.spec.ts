@@ -192,6 +192,13 @@ describe.skipIf(SEM_BANCO)('autoliberação do resultado (MariaDB, cliente f22_o
       mensagem: null,
       bloqueia: true,
     });
+    // A digitação lista só as condições da amostra do exame (sem princípio ativo, ativas).
+    expect(await autolib.interferentesDaAmostra(c, m!.exameLab)).toContainEqual({
+      id: hemolise.id,
+      substancia: 'Hemólise',
+      efeito: 'variavel',
+      bloqueia: true,
+    });
     await resultados.registrar(c, m!.itemLab2, {
       valores: [{ analito: an, numero: 25 }],
       interferentesAmostra: [hemolise.id],

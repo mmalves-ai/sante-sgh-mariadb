@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import { listarCondicoesDaAmostra } from '../api-autoliberacao.js';
 import { digitarResultado } from '../api-resultado.js';
 import { lerDigitacao, listarExamesSadt, novaChave } from '../api-sadt.js';
 import AvisoSadt from '../componentes/AvisoSadt.vue';
@@ -45,6 +46,19 @@ watch(aberto, (novo, antigo) => {
 const valores = ref<Record<number, string>>({});
 const variaveis = ref<Record<number, string>>({});
 const observacao = ref('');
+// Condição da amostra (05-SADT linha 11): o que a bancada viu (hemólise, lipemia) vai para a autoliberação. Sem
+// cadastro para o exame (ou sem o banco do cliente), o campo não aparece.
+const exameDoCatalogo = computed(() => ficha.data.value?.exame.exame.id ?? null);
+const condicoes = useQuery({
+  queryKey: computed(() => ['sadt', 'autoliberacao', 'amostra', exameDoCatalogo.value]),
+  queryFn: () => listarCondicoesDaAmostra(exameDoCatalogo.value as number),
+  enabled: computed(() => exameDoCatalogo.value !== null),
+  retry: false,
+});
+const amostra = ref<number[]>([]);
+watch(aberto, () => {
+  amostra.value = [];
+});
 watch(
   () => ficha.data.value,
   (f) => {
@@ -153,6 +167,7 @@ async function gravar(): Promise<void> {
         elementos,
         observacao: observacao.value.trim(),
         variaveis: variaveisDigitadas(variaveis.value),
+        interferentesAmostra: amostra.value,
       },
       novaChave('digitar'),
     );
@@ -321,6 +336,18 @@ async function gravar(): Promise<void> {
         data-testid="digitacao-texto-padrao"
         @update:model-value="inserirTexto"
       />
+      <fieldset
+        v-if="condicoes.data.value?.length && !ficha.data.value.bloqueado"
+        class="campo"
+        data-testid="digitacao-amostra"
+      >
+        <legend>{{ t('sadt.autoliberacao.amostra.rotulo') }}</legend>
+        <p class="secundario">{{ t('sadt.autoliberacao.amostra.ajuda') }}</p>
+        <label v-for="c in condicoes.data.value" :key="c.id">
+          <input v-model="amostra" type="checkbox" :value="c.id" :data-testid="`digitacao-amostra-${c.id}`" />
+          {{ c.substancia }}
+        </label>
+      </fieldset>
       <span class="campo">
         <label for="digitacao-obs">{{ t('sadt.observacao') }}</label>
         <textarea id="digitacao-obs" v-model="observacao" rows="2" :disabled="ficha.data.value.bloqueado" />

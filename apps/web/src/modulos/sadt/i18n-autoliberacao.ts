@@ -3,6 +3,10 @@ export const mensagensAutoliberacao = {
   titulo: 'Autoliberação de resultados',
   explicacao:
     'Desligada por padrão: só os exames com regra ativa são avaliados. Crítico, variação acima do limite contra o resultado anterior do paciente, substância interferente e curva incompleta vão para a conferência do responsável técnico.',
+  amostra: {
+    rotulo: 'Condição da amostra',
+    ajuda: 'Aponte o que a bancada viu na amostra: a autoliberação retém o resultado para conferência.',
+  },
   abas: { fila: 'Conferência', regras: 'Regras', deltas: 'Delta check', interferentes: 'Interferentes' },
   fila: {
     vazia: 'Nenhum resultado retido para conferência.',

@@ -3,6 +3,7 @@
 //   GET  /api/sadt/autoliberacao/fila                    retidos para a conferência do responsável técnico
 //   GET  /api/sadt/autoliberacao                         regras com condições, limites de delta, interferentes
 //   GET  /api/sadt/autoliberacao/principios?busca=       medicamento interferente pelo princípio ativo
+//   GET  /api/sadt/autoliberacao/amostra?exame=          condições da amostra do exame, para a digitação apontar
 //   POST /api/sadt/autoliberacao/regras                  inclui uma regra (condições conferidas pelo domínio)
 //   POST /api/sadt/autoliberacao/limites-delta           inclui um limite de delta do estabelecimento
 //   POST /api/sadt/autoliberacao/interferentes           inclui uma substância interferente
@@ -46,6 +47,13 @@ export class AutoliberacaoController {
   @Permissao('sadt.catalogo.ler')
   listar(@Req() req: RequisicaoAutorizada) {
     return this.s.listar(sessaoDe(req).porta);
+  }
+
+  /** As condições da amostra que a bancada pode apontar na digitação do exame (catálogo do exame). */
+  @Get('amostra')
+  @Permissao('sadt.resultado.ler')
+  amostra(@Query('exame') exame: string | undefined, @Req() req: RequisicaoAutorizada) {
+    return this.s.interferentesDaAmostra(sessaoDe(req).porta, idDaRota(String(exame ?? '')));
   }
 
   @Get('principios')

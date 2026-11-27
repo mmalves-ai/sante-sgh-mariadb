@@ -160,3 +160,10 @@ export const desativarCadastroAutoliberacao = (
 const esquemaLiberado = z.object({ resultado: n, exame: n, situacao: txt }).passthrough();
 export const liberarRetido = (exameItem: number, chave: string) =>
   enviar(`/api/sadt/exames-pedidos/${exameItem}/resultado/liberar`, {}, esquemaLiberado, chave);
+
+/** Condições da amostra cadastradas para o exame (hemólise, lipemia...), que a bancada aponta na digitação. */
+export const listarCondicoesDaAmostra = (exame: number) =>
+  ler(
+    `${B}/amostra?exame=${exame}`,
+    z.array(z.object({ id: n, substancia: txt, efeito: txt, bloqueia: z.boolean() })),
+  );

@@ -68,6 +68,8 @@ export function digitarResultado(
     elementos: readonly ValorDaTela[];
     observacao: string;
     variaveis: readonly { codigo: number; valor: number }[];
+    /** Condições da amostra apontadas pela bancada (avaliadas pela autoliberação). */
+    interferentesAmostra?: readonly number[];
   },
   chave: string,
 ): Promise<GravacaoResultado> {
@@ -76,6 +78,7 @@ export function digitarResultado(
     {
       valores: valoresDoBanco(e.elementos),
       ...(e.observacao ? { observacao: e.observacao } : {}),
+      ...(e.interferentesAmostra?.length ? { interferentesAmostra: e.interferentesAmostra } : {}),
       ...(e.variaveis.length
         ? { variaveis: e.variaveis.map((v) => ({ variavel: v.codigo, valor: v.valor })) }
         : {}),
