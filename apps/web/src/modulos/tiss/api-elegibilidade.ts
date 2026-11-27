@@ -1,4 +1,5 @@
 // Cliente da consulta de elegibilidade (F3.9, 08-INTG L128 (31)): visão por paciente, consulta e resposta da operadora.
+import { type EstadoIntegracaoNaFuncao, esquemaEstadoIntegracaoNaFuncao } from '@sgh/contratos';
 import { z } from 'zod';
 import { enviar, ler } from '../exames/api-exames.js';
 
@@ -51,3 +52,9 @@ export const responderElegibilidade = (id: number, corpo: unknown) =>
 /** C2-070: lê o retorno do serviço web da operadora e grava a resposta (na fila, nada muda). */
 export const lerRetornoElegibilidade = (id: number) =>
   enviar(`${E}/${id}/retorno`, {}, resultado, chave('retorno'));
+
+// Decisão 53: o estado da troca com a operadora na central de integrações externas (selo e avisos da tela).
+export const URL_TRANSPORTE_ELEGIBILIDADE = `${E}/transporte`;
+export const URL_TRANSPORTE_COMUNICACAO = '/api/internacao/comunicacoes-operadora/transporte';
+export const lerTransporteTiss = (url: string): Promise<EstadoIntegracaoNaFuncao> =>
+  ler(url, esquemaEstadoIntegracaoNaFuncao);

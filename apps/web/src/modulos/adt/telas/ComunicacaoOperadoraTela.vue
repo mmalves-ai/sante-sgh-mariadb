@@ -31,6 +31,8 @@ import {
   transicaoComunicacao,
   transmitirComunicacao,
 } from '../api-leitos-sus.js';
+import EstadoTransporteTiss from '../../tiss/componentes/EstadoTransporteTiss.vue';
+import { URL_TRANSPORTE_COMUNICACAO } from '../../tiss/api-elegibilidade.js';
 import ErroAdt from '../componentes/ErroAdt.vue';
 
 const props = defineProps<{ reg: string }>();
@@ -118,6 +120,7 @@ const verMensagem = async (c: Comunicacao) => {
   <section class="tela-agenda" aria-labelledby="com-op-titulo" data-testid="tela-comunicacao-operadora">
     <h1 id="com-op-titulo">{{ t('adt.leitosSus.comunicacao.titulo') }}</h1>
     <p>{{ t('adt.leitosSus.comunicacao.texto') }}</p>
+    <EstadoTransporteTiss :url="URL_TRANSPORTE_COMUNICACAO" />
     <ErroAdt v-if="lista.isError.value" :erro="lista.error.value" />
     <ErroAdt v-if="erro" :erro="erro" />
     <ul v-if="avisos.length" class="problemas" data-testid="com-op-problemas">

@@ -16,7 +16,9 @@ import {
   lerElegibilidade,
   lerRetornoElegibilidade,
   responderElegibilidade,
+  URL_TRANSPORTE_ELEGIBILIDADE,
 } from '../api-elegibilidade.js';
+import EstadoTransporteTiss from '../componentes/EstadoTransporteTiss.vue';
 
 type Situacao = 'elegivel' | 'inelegivel' | 'erro' | 'sem_resposta';
 const { t } = useI18n();
@@ -103,6 +105,7 @@ if (pacienteTexto.value) void abrir();
   <section class="elegibilidade" data-testid="elegibilidade" aria-labelledby="eleg-titulo">
     <h1 id="eleg-titulo">{{ k('titulo') }}</h1>
     <p>{{ k('texto') }}</p>
+    <EstadoTransporteTiss :url="URL_TRANSPORTE_ELEGIBILIDADE" />
     <form class="linha" @submit.prevent="abrir">
       <SanteCampoTexto
         v-model="pacienteTexto"

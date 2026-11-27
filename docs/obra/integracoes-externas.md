@@ -56,5 +56,12 @@ lote), `pix`, `esocial`, `nfse`, `equipamentos-laboratorio`, `sus-webservices`, 
   catálogo são aceitos). Nunca volta à tela: o painel diz só "definida" ou não.
 - Ligar o real exige a senha de novo e justificativa (trilha). Fora de produção grava, a tela avisa "neutralizado neste
   ambiente" e o adaptador segue no simulador (AGENTS.md, regra 6).
-- `TRANSPORTE_TISS_PRODUCAO_CONFIGURADO` e `provedorPixDoAmbiente` são anteriores à central: a função dona de cada um
-  passa a decidir pela central (`modoDaIntegracao`) e deixa a constante e a variável de ambiente só como trava extra.
+- `provedorPixDoAmbiente` é anterior à central: a função dona passa a decidir pela central (`modoDaIntegracao`) e deixa
+  a variável de ambiente só como trava extra.
+- Operadora TISS (`operadora-tiss-webservice`, C2-070, C1-108 e C3-007): a elegibilidade e a comunicação de internação
+  e alta perguntam à central por `transporteTissDaCentral` (`apps/api/src/modulos/tiss/transporte-tiss.ts`), que a tela
+  da elegibilidade e a das comunicações leem em `GET .../transporte` (selo "Simulador", real neutralizado, aviso do
+  fornecedor). O simulador do worker (`destinoFalsoTiss`) responde pelo simulador comum do domínio (`respostaSimulada`):
+  aceite com protocolo, recusa com motivo e erro de transporte. O real depende da definição do webservice de cada
+  operadora: `TRANSPORTE_TISS_REAL_ESCRITO` fica `false` e, em produção, nada sai (registro à mão) até a equipe de
+  desenvolvimento receber a definição e escrever o cliente SOAP.

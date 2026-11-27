@@ -8,6 +8,7 @@
 // A marcação é infraestrutura da fila, como no relay: transação curta condicionada à situação 'enviada' (dois
 // transmissores não respondem duas vezes), sem trilha própria. Log só com ids, códigos e contagens.
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { respostaSimulada } from '@sgh/dominio-integracao';
 import { lerInteiroAmbiente, NucleoProprio } from '@sgh/nucleo';
 import { clientesDoWorker } from './clientes-worker.js';
 import { logger } from './logger.js';
@@ -27,18 +28,50 @@ export interface MensagemTiss {
 /** O destino devolve o recibo (JSON no formato que o domínio lê) ou lança em falha de transporte. */
 export type DestinoTiss = (m: MensagemTiss) => Promise<Record<string, unknown>>;
 
-/**
- * Destino falso (fora de produção): nenhuma rede. A elegibilidade volta elegível com um código de validação sintético; a
- * comunicação volta aceita com um protocolo sintético. O mesmo caminho da produção, com o recibo previsível.
- */
-export const destinoFalsoTiss: DestinoTiss = (m) =>
-  Promise.resolve(
-    m.ponto === 'tiss.elegibilidade'
-      ? { elegivel: true, codigoValidacao: `FALSO${m.id}`.slice(0, 20) }
-      : { aceita: true, protocolo: `FALSO${m.id}`.slice(0, 50) },
-  );
+/** A entrada da central de integrações externas (decisão 53) que este transmissor serve. */
+export const INTEGRACAO_OPERADORA_TISS = 'operadora-tiss-webservice';
 
-/** O destino do ambiente: o falso fora de produção; em produção, o transporte configurado ou nenhum. */
+/** A chave do simulador: a mesma mensagem dá sempre a mesma resposta. */
+export const chaveSimuladorTiss = (m: Pick<MensagemTiss, 'id' | 'ponto'>): string => `${m.ponto}:${m.id}`;
+
+/**
+ * O recibo do simulador pelo contrato do serviço da operadora (simulador comum do domínio, `respostaSimulada`): aceite
+ * (elegível com código de validação; comunicação aceita com protocolo), recusa (inelegível ou recusada, com motivo) e
+ * erro de transporte (lança, e a mensagem vira 'erro' com o código).
+ */
+export function reciboSimuladoTiss(ponto: PontoTransmissorTiss, chave: string): Record<string, unknown> {
+  const r = respostaSimulada(INTEGRACAO_OPERADORA_TISS, chave);
+  if (r.tipo === 'erro-transporte') {
+    const e = new Error(r.mensagem);
+    e.name = 'SimuladorSemResposta';
+    throw e;
+  }
+  if (ponto === 'tiss.elegibilidade')
+    return r.tipo === 'aceite'
+      ? { elegivel: true, codigoValidacao: r.protocolo.slice(0, 20) }
+      : { elegivel: false, motivo: `${r.codigo}: ${r.mensagem}` };
+  return r.tipo === 'aceite'
+    ? { aceita: true, protocolo: r.protocolo.slice(0, 50) }
+    : { aceita: false, motivo: `${r.codigo}: ${r.mensagem}` };
+}
+
+/**
+ * Destino falso (fora de produção): o simulador da central, nenhuma rede. O mesmo caminho da produção, com o recibo
+ * previsível.
+ */
+export const destinoFalsoTiss: DestinoTiss = (m) => {
+  try {
+    return Promise.resolve(reciboSimuladoTiss(m.ponto, chaveSimuladorTiss(m)));
+  } catch (e) {
+    return Promise.reject(e instanceof Error ? e : new Error('simulador'));
+  }
+};
+
+/**
+ * O destino do ambiente: o simulador fora de produção; em produção, o transporte real ou nenhum. O real depende da
+ * definição do webservice de cada operadora (aviso na central): até ele ser escrito, nenhum, e a API (que pergunta à
+ * central por transporteTissDaCentral) também não põe nada na outbox em produção.
+ */
 export function destinoDoAmbiente(
   env: NodeJS.ProcessEnv,
   transporteProducao: DestinoTiss | null = null,

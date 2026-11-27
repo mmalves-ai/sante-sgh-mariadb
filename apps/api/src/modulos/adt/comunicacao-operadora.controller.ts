@@ -27,6 +27,7 @@ import {
   PORTA_COMUNICACAO_OPERADORA,
   type PortaComunicacaoOperadoraPropria,
 } from './comunicacao-operadora-propria.js';
+import { transporteTissDaCentral } from '../tiss/transporte-tiss.js';
 
 export const PERMISSOES_COMUNICACAO_OPERADORA = {
   ler: 'internacao.internacao.ler',
@@ -51,6 +52,13 @@ export class ComunicacaoOperadoraController {
     return fn(this.porta, s.porta).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
+  }
+
+  /** Decisão 53: estado da central (operadora-tiss-webservice) para o selo e os avisos; responde sem o banco próprio. */
+  @Get('transporte')
+  @Permissao(PERMISSOES_COMUNICACAO_OPERADORA.ler)
+  transporte() {
+    return transporteTissDaCentral();
   }
 
   @Get('internacoes/:int')

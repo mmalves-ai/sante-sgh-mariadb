@@ -42,4 +42,16 @@ export const mensagensElegibilidade = {
   motivoNegativa: 'Motivo da negativa',
   registrar: 'Registrar a resposta',
   respondida: 'Resposta registrada.',
+  // Decisão 53: estado da troca com a operadora na central de integrações externas (operadora-tiss-webservice).
+  transporte: {
+    rotulo: 'Troca on-line com a operadora',
+    selo: 'Simulador',
+    seloReal: 'Real',
+    simulador:
+      'A troca com a operadora está no simulador (Administração > Integrações externas): as respostas são de treino e nada sai do hospital.',
+    neutralizado: 'O modo real está ligado, mas fica neutralizado neste ambiente: responde o simulador.',
+    semEnvio: 'Neste ambiente nada é enviado à operadora: registre a resposta à mão.',
+    fornecedor:
+      'O envio real depende da definição do webservice de cada operadora: passe a definição à equipe de desenvolvimento. Peça à operadora:',
+  },
 };

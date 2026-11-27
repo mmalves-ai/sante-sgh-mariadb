@@ -2,6 +2,7 @@
 //   GET  /api/tiss/elegibilidade/pacientes/:paciente     coberturas com a última elegibilidade e as consultas (visão por paciente)
 //   POST /api/tiss/elegibilidade                         { cobertura, atendimento? } registra a consulta (ou devolve a do dia)
 //   POST /api/tiss/elegibilidade/:id/resposta            { situacao, motivoNegativa?, motivoGlosa?, codigoValidacao?, versao }
+//   GET  /api/tiss/elegibilidade/transporte              estado da central (operadora-tiss-webservice): selo e avisos; sem banco
 //   POST /api/tiss/elegibilidade/:id/retorno             lê o retorno do serviço web da operadora e grava (C2-070)
 // Tudo ligado para todos; quem consulta e registra a resposta é decidido pelas permissões do cargo.
 import {
@@ -21,6 +22,7 @@ import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
 import { PORTA_ELEGIBILIDADE, type PortaElegibilidadePropria } from './elegibilidade-propria.js';
+import { transporteTissDaCentral } from './transporte-tiss.js';
 
 export const PERMISSOES_ELEGIBILIDADE = {
   ler: 'atendimento.atendimento.ler',
@@ -41,6 +43,13 @@ export class ElegibilidadeController {
     return fn(this.porta, sessaoDe(req).porta).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
+  }
+
+  /** Decisão 53: a tela mostra o selo "Simulador" e o aviso do fornecedor; responde também sem o banco próprio. */
+  @Get('transporte')
+  @Permissao(PERMISSOES_ELEGIBILIDADE.ler)
+  transporte() {
+    return transporteTissDaCentral();
   }
 
   @Get('pacientes/:paciente')

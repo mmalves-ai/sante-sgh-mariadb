@@ -23,7 +23,15 @@ import {
   destinoDoAmbiente,
   destinoFalsoTiss,
   type DestinoTiss,
+  type PontoTransmissorTiss,
+  reciboSimuladoTiss,
 } from './transmissor-tiss.service.js';
+
+/** O protocolo (ou código de validação) que o simulador da central dá à mensagem. */
+const protocoloSimulado = (ponto: PontoTransmissorTiss, id: number): string => {
+  const r = reciboSimuladoTiss(ponto, `${ponto}:${id}`);
+  return String(r['protocolo'] ?? r['codigoValidacao']);
+};
 
 describe.skipIf(SEM_BANCO)('transmissor TISS pelo serviço web (contrato de efeito)', () => {
   let nucleo: NucleoProprio;
@@ -94,7 +102,7 @@ describe.skipIf(SEM_BANCO)('transmissor TISS pelo serviço web (contrato de efei
       situacao: 'elegivel',
       motivoNegativa: null,
       motivoGlosa: null,
-      codigoValidacao: `FALSO${id['elegibilidade']}`,
+      codigoValidacao: protocoloSimulado('tiss.elegibilidade', id['elegibilidade']!).slice(0, 20),
     });
 
     const com = await linha(id['comunicacao']!);
@@ -106,7 +114,11 @@ describe.skipIf(SEM_BANCO)('transmissor TISS pelo serviço web (contrato de efei
         resposta: String(com?.['resposta']),
         erro: null,
       }).retorno,
-    ).toEqual({ acao: 'confirmar', protocolo: `FALSO${id['comunicacao']}`, resposta: null });
+    ).toEqual({
+      acao: 'confirmar',
+      protocolo: protocoloSimulado('tiss.comunicacao_beneficiario', id['comunicacao']!),
+      resposta: null,
+    });
 
     const falha = await linha(id['falha']!);
     expect(falha).toMatchObject({

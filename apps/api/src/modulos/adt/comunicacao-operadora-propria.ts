@@ -55,7 +55,7 @@ import {
   recusaRegra,
   txtOuNull,
 } from '../../porta-estabelecimento-propria.js';
-import { transporteTissDoAmbiente } from '../tiss/transporte-tiss.js';
+import { transporteTissDaCentral } from '../tiss/transporte-tiss.js';
 
 export const PORTA_COMUNICACAO_OPERADORA = Symbol('PORTA_COMUNICACAO_OPERADORA');
 
@@ -400,7 +400,7 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
           situacao: String(r['situacao']) as SituacaoComunicacaoOperadora,
           tipo,
           servicoWeb: servico !== null,
-          transporte: transporteTissDoAmbiente(),
+          transporte: (await transporteTissDaCentral()).transmite,
         });
         if (p.length) throw recusaRegra('Envio recusado', p);
         const m = await this.montar(tx, id, est.id);
@@ -499,7 +499,9 @@ export class PortaComunicacaoOperadoraPropria extends PortaEstabelecimentoPropri
           existentes,
         });
         const servico =
-          devidas.length && transporteTissDoAmbiente() ? await servicoWebDaFonte(tx, est.id, d.fonte) : null;
+          devidas.length && (await transporteTissDaCentral()).transmite
+            ? await servicoWebDaFonte(tx, est.id, d.fonte)
+            : null;
         const geradas: { id: number; tipo: string; situacao: string }[] = [];
         for (const tipo of devidas) {
           const id = await tx.incluir('comunicacao_internacao_operadora', {

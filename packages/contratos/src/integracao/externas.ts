@@ -401,3 +401,23 @@ export const esquemaResultadoIntegracaoExterna: z.ZodType<ResultadoIntegracaoExt
   integracao: esquemaIntegracaoExternaLida,
   neutralizado: z.boolean(),
 });
+
+/**
+ * O estado da integração na tela da função que a usa (decisão 53): o selo "Simulador", o aviso de real neutralizado
+ * fora de produção e, quando o real depende da definição do fornecedor, o aviso para passá-la à equipe de
+ * desenvolvimento. `transmite`: a função entrega pela integração agora; sem isso, o registro é à mão.
+ */
+export interface EstadoIntegracaoNaFuncao {
+  readonly integracao: string;
+  readonly modo: ModoIntegracaoExterna;
+  readonly neutralizado: boolean;
+  readonly transmite: boolean;
+  readonly dependeDefinicaoFornecedor: boolean;
+}
+export const esquemaEstadoIntegracaoNaFuncao: z.ZodType<EstadoIntegracaoNaFuncao> = z.object({
+  integracao: z.string(),
+  modo: z.enum(MODOS_INTEGRACAO_EXTERNA),
+  neutralizado: z.boolean(),
+  transmite: z.boolean(),
+  dependeDefinicaoFornecedor: z.boolean(),
+});

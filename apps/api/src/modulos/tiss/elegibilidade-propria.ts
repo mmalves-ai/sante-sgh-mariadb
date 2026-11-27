@@ -13,7 +13,7 @@
 //     pendente com integracao_mensagem_id; fora de produção o transmissor usa destino falso (regra 6);
 //   - retorno (C2-070): lê a mensagem ligada; na fila, nada muda; o recibo vira a resposta pela mesma gravação da
 //     resposta à mão (situação, motivo, código de validação e a última elegibilidade da cobertura).
-import { transporteTissDoAmbiente } from './transporte-tiss.js';
+import { transporteTissDaCentral } from './transporte-tiss.js';
 import {
   conferirPedidoElegibilidade,
   conferirRespostaElegibilidade,
@@ -245,7 +245,7 @@ export class PortaElegibilidadePropria extends PortaEstabelecimentoPropria {
             situacao: 'pendente',
             jaEnviada: false,
             servicoWeb: servico !== null,
-            transporte: transporteTissDoAmbiente(),
+            transporte: (await transporteTissDaCentral()).transmite,
           }).length === 0;
         if (enviada) {
           const mensagem = await gravarOutbox(tx, {
