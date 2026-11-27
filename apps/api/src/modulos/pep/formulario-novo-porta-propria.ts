@@ -205,8 +205,8 @@ export function definicaoDaVersaoMigrada(m: {
   const titulo = cortar(m.titulo, LIMITES_FORMULARIO_NOVO.titulo);
   const tituloModelo = titulo.length >= 3 ? titulo : `Modelo ${m.codigo}`;
   const tipo = doBanco(m.tipoRegistro);
-  const tipoRegistro =
-    (TIPOS_REGISTRO_FORMULARIO_NOVO as readonly string[]).find((t) => t === tipo) ?? 'evolucao';
+  const tipoRegistro: (typeof TIPOS_REGISTRO_FORMULARIO_NOVO)[number] =
+    TIPOS_REGISTRO_FORMULARIO_NOVO.find((t) => t === tipo) ?? 'evolucao';
   const ids = new Set(m.campos.map((c) => c.id));
   const filhos = new Map<number | null, CampoMigrado[]>();
   for (const c of m.campos) {
