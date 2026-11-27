@@ -21,7 +21,7 @@ async function entrar(page: Page, login: string): Promise<void> {
 const linhaCom = (page: Page, tabela: string, texto: string) =>
   page.getByTestId(tabela).locator('tbody tr', { hasText: texto });
 
-test.describe('financeiro: adiantamento @F3.8 @F3.8-04', () => {
+test.describe('financeiro: adiantamento @F3.8 @F3.8-04 @jornada', () => {
   test.setTimeout(300_000);
 
   test('pedir → aprovar → pagar → compensar só o título aprovado → devolver; título pago e movimento; axe', async ({

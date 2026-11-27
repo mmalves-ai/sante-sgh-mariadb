@@ -38,7 +38,7 @@ async function cadastrarAparelho(page: Page, tipo: 'totem' | 'painel', nome: str
   return new URL(texto).pathname + new URL(texto).hash;
 }
 
-test.describe('Recepção, senhas, totens e painéis @M19 @fase2 @jornada', () => {
+test.describe('Recepção, senhas, totens e painéis @M19 @fase2', () => {
   test.setTimeout(150_000);
   test.beforeAll(() => rmSync(POR_FORA, { force: true }));
   test.afterAll(() => rmSync(POR_FORA, { force: true }));
