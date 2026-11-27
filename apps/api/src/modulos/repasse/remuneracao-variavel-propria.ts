@@ -62,7 +62,7 @@ const dataTexto = (v: unknown): string | null =>
       : String(v).slice(0, 10);
 const cent = (v: unknown): number => Math.round(Number(v ?? 0) * 100);
 
-const esquemaMinimo = z
+export const esquemaMinimo = z
   .object({
     profissional: id,
     valorMinimo: z.number().positive(),
@@ -73,7 +73,7 @@ const esquemaMinimo = z
   })
   .strict();
 
-const esquemaFixo = z
+export const esquemaFixo = z
   .object({
     profissional: id,
     descricao: z.string().trim().min(1).max(150),
@@ -123,7 +123,7 @@ const esquemaApurado = z
   })
   .strict();
 
-const esquemaEncerrar = z.object({ versao, fim: data }).strict();
+export const esquemaEncerrar = z.object({ versao, fim: data }).strict();
 
 export const TIPOS_REGRA_VARIAVEL = ['minimo', 'fixo', 'resultado', 'meta'] as const;
 export type TipoRegraVariavel = (typeof TIPOS_REGRA_VARIAVEL)[number];

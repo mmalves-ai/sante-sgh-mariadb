@@ -104,6 +104,29 @@ async function medicoLivre(
   return null;
 }
 
+/** Sem médico livre: cadastra o favorecido próprio de um médico da busca de prestadores que ainda não tem nenhum. */
+async function favorecerSintetico(
+  api: APIRequestContext,
+  de: string,
+  ate: string,
+): Promise<{ profissional: number; nome: string } | null> {
+  const fav = await api.get('/api/repasse/favorecidos');
+  if (!fav.ok()) return null;
+  const comFavorecido = new Set(
+    ((await fav.json()) as { itens: Favorecido[] }).itens.map((f) => f.profissional),
+  );
+  const r = await api.get('/api/repasse/prestadores?termo=SINTETICO');
+  if (!r.ok()) return null;
+  for (const p of (await r.json()) as { prestador: number }[]) {
+    if (comFavorecido.has(p.prestador)) continue;
+    const novo = await api.post('/api/repasse/favorecidos', {
+      data: { profissional: p.prestador, tipo: 'proprio_profissional', inicio: de },
+    });
+    if (novo.ok()) return medicoLivre(api, de, ate);
+  }
+  return null;
+}
+
 test.describe('valor fixo mensal e mínimo garantido do repasse @C2-100', () => {
   test.setTimeout(180_000);
 
@@ -124,7 +147,10 @@ test.describe('valor fixo mensal e mínimo garantido do repasse @C2-100', () => 
     test.skip(!evento, 'Sem evento de rendimento no cliente do E2E.');
     const de = `${apuracao!.competencia.slice(0, 7)}-01`;
     const ate = ultimoDia(de);
-    const medico = await medicoLivre(page.request, de, ate);
+    // Fonte sintética (sem banco próprio, como no CI): sem favorecido próprio cadastrado, o teste cadastra o do médico
+    // sintético pela API (o analista do repasse edita favorecidos) antes de procurar o médico livre.
+    const medico =
+      (await medicoLivre(page.request, de, ate)) ?? (await favorecerSintetico(page.request, de, ate));
     test.skip(
       medico === null,
       'Sem médico com favorecido próprio vigente e sem fixo nem mínimo na competência da apuração.',

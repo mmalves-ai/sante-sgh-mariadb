@@ -22,6 +22,7 @@ import { PORTA_FAVORECIDOS_REPASSE, PortaFavorecidosRepassePropria } from './fav
 import { PortaFavorecidosRepasseMemoria } from './favorecidos-memoria.js';
 import { FONTE_FISCAL_REPASSE, fonteFiscalRepasse } from './fonte-fiscal.js';
 import { RemuneracaoVariavelController } from './remuneracao-variavel.controller.js';
+import { PortaRemuneracaoVariavelMemoria } from './remuneracao-variavel-memoria.js';
 import { VariavelFaixaController } from './variavel-faixa.controller.js';
 import { RateioCustoController } from './rateio-custo.controller.js';
 import { PORTA_RATEIO_CUSTO_REPASSE, PortaRateioCustoRepassePropria } from './rateio-custo-propria.js';
@@ -114,7 +115,11 @@ export async function moduloRepasse(
         : []),
       // Na fonte sintética (E2E, sem banco do cliente), os favorecidos ficam na porta em memória.
       ...(!ctx.nucleo && fontesSinteticas(ctx.env)
-        ? [{ provide: PORTA_FAVORECIDOS_REPASSE, useValue: new PortaFavorecidosRepasseMemoria() }]
+        ? [
+            { provide: PORTA_FAVORECIDOS_REPASSE, useValue: new PortaFavorecidosRepasseMemoria() },
+            // Valor fixo e mínimo garantido (C2-100) na porta em memória da fonte sintética.
+            { provide: PORTA_REMUNERACAO_VARIAVEL, useValue: new PortaRemuneracaoVariavelMemoria() },
+          ]
         : []),
       { provide: PORTA_REPASSE, useValue: porta },
       { provide: GERADOR_PDF_REPASSE, useValue: geradorPdf },

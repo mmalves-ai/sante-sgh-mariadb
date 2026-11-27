@@ -25,10 +25,10 @@ import {
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
+import type { PortaRemuneracaoVariavel } from './remuneracao-variavel-memoria.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
 import {
   PORTA_REMUNERACAO_VARIAVEL,
-  type PortaRemuneracaoVariavelPropria,
   TIPOS_REGRA_VARIAVEL,
   type TipoRegraVariavel,
 } from './remuneracao-variavel-propria.js';
@@ -53,12 +53,12 @@ export class RemuneracaoVariavelController {
   constructor(
     @Optional()
     @Inject(PORTA_REMUNERACAO_VARIAVEL)
-    private readonly porta: PortaRemuneracaoVariavelPropria | null = null,
+    private readonly porta: PortaRemuneracaoVariavel | null = null,
   ) {}
 
   private async com<T>(
     req: RequisicaoAutorizada,
-    fn: (p: PortaRemuneracaoVariavelPropria, c: ReturnType<typeof sessaoDe>['porta']) => Promise<T>,
+    fn: (p: PortaRemuneracaoVariavel, c: ReturnType<typeof sessaoDe>['porta']) => Promise<T>,
   ) {
     if (!this.porta) throw new ErroProblema('indisponivel', 503, 'Recurso sem banco próprio neste ambiente');
     const s = sessaoDe(req);
