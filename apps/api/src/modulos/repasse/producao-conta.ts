@@ -10,10 +10,13 @@ import {
   sincronizarProducaoDaConta as sincronizarNaPorta,
 } from '@sgh/dominio-repasse';
 import { definirOperacao, type ContextoOperacao, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
-import { portaProducaoConta, TABELAS_PRODUCAO_CONTA } from '@sgh/persistencia';
+import { portaProducaoConta, TABELAS_PRODUCAO_CONTA as TABELAS_DA_PORTA } from '@sgh/persistencia';
 import { z } from 'zod';
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
+import { publicarFatosDoRepasse } from './fato-contabil-repasse.js';
 
-export { TABELAS_PRODUCAO_CONTA };
+/** As tabelas da sincronização, mais as do fato contábil do crédito de glosa revertida (C2-093). */
+export const TABELAS_PRODUCAO_CONTA: readonly string[] = [...TABELAS_DA_PORTA, ...TABELAS_PUBLICACAO_FATO];
 export type { ResumoProducaoConta };
 
 /**
@@ -25,7 +28,23 @@ export function sincronizarProducaoDaConta(
   d: { readonly conta: number; readonly itens?: readonly number[]; readonly evento: EventoProducao },
   ctx: Pick<ContextoOperacao, 'estabelecimento' | 'usuario'>,
 ): Promise<ResumoProducaoConta> {
-  return sincronizarNaPorta(portaProducaoConta(tx, ctx), d);
+  return comFatoDosCreditos(tx, ctx, (porta) => sincronizarNaPorta(porta, d));
+}
+
+/**
+ * Roda a sincronização na porta e publica, na mesma transação, o fato `repasse` dos créditos de glosa revertida que ela
+ * lançou (C2-093; ADR 0003). O lançamento do crédito é um `lancamento_repasse` de ajuste, positivo.
+ */
+async function comFatoDosCreditos<R>(
+  tx: TxOperacao,
+  ctx: Pick<ContextoOperacao, 'estabelecimento' | 'usuario'>,
+  sincronizar: (porta: ReturnType<typeof portaProducaoConta>) => Promise<R>,
+): Promise<R> {
+  const porta = portaProducaoConta(tx, ctx);
+  const r = await sincronizar(porta);
+  if (porta.creditosLancados.length > 0 && ctx.estabelecimento !== null)
+    await publicarFatosDoRepasse(tx, ctx.estabelecimento, porta.creditosLancados);
+  return r;
 }
 
 /**
@@ -37,7 +56,7 @@ export function sincronizarGlosaDoItem(
   d: { readonly conta: number; readonly item: number },
   ctx: Pick<ContextoOperacao, 'estabelecimento' | 'usuario'>,
 ): Promise<ResumoProducaoConta & { readonly glosado: number }> {
-  return sincronizarGlosaNaPorta(portaProducaoConta(tx, ctx), d);
+  return comFatoDosCreditos(tx, ctx, (porta) => sincronizarGlosaNaPorta(porta, d));
 }
 
 export const esquemaSincronizarProducaoConta = z

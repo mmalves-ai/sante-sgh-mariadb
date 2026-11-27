@@ -2,7 +2,9 @@
 // `repasse` (custo do honorário a pagar ao profissional) e o estorno do lançamento estorna o fato. O estorno do repasse
 // pode ser parcial; o fato estorna sempre o efeito inteiro, então o estorno parcial estorna o fato vivo e publica o saldo
 // ainda não estornado do original como fato novo, na data do estorno (o original fica, o estorno aponta para ele). O
-// lançamento negativo que não é estorno (desconto no repasse) publica o fato `descontoRepasse` pelo valor absoluto.
+// lançamento de desconto publica o fato `descontoRepasse` pelo valor absoluto: o banco grava o lançamento que não é
+// estorno sempre positivo (ck_lancamento_repasse_estorno), e o desconto é o do evento de natureza `desconto` (a parte
+// negativa da faixa, por exemplo); o valor negativo que não é estorno também conta como desconto.
 import { estornarFatosDaOrigem, publicarFatos } from '../contabil/publicacao-fato.js';
 import type { TxOperacao } from '@sgh/nucleo';
 
@@ -11,8 +13,8 @@ const ENTIDADE = 'lancamento_repasse';
 const dataIso = (v: unknown): string =>
   v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '').slice(0, 10);
 const centavosDe = (v: unknown): number => Math.round(Number(v ?? 0) * 100);
-const tipoDoValor = (centavos: number) =>
-  centavos < 0 ? ('descontoRepasse' as const) : ('repasse' as const);
+const tipoDoValor = (centavos: number, natureza: unknown) =>
+  centavos < 0 || natureza === 'desconto' ? ('descontoRepasse' as const) : ('repasse' as const);
 
 /** Publica o fato de cada lançamento gravado agora (os ids da mesma transação); o estorno, o estorno do fato e o saldo. */
 export async function publicarFatosDoRepasse(
@@ -24,8 +26,9 @@ export async function publicarFatosDoRepasse(
   const marcas = lancamentos.map(() => '?').join(',');
   const linhas = await tx.consultar(
     `SELECT l.id, l.valor, l.data_lancamento, l.tipo_lancamento, l.tipo_favorecido, l.evento_repasse_id,
-            l.estornado_lancamento_repasse_id AS original
+            l.estornado_lancamento_repasse_id AS original, ev.natureza
        FROM lancamento_repasse l
+       LEFT JOIN evento_repasse ev ON ev.id = l.evento_repasse_id
       WHERE l.estabelecimento_id = ? AND l.id IN (${marcas}) AND l.excluido_em IS NULL
       ORDER BY l.id`,
     [estabelecimento, ...lancamentos],
@@ -37,7 +40,7 @@ export async function publicarFatosDoRepasse(
       const centavos = centavosDe(l['valor']);
       await publicarFatos(tx, estabelecimento, [
         {
-          tipo: tipoDoValor(centavos),
+          tipo: tipoDoValor(centavos, l['natureza']),
           entidade: ENTIDADE,
           entidadeId: id,
           data,
@@ -64,6 +67,7 @@ export async function publicarFatosDoRepasse(
     );
     const o = await tx.uma(
       `SELECT l.valor, l.tipo_lancamento, l.tipo_favorecido, l.evento_repasse_id,
+              (SELECT ev.natureza FROM evento_repasse ev WHERE ev.id = l.evento_repasse_id) AS natureza,
               (SELECT COALESCE(SUM(-x.valor), 0) FROM lancamento_repasse x
                 WHERE x.estornado_lancamento_repasse_id = l.id AND x.excluido_em IS NULL AND x.situacao <> 'cancelado')
                 AS estornado
@@ -76,7 +80,7 @@ export async function publicarFatosDoRepasse(
     const saldo = centavosDe(o['valor']) - centavosDe(o['estornado']);
     await publicarFatos(tx, estabelecimento, [
       {
-        tipo: tipoDoValor(saldo),
+        tipo: tipoDoValor(saldo, o['natureza']),
         entidade: ENTIDADE,
         entidadeId: original,
         data,

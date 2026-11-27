@@ -52,7 +52,9 @@ import type {
 } from '@sgh/contratos';
 import { ErroOperacao, recusa, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
 import { civil, FUSO_PADRAO, instanteCivil } from '../exames/relogio.js';
+import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import { lancadorContaEstoque, TABELAS_CONTA_ESTOQUE } from '../suprimentos/conta-estoque.js';
+import { publicarFatoDoMovimento } from '../suprimentos/fato-contabil-estoque.js';
 import { consumirEtiquetas } from '../suprimentos/etiqueta-identificacao.js';
 import type { ExtrasGravacaoFarmacia } from './gravador-avaliacao.js';
 import type { GravadorSghFarmacia } from './porta.js';
@@ -100,6 +102,8 @@ export const TABELAS_DISPENSACAO = [
   'envio_controlado_nacional_item',
   // Motor estoque → conta: a saída ao paciente lança o item na conta; a devolução e o cancelamento o estornam.
   ...TABELAS_CONTA_ESTOQUE.filter((t) => t !== 'movimento_estoque'),
+  // C2-093: a saída ao paciente e a perda publicam o fato `saidaEstoque`; o cancelamento (estorno) o estorna.
+  ...TABELAS_PUBLICACAO_FATO,
 ] as const;
 
 /** Situação da entrega ao setor (modelo) ↔ número do contrato das telas (7 dispensada, 8 entregue, 9 estornada). */
@@ -402,6 +406,19 @@ export function gravadorDispensacao(
       usuario_id: usuario,
       faturavel: m.natureza === 'consumo_paciente',
       ...m.refs,
+    });
+    // C2-093 (ADR 0003): o fato contábil do movimento na mesma transação (regra comum do estoque).
+    const estorno = m.refs['estorno_movimento_estoque_id'];
+    const centro = m.refs['centro_custo_id'];
+    await publicarFatoDoMovimento(tx, est, {
+      id,
+      natureza: m.sentido,
+      valor: Math.round(q * custo * 100) / 100,
+      hoje: await hoje(),
+      tipoMovimento: tipo,
+      insumo: m.insumo.id,
+      centroCusto: typeof centro === 'number' ? centro : null,
+      estorno: typeof estorno === 'number' ? estorno : null,
     });
     return { id, custo, tipo };
   };

@@ -355,6 +355,19 @@ describe.skipIf(SEM_BANCO)('remuneração variável por faixa e equipe (MariaDB)
       Number(a?.['valor_descontos']),
       Number(a?.['valor_liquido']),
     ]).toEqual([2380, 30, 2350]);
+    // C2-093: cada parte publica o fato do lançamento; o acréscimo é `repasse`, a parte de desconto `descontoRepasse`.
+    const fatos = await um(
+      `SELECT COUNT(*) AS n, SUM(ev.codigo = 'repasse') AS repasses, SUM(ev.codigo = 'descontoRepasse') AS descontos,
+              SUM(CASE WHEN ev.codigo = 'descontoRepasse' THEN f.valor ELSE 0 END) AS desconto
+         FROM fato_contabil f JOIN evento_contabil ev ON ev.id = f.evento_contabil_id
+         JOIN lancamento_repasse l ON l.id = f.entidade_origem_id
+        WHERE f.entidade_origem = 'lancamento_repasse' AND l.apuracao_repasse_id = ? AND f.excluido_em IS NULL`,
+      [ids.set],
+    );
+    expect([Number(fatos?.['n']), Number(fatos?.['repasses']), Number(fatos?.['descontos'])]).toEqual([
+      4, 3, 1,
+    ]);
+    expect(Number(fatos?.['desconto'])).toBe(30);
     const deNovo = await porta.lancar(c(), ids.set);
     expect(deNovo.lancamentos).toBe(0);
     expect(

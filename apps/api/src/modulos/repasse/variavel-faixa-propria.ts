@@ -884,9 +884,9 @@ export class PortaVariavelFaixaPropria extends PortaEstabelecimentoPropria {
               observacao: `${s.memoria}${r.equipe !== null ? ` Cota ${pt.cota}% da equipe ${s.beneficiario}.` : ''}`,
               situacao: 'aberto',
             });
-            // C2-093: a parte grava o valor sem sinal; só o crédito publica o fato `repasse` (a parte negativa
-            // gravada sem sinal viraria crédito no fato: fica pendente na ficha).
-            if (pt.valor > 0) await publicarFatosDoRepasse(tx, est.id, [lanc]);
+            // C2-093: a parte grava o valor positivo (o banco só aceita estorno negativo); o acréscimo publica o fato
+            // `repasse` e a parte negativa, com o evento de desconto, publica `descontoRepasse` (pela natureza do evento).
+            await publicarFatosDoRepasse(tx, est.id, [lanc]);
             lancamentos += 1;
             if (pt.valor > 0) credito += cents;
             else debito += cents;

@@ -264,7 +264,13 @@ export function portaProducaoConta(
     });
   };
 
+  // C2-093: os créditos de glosa revertida lançados nesta porta (ids de lancamento_repasse). Quem chama publica o fato
+  // contábil `repasse` deles na mesma transação (a regra do fato é do @sgh/dominio-contabil, que a infraestrutura não
+  // importa): a API, em repasse/producao-conta.ts.
+  const creditosLancados: number[] = [];
+
   return {
+    creditosLancados,
     async travarConta(id: number) {
       // A trava da conta põe em fila as sincronizações da mesma conta (lançamento, fechamento, glosa, a operação
       // própria): a chave única da produção aceita NULL no prestador e no tipo de lançamento e não barra a duplicata.
@@ -585,7 +591,7 @@ export function portaProducaoConta(
         [c.producao],
       );
       if (!o) return false;
-      await tx.incluir('lancamento_repasse', {
+      const credito = await tx.incluir('lancamento_repasse', {
         estabelecimento_id: est,
         favorecido_repasse_id: n(o['favorecido_repasse_id']),
         tipo_favorecido: texto(o['tipo_favorecido']),
@@ -601,6 +607,7 @@ export function portaProducaoConta(
         justificativa:
           'Glosa revertida depois que o débito do repasse já foi descontado numa apuração conferida.',
       });
+      creditosLancados.push(credito);
       return true;
     },
   };
