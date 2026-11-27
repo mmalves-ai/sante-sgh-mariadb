@@ -179,11 +179,12 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
           [checklist, seq, cod, `Item sintético ${cod}`, hoje],
         );
       // Segundo checklist: itens sem código (a tela os mostra como item1 e item2), o primeiro com peso 3 e sem aceitar
-      // "não se aplica"; o segundo com o peso padrão.
+      // "não se aplica"; o segundo com o peso padrão. Fica sem comissão dona (como os já carregados sem dono): a chave
+      // única uq_modelo_checklist_qualidade_comissao_finalidade admite um só checklist por comissão e finalidade.
       const modelo2 = await e.inserir(
         `INSERT INTO modelo_checklist_qualidade (codigo, nome, finalidade, comissao_hospitalar_id, situacao, criado_em)
-         VALUES (?, 'Checklist sintético RP sem código', 'revisao_prontuario', ?, 'publicado', ?)`,
-        [`SRQ${NUM}`, comissao, hoje],
+         VALUES (?, 'Checklist sintético RP sem código', 'revisao_prontuario', NULL, 'publicado', ?)`,
+        [`SRQ${NUM}`, hoje],
       );
       const checklist2 = await e.inserir(
         `INSERT INTO modelo_checklist_qualidade_versao (modelo_checklist_qualidade_id, operacao, ocorrido_em, numero_versao,
@@ -221,6 +222,9 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
         );
       const ativo = await sorteio('2026-10-01', false);
       const cancelado = await sorteio('2026-09-01', true);
+      // Sorteio próprio da revisão do outro estabelecimento: a chave única uq_revisao_prontuario_sorteio_atendimento
+      // admite um atendimento uma vez por sorteio (o at2 já está no sorteio ativo).
+      const ativoOutro = await sorteio('2026-08-01', false);
       const rev = (s: number, at: number, ck = checklist, est = m.est) =>
         e.inserir(
           `INSERT INTO revisao_prontuario (estabelecimento_id, comissao_hospitalar_id, sorteio_revisao_prontuario_id,
@@ -245,7 +249,7 @@ describe.skipIf(SEM_BANCO_QUA)(`revisão do prontuário no banco próprio (${CLI
         p2: await rev(ativo, at2),
         pCancelado: await rev(cancelado, at1),
         p3: await rev(ativo, at3, checklist2),
-        pOutro: await rev(ativo, at2, checklist, m.outro),
+        pOutro: await rev(ativoOutro, at2, checklist, m.outro),
       };
     });
   });
