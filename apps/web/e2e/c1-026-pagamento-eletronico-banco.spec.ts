@@ -55,6 +55,9 @@ test.describe('financeiro: pagamento eletrônico no banco do cliente, ciclo comp
   }) => {
     const externas = vigiarExternas(page);
 
+    // 0. O administrador liga o contas a pagar (o cliente descartável nasce com ele em consulta).
+    await ligarContasPagar(page);
+
     // 1. Cadastro de credores: conta e chave Pix do profissional, pela tela.
     await entrar(page, 'SINT.FIN.CREDOR');
     const sonda = await page.request.get(`${PE}/bancos`);
@@ -87,8 +90,7 @@ test.describe('financeiro: pagamento eletrônico no banco do cliente, ciclo comp
     // A chave volta mascarada (nunca o valor inteiro na lista).
     await expect(page.getByTestId('pe-contas')).not.toContainText('529.982.247-25');
 
-    // 2. O título a pagar do profissional, lançado por quem lança (não por quem paga), com o contas a pagar ligado.
-    await ligarContasPagar(page);
+    // 2. O título a pagar do profissional, lançado por quem lança (não por quem paga).
     await entrar(page, 'SINT.FIN.LANCA');
     const csrf = (await page.context().cookies()).find((c) => c.name === 'sgh_csrf')?.value ?? '';
     const documento = 260_000 + Math.floor(Math.random() * 90_000);
