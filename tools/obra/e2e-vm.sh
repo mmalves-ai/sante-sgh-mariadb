@@ -118,9 +118,7 @@ if [[ $BANCO -eq 1 ]]; then
   MSENHA="$(grep '^MARIADB_SENHA=' "$RAIZ/.env" | cut -d= -f2-)"
   [[ -n "$MSENHA" ]] || { echo "e2e-vm: --banco sem MARIADB_SENHA no .env" >&2; exit 2; }
   ( umask 077; printf 'MARIADB_SENHA=%s\n' "$MSENHA" > "$AMB_BANCO" )
-  MARIADB_SENHA="$MSENHA" python3 -I "$RAIZ/tools/obra/e2e_banco.py" criar "$WT" "$SUF" \
-    || { echo "e2e-vm: criar o cliente descartável falhou" >&2; exit 1; }
-fi
+fi  # o cliente é criado na rodada, depois da instalação (o catálogo de ações roda o gerador em Node da árvore)
 
 # Ambiente mínimo do job do ci.yml (sem .env; nada herdado da sessão). As diferenças para o ci.yml são só as da VM:
 # E2E_PORTAS (portas de teste, filas com prefixo próprio), E2E_WORKER=completo (o mesmo worker do `pnpm dev`) e o teto
@@ -143,9 +141,12 @@ LOG="$BASE/ultimo.log"
 MARCA="$BASE/memoria-baixa"
 rm -f "$MARCA"
 rodada() {
-  echo "e2e-vm: commit ${SHA:0:8}, portas web:api $PORTAS, banco: $([[ " ${E[*]} " == *" SGH_NUCLEO_SEM_BANCO=1 "* ]] && echo nenhum || echo descartável), argumentos: $*"
+  echo "e2e-vm: commit ${SHA:0:8}, portas web:api $PORTAS, banco: $([[ $BANCO -eq 1 ]] && echo "cliente_e2e_$SUF" || echo nenhum), argumentos: $*"
   cd "$WT" && "${E[@]}" ./pnpm install --frozen-lockfile --prefer-offline --store-dir "$RAIZ/.pnpm-store" >"$BASE/instalar.log" 2>&1 \
     || { echo "e2e-vm: instalar falhou (ver $BASE/instalar.log)"; exit 1; }
+  if [[ $BANCO -eq 1 ]]; then
+    "${E[@]}" python3 -I "$RAIZ/tools/obra/e2e_banco.py" criar "$WT" "$SUF" || { echo "e2e-vm: criar o cliente descartável falhou"; exit 1; }
+  fi
   # Build antes do Playwright (25/11): o webServer tem 240 s e o build passava esse tempo esperando vaga do limite-vm
   # (máx. 3 comandos pesados na VM, disputados com os construtores). Com o build pronto, o api:serve só reaproveita o cache.
   "${E[@]}" ./pnpm exec nx run-many -t build -p api web --output-style=static >"$BASE/build.log" 2>&1 \
@@ -153,7 +154,7 @@ rodada() {
   exec "${E[@]}" nice -n 10 ./node_modules/.bin/playwright test -c apps/web/playwright.config.ts "$@"
 }
 # A rodada num grupo de processos próprio (setsid): o vigia encerra o grupo inteiro (playwright, nx, api, web, worker).
-setsid bash -c "$(declare -f rodada); $(declare -p E SHA PORTAS WT BASE RAIZ); rodada \"\$@\"" rodada "$@" > >(tee "$LOG") 2>&1 &
+setsid bash -c "$(declare -f rodada); $(declare -p E SHA PORTAS WT BASE RAIZ BANCO SUF); rodada \"\$@\"" rodada "$@" > >(tee "$LOG") 2>&1 &
 PID=$!
 vigia() {
   while kill -0 "$PID" 2>/dev/null; do

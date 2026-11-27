@@ -8,7 +8,7 @@ sintéticos. Os nomes têm prefixo fixo e só eles são criados ou apagados (o a
                             (900000 + posição em CONTAS_SINTETICAS), e refaz as numerações dos estabelecimentos.
   apagar <arvore> <sufixo>  DROP só de cliente_e2e_<sufixo> e plataforma_e2e_<sufixo>, conferido o prefixo.
 
-A senha do MariaDB vem de MARIADB_SENHA (o e2e-vm.sh a passa; nunca impressa). Espelho padrão da base: E2E_ESPELHO
+A senha do MariaDB vem de MARIADB_SENHA ou do arquivo SGH_ARQUIVO_AMBIENTE (o e2e-vm.sh o grava; nunca impressa). Espelho padrão da base: E2E_ESPELHO
 (padrão: nenhum, para não copiar ~0,8 GB a cada rodada; o cliente nasce sem catálogos, com aviso).
 uso: python3 -I tools/obra/e2e_banco.py criar <arvore> <sufixo> | apagar <arvore> <sufixo>
 """
@@ -83,6 +83,11 @@ def modulo(arvore, nome):
 
 def criar(arvore, sufixo):
     cliente, plataforma = nomes(sufixo)
+    arq = os.environ.get("SGH_ARQUIVO_AMBIENTE", "")
+    if not os.environ.get("MARIADB_SENHA") and arq and Path(arq).is_file():  # o arquivo 600 que o e2e-vm.sh grava
+        for linha in Path(arq).read_text(encoding="utf-8").splitlines():
+            if linha.startswith("MARIADB_SENHA="):
+                os.environ["MARIADB_SENHA"] = linha.split("=", 1)[1]
     if not os.environ.get("MARIADB_SENHA"):
         raise SystemExit("e2e_banco: MARIADB_SENHA ausente no ambiente")
     apagar(arvore, sufixo)  # sobra de rodada interrompida (SIGKILL) com o mesmo commit
