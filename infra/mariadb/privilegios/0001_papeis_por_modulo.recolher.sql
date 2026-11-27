@@ -4390,6 +4390,7 @@ REVOKE SELECT, INSERT, UPDATE ON ordem_manipulacao_insumo FROM sgh_mod_supriment
 REVOKE SELECT, INSERT, UPDATE ON ordem_unitarizacao FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON ordem_unitarizacao_item FROM sgh_mod_suprimentos;
 REVOKE SELECT ON origem_lancamento FROM sgh_mod_suprimentos;
+REVOKE SELECT ON origem_recurso_compra FROM sgh_mod_suprimentos;
 REVOKE SELECT ON paciente FROM sgh_mod_suprimentos;
 REVOKE SELECT ON padrao_leitura_codigo FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON parametro_reposicao FROM sgh_mod_suprimentos;
@@ -4441,6 +4442,9 @@ REVOKE SELECT ON servico_contratavel FROM sgh_mod_suprimentos;
 REVOKE SELECT ON setor_funcional FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON sla_contrato FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON solicitacao_cadastro_insumo FROM sgh_mod_suprimentos;
+REVOKE SELECT, INSERT ON solicitacao_compra FROM sgh_mod_suprimentos;
+REVOKE SELECT, INSERT ON solicitacao_compra_fonte_recurso FROM sgh_mod_suprimentos;
+REVOKE SELECT, INSERT ON solicitacao_compra_item FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON solicitacao_opme FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON solicitacao_opme_item FROM sgh_mod_suprimentos;
 REVOKE SELECT ON subgrupo_insumo FROM sgh_mod_suprimentos;
