@@ -89,6 +89,7 @@ import {
 } from '../faturamento/conta-entrada.js';
 import { lancarItem } from '../faturamento/operacoes.js';
 import { conferirCredenciamentoNoFluxo } from '../precos/credenciamento-fluxo.js';
+import { conferirDocumentosExigidos } from '../pep/obrigatoriedade-documento-propria.js';
 import { conferirRegraDoPlanoNaAbertura } from './regra-plano-propria.js';
 import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
 import { gravarImpressoEmitido, lerFichasDoAtendimento } from './regras-impressao.js';
@@ -1426,6 +1427,14 @@ const OPERACAO_ENCERRAR = definirOperacao({
         );
     }
     const agora = new Date();
+    // Documento exigido pela regra "bloquear" (C2-028): recusa com o motivo antes de encerrar.
+    await conferirDocumentosExigidos(
+      tx,
+      Number(tx.contexto.estabelecimento),
+      a.id,
+      d.atoMedico ? ['alta', 'fechamento_atendimento'] : ['fechamento_atendimento'],
+      agora,
+    );
     await mudarSituacao(
       tx,
       a,

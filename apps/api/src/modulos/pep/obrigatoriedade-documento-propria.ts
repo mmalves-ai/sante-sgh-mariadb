@@ -18,6 +18,9 @@
 // Regra de negócio no domínio (@sgh/dominio-pep), nenhuma em gatilho. SQL parametrizado, no estabelecimento da sessão.
 import {
   type AtendimentoAvaliado,
+  bloqueiosDoPasso,
+  motivoDoBloqueio,
+  type PassoBloqueavel,
   type DocumentoDoAtendimento,
   EXIGENCIAS_OBRIGATORIEDADE,
   MOMENTOS_OBRIGATORIEDADE,
@@ -220,6 +223,7 @@ async function lerPendencias(
   regras: readonly RegraObrigatoriedade[],
   filtro: { readonly atendimento?: number },
   agora: Date,
+  passos?: readonly PassoBloqueavel[],
 ): Promise<AtendimentoComPendencias[]> {
   // Na lista: os abertos e os encerrados há até DIAS_ENCERRADO_NA_LISTA dias (a alta e o fechamento vencem depois).
   const desde = new Date(agora.getTime() - DIAS_ENCERRADO_NA_LISTA * 86_400_000);
@@ -287,9 +291,43 @@ async function lerPendencias(
       prontuario: txtOuNull(r['numero_prontuario']),
       setor,
       setorNome: setor === null ? null : (setores.get(setor) ?? null),
-      pendencias: pendenciasObrigatorias(regras, avaliado, docsPor.get(at) ?? [], agora),
+      pendencias: passos
+        ? bloqueiosDoPasso(regras, avaliado, docsPor.get(at) ?? [], passos, agora)
+        : pendenciasObrigatorias(regras, avaliado, docsPor.get(at) ?? [], agora),
     };
   });
+}
+
+/**
+ * A regra "bloquear" na operação (C2-028): chamada dentro da transação da alta médica e do fechamento do atendimento,
+ * recusa (422 documento-exigido-pendente) com o motivo quando falta documento exigido pelo passo ou já vencido. Sem
+ * regra ativa no estabelecimento, nada é lido além das regras.
+ */
+export async function conferirDocumentosExigidos(
+  l: Leitor,
+  est: number,
+  atendimento: number,
+  passos: readonly PassoBloqueavel[],
+  agora: Date,
+): Promise<void> {
+  const regras = (await lerRegras(l, est, ' AND r.ativo')).filter((r) => r.exigencia === 'bloquear');
+  if (!regras.length) return;
+  const [a] = await lerPendencias(l, est, regras, { atendimento }, agora, passos);
+  if (!a?.pendencias.length) return;
+  throw new ErroOperacao(
+    422,
+    'documento-exigido-pendente',
+    'Documento exigido pendente',
+    motivoDoBloqueio(a.pendencias),
+    {
+      pendencias: a.pendencias.map((p) => ({
+        regra: p.regra,
+        modelo: p.modelo,
+        titulo: p.titulo,
+        momento: p.momento,
+      })),
+    },
+  );
 }
 
 export class PortaObrigatoriedadeDocumentoPropria extends PortaEstabelecimentoPropria {

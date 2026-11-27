@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Documentos exigidos por diagnóstico, idade ou setor (C2-028, 03-PEP L132). Aba "Pendências": a lista do
 // profissional, por paciente, com os atendimentos abertos em que falta documento exigido pela regra do hospital; a
-// vencida e a prioritária vêm primeiro e em destaque, com o motivo (o CID, a idade, o setor) e o
+// vencida e a bloqueante vêm primeiro e em destaque, com o motivo (o CID, a idade, o setor) e o
 // prazo; um clique abre o prontuário do paciente. Aba "Regras" (administração do PEP): o cadastro da regra (documento,
 // setor, sexo, tipo de atendimento, faixa etária em anos, CID-10 por código ou categoria, momento, exigência, prazo,
 // intervalo do periódico e vigência), com a validação na hora pela mesma regra do servidor; alterar e desativar
@@ -40,7 +40,7 @@ const { t } = useI18n({
       todosSetores: 'Todos os setores',
       soVencidas: 'Só as vencidas',
       totais:
-        '{atendimentos} atendimento(s) · {pendencias} documento(s) faltando · {vencidas} vencido(s) · {bloqueantes} prioritário(s)',
+        '{atendimentos} atendimento(s) · {pendencias} documento(s) faltando · {vencidas} vencido(s) · {bloqueantes} bloqueante(s)',
       semRegras: 'Nenhuma regra ativa: cadastre na aba Regras quais documentos o hospital exige.',
       nenhuma: 'Nenhum documento exigido faltando.',
       paciente: '{nome} · prontuário {pront} · atendimento {num}',
@@ -60,7 +60,7 @@ const { t } = useI18n({
       },
       // O valor 'bloquear' marca a falta como prioritária na lista; a alta, a prescrição e o fechamento ainda não
       // conferem a regra, e a tela não promete bloqueio que não existe.
-      exigencias: { bloquear: 'Prioritário (destaque na lista)', alertar: 'Só alerta' },
+      exigencias: { bloquear: 'Bloqueia a alta e o fechamento', alertar: 'Só alerta' },
       tipos: {
         todos: 'Todos',
         ambulatorial: 'Ambulatorial',

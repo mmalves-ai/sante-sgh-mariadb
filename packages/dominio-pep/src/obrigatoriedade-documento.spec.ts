@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   type AtendimentoAvaliado,
+  bloqueiosDoPasso,
+  motivoDoBloqueio,
   cidCoberto,
   idadeEmDias,
   pendenciasObrigatorias,
@@ -172,5 +174,36 @@ describe('obrigatoriedade de documentos (03-PEP L132)', () => {
     expect(l.map((x) => x.regra)).toEqual([2, 1]);
     expect(tipoAtendimentoDaCategoria('pronto_atendimento')).toBe('urgencia');
     expect(tipoAtendimentoDaCategoria('telessaude')).toBe('ambulatorial');
+  });
+});
+
+describe('bloqueiosDoPasso (a regra "bloquear" recusa a alta e o fechamento)', () => {
+  const sumario = regra({ id: 7, modelo: 20, titulo: 'Sumário de alta', momento: 'alta', prazoMinutos: 60 });
+  it('recusa a alta sem o documento exigido na alta, mesmo dentro do prazo', () => {
+    const b = bloqueiosDoPasso([sumario], atendimento(), [], ['alta'], agora);
+    expect(b.map((x) => x.regra)).toEqual([7]);
+    expect(motivoDoBloqueio(b)).toContain('Sumário de alta');
+  });
+  it('libera a alta com o documento feito, e a regra "alertar" nunca recusa', () => {
+    expect(
+      bloqueiosDoPasso([sumario], atendimento(), [{ modelo: 20, em: agora.toISOString() }], ['alta'], agora),
+    ).toEqual([]);
+    expect(
+      bloqueiosDoPasso([{ ...sumario, exigencia: 'alertar' }], atendimento(), [], ['alta'], agora),
+    ).toEqual([]);
+  });
+  it('o fechamento não é recusado pela regra da alta ainda no prazo, mas é pela vencida', () => {
+    const alta = '2026-11-24T11:30:00.000Z';
+    expect(
+      bloqueiosDoPasso([sumario], atendimento({ altaMedica: alta }), [], ['fechamento_atendimento'], agora),
+    ).toEqual([]);
+    const antiga = '2026-11-24T09:00:00.000Z';
+    expect(
+      bloqueiosDoPasso([sumario], atendimento({ altaMedica: antiga }), [], ['fechamento_atendimento'], agora),
+    ).toHaveLength(1);
+  });
+  it('a admissão vencida e bloqueante recusa a alta; a ainda no prazo, não', () => {
+    expect(bloqueiosDoPasso([regra()], atendimento(), [], ['alta'], agora)).toHaveLength(1);
+    expect(bloqueiosDoPasso([regra({ prazoMinutos: 600 })], atendimento(), [], ['alta'], agora)).toEqual([]);
   });
 });

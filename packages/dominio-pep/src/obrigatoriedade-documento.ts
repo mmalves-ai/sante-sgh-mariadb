@@ -288,6 +288,39 @@ export function pendenciasObrigatorias(
   );
 }
 
+/** Passos do atendimento que a regra "bloquear" pode recusar. */
+export type PassoBloqueavel = 'alta' | 'fechamento_atendimento';
+
+/**
+ * O que impede o passo (alta médica, fechamento do atendimento): simula o passo agora (a alta e a saída passam a
+ * existir) e devolve as pendências de exigência "bloquear" que o recusam. Recusa a regra do próprio passo (o documento
+ * exigido na alta é condição da alta; o do fechamento, do fechamento) e a de outro momento já vencida. A pendência
+ * "alertar" nunca recusa. A prescrição não é recusada por documento (decisão de 26/11: barrar a prescrição atrasa o
+ * tratamento; a falta aparece na lista e no destaque).
+ */
+export function bloqueiosDoPasso(
+  regras: readonly RegraObrigatoriedade[],
+  a: AtendimentoAvaliado,
+  documentos: readonly DocumentoDoAtendimento[],
+  passos: readonly PassoBloqueavel[],
+  agora: Date,
+): PendenciaObrigatoria[] {
+  const instante = agora.toISOString();
+  const simulado: AtendimentoAvaliado = {
+    ...a,
+    altaMedica: passos.includes('alta') ? (a.altaMedica ?? instante) : a.altaMedica,
+    saida: passos.includes('fechamento_atendimento') ? instante : a.saida,
+  };
+  return pendenciasObrigatorias(regras, simulado, documentos, agora).filter(
+    (p) => p.exigencia === 'bloquear' && (p.vencida || (passos as readonly string[]).includes(p.momento)),
+  );
+}
+
+/** Texto da recusa: os documentos que faltam, com o motivo da regra. */
+export function motivoDoBloqueio(bloqueios: readonly PendenciaObrigatoria[]): string {
+  return `Documento exigido pendente: ${bloqueios.map((b) => `${b.titulo} (${b.motivo})`).join('; ')}.`;
+}
+
 /** Tipo de atendimento da regra a partir do tipo-base da categoria do atendimento. */
 export function tipoAtendimentoDaCategoria(
   tipoBase: string | null,

@@ -16,7 +16,12 @@ import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { limparTrilhaDaMassa } from '../../teste/limpar-trilha.spec-util.js';
 import { inserirMinimo } from '../suprimentos/massa-propria.spec-util.js';
-import { PortaObrigatoriedadeDocumentoPropria } from './obrigatoriedade-documento-propria.js';
+import { randomUUID } from 'node:crypto';
+import { PortaAtendimentoPropria } from '../atendimento/porta-propria.js';
+import {
+  conferirDocumentosExigidos,
+  PortaObrigatoriedadeDocumentoPropria,
+} from './obrigatoriedade-documento-propria.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
@@ -46,6 +51,11 @@ async function limpar(e: Escritor): Promise<void> {
   ]);
   await e.executar('DELETE FROM modelo_documento_clinico WHERE codigo LIKE ?', [`${COD('')}%`]);
   await e.executar(`DELETE FROM diagnostico_atendimento WHERE estabelecimento_id IN (${ests})`, [P, P2]);
+  await e.executar(`DELETE FROM integracao_mensagem WHERE estabelecimento_id IN (${ests})`, [P, P2]);
+  await e.executar(
+    `DELETE FROM atendimento_situacao_historico WHERE atendimento_id IN (SELECT id FROM atendimento WHERE estabelecimento_id IN (${ests}))`,
+    [P, P2],
+  );
   await e.executar(`DELETE FROM atendimento WHERE estabelecimento_id IN (${ests})`, [P, P2]);
   await e.executar(`DELETE FROM setor_funcional WHERE estabelecimento_id IN (${ests})`, [P, P2]);
   const pf = 'SELECT id FROM pessoa_fisica WHERE nome LIKE ?';
@@ -502,6 +512,94 @@ describe.skipIf(SEM_BANCO)(
       await porta.ativar(ctx(), g, { versao: 1, ativo: false });
       expect(await linha()).toMatchObject({ estabelecimento_id: null, versao: 2 });
       expect(Number((await linha())?.['ativo'])).toBe(0);
+    });
+
+    it('a regra "bloquear" recusa o fechamento (executor) e a alta com o motivo, sem escrita; "alertar" deixa passar', async () => {
+      // O executor usa o relógio real: atendimento aberto ontem e regra vigente desde 2026.
+      const ontem = new Date(Date.now() - 86_400_000);
+      const atF = await nucleo.escrever({ cliente: CLIENTE, correlacao: `bloq-${P}` }, (e) =>
+        inserirMinimo(
+          e,
+          'atendimento',
+          {
+            estabelecimento_id: m.est,
+            numero: `${P}-F`,
+            paciente_id: m.pacienteB,
+            categoria_atendimento_id: m.categoriaAt,
+            carater_atendimento_tiss_id: m.caraterTiss,
+            fonte_pagadora_id: m.fonte,
+            profissional_id: m.profissional,
+            situacao: 'aberto',
+            entrada_em: ontem,
+          },
+          P,
+        ),
+      );
+      const r = await porta.incluir(ctx(), {
+        modelo: m.modelo1,
+        momento: 'fechamento_atendimento',
+        exigencia: 'bloquear',
+        prazoMinutos: 120,
+        vigenciaInicio: '2026-01-01',
+      });
+      const atd = new PortaAtendimentoPropria(nucleo, CLIENTE);
+      const encerrar = () =>
+        atd.executar(
+          { cliente: CLIENTE, estabelecimento: m.est, usuario: m.usuario, correlacao: `${P}-atd` },
+          'atendimento.encerrarAtendimento',
+          { atendimento: atF, desfecho: 'evasao' },
+          {
+            ...ctx(),
+            correlacao: `${P}-atd`,
+            chaveIdempotencia: `${P}-${randomUUID()}`,
+            login: 'teste.c2028',
+            estacao: 'TESTE',
+          },
+        );
+      const situacao = async () =>
+        (await ler('SELECT situacao, saida_em FROM atendimento WHERE id = ?', [atF]))[0];
+      await expect(encerrar()).rejects.toMatchObject({
+        problema: {
+          status: 422,
+          codigo: 'documento-exigido-pendente',
+          detail: expect.stringContaining('MODELO SINTETICO 1'),
+        },
+      });
+      expect(await situacao()).toEqual({ situacao: 'aberto', saida_em: null });
+      expect(
+        await contar('SELECT COUNT(*) AS n FROM atendimento_situacao_historico WHERE atendimento_id = ?', [
+          atF,
+        ]),
+      ).toBe(0);
+      // A regra da alta recusa o passo da alta médica (a mesma conferência que a porta de ADT chama na transação).
+      const rAlta = await porta.incluir(ctx(), {
+        modelo: m.modelo2,
+        momento: 'alta',
+        exigencia: 'bloquear',
+        prazoMinutos: 60,
+        vigenciaInicio: '2026-01-01',
+      });
+      await expect(
+        nucleo.escrever({ cliente: CLIENTE, correlacao: `alta-${P}` }, (e) =>
+          conferirDocumentosExigidos(e, m.est, atF, ['alta'], new Date()),
+        ),
+      ).rejects.toMatchObject({ problema: { codigo: 'documento-exigido-pendente' } });
+      await porta.ativar(ctx(), Number(rAlta['id']), { versao: 1, ativo: false });
+      // Como "alertar", a mesma falta não recusa: o atendimento fecha.
+      const [v] = await ler('SELECT versao FROM regra_obrigatoriedade_documento WHERE id = ?', [
+        Number(r['id']),
+      ]);
+      await porta.alterar(ctx(), Number(r['id']), {
+        versao: Number(v?.['versao']),
+        modelo: m.modelo1,
+        momento: 'fechamento_atendimento',
+        exigencia: 'alertar',
+        prazoMinutos: 120,
+        vigenciaInicio: '2026-01-01',
+      });
+      await encerrar();
+      expect((await situacao())?.['situacao']).toBe('encerrado');
+      await porta.ativar(ctx(), Number(r['id']), { versao: Number(v?.['versao']) + 1, ativo: false });
     });
   },
 );

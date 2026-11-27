@@ -55,6 +55,7 @@ import type { ProfissionalDaSessao } from '../atendimento/porta.js';
 import type { DestinoPorta, LiberacaoGravacao, TrilhaDaGravacao } from '../exames/public-api.js';
 import { civil, FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relogio.js';
 import { FonteInternacaoPropria } from '../internacao/fonte-propria.js';
+import { conferirDocumentosExigidos } from '../pep/obrigatoriedade-documento-propria.js';
 import {
   apoio,
   carimboVersao,
@@ -1655,6 +1656,8 @@ function gravador(tx: TxOperacao, est: number): GravadorSghAdt {
       if (!(await tx.uma('SELECT id FROM motivo_saida_hospitalar WHERE id = ? AND ativo = TRUE', [r.motivo])))
         throw recusa('motivo-inexistente', 'O motivo da alta não existe.', { campos: ['motivo'] });
       const agora = new Date();
+      // Documento exigido pela regra "bloquear" (C2-028): a alta é recusada com o motivo.
+      await conferirDocumentosExigidos(tx, est, n(i['atendimento_id']), ['alta'], agora);
       const id = await tx.incluir('alta_medica', {
         estabelecimento_id: est,
         atendimento_id: n(i['atendimento_id']),
