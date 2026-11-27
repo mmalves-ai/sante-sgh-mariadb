@@ -18,7 +18,7 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-test.describe('Conta do paciente, lançamentos e auditoria @M30 @jornada', () => {
+test.describe('Conta do paciente, lançamentos e auditoria @M30', () => {
   test.setTimeout(300_000);
 
   test('internação: explicar preço, conferência em bloco, pendência, fechamento, reabertura recusada, fila tardia; axe', async ({

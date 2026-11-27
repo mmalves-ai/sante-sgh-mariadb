@@ -62,13 +62,12 @@ jobs:
       - name: Trava de saídas (ambiente:verificar)
         run: env -u GITHUB_API_URL -u GITHUB_GRAPHQL_URL -u GITHUB_SERVER_URL ./pnpm ambiente:verificar
       # Sem .env no runner: a API e o worker só sobem com o AMBIENTE declarado (ci: neutralizado, sem banco).
-      # Decisão 59 do dono (pacote @jornada: agenda, prontuário, conta e lote TISS, já marcados): fica fora da esteira até
-      # a partida a frio ficar estável. Nas rodadas com taskset 0-3 (27/11), o 1o teste de cada worker oscilou esperando
-      # o campo de login ou o título da tela (spec diferente a cada rodada). Ao ligar: --grep "@M00|@jornada" aqui, no
-      # tools/obra/ci-sim.sh e no tools/obra/esteira-local.sh.
+      # Decisão 59 do dono: pacote @jornada (agenda, prontuário e lote TISS) com aquecimento real no globalSetup
+      # (apps/web/e2e/aquecer.ts, 9f0a410e). 3 rodadas verdes com taskset 0-3. A conta (m30) fica fora: o laço de 9
+      # telas por recarga inteira no Vite dev passa de 5 s às vezes. Mesma linha no ci-sim.sh e no esteira-local.sh.
       - name: E2E do marco (Chrome do runner, channel chrome)
         env:
           AMBIENTE: ci
-        run: env -u GITHUB_API_URL -u GITHUB_GRAPHQL_URL -u GITHUB_SERVER_URL ./pnpm e2e -- --grep @M00
+        run: env -u GITHUB_API_URL -u GITHUB_GRAPHQL_URL -u GITHUB_SERVER_URL ./pnpm e2e -- --grep "@M00|@jornada"
       - name: Segurança (gitleaks, Semgrep, OSV, Trivy, SBOM)
         run: ./pnpm seguranca:verificar

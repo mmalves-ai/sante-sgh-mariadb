@@ -20,6 +20,6 @@ passo instalar "${E[@]}" ./pnpm install --frozen-lockfile
 passo verificar-tudo "${E[@]}" ./pnpm verificar:tudo
 passo fronteiras "${E[@]}" ./pnpm fronteiras:provar
 passo trava "${E[@]}" ./pnpm ambiente:verificar
-passo e2e "${E[@]}" AMBIENTE=ci ./pnpm e2e -- --grep @M00
+passo e2e "${E[@]}" AMBIENTE=ci ./pnpm e2e -- --grep "@M00|@jornada"
 passo seguranca "${E[@]}" ./pnpm seguranca:verificar
 echo "RESULTADO: VERDE ($C)"
