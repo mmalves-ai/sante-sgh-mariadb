@@ -47,7 +47,7 @@ import {
 } from '@sgh/dominio-faturamento';
 import { definirOperacao, recusa, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
 import { z } from 'zod';
-import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
+import { sincronizarProducaoDaConta, TABELAS_SINCRONIZACAO_PRODUCAO } from '../repasse/producao-conta.js';
 import { precoVigente, tabelasDePreco } from './preco-conta.js';
 import { destinoDaContaNaEntrada, quebrarContasPorPeriodo, trechoDaConta } from './quebra-conta.js';
 import { conferirCompetenciaDaConta, contaAceitaLancamento } from './regras-conta.js';
@@ -61,7 +61,7 @@ const r2 = (x: number) => Math.round(x * 100) / 100;
 
 /** As tabelas que a abertura e a apuração gravam: a operação que as chama as declara junto das suas. */
 export const TABELAS_CONTA_ENTRADA = [
-  ...TABELAS_PRODUCAO_CONTA,
+  ...TABELAS_SINCRONIZACAO_PRODUCAO,
   'conta_hospitalar',
   'atendimento_conta',
   'motivo_cancelamento_conta',

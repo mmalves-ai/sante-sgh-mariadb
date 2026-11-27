@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.aplicar (alcance 5d94b017628d). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.aplicar (alcance 9d0bd06abfc5). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -291,9 +291,11 @@ GRANT SELECT ON especialidade_medica TO sgh_mod_adt;
 GRANT SELECT ON estabelecimento TO sgh_mod_adt;
 GRANT SELECT ON estabelecimento_externo TO sgh_mod_adt;
 GRANT SELECT, INSERT, UPDATE ON estorno_repasse TO sgh_mod_adt;
+GRANT SELECT, INSERT, UPDATE ON evento_contabil TO sgh_mod_adt;
 GRANT SELECT, INSERT, UPDATE ON evento_regulacao TO sgh_mod_adt;
 GRANT SELECT ON faixa_diurese TO sgh_mod_adt;
 GRANT SELECT, INSERT, UPDATE ON faixa_valor_categoria_clinica TO sgh_mod_adt;
+GRANT SELECT, INSERT, UPDATE ON fato_contabil TO sgh_mod_adt;
 GRANT SELECT, INSERT, UPDATE ON fonte_pagadora TO sgh_mod_adt;
 GRANT SELECT, INSERT, UPDATE ON formulario_declaracao_obito TO sgh_mod_adt;
 GRANT SELECT ON funcao_equipe_cirurgica TO sgh_mod_adt;
@@ -562,6 +564,8 @@ GRANT SELECT, INSERT, UPDATE ON equipe_assistencial_paciente TO sgh_mod_atendime
 GRANT SELECT ON especialidade_medica TO sgh_mod_atendimento;
 GRANT SELECT ON estabelecimento TO sgh_mod_atendimento;
 GRANT SELECT, INSERT, UPDATE ON estorno_repasse TO sgh_mod_atendimento;
+GRANT SELECT, INSERT, UPDATE ON evento_contabil TO sgh_mod_atendimento;
+GRANT SELECT, INSERT, UPDATE ON fato_contabil TO sgh_mod_atendimento;
 GRANT SELECT ON fonte_pagadora TO sgh_mod_atendimento;
 GRANT SELECT ON funcao_equipe_cobranca TO sgh_mod_atendimento;
 GRANT SELECT ON glosa TO sgh_mod_atendimento;
@@ -1862,6 +1866,8 @@ GRANT SELECT, INSERT, UPDATE ON envio_controlado_nacional TO sgh_mod_farmacia;
 GRANT SELECT, INSERT, UPDATE ON envio_controlado_nacional_item TO sgh_mod_farmacia;
 GRANT SELECT ON estabelecimento TO sgh_mod_farmacia;
 GRANT SELECT, INSERT, UPDATE ON etiqueta_identificacao TO sgh_mod_farmacia;
+GRANT SELECT, INSERT, UPDATE ON evento_contabil TO sgh_mod_farmacia;
+GRANT SELECT, INSERT, UPDATE ON fato_contabil TO sgh_mod_farmacia;
 GRANT SELECT ON frequencia_administracao TO sgh_mod_farmacia;
 GRANT SELECT ON grade_horario_unidade TO sgh_mod_farmacia;
 GRANT SELECT ON grupo_insumo TO sgh_mod_farmacia;
@@ -4092,6 +4098,7 @@ GRANT SELECT ON especialidade_diagnostica TO sgh_mod_sadt;
 GRANT SELECT ON estabelecimento TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON estorno_repasse TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON estudo_imagem TO sgh_mod_sadt;
+GRANT SELECT, INSERT, UPDATE ON evento_contabil TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON exame TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON exame_analito TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON exame_item TO sgh_mod_sadt;
@@ -4109,6 +4116,7 @@ GRANT SELECT, INSERT, UPDATE ON exportacao_documento TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON faixa_referencia TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON faixa_referencia_grandeza TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON faixa_referencia_versao TO sgh_mod_sadt;
+GRANT SELECT, INSERT, UPDATE ON fato_contabil TO sgh_mod_sadt;
 GRANT SELECT ON fonte_pagadora TO sgh_mod_sadt;
 GRANT SELECT ON forma_entrega_resultado TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON formula_calculo TO sgh_mod_sadt;
@@ -4695,8 +4703,10 @@ GRANT SELECT ON equipe_profissional TO sgh_mod_tiss;
 GRANT SELECT ON equipe_profissional_membro TO sgh_mod_tiss;
 GRANT SELECT ON estabelecimento TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON estorno_repasse TO sgh_mod_tiss;
+GRANT SELECT, INSERT, UPDATE ON evento_contabil TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON faixa_numeracao_guia TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON faixa_numeracao_guia_uso TO sgh_mod_tiss;
+GRANT SELECT, INSERT, UPDATE ON fato_contabil TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON fatura_fonte_pagadora TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON fatura_fonte_pagadora_conta TO sgh_mod_tiss;
 GRANT SELECT, INSERT, UPDATE ON fechamento_competencia_fonte_pagadora TO sgh_mod_tiss;

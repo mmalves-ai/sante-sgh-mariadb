@@ -48,7 +48,7 @@ import {
   publicarFatos,
   TABELAS_PUBLICACAO_FATO,
 } from '../contabil/publicacao-fato.js';
-import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
+import { sincronizarProducaoDaConta, TABELAS_SINCRONIZACAO_PRODUCAO } from '../repasse/producao-conta.js';
 import {
   apurarLancamentosAutomaticos,
   apurarLancamentosDoDia,
@@ -242,7 +242,7 @@ export const fecharConta = definirOperacao<FecharContaEntrada, ResultadoOperacao
   tabelas: [
     'conta_hospitalar',
     'conta_hospitalar_etapa',
-    ...TABELAS_PRODUCAO_CONTA,
+    ...TABELAS_SINCRONIZACAO_PRODUCAO,
     ...TABELAS_PUBLICACAO_FATO,
     ...TABELAS_RECEITA_CONTABIL,
   ],
@@ -564,7 +564,7 @@ export const lancarItem = definirOperacao<LancarItemEntrada, ResultadoOperacao>(
     'conta_hospitalar_item',
     'conta_hospitalar_item_memoria',
     'conta_hospitalar',
-    ...TABELAS_PRODUCAO_CONTA,
+    ...TABELAS_SINCRONIZACAO_PRODUCAO,
     // F3.7 (06-FAT linha 20): o pacote reconhecido pelo procedimento entra e os aplicados reclassificam ao lançar.
     ...TABELAS_PACOTE_AO_LANCAR,
   ],

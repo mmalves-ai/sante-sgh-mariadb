@@ -10,13 +10,14 @@ import {
   sincronizarProducaoDaConta as sincronizarNaPorta,
 } from '@sgh/dominio-repasse';
 import { definirOperacao, type ContextoOperacao, type ResultadoOperacao, type TxOperacao } from '@sgh/nucleo';
-import { portaProducaoConta, TABELAS_PRODUCAO_CONTA as TABELAS_DA_PORTA } from '@sgh/persistencia';
+import { portaProducaoConta, TABELAS_PRODUCAO_CONTA } from '@sgh/persistencia';
 import { z } from 'zod';
 import { TABELAS_PUBLICACAO_FATO } from '../contabil/publicacao-fato.js';
 import { publicarFatosDoRepasse } from './fato-contabil-repasse.js';
 
 /** As tabelas da sincronização, mais as do fato contábil do crédito de glosa revertida (C2-093). */
-export const TABELAS_PRODUCAO_CONTA: readonly string[] = [...TABELAS_DA_PORTA, ...TABELAS_PUBLICACAO_FATO];
+// Nome próprio, sem alias de import: o gerador de privilégios segue a constante até a definição literal.
+export const TABELAS_SINCRONIZACAO_PRODUCAO = [...TABELAS_PRODUCAO_CONTA, ...TABELAS_PUBLICACAO_FATO];
 export type { ResumoProducaoConta };
 
 /**
@@ -71,7 +72,7 @@ export type SincronizarProducaoContaEntrada = z.infer<typeof esquemaSincronizarP
 /** A operação própria (tela de conferência do repasse, reprocessamento): a mesma sincronização numa transação. */
 export const sincronizarProducaoConta = definirOperacao<SincronizarProducaoContaEntrada, ResultadoOperacao>({
   nome: 'repasse.sincronizar-producao-conta',
-  tabelas: TABELAS_PRODUCAO_CONTA,
+  tabelas: TABELAS_SINCRONIZACAO_PRODUCAO,
   entrada: esquemaSincronizarProducaoConta,
   async gravar(tx, e, ctx) {
     const r = await sincronizarProducaoDaConta(

@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.recolher (alcance 5d94b017628d). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.recolher (alcance 9d0bd06abfc5). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -241,9 +241,11 @@ REVOKE SELECT ON especialidade_medica FROM sgh_mod_adt;
 REVOKE SELECT ON estabelecimento FROM sgh_mod_adt;
 REVOKE SELECT ON estabelecimento_externo FROM sgh_mod_adt;
 REVOKE SELECT, INSERT, UPDATE ON estorno_repasse FROM sgh_mod_adt;
+REVOKE SELECT, INSERT, UPDATE ON evento_contabil FROM sgh_mod_adt;
 REVOKE SELECT, INSERT, UPDATE ON evento_regulacao FROM sgh_mod_adt;
 REVOKE SELECT ON faixa_diurese FROM sgh_mod_adt;
 REVOKE SELECT, INSERT, UPDATE ON faixa_valor_categoria_clinica FROM sgh_mod_adt;
+REVOKE SELECT, INSERT, UPDATE ON fato_contabil FROM sgh_mod_adt;
 REVOKE SELECT, INSERT, UPDATE ON fonte_pagadora FROM sgh_mod_adt;
 REVOKE SELECT, INSERT, UPDATE ON formulario_declaracao_obito FROM sgh_mod_adt;
 REVOKE SELECT ON funcao_equipe_cirurgica FROM sgh_mod_adt;
@@ -512,6 +514,8 @@ REVOKE SELECT, INSERT, UPDATE ON equipe_assistencial_paciente FROM sgh_mod_atend
 REVOKE SELECT ON especialidade_medica FROM sgh_mod_atendimento;
 REVOKE SELECT ON estabelecimento FROM sgh_mod_atendimento;
 REVOKE SELECT, INSERT, UPDATE ON estorno_repasse FROM sgh_mod_atendimento;
+REVOKE SELECT, INSERT, UPDATE ON evento_contabil FROM sgh_mod_atendimento;
+REVOKE SELECT, INSERT, UPDATE ON fato_contabil FROM sgh_mod_atendimento;
 REVOKE SELECT ON fonte_pagadora FROM sgh_mod_atendimento;
 REVOKE SELECT ON funcao_equipe_cobranca FROM sgh_mod_atendimento;
 REVOKE SELECT ON glosa FROM sgh_mod_atendimento;
@@ -1812,6 +1816,8 @@ REVOKE SELECT, INSERT, UPDATE ON envio_controlado_nacional FROM sgh_mod_farmacia
 REVOKE SELECT, INSERT, UPDATE ON envio_controlado_nacional_item FROM sgh_mod_farmacia;
 REVOKE SELECT ON estabelecimento FROM sgh_mod_farmacia;
 REVOKE SELECT, INSERT, UPDATE ON etiqueta_identificacao FROM sgh_mod_farmacia;
+REVOKE SELECT, INSERT, UPDATE ON evento_contabil FROM sgh_mod_farmacia;
+REVOKE SELECT, INSERT, UPDATE ON fato_contabil FROM sgh_mod_farmacia;
 REVOKE SELECT ON frequencia_administracao FROM sgh_mod_farmacia;
 REVOKE SELECT ON grade_horario_unidade FROM sgh_mod_farmacia;
 REVOKE SELECT ON grupo_insumo FROM sgh_mod_farmacia;
@@ -4042,6 +4048,7 @@ REVOKE SELECT ON especialidade_diagnostica FROM sgh_mod_sadt;
 REVOKE SELECT ON estabelecimento FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON estorno_repasse FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON estudo_imagem FROM sgh_mod_sadt;
+REVOKE SELECT, INSERT, UPDATE ON evento_contabil FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON exame FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON exame_analito FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON exame_item FROM sgh_mod_sadt;
@@ -4059,6 +4066,7 @@ REVOKE SELECT, INSERT, UPDATE ON exportacao_documento FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON faixa_referencia FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON faixa_referencia_grandeza FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON faixa_referencia_versao FROM sgh_mod_sadt;
+REVOKE SELECT, INSERT, UPDATE ON fato_contabil FROM sgh_mod_sadt;
 REVOKE SELECT ON fonte_pagadora FROM sgh_mod_sadt;
 REVOKE SELECT ON forma_entrega_resultado FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON formula_calculo FROM sgh_mod_sadt;
@@ -4645,8 +4653,10 @@ REVOKE SELECT ON equipe_profissional FROM sgh_mod_tiss;
 REVOKE SELECT ON equipe_profissional_membro FROM sgh_mod_tiss;
 REVOKE SELECT ON estabelecimento FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON estorno_repasse FROM sgh_mod_tiss;
+REVOKE SELECT, INSERT, UPDATE ON evento_contabil FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON faixa_numeracao_guia FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON faixa_numeracao_guia_uso FROM sgh_mod_tiss;
+REVOKE SELECT, INSERT, UPDATE ON fato_contabil FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON fatura_fonte_pagadora FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON fatura_fonte_pagadora_conta FROM sgh_mod_tiss;
 REVOKE SELECT, INSERT, UPDATE ON fechamento_competencia_fonte_pagadora FROM sgh_mod_tiss;

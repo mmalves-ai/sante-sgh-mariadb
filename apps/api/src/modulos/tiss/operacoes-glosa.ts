@@ -52,7 +52,7 @@ import {
 } from '@sgh/nucleo';
 import { versaoNumero } from '../faturamento/esquemas.js';
 import { esquemaBaixaComPrazo, esquemaRecursoComPrazo } from './esquemas.js';
-import { sincronizarGlosaDoItem, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
+import { sincronizarGlosaDoItem, TABELAS_SINCRONIZACAO_PRODUCAO } from '../repasse/producao-conta.js';
 import { tabelaTissDoItem } from './regras-tiss.js';
 
 type Linha = Record<string, unknown>;
@@ -189,7 +189,7 @@ const registrarGlosa = definirOperacao<BaixaComPrazo, ResultadoOperacao>({
     'sequencia_negocio',
     'demonstrativo_analise_conta',
     'demonstrativo_analise_conta_item',
-    ...TABELAS_PRODUCAO_CONTA,
+    ...TABELAS_SINCRONIZACAO_PRODUCAO,
     ...TABELAS_RECEITA_CONTABIL,
   ],
   entrada: esquemaBaixaComPrazo,

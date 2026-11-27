@@ -67,7 +67,7 @@ import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { civil } from '../exames/relogio.js';
 import { versaoTexto } from '../faturamento/esquemas.js';
-import { sincronizarGlosaDoItem, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
+import { sincronizarGlosaDoItem, TABELAS_SINCRONIZACAO_PRODUCAO } from '../repasse/producao-conta.js';
 import { ProfissionalComplementoProprio } from '../cadastro/profissional-complemento-proprio.js';
 import type { ArmazemXmlTiss } from './armazem-xml.js';
 import {
@@ -146,7 +146,7 @@ const TABELAS_GRAVACAO_DIRETA = [
   'glosa',
   'glosa_item',
   'conta_hospitalar_item',
-  ...TABELAS_PRODUCAO_CONTA,
+  ...TABELAS_SINCRONIZACAO_PRODUCAO,
   'endpoint_tiss_fonte_pagadora',
   'integracao_mensagem',
   ...TABELAS_DEMONSTRATIVO,

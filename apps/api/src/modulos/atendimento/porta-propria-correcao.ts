@@ -27,7 +27,7 @@ import { definirOperacao, ErroOperacao, type Linha, recusa, type TxOperacao } fr
 import { solicitanteQueRespondeHoje } from '../cadastro/solicitante-vigente.js';
 import { totalDosItens } from '../faturamento/operacoes.js';
 import { contaAceitaLancamento } from '../faturamento/regras-conta.js';
-import { sincronizarProducaoDaConta, TABELAS_PRODUCAO_CONTA } from '../repasse/producao-conta.js';
+import { sincronizarProducaoDaConta, TABELAS_SINCRONIZACAO_PRODUCAO } from '../repasse/producao-conta.js';
 
 const FUSO_PADRAO = 'America/Sao_Paulo';
 
@@ -359,7 +359,7 @@ const TABELAS_EXTRA = [
   'conta_hospitalar',
   'conta_hospitalar_item',
   'conta_hospitalar_item_memoria',
-  ...TABELAS_PRODUCAO_CONTA,
+  ...TABELAS_SINCRONIZACAO_PRODUCAO,
 ];
 
 interface ExtraTravado {
