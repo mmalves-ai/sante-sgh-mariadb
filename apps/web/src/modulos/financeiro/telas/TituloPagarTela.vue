@@ -352,7 +352,7 @@ async function excluir() {
           v-if="alterando"
           :detalhe="titulo.data.value"
           :parcela="n"
-          :pode-gravar="pode('criarTituloPagar', 'financeiro.tituloPagar.criar')"
+          :pode-gravar="pode('financeiro.criarTituloPagar', 'financeiro.tituloPagar.criar')"
           @gravado="aposGravar"
         />
       </template>
