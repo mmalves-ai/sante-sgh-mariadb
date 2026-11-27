@@ -8,7 +8,7 @@ import { expect, type Page, test } from '@playwright/test';
 import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
 
 const SENHA = 'Sintetico#2026';
-const INDICADOR = 'adesaoHigieneMaos';
+const INDICADOR = 'taxaErroMedicacao';
 
 async function entrar(page: Page, login: string): Promise<void> {
   await page.context().clearCookies();
@@ -35,13 +35,16 @@ test.describe('Qualidade: análise crítica do indicador com plano de ação @F3
     await expect(form).toBeVisible();
     await semViolacaoAxe(page, 'ficha do indicador com o formulário da análise');
 
-    const texto = 'Adesão abaixo do esperado no turno da noite (análise sintética E2E)';
+    const texto = 'Erros de medicação concentrados no turno da noite (análise sintética E2E)';
     await form.getByTestId('analise-texto').locator('textarea').fill(texto);
-    await form.getByTestId('analise-causas').locator('textarea').fill('Falta de dispensadores no corredor');
+    await form
+      .getByTestId('analise-causas')
+      .locator('textarea')
+      .fill('Dupla checagem não feita na troca de plantão');
     await form
       .getByTestId('analise-plano')
       .locator('textarea')
-      .fill('Instalar dispensadores e reforçar a auditoria');
+      .fill('Reforçar a dupla checagem e auditar o aprazamento');
     await form.getByTestId('analise-responsavel').locator('input').fill('Coordenação de enfermagem');
     const prazo = form.getByTestId('analise-prazo').locator('input');
     await prazo.fill('31/12/2026');
