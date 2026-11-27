@@ -104,7 +104,7 @@ test.describe('Autoliberação de resultados @C2-058 @fase7', () => {
       return json(rota, { codigo: 'nao-simulado' }, 500);
     });
 
-    await entrar(page, 'SINT.LABORATORIO');
+    await entrar(page, 'SINT.BIOMEDICO'); // a bancada técnica do laboratório (sadt.resultado.ler)
     await page.goto('/sadt/autoliberacao');
     await expect(page.getByTestId('autoliberacao')).toBeVisible();
     await semViolacaoAxe(page, '/sadt/autoliberacao');
