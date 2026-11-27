@@ -20,6 +20,8 @@ import {
 } from '../api-financeiro.js';
 import { data, quando, reais, usarFinanceiro } from '../usar-financeiro.js';
 import EnviarParaAprovacao from '../componentes/EnviarParaAprovacao.vue';
+import AlterarTituloPagar from '../componentes/AlterarTituloPagar.vue';
+import DevolucaoFornecedor from '../componentes/DevolucaoFornecedor.vue';
 
 const props = defineProps<{ id: string }>();
 const { t } = useI18n();
@@ -120,6 +122,17 @@ async function prorrogar() {
   } catch (e) {
     erro.value = e;
   }
+}
+// Alteração do título não pago e devolução ao fornecedor (F3.8, 07-FIN linha 63, C1-008). A alteração abre só no
+// título em aberto (o servidor recusa o que tem baixa, borderô ou nota abatida); a devolução, sobre a parcela com saldo.
+const alterando = ref(false);
+const alteravel = computed(() =>
+  (titulo.data.value?.parcelas ?? []).every((p) => ['aberto', 'vencido'].includes(p.situacao)),
+);
+async function aposGravar(m: string) {
+  mensagem.value = m;
+  alterando.value = false;
+  await qc.invalidateQueries({ queryKey: ['financeiro'] });
 }
 async function excluir() {
   erro.value = null;
@@ -326,6 +339,29 @@ async function excluir() {
           <li v-if="!(historico.data.value ?? []).length">{{ t('financeiro.pagar.prorrogar.nenhuma') }}</li>
         </ul>
       </template>
+      <template v-if="alteravel && tem('financeiro.tituloPagar.criar')">
+        <button
+          type="button"
+          :aria-expanded="alterando"
+          data-testid="tpd-alterar"
+          @click="alterando = !alterando"
+        >
+          {{ alterando ? t('financeiro.alteracaoTitulo.fechar') : t('financeiro.alteracaoTitulo.abrir') }}
+        </button>
+        <AlterarTituloPagar
+          v-if="alterando"
+          :detalhe="titulo.data.value"
+          :parcela="n"
+          :pode-gravar="pode('criarTituloPagar', 'financeiro.tituloPagar.criar')"
+          @gravado="aposGravar"
+        />
+      </template>
+      <DevolucaoFornecedor
+        v-if="tem('financeiro.notaCreditoDebito.emitir')"
+        :parcelas="abertas"
+        :pode-gravar="tem('financeiro.notaCreditoDebito.emitir')"
+        @gravado="aposGravar"
+      />
       <template v-if="titulo.data.value.situacao === 'aberto' || titulo.data.value.situacao === 'vencido'">
         <p class="secundario">{{ t('financeiro.pagar.excluirTexto') }}</p>
         <button

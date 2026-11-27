@@ -14,6 +14,7 @@ import { mensagensNotaMercadoria } from './i18n-nota-mercadoria.js';
 import { mensagensPagamentoEletronico } from './i18n-pagamento-eletronico.js';
 import { mensagensPixFinanceiro } from './i18n-pix.js';
 import { mensagensPrevisaoFinanceiro } from './i18n-previsao.js';
+import { mensagensAlteracaoTitulo, mensagensDevolucaoFornecedor } from './i18n-titulo-pagar-alteracao.js';
 
 export const mensagensFinanceiro = {
   // F3.8, 07-FIN linha 89: cartão de débito e crédito (i18n-cartao.ts).
@@ -26,6 +27,9 @@ export const mensagensFinanceiro = {
   pagamentoEletronico: mensagensPagamentoEletronico,
   // F3.8, 07-FIN linha 63: baixa parcial, desconto e acréscimos na baixa (i18n-baixa.ts).
   baixa: mensagensBaixaFinanceiro,
+  // F3.8, 07-FIN linha 63 (C1-008): alteração do título não pago e devolução ao fornecedor.
+  alteracaoTitulo: mensagensAlteracaoTitulo,
+  devolucaoFornecedor: mensagensDevolucaoFornecedor,
   // F8, 07-FIN linha 68: previsão e provisão de pagamentos (i18n-previsao.ts).
   previsao: mensagensPrevisaoFinanceiro,
   // F8, 07-FIN linha 69: encontro de contas com o mesmo parceiro (i18n-encontro.ts).
