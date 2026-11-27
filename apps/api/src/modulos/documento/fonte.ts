@@ -14,7 +14,7 @@ import type { ArmazemArquivos } from '@sgh/nucleo';
 import type { Configuracao } from '../../configuracao.js';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { registrarConversaoPdf } from '../../telemetria.js';
-import { EmissaoService, politicaRetencao } from './aplicacao/emissao.service.js';
+import { type DependenciasEmissao, EmissaoService, politicaRetencao } from './aplicacao/emissao.service.js';
 import { RegistroEmissoesMemoria } from './infra/registro.js';
 import { armazemArquivosDoAmbiente } from './infra/arquivos.js';
 import { ArmazemValkey, FilaZplValkey } from './infra/valkey.js';
@@ -42,6 +42,8 @@ export function criarFonteDocumento(
     readonly armazem?: ArmazemArquivos;
     /** Id do estabelecimento pelo código (obrigatório com o banco próprio; ver DependenciasEmissao). */
     readonly idEstabelecimento?: (codigo: string) => Promise<number>;
+    /** 03-PEP L131: a regra de cabeçalho por estabelecimento e tipo de documento (ver DependenciasEmissao). */
+    readonly cabecalhoImpressao?: DependenciasEmissao['cabecalhoImpressao'];
   } = {},
 ): FonteDocumento {
   const armazem =
@@ -66,6 +68,7 @@ export function criarFonteDocumento(
     aoConverter: (ms) => registrarConversaoPdf(ms / 1000),
     ...(opcoes.certificadoSbis ? { certificadoSbis: opcoes.certificadoSbis } : {}),
     ...(opcoes.idEstabelecimento ? { idEstabelecimento: opcoes.idEstabelecimento } : {}),
+    ...(opcoes.cabecalhoImpressao ? { cabecalhoImpressao: opcoes.cabecalhoImpressao } : {}),
   });
   const valkey = env['VALKEY_URL']?.trim();
   const fila = valkey ? new FilaZplValkey(valkey) : null;

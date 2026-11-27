@@ -134,7 +134,7 @@ const SQL_ULTIMA_ASSINATURA = (coluna: string) => `
     ORDER BY ev.ocorrido_em DESC, ev.id DESC LIMIT 1)`;
 
 const SQL_DOCUMENTOS = `
-  SELECT dp.id, t.categoria AS categoria_tipo, dp.entidade_origem, dp.entidade_origem_id, dp.paciente_id, dp.atendimento_id,
+  SELECT dp.id, dp.tipo_documento_clinico_id, t.categoria AS categoria_tipo, dp.entidade_origem, dp.entidade_origem_id, dp.paciente_id, dp.atendimento_id,
          dp.lancado_em, dp.conteudo, s.categoria, da.hash_conteudo, da.nivel_exigido, da.concluido_em,
          ${SQL_ULTIMA_ASSINATURA('ocorrido_em')} AS assinado_em,
          ${SQL_ULTIMA_ASSINATURA('dados')} AS dados_assinatura,
@@ -220,6 +220,7 @@ export function documentoLido(x: Record<string, unknown>, fuso: string): Documen
     assinadoEm: dataHora(assinadoEm, fuso),
     suspenso: !CATEGORIAS_ASSINAVEIS.includes(categoria) && categoria !== 'assinado',
     comoSuporte: conteudo['como_suporte'] === true || assinatura['comoSuporte'] === true,
+    ...(x['tipo_documento_clinico_id'] != null ? { tipoDocumento: num(x['tipo_documento_clinico_id']) } : {}),
     // Só o documento com conteúdo estruturado gravado (o registro de enfermagem do turno) traz o campo.
     ...(conteudo['registro'] && typeof conteudo['registro'] === 'object'
       ? { registro: conteudo['registro'] as Record<string, unknown> }

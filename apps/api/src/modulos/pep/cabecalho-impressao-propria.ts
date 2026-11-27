@@ -113,6 +113,42 @@ const conflito = () =>
     'Outra pessoa alterou a regra: recarregue e confira.',
   );
 
+/** A regra resolvida para o estabelecimento e o tipo de documento, montada com os dados da instituição. */
+async function cabecalhoDoEstabelecimento(l: Leitor, est: number, tipoDocumento: number | null) {
+  const regra = resolverCabecalho(await lerRegras(l, est), est, tipoDocumento);
+  const e = await l.uma<Linha>(
+    `SELECT e.nome_fantasia, e.cnpj, e.codigo_cnes, e.logradouro, e.numero, e.bairro_nome, e.telefone,
+            pj.razao_social AS mant_nome, pj.cnpj AS mant_cnpj
+       FROM estabelecimento e
+       LEFT JOIN mantenedora m ON m.id = e.mantenedora_id
+       LEFT JOIN pessoa_juridica pj ON pj.id = m.pessoa_juridica_id
+      WHERE e.id = ?`,
+    [est],
+  );
+  if (!e) throw naoEncontrado('Estabelecimento');
+  const endereco =
+    [txtOuNull(e['logradouro']), txtOuNull(e['numero']), txtOuNull(e['bairro_nome'])]
+      .filter(Boolean)
+      .join(', ') || null;
+  const dados = {
+    nome: String(e['nome_fantasia']),
+    cnpj: txtOuNull(e['cnpj']),
+    cnes: txtOuNull(e['codigo_cnes']),
+    endereco,
+    telefone: txtOuNull(e['telefone']),
+  };
+  const mantenedora = e['mant_nome']
+    ? {
+        nome: String(e['mant_nome']),
+        cnpj: txtOuNull(e['mant_cnpj']),
+        cnes: null,
+        endereco: null,
+        telefone: null,
+      }
+    : null;
+  return { regra: regra ? regra.id : null, ...montarCabecalho(regra, dados, mantenedora) };
+}
+
 export class PortaCabecalhoImpressaoPropria extends PortaEstabelecimentoPropria {
   constructor(nucleo: ConstructorParameters<typeof PortaEstabelecimentoPropria>[0], cliente: string) {
     super(nucleo, cliente, [CABECALHO], 'pep.cabecalho');
@@ -135,40 +171,24 @@ export class PortaCabecalhoImpressaoPropria extends PortaEstabelecimentoPropria 
   /** A regra que vale para o tipo de documento e as linhas que o documento imprime. */
   previa(c: ContextoPortaPropria, consulta: unknown) {
     const f = entradaValida(esquemaPrevia, consulta ?? {});
-    return this.ler(c, 'previa', async (l, est) => {
-      const regra = resolverCabecalho(await lerRegras(l, est.id), est.id, f.tipoDocumento ?? null);
-      const e = await l.uma<Linha>(
-        `SELECT e.nome_fantasia, e.cnpj, e.codigo_cnes, e.logradouro, e.numero, e.bairro_nome, e.telefone,
-                pj.razao_social AS mant_nome, pj.cnpj AS mant_cnpj
-           FROM estabelecimento e
-           LEFT JOIN mantenedora m ON m.id = e.mantenedora_id
-           LEFT JOIN pessoa_juridica pj ON pj.id = m.pessoa_juridica_id
-          WHERE e.id = ?`,
-        [est.id],
-      );
-      if (!e) throw naoEncontrado('Estabelecimento');
-      const endereco =
-        [txtOuNull(e['logradouro']), txtOuNull(e['numero']), txtOuNull(e['bairro_nome'])]
-          .filter(Boolean)
-          .join(', ') || null;
-      const dados = {
-        nome: String(e['nome_fantasia']),
-        cnpj: txtOuNull(e['cnpj']),
-        cnes: txtOuNull(e['codigo_cnes']),
-        endereco,
-        telefone: txtOuNull(e['telefone']),
-      };
-      const mantenedora = e['mant_nome']
-        ? {
-            nome: String(e['mant_nome']),
-            cnpj: txtOuNull(e['mant_cnpj']),
-            cnes: null,
-            endereco: null,
-            telefone: null,
-          }
-        : null;
-      return { regra: regra ? regra.id : null, ...montarCabecalho(regra, dados, mantenedora) };
-    });
+    return this.ler(c, 'previa', (l, est) => cabecalhoDoEstabelecimento(l, est.id, f.tipoDocumento ?? null));
+  }
+
+  /**
+   * A emissão do PDF (EmissaoService): a regra do estabelecimento (código) e do tipo de documento clínico do pedido,
+   * com as linhas do cabeçalho e do rodapé e o que o documento exibe. Leitura só, sem usuário.
+   */
+  paraEmissao(estabelecimento: string, tipoDocumento: number | null) {
+    return this.ler(
+      {
+        cliente: this.cliente,
+        hospital: estabelecimento,
+        usuario: null,
+        correlacao: 'pep.cabecalho.emissao',
+      },
+      'emissao',
+      (l, est) => cabecalhoDoEstabelecimento(l, est.id, tipoDocumento),
+    );
   }
 
   private conferir(e: { fonte: RegraCabecalho['fonte']; cabecalho: string | null; rodape: string | null }) {

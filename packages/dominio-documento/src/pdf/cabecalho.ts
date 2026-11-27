@@ -133,3 +133,18 @@ export function montarCabecalho(
 function formatarCnpj(c: string): string {
   return /^\d{14}$/.test(c) ? c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : c;
 }
+
+/**
+ * 03-PEP L131: os campos que o documento imprime pela regra do tipo de documento. Sem os dados do paciente, saem os
+ * campos do grupo 'paciente'; sem a assinatura, os do grupo 'assinatura'. Campo sem grupo sempre sai.
+ */
+export function aplicarExibicao<C extends { readonly grupo?: 'paciente' | 'assinatura' }>(
+  campos: readonly C[],
+  exibe: { readonly exibeDadosPaciente: boolean; readonly exibeAssinatura: boolean },
+): C[] {
+  return campos.filter(
+    (c) =>
+      (c.grupo !== 'paciente' || exibe.exibeDadosPaciente) &&
+      (c.grupo !== 'assinatura' || exibe.exibeAssinatura),
+  );
+}

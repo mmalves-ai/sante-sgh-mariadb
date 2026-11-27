@@ -71,17 +71,17 @@ export interface ConteudoPep {
 export function camposDoDocumentoPep(c: ConteudoPep): CampoDocumento[] {
   const i = c.identificacao;
   const campos: CampoDocumento[] = [
-    { rotulo: 'Paciente', valor: i.paciente },
-    { rotulo: 'Prontuário', valor: i.prontuario },
-    ...(i.nascimento ? [{ rotulo: 'Nascimento', valor: i.nascimento }] : []),
-    ...(i.atendimento ? [{ rotulo: 'Atendimento', valor: i.atendimento }] : []),
+    { rotulo: 'Paciente', valor: i.paciente, grupo: 'paciente' },
+    { rotulo: 'Prontuário', valor: i.prontuario, grupo: 'paciente' },
+    ...(i.nascimento ? [{ rotulo: 'Nascimento', valor: i.nascimento, grupo: 'paciente' as const }] : []),
+    ...(i.atendimento ? [{ rotulo: 'Atendimento', valor: i.atendimento, grupo: 'paciente' as const }] : []),
     { rotulo: 'Profissional', valor: i.conselho ? `${i.profissional} (${i.conselho})` : i.profissional },
     { rotulo: 'Data e hora', valor: i.dataHora },
     ...(c.extras ?? []),
     { rotulo: TITULOS_PEP[c.modelo], valor: c.corpo.join('\n') || '-' },
   ];
   if (EXIGE_ASSINATURA_A_MAO.has(c.modelo))
-    campos.push({ rotulo: 'Assinatura', valor: RODAPE_ASSINATURA_A_MAO });
+    campos.push({ rotulo: 'Assinatura', valor: RODAPE_ASSINATURA_A_MAO, grupo: 'assinatura' });
   return campos;
 }
 

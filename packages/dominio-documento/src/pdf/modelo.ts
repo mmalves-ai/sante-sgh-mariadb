@@ -10,6 +10,11 @@ export interface CampoDocumento {
    * abre parágrafo). Tudo é escapado antes; só essas marcas viram HTML. Sem formato, o valor sai como texto puro.
    */
   readonly formato?: 'texto' | 'marcado';
+  /**
+   * 03-PEP L131: o grupo do campo para a regra de cabeçalho do tipo de documento ('paciente': identificação do
+   * paciente; 'assinatura': linha de assinatura). A regra pode esconder o grupo na emissão (aplicarExibicao).
+   */
+  readonly grupo?: 'paciente' | 'assinatura';
 }
 
 export interface DadosDocumento {

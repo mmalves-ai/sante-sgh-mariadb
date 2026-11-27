@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  aplicarExibicao,
   type CampoDocumento,
   chaveObjeto,
   type EmissaoDocumento,
@@ -90,6 +91,23 @@ export interface DependenciasEmissao {
    * memória da sessão sintética), o arquivo fica sem estabelecimento.
    */
   readonly idEstabelecimento?: (codigo: string) => Promise<number>;
+  /**
+   * 03-PEP L131: o cabeçalho, o rodapé e o que o documento exibe pela regra do estabelecimento (código) e do tipo de
+   * documento clínico do pedido (resolverCabecalho + montarCabecalho, no banco próprio). Sem a dependência, ou com
+   * falha da leitura, o documento sai com o nome do estabelecimento e todos os campos, como antes.
+   */
+  readonly cabecalhoImpressao?: (
+    estabelecimento: string,
+    tipoDocumento: number | null,
+  ) => Promise<CabecalhoEmissao>;
+}
+
+/** As linhas do cabeçalho e do rodapé e o que o documento exibe (o resultado de montarCabecalho). */
+export interface CabecalhoEmissao {
+  readonly linhas: readonly string[];
+  readonly rodape: readonly string[];
+  readonly exibeDadosPaciente: boolean;
+  readonly exibeAssinatura: boolean;
 }
 
 /** Dono do arquivo guardado: estabelecimento (código), usuário e a linha da tabela dona, quando já tem id. */
@@ -125,6 +143,8 @@ export interface PedidoEmissao {
   readonly justificativa?: string | null;
   /** 04-INT L69: as cópias que saem dentro do mesmo PDF (cada uma em página nova, "Cópia k de n"); padrão 1. */
   readonly copias?: number;
+  /** 03-PEP L131: o tipo de documento clínico (tipo_documento_clinico.id), para a regra de cabeçalho; null: geral. */
+  readonly tipoDocumento?: number | null;
 }
 
 /** Tentativas da reemissão quando outra pegou a mesma via ao mesmo tempo. */
@@ -226,6 +246,11 @@ export class EmissaoService {
     const certificadoSbis = this.d.certificadoSbis
       ? await this.d.certificadoSbis(pedido.estabelecimento).catch(() => null)
       : null;
+    const cabecalho = this.d.cabecalhoImpressao
+      ? await this.d
+          .cabecalhoImpressao(pedido.estabelecimento, pedido.tipoDocumento ?? null)
+          .catch(() => null)
+      : null;
     const html = htmlDocumento({
       certificadoSbis,
       titulo: pedido.titulo,
@@ -237,7 +262,8 @@ export class EmissaoService {
         timeZone: 'America/Sao_Paulo',
       }).format(agora),
       via: rotuloVia(via),
-      campos: pedido.campos,
+      campos: cabecalho ? aplicarExibicao(pedido.campos, cabecalho) : pedido.campos,
+      ...(cabecalho ? { cabecalhoLinhas: cabecalho.linhas, rodapeLinhas: cabecalho.rodape } : {}),
       qrSvg: qrSvg(pedido.qr?.url ?? urlValidacao(this.d.baseUrlValidacao, identificadorQr)),
       identificadorQr,
       fontesCss: fontesCss(this.d.raiz ?? process.cwd()),

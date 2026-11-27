@@ -18,6 +18,7 @@ import {
   FONTE_CONTEUDO_ICP,
   type FonteConteudoIcp,
 } from '../assinatura/public-api.js';
+import { PortaCabecalhoImpressaoPropria } from '../pep/cabecalho-impressao-propria.js';
 import { PORTA_DOCUMENTOS, type PortaDocumentos } from '../pep/documentos-porta.js';
 import type { ServicoDocumentos } from '../pep/documentos-servico.js';
 import { SERVICO_DOCUMENTOS } from '../pep/documentos.controller.js';
@@ -48,6 +49,12 @@ function contextoDaAssinatura(c: ContextoAssinatura) {
   };
 }
 
+/** A regra de cabeçalho que a emissão aplica, lida pela porta própria dos cabeçalhos (PEP). */
+function cabecalhoDaEmissao(porta: PortaCabecalhoImpressaoPropria) {
+  return (estabelecimento: string, tipoDocumento: number | null) =>
+    porta.paraEmissao(estabelecimento, tipoDocumento);
+}
+
 @Module({})
 export class ModuloDocumento {}
 
@@ -67,7 +74,13 @@ export function moduloDocumento(ctx: ContextoModulo, opcoes: OpcoesModuloDocumen
     opcoes.fonte ??
     criarFonteDocumento(ctx.configuracao, env, {
       armazem,
-      ...(ctx.nucleo && cliente ? { idEstabelecimento: estabelecimentoDoCliente(cliente, ctx.nucleo) } : {}),
+      ...(ctx.nucleo && cliente
+        ? {
+            idEstabelecimento: estabelecimentoDoCliente(cliente, ctx.nucleo),
+            // 03-PEP L131: o PDF sai com o cabeçalho da regra do estabelecimento e do tipo de documento.
+            cabecalhoImpressao: cabecalhoDaEmissao(new PortaCabecalhoImpressaoPropria(ctx.nucleo, cliente)),
+          }
+        : {}),
     });
   return {
     module: ModuloDocumento,

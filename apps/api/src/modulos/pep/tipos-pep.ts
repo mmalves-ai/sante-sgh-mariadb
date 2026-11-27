@@ -1279,6 +1279,8 @@ export interface DocumentoProprioLido {
   readonly assinadoEm: string | null;
   readonly suspenso: boolean;
   readonly comoSuporte: boolean;
+  /** 03-PEP L131: o tipo de documento clínico (id), para a regra de cabeçalho da impressão (só no banco próprio). */
+  readonly tipoDocumento?: number;
 }
 
 export interface ProblemaLido {

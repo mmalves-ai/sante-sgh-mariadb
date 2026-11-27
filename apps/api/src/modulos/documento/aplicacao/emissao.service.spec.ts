@@ -188,3 +188,79 @@ describe('emissão em duas etapas', () => {
     expect(armazem.tamanho).toBe(4);
   });
 });
+
+describe('03-PEP L131: cabeçalho pela regra do tipo de documento', () => {
+  const comRegra = (
+    f: (
+      est: string,
+      tipo: number | null,
+    ) => Promise<{
+      linhas: string[];
+      rodape: string[];
+      exibeDadosPaciente: boolean;
+      exibeAssinatura: boolean;
+    }>,
+  ) =>
+    new EmissaoService({
+      armazem,
+      cliente: 'teste',
+      gotenbergUrl: 'http://127.0.0.1:3318',
+      registro,
+      retencao: { imutavel: false, duracaoMs: 60_000 },
+      produto: 'Produto de Teste',
+      baseUrlValidacao: 'https://rede-teste.exemplo.invalid',
+      nomeEstabelecimento: (c) => c,
+      raiz,
+      cabecalhoImpressao: f,
+    });
+  const comGrupos = {
+    ...pedido,
+    campos: [
+      { rotulo: 'Paciente', valor: 'Paciente Fictício de Teste', grupo: 'paciente' as const },
+      { rotulo: 'Corpo', valor: 'Texto de prova' },
+      { rotulo: 'Assinatura', valor: 'Linha de assinatura de prova', grupo: 'assinatura' as const },
+    ],
+  };
+
+  it('resolve pela regra do estabelecimento e do tipo do pedido e imprime as linhas e o rodapé', async () => {
+    const pedidos: [string, number | null][] = [];
+    await comRegra(async (e, t) => {
+      pedidos.push([e, t]);
+      return {
+        linhas: ['Hospital de Prova', 'CNPJ de prova'],
+        rodape: ['Rodapé de prova'],
+        exibeDadosPaciente: true,
+        exibeAssinatura: true,
+      };
+    }).emitir({ ...comGrupos, tipoDocumento: 7 });
+    expect(pedidos).toEqual([['zz', 7]]);
+    const h = await htmlEnviado();
+    expect(h).toContain('Hospital de Prova<br>CNPJ de prova');
+    expect(h).toContain('<p class="rodape">Rodapé de prova</p>');
+    expect(h).toContain('Paciente Fictício de Teste');
+    expect(h).toContain('Linha de assinatura de prova');
+  });
+
+  it('sem tipo no pedido, a regra geral (null); a regra esconde os dados do paciente e a assinatura', async () => {
+    const tipos: (number | null)[] = [];
+    await comRegra(async (_e, t) => {
+      tipos.push(t);
+      return { linhas: ['Hospital de Prova'], rodape: [], exibeDadosPaciente: false, exibeAssinatura: false };
+    }).emitir(comGrupos);
+    expect(tipos).toEqual([null]);
+    const h = await htmlEnviado();
+    expect(h).not.toContain('Paciente Fictício de Teste');
+    expect(h).not.toContain('Linha de assinatura de prova');
+    expect(h).toContain('Texto de prova');
+  });
+
+  it('falha da leitura da regra: sai com o nome do estabelecimento e todos os campos', async () => {
+    await comRegra(async () => {
+      throw new Error('banco fora');
+    }).emitir(comGrupos);
+    const h = await htmlEnviado();
+    expect(h).toContain('Paciente Fictício de Teste');
+    expect(h).toContain('Linha de assinatura de prova');
+    expect(h).not.toContain('class="rodape"');
+  });
+});

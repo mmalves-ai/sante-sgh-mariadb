@@ -596,6 +596,7 @@ export class DocumentosPepController {
       try {
         via = await fonte.emissao.segundaVia(anterior, g.texto, {
           titulo: TITULOS_PEP[modelo],
+          ...(proprio?.tipoDocumento ? { tipoDocumento: proprio.tipoDocumento } : {}),
           campos,
           autor: s.login,
           marcaSuporte: marca,
@@ -642,8 +643,11 @@ export class DocumentosPepController {
         codigo: just.codigo,
       });
     try {
+      // 03-PEP L131: o espelho no prontuário dá o tipo de documento clínico, para o cabeçalho da regra.
+      const proprio = await this.servico.porta.documentoSghDaOrigem(this.c(s), TABELA_DO_TIPO[tipo], id);
       // A justificativa da 1ª via fica na própria emissão, haja ou não espelho no prontuário.
       const r = await fonte.emissao.emitir({
+        ...(proprio?.tipoDocumento ? { tipoDocumento: proprio.tipoDocumento } : {}),
         rede: s.rede,
         estabelecimento: s.hospital,
         modelo,
@@ -656,7 +660,6 @@ export class DocumentosPepController {
         justificativa: just.justificativa,
       });
       // Com espelho no prontuário, também o evento do documento (tipo, justificativa, quem, quando), nunca apagado.
-      const proprio = await this.servico.porta.documentoSghDaOrigem(this.c(s), TABELA_DO_TIPO[tipo], id);
       if (proprio)
         await this.servico.porta.registrarEventoDocumento(this.sgh(s, 'pep.documento.impresso'), {
           documento: proprio.id,

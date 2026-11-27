@@ -1,6 +1,7 @@
 // 03-PEP L131: regra de cabeçalho por tipo de documento. Massa sintética.
 import { describe, expect, it } from 'vitest';
 import {
+  aplicarExibicao,
   montarCabecalho,
   type RegraCabecalho,
   resolverCabecalho,
@@ -124,5 +125,21 @@ describe('regra de cabeçalho', () => {
     });
     expect(padrao).toContain('<div>Hospital Sintético</div>');
     expect(padrao).not.toContain('class="rodape"');
+  });
+});
+
+describe('aplicarExibicao (03-PEP L131)', () => {
+  const campos = [
+    { rotulo: 'Paciente', valor: 'x', grupo: 'paciente' as const },
+    { rotulo: 'Corpo', valor: 'y' },
+    { rotulo: 'Assinatura', valor: 'z', grupo: 'assinatura' as const },
+  ];
+  it('esconde só o grupo que a regra desliga', () => {
+    const r = (p: boolean, a: boolean) =>
+      aplicarExibicao(campos, { exibeDadosPaciente: p, exibeAssinatura: a }).map((c) => c.rotulo);
+    expect(r(true, true)).toEqual(['Paciente', 'Corpo', 'Assinatura']);
+    expect(r(false, true)).toEqual(['Corpo', 'Assinatura']);
+    expect(r(true, false)).toEqual(['Paciente', 'Corpo']);
+    expect(r(false, false)).toEqual(['Corpo']);
   });
 });
