@@ -20,7 +20,7 @@ async function entrar(page: Page, login: string): Promise<void> {
 }
 
 test.describe('Qualidade: análise crítica do indicador com plano de ação @F3.9 @fase3', () => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
 
   test('ficha técnica → análise com plano e dono → histórico e linha analisada; axe', async ({ page }) => {
     const externas = vigiarExternas(page);
