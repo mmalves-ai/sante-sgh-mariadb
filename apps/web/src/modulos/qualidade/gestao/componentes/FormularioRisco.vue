@@ -82,7 +82,9 @@ async function gravar(): Promise<void> {
 </script>
 
 <template>
-  <form class="painel-ccih" data-testid="form-risco" @submit.prevent="gravar">
+  <form class="painel-ccih" data-testid="form-risco" novalidate @submit.prevent="gravar">
+    <!-- novalidate: a conferência é a do montarRisco, que diz na hora o que falta (o "obrigatório" nativo do nome do
+         controle barrava o envio sem mensagem; achado pelo E2E c2-060-controles-risco). -->
     <h2>
       {{
         risco
