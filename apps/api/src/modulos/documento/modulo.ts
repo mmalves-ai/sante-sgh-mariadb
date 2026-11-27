@@ -5,8 +5,21 @@
 // cliente, o estabelecimento e o usuário da sessão; tabela emissao_documento) espera o pedido de DDL do lote 02-06 e
 // a opção do registro por requisição em criarFonteDocumento (pedido ao integrador; fonte.ts é de outro lote). Até lá,
 // a fonte usa o registro em memória do processo, como antes.
+// W0-10: daqui saem também o armazém do PDF da assinatura ICP (ARMAZEM_PDF_ICP, sobre esta fonte) e o conteúdo do
+// documento clínico a assinar (FONTE_CONTEUDO_ICP, pelo serviço dos documentos do PEP, global, quando montado), que o
+// módulo assinatura recebe para a prévia, o PDF assinado e a fila do portal do médico externo. Sem o PEP, a fonte do
+// conteúdo fica nula e a assinatura responde indisponível, como antes.
 import { type DynamicModule, Module } from '@nestjs/common';
 import { fontesSinteticas } from '../../sessao/montar.js';
+import {
+  ARMAZEM_PDF_ICP,
+  armazemPdfIcp,
+  FONTE_CONTEUDO_ICP,
+  type FonteConteudoIcp,
+} from '../assinatura/public-api.js';
+import { PORTA_DOCUMENTOS, type PortaDocumentos } from '../pep/documentos-porta.js';
+import type { ServicoDocumentos } from '../pep/documentos-servico.js';
+import { SERVICO_DOCUMENTOS } from '../pep/documentos.controller.js';
 import type { ContextoModulo } from '../registro.js';
 import { DocumentoController } from './documento.controller.js';
 import { criarFonteDocumento, FONTE_DOCUMENTO, type FonteDocumento } from './fonte.js';
@@ -42,8 +55,28 @@ export function moduloDocumento(ctx: ContextoModulo, opcoes: OpcoesModuloDocumen
     module: ModuloDocumento,
     global: true,
     controllers: [DocumentoController],
-    providers: [{ provide: FONTE_DOCUMENTO, useValue: fonte }],
-    exports: [FONTE_DOCUMENTO],
+    providers: [
+      { provide: FONTE_DOCUMENTO, useValue: fonte },
+      { provide: ARMAZEM_PDF_ICP, useValue: armazemPdfIcp(fonte) },
+      {
+        provide: FONTE_CONTEUDO_ICP,
+        useFactory: (
+          servico: ServicoDocumentos | null,
+          porta: PortaDocumentos | null,
+        ): FonteConteudoIcp | null =>
+          servico && porta
+            ? {
+                conteudo: (c, d) => servico.conteudoParaAssinatura(c, d),
+                nomes: (c, ps) => porta.nomes(c, ps),
+              }
+            : null,
+        inject: [
+          { token: SERVICO_DOCUMENTOS, optional: true },
+          { token: PORTA_DOCUMENTOS, optional: true },
+        ],
+      },
+    ],
+    exports: [FONTE_DOCUMENTO, ARMAZEM_PDF_ICP, FONTE_CONTEUDO_ICP],
   };
 }
 
