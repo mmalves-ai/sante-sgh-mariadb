@@ -43,7 +43,9 @@ situação do valor crítico não passa a "Já com plantonista/supervisor" depoi
 opção "Certificado em nuvem" (pm-ass-certificado).
 Atualização 27/11 10h (6b18fddb, b595e04b): o crítico e o certificado em nuvem voltaram a ser ligados (perdidos com o fim do
 boot antigo, d0c9ef19). Seguem 2/4: a fila da assinatura remota está vazia porque FONTE_CONTEUDO_ICP e ARMAZEM_PDF_ICP não
-têm provedor na API; e o teste do crítico esbarra no aviso de exame repetido em 24 h da massa sintética do dia.
+têm provedor na API; e o teste do crítico esbarra no aviso de exame repetido em 24 h da massa sintética do dia. Atualização 27/11 11h
+(e343781e, eb5e7936): fila da assinatura religada (fonte do conteúdo, armazém do PDF e documentos do PEP em memória);
+w0-10 3/4 e m26 3/3. Resta o teste "ciência com a conduta" (pedido de exame repetido em 24 h na massa sintética).
 
 | Fase | Ficha | Linha | Função | Motivo | O que o hospital faz |
 |---|---|---|---|---|---|
