@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.recolher (alcance d82cd74a4a17). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.recolher (alcance 36e5032b5dbd). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -2726,6 +2726,7 @@ REVOKE SELECT, INSERT, UPDATE ON regra_comissao_parcela FROM sgh_mod_operadora;
 REVOKE SELECT, INSERT, UPDATE ON regra_comissao_venda FROM sgh_mod_operadora;
 REVOKE SELECT, INSERT, UPDATE ON regra_coparticipacao FROM sgh_mod_operadora;
 REVOKE SELECT, INSERT, UPDATE ON regra_critica_conta FROM sgh_mod_operadora;
+REVOKE SELECT, INSERT, UPDATE ON regra_franquia_plano FROM sgh_mod_operadora;
 REVOKE SELECT, INSERT, UPDATE ON regra_reajuste_sinistralidade FROM sgh_mod_operadora;
 REVOKE SELECT, INSERT, UPDATE ON regra_reajuste_sinistralidade_faixa FROM sgh_mod_operadora;
 REVOKE SELECT, INSERT, UPDATE ON regra_reembolso_plano FROM sgh_mod_operadora;
@@ -2756,6 +2757,7 @@ REVOKE SELECT ON termo_terminologia FROM sgh_mod_operadora;
 REVOKE SELECT ON tipo_acomodacao_plano FROM sgh_mod_operadora;
 REVOKE SELECT ON tipo_credor FROM sgh_mod_operadora;
 REVOKE SELECT ON tipo_documento_financeiro FROM sgh_mod_operadora;
+REVOKE SELECT ON tipo_franquia FROM sgh_mod_operadora;
 REVOKE SELECT ON tipo_guia_plano FROM sgh_mod_operadora;
 REVOKE SELECT ON tipo_lancamento_fatura FROM sgh_mod_operadora;
 REVOKE SELECT, INSERT, UPDATE ON tipo_prestador_rede FROM sgh_mod_operadora;
@@ -4237,6 +4239,7 @@ REVOKE SELECT ON trilha_encadeamento_inicio FROM sgh_mod_suporte;
 REVOKE SELECT ON usuario FROM sgh_mod_suporte;
 REVOKE SELECT ON usuario_estabelecimento FROM sgh_mod_suporte;
 REVOKE SELECT ON usuario_perfil FROM sgh_mod_suporte;
+REVOKE SELECT, INSERT, UPDATE ON adesao_ata_registro_preco FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON aditivo_contrato FROM sgh_mod_suprimentos;
 REVOKE SELECT ON agendamento_cirurgico FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON anexo_contrato FROM sgh_mod_suprimentos;
@@ -4294,12 +4297,14 @@ REVOKE SELECT ON estabelecimento FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON estabilidade_insumo FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON etapa_solicitacao_opme FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON etiqueta_identificacao FROM sgh_mod_suprimentos;
+REVOKE SELECT, INSERT, UPDATE ON evento_contabil FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE, DELETE ON evento_processo_licitatorio FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON excecao_orcamentaria FROM sgh_mod_suprimentos;
 REVOKE SELECT ON fabricante FROM sgh_mod_suprimentos;
 REVOKE SELECT ON faixa_avaliacao_fornecedor FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON faixa_sla_contrato FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE, DELETE ON faixa_taxa_consignacao FROM sgh_mod_suprimentos;
+REVOKE SELECT, INSERT, UPDATE ON fato_contabil FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON fechamento_estoque FROM sgh_mod_suprimentos;
 REVOKE SELECT ON fonte_referencia_matmed FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON garantia_contrato FROM sgh_mod_suprimentos;

@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.aplicar (alcance d82cd74a4a17). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.aplicar (alcance 36e5032b5dbd). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -2776,6 +2776,7 @@ GRANT SELECT, INSERT, UPDATE ON regra_comissao_parcela TO sgh_mod_operadora;
 GRANT SELECT, INSERT, UPDATE ON regra_comissao_venda TO sgh_mod_operadora;
 GRANT SELECT, INSERT, UPDATE ON regra_coparticipacao TO sgh_mod_operadora;
 GRANT SELECT, INSERT, UPDATE ON regra_critica_conta TO sgh_mod_operadora;
+GRANT SELECT, INSERT, UPDATE ON regra_franquia_plano TO sgh_mod_operadora;
 GRANT SELECT, INSERT, UPDATE ON regra_reajuste_sinistralidade TO sgh_mod_operadora;
 GRANT SELECT, INSERT, UPDATE ON regra_reajuste_sinistralidade_faixa TO sgh_mod_operadora;
 GRANT SELECT, INSERT, UPDATE ON regra_reembolso_plano TO sgh_mod_operadora;
@@ -2806,6 +2807,7 @@ GRANT SELECT ON termo_terminologia TO sgh_mod_operadora;
 GRANT SELECT ON tipo_acomodacao_plano TO sgh_mod_operadora;
 GRANT SELECT ON tipo_credor TO sgh_mod_operadora;
 GRANT SELECT ON tipo_documento_financeiro TO sgh_mod_operadora;
+GRANT SELECT ON tipo_franquia TO sgh_mod_operadora;
 GRANT SELECT ON tipo_guia_plano TO sgh_mod_operadora;
 GRANT SELECT ON tipo_lancamento_fatura TO sgh_mod_operadora;
 GRANT SELECT, INSERT, UPDATE ON tipo_prestador_rede TO sgh_mod_operadora;
@@ -4287,6 +4289,7 @@ GRANT SELECT ON trilha_encadeamento_inicio TO sgh_mod_suporte;
 GRANT SELECT ON usuario TO sgh_mod_suporte;
 GRANT SELECT ON usuario_estabelecimento TO sgh_mod_suporte;
 GRANT SELECT ON usuario_perfil TO sgh_mod_suporte;
+GRANT SELECT, INSERT, UPDATE ON adesao_ata_registro_preco TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON aditivo_contrato TO sgh_mod_suprimentos;
 GRANT SELECT ON agendamento_cirurgico TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON anexo_contrato TO sgh_mod_suprimentos;
@@ -4344,12 +4347,14 @@ GRANT SELECT ON estabelecimento TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON estabilidade_insumo TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON etapa_solicitacao_opme TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON etiqueta_identificacao TO sgh_mod_suprimentos;
+GRANT SELECT, INSERT, UPDATE ON evento_contabil TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE, DELETE ON evento_processo_licitatorio TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON excecao_orcamentaria TO sgh_mod_suprimentos;
 GRANT SELECT ON fabricante TO sgh_mod_suprimentos;
 GRANT SELECT ON faixa_avaliacao_fornecedor TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON faixa_sla_contrato TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE, DELETE ON faixa_taxa_consignacao TO sgh_mod_suprimentos;
+GRANT SELECT, INSERT, UPDATE ON fato_contabil TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON fechamento_estoque TO sgh_mod_suprimentos;
 GRANT SELECT ON fonte_referencia_matmed TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON garantia_contrato TO sgh_mod_suprimentos;
