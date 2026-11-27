@@ -138,3 +138,10 @@ cada uma com construir, revisão adversarial e correção.
   só; a confirmação final fica por script.
 - Resultado: lote 1 (1b196ec7) 38 de 109 arquivos verdes; confirmação (c1eec038) 38 de 71 corrigidos verdes; 76 de 109 no
   total. Os 33 vermelhos restantes vão às pendências sem 3ª tentativa (regra 5 do plano de redução).
+
+| Rodada (26/11, tarde e noite) | Estimativa | Teto | Gasto | Agentes |
+|---|---|---|---|---|
+| completar-5 | 7 M | 9 M | cerca de 2,6 M | 6 (5 funções e 1 de decisões; ~0,45 M cada) |
+| completar-6 | 2,5 M | 3,5 M | cerca de 1,5 M | 2 (~0,75 M cada); a prova do C2-024 rodou por script |
+
+- As duas abaixo da estimativa: commit antes da prova, uma prova só, uma função por agente.

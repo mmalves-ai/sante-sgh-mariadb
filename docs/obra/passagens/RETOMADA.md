@@ -641,3 +641,12 @@ corrente de CronCreate morre com a sessão; ao retomar, recriar (formato na mem�
 - Depois do sha dela: push; painel 5310 a partir de sante-sgh-wt/painel (worktree próprio; o ci-sim é comum às sessões);
   renumerar decisoes-tomadas.md (há 13 e 14 em dobro; as dela viraram 39 a 43); C2-024 e C2-057 (arquivos dela).
 - Pendências: docs/obra/pendencias-2026-11-26.md (35 Parciais da integrar-4 com o motivo real, mais C2-103 com E2E vermelho).
+
+## Passagem de 26/11 21h15 (Sessão de Construção)
+- Push: origin/main = 8acaefe1 (ci-sim VERDE), sobre a junção 4323478b da Painel de Injeção (recusas da carga, fase 2).
+  Painel 5310/API 3310 no 8acaefe1 (build em sante-sgh-wt/painel, conferido contra o commit). Migrações no
+  cliente_prontocardio aplicadas pela Painel de Injeção (729 arquivos).
+- Fichas 370/467 (79%). Roteiro da revisão com o dono: docs/obra/revisao-27-11.md.
+- Regra (Painel de Injeção): migração nova sempre em arquivo novo e idempotente; o aplicador para no primeiro "já existe"
+  dos arquivos antigos, então mudança em arquivo antigo não chega a cliente existente.
+- Nenhuma rodada aberta. Próximo: o que o dono priorizar na revisão de 27/11.
