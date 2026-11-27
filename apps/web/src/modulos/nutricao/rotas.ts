@@ -35,6 +35,12 @@ export const rotasNutricao: RouteRecordRaw[] = [
     meta: { permissao: P.mapaLer },
   },
   {
+    path: '/nutricao/refeicao-acompanhante',
+    name: 'nutricao.refeicao-acompanhante',
+    component: () => import('./telas/RefeicaoAcompanhanteTela.vue'),
+    meta: { permissao: P.mapaLer },
+  },
+  {
     path: '/nutricao/composicao',
     name: 'nutricao.composicao',
     component: () => import('./telas/ComposicaoAlimentosTela.vue'),

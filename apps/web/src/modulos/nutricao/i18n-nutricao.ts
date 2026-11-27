@@ -2,12 +2,14 @@
 // produto (ADR 0023): só o que a pessoa faz aqui.
 import { mensagensCardapio } from './i18n-cardapio.js';
 import { mensagensComposicao } from './i18n-composicao.js';
+import { mensagensDireitoRefeicao } from './i18n-direito-refeicao.js';
 import { mensagensOcorrenciaRefeicao } from './i18n-ocorrencia-refeicao.js';
 
 export const mensagensNutricao = {
   ocorrencias: mensagensOcorrenciaRefeicao,
   cardapio: mensagensCardapio,
   composicao: mensagensComposicao,
+  direitoRefeicao: mensagensDireitoRefeicao,
   carregando: 'Carregando…',
   nenhum: 'Nada encontrado.',
   cortada: 'A lista passou do limite e foi cortada; filtre por unidade.',
@@ -394,6 +396,13 @@ export const mensagensNutricao = {
       'O registro fica inativo e visível, com o motivo. Ele sai do último registro do paciente. Só quem registrou estorna.',
   },
   recusas: {
+    'refeicao-repetida': 'Esta refeição já foi lançada para o acompanhante nesta data.',
+    'refeicao-ja-decidida': 'A fonte pagadora já decidiu esta refeição.',
+    'refeicao-cancelada': 'A refeição está cancelada.',
+    'refeicao-na-conta': 'A refeição já está na conta do atendimento: o estorno é pelo faturamento.',
+    'atendimento-sem-conta': 'O atendimento não tem conta aberta para lançar a refeição cobrável.',
+    'refeicao-sem-preco': 'A refeição não tem preço cadastrado para a conta.',
+    'item-sem-codigo-de-conta': 'A refeição não tem o item de conta cadastrado para a cobrança.',
     'triagem-final-pendente':
       'Alguma resposta da triagem inicial foi "sim": responda o estado nutricional e a gravidade da doença.',
     'idade-desconhecida':

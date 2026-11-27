@@ -175,9 +175,11 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // como fase 7); a contagem acompanha.
 // C2-024 (05-SUP linha 14, F3): o item "Etiquetas de identificação" do estoque e almoxarifado entrou à mão (mesmo
 // motivo); a contagem acompanha.
+// C1-030 (04-HOT linha 133): o item "Refeição do acompanhante: direito e cobrança" do serviço de nutrição entrou à
+// mão (mesmo motivo); a contagem acompanha.
 // C2-113 (08-SGO linha 95, F7): o item "Declaração de saúde, CPT e portabilidade" da operadora própria entrou à mão
 // (mesmo motivo; F7 vai como fase 7); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":527,"M":198,"P":57,"N":272};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":528,"M":198,"P":57,"N":273};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -531,6 +533,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.cardapio-ficha-tecnica-e-producao","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Cardápio, ficha técnica e produção"],"titulo":"Cardápio, ficha técnica e produção","selo":"N","fase":7,"rota":"/nutricao/cardapio","permissao":"hotelaria.mapaDieta.ler"},
   {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.composicao-nutricional-dos-alimentos","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Composição nutricional dos alimentos"],"titulo":"Composição nutricional dos alimentos","selo":"N","fase":7,"rota":"/nutricao/composicao","permissao":"hotelaria.mapaDieta.ler"},
   {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.etiqueta-de-bandeja-e-dieta-do-acompanhante","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Etiqueta de bandeja e dieta do acompanhante"],"titulo":"Etiqueta de bandeja e dieta do acompanhante","selo":"N","fase":5,"rota":"/nutricao/mapa?aba=etiquetas","permissao":"hotelaria.mapaDieta.ler"},
+  {"id":"hotelaria-e-apoio.servico-de-nutricao-e-dietetica.refeicao-do-acompanhante-direito-e-cobranca","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Serviço de nutrição e dietética","Refeição do acompanhante: direito e cobrança"],"titulo":"Refeição do acompanhante: direito e cobrança","selo":"N","fase":7,"rota":"/nutricao/refeicao-acompanhante","permissao":"hotelaria.mapaDieta.ler"},
   {"id":"hotelaria-e-apoio.portaria-e-visitantes.cadastro-de-visitantes-e-cracha","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Portaria e visitantes","Cadastro de visitantes e crachá"],"titulo":"Cadastro de visitantes e crachá","selo":"N","fase":5,"rota":"/portaria","permissao":"hotelaria.visita.ler"},
   {"id":"hotelaria-e-apoio.portaria-e-visitantes.regras-e-bloqueio-de-visita-por-paciente","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Portaria e visitantes","Regras e bloqueio de visita por paciente"],"titulo":"Regras e bloqueio de visita por paciente","selo":"N","fase":5,"rota":"/portaria/regras","permissao":"hotelaria.visita.regrar"},
   {"id":"hotelaria-e-apoio.portaria-e-visitantes.acompanhantes-com-direito-legal","area":"HOTELARIA E APOIO","grupo":null,"caminho":["Hotelaria e apoio","Portaria e visitantes","Acompanhantes com direito legal"],"titulo":"Acompanhantes com direito legal","selo":"N","fase":5,"rota":"/portaria/acompanhantes","permissao":"hotelaria.acompanhante.registrar"},
