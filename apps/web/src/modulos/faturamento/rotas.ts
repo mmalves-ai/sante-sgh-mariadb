@@ -322,7 +322,7 @@ export const rotasFaturamento: RouteRecordRaw[] = [
       // Quem configura (o administrador, por perfil) abre a tela sem precisar ler a produção SUS.
       permissao: 'faturamento.sus.ler',
       permissaoOu: ['faturamento.susConfiguracao.editar'],
-      menu: 'Faturamento > Faturamento SUS > Configuração (permissões por setor e parâmetros)',
+      menu: 'Faturamento > Faturamento SUS > Configuração do faturamento SUS',
     },
   },
   // M51 (etapa 4): a AIH, o retorno do gestor e os leitos de UTI habilitados (desligados por estabelecimento até haver

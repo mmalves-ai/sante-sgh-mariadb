@@ -28,7 +28,7 @@ test.describe('@C1-051 Faturamento SUS: permissão por setor e parâmetros por i
     const externas = vigiarExternas(page);
     // A supervisão do faturamento SUS (o administrador não tem permissão de faturamento: segregação).
     await entrar(page, 'SINT.SUS.CONFIGURACAO');
-    await (await itemDoMenu(page, 'Configuração (permissões por setor e parâmetros)')).click();
+    await (await itemDoMenu(page, 'Configuração do faturamento SUS')).click();
     await expect(page).toHaveURL(/\/faturamento\/sus\/configuracao/);
     const tela = page.getByTestId('tela-configuracao-sus');
     await expect(tela).toBeVisible();

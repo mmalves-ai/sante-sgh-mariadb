@@ -3,6 +3,8 @@
 // que o usuário vê, de tools/matriz/src/rotulos-de-produto.ts.
 import type { ContagemMenu, ItemMenu } from './tipos.js';
 
+// C1-051 (06-SUS L53, F7): o item "Configuração do faturamento SUS" (permissão por usuário e setor e parâmetros por
+// instrumento) entrou à mão (mesmo motivo); a contagem acompanha.
 // C2-072 (07-FIN L149, F8): os itens "Imobilizado em andamento" e "Seguro dos bens" do patrimônio entraram à mão
 // (mesmo motivo); a contagem acompanha.
 // C2-101 (07-FIN L127, F8): o item "Consolidação gerencial" da contabilidade entrou à mão (mesmo motivo); a contagem
@@ -185,7 +187,7 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // (mesmo motivo; F7 vai como fase 7); a contagem acompanha.
 // C1-055 (02-REC linha 35): o item "Regras de impressão das fichas" da recepção entrou à mão (mesmo motivo); a
 // contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":531,"M":198,"P":57,"N":276};
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":532,"M":198,"P":57,"N":277};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -468,6 +470,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"faturamento.faturamento-sus.transplantes-central-estadual","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Transplantes para a central estadual"],"titulo":"Transplantes para a central estadual","selo":"N","fase":7,"rota":"/faturamento/sus/transplantes","permissao":"faturamento.susTransplante.ler"},
   {"id":"faturamento.faturamento-sus.habilitacoes-e-servicos-do-estabelecimento","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Habilitações e serviços do estabelecimento"],"titulo":"Habilitações e serviços do estabelecimento","selo":"N","fase":7,"rota":"/faturamento/sus/cadastros/estabelecimento","permissao":"faturamento.sus.ler"},
   {"id":"faturamento.faturamento-sus.repasse-da-producao-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Repasse da produção SUS"],"titulo":"Repasse da produção SUS","selo":"N","fase":7,"rota":"/faturamento/sus/repasse","permissao":"repasse.apuracao.ler"},
+  {"id":"faturamento.faturamento-sus.configuracao-do-faturamento-sus","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Faturamento SUS","Configuração do faturamento SUS"],"titulo":"Configuração do faturamento SUS","selo":"N","fase":7,"rota":"/faturamento/sus/configuracao","permissao":"faturamento.sus.ler"},
   {"id":"faturamento.repasse-medico.regras-de-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Regras de repasse"],"titulo":"Regras de repasse","selo":"M","fase":3,"rota":"/repasse/regras","permissao":"repasse.regra.ler"},
   {"id":"faturamento.repasse-medico.remuneracao-variavel","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Remuneração variável"],"titulo":"Remuneração variável","selo":"N","fase":7,"rota":"/repasse/remuneracao-variavel","permissao":"repasse.regra.ler"},
   {"id":"faturamento.repasse-medico.apuracao-faturamento-x-repasse","area":"FATURAMENTO","grupo":null,"caminho":["Faturamento","Repasse médico","Apuração"],"titulo":"Apuração","selo":"M","fase":3,"rota":"/repasse/apuracao","permissao":"repasse.apuracao.ler"},
