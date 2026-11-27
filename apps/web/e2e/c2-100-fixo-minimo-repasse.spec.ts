@@ -106,10 +106,11 @@ async function medicoLivre(
 
 /** Sem médico livre: cadastra o favorecido próprio de um médico da busca de prestadores que ainda não tem nenhum. */
 async function favorecerSintetico(
-  api: APIRequestContext,
+  page: Page,
   de: string,
   ate: string,
 ): Promise<{ profissional: number; nome: string } | null> {
+  const api = page.request;
   const fav = await api.get('/api/repasse/favorecidos');
   if (!fav.ok()) return null;
   const comFavorecido = new Set(
@@ -119,7 +120,10 @@ async function favorecerSintetico(
   if (!r.ok()) return null;
   for (const p of (await r.json()) as { prestador: number }[]) {
     if (comFavorecido.has(p.prestador)) continue;
+    // POST da página com o CSRF da sessão e a Idempotency-Key, como a tela faz.
+    const csrf = (await page.context().cookies()).find((c) => c.name === 'sgh_csrf')?.value ?? '';
     const novo = await api.post('/api/repasse/favorecidos', {
+      headers: { 'x-csrf': csrf, 'idempotency-key': `e2e-c2-100-${Date.now()}-${p.prestador}` },
       data: { profissional: p.prestador, tipo: 'proprio_profissional', inicio: de },
     });
     if (novo.ok()) return medicoLivre(api, de, ate);
@@ -149,8 +153,7 @@ test.describe('valor fixo mensal e mínimo garantido do repasse @C2-100', () => 
     const ate = ultimoDia(de);
     // Fonte sintética (sem banco próprio, como no CI): sem favorecido próprio cadastrado, o teste cadastra o do médico
     // sintético pela API (o analista do repasse edita favorecidos) antes de procurar o médico livre.
-    const medico =
-      (await medicoLivre(page.request, de, ate)) ?? (await favorecerSintetico(page.request, de, ate));
+    const medico = (await medicoLivre(page.request, de, ate)) ?? (await favorecerSintetico(page, de, ate));
     test.skip(
       medico === null,
       'Sem médico com favorecido próprio vigente e sem fixo nem mínimo na competência da apuração.',
