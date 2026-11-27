@@ -5,7 +5,8 @@ sintéticos. Os nomes têm prefixo fixo e só eles são criados ou apagados (o a
                             (plataforma_e2e_<sufixo>) pelo "criar novo cliente" DA ÁRVORE do commit (migrações, ações,
                             sementes); semeia os estabelecimentos sintéticos (ESTABELECIMENTOS, REDE_SINTETICA_SEGUNDO) e
                             as contas sintéticas da fonte sintética da árvore, com o mesmo id que a sessão sintética usa
-                            (900000 + posição em CONTAS_SINTETICAS), e refaz as numerações dos estabelecimentos.
+                            (900000 + posição em CONTAS_SINTETICAS), refaz as numerações dos estabelecimentos e aplica
+                            a massa sintética de apps/web/e2e/massa-banco/*.sql (ordem do nome; idempotente).
   apagar <arvore> <sufixo>  DROP só de cliente_e2e_<sufixo> e plataforma_e2e_<sufixo>, conferido o prefixo.
 
 A senha do MariaDB vem de MARIADB_SENHA ou do arquivo SGH_ARQUIVO_AMBIENTE (o e2e-vm.sh o grava; nunca impressa). Espelho padrão da base: E2E_ESPELHO
@@ -109,8 +110,12 @@ def criar(arvore, sufixo):
                              for i, l in enumerate(logins)) + ";")
     sql(arvore, cliente, "\n".join(linhas))
     num = modulo(arvore, "configurar_numeracoes").carregar(cliente)
+    # Massa sintética dos E2E que pedem o que o produto não cadastra por tela (catálogo oficial ou carga), em ordem.
+    massas = sorted((Path(arvore) / "apps/web/e2e/massa-banco").glob("*.sql"))
+    for arquivo in massas:
+        sql(arvore, cliente, arquivo.read_text(encoding="utf-8"))
     print(json.dumps({"cliente": f"e2e_{sufixo}", "banco": cliente, "plataforma": plataforma, "tabelas": r["tabelas"],
-                      "estabelecimentos": len(ests), "contas": len(logins), "numeracoes": num.get("numeracoes"),
+                      "estabelecimentos": len(ests), "contas": len(logins), "numeracoes": num.get("numeracoes"), "massas": len(massas),
                       "espelho": "aviso" not in r["espelho"]}, ensure_ascii=False))
 
 
