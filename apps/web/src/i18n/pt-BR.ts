@@ -32,6 +32,7 @@ import { mensagensPortaria } from '../modulos/portaria/i18n.js';
 import { mensagensRelatorios } from '../modulos/relatorios/i18n.js';
 import { mensagensIntegracoes } from '../modulos/integracoes/i18n.js';
 import { mensagensFachada } from '../modulos/integracoes/i18n-fachada.js';
+import { mensagensIntegracoesExternas } from '../modulos/integracoes/i18n-integracoes-externas.js';
 import { mensagensAdt } from '../modulos/adt/i18n.js';
 import { mensagensTrabalho } from '../modulos/inicio/i18n.js';
 import { mensagensSuprimentos } from '../modulos/suprimentos/i18n.js';
@@ -2447,6 +2448,8 @@ export const mensagensWeb = {
   relatorios: mensagensRelatorios,
   integracoes: mensagensIntegracoes,
   fachada: mensagensFachada,
+  // Decisão 53: a central de integrações externas (simulador e real).
+  integracoesExternas: mensagensIntegracoesExternas,
   // M28: estoque, almoxarifado e compras.
   suprimentos: mensagensSuprimentos,
   farmacia: mensagensFarmacia,

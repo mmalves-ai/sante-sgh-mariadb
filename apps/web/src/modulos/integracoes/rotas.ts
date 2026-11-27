@@ -55,6 +55,13 @@ export const rotasIntegracoes: RouteRecordRaw[] = [
     meta: { permissao: 'integracao.fachada.ler' },
   },
   {
+    // Decisão 53: a central de integrações externas (simulador e real, parâmetros, credenciais no cofre).
+    path: '/administracao/integracoes-externas',
+    name: 'integracoes.externas',
+    component: () => import('./telas/IntegracoesExternasTela.vue'),
+    meta: { permissao: 'config.integracaoExterna.ler' },
+  },
+  {
     path: '/pa/classificacao-externa',
     name: 'integracoes.classificacaoExterna',
     component: () => import('./telas/ClassificacaoExternaTela.vue'),

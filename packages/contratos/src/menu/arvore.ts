@@ -189,7 +189,9 @@ import type { ContagemMenu, ItemMenu } from './tipos.js';
 // contagem acompanha.
 // C1-054 (08-INTG L131, F7): o item "Serviços web do SUS" (rastreamento de câncer e cadastro de prestador) entrou à
 // mão (mesmo motivo); a contagem acompanha.
-export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":533,"M":198,"P":57,"N":278};
+// Decisão 53 do dono: o item "Integrações externas" da administração (central de simulador e real, parâmetros e
+// credenciais) entrou à mão (mesmo motivo; F7); a contagem acompanha.
+export const CONTAGEM_DO_CABECALHO: ContagemMenu = {"total":534,"M":198,"P":57,"N":279};
 
 export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"inicio.minha-fila-de-trabalho-worklist-do-perfil","area":"INÍCIO","grupo":null,"caminho":["Início","Minha fila de trabalho"],"titulo":"Minha fila de trabalho","selo":"N","fase":2,"rota":"/inicio","permissao":"acesso.inicio.ler"},
@@ -712,6 +714,7 @@ export const ARVORE_MENU: readonly ItemMenu[] = [
   {"id":"administracao.integracoes.parceiros-externos-indices-de-uti-e-outros","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","Parceiros externos"],"titulo":"Parceiros externos","selo":"M","fase":3,"rota":"/admin/integracoes/parceiros","permissao":"integracao.parceiro.ler"},
   {"id":"administracao.integracoes.sms-e-whatsapp-confirmacoes","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","SMS e WhatsApp"],"titulo":"SMS e WhatsApp","selo":"P","fase":3,"rota":"/admin/integracoes/mensagens","permissao":"integracao.mensagem.ler"},
   {"id":"administracao.integracoes.fachada-sante-api-hal-ai-para-quando-o-modelo-evoluir","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","Fachada sante-api para quando o modelo evoluir"],"titulo":"Fachada sante-api para quando o modelo evoluir","selo":"N","fase":7,"rota":"/administracao/integracoes/fachada","permissao":"integracao.fachada.ler"},
+  {"id":"administracao.integracoes.integracoes-externas-simulador-e-real","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","Integrações externas"],"titulo":"Integrações externas","selo":"N","fase":7,"rota":"/administracao/integracoes-externas","permissao":"config.integracaoExterna.ler"},
   {"id":"administracao.integracoes.monitor-de-filas-e-reprocessamento","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","Monitor de filas e reprocessamento"],"titulo":"Monitor de filas e reprocessamento","selo":"N","fase":3,"rota":"/admin/integracoes/monitor","permissao":"integracao.fila.ler"},
   {"id":"administracao.integracoes.fila-erp-corporativo","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","Fila do ERP corporativo"],"titulo":"Fila do ERP corporativo","selo":"N","fase":7,"rota":"/admin/integracoes/erp","permissao":"integracao.filaErp.ler"},
   {"id":"administracao.integracoes.leiautes-de-importacao-cep","area":"ADMINISTRAÇÃO","grupo":null,"caminho":["Administração","Integrações","Leiautes de importação"],"titulo":"Leiautes de importação","selo":"M","fase":1,"rota":"/administracao/integracoes/leiautes","permissao":"catalogo.leiaute.ler"},

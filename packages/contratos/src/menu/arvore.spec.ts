@@ -7,7 +7,7 @@ import { ARVORE_MENU, CONTAGEM_DO_CABECALHO } from './arvore.js';
 
 describe('menu gerado da árvore (regra 12)', () => {
   it('total e selos M, P e N iguais ao cabeçalho do arquivo', () => {
-    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 533, M: 198, P: 57, N: 278 });
+    expect(CONTAGEM_DO_CABECALHO).toEqual({ total: 534, M: 198, P: 57, N: 279 });
     expect(ARVORE_MENU).toHaveLength(CONTAGEM_DO_CABECALHO.total);
     expect(ARVORE_MENU.filter((i) => i.selo === 'M')).toHaveLength(CONTAGEM_DO_CABECALHO.M);
     expect(ARVORE_MENU.filter((i) => i.selo === 'P')).toHaveLength(CONTAGEM_DO_CABECALHO.P);
@@ -15,7 +15,7 @@ describe('menu gerado da árvore (regra 12)', () => {
   });
 
   it('ids estáveis e únicos; cada item tem fase F0 a F7 e caminho que termina no título', () => {
-    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(533);
+    expect(new Set(ARVORE_MENU.map((i) => i.id)).size).toBe(534);
     for (const i of ARVORE_MENU) {
       expect(i.id).toMatch(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/);
       expect(i.fase).toBeGreaterThanOrEqual(0);
@@ -156,6 +156,7 @@ describe('menu gerado da árvore (regra 12)', () => {
         '/administracao/empresa', // M10
         '/administracao/implantacao', // C2-025 (01-ADM L98)
         '/administracao/integracoes/fachada', // M58 (etapa 4: fachada da API de integração da Hal-AI)
+        '/administracao/integracoes-externas', // decisão 53: central de integrações externas
         '/administracao/integracoes/leiautes', // M13
         '/administracao/liberacao', // M08 (POL-3)
         '/administracao/notificacoes', // M10
