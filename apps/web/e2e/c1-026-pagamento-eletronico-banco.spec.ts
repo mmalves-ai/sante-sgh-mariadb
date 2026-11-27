@@ -57,8 +57,15 @@ async function ligarContasPagar(page: Page): Promise<void> {
     .getByTestId('mensagem-liberacao')
     .or(page.getByTestId('recusa-liberacao'))
     .or(form.getByRole('alert'));
-  await expect(fim.first()).toBeVisible({ timeout: 30_000 });
-  expect(await fim.first().innerText()).toContain('chave(s) alterada(s)');
+  await expect
+    .poll(
+      async () =>
+        (await fim.allInnerTexts()).filter((t) => !t.includes('Pré-requisito registrado')).join(' | '),
+      {
+        timeout: 30_000,
+      },
+    )
+    .toContain('chave(s) alterada(s)');
 }
 
 const dia = (mais: number) => new Date(Date.now() + mais * 86_400_000).toISOString().slice(0, 10);
