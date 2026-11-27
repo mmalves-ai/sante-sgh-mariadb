@@ -7,7 +7,7 @@
 import type { TipoDocumentoAberto } from '@sgh/contratos';
 import { JUSTIFICATIVA_MINIMA_IMPRESSAO, RAZOES_IMPRESSAO } from '@sgh/dominio-pep';
 import { SanteAlerta, SanteBotao, SanteDialogo, SanteSelecao } from '@sgh/ui';
-import { useQuery } from '@tanstack/vue-query';
+import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import MensagemErro from '../../../../casca/MensagemErro.vue';
@@ -17,6 +17,7 @@ import { dataHoraBr } from '../../formato.js';
 const props = defineProps<{ paciente: number; tipo: TipoDocumentoAberto; id: number }>();
 const visivel = defineModel<boolean>('visivel', { required: true });
 const { t } = useI18n();
+const consultas = useQueryClient();
 const doc = useQuery({
   queryKey: computed(() => ['pep', 'doc', 'aberto', props.paciente, props.tipo, props.id]),
   queryFn: () => abrirDocumento(props.paciente, props.tipo, props.id),
@@ -64,6 +65,10 @@ async function imprimir(): Promise<void> {
       ),
     );
     impressoes.value++;
+    // A via saiu: a leitura das vias guardada (staleTime) diria "nunca impresso" ao reabrir o documento.
+    void consultas.invalidateQueries({
+      queryKey: ['pep', 'doc', 'vias', props.paciente, props.tipo, props.id],
+    });
     justificativa.value = '';
     motivo.value = null;
     complemento.value = '';
