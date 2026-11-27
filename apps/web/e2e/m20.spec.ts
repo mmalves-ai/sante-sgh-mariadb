@@ -20,7 +20,7 @@ async function entrar(page: Page, login: string): Promise<void> {
   await expect(page).toHaveURL(/\/inicio/);
 }
 
-test.describe('Atendimento ambulatorial e pronto atendimento @M20 @fase2 @jornada', () => {
+test.describe('Atendimento ambulatorial e pronto atendimento @M20 @fase2', () => {
   test.setTimeout(180_000);
 
   test('senha → abertura → pulseira → fila do consultório (chamar, atender) → encerramento; axe', async ({

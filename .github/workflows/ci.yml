@@ -62,7 +62,7 @@ jobs:
       - name: Trava de saídas (ambiente:verificar)
         run: env -u GITHUB_API_URL -u GITHUB_GRAPHQL_URL -u GITHUB_SERVER_URL ./pnpm ambiente:verificar
       # Sem .env no runner: a API e o worker só sobem com o AMBIENTE declarado (ci: neutralizado, sem banco).
-      # Decisão 59 do dono: o marco (@M00) e o pacote curto das jornadas principais (@jornada: agenda, atendimento,
+      # Decisão 59 do dono: o marco (@M00) e o pacote curto das jornadas principais (@jornada: agenda,
       # prontuário, conta e lote TISS; a entrada é a de todos eles), mesma linha do tools/obra/ci-sim.sh.
       - name: E2E do marco e das jornadas (Chrome do runner, channel chrome)
         env:
