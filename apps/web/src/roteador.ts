@@ -49,6 +49,7 @@ import { rotasFinanceiro } from './modulos/financeiro/rotas.js';
 import { rotasRepasse } from './modulos/repasse/rotas.js';
 import { rotasAssinatura } from './modulos/assinatura/rotas.js';
 import { rotasOperadora } from './modulos/operadora/rotas.js';
+import { rotasSaudeBeneficiario } from './modulos/operadora/rotas-saude-beneficiario.js';
 import { rotasContratoAlteracoes } from './modulos/operadora/rotas-contrato-alteracoes.js';
 import { rotasDeclaracoesAns } from './modulos/operadora/rotas-declaracoes-ans.js';
 import { rotasProvisoesTecnicas } from './modulos/operadora/rotas-provisoes-tecnicas.js';
@@ -184,6 +185,8 @@ export function rotas(desenvolvimento: boolean): RouteRecordRaw[] {
     ...rotasAssinatura,
     // M56 (etapa F0): operadora própria (Envios à ANS com os catálogos da ANS).
     ...rotasOperadora,
+    // C2-113 (08-SGO L95): declaração de saúde, CPT e portabilidade de carências do beneficiário.
+    ...rotasSaudeBeneficiario,
     // C2-108 (08-SGO L94): aditivos e cancelamento do contrato de plano da operadora.
     ...rotasContratoAlteracoes,
     ...rotasDeclaracoesAns,

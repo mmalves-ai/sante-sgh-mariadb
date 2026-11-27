@@ -117,6 +117,7 @@ import { mensagensDeclaracoesAns } from '../modulos/operadora/i18n-declaracoes.j
 import { mensagensReajusteColetivo } from '../modulos/operadora/i18n-reajuste-coletivo.js';
 import { mensagensContasOperadora } from '../modulos/operadora/i18n-contas.js';
 import { mensagensComercialOperadora } from '../modulos/operadora/i18n-comercial.js';
+import { mensagensSaudeBeneficiario } from '../modulos/operadora/i18n-saude-beneficiario.js';
 import {
   mensagensAtendimentoOperadora,
   mensagensPortalPrestador,
@@ -2532,6 +2533,8 @@ export const mensagensWeb = {
   operadoraReajuste: mensagensReajusteColetivo,
   // 08-SGO L100 (C2-095): o comercial da operadora (proposta de adesão, força de venda, metas, comissão).
   operadoraComercial: mensagensComercialOperadora,
+  // 08-SGO L95 (C2-113): declaração de saúde, CPT e portabilidade de carências do beneficiário.
+  saudeBeneficiario: mensagensSaudeBeneficiario,
   operadoraAtendimento: mensagensAtendimentoOperadora,
   portalPrestador: mensagensPortalPrestador,
   // M60 (etapa 2): a conferência da instalação e da conexão ao banco.
