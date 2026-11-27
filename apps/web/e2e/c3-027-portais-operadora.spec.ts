@@ -207,7 +207,7 @@ test.describe('C3-027 portais da operadora @C3-027', () => {
       );
     });
 
-    await entrar(page, 'SINT.ADMIN');
+    await entrar(page, 'SINT.PORTAL.BENEF');
     await page.goto('/portal-operadora/beneficiario');
     await expect(page.getByTestId('portal-conta')).toContainText('sint.benef.1');
     await page.getByTestId('portal-ver-cartao').click();

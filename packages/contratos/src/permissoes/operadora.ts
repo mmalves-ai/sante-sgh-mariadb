@@ -22,6 +22,16 @@ export type PerfilOperadora = (typeof PERFIS_OPERADORA)[number];
 /** Perfil especial do portal do prestador (cap-08 §8.3.5): identidade própria em SGH_, nunca usuário interno. */
 export const PERFIL_PORTAL_PRESTADOR = 'portal-prestador' as const;
 
+/**
+ * Perfis dos usuários externos dos portais da operadora (08-SGO L114, C3-027): o beneficiário, a empresa contratante e o
+ * corretor entram com a conta do portal (conta_portal_*) e só recebem operadora.portal.acessar; nunca usuário interno.
+ */
+export const PERFIS_PORTAIS_OPERADORA = [
+  'portal-beneficiario',
+  'portal-contratante',
+  'portal-corretor',
+] as const;
+
 const p = (
   codigo: string,
   descricao: string,
@@ -272,10 +282,11 @@ export const PERMISSOES_OPERADORA_M56: readonly DeclaracaoPermissao[] = [
     [GESTOR],
     { categoria: 'tecnica', criticidade: 'sensivel' },
   ),
-  // Portal do prestador (F7): a permissão nunca vem de usuário interno; o servidor do portal a dá à sessão do portal.
+  // Portal do prestador (F7) e portais do beneficiário, da contratante e do corretor (C3-027): a permissão nunca vem de
+  // usuário interno; vem só dos perfis externos dos portais.
   p(
     'operadora.portal.acessar',
-    'Entrar no portal do prestador credenciado com as funções que o contrato do prestador libera',
-    [PERFIL_PORTAL_PRESTADOR],
+    'Entrar no portal do prestador credenciado, do beneficiário, da empresa contratante ou do corretor',
+    [PERFIL_PORTAL_PRESTADOR, ...PERFIS_PORTAIS_OPERADORA],
   ),
 ];

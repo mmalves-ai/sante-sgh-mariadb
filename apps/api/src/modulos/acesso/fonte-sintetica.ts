@@ -3569,6 +3569,19 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       opcoesGrupo: opcoesSus('faturamento.sus.*', 'faturamento.susConfiguracao.*'),
     },
   },
+  /**
+   * C3-027 (08-SGO L114; no fim da lista): o usuário externo do portal do beneficiário, só com o perfil do portal
+   * (operadora.portal.acessar). O administrador e a gestão da operadora não entram no portal (segregação).
+   */
+  'SINT.PORTAL.BENEF': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: { papeis: [4] },
+    perfisConcedidos: ['portal-beneficiario'],
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */

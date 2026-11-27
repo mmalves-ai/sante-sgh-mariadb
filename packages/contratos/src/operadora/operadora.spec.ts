@@ -7,6 +7,7 @@ import { ARVORE_MENU } from '../menu/arvore.js';
 import { CATALOGO_DECLARADO } from '../permissoes/catalogo.js';
 import {
   PERFIL_PORTAL_PRESTADOR,
+  PERFIS_PORTAIS_OPERADORA,
   PERFIS_OPERADORA,
   PERMISSOES_OPERADORA_M56,
 } from '../permissoes/operadora.js';
@@ -86,7 +87,11 @@ describe('permissões da operadora', () => {
   });
 
   it('nenhuma vem do outro sistema; todas por perfil da operadora ou do portal, sem escopo', () => {
-    const perfis = new Set<string>([...PERFIS_OPERADORA, PERFIL_PORTAL_PRESTADOR]);
+    const perfis = new Set<string>([
+      ...PERFIS_OPERADORA,
+      PERFIL_PORTAL_PRESTADOR,
+      ...PERFIS_PORTAIS_OPERADORA,
+    ]);
     for (const p of PERMISSOES_OPERADORA_M56) {
       expect(p.codigo).toMatch(FORMATO_CODIGO_PERMISSAO);
       expect(p.codigo.startsWith('operadora.')).toBe(true);
@@ -111,6 +116,13 @@ describe('permissões da operadora', () => {
     );
     const portal = PERMISSOES_OPERADORA_M56.filter((p) => p.perfis?.includes(PERFIL_PORTAL_PRESTADOR));
     expect(portal.map((p) => p.codigo)).toEqual(['operadora.portal.acessar']);
+    for (const perfil of PERFIS_PORTAIS_OPERADORA) {
+      const doPerfil = PERMISSOES_OPERADORA_M56.filter((p) => p.perfis?.includes(perfil));
+      expect(
+        doPerfil.map((p) => p.codigo),
+        perfil,
+      ).toEqual(['operadora.portal.acessar']);
+    }
   });
 
   it('o item do atendimento abre a quem lê os domínios: o gestor alcança e grava os motivos de ligação (revisão M56.5)', () => {
