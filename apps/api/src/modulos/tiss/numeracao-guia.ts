@@ -31,6 +31,8 @@ export const TABELAS_NUMERACAO_GUIA = [
 /** Guia que nasce neste lote, com o número já consumido da faixa. */
 export interface GuiaEmitida {
   readonly conta: number;
+  /** O período fechado da guia (lote por período); nulo na guia da conta inteira. */
+  readonly periodo: number | null;
   readonly numero: string;
   readonly sequencia: number;
   readonly faixa: number;
@@ -44,6 +46,7 @@ export interface GuiaReusada {
   readonly id: number;
   readonly versao: number;
   readonly conta: number;
+  readonly periodo: number | null;
   readonly recemNascido: boolean;
   readonly senha: string;
   readonly guiaOperadora: string;
@@ -62,6 +65,16 @@ const SQL_GUIA = `
    WHERE conta_hospitalar_id = ? AND tipo_guia = ? AND fonte_pagadora_id = ? AND excluido_em IS NULL
      AND situacao <> 'cancelada'
    ORDER BY id DESC LIMIT 1`;
+/** A guia da conta no período (lote TISS por período, decisão 58): nulo, a guia da conta inteira ou a do que sobra. */
+const SQL_GUIA_PERIODO = `
+  SELECT id, versao, numero_guia_prestador, situacao FROM guia_tiss
+   WHERE conta_hospitalar_id = ? AND tipo_guia = ? AND fonte_pagadora_id = ? AND conta_hospitalar_periodo_id <=> ?
+     AND excluido_em IS NULL AND situacao <> 'cancelada'
+   ORDER BY id DESC LIMIT 1`;
+
+/** A chave da guia no lote: a conta e, na conta repartida por período fechado, o período. */
+export const chaveGuiaDoLote = (conta: number, periodo: number | null | undefined): string =>
+  `${conta}/${periodo ?? ''}`;
 
 /**
  * Dá o número a cada guia que vai ao arquivo, antes da montagem do XML. `tipoGuia` é o tipo da guia no modelo
@@ -84,11 +97,16 @@ export async function numerarGuiasDoLote(
   const saida: ContaTiss[] = [];
   const emitidas: GuiaEmitida[] = [];
   const reusadas: GuiaReusada[] = [];
-  const dados = new Map<number, { readonly numero: string } | null>();
+  const dados = new Map<string, { readonly numero: string } | null>();
+  // Só o lote com conta repartida por período lê a guia pelo período (a coluna vem da migração 12_FAT/98).
+  const porPeriodo = montadas.some((m) => m.periodo !== undefined);
   let ultimo: { esgotada: boolean; noFim: boolean; restantes: number } | null = null;
   for (const m of montadas) {
-    if (!dados.has(m.conta)) {
-      const guia = await tx.uma<Linha>(SQL_GUIA, [m.conta, tipoGuia, fonte]);
+    const chave = chaveGuiaDoLote(m.conta, m.periodo);
+    if (!dados.has(chave)) {
+      const guia = porPeriodo
+        ? await tx.uma<Linha>(SQL_GUIA_PERIODO, [m.conta, tipoGuia, fonte, m.periodo ?? null])
+        : await tx.uma<Linha>(SQL_GUIA, [m.conta, tipoGuia, fonte]);
       const numeroDaGuia = guia ? String(guia['numero_guia_prestador'] ?? '') : null;
       const origem = origemNumeroGuia({ numeroDaGuia, situacoesDasFaixas: situacoes });
       // Toda guia existente que vai ao arquivo é ligada ao lote (não só a que já estava em lote).
@@ -97,12 +115,13 @@ export async function numerarGuiasDoLote(
           id: Number(guia['id']),
           versao: Number(guia['versao']),
           conta: m.conta,
+          periodo: m.periodo ?? null,
           recemNascido: m.atendimentoRN,
           senha: m.senha,
           guiaOperadora: m.guiaSolicitacao,
         });
-      if (origem === 'guia') dados.set(m.conta, { numero: numeroDaGuia ?? m.numeroGuia });
-      else if (origem === 'conta') dados.set(m.conta, null);
+      if (origem === 'guia') dados.set(chave, { numero: numeroDaGuia ?? m.numeroGuia });
+      else if (origem === 'conta') dados.set(chave, null);
       else {
         // A guia de honorário referencia a guia principal da conta (o resumo de internação já emitido).
         let principal: number | null = null;
@@ -133,6 +152,7 @@ export async function numerarGuiasDoLote(
           );
         const g: GuiaEmitida = {
           conta: m.conta,
+          periodo: m.periodo ?? null,
           numero: r.numero,
           sequencia: r.sequencia,
           faixa: r.faixa,
@@ -141,11 +161,11 @@ export async function numerarGuiasDoLote(
           senha: m.senha,
           guiaOperadora: m.guiaSolicitacao,
         };
-        dados.set(m.conta, g);
+        dados.set(chave, g);
         emitidas.push(g);
       }
     }
-    const g = dados.get(m.conta);
+    const g = dados.get(chave);
     saida.push(g ? { ...m, numeroGuia: g.numero } : m);
   }
   const aviso = ultimo ? avisoFaixaNoFim(ultimo) : null;
@@ -168,8 +188,12 @@ export async function gravarGuiasDoLote(
     readonly usuario: number | null;
     readonly numerado: LoteNumerado;
     readonly valores: ReadonlyMap<number, number>;
+    /** Valor de cada guia pela chave (chaveGuiaDoLote), quando a conta vai repartida por período fechado. */
+    readonly valoresGuia?: ReadonlyMap<string, number>;
   },
 ): Promise<string[]> {
+  const valorDa = (conta: number, periodo: number | null) =>
+    d.valoresGuia?.get(chaveGuiaDoLote(conta, periodo)) ?? d.valores.get(conta) ?? 0;
   const avisos: string[] = [];
   for (const g of d.numerado.emitidas) {
     const ct = await tx.uma<Linha>(
@@ -179,6 +203,7 @@ export async function gravarGuiasDoLote(
     const guia = await tx.incluir('guia_tiss', {
       estabelecimento_id: d.estabelecimento,
       conta_hospitalar_id: g.conta,
+      ...(g.periodo !== null ? { conta_hospitalar_periodo_id: g.periodo } : {}),
       tipo_guia: d.tipoGuia,
       guia_tiss_principal_id: g.principal,
       guia_fonte_pagadora_id: ct?.['guia_fonte_pagadora_id'] ?? null,
@@ -190,7 +215,7 @@ export async function gravarGuiasDoLote(
       atendimento_recem_nascido: g.recemNascido,
       data_emissao: d.hoje,
       senha: g.senha || null,
-      valor_total: d.valores.get(g.conta) ?? 0,
+      valor_total: valorDa(g.conta, g.periodo),
       situacao: 'em_lote',
     });
     await tx.incluir('faixa_numeracao_guia_uso', {
@@ -217,7 +242,7 @@ export async function gravarGuiasDoLote(
     await tx.alterar('guia_tiss', r.id, r.versao, {
       lote_tiss_id: d.lote,
       situacao: 'em_lote',
-      valor_total: d.valores.get(r.conta) ?? 0,
+      valor_total: valorDa(r.conta, r.periodo),
       atendimento_recem_nascido: r.recemNascido,
       ...(r.senha ? { senha: r.senha } : {}),
       ...(r.guiaOperadora ? { numero_guia_operadora: r.guiaOperadora } : {}),

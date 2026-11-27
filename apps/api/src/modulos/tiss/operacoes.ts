@@ -41,6 +41,7 @@ import {
   recusaObrigatoriosPendentes,
   recusaObservacaoLonga,
   conferirReducaoComercialDaGuia,
+  guiasPorPeriodoFechado,
   reducaoComercialDaGuia,
 } from '@sgh/dominio-faturamento';
 import {
@@ -86,6 +87,20 @@ import { operacoesGlosaCom } from './operacoes-glosa.js';
 import { apresentarLote, gravarFaturaDoLote, protocolarFaturaDoLote } from './apresentacao-propria.js';
 // F3.1 (02-CAD linha 25): o número da guia sai da faixa da operadora e a guia emitida fica gravada com o lote.
 import { gravarGuiasDoLote, numerarGuiasDoLote, TABELAS_NUMERACAO_GUIA } from './numeracao-guia.js';
+
+/**
+ * Uma guia da conta repartida por período fechado (decisão 58): os itens dela, as datas da faixa, o valor que ela leva
+ * (a última fecha no total da conta, com o abatimento comercial) e o sufixo do número da guia do período.
+ */
+interface FaixaDaGuia {
+  readonly periodo: number | null;
+  readonly sequencia: number | null;
+  readonly itens: ReadonlySet<number>;
+  readonly inicio: Date;
+  readonly fim: Date;
+  readonly anteriores: number;
+  readonly ultima: boolean;
+}
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -241,16 +256,19 @@ async function contaTiss(
   tipoGuia: TipoGuiaLote,
   est: number,
   assinaturaNoDia: AssinaturaDoExecutante | null = null,
+  faixa: FaixaDaGuia | null = null,
 ): Promise<{ conta: ContaTiss; avisos: string[]; informados: Set<CampoPadraoTiss> }> {
   const rotulo = texto(ct['numero']) || String(n(ct['id']));
-  const itens = await tx.consultar<Linha>(
-    `SELECT ci.sequencia, ci.realizado_em, ci.quantidade, ci.valor_unitario, ci.valor_total, f.codigo, f.descricao,
+  const todos = await tx.consultar<Linha>(
+    `SELECT ci.id, ci.sequencia, ci.realizado_em, ci.quantidade, ci.valor_unitario, ci.valor_total, f.codigo, f.descricao,
             f.tipo_item
        FROM conta_hospitalar_item ci JOIN item_faturavel f ON f.id = ci.item_faturavel_id
       WHERE ci.conta_hospitalar_id = ? AND ci.excluido_em IS NULL AND ci.situacao NOT IN ${SITUACOES_SEM_COBRANCA}
       ORDER BY ci.sequencia`,
     [n(ct['id'])],
   );
+  // Lote por período (decisão 58): a guia do período leva só os itens dele.
+  const itens = faixa ? todos.filter((i) => faixa.itens.has(n(i['id']))) : todos;
   const soma = await tx.uma<Linha>(
     `SELECT COUNT(*) AS q FROM conta_hospitalar_item
       WHERE conta_hospitalar_id = ? AND excluido_em IS NULL AND situacao NOT IN ${SITUACOES_SEM_COBRANCA}`,
@@ -345,44 +363,52 @@ async function contaTiss(
     throw recusa(r.codigo, r.mensagem);
   }
 
-  const itensGuia = itens.map((i, k) => {
-    const quantidade = n(i['quantidade']);
-    return {
-      sequencial: k + 1,
-      tipo: grupoTissDoItem(texto(i['tipo_item'])),
-      natureza: naturezaDoItem(texto(i['tipo_item'])),
-      data: dataIso(i['realizado_em']),
-      codigo: texto(i['codigo']).slice(0, 10),
-      codigoTabela: tabelaTissDoItem(texto(i['tipo_item'])),
-      descricao: texto(i['descricao']).slice(0, 150),
-      quantidade,
-      valorUnitario: unitarioDaGuia(quantidade, n(i['valor_unitario']), n(i['valor_total'])),
-    };
-  });
+  const paraGuia = (lista: Linha[]) =>
+    lista.map((i, k) => {
+      const quantidade = n(i['quantidade']);
+      return {
+        sequencial: k + 1,
+        tipo: grupoTissDoItem(texto(i['tipo_item'])),
+        natureza: naturezaDoItem(texto(i['tipo_item'])),
+        data: dataIso(i['realizado_em']),
+        codigo: texto(i['codigo']).slice(0, 10),
+        codigoTabela: tabelaTissDoItem(texto(i['tipo_item'])),
+        descricao: texto(i['descricao']).slice(0, 150),
+        quantidade,
+        valorUnitario: unitarioDaGuia(quantidade, n(i['valor_unitario']), n(i['valor_total'])),
+      };
+    });
+  const itensGuia = paraGuia(itens);
+  const somaBruta = (lista: ReturnType<typeof paraGuia>) =>
+    lista.reduce((t, i) => t + Math.round(i.quantidade * i.valorUnitario * 100), 0) / 100;
   // 06-FAT linha 19: o desconto por volume e a franquia aplicados saem do total da conta e vão à guia pelo fator de
   // redução dos itens; a conferência compara os itens com o total antes desse abatimento.
   // O fator vai item a item (reducaoComercialDaGuia) para o total da guia fechar no centavo com o valor_total da conta;
   // se o fator de duas casas do padrão não fecha (guia de um item só, por exemplo), a conta é recusada, nunca cobrada
   // diferente da conta.
-  const bruto = itensGuia.reduce((t, i) => t + Math.round(i.quantidade * i.valorUnitario * 100), 0) / 100;
-  const comercial = await abatimentoComercialDaConta(tx, n(ct['id']), bruto);
+  const bruto = somaBruta(itensGuia);
+  // Na conta repartida por período, a guia do período leva o valor dos itens dela; a última fecha no total da conta
+  // (o total menos as anteriores) e leva o abatimento comercial da conta inteira.
+  const comercial =
+    faixa && !faixa.ultima
+      ? { abatimento: 0 }
+      : await abatimentoComercialDaConta(tx, n(ct['id']), faixa ? somaBruta(paraGuia(todos)) : bruto);
+  const alvo = faixa
+    ? faixa.ultima
+      ? Math.round((n(ct['valor_total']) - faixa.anteriores) * 100) / 100
+      : Math.round(itens.reduce((t, i) => t + n(i['valor_total']), 0) * 100) / 100
+    : n(ct['valor_total']);
   const divergente = conferirGuiaComConta({
     conta: rotulo,
     itens: itensGuia,
-    esperados: n(soma?.['q']),
-    totalConta: Math.round((n(ct['valor_total']) + comercial.abatimento) * 100) / 100,
+    esperados: faixa ? itens.length : n(soma?.['q']),
+    totalConta: Math.round((alvo + comercial.abatimento) * 100) / 100,
   });
   if (divergente) throw recusa(divergente.codigo, divergente.mensagem);
   // O alvo é o próprio valor_total (a folga da conferência acima cobre só o arredondamento das linhas).
-  const abatimentoGuia =
-    comercial.abatimento > 0 ? Math.max(0, Math.round((bruto - n(ct['valor_total'])) * 100) / 100) : 0;
+  const abatimentoGuia = comercial.abatimento > 0 ? Math.max(0, Math.round((bruto - alvo) * 100) / 100) : 0;
   const reducao = reducaoComercialDaGuia(itensGuia, abatimentoGuia);
-  const fechamento = conferirReducaoComercialDaGuia(
-    rotulo,
-    reducao,
-    n(ct['valor_total']),
-    comercial.abatimento,
-  );
+  const fechamento = conferirReducaoComercialDaGuia(rotulo, reducao, alvo, comercial.abatimento);
   if (fechamento) throw recusa(fechamento.codigo, fechamento.mensagem);
   const itensReduzidos = itensGuia.map((i, k) => {
     const f = reducao.fatores[k] ?? 1;
@@ -409,8 +435,23 @@ async function contaTiss(
         `o profissional ${executante.nome} da conta ${rotulo} não tem assinatura cadastrada vigente em ${diaDoAto}`,
       );
   }
-  const inicio = ct['inicio_em'];
-  const fim = ct['fim_em'] ?? ct['inicio_em'];
+  const inicio = faixa ? faixa.inicio : ct['inicio_em'];
+  const fim = faixa ? faixa.fim : (ct['fim_em'] ?? ct['inicio_em']);
+  // A guia do período leva o número dela (o do lote anterior do mesmo período) ou o da conta com o sufixo do período.
+  const guiaDoPeriodo =
+    faixa?.periodo !== null && faixa?.periodo !== undefined
+      ? await tx.uma<Linha>(
+          `SELECT numero_guia_prestador FROM guia_tiss
+            WHERE conta_hospitalar_id = ? AND tipo_guia = ? AND fonte_pagadora_id = ? AND conta_hospitalar_periodo_id = ?
+              AND excluido_em IS NULL AND situacao <> 'cancelada' ORDER BY id DESC LIMIT 1`,
+          [n(ct['id']), TIPO_GUIA_TISS[tipoGuia], n(ct['fonte_pagadora_id']), faixa.periodo],
+        )
+      : null;
+  const sufixo = faixa?.sequencia !== null && faixa?.sequencia !== undefined ? `-${faixa.sequencia}` : '';
+  const numeroGuia = sufixo
+    ? texto(guiaDoPeriodo?.['numero_guia_prestador']) ||
+      `${(texto(ct['numero']) || String(n(ct['id']))).slice(0, 20 - sufixo.length)}${sufixo}`
+    : (texto(guia?.['numero_guia_prestador']) || texto(ct['numero'])).slice(0, 20);
   const recemNascido = guia
     ? Boolean(n(guia['atendimento_recem_nascido']))
     : Boolean(n(at?.['recem_nascido']));
@@ -426,7 +467,8 @@ async function contaTiss(
     conta: {
       conta: n(ct['id']),
       tipoGuia,
-      numeroGuia: (texto(guia?.['numero_guia_prestador']) || texto(ct['numero'])).slice(0, 20),
+      numeroGuia: numeroGuia.slice(0, 20),
+      ...(faixa?.periodo !== null && faixa?.periodo !== undefined ? { periodo: faixa.periodo } : {}),
       carteira: texto(carteira?.['numero_carteira']),
       atendimentoRN: recemNascido,
       inicio: { data: dataIso(inicio), hora: horaIso(inicio) },
@@ -463,6 +505,79 @@ async function contaTiss(
   };
 }
 
+/**
+ * As guias da conta no lote (decisão 58, regra em guiasPorPeriodoFechado): `[null]` sem período fechado (a conta
+ * inteira); com período fechado, uma faixa por período fechado com item e uma com o que sobra.
+ */
+async function faixasDaConta(tx: TxOperacao, ct: Linha): Promise<(FaixaDaGuia | null)[]> {
+  const periodos = await tx.consultar<Linha>(
+    `SELECT id, sequencia, inicio_em, fim_em, competencia, tipo_lancamento_id, fechado_em
+       FROM conta_hospitalar_periodo WHERE conta_hospitalar_id = ? AND excluido_em IS NULL ORDER BY sequencia`,
+    [n(ct['id'])],
+  );
+  if (!periodos.some((p) => p['fechado_em'] !== null && p['fechado_em'] !== undefined)) return [null];
+  const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v ?? ''));
+  const itens = await tx.consultar<Linha>(
+    `SELECT id, realizado_em, tipo_lancamento_id, valor_total FROM conta_hospitalar_item
+      WHERE conta_hospitalar_id = ? AND excluido_em IS NULL AND situacao NOT IN ${SITUACOES_SEM_COBRANCA}`,
+    [n(ct['id'])],
+  );
+  const guias = guiasPorPeriodoFechado(
+    periodos.map((p) => ({
+      id: n(p['id']),
+      inicio: iso(p['inicio_em']),
+      fim: iso(p['fim_em']),
+      competencia: dataIso(p['competencia']),
+      tipoLancamentoId: p['tipo_lancamento_id'] === null ? null : n(p['tipo_lancamento_id']),
+      fechado: p['fechado_em'] !== null && p['fechado_em'] !== undefined,
+    })),
+    itens.map((i) => ({
+      id: n(i['id']),
+      realizadoEm: iso(i['realizado_em']),
+      tipoLancamentoId: i['tipo_lancamento_id'] === null ? null : n(i['tipo_lancamento_id']),
+    })),
+    { inicio: iso(ct['inicio_em']), fim: iso(ct['fim_em'] ?? ct['inicio_em']) },
+  );
+  const valorDe = new Map(itens.map((i) => [n(i['id']), n(i['valor_total'])]));
+  const sequencia = new Map(periodos.map((p) => [n(p['id']), n(p['sequencia'])]));
+  let anteriores = 0;
+  return guias.map((g, k) => {
+    const f: FaixaDaGuia = {
+      periodo: g.periodo?.id ?? null,
+      sequencia: g.periodo ? (sequencia.get(g.periodo.id) ?? null) : null,
+      itens: new Set(g.itens),
+      inicio: new Date(g.inicio),
+      fim: new Date(g.fim),
+      anteriores: Math.round(anteriores * 100) / 100,
+      ultima: k === guias.length - 1,
+    };
+    anteriores += g.itens.reduce((t, i) => t + (valorDe.get(i) ?? 0), 0);
+    return f;
+  });
+}
+
+/** Liga os itens de cada período fechado à guia do período gravada no lote (a guia nasce só com faixa da operadora). */
+async function ligarItensAsGuiasDoPeriodo(
+  tx: TxOperacao,
+  lote: number,
+  itensPorGuia: readonly { conta: number; periodo: number; itens: readonly number[] }[],
+): Promise<void> {
+  for (const g of itensPorGuia) {
+    const guia = await tx.uma<Linha>(
+      `SELECT id FROM guia_tiss WHERE lote_tiss_id = ? AND conta_hospitalar_id = ? AND conta_hospitalar_periodo_id = ?
+          AND excluido_em IS NULL ORDER BY id DESC LIMIT 1`,
+      [lote, g.conta, g.periodo],
+    );
+    if (!guia) continue;
+    for (const i of await tx.consultar<Linha>(
+      `SELECT id, versao FROM conta_hospitalar_item WHERE id IN (${g.itens.map(() => '?').join(', ')})
+          AND (guia_tiss_id IS NULL OR guia_tiss_id <> ?)`,
+      [...g.itens, n(guia['id'])],
+    ))
+      await tx.alterar('conta_hospitalar_item', n(i['id']), n(i['versao']), { guia_tiss_id: n(guia['id']) });
+  }
+}
+
 /** Gera o lote TISS: confere cada conta sob a trava, monta e valida o XML, guarda, e grava o lote e as contas. */
 function gerarLote(montador: MontadorLoteTiss | null, assinaturaNoDia: AssinaturaDoExecutante | null = null) {
   return definirOperacao<GerarLoteEntrada, ResultadoOperacao>({
@@ -475,6 +590,7 @@ function gerarLote(montador: MontadorLoteTiss | null, assinaturaNoDia: Assinatur
       'sequencia_negocio',
       'fatura_fonte_pagadora',
       'fatura_fonte_pagadora_conta',
+      'conta_hospitalar_item',
       ...TABELAS_NUMERACAO_GUIA,
     ],
     entrada: esquemaGerarLote,
@@ -562,10 +678,21 @@ function gerarLote(montador: MontadorLoteTiss | null, assinaturaNoDia: Assinatur
       const montadas: ContaTiss[] = [];
       const avisos: string[] = [];
       const lidas = [];
+      // Lote por período (decisão 58): a conta com período fechado vai com uma guia por período fechado e uma com o
+      // que sobra; sem período fechado, uma guia só, como antes.
+      const itensPorGuia: { conta: number; periodo: number; itens: number[] }[] = [];
       for (const ct of contas) {
-        const g = await contaTiss(tx, ct, tipoGuia, est, assinaturaNoDia);
-        lidas.push({ linha: ct, conta: g.conta, informados: g.informados });
-        avisos.push(...g.avisos);
+        for (const f of await faixasDaConta(tx, ct)) {
+          const g = await contaTiss(tx, ct, tipoGuia, est, assinaturaNoDia, f);
+          lidas.push({
+            linha: ct,
+            conta: g.conta,
+            informados: g.informados,
+            ...(f ? { itens: f.itens } : {}),
+          });
+          avisos.push(...g.avisos);
+          if (f?.periodo) itensPorGuia.push({ conta: n(ct['id']), periodo: f.periodo, itens: [...f.itens] });
+        }
       }
       const hoje = civil(new Date(), await fusoDe(tx, est)).data;
       const ap = await apresentarLote(tx, est, e.convenio, tipoGuia, lidas, hoje);
@@ -667,7 +794,10 @@ function gerarLote(montador: MontadorLoteTiss | null, assinaturaNoDia: Assinatur
         usuario: ctx.usuario ?? null,
         numerado,
         valores: ap.valores,
+        valoresGuia: ap.valoresGuia,
       });
+      // Os itens do período fechado apontam a guia do período (a reabertura do período recusa com a guia em lote).
+      await ligarItensAsGuiasDoPeriodo(tx, lote, itensPorGuia);
       const fatura = await gravarFaturaDoLote(tx, est, {
         fonte: e.convenio,
         lote,

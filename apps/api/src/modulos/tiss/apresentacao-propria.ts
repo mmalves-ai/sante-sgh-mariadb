@@ -48,6 +48,7 @@ import { z } from 'zod';
 import { podeNoEstabelecimento } from '../faturamento/conta-movimentos-propria.js';
 import { conferirCobrancaPropria } from '../precos/cobranca-propria.js';
 import { aplicarDeParaNaConta } from '../precos/de-para-guia.js';
+import { chaveGuiaDoLote } from './numeracao-guia.js';
 
 type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
@@ -187,6 +188,8 @@ export interface ContaParaApresentar {
   readonly conta: ContaTiss;
   /** Campos da guia que vieram do cadastro do atendimento (o valor padrão só os troca com `sobrepoe`). */
   readonly informados: ReadonlySet<CampoPadraoTiss>;
+  /** Lote por período (decisão 58): os itens da conta que esta guia leva (ids); ausente, a conta inteira. */
+  readonly itens?: ReadonlySet<number>;
 }
 
 export interface LoteApresentado {
@@ -194,8 +197,10 @@ export interface LoteApresentado {
   /** Contas cuja guia não vai ao arquivo (ficou sem valor e a fonte pagadora não quer guia zerada): não entram no lote
    * nem na fatura e continuam na fila do faturamento. */
   readonly omitidas: number[];
-  /** Valor apresentado de cada conta que foi ao arquivo (a guia depois da regra), pelo id da conta. */
+  /** Valor apresentado de cada conta que foi ao arquivo (a soma das guias depois da regra), pelo id da conta. */
   readonly valores: ReadonlyMap<number, number>;
+  /** Valor apresentado de cada guia pela chave conta/período (chaveGuiaDoLote; lote por período, decisão 58). */
+  readonly valoresGuia: ReadonlyMap<string, number>;
   readonly registroAns: string | null;
   readonly codigoPrestador: string | null;
   /** Contratado por CNPJ ou CPF quando a regra pede (sem ela, o código na operadora). */
@@ -267,6 +272,7 @@ export async function apresentarLote(
   const conferidas: { rotulo: string; regra: RegraApresentacao | null }[] = [];
   const omitidas: number[] = [];
   const valores = new Map<number, number>();
+  const valoresGuia = new Map<string, number>();
   for (const c of contas) {
     const id = n(c.linha['id']);
     const rotulo = texto(c.linha['numero']) || String(id);
@@ -275,14 +281,16 @@ export async function apresentarLote(
     const tipoAtendimento = tipoAtendimentoDaConta(texto(c.linha['natureza']) || null);
     const regra = escolherRegraApresentacao(regras, tipoConta);
     conferidas.push({ rotulo, regra });
-    const origens = await tx.consultar<Linha>(
-      `SELECT ci.sequencia, ci.item_faturavel_id, ci.executante_profissional_id, ci.setor_funcional_id,
+    const origens = await tx
+      .consultar<Linha>(
+        `SELECT ci.id, ci.sequencia, ci.item_faturavel_id, ci.executante_profissional_id, ci.setor_funcional_id,
               ci.funcao_equipe_cobranca_id, ci.quantidade, ci.realizado_em, f.grupo_faturamento_id
          FROM conta_hospitalar_item ci JOIN item_faturavel f ON f.id = ci.item_faturavel_id
         WHERE ci.conta_hospitalar_id = ? AND ci.excluido_em IS NULL AND ci.situacao NOT IN ${SITUACOES_SEM_COBRANCA}
         ORDER BY ci.sequencia`,
-      [id],
-    );
+        [id],
+      )
+      .then((r) => (c.itens ? r.filter((o) => c.itens?.has(n(o['id']))) : r));
     const at = c.linha['atendimento_id']
       ? await tx.uma<Linha>(
           'SELECT regime_atendimento_id, origem_entrada_atendimento_id FROM atendimento WHERE id = ?',
@@ -372,7 +380,10 @@ export async function apresentarLote(
         'guia-sem-itens',
         `A conta ${rotulo} ficou sem itens para a guia pela regra de apresentação da fonte pagadora.`,
       );
-    valores.set(id, valorApresentado(vp.conta));
+    const valorGuia = valorApresentado(vp.conta);
+    valores.set(id, Math.round(((valores.get(id) ?? 0) + valorGuia) * 100) / 100);
+    const chaveGuia = chaveGuiaDoLote(id, c.conta.periodo);
+    valoresGuia.set(chaveGuia, Math.round(((valoresGuia.get(chaveGuia) ?? 0) + valorGuia) * 100) / 100);
     // A série do hospital numera a guia que ainda não tem número próprio (a que leva o número da conta).
     const rm = montadorDe(regra);
     const numeraPelaSerie =
@@ -447,8 +458,10 @@ export async function apresentarLote(
   }
   return {
     montadas: numeradas,
-    omitidas,
+    // A conta repartida por período com uma guia omitida e outra no arquivo vai ao lote (não fica fora dele).
+    omitidas: [...new Set(omitidas)].filter((o) => !valores.has(o)),
     valores,
+    valoresGuia,
     registroAns: r.regra?.registroAns ?? null,
     codigoPrestador: r.regra?.codigoContratadoOperadora ?? null,
     identificacao,

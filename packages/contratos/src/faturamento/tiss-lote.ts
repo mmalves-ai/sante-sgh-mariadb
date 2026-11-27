@@ -67,6 +67,11 @@ export interface ContaTiss {
    * na conta (06-FAT linha 19); sem abatimento, ausente (1.00).
    */
   readonly reducaoAcrescimo?: number;
+  /**
+   * Lote TISS por período (06-FAT linha 12, decisão 58): o período fechado da conta que esta guia apresenta (só os itens
+   * dele, com as datas da faixa); ausente na guia da conta inteira e na do que sobra fora dos períodos fechados.
+   */
+  readonly periodo?: number;
   readonly itens: readonly ItemContaTiss[];
 }
 

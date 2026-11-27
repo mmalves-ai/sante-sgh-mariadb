@@ -549,6 +549,105 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
     }
   }, 60_000);
 
+  it('lote TISS por período (06-FAT linha 12, decisão 58): a conta com período fechado vai com uma guia por período fechado (itens e datas da faixa) e uma com o que sobra; o lote e a fatura levam a conta uma vez, com o total', async () => {
+    const d = (dia: string) => new Date(`2026-01-${dia}T12:00:00.000Z`);
+    const contaP = await nucleo.escrever(
+      { cliente: CLIENTE, correlacao: 'preparo-teste-03-16' },
+      async (e) => {
+        const agora = new Date();
+        const id = await e.inserir(
+          `INSERT INTO conta_hospitalar (estabelecimento_id, numero, atendimento_id, paciente_id, fonte_pagadora_id,
+           tipo_conta_id, natureza, competencia, inicio_em, fim_em, situacao, valor_itens, valor_total, fechada_em,
+           fechada_por_usuario_id, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, 'internacao', ?, ?, ?, 'fechada', 300, 300, ?, ?, ?)`,
+          [
+            ids.est,
+            `${P}-CP`,
+            ids.atendimento,
+            ids.paciente,
+            ids.fonte,
+            ids.tipoConta,
+            competencia,
+            d('05'),
+            d('25'),
+            agora,
+            ids.usuario,
+            agora,
+          ],
+        );
+        for (const [seq, dia, qtd] of [
+          [1, '10', 1],
+          [2, '20', 2],
+        ] as const)
+          await e.inserir(
+            `INSERT INTO conta_hospitalar_item (conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,
+             valor_unitario, valor_total, criado_em)
+           VALUES (?, ?, ?, ?, ?, 100, ?, ?)`,
+            [id, seq, ids.item, d(dia), qtd, qtd * 100, agora],
+          );
+        await e.inserir(
+          `INSERT INTO conta_hospitalar_periodo (conta_hospitalar_id, sequencia, inicio_em, fim_em, competencia, fechado_em,
+           fechado_por, criado_em)
+         VALUES (?, 1, ?, ?, '2026-01-01', ?, ?, ?)`,
+          [id, d('05'), d('15'), agora, ids.usuario, agora],
+        );
+        return id;
+      },
+    );
+    let lote = 0;
+    try {
+      const r = await porta.executar(
+        c,
+        'faturamento.gerarLote',
+        { convenio: ids.fonte, tipoGuia: 3, contas: [{ id: contaP, versao: await versaoDaConta(contaP) }] },
+        op(),
+      );
+      lote = Number(r.resultado['lote']);
+      expect(r.resultado).toMatchObject({ contas: 1, valor: 300 });
+      const chave = (await porta.xmlDoLote(c, lote))?.chave ?? '';
+      const xml = new TextDecoder().decode((await armazem.ler(chave)) ?? new Uint8Array());
+      // Duas guias: a do período fechado (número da conta com o sufixo do período) e a do que sobra.
+      expect(
+        (xml.match(/numeroGuiaPrestador>[^<]+</g) ?? []).filter((x) => x.includes(`${P}-CP`)).sort(),
+      ).toEqual([`numeroGuiaPrestador>${P}-CP-1<`, `numeroGuiaPrestador>${P}-CP<`]);
+      expect(xml).toMatch(/dataInicioFaturamento>2026-01-05<.{0,120}dataFinalFaturamento>2026-01-15</);
+      expect(xml).toMatch(/dataInicioFaturamento>2026-01-15<.{0,120}dataFinalFaturamento>2026-01-25</);
+      expect((xml.match(/valorTotalGeral>[^<]+</g) ?? []).sort()).toEqual([
+        'valorTotalGeral>100.00<',
+        'valorTotalGeral>200.00<',
+      ]);
+      expect(
+        await lerUma('SELECT COUNT(*) AS q, SUM(valor) AS v FROM lote_tiss_conta WHERE lote_tiss_id = ?', [
+          lote,
+        ]),
+      ).toMatchObject({ q: 1 });
+      expect(
+        Number(
+          (
+            await lerUma('SELECT valor_apresentado FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?', [lote])
+          )?.['valor_apresentado'],
+        ),
+      ).toBe(300);
+    } finally {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-03-16' }, async (e) => {
+        const a = await e.uma<{ arquivo_id: number }>('SELECT arquivo_id FROM lote_tiss WHERE id = ?', [
+          lote,
+        ]);
+        await e.executar('DELETE FROM lote_tiss_conta WHERE lote_tiss_id = ?', [lote]);
+        await e.executar(
+          'DELETE FROM fatura_fonte_pagadora_conta WHERE fatura_fonte_pagadora_id IN (SELECT id FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?)',
+          [lote],
+        );
+        await e.executar('DELETE FROM fatura_fonte_pagadora WHERE lote_tiss_id = ?', [lote]);
+        await e.executar('DELETE FROM lote_tiss WHERE id = ?', [lote]);
+        await e.executar('DELETE FROM arquivo WHERE id = ?', [a?.arquivo_id ?? 0]);
+        await e.executar('DELETE FROM conta_hospitalar_item WHERE conta_hospitalar_id = ?', [contaP]);
+        await e.executar('DELETE FROM conta_hospitalar_periodo WHERE conta_hospitalar_id = ?', [contaP]);
+        await e.executar('DELETE FROM conta_hospitalar WHERE id = ?', [contaP]);
+      });
+    }
+  }, 60_000);
+
   it('gerar o lote com os campos da operadora (06-FAT linha 10): a guia da conta leva à observação do XML o código de envio da opção, nunca a descrição', async () => {
     const complementos = new ServicoComplementosConta(nucleo);
     const opC = () => ({ ...op(), reautenticadoEm: Date.now() });

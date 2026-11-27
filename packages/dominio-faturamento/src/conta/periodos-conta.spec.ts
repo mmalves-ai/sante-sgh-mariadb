@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type ItemDoPeriodo,
   type PeriodoFaixa,
+  guiasPorPeriodoFechado,
   periodoDoItem,
   periodoFechadoDoLancamento,
   resumoPorPeriodo,
@@ -111,5 +112,34 @@ describe('conta parcial por período', () => {
       periodoFechadoDoLancamento([fev, h], { realizadoEm: '2026-02-10T00:00:00.000', tipoLancamentoId: 7 })
         ?.id,
     ).toBe(3);
+  });
+
+  it('lote TISS por período (decisão 58): uma guia por período fechado com as datas da faixa e a do que sobra', () => {
+    const conta = { inicio: '2026-01-20T08:00:00.000', fim: '2026-03-05T10:00:00.000' };
+    const itens = [
+      item(1, '2026-01-21T10:00:00.000'),
+      item(2, '2026-02-03T10:00:00.000'),
+      item(3, '2026-02-10T10:00:00.000', { tipoLancamentoId: 7 }),
+      item(4, '2026-03-02T10:00:00.000'),
+    ];
+    // Sem período fechado: uma guia só, com a conta inteira.
+    expect(guiasPorPeriodoFechado([jan, fev], itens, conta)).toEqual([
+      { periodo: null, itens: [1, 2, 3, 4], ...conta },
+    ]);
+    // Janeiro e fevereiro fechados; o honorário de fevereiro (tipo 7) cai no período dele, aberto: vai ao resto.
+    const fj = { ...jan, fechado: true };
+    const ff = { ...fev, fechado: true };
+    expect(guiasPorPeriodoFechado([ff, fj, honorFev], itens, conta)).toEqual([
+      { periodo: fj, itens: [1], inicio: jan.inicio, fim: jan.fim },
+      { periodo: ff, itens: [2], inicio: fev.inicio, fim: fev.fim },
+      { periodo: null, itens: [3, 4], inicio: conta.inicio, fim: conta.fim },
+    ]);
+    // O resto todo depois do último fechado começa no fim dele; período fechado sem item não gera guia.
+    expect(guiasPorPeriodoFechado([fj, ff], [itens[0]!, itens[3]!], conta)).toEqual([
+      { periodo: fj, itens: [1], inicio: jan.inicio, fim: jan.fim },
+      { periodo: null, itens: [4], inicio: fev.fim, fim: conta.fim },
+    ]);
+    // Tudo dentro de períodos fechados: só as guias dos períodos.
+    expect(guiasPorPeriodoFechado([fj], [itens[0]!], conta)).toHaveLength(1);
   });
 });

@@ -167,3 +167,48 @@ export function periodoFechadoDoLancamento(
     ) ?? null
   );
 }
+
+/** Uma guia do lote TISS da conta repartida por período fechado (decisão 58 do dono, 27/11). */
+export interface GuiaDoPeriodo {
+  /** O período fechado da guia; nulo na guia do que sobra (itens fora de qualquer período fechado). */
+  readonly periodo: PeriodoFaixa | null;
+  readonly itens: readonly number[];
+  readonly inicio: string;
+  readonly fim: string;
+}
+
+/**
+ * Lote TISS por período (decisão 58): a conta com período fechado vai ao lote com uma guia por período fechado (só os
+ * itens que caem nele, com as datas da faixa) e uma guia com o que sobra (do fim do último período fechado ao fim da
+ * conta). Período fechado sem item não gera guia. Sem período fechado, uma guia só, com as datas da conta (como antes).
+ */
+export function guiasPorPeriodoFechado(
+  periodos: readonly PeriodoFaixa[],
+  itens: readonly Pick<ItemDoPeriodo, 'id' | 'realizadoEm' | 'tipoLancamentoId'>[],
+  conta: { readonly inicio: string; readonly fim: string },
+): GuiaDoPeriodo[] {
+  const fechados = periodos.filter((p) => p.fechado);
+  if (!fechados.length) return [{ periodo: null, itens: itens.map((i) => i.id), ...conta }];
+  const porPeriodo = new Map<number, number[]>();
+  const resto: Pick<ItemDoPeriodo, 'id' | 'realizadoEm'>[] = [];
+  for (const i of itens) {
+    const p = periodoDoItem(periodos, i);
+    if (p?.fechado) porPeriodo.set(p.id, [...(porPeriodo.get(p.id) ?? []), i.id]);
+    else resto.push(i);
+  }
+  const guias: GuiaDoPeriodo[] = [...fechados]
+    .sort((a, b) => ms(a.inicio) - ms(b.inicio) || a.id - b.id)
+    .filter((p) => porPeriodo.has(p.id))
+    .map((p) => ({ periodo: p, itens: porPeriodo.get(p.id) ?? [], inicio: p.inicio, fim: p.fim }));
+  if (resto.length) {
+    const corte = fechados.reduce((m, p) => (ms(p.fim) > ms(m) ? p.fim : m), fechados[0]!.fim);
+    const depois = resto.every((i) => ms(i.realizadoEm) > ms(corte)) && ms(corte) > ms(conta.inicio);
+    guias.push({
+      periodo: null,
+      itens: resto.map((i) => i.id),
+      inicio: depois ? corte : conta.inicio,
+      fim: conta.fim,
+    });
+  }
+  return guias;
+}
