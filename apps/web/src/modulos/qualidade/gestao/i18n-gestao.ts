@@ -226,6 +226,8 @@ export const mensagensGestaoQualidade = {
       cientes: 'Quem já deu ciência',
       verCientes: 'Ver quem deu ciência',
       nenhumCiente: 'Ninguém deu ciência ainda.',
+      pendentesCiencia: 'Quem deve ler e ainda não deu ciência',
+      nenhumPendente: 'Ninguém da distribuição está pendente.',
       revisar: 'Publicar nova revisão',
       retirar: 'Retirar de uso',
       motivo: 'Motivo da retirada',

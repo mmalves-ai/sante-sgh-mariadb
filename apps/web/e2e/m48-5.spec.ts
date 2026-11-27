@@ -69,9 +69,20 @@ test.describe('Gestão da qualidade: POP e ciência, ouvidoria com prazo e respo
     await expect(page.getByTestId('gestao-aviso')).toBeVisible();
     await expect(doc.getByTestId('doc-ciencias')).toContainText('1');
     await expect(doc.getByTestId('doc-dar-ciencia')).toHaveCount(0);
+    // Ramo próprio (distribuição por conta, perfil, cargo ou setor): a resposta de
+    // GET /api/qualidade/documentos/:id/pendentes-ciencia segue o contrato ({ itens: [{ usuario, nome }] }) e o gestor
+    // vê quem deve ler e ainda não leu. Simulada aqui porque o E2E roda sem banco (a porta em memória não tem
+    // distribuição: documento aberto, ninguém pendente).
+    await page.route('**/api/qualidade/documentos/*/pendentes-ciencia', (r) =>
+      r.fulfill({ json: { itens: [{ usuario: 'SINT.OUVIDORIA', nome: 'Ouvidoria sintética' }] } }),
+    );
     await doc.getByTestId('doc-ver-cientes').click();
     await expect(doc.getByTestId('doc-cientes')).toContainText('SINT.QUALIDADE');
-    await semViolacaoAxe(page, '/qualidade/documentos (quem deu ciência)');
+    await expect(doc.getByTestId('doc-pendentes-ciencia')).toContainText(
+      'Ouvidoria sintética (SINT.OUVIDORIA)',
+    );
+    await semViolacaoAxe(page, '/qualidade/documentos (quem deu ciência e quem falta)');
+    await page.unroute('**/api/qualidade/documentos/*/pendentes-ciencia');
 
     // ── A ouvidoria: o vigente e a ciência ───────────────────────────────────────────────────────────────────
     await sair(page);

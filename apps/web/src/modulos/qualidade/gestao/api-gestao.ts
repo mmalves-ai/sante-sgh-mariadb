@@ -118,6 +118,10 @@ export type DocumentoCompletoTela = z.infer<typeof esquemaDocumentoCompleto>;
 const esquemaCientes = z.object({
   itens: z.array(z.object({ usuario: s, cienteEm: s })),
 });
+/** Quem a distribuição obriga a ler a revisão vigente e ainda não registrou a ciência (login e nome). */
+const esquemaPendentesCiencia = z.object({
+  itens: z.array(z.object({ usuario: s, nome: s })),
+});
 
 const unidade = z.enum(['percentual', 'dias', 'razao', 'quantidade', 'densidade', 'minutos']);
 const situacaoMeta = z.enum(['na-meta', 'fora-da-meta', 'sem-meta', 'sem-valor']);
@@ -436,6 +440,8 @@ export const lerDocumentos = (f: {
 export const lerDocumento = (id: number): Promise<DocumentoCompletoTela> =>
   ler(`${Q}/documentos/${String(id)}`, esquemaDocumentoCompleto);
 export const lerCientes = (id: number) => ler(`${Q}/documentos/${String(id)}/ciencias`, esquemaCientes);
+export const lerPendentesCiencia = (id: number) =>
+  ler(`${Q}/documentos/${String(id)}/pendentes-ciencia`, esquemaPendentesCiencia);
 /** Os setores do estabelecimento para escolher a área do documento pelo id. */
 export const listarSetoresDocumento = () =>
   ler(

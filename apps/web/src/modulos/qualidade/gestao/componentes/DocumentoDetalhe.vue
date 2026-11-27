@@ -12,6 +12,7 @@ import {
   type DocumentoCompletoTela,
   lerCientes,
   lerDocumento,
+  lerPendentesCiencia,
   novaChaveGestao,
   registrarCiencia,
   retirarDocumento,
@@ -44,6 +45,12 @@ const cientes = useQuery({
   queryKey: computed(() => ['gestaoQualidade', 'cientes', props.id]),
   queryFn: () => lerCientes(props.id),
   enabled: computed(() => verCientes.value && props.podePublicar),
+});
+// Para o gestor do documento: quem a distribuição obriga a ler a revisão vigente e ainda não leu.
+const pendentes = useQuery({
+  queryKey: computed(() => ['gestaoQualidade', 'pendentesCiencia', props.id]),
+  queryFn: () => lerPendentesCiencia(props.id),
+  enabled: computed(() => verCientes.value && props.podePublicar && doc.data.value?.situacao === 'vigente'),
 });
 
 const erro = ref<unknown>(null);
@@ -240,6 +247,19 @@ async function retirar(): Promise<void> {
               {{ c.usuario }}: {{ dataHora(c.cienteEm) }}
             </li>
           </ul>
+          <template v-if="doc.data.value.situacao === 'vigente'">
+            <h3>{{ t('gestaoQualidade.documentos.detalhe.pendentesCiencia') }}</h3>
+            <ErroGestao v-if="pendentes.isError.value" :erro="pendentes.error.value" />
+            <p
+              v-else-if="pendentes.data.value && !pendentes.data.value.itens.length"
+              data-testid="doc-sem-pendentes"
+            >
+              {{ t('gestaoQualidade.documentos.detalhe.nenhumPendente') }}
+            </p>
+            <ul v-else-if="pendentes.data.value" class="lista-ccih" data-testid="doc-pendentes-ciencia">
+              <li v-for="p in pendentes.data.value.itens" :key="p.usuario">{{ p.nome }} ({{ p.usuario }})</li>
+            </ul>
+          </template>
         </template>
       </template>
     </template>

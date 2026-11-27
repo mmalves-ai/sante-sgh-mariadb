@@ -225,6 +225,31 @@ describe('gestão documental', () => {
     expect(w.find('[data-testid="gestao-aviso"]').text()).toContain('Ciência registrada');
   });
 
+  it('o gestor do documento vê quem deu ciência e quem a distribuição obriga a ler e ainda não leu', async () => {
+    sessao('qualidade.documento.ler', 'qualidade.documento.publicar');
+    const c = simular(
+      base((url) => {
+        if (url === '/api/qualidade/documentos/5/ciencias')
+          return { itens: [{ usuario: 'SINT.QUALIDADE', cienteEm: '2026-10-02T09:00:00' }] };
+        if (url === '/api/qualidade/documentos/5/pendentes-ciencia')
+          return { itens: [{ usuario: 'SINT.ENFERMEIRA', nome: 'Enfermeira sintética' }] };
+        if (url.startsWith('/api/qualidade/documentos/5')) return DOC_COMPLETO();
+        if (url.startsWith('/api/qualidade/documentos')) return PAGINA([DOC()]);
+        return undefined;
+      }),
+    );
+    const w = montar(DocumentosTela);
+    await flushPromises();
+    await clicar(w, 'abrir-documento-5');
+    expect(c.some((x) => x.url.includes('pendentes-ciencia'))).toBe(false);
+    await clicar(w, 'doc-ver-cientes');
+    await flushPromises();
+    expect(w.find('[data-testid="doc-cientes"]').text()).toContain('SINT.QUALIDADE');
+    expect(w.find('[data-testid="doc-pendentes-ciencia"]').text()).toContain(
+      'Enfermeira sintética (SINT.ENFERMEIRA)',
+    );
+  });
+
   it('quem publica: o novo documento vai com o código em maiúsculas e a vigência de 24 meses', async () => {
     sessao('qualidade.documento.ler', 'qualidade.documento.publicar');
     const c = simular(
