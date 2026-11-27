@@ -57,6 +57,74 @@ test.describe('@C2-034 documentos da internação conforme o convênio', () => {
     page,
   }) => {
     const externas = vigiarExternas(page);
+    // A configuração dos documentos só tem porta própria (sem banco ela responde 503): as duas leituras da tela de
+    // configuração são simuladas pelo contrato da API (massa SINTÉTICA); a gravação e a prévia sobre o banco estão no
+    // contrato de efeito apps/api/src/modulos/adt/documentos-internacao.int.spec.ts.
+    const modelo = {
+      id: 2,
+      codigo: 'TERMO-CONV',
+      titulo: 'TERMO DO CONVENIO',
+      ativo: true,
+      especialidade: null,
+      idadeMinima: null,
+      idadeMaxima: null,
+      conteudo: '<p>Termo sintético</p>',
+      momento: 'admissao',
+      copias: 2,
+      todosEstabelecimentos: false,
+      versao: 1,
+    };
+    await page.route(/\/api\/documentos-internacao(\?.*)?$/, (rota) =>
+      rota.request().method() !== 'GET'
+        ? rota.fallback()
+        : rota.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              modelos: [modelo],
+              regras: [
+                {
+                  id: 1,
+                  modelo: 2,
+                  momento: 'admissao',
+                  convenio: 901,
+                  especialidade: null,
+                  modalidade: null,
+                  obrigatorio: true,
+                  selecionadoPorPadrao: true,
+                  copias: 2,
+                  ordem: 1,
+                  ativo: true,
+                  versao: 1,
+                },
+              ],
+              modalidades: [{ codigo: 1, nome: 'CLINICA' }],
+              podeEditar: false,
+              podeModeloComum: false,
+            }),
+          }),
+    );
+    await page.route(/\/api\/documentos-internacao\/internacao\/\d+(\?.*)?$/, (rota) =>
+      rota.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          momento: 'admissao',
+          documentos: [
+            {
+              modelo: 2,
+              titulo: 'TERMO DO CONVENIO',
+              regra: 1,
+              copias: 2,
+              obrigatorio: true,
+              selecionado: true,
+              sobDemanda: false,
+              texto: 'Termo sintético',
+            },
+          ],
+        }),
+      }),
+    );
     await entrar(page, 'SINT.INTERNACAO');
     const reg = await admitir(page);
     expect(reg).toBeGreaterThan(0);
