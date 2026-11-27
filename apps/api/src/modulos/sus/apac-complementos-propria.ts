@@ -486,6 +486,37 @@ export class PortaApacComplementosPropria extends PortaEstabelecimentoPropria {
     };
   }
 
+  /**
+   * C1-051: o setor do atendimento do laudo (pelo laudo ou pela sessão da APAC dele), para a permissão por usuário e
+   * setor; null, registro fora do estabelecimento da sessão.
+   */
+  setor(
+    c: ContextoPortaPropria,
+    ref: { readonly laudo: number } | { readonly sessao: number },
+  ): Promise<{ setor: number | null } | null> {
+    return this.ler(c, 'setor', async (l, est) => {
+      const x =
+        'laudo' in ref
+          ? await l.uma(
+              `SELECT at.setor_funcional_id FROM laudo_apac la LEFT JOIN atendimento at ON at.id = la.atendimento_id
+                WHERE la.id = ? AND la.estabelecimento_id = ? AND la.excluido_em IS NULL`,
+              [ref.laudo, est.id],
+            )
+          : await l.uma(
+              `SELECT at.setor_funcional_id FROM apac_sessao s
+                 JOIN apac a ON a.id = s.apac_id
+                 JOIN autorizacao_apac aa ON aa.id = a.autorizacao_apac_id
+                 JOIN laudo_apac la ON la.id = aa.laudo_apac_id
+                 LEFT JOIN atendimento at ON at.id = la.atendimento_id
+                WHERE s.id = ? AND a.estabelecimento_id = ?`,
+              [ref.sessao, est.id],
+            );
+      if (!x) return null;
+      const v = x['setor_funcional_id'];
+      return { setor: v === null || v === undefined ? null : Number(v) };
+    });
+  }
+
   /** Os laudos complementares e as sessões da APAC (o laudo é o id da tela). */
   complementos(c: ContextoPortaPropria, laudo: number): Promise<ComplementosApac> {
     return this.ler(c, 'ler', (l, est) => this.lerTudo(l, est.id, laudo));

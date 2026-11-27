@@ -63,7 +63,14 @@ import {
 } from '../config/public-api.js';
 import { PORTA_SUS, type PortaSus } from './porta.js';
 import type { ArmazemArquivoSus } from './servico.js';
-import { ARMAZEM_ARQUIVO_SUS, SusController } from './sus.controller.js';
+import {
+  PORTA_ESTABELECIMENTO_SUS,
+  type PortaEstabelecimentoSusPropria,
+} from './estabelecimento-sus-propria.js';
+import { controladorSusCompleto } from './guarda-setor-sus.js';
+import { PORTA_CONFIGURACAO_SUS, type PortaConfiguracaoSus } from './porta-configuracao.js';
+import { PORTA_PROGRAMACAO_SUS, type PortaProgramacaoSusPropria } from './programacao-propria.js';
+import { ARMAZEM_ARQUIVO_SUS, type SusController } from './sus.controller.js';
 
 interface Resposta {
   header(n: string, v: string): unknown;
@@ -95,8 +102,23 @@ export class SusAihController {
     @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
     @Optional() @Inject(ARMAZEM_ARQUIVO_SUS) armazem: ArmazemArquivoSus | null = null,
+    @Optional() @Inject(PORTA_PROGRAMACAO_SUS) programacao: PortaProgramacaoSusPropria | null = null,
+    @Optional()
+    @Inject(PORTA_ESTABELECIMENTO_SUS)
+    estabelecimentoSus: PortaEstabelecimentoSusPropria | null = null,
+    // C1-051: sem a porta da configuração, a sessão das rotas da AIH ficava sem as permissões por setor do usuário.
+    @Optional() @Inject(PORTA_CONFIGURACAO_SUS) portaConfiguracao: PortaConfiguracaoSus | null = null,
   ) {
-    this.base = new SusController(porta, trilha, configuracao, cache, armazem);
+    this.base = controladorSusCompleto(
+      porta,
+      trilha,
+      configuracao,
+      cache,
+      armazem,
+      programacao,
+      estabelecimentoSus,
+      portaConfiguracao,
+    );
   }
 
   private get aih() {

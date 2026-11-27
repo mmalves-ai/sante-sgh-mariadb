@@ -18,6 +18,7 @@ import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
+import { GuardaSetorSus } from './guarda-setor-sus.js';
 import {
   PORTA_CONTA_AIH_COMPLEMENTO,
   type PortaContaAihComplementoPropria,
@@ -33,7 +34,15 @@ export class ContaAihComplementoController {
     @Optional()
     @Inject(PORTA_CONTA_AIH_COMPLEMENTO)
     private readonly porta: PortaContaAihComplementoPropria | null = null,
+    @Optional() private readonly setor: GuardaSetorSus | null = null,
   ) {}
+
+  /** C1-051: o setor da internação da AIH (ler e gravar o complemento é digitação). */
+  private async exigirSetor(req: RequisicaoAutorizada, aih: number) {
+    const porta = this.porta;
+    if (!porta || !this.setor) return;
+    await this.setor.exigir(req, 'digitacao', () => porta.setor(sessaoDe(req).porta, aih));
+  }
 
   private async com<T>(
     req: RequisicaoAutorizada,
@@ -48,7 +57,8 @@ export class ContaAihComplementoController {
 
   @Get(':aih/complemento')
   @Permissao(LER)
-  consultar(@Req() req: RequisicaoAutorizada, @Param('aih', ParseIntPipe) aih: number) {
+  async consultar(@Req() req: RequisicaoAutorizada, @Param('aih', ParseIntPipe) aih: number) {
+    await this.exigirSetor(req, aih);
     return this.com(req, (p, c) => p.consultar(c, aih));
   }
 
@@ -56,7 +66,12 @@ export class ContaAihComplementoController {
   @HttpCode(200)
   @Permissao(REGISTRAR)
   @AuditadoNoHandler(TRILHA)
-  salvar(@Req() req: RequisicaoAutorizada, @Param('aih', ParseIntPipe) aih: number, @Body() corpo: unknown) {
+  async salvar(
+    @Req() req: RequisicaoAutorizada,
+    @Param('aih', ParseIntPipe) aih: number,
+    @Body() corpo: unknown,
+  ) {
+    await this.exigirSetor(req, aih);
     return this.com(req, (p, c) => p.salvar(c, aih, corpo));
   }
 }

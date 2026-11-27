@@ -160,4 +160,34 @@ describe('faturamento SUS: a permissão por usuário e setor (C1-051)', () => {
       expect(r).not.toEqual(recusa('sus-setor-sem-permissao'));
     }
   });
+
+  it('o retorno do gestor: listar, importar e tratar exigem faturamento em todos os setores da competência', async () => {
+    const { aih } = montar();
+    const so1 = sessao([perm(1, 'faturamento')]);
+    // Com permissão por setor, a listagem pede a competência (a produção dela tem os setores 1 e 2).
+    await expect(aih.listarRetornos(so1, { pagina: 1, porPagina: 20 } as never)).rejects.toEqual(
+      recusa('sus-setor-sem-permissao'),
+    );
+    await expect(
+      aih.listarRetornos(so1, { competencia: COMP, pagina: 1, porPagina: 20 } as never),
+    ).rejects.toEqual(recusa('sus-setor-sem-permissao'));
+    await expect(
+      aih.importarRetorno(so1, {
+        instrumento: 'aih',
+        competencia: COMP,
+        conteudo: 'numero_aih;situacao;valor_aprovado;motivo\n3300000000001;aprovada;10,00;\n',
+      } as never),
+    ).rejects.toEqual(recusa('sus-setor-sem-permissao'));
+    // Faturamento nos dois setores: a listagem passa.
+    const ambos = sessao([perm(1, 'faturamento'), perm(2, 'faturamento')]);
+    await expect(
+      aih.listarRetornos(ambos, { competencia: COMP, pagina: 1, porPagina: 20 } as never),
+    ).resolves.toMatchObject({ itens: [] });
+    // Sem permissão cadastrada, vale o cargo (sem competência também).
+    await expect(
+      aih.listarRetornos(sessao([]), { pagina: 1, porPagina: 20 } as never),
+    ).resolves.toMatchObject({
+      itens: [],
+    });
+  });
 });

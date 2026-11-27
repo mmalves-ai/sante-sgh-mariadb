@@ -408,6 +408,25 @@ export class PortaContaAihComplementoPropria extends PortaEstabelecimentoPropria
     ).map((x) => ({ id: num(x['id']), codigo: txt(x['codigo']), descricao: txt(x['descricao']) }));
   }
 
+  /**
+   * C1-051: o setor do atendimento da internação da AIH (a permissão por usuário e setor); null, AIH fora do
+   * estabelecimento da sessão.
+   */
+  setor(c: ContextoPortaPropria, aih: number): Promise<{ setor: number | null } | null> {
+    return this.ler(c, 'setor', async (l, est) => {
+      const x = await l.uma(
+        `SELECT at.setor_funcional_id FROM autorizacao_internacao_sus a
+           LEFT JOIN internacao i ON i.id = a.internacao_id
+           LEFT JOIN atendimento at ON at.id = i.atendimento_id
+          WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
+        [aih, est.id],
+      );
+      if (!x) return null;
+      const v = x['setor_funcional_id'];
+      return { setor: v === null || v === undefined ? null : Number(v) };
+    });
+  }
+
   /** O complemento da última conta da AIH e as opções da tela (procedimentos, atividades, credores, habilitações). */
   consultar(
     c: ContextoPortaPropria,

@@ -12,6 +12,7 @@ import { LeitosUtiSusController } from './leitos-uti.controller.js';
 import { EstabelecimentoSusController } from './estabelecimento-sus.controller.js';
 import { PORTA_ESTABELECIMENTO_SUS, PortaEstabelecimentoSusPropria } from './estabelecimento-sus-propria.js';
 import { LaudoInternacaoSusController } from './laudo-internacao-sus.controller.js';
+import { GuardaSetorSus } from './guarda-setor-sus.js';
 import { ContaAihComplementoController } from './conta-aih-complemento.controller.js';
 import { RepasseSusController } from './repasse-sus.controller.js';
 import { PORTA_REPASSE_SUS, PortaRepasseSusPropria } from './repasse-sus-propria.js';
@@ -90,6 +91,8 @@ export function modulo(ctx: ContextoModulo, opcoes: OpcoesModuloSus = {}): Dynam
     ],
     providers: [
       { provide: PORTA_SUS, useValue: porta },
+      // C1-051: a permissão por usuário e setor nas rotas que não passam pelo ServicoSus.
+      GuardaSetorSus,
       { provide: ARMAZEM_ARQUIVO_SUS, useValue: armazem },
       // F7 (08-INTG linha 131): serviço web do SUS; o simulador fora de produção (regra 6).
       { provide: NUCLEO_SERVICO_WEB_SUS, useValue: ctx.nucleo ?? null },

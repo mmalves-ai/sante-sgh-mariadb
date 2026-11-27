@@ -421,6 +421,18 @@ describe.skipIf(SEM_BANCO)('PortaApacComplementosPropria contra o MariaDB (contr
     ).rejects.toMatchObject({ problema: { status: 422 } });
   });
 
+  it('C1-051: o setor do atendimento do laudo, pelo laudo e pela sessão (o laudo sem atendimento fica sem setor)', async () => {
+    expect(await porta.setor(ctx(), { laudo: laudo.onco })).toEqual({ setor: null });
+    expect(await porta.setor(ctx(), { laudo: -1 })).toBeNull();
+    const [sessao] = await ler<{ id: number }>(
+      `SELECT s.id FROM apac_sessao s JOIN apac a ON a.id = s.apac_id WHERE a.estabelecimento_id = ? ORDER BY s.id LIMIT 1`,
+      [est],
+    );
+    expect(sessao).toBeDefined();
+    expect(await porta.setor(ctx(), { sessao: Number(sessao?.id) })).toEqual({ setor: null });
+    expect(await porta.setor(ctx(), { sessao: -1 })).toBeNull();
+  });
+
   it('cada gravação deixa a trilha na mesma transação', async () => {
     const t = await ler<{ n: number }>(
       `SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ? AND entidade IN ('laudo_apac_oncologia','laudo_apac_auditiva','laudo_apac_medicamento','laudo_apac_odontologia','apac_sessao')`,

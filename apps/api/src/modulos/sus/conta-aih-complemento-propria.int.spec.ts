@@ -267,6 +267,18 @@ describe.skipIf(SEM_BANCO)('PortaContaAihComplementoPropria contra o MariaDB (co
     expect(r.opcoes.atividades.map((a) => a.codigo)).toContain('C2121A');
   });
 
+  it('C1-051: o setor do atendimento da internação da AIH (a permissão por setor); AIH de fora, null', async () => {
+    const [x] = await ler<{ setor: number | null }>(
+      `SELECT at.setor_funcional_id AS setor FROM autorizacao_internacao_sus a JOIN internacao i ON i.id = a.internacao_id
+         JOIN atendimento at ON at.id = i.atendimento_id WHERE a.id = ?`,
+      [aih],
+    );
+    expect(await porta.setor(ctx(), aih)).toEqual({
+      setor: x?.setor === null || x === undefined ? null : Number(x.setor),
+    });
+    expect(await porta.setor(ctx(), -1)).toBeNull();
+  });
+
   it('grava equipe, diagnósticos e incremento com o valor pela SIGTAP; as versões sobem; a trilha fica', async () => {
     const vc = await versaoConta();
     const va = await versaoAih();

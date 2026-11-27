@@ -63,6 +63,7 @@ import {
   type ParametrosAih,
 } from './montagem-aih.js';
 import type { ContextoSus, GravacaoSus, LeituraSus, PortaSus } from './porta.js';
+import { recusaConfiguracaoSus } from './servico-configuracao.js';
 import type { ArmazemArquivoSus, MontadorCriticaSus, ServicoSus, SessaoSus } from './servico.js';
 import {
   type AihRegistro,
@@ -909,6 +910,11 @@ export class ServicoSusAih {
 
   async listarRetornos(s: SessaoSus, f: FiltroRetornosSus): Promise<PaginaRetornosSus> {
     this.exigirSus(s);
+    // C1-051: com permissão por setor, o retorno é lido por competência, com 'faturamento' em todos os setores dela.
+    if (this.sus.setoresSus(s, 'faturamento') !== null) {
+      if (!f.competencia) throw recusaConfiguracaoSus('sus-setor-sem-permissao');
+      await this.sus.exigirFaturamentoDaCompetencia(s, f.competencia);
+    }
     const r = await this.porta.ler(this.ctx(s), (l) =>
       l.paginaRetornos({
         ...(f.instrumento ? { instrumento: f.instrumento } : {}),
@@ -934,6 +940,8 @@ export class ServicoSusAih {
    */
   async importarRetorno(s: SessaoSus, e: ImportarRetornoSusEntrada): Promise<ResultadoRetornoSus> {
     this.exigirEscopoTotal(s);
+    // C1-051: o retorno da competência é faturamento em todos os setores com produção SUS nela.
+    await this.sus.exigirFaturamentoDaCompetencia(s, e.competencia);
     const leitura = lerRetornoSus(e.conteudo, e.instrumento, e.competencia);
     if (leitura.linhas.length === 0) throw recusa('retorno-sem-linhas', { erros: leitura.erros.length });
     if (leitura.linhas.length > 20_000) throw recusa('retorno-sem-linhas', { linhas: leitura.linhas.length });
@@ -1021,6 +1029,7 @@ export class ServicoSusAih {
     return this.gravar(s, async (g) => {
       const r = await g.retornoSus(e.retorno, true);
       if (!r) throw new ErroProblema('nao-encontrado', 404, 'Retorno não encontrado');
+      await this.sus.exigirFaturamentoNa(s, g, r.competencia);
       if (versaoSus(r.versao) !== e.versao) throw recusa('versao-alterada');
       if (r.tratamento !== 'pendente' || r.situacao === 'aprovada') throw recusa('retorno-sem-pendencia');
       if (e.decisao === 'reapresentar' && r.instrumento === 'aih' && r.situacao !== 'rejeitada')

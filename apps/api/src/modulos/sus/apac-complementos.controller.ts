@@ -21,6 +21,7 @@ import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { problemaDoCadastro, sessaoDe } from '../cadastro/comum.js';
+import { GuardaSetorSus } from './guarda-setor-sus.js';
 import {
   laudoDaRota,
   PORTA_APAC_COMPLEMENTOS,
@@ -35,7 +36,15 @@ export class ApacComplementosController {
     @Optional()
     @Inject(PORTA_APAC_COMPLEMENTOS)
     private readonly porta: PortaApacComplementosPropria | null = null,
+    @Optional() private readonly setor: GuardaSetorSus | null = null,
   ) {}
+
+  /** C1-051: o setor do atendimento do laudo (ler e gravar os complementos e as sessões é digitação). */
+  private async exigirSetor(req: RequisicaoAutorizada, ref: { laudo: number } | { sessao: number }) {
+    const porta = this.porta;
+    if (!porta || !this.setor) return;
+    await this.setor.exigir(req, 'digitacao', () => porta.setor(sessaoDe(req).porta, ref));
+  }
 
   private async com<T>(
     req: RequisicaoAutorizada,
@@ -50,7 +59,8 @@ export class ApacComplementosController {
 
   @Get(':laudo')
   @Permissao('faturamento.sus.ler')
-  complementos(@Req() req: RequisicaoAutorizada, @Param('laudo', ParseIntPipe) laudo: number) {
+  async complementos(@Req() req: RequisicaoAutorizada, @Param('laudo', ParseIntPipe) laudo: number) {
+    await this.exigirSetor(req, { laudo });
     return this.com(req, (p, c) => p.complementos(c, laudo));
   }
 
@@ -58,12 +68,13 @@ export class ApacComplementosController {
   @HttpCode(200)
   @Permissao('faturamento.susApac.registrar')
   @AuditadoNoHandler(TRILHA)
-  gravarLaudo(
+  async gravarLaudo(
     @Req() req: RequisicaoAutorizada,
     @Param('laudo', ParseIntPipe) laudo: number,
     @Param('tipo') tipo: string,
     @Body() corpo: unknown,
   ) {
+    await this.exigirSetor(req, { laudo });
     return this.com(req, (p, c) => p.gravarLaudo(c, laudo, laudoDaRota(tipo), corpo));
   }
 
@@ -71,12 +82,13 @@ export class ApacComplementosController {
   @HttpCode(200)
   @Permissao('faturamento.susApac.registrar')
   @AuditadoNoHandler(TRILHA)
-  retirarLaudo(
+  async retirarLaudo(
     @Req() req: RequisicaoAutorizada,
     @Param('laudo', ParseIntPipe) laudo: number,
     @Param('tipo') tipo: string,
     @Body() corpo: unknown,
   ) {
+    await this.exigirSetor(req, { laudo });
     return this.com(req, (p, c) => p.retirarLaudo(c, laudo, laudoDaRota(tipo), corpo));
   }
 
@@ -84,11 +96,12 @@ export class ApacComplementosController {
   @HttpCode(201)
   @Permissao('faturamento.susApac.registrar')
   @AuditadoNoHandler(TRILHA)
-  registrarSessao(
+  async registrarSessao(
     @Req() req: RequisicaoAutorizada,
     @Param('laudo', ParseIntPipe) laudo: number,
     @Body() corpo: unknown,
   ) {
+    await this.exigirSetor(req, { laudo });
     return this.com(req, (p, c) => p.registrarSessao(c, laudo, corpo));
   }
 
@@ -96,11 +109,12 @@ export class ApacComplementosController {
   @HttpCode(200)
   @Permissao('faturamento.susApac.registrar')
   @AuditadoNoHandler(TRILHA)
-  cancelarSessao(
+  async cancelarSessao(
     @Req() req: RequisicaoAutorizada,
     @Param('id', ParseIntPipe) id: number,
     @Body() corpo: unknown,
   ) {
+    await this.exigirSetor(req, { sessao: id });
     return this.com(req, (p, c) => p.cancelarSessao(c, id, corpo));
   }
 }
