@@ -105,6 +105,14 @@ describe.skipIf(SEM_BANCO)(
       ]);
       expect(Number(linhas[0]!['liberada'])).toBe(0);
       expect(linhas[1]!['descricao']).toBe('O procedimento exige junta médica.');
+      // A ficha do pedido lê as críticas gravadas pela porta (com a liberação manual).
+      const lidas = await porta.criticasENegativa(contexto(m), r.id);
+      expect(lidas.criticas.map((x) => [x.sequencia, x.codigo, x.forma, x.liberada])).toEqual([
+        [1, 'em-carencia', 'automatica', false],
+        [2, 'rol-exige-junta', 'automatica', false],
+      ]);
+      expect(lidas.criticas[0]!.liberadaEm).toBeNull();
+      expect(lidas.negativa).toBeNull();
     });
 
     it('recusa a crítica fora do cadastro e não deixa o pedido gravado', async () => {
@@ -221,6 +229,17 @@ describe.skipIf(SEM_BANCO)(
       expect(Number(n!['estabelecimento_id'])).toBe(m.est);
       expect(Number(n!['motivo_decisao_autorizacao_id'])).toBe(m.critica);
       expect(Number(n!['versao'])).toBe(1);
+      // A ficha do pedido lê a negativa emitida pela porta (número, fundamento, entrega ainda sem meio nem data).
+      const ficha = await porta.criticasENegativa(contexto(m), r.id);
+      expect(ficha.negativa).toMatchObject({
+        numero: 'NEG-L1220-A3',
+        fundamento: 'carencia',
+        clausula: 'Cláusula 9 do contrato',
+        situacao: 'emitida',
+        meioEntrega: null,
+        entregueEm: null,
+      });
+      expect(ficha.negativa!.emitidaEm).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
       const a = await registrar('L1220-A4', []);
       await porta.gravar(contexto(m), T('operadora.autorizacao.decidida'), (g) =>
@@ -246,6 +265,7 @@ describe.skipIf(SEM_BANCO)(
       expect(
         await ler('SELECT id FROM critica_pedido_autorizacao WHERE pedido_autorizacao_plano_id = ?', [a.id]),
       ).toHaveLength(0);
+      expect(await porta.criticasENegativa(contexto(m), a.id)).toEqual({ criticas: [], negativa: null });
     });
   },
 );

@@ -66,6 +66,21 @@ const rotulo = (d: 'tipoGuia' | 'origem' | 'critica' | 'situacaoGuia', codigo: n
     : (apoio.data.value?.dominios[d].find((x) => x.codigo === codigo)?.rotulo ?? String(codigo));
 const data = (d: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '—');
 const quando = (d: string) => `${data(d.slice(0, 10))} ${d.slice(11, 16)}`;
+// C2-122: as críticas gravadas no pedido e a negativa emitida (rótulos dos códigos do banco).
+const traduzir = (grupo: string, codigo: string | null) => {
+  if (!codigo) return '—';
+  const chave = `operadoraAutorizacao.ficha.${grupo}.${codigo}`;
+  const r = t(chave);
+  return r === chave ? codigo : r;
+};
+const formaCritica = (f: string) =>
+  ({
+    automatica: t('operadoraAutorizacao.ficha.gravadaAutomatica'),
+    manual: t('operadoraAutorizacao.ficha.gravadaManual'),
+    intercambio: t('operadoraAutorizacao.ficha.gravadaIntercambio'),
+  })[f] ?? f;
+const fundamentoNegativa = (f: string) => traduzir('fundamentos', f);
+const meioEntrega = (m: string | null) => traduzir('meiosEntrega', m);
 const carater = (c: 'E' | 'U') => CARATERES_ATENDIMENTO[c];
 const tabela = (n: number) => TABELAS_ITEM_GUIA[n as keyof typeof TABELAS_ITEM_GUIA] ?? String(n);
 const internacaoTipo = (n: number) => TIPOS_INTERNACAO[n as keyof typeof TIPOS_INTERNACAO] ?? String(n);
@@ -678,6 +693,29 @@ watch(ligada, (v) => {
             </li>
           </ul>
 
+          <template v-if="ficha.data.value.criticasGravadas.length">
+            <h3>{{ t('operadoraAutorizacao.ficha.criticasGravadas') }}</h3>
+            <ul data-testid="aut-ficha-criticas-gravadas">
+              <li
+                v-for="c in ficha.data.value.criticasGravadas"
+                :key="c.sequencia"
+                :data-liberada="c.liberada"
+              >
+                {{ c.descricao }} ({{ formaCritica(c.forma) }}, {{ quando(c.em) }}) ·
+                <template v-if="c.liberada">
+                  {{
+                    t('operadoraAutorizacao.ficha.liberada', {
+                      em: c.liberadaEm ? quando(c.liberadaEm) : '—',
+                      por: c.liberadaPor ?? '—',
+                      justificativa: c.justificativa ?? '—',
+                    })
+                  }}
+                </template>
+                <template v-else>{{ t('operadoraAutorizacao.ficha.pendenteLiberacao') }}</template>
+              </li>
+            </ul>
+          </template>
+
           <h3>{{ t('operadoraAutorizacao.ficha.itens') }}</h3>
           <table class="tabela" data-testid="aut-ficha-itens">
             <caption class="visualmente-oculto">
@@ -706,6 +744,50 @@ watch(ligada, (v) => {
               </tr>
             </tbody>
           </table>
+
+          <template v-if="ficha.data.value.negativa">
+            <h3>{{ t('operadoraAutorizacao.ficha.negativa') }}</h3>
+            <dl class="ficha" data-testid="aut-ficha-negativa">
+              <div>
+                <dt>{{ t('operadoraAutorizacao.ficha.negativaNumero') }}</dt>
+                <dd data-testid="aut-ficha-negativa-numero">{{ ficha.data.value.negativa.numero }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('operadoraAutorizacao.ficha.negativaFundamento') }}</dt>
+                <dd>{{ fundamentoNegativa(ficha.data.value.negativa.fundamento) }}</dd>
+              </div>
+              <div v-if="ficha.data.value.negativa.clausula">
+                <dt>{{ t('operadoraAutorizacao.ficha.negativaClausula') }}</dt>
+                <dd>{{ ficha.data.value.negativa.clausula }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('operadoraAutorizacao.ficha.negativaEmitida') }}</dt>
+                <dd>{{ quando(ficha.data.value.negativa.emitidaEm) }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('operadoraAutorizacao.ficha.negativaEntrega') }}</dt>
+                <dd data-testid="aut-ficha-negativa-entrega">
+                  <template v-if="ficha.data.value.negativa.entregueEm">
+                    {{
+                      t('operadoraAutorizacao.ficha.negativaEntregue', {
+                        meio: meioEntrega(ficha.data.value.negativa.meioEntrega),
+                        em: quando(ficha.data.value.negativa.entregueEm),
+                      })
+                    }}
+                  </template>
+                  <template v-else>{{ t('operadoraAutorizacao.ficha.negativaNaoEntregue') }}</template>
+                  <template v-if="ficha.data.value.negativa.prazoEntregaEm">
+                    ·
+                    {{
+                      t('operadoraAutorizacao.ficha.negativaPrazoEntrega', {
+                        em: quando(ficha.data.value.negativa.prazoEntregaEm),
+                      })
+                    }}
+                  </template>
+                </dd>
+              </div>
+            </dl>
+          </template>
 
           <template v-if="ficha.data.value.comunicado">
             <h3>{{ t('operadoraAutorizacao.ficha.comunicado') }}</h3>

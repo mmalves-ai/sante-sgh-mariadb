@@ -532,6 +532,37 @@ export const esquemaAutorizacaoDetalhe = z.object({
       }),
     )
     .default([]),
+  /** C2-122: as críticas gravadas no pedido (critica_pedido_autorizacao), com a liberação manual e a justificativa. */
+  criticasGravadas: z
+    .array(
+      z.object({
+        sequencia: z.number().int(),
+        codigo: z.string().nullable(),
+        descricao: z.string(),
+        forma: z.string(),
+        em: z.string(),
+        liberada: z.boolean(),
+        liberadaEm: z.string().nullable(),
+        liberadaPor: z.string().nullable(),
+        justificativa: z.string().nullable(),
+      }),
+    )
+    .default([]),
+  /** C2-122: a negativa formal emitida na decisão (negativa_cobertura, RN 395), com a entrega ao beneficiário. */
+  negativa: z
+    .object({
+      numero: z.string(),
+      fundamento: z.string(),
+      clausula: z.string().nullable(),
+      descricao: z.string(),
+      situacao: z.string(),
+      emitidaEm: z.string(),
+      prazoEntregaEm: z.string().nullable(),
+      meioEntrega: z.string().nullable(),
+      entregueEm: z.string().nullable(),
+    })
+    .nullable()
+    .default(null),
 });
 export type AutorizacaoDetalhe = z.infer<typeof esquemaAutorizacaoDetalhe>;
 

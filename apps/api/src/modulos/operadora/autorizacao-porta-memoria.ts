@@ -19,6 +19,7 @@ import {
   type DadosAutorizacao,
   type DadosAutorizacaoDaSenha,
   type DadosAutorizacaoResumo,
+  type DadosCriticasENegativa,
   type DadosEventoAutorizacao,
   type DadosItemAutorizacao,
   type DadosItemDominioAutorizacao,
@@ -376,6 +377,11 @@ export class PortaAutorizacaoOperadoraMemoria implements PortaAutorizacaoOperado
       .filter((e) => e.hospital === c.hospital && e.autorizacao === id)
       .sort((a, b) => a.id - b.id)
       .map((e) => sem(e, 'hospital', 'autorizacao'));
+  }
+
+  /** C2-122: a sessão sintética não grava as críticas por pedido nem a negativa formal (só a porta própria). */
+  async criticasENegativa(): Promise<DadosCriticasENegativa> {
+    return { criticas: [], negativa: null };
   }
 
   async anexosDoComplemento(c: ContextoAutorizacao, id: number): Promise<DadosAnexoComplemento[]> {

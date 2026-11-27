@@ -530,6 +530,32 @@ export interface DadosEnvioExistente {
   readonly situacao: SituacaoEnvioPorta;
 }
 
+/** C2-122: as críticas gravadas no pedido e a negativa formal emitida (a ficha do pedido). */
+export interface DadosCriticasENegativa {
+  readonly criticas: readonly {
+    readonly sequencia: number;
+    readonly codigo: string | null;
+    readonly descricao: string;
+    readonly forma: string;
+    readonly em: string;
+    readonly liberada: boolean;
+    readonly liberadaEm: string | null;
+    readonly liberadaPor: string | null;
+    readonly justificativa: string | null;
+  }[];
+  readonly negativa: {
+    readonly numero: string;
+    readonly fundamento: string;
+    readonly clausula: string | null;
+    readonly descricao: string;
+    readonly situacao: string;
+    readonly emitidaEm: string;
+    readonly prazoEntregaEm: string | null;
+    readonly meioEntrega: string | null;
+    readonly entregueEm: string | null;
+  } | null;
+}
+
 export interface DadosEventoAutorizacao {
   readonly id: number;
   readonly evento:

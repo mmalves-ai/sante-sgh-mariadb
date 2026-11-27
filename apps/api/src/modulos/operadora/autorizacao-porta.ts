@@ -16,6 +16,7 @@ import {
   type DadosAutorizacao,
   type DadosAutorizacaoResumo,
   type DadosElegibilidadeBeneficiario,
+  type DadosCriticasENegativa,
   type DadosEventoAutorizacao,
   type DadosItemAutorizacao,
   type DadosItemDominioAutorizacao,
@@ -120,6 +121,8 @@ export interface PortaAutorizacaoOperadora {
   autorizacao(c: ContextoAutorizacao, id: number): Promise<DadosAutorizacao | null>;
   itens(c: ContextoAutorizacao, id: number): Promise<DadosItemAutorizacao[]>;
   eventos(c: ContextoAutorizacao, id: number): Promise<DadosEventoAutorizacao[]>;
+  /** C2-122: as críticas gravadas no pedido (com a liberação manual) e a negativa formal emitida. */
+  criticasENegativa(c: ContextoAutorizacao, id: number): Promise<DadosCriticasENegativa>;
   /** W0-10: os anexos das respostas ao complemento (sem o conteúdo) e um anexo com o conteúdo (do prestador, se dado). */
   anexosDoComplemento(c: ContextoAutorizacao, id: number): Promise<DadosAnexoComplemento[]>;
   anexoDoComplemento(
@@ -155,6 +158,7 @@ export const METODOS_PORTA_AUTORIZACAO: ReadonlySet<string> = new Set([
   'autorizacao',
   'itens',
   'eventos',
+  'criticasENegativa',
   'anexosDoComplemento',
   'anexoDoComplemento',
   'auditores',

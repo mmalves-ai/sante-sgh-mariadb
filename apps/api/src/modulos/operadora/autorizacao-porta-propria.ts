@@ -49,6 +49,7 @@ import {
   type DadosAutorizacaoDaSenha,
   type DadosAutorizacaoResumo,
   type DadosElegibilidadeBeneficiario,
+  type DadosCriticasENegativa,
   type DadosEventoAutorizacao,
   type DadosItemAutorizacao,
   type DadosItemDominioAutorizacao,
@@ -572,6 +573,58 @@ export class PortaAutorizacaoOperadoraPropria
         em: instante(h['ocorrido_em']) ?? '',
         por: txt(h['login']),
       }));
+    });
+  }
+
+  /** C2-122: as críticas gravadas no pedido (com a liberação manual) e a negativa formal emitida, do estabelecimento. */
+  criticasENegativa(c: ContextoAutorizacao, id: number): Promise<DadosCriticasENegativa> {
+    return this.ler(c, async (l) => {
+      const criticas = await l.consultar(
+        `SELECT cp.sequencia, ca.codigo, cp.descricao, cp.forma_registro, cp.ocorrido_em, cp.liberada, cp.liberada_em,
+                cp.justificativa_liberacao, u.login
+           FROM critica_pedido_autorizacao cp
+           JOIN pedido_autorizacao_plano pa ON pa.id = cp.pedido_autorizacao_plano_id
+           LEFT JOIN critica_autorizacao ca ON ca.id = cp.critica_autorizacao_id
+           LEFT JOIN usuario u ON u.id = cp.liberada_por_usuario_id
+          WHERE cp.pedido_autorizacao_plano_id = ? AND pa.estabelecimento_id = ? AND cp.excluido_em IS NULL
+          ORDER BY cp.sequencia`,
+        [id, c.estabelecimento ?? 0],
+      );
+      const negativa = await l.consultar(
+        `SELECT numero, fundamento, clausula_contratual, descricao, situacao, criado_em, prazo_entrega_em, meio_entrega,
+                entregue_em
+           FROM negativa_cobertura
+          WHERE pedido_autorizacao_plano_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+          ORDER BY id DESC LIMIT 1`,
+        [id, c.estabelecimento ?? 0],
+      );
+      const n = negativa[0];
+      return {
+        criticas: criticas.map((x) => ({
+          sequencia: num(x['sequencia']),
+          codigo: txtOuNulo(x['codigo']),
+          descricao: txt(x['descricao']),
+          forma: txt(x['forma_registro']),
+          em: instante(x['ocorrido_em']) ?? '',
+          liberada: Boolean(Number(x['liberada'])),
+          liberadaEm: instante(x['liberada_em']),
+          liberadaPor: txtOuNulo(x['login']),
+          justificativa: txtOuNulo(x['justificativa_liberacao']),
+        })),
+        negativa: n
+          ? {
+              numero: txt(n['numero']),
+              fundamento: txt(n['fundamento']),
+              clausula: txtOuNulo(n['clausula_contratual']),
+              descricao: txt(n['descricao']),
+              situacao: txt(n['situacao']),
+              emitidaEm: instante(n['criado_em']) ?? '',
+              prazoEntregaEm: instante(n['prazo_entrega_em']),
+              meioEntrega: txtOuNulo(n['meio_entrega']),
+              entregueEm: instante(n['entregue_em']),
+            }
+          : null,
+      };
     });
   }
 

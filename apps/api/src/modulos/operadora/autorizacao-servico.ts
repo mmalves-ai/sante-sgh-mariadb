@@ -455,13 +455,14 @@ export class ServicoAutorizacaoOperadora {
   async detalhe(c: ContextoAutorizacao, id: number): Promise<AutorizacaoDetalhe> {
     const a = await this.porta.autorizacao(c, id);
     if (!a) throw naoEncontrada();
-    const [itens, eventos, relogio, cidNome, dominios, anexos] = await Promise.all([
+    const [itens, eventos, relogio, cidNome, dominios, anexos, gravadas] = await Promise.all([
       this.porta.itens(c, id),
       this.porta.eventos(c, id),
       this.porta.relogio(c),
       a.cid ? this.porta.nomeDoCid(c, a.cid) : Promise.resolve(null),
       this.porta.dominios(c),
       this.porta.anexosDoComplemento(c, id),
+      this.porta.criticasENegativa(c, id),
     ]);
     const aberta = SITUACOES_EM_ABERTO.includes(a.situacao);
     const criticas = aberta
@@ -566,6 +567,8 @@ export class ServicoAutorizacaoOperadora {
           ),
       }),
       versao: a.versao,
+      criticasGravadas: gravadas.criticas.map((x) => ({ ...x })),
+      negativa: gravadas.negativa ? { ...gravadas.negativa } : null,
     };
   }
 
