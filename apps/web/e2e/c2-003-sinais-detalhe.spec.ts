@@ -153,6 +153,7 @@ async function simularSinaisDetalhe(page: Page): Promise<void> {
       novos.push(item);
       return { id: item.id, tipo: item.tipo, nivel, limite: lim?.id ?? null };
     });
+    afericoes.unshift(...novos); // a aferição nova no topo, na ordem dos parâmetros
     return json(
       r,
       {
