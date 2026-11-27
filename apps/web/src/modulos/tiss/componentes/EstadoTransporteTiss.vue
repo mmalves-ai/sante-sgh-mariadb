@@ -44,7 +44,7 @@ onMounted(async () => {
 
 <style scoped>
 .transporte-tiss {
-  border: 1px solid var(--sante-cor-borda, #c8cdd4);
+  border: 1px solid var(--sgh-borda);
   border-radius: 6px;
   padding: 0.5rem 0.75rem;
   margin: 0.5rem 0;
@@ -53,10 +53,11 @@ onMounted(async () => {
   margin-left: 0.5rem;
   padding: 0 0.4rem;
   border-radius: 4px;
-  background: var(--sante-cor-aviso-fundo, #fff4d6);
-  color: var(--sante-cor-texto, #1a1a1a);
+  background: var(--sgh-aviso-suave);
+  color: var(--sgh-texto);
 }
 .selo[data-modo='real'] {
-  background: var(--sante-cor-sucesso-fundo, #dff3e4);
+  background: var(--sgh-fundo-elevado);
+  outline: 1px solid var(--sgh-sucesso);
 }
 </style>
