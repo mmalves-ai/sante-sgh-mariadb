@@ -538,9 +538,11 @@ function encerrarPadrao(p: PadraoApresentacaoTela) {
           data-testid="apt-sp-sadt"
         />
         <label><input v-model="fr.ativa" type="checkbox" /> {{ t('apresentacaoTiss.regra.ativa') }}</label>
-        <ul v-if="Object.keys(errosRegra).length" role="alert" data-testid="apt-erros-regra">
-          <li v-for="(m, k) in errosRegra" :key="k">{{ m }}</li>
-        </ul>
+        <div v-if="Object.keys(errosRegra).length" role="alert" data-testid="apt-erros-regra">
+          <ul>
+            <li v-for="(m, k) in errosRegra" :key="k">{{ m }}</li>
+          </ul>
+        </div>
         <button
           type="submit"
           :disabled="Object.keys(errosRegra).length + Object.keys(errosMontador).length > 0"
@@ -651,9 +653,11 @@ function encerrarPadrao(p: PadraoApresentacaoTela) {
             <input v-model="fi.naoExporta" type="checkbox" data-testid="apt-item-fora" />
             {{ t('apresentacaoTiss.item.naoExporta') }}
           </label>
-          <ul v-if="errosItem.length" role="alert" data-testid="apt-erros-item">
-            <li v-for="m in errosItem" :key="m">{{ m }}</li>
-          </ul>
+          <div v-if="errosItem.length" role="alert" data-testid="apt-erros-item">
+            <ul>
+              <li v-for="m in errosItem" :key="m">{{ m }}</li>
+            </ul>
+          </div>
           <button type="submit" :disabled="errosItem.length > 0" data-testid="apt-incluir-item">
             {{ t('apresentacaoTiss.item.incluir') }}
           </button>
@@ -733,9 +737,11 @@ function encerrarPadrao(p: PadraoApresentacaoTela) {
           <input v-model="fp.todosEstabelecimentos" type="checkbox" />
           {{ t('apresentacaoTiss.padrao.todosEstabelecimentos') }}
         </label>
-        <ul v-if="Object.values(errosPadrao).some((m) => m)" role="alert" data-testid="apt-erros-padrao">
-          <li v-for="(m, k) in errosPadrao" :key="k">{{ m }}</li>
-        </ul>
+        <div v-if="Object.values(errosPadrao).some((m) => m)" role="alert" data-testid="apt-erros-padrao">
+          <ul>
+            <li v-for="(m, k) in errosPadrao" :key="k">{{ m }}</li>
+          </ul>
+        </div>
         <button
           type="submit"
           :disabled="Object.keys(errosPadrao).length > 0"
