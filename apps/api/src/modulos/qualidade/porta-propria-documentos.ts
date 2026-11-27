@@ -234,7 +234,7 @@ export function gravacoesDocumentos(tx: TxOperacao, est: number): GravacoesDocum
 
     retirarDocumento: async (r) => {
       const [v] = await tx.consultarParaAtualizar<Linha>(SQL_REVISAO, [r.id, est], { teto: 1 });
-      if (conferirRetirada(v ? { versao: n(v['versao']), situacao: texto(v['situacao']) } : null, r))
+      if (!v || conferirRetirada({ versao: n(v['versao']), situacao: texto(v['situacao']) }, r))
         throw recusaVersaoGestao('O documento');
       const usuario = await exigirUsuario(tx, r.usuario);
       const versao = await tx.alterar('documento_qualidade_versao', r.id, r.versao, {

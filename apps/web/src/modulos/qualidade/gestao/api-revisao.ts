@@ -30,7 +30,10 @@ const esquemaChecklist = z.object({
   id: n,
   comissao: n,
   revisao: n,
-  itens: z.array(esquemaItem),
+  // Item gravado do checklist: peso (ausente pesa 1) e se aceita "não se aplica" (ausente aceita), como no contrato.
+  itens: z.array(
+    esquemaItem.extend({ peso: z.number().optional(), aceitaNaoAplicavel: z.boolean().optional() }),
+  ),
   situacao: z.enum(['vigente', 'substituida', 'inativa']),
   motivo: sN,
   publicadoPor: s,

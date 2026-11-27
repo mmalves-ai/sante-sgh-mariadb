@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.recolher (alcance 36e5032b5dbd). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.recolher (alcance 5d94b017628d). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -2039,6 +2039,7 @@ REVOKE SELECT, INSERT, UPDATE ON simulacao_receita_inconsistencia FROM sgh_mod_f
 REVOKE SELECT, INSERT, UPDATE ON simulacao_receita_resultado FROM sgh_mod_faturamento;
 REVOKE SELECT ON tabela_preco FROM sgh_mod_faturamento;
 REVOKE SELECT ON terminologia FROM sgh_mod_faturamento;
+REVOKE SELECT ON terminologia_tipo_lancamento FROM sgh_mod_faturamento;
 REVOKE SELECT ON termo_terminologia FROM sgh_mod_faturamento;
 REVOKE SELECT ON teto_cobranca FROM sgh_mod_faturamento;
 REVOKE SELECT ON tipo_auditoria FROM sgh_mod_faturamento;
@@ -2070,6 +2071,7 @@ REVOKE SELECT ON acao_sistema FROM sgh_mod_financeiro;
 REVOKE SELECT, INSERT, UPDATE ON adiantamento FROM sgh_mod_financeiro;
 REVOKE SELECT, INSERT, UPDATE ON administradora_cartao FROM sgh_mod_financeiro;
 REVOKE SELECT, INSERT, UPDATE ON agrupador_aprovacao FROM sgh_mod_financeiro;
+REVOKE SELECT, INSERT, UPDATE ON ajuste_orcamento_nota FROM sgh_mod_financeiro;
 REVOKE SELECT, INSERT, UPDATE ON ajuste_provisao_passivo FROM sgh_mod_financeiro;
 REVOKE SELECT, INSERT, UPDATE ON aprovador_etapa FROM sgh_mod_financeiro;
 REVOKE SELECT, INSERT, UPDATE ON apuracao_retencao FROM sgh_mod_financeiro;
@@ -2892,6 +2894,9 @@ REVOKE SELECT ON causalidade_reacao_adversa FROM sgh_mod_pep;
 REVOKE SELECT ON cenario_alerta FROM sgh_mod_pep;
 REVOKE SELECT ON certificado_usuario FROM sgh_mod_pep;
 REVOKE SELECT, INSERT, UPDATE ON ciencia_resultado_critico FROM sgh_mod_pep;
+REVOKE SELECT, INSERT, UPDATE ON classificacao_risco FROM sgh_mod_pep;
+REVOKE SELECT, INSERT, UPDATE ON classificacao_risco_evento FROM sgh_mod_pep;
+REVOKE SELECT, INSERT, UPDATE ON classificacao_risco_resposta FROM sgh_mod_pep;
 REVOKE SELECT ON clinica_assistencial FROM sgh_mod_pep;
 REVOKE SELECT, INSERT, UPDATE ON componente_sumario_alta FROM sgh_mod_pep;
 REVOKE SELECT, INSERT, UPDATE ON condicao_se_necessario FROM sgh_mod_pep;
@@ -3568,6 +3573,7 @@ REVOKE SELECT, INSERT, UPDATE ON dispositivo_invasivo_evento FROM sgh_mod_qualid
 REVOKE SELECT, INSERT, UPDATE ON dispositivo_invasivo_paciente FROM sgh_mod_qualidade;
 REVOKE SELECT, INSERT, UPDATE ON documento_qualidade FROM sgh_mod_qualidade;
 REVOKE SELECT, INSERT, UPDATE ON documento_qualidade_ciencia FROM sgh_mod_qualidade;
+REVOKE SELECT ON documento_qualidade_distribuicao FROM sgh_mod_qualidade;
 REVOKE SELECT, INSERT, UPDATE ON documento_qualidade_versao FROM sgh_mod_qualidade;
 REVOKE SELECT, INSERT, UPDATE ON envio_regulatorio_qualidade FROM sgh_mod_qualidade;
 REVOKE SELECT ON escala_clinica FROM sgh_mod_qualidade;
@@ -3697,9 +3703,11 @@ REVOKE SELECT ON unidade_federativa FROM sgh_mod_qualidade;
 REVOKE SELECT ON unidade_internacao FROM sgh_mod_qualidade;
 REVOKE SELECT ON usuario FROM sgh_mod_qualidade;
 REVOKE SELECT ON usuario_estabelecimento FROM sgh_mod_qualidade;
+REVOKE SELECT ON usuario_perfil FROM sgh_mod_qualidade;
 REVOKE SELECT ON usuario_profissional FROM sgh_mod_qualidade;
 REVOKE SELECT, INSERT, UPDATE ON verificacao_bundle FROM sgh_mod_qualidade;
 REVOKE SELECT, INSERT, UPDATE ON verificacao_bundle_item FROM sgh_mod_qualidade;
+REVOKE SELECT ON vinculo_trabalho FROM sgh_mod_qualidade;
 REVOKE SELECT ON acao_fluxo_senha FROM sgh_mod_recepcao;
 REVOKE SELECT, INSERT, UPDATE ON afericao FROM sgh_mod_recepcao;
 REVOKE SELECT, INSERT, UPDATE ON afericao_valor FROM sgh_mod_recepcao;
@@ -4042,6 +4050,7 @@ REVOKE SELECT ON exame_laboratorio_apoio FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON exame_lateralidade FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON exame_material FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON exame_orientacao_preparo FROM sgh_mod_sadt;
+REVOKE SELECT ON exame_regiao_anatomica FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON exame_restricao_portal FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON exame_secundario FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON exame_setor_executante FROM sgh_mod_sadt;
@@ -4145,6 +4154,7 @@ REVOKE SELECT ON profissional FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON protocolo_acesso_portal FROM sgh_mod_sadt;
 REVOKE SELECT ON recipiente_coleta FROM sgh_mod_sadt;
 REVOKE SELECT ON recurso_agendavel FROM sgh_mod_sadt;
+REVOKE SELECT ON regiao_anatomica_codificada FROM sgh_mod_sadt;
 REVOKE SELECT ON regime_atendimento FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON registro_hemodinamica FROM sgh_mod_sadt;
 REVOKE SELECT, INSERT, UPDATE ON registro_hemodinamica_achado FROM sgh_mod_sadt;
@@ -4242,6 +4252,7 @@ REVOKE SELECT ON usuario_perfil FROM sgh_mod_suporte;
 REVOKE SELECT, INSERT, UPDATE ON adesao_ata_registro_preco FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON aditivo_contrato FROM sgh_mod_suprimentos;
 REVOKE SELECT ON agendamento_cirurgico FROM sgh_mod_suprimentos;
+REVOKE SELECT, INSERT, UPDATE ON ajuste_orcamento_nota FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON anexo_contrato FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT, UPDATE ON apresentacao_comercial FROM sgh_mod_suprimentos;
 REVOKE SELECT, INSERT ON ata_registro_preco FROM sgh_mod_suprimentos;

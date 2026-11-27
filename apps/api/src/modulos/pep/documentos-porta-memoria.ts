@@ -1780,7 +1780,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
             hora: agoraClinico.slice(11, 16),
             anteriores: e.pedidos
               .filter((p) => p.paciente === x.paciente && p.exame === it.exame)
-              .map((p) => p.data),
+              .flatMap((p) => (p.data ? [p.data] : [])),
           }),
         );
         const decisao = decisaoDoPedido(acionadas, {

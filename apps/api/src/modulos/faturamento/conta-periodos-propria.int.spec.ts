@@ -252,17 +252,15 @@ describe.skipIf(SEM_BANCO)('conta parcial por período no faturamento (MariaDB)'
     );
     expect(
       await codigoDo(
-        nucleo
-          .criarExecutor()
-          .executar(
-            conferirItem,
-            CLIENTE,
-            {
-              conta: ids.conta,
-              itens: [{ id: Number(item['id']), versao: versaoTexto(Number(item['versao'])) }],
-            },
-            op(),
-          ),
+        nucleo.criarExecutor().executar(
+          conferirItem,
+          CLIENTE,
+          {
+            conta: ids.conta,
+            itens: [{ id: Number(item['id']), versao: versaoTexto(Number(item['versao'])) }],
+          },
+          op(),
+        ),
       ),
     ).toMatch(/^periodo-fechado/);
     expect(

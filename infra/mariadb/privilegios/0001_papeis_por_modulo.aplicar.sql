@@ -1,4 +1,4 @@
--- 0001_papeis_por_modulo.aplicar (alcance 36e5032b5dbd). Gerado por pnpm privilegios:gerar; não edite à mão.
+-- 0001_papeis_por_modulo.aplicar (alcance 5d94b017628d). Gerado por pnpm privilegios:gerar; não edite à mão.
 -- Rodar no banco de cada cliente (USE <banco do cliente>), pela TI, com autorização do dono para o passo.
 -- Sem efeito sozinho: o papel só reduz privilégio quando a conta da API o usa (conta por módulo com
 -- SET DEFAULT ROLE, ou SET ROLE por operação no núcleo). Esse passo está pedido e ainda não existe.
@@ -2089,6 +2089,7 @@ GRANT SELECT, INSERT, UPDATE ON simulacao_receita_inconsistencia TO sgh_mod_fatu
 GRANT SELECT, INSERT, UPDATE ON simulacao_receita_resultado TO sgh_mod_faturamento;
 GRANT SELECT ON tabela_preco TO sgh_mod_faturamento;
 GRANT SELECT ON terminologia TO sgh_mod_faturamento;
+GRANT SELECT ON terminologia_tipo_lancamento TO sgh_mod_faturamento;
 GRANT SELECT ON termo_terminologia TO sgh_mod_faturamento;
 GRANT SELECT ON teto_cobranca TO sgh_mod_faturamento;
 GRANT SELECT ON tipo_auditoria TO sgh_mod_faturamento;
@@ -2120,6 +2121,7 @@ GRANT SELECT ON acao_sistema TO sgh_mod_financeiro;
 GRANT SELECT, INSERT, UPDATE ON adiantamento TO sgh_mod_financeiro;
 GRANT SELECT, INSERT, UPDATE ON administradora_cartao TO sgh_mod_financeiro;
 GRANT SELECT, INSERT, UPDATE ON agrupador_aprovacao TO sgh_mod_financeiro;
+GRANT SELECT, INSERT, UPDATE ON ajuste_orcamento_nota TO sgh_mod_financeiro;
 GRANT SELECT, INSERT, UPDATE ON ajuste_provisao_passivo TO sgh_mod_financeiro;
 GRANT SELECT, INSERT, UPDATE ON aprovador_etapa TO sgh_mod_financeiro;
 GRANT SELECT, INSERT, UPDATE ON apuracao_retencao TO sgh_mod_financeiro;
@@ -2942,6 +2944,9 @@ GRANT SELECT ON causalidade_reacao_adversa TO sgh_mod_pep;
 GRANT SELECT ON cenario_alerta TO sgh_mod_pep;
 GRANT SELECT ON certificado_usuario TO sgh_mod_pep;
 GRANT SELECT, INSERT, UPDATE ON ciencia_resultado_critico TO sgh_mod_pep;
+GRANT SELECT, INSERT, UPDATE ON classificacao_risco TO sgh_mod_pep;
+GRANT SELECT, INSERT, UPDATE ON classificacao_risco_evento TO sgh_mod_pep;
+GRANT SELECT, INSERT, UPDATE ON classificacao_risco_resposta TO sgh_mod_pep;
 GRANT SELECT ON clinica_assistencial TO sgh_mod_pep;
 GRANT SELECT, INSERT, UPDATE ON componente_sumario_alta TO sgh_mod_pep;
 GRANT SELECT, INSERT, UPDATE ON condicao_se_necessario TO sgh_mod_pep;
@@ -3618,6 +3623,7 @@ GRANT SELECT, INSERT, UPDATE ON dispositivo_invasivo_evento TO sgh_mod_qualidade
 GRANT SELECT, INSERT, UPDATE ON dispositivo_invasivo_paciente TO sgh_mod_qualidade;
 GRANT SELECT, INSERT, UPDATE ON documento_qualidade TO sgh_mod_qualidade;
 GRANT SELECT, INSERT, UPDATE ON documento_qualidade_ciencia TO sgh_mod_qualidade;
+GRANT SELECT ON documento_qualidade_distribuicao TO sgh_mod_qualidade;
 GRANT SELECT, INSERT, UPDATE ON documento_qualidade_versao TO sgh_mod_qualidade;
 GRANT SELECT, INSERT, UPDATE ON envio_regulatorio_qualidade TO sgh_mod_qualidade;
 GRANT SELECT ON escala_clinica TO sgh_mod_qualidade;
@@ -3747,9 +3753,11 @@ GRANT SELECT ON unidade_federativa TO sgh_mod_qualidade;
 GRANT SELECT ON unidade_internacao TO sgh_mod_qualidade;
 GRANT SELECT ON usuario TO sgh_mod_qualidade;
 GRANT SELECT ON usuario_estabelecimento TO sgh_mod_qualidade;
+GRANT SELECT ON usuario_perfil TO sgh_mod_qualidade;
 GRANT SELECT ON usuario_profissional TO sgh_mod_qualidade;
 GRANT SELECT, INSERT, UPDATE ON verificacao_bundle TO sgh_mod_qualidade;
 GRANT SELECT, INSERT, UPDATE ON verificacao_bundle_item TO sgh_mod_qualidade;
+GRANT SELECT ON vinculo_trabalho TO sgh_mod_qualidade;
 GRANT SELECT ON acao_fluxo_senha TO sgh_mod_recepcao;
 GRANT SELECT, INSERT, UPDATE ON afericao TO sgh_mod_recepcao;
 GRANT SELECT, INSERT, UPDATE ON afericao_valor TO sgh_mod_recepcao;
@@ -4092,6 +4100,7 @@ GRANT SELECT ON exame_laboratorio_apoio TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON exame_lateralidade TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON exame_material TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON exame_orientacao_preparo TO sgh_mod_sadt;
+GRANT SELECT ON exame_regiao_anatomica TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON exame_restricao_portal TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON exame_secundario TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON exame_setor_executante TO sgh_mod_sadt;
@@ -4195,6 +4204,7 @@ GRANT SELECT ON profissional TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON protocolo_acesso_portal TO sgh_mod_sadt;
 GRANT SELECT ON recipiente_coleta TO sgh_mod_sadt;
 GRANT SELECT ON recurso_agendavel TO sgh_mod_sadt;
+GRANT SELECT ON regiao_anatomica_codificada TO sgh_mod_sadt;
 GRANT SELECT ON regime_atendimento TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON registro_hemodinamica TO sgh_mod_sadt;
 GRANT SELECT, INSERT, UPDATE ON registro_hemodinamica_achado TO sgh_mod_sadt;
@@ -4292,6 +4302,7 @@ GRANT SELECT ON usuario_perfil TO sgh_mod_suporte;
 GRANT SELECT, INSERT, UPDATE ON adesao_ata_registro_preco TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON aditivo_contrato TO sgh_mod_suprimentos;
 GRANT SELECT ON agendamento_cirurgico TO sgh_mod_suprimentos;
+GRANT SELECT, INSERT, UPDATE ON ajuste_orcamento_nota TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON anexo_contrato TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT, UPDATE ON apresentacao_comercial TO sgh_mod_suprimentos;
 GRANT SELECT, INSERT ON ata_registro_preco TO sgh_mod_suprimentos;
