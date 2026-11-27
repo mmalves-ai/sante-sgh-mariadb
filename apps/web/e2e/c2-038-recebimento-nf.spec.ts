@@ -268,7 +268,8 @@ test.describe('Recebimento por nota fiscal com conferência física e impostos @
     await expect(nf.getByTestId(`nf-impostos-${item}`)).toContainText('IPI');
     // Custo de entrada: 120,00 + IPI 6,00 (o ICMS próprio já está no preço e o hospital não toma crédito).
     await expect(nf.getByTestId('nf-custo-entrada')).toContainText('126,00');
-    if (comLote) {
+    // Lote na nota só quando o item é rastreável (a tela mostra o botão de mais um lote).
+    if ((await nf.getByTestId(`nf-mais-lote-${item}`).count()) > 0) {
       if ((await nf.getByTestId(`nf-lote-${item}-0`).count()) === 0)
         await nf.getByTestId(`nf-mais-lote-${item}`).click();
       await nf.getByTestId(`nf-lote-${item}-0`).fill('LOTE-SINT-38');
