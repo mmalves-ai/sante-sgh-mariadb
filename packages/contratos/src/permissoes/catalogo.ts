@@ -266,5 +266,11 @@ export const PERFIS_COMPLEMENTARES = [
    * adiantamento a fornecedor ou médico (segregação de funções). Só por concessão nominal ou pelo mapa aprovado.
    */
   'aprovador-devolucao-paciente',
+  /**
+   * C1-051 (06-SUS linha 53): supervisão do faturamento SUS: dá e encerra a permissão por usuário e setor do faturamento
+   * SUS e grava os parâmetros de cada instrumento, sem o perfil do administrador do sistema (segregação de funções). Só
+   * por concessão nominal da gestão de acessos ou pelo mapa aprovado.
+   */
+  'supervisao-faturamento-sus',
 ] as const;
 export type PerfilComplementar = (typeof PERFIS_COMPLEMENTARES)[number];

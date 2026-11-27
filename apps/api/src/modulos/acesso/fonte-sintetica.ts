@@ -3566,8 +3566,10 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
     senhaAlteradaEm: new Date(),
     concessoes: {
       grupo: 'SUSCONFIG',
-      opcoesGrupo: opcoesSus('faturamento.sus.*', 'faturamento.susConfiguracao.*'),
+      opcoesGrupo: opcoesSus('faturamento.sus.*'),
     },
+    // A edição da configuração é concedida por perfil (sem opção do menu de origem): o perfil próprio da supervisão.
+    perfisConcedidos: ['supervisao-faturamento-sus'],
   },
   /**
    * C3-027 (08-SGO L114; no fim da lista): o usuário externo do portal do beneficiário, só com o perfil do portal
