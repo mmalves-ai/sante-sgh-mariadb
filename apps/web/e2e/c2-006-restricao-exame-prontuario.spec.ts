@@ -214,6 +214,11 @@ test.describe('Restrição clínica do exame no pedido do prontuário @C2-006 @F
     const j = await justificativa;
     expect(((await j.json()) as { codigo?: string }).codigo).toBe('restricao-justificativa');
     await expect(page.getByTestId('mensagem-erro')).toContainText('Informe a justificativa');
+    // O clique rolou a lista para baixo do cabeçalho fixo: o axe confere a tela no topo (sem alvo encoberto).
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      document.getElementById('conteudo')?.scrollTo(0, 0);
+    });
     await semViolacaoAxe(page, '/pep/paciente/1001/exames (recusa da restrição)');
   });
 
