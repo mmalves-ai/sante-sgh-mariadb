@@ -10,6 +10,7 @@ import {
   conferirComposicao,
   INDICADORES_VARIAVEL,
   PERIODOS_VARIAVEL,
+  ultimoDiaDoMes,
   validarMembroEquipe,
   validarRegraVariavelFaixa,
   type AjusteFaixa,
@@ -715,7 +716,7 @@ async function lancar() {
               <th scope="row">
                 {{ `${r.codigo} · ${r.descricao}` }}
                 <small>
-                  {{ k('apuracao.periodo', { de: r.periodoInicio, ate: r.periodoFim }) }}
+                  {{ k('apuracao.periodo', { de: r.periodoInicio, ate: ultimoDiaDoMes(r.periodoFim) }) }}
                   <template v-if="!r.fecha"> · {{ k('apuracao.naoFecha') }}</template>
                 </small>
               </th>
