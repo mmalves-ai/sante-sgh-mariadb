@@ -1026,6 +1026,27 @@ function gravadorNir(tx: TxOperacao, est: number): GravadorNir {
         [r.central],
         `a central reguladora "${r.central}"`,
       );
+      // C3-013: a mudança de situação é linha nova com o mesmo número; o número não pode estar ligado a outro pedido.
+      const outro = await tx.uma(
+        'SELECT id FROM solicitacao_regulacao WHERE central_reguladora_id = ? AND numero = ? AND (pedido_leito_id IS NULL OR pedido_leito_id <> ?) LIMIT 1',
+        [central, r.numero, r.solicitacao],
+      );
+      if (outro)
+        throw recusa(
+          'numero-em-uso',
+          'Este número de regulação já está ligado a outra solicitação de leito.',
+        );
+      // A sucessão é única (uq_solicitacao_regulacao_sucessao): a anterior já sucedida pede reabrir a tela.
+      if (
+        r.anterior !== null &&
+        (await tx.uma('SELECT id FROM solicitacao_regulacao WHERE solicitacao_anterior_id = ? LIMIT 1', [
+          r.anterior,
+        ]))
+      )
+        throw recusa(
+          'regulacao-desatualizada',
+          'A regulação desta solicitação mudou depois que você abriu (outra pessoa registrou). Abra de novo.',
+        );
       const id = await tx.incluir('solicitacao_regulacao', {
         estabelecimento_id: est,
         central_reguladora_id: central,

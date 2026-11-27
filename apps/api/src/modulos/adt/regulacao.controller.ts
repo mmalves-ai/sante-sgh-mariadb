@@ -31,6 +31,7 @@ import {
 } from '@sgh/dominio-internacao';
 import { type RegistroRegulacaoNir } from './tipos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
+import { modoDaIntegracao } from '../integracao/externas/servico.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
@@ -71,6 +72,9 @@ export function registroDe(r: RegistroRegulacaoNir): RegistroRegulacao {
 /** A vigente da solicitação: a última da sucessão (a de maior ID). */
 const vigenteDe = (rs: readonly RegistroRegulacaoNir[]) => [...rs].sort((a, b) => a.id - b.id).at(-1) ?? null;
 
+/** A entrada da central de regulação no catálogo das integrações externas (decisão 53). */
+const INTEGRACAO_REGULACAO = 'regulacao-central';
+
 @Controller('nir/regulacao')
 export class RegulacaoController {
   private readonly apoio: ApoioGravacao<GravadorNir>;
@@ -99,18 +103,36 @@ export class RegulacaoController {
     );
   }
 
-  /** O conector vale só fora de produção (simulador) e com a chave ligada; em produção, só com a DP-29. */
+  /**
+   * O conector pergunta o modo à central de integrações externas (decisão 53; `regulacao-central`). O real depende da
+   * definição da API da central do gestor (aviso na tela da central): até a equipe de desenvolvimento recebê-la, o
+   * número é registrado à mão. O simulador responde só fora de produção e com a chave do estabelecimento ligada.
+   */
   private async estadoConector(s: SessaoCadastro): Promise<TelaRegulacao['conector']> {
+    const m = await modoDaIntegracao(INTEGRACAO_REGULACAO);
+    if (m.modo === 'real')
+      return {
+        ligado: false,
+        modo: 'desligado',
+        motivo:
+          'O envio real à central de regulação depende da definição da API do gestor (passe-a à equipe de desenvolvimento, em Administração > Integrações externas): registre o número à mão.',
+      };
     if ((process.env['AMBIENTE']?.trim() || 'dev') === 'producao')
       return {
         ligado: false,
         modo: 'desligado',
         motivo:
-          'O conector com a central de regulação depende da confirmação da API da central (DP-29): registre o número à mão.',
+          'A central de regulação está no simulador (Administração > Integrações externas), que não envia em produção: registre o número à mão.',
       };
     const l = await this.conector.liberacao(s);
     return l.ligada
-      ? { ligado: true, modo: 'simulador', motivo: null }
+      ? {
+          ligado: true,
+          modo: 'simulador',
+          motivo: m.neutralizado
+            ? 'O real está ligado, mas fica neutralizado neste ambiente: responde o simulador.'
+            : null,
+        }
       : {
           ligado: false,
           modo: 'desligado',

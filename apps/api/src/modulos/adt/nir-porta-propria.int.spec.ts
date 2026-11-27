@@ -379,8 +379,8 @@ describe.skipIf(SEM_BANCO_ADT)(`porta própria do NIR (MariaDB, cliente ${CLIENT
           solicitacao: pedido,
           central: M().central,
           sentido: 'saida',
-          // Outro número: o índice único (central, número) ainda recusa a mudança de situação com o mesmo número.
-          numero: 'REG-0303',
+          // Mesmo número da vigente: a mudança de situação é linha nova ligada à anterior (migração 07_INT/99zl).
+          numero: 'REG-0301',
           situacao: 'em_analise',
           origem: 'manual',
           observacao: null,
@@ -419,6 +419,14 @@ describe.skipIf(SEM_BANCO_ADT)(`porta própria do NIR (MariaDB, cliente ${CLIENT
         [r.id],
       ),
     ).toMatchObject({ ant: vigente, situacao: 'em_analise' });
+    expect(
+      await conta(
+        'SELECT COUNT(*) AS n FROM solicitacao_regulacao WHERE pedido_leito_id = ? AND numero = ?',
+        [pedido, 'REG-0301'],
+      ),
+    ).toBe(2);
+    // A anterior já sucedida não aceita outra sucessora: recusa, nada gravado.
+    await expect(nova(null)).rejects.toSatisfy((e) => codigoDe(e) === 'regulacao-desatualizada');
   });
 
   it('cancelar em vez de excluir: a solicitação e a reserva ficam com motivo, quem e quando; o leito volta a livre; o banco recusa o cancelamento incompleto', async () => {
@@ -445,6 +453,27 @@ describe.skipIf(SEM_BANCO_ADT)(`porta própria do NIR (MariaDB, cliente ${CLIENT
     expect(await lerAdt(M(), 'SELECT estado_situacao FROM pedido_leito WHERE id = ?', [p2])).toMatchObject({
       estado_situacao: 'solicitado',
     });
+    // C3-013: o número da regulação de um pedido não se liga a outro pedido de leito; nada gravado.
+    await expect(
+      grava('solicitacao_regulacao', (g) =>
+        g.registrarRegulacao({
+          solicitacao: p2,
+          central: M().central,
+          sentido: 'saida',
+          numero: 'REG-0301',
+          situacao: 'solicitada',
+          origem: 'manual',
+          observacao: null,
+          anterior: null,
+          mensagemHash: null,
+          por: M().login,
+          outbox: null,
+        }),
+      ),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'numero-em-uso');
+    expect(
+      await conta('SELECT COUNT(*) AS n FROM solicitacao_regulacao WHERE pedido_leito_id = ?', [p2]),
+    ).toBe(0);
     const r2 = await grava<number>('reserva_leito', (g) =>
       g.reservar({ solicitacao: p2, leito: leito('02'), validadeMin: 60, excecao: null, usuario: M().login }),
     );

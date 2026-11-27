@@ -17,6 +17,7 @@ import { EstadoNirMemoria } from './nir-memoria.js';
 import { PortaNirMemoria } from './nir-porta-memoria.js';
 import { PortaAdtMemoria } from './porta-memoria.js';
 import { registroDe } from './regulacao.controller.js';
+import { ligarCentralIntegracoes } from '../integracao/externas/servico.js';
 
 const env: Record<string, string> = {
   ...envTeste,
@@ -132,6 +133,26 @@ describe('regulação estadual (M44, etapa 3)', () => {
     expect(x.conector.motivo).toMatch(/à mão/);
     expect(x.acoes.registrar).toBe(true);
     expect(trilha.eventos.some((e) => e.evento === 'internacao.solicitacaoLeito.lida')).toBe(true);
+  });
+
+  it('C3-013: o conector pergunta o modo à central de integrações; o real pede a definição da API do gestor e o número fica à mão', async () => {
+    ligarCentralIntegracoes({
+      modoDaIntegracao: async (integracao: string) => ({
+        integracao,
+        modo: 'real',
+        neutralizado: false,
+        parametros: {},
+        credencial: async () => null,
+        registrarFalha: async () => undefined,
+      }),
+    } as never);
+    try {
+      const x = (await get(nirS, '/nir/regulacao')).json();
+      expect(x.conector).toMatchObject({ ligado: false, modo: 'desligado' });
+      expect(x.conector.motivo).toMatch(/definição da API/);
+    } finally {
+      ligarCentralIntegracoes(null);
+    }
   });
 
   it('regra 14: o número à mão; a mudança sobre a vigente; colisão; outro número na regulação em andamento', async () => {
