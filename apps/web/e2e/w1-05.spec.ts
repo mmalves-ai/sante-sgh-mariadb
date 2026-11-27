@@ -296,7 +296,10 @@ test.describe('Atendimento: corrigir a ficha, estornar o extra, excluir; fichas 
         }),
       }),
     );
-    await entrar(page, 'SINT.ADMIN');
+    // O atalho fica nos atendimentos do dia (atendimento.atendimento.ler) e só aparece a quem configura as fichas
+    // (documento.cadastro.editar): a supervisão das fichas da recepção. O SINT.ADMIN não lê o atendimento
+    // (segregação), por isso não vê a tela do dia.
+    await entrar(page, 'SINT.RECEPCAO.FICHAS');
     await page.goto('/recepcao/atendimento');
     await page.getByTestId('link-regras-impressao').click();
     await expect(page).toHaveURL(/\/recepcao\/atendimento\/regras-impressao$/);

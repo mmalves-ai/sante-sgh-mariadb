@@ -3533,6 +3533,22 @@ export const CONTAS_SINTETICAS: Readonly<Record<string, ContaSintetica>> = {
       conselho: true,
     },
   },
+  /**
+   * C1-019 (02-REC L30/L35; no fim da lista): a supervisão das fichas da recepção, que vê os atendimentos do dia e
+   * mantém os modelos de ficha e as regras de impressão (atalho da tela do dia). Nenhuma conta tinha as duas
+   * permissões: o administrador configura sem ler o atendimento (segregação) e o guichê lê sem configurar.
+   */
+  'SINT.RECEPCAO.FICHAS': {
+    senha: SENHA_SINTETICA,
+    criptografada: true,
+    ativo: true,
+    bloqueado: false,
+    senhaAlteradaEm: new Date(),
+    concessoes: {
+      grupo: 'RECEPFICHAS',
+      opcoesGrupo: opcoesDasPermissoes('atendimento.atendimento.ler', 'documento.cadastro.editar'),
+    },
+  },
 };
 
 /** M59.2: as contas sintéticas que a identidade em memória (credencial forte e segundo fator) conhece. */
