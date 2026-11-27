@@ -41,6 +41,9 @@ cadastro do segundo fator. Corrigido em 27/11 (CPF exigido no autocadastro desde
 operação desconhecida no SADT, 9e3cadeb e f444c5d5): 2/4 verdes. Seguem 2 defeitos à parte no portal do médico externo: a
 situação do valor crítico não passa a "Já com plantonista/supervisor" depois da ciência, e a assinatura remota não mostra a
 opção "Certificado em nuvem" (pm-ass-certificado).
+Atualização 27/11 10h (6b18fddb, b595e04b): o crítico e o certificado em nuvem voltaram a ser ligados (perdidos com o fim do
+boot antigo, d0c9ef19). Seguem 2/4: a fila da assinatura remota está vazia porque FONTE_CONTEUDO_ICP e ARMAZEM_PDF_ICP não
+têm provedor na API; e o teste do crítico esbarra no aviso de exame repetido em 24 h da massa sintética do dia.
 
 | Fase | Ficha | Linha | Função | Motivo | O que o hospital faz |
 |---|---|---|---|---|---|

@@ -23,7 +23,7 @@
   },
   "targetDefaults": {
     "lint": { "cache": true, "inputs": ["default"] },
-    "typecheck": { "cache": true, "inputs": ["default", "^default"] },
+    "typecheck": { "cache": true, "inputs": ["default", "^default"], "parallelism": false },
     "test": { "cache": true, "inputs": ["default", "^default"] },
     "build": {
       "cache": true,
