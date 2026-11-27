@@ -41,6 +41,10 @@ import {
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
+import {
+  controlarOrcamentoDoDocumento,
+  TABELAS_CONTROLE_NO_DOCUMENTO,
+} from '../orcamento/controle-orcamentario-propria.js';
 import { dataIso, numero, texto } from './vocabulario.js';
 
 const id = z.number().int().positive();
@@ -370,6 +374,10 @@ async function aplicarNoDocumento(
   } else if (situacao === 'aprovado') {
     await tx.alterar('contrato_fornecedor', documento, d.versao, { situacao: 'vigente' });
   }
+  // C2-112 (07-FIN linha 130): o motor aprova o título e o pedido por fora da alçada simples; a aprovação dele também
+  // reserva o saldo orçado na mesma transação, e o bloqueio sem exceção aprovada recusa a decisão inteira.
+  if (situacao === 'aprovado' && (tipo === 'titulo_pagar' || tipo === 'pedido_compra'))
+    await controlarOrcamentoDoDocumento(tx, est, usuario, { tipoDocumento: tipo, documento, ciente: true });
 }
 
 // ── Operações ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -720,6 +728,7 @@ const decidir = definirOperacao<z.infer<typeof esquemaDecidir>, ResultadoOperaca
     'titulo_pagar',
     'pedido_compra',
     'contrato_fornecedor',
+    ...TABELAS_CONTROLE_NO_DOCUMENTO,
   ],
   entrada: esquemaDecidir as never,
   async gravar(tx, e, ctx) {

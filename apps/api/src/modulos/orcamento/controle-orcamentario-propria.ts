@@ -70,7 +70,7 @@ const T_EXCECAO = 'excecao_orcamentaria';
 const T_AJUSTE = 'ajuste_orcamento_nota';
 const TABELAS = [T_REGRA, T_RESERVA, T_EXCECAO, T_AJUSTE];
 /** O que a aprovação do pedido de compra e a do título a pagar gravam pelo controle (somar às tabelas delas). */
-export const TABELAS_CONTROLE_NO_DOCUMENTO = [T_RESERVA, T_EXCECAO] as const;
+export const TABELAS_CONTROLE_NO_DOCUMENTO = [T_RESERVA, T_EXCECAO, T_AJUSTE] as const;
 
 const dataTxt = (v: unknown): string | null => {
   if (v === null || v === undefined) return null;
@@ -675,105 +675,9 @@ export class PortaControleOrcamentarioPropria extends PortaEstabelecimentoPropri
   /** A nota realiza a reserva: consome, libera a sobra na final e grava o ajuste em sequência. */
   registrarNota(c: ContextoPortaPropria, reservaId: number, entrada: unknown) {
     const e = entradaValida(esquemaNota, entrada);
-    return this.gravar(c, 'financeiro.orc_controle.registrar_nota', TABELAS, async (tx, est, usuario) => {
-      const [r] = await tx.consultarParaAtualizar(
-        'SELECT * FROM reserva_orcamentaria WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-        [reservaId, est.id],
-        { teto: 1 },
-      );
-      if (!r) throw naoEncontrado('Reserva orçamentária');
-      if (e.notaEntrada !== null) {
-        const nota = await tx.uma('SELECT id FROM nota_entrada WHERE id = ? AND estabelecimento_id = ?', [
-          e.notaEntrada,
-          est.id,
-        ]);
-        if (!nota) throw naoEncontrado('Nota de entrada');
-      }
-      const reserva = reservaLida(r);
-      const ef = efeitoDaNota({ reserva, realizado: e.valorRealizado, final: e.final });
-      recusa('Nota recusada', ef.problemas);
-      // O ajuste positivo da nota final gasta além do comprometido: segue a regra da linha (ciência ou exceção).
-      const comp = dataTxt(r['competencia'])!;
-      const tipo = String(r['tipo_documento']) as DocumentoReserva;
-      const doc = numOuNull(r['pedido_compra_id']) ?? numOuNull(r['titulo_pagar_id']);
-      const conta = numOuNull(r['conta_orcamentaria_id']);
-      let conf: ReturnType<typeof conferirAjusteDaNota> | null = null;
-      let exc: Record<string, unknown> | undefined;
-      if (ef.ajuste > 0) {
-        const lr = await tx.uma(SQL_LINHA, [num(r['linha_orcamento_id']), est.id]);
-        if (!lr) throw naoEncontrado('Linha do orçamento');
-        const saldo = await saldoDaLinha(tx, est.id, linhaLida(lr), {
-          tipoDocumento: tipo,
-          competencia: comp,
-          conta,
-          data: e.dataEmissao ?? comp,
-        });
-        [exc] = await tx.consultarParaAtualizar(
-          SQL_EXCECAO_APROVADA,
-          [est.id, tipo, doc, comp, num(r['linha_orcamento_id']), conta, conta],
-          { teto: 1 },
-        );
-        conf = conferirAjusteDaNota({
-          acao: saldo.acao,
-          tolerancia: saldo.regra?.tolerancia ?? 0,
-          saldo,
-          ajuste: ef.ajuste,
-          ciente: e.ciente,
-          excecaoAprovada: exc ? dinheiro(exc['valor']) : null,
-        });
-        recusa('Nota recusada', conf.problemas);
-      }
-      const seq = await tx.uma(
-        'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM ajuste_orcamento_nota WHERE reserva_orcamentaria_id = ?',
-        [reservaId],
-      );
-      await tx.alterar(T_RESERVA, reservaId, e.versao, {
-        valor_consumido: Math.round((reserva.consumido + ef.consumir) * 100) / 100,
-        valor_liberado: Math.round((reserva.liberado + ef.liberar) * 100) / 100,
-        situacao: ef.situacao,
-        ...(e.notaEntrada !== null && r['nota_entrada_id'] === null
-          ? { nota_entrada_id: e.notaEntrada }
-          : {}),
-      });
-      const ajuste = await tx.incluir(T_AJUSTE, {
-        reserva_orcamentaria_id: reservaId,
-        sequencia: num(seq?.['s']),
-        nota_entrada_id: e.notaEntrada,
-        pedido_compra_id: numOuNull(r['pedido_compra_id']),
-        empresa_fornecedora_id: numOuNull(r['empresa_fornecedora_id']),
-        competencia: dataTxt(r['competencia']),
-        data_emissao: e.dataEmissao,
-        numero_documento: e.numeroDocumento,
-        centro_custo_id: numOuNull(r['centro_custo_id']),
-        conta_orcamentaria_id: numOuNull(r['conta_orcamentaria_id']),
-        valor_comprometido: ef.comprometido,
-        valor_realizado: e.valorRealizado,
-        valor_ajuste: ef.ajuste,
-        motivo: e.motivo || null,
-        excedeu_saldo: conf?.excedeuSaldo ?? false,
-        autorizador_usuario_id:
-          conf?.autorizacao === 'excecao'
-            ? num(exc!['aprovado_por_usuario_id'])
-            : conf?.autorizacao === 'sessao'
-              ? usuario
-              : null,
-      });
-      if (conf?.autorizacao === 'excecao')
-        await tx.alterar(T_EXCECAO, num(exc!['id']), num(exc!['versao']), {
-          situacao: 'utilizada',
-          reserva_orcamentaria_id: reservaId,
-        });
-      return {
-        tabela: T_AJUSTE,
-        id: ajuste,
-        consumir: ef.consumir,
-        liberar: ef.liberar,
-        ajuste: ef.ajuste,
-        situacao: ef.situacao,
-        decisao: conf?.decisao ?? 'livre',
-        excesso: conf?.excesso ?? 0,
-      };
-    });
+    return this.gravar(c, 'financeiro.orc_controle.registrar_nota', TABELAS, (tx, est, usuario) =>
+      consumirReservaComNota(tx, est.id, usuario, reservaId, e),
+    );
   }
 
   /** Libera o saldo em aberto da reserva, com o motivo (nada se apaga). */
@@ -799,6 +703,190 @@ export class PortaControleOrcamentarioPropria extends PortaEstabelecimentoPropri
       return { tabela: T_RESERVA, id: reservaId, liberado: aberto };
     });
   }
+}
+
+/** Os dados da nota que realiza a reserva; `versao` nula usa a versão lida (a nota confirmada no recebimento). */
+export type NotaParaReserva = Omit<z.infer<typeof esquemaNota>, 'versao'> & {
+  readonly versao: number | null;
+};
+
+/**
+ * A nota realiza a reserva: consome, libera a sobra na final e grava o ajuste em sequência. O ajuste positivo da nota
+ * final segue a regra da linha (conferirAjusteDaNota): o bloqueio sem exceção aprovada recusa a nota.
+ */
+export async function consumirReservaComNota(
+  tx: TxOperacao,
+  est: number,
+  usuario: number,
+  reservaId: number,
+  e: NotaParaReserva,
+) {
+  const [r] = await tx.consultarParaAtualizar(
+    'SELECT * FROM reserva_orcamentaria WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+    [reservaId, est],
+    { teto: 1 },
+  );
+  if (!r) throw naoEncontrado('Reserva orçamentária');
+  if (e.notaEntrada !== null) {
+    const nota = await tx.uma('SELECT id FROM nota_entrada WHERE id = ? AND estabelecimento_id = ?', [
+      e.notaEntrada,
+      est,
+    ]);
+    if (!nota) throw naoEncontrado('Nota de entrada');
+  }
+  const reserva = reservaLida(r);
+  const ef = efeitoDaNota({ reserva, realizado: e.valorRealizado, final: e.final });
+  recusa('Nota recusada', ef.problemas);
+  // O ajuste positivo da nota final gasta além do comprometido: segue a regra da linha (ciência ou exceção).
+  const comp = dataTxt(r['competencia'])!;
+  const tipo = String(r['tipo_documento']) as DocumentoReserva;
+  const doc = numOuNull(r['pedido_compra_id']) ?? numOuNull(r['titulo_pagar_id']);
+  const conta = numOuNull(r['conta_orcamentaria_id']);
+  let conf: ReturnType<typeof conferirAjusteDaNota> | null = null;
+  let exc: Record<string, unknown> | undefined;
+  if (ef.ajuste > 0) {
+    const lr = await tx.uma(SQL_LINHA, [num(r['linha_orcamento_id']), est]);
+    if (!lr) throw naoEncontrado('Linha do orçamento');
+    const saldo = await saldoDaLinha(tx, est, linhaLida(lr), {
+      tipoDocumento: tipo,
+      competencia: comp,
+      conta,
+      data: e.dataEmissao ?? comp,
+    });
+    [exc] = await tx.consultarParaAtualizar(
+      SQL_EXCECAO_APROVADA,
+      [est, tipo, doc, comp, num(r['linha_orcamento_id']), conta, conta],
+      { teto: 1 },
+    );
+    conf = conferirAjusteDaNota({
+      acao: saldo.acao,
+      tolerancia: saldo.regra?.tolerancia ?? 0,
+      saldo,
+      ajuste: ef.ajuste,
+      ciente: e.ciente,
+      excecaoAprovada: exc ? dinheiro(exc['valor']) : null,
+    });
+    recusa('Nota recusada', conf.problemas);
+  }
+  const seq = await tx.uma(
+    'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM ajuste_orcamento_nota WHERE reserva_orcamentaria_id = ?',
+    [reservaId],
+  );
+  await tx.alterar(T_RESERVA, reservaId, e.versao ?? num(r['versao']), {
+    valor_consumido: Math.round((reserva.consumido + ef.consumir) * 100) / 100,
+    valor_liberado: Math.round((reserva.liberado + ef.liberar) * 100) / 100,
+    situacao: ef.situacao,
+    ...(e.notaEntrada !== null && r['nota_entrada_id'] === null ? { nota_entrada_id: e.notaEntrada } : {}),
+  });
+  const ajuste = await tx.incluir(T_AJUSTE, {
+    reserva_orcamentaria_id: reservaId,
+    sequencia: num(seq?.['s']),
+    nota_entrada_id: e.notaEntrada,
+    pedido_compra_id: numOuNull(r['pedido_compra_id']),
+    empresa_fornecedora_id: numOuNull(r['empresa_fornecedora_id']),
+    competencia: dataTxt(r['competencia']),
+    data_emissao: e.dataEmissao,
+    numero_documento: e.numeroDocumento,
+    centro_custo_id: numOuNull(r['centro_custo_id']),
+    conta_orcamentaria_id: numOuNull(r['conta_orcamentaria_id']),
+    valor_comprometido: ef.comprometido,
+    valor_realizado: e.valorRealizado,
+    valor_ajuste: ef.ajuste,
+    motivo: e.motivo || null,
+    excedeu_saldo: conf?.excedeuSaldo ?? false,
+    autorizador_usuario_id:
+      conf?.autorizacao === 'excecao'
+        ? num(exc!['aprovado_por_usuario_id'])
+        : conf?.autorizacao === 'sessao'
+          ? usuario
+          : null,
+  });
+  if (conf?.autorizacao === 'excecao')
+    await tx.alterar(T_EXCECAO, num(exc!['id']), num(exc!['versao']), {
+      situacao: 'utilizada',
+      reserva_orcamentaria_id: reservaId,
+    });
+  return {
+    tabela: T_AJUSTE,
+    id: ajuste,
+    consumir: ef.consumir,
+    liberar: ef.liberar,
+    ajuste: ef.ajuste,
+    situacao: ef.situacao,
+    decisao: conf?.decisao ?? 'livre',
+    excesso: conf?.excesso ?? 0,
+  };
+}
+
+export interface NotaDoPedido {
+  readonly pedido: number;
+  readonly nota: number;
+  readonly valor: number;
+  /** O pedido ficou todo recebido: a nota encerra as reservas dele (a sobra é liberada e o excesso vira ajuste). */
+  readonly final: boolean;
+  readonly numeroDocumento: string | null;
+  readonly dataEmissao: string | null;
+}
+
+/**
+ * C2-112 (07-FIN linha 130): a nota de entrada confirmada do pedido de compra realiza as reservas abertas dele, na
+ * mesma transação da confirmação, da mais antiga para a mais nova. A nota parcial que alcança o que está em aberto
+ * encerra as reservas (vira final): o que passa delas é ajuste e segue a regra da linha, e o bloqueio sem exceção
+ * aprovada recusa a nota inteira. Na nota final, a reserva que a nota não alcança é liberada. Pedido sem reserva
+ * aberta (sem orçamento no ano, ou já realizado) não tem o que consumir.
+ */
+export async function consumirReservasDoPedidoNaNota(
+  tx: TxOperacao,
+  est: number,
+  usuario: number,
+  n: NotaDoPedido,
+): Promise<{ reserva: number; consumido: number; ajuste: number; situacao: string }[]> {
+  const linhas = await tx.consultarParaAtualizar(
+    `SELECT * FROM reserva_orcamentaria
+      WHERE tipo_documento = 'pedido_compra' AND pedido_compra_id = ? AND estabelecimento_id = ?
+        AND situacao IN ('ativa', 'parcial') AND excluido_em IS NULL ORDER BY id`,
+    [n.pedido, est],
+    { teto: 100 },
+  );
+  const reservas = linhas
+    .map((r) => ({ r, aberto: abertoDaReserva(reservaLida(r)) }))
+    .filter((x) => x.aberto > 0);
+  if (reservas.length === 0) return [];
+  const totalAberto = reservas.reduce((s, x) => s + x.aberto, 0);
+  const final = n.final || Math.round(n.valor * 100) >= Math.round(totalAberto * 100);
+  let resto = Math.round(n.valor * 100) / 100;
+  const feitos: { reserva: number; consumido: number; ajuste: number; situacao: string }[] = [];
+  for (const [i, { r, aberto }] of reservas.entries()) {
+    const reservaId = num(r['id']);
+    if (resto <= 0) {
+      if (!final) break;
+      const reserva = reservaLida(r);
+      await tx.alterar(T_RESERVA, reservaId, num(r['versao']), {
+        valor_liberado: Math.round((reserva.liberado + aberto) * 100) / 100,
+        situacao: reserva.consumido > 0 ? 'consumida' : 'liberada',
+        liberado_em: new Date(),
+        liberado_por: usuario,
+        motivo_liberacao: `Pedido encerrado pela nota de entrada ${n.nota} sem consumir esta reserva.`,
+      });
+      feitos.push({ reserva: reservaId, consumido: 0, ajuste: 0, situacao: 'liberada' });
+      continue;
+    }
+    const ultima = i === reservas.length - 1;
+    const realizado = !ultima && resto >= aberto ? aberto : resto;
+    const r2 = await consumirReservaComNota(tx, est, usuario, reservaId, {
+      versao: null,
+      valorRealizado: realizado,
+      final: !ultima && resto >= aberto ? true : final,
+      notaEntrada: n.nota,
+      numeroDocumento: n.numeroDocumento,
+      dataEmissao: n.dataEmissao,
+      motivo: null,
+      ciente: true,
+    });
+    feitos.push({ reserva: reservaId, consumido: r2.consumir, ajuste: r2.ajuste, situacao: r2.situacao });
+    resto = Math.round((resto - realizado) * 100) / 100;
+  }
+  return feitos;
 }
 
 /**

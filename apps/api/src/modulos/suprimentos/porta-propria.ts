@@ -146,6 +146,7 @@ import {
 import { consumirEtiquetas } from './etiqueta-identificacao.js';
 import { TABELAS_VINCULO_PEDIDO_CONTRATO, vincularPedidoNaCompra } from './contrato-porta-propria.js';
 import {
+  consumirReservasDoPedidoNaNota,
   controlarOrcamentoDoDocumento,
   TABELAS_CONTROLE_NO_DOCUMENTO,
 } from '../orcamento/controle-orcamentario-propria.js';
@@ -3034,6 +3035,16 @@ async function registrarEntradaNF(
     await tx.alterar('pedido_compra', n(pedido['id']), n(pedido['versao']), {
       situacao: tudo ? 'recebido' : 'parcialmente_recebido',
       ...(pedido['aprovado_em'] ? {} : { aprovado_em: agora }),
+    });
+    // C2-112 (07-FIN linha 130): a nota confirmada realiza as reservas orçamentárias do pedido na mesma transação;
+    // o excesso da nota final segue a regra da linha (o bloqueio sem exceção aprovada recusa a nota).
+    await consumirReservasDoPedidoNaNota(tx, est, usuarioDe(tx), {
+      pedido: n(pedido['id']),
+      nota,
+      valor: custos.valorTotal,
+      final: tudo,
+      numeroDocumento: String(e.numero).slice(0, 30),
+      dataEmissao: e.emissao,
     });
   }
   // C2-093: o fato contábil da nota confirmada, na mesma transação.
