@@ -13,7 +13,9 @@ import MensagemErro from '../../../casca/MensagemErro.vue';
 import { pode } from '../../../casca/sessao/pode.js';
 import {
   type ConciliacaoCnesTela,
+  type ConferenciaCnesTela,
   conciliarHabilitacoesSus,
+  conferirComCnes,
   encerrarCadastroSus,
   inativarRegraServicoSus,
   incluirHabilitacaoSus,
@@ -21,7 +23,9 @@ import {
   incluirRegraServicoSus,
   incluirServicoSus,
   lerCadastroSus,
+  lerConferenciasCnes,
   lerOpcoesCadastroSus,
+  resolverCriticaCnes,
   type TipoEncerravel,
 } from '../api-estabelecimento-sus.js';
 
@@ -32,8 +36,8 @@ const cadastro = useQuery({ queryKey: ['sus', 'estabelecimento', 'cadastro'], qu
 const opcoes = useQuery({ queryKey: ['sus', 'estabelecimento', 'opcoes'], queryFn: lerOpcoesCadastroSus });
 const podeEditar = computed(() => pode('faturamento.susCadastro.editar'));
 
-type Aba = 'habilitacoes' | 'servicos' | 'regrasPrestador' | 'regrasServico';
-const ABAS: Aba[] = ['habilitacoes', 'servicos', 'regrasPrestador', 'regrasServico'];
+type Aba = 'habilitacoes' | 'servicos' | 'regrasPrestador' | 'regrasServico' | 'conferencia';
+const ABAS: Aba[] = ['habilitacoes', 'servicos', 'regrasPrestador', 'regrasServico', 'conferencia'];
 const aba = ref<Aba>('habilitacoes');
 
 const mesAtual = () => new Date().toISOString().slice(0, 7);
@@ -127,6 +131,34 @@ const conciliar = (aplicar: boolean) =>
     previa.value = r;
     return r;
   });
+
+// Conferência com o cadastro nacional (C3-011): só é lida quando a aba abre.
+const conferencias = useQuery({
+  queryKey: ['sus', 'estabelecimento', 'cnes', 'conferencias'],
+  queryFn: lerConferenciasCnes,
+  enabled: computed(() => aba.value === 'conferencia'),
+});
+const cf = reactive({ competencia: mesAtual() });
+// O aviso com a contagem vem depois do 'Gravado.' geral (o onSuccess da chamada roda depois do da mutação).
+const conferir = () =>
+  acao.mutate(() => conferirComCnes(cf.competencia.replace('-', '')), {
+    onSuccess: (r) => {
+      const n = (r as { quantidadeCriticas: number }).quantidadeCriticas;
+      aviso.value = t('faturamentoSus.estabelecimento.conferenciaCnes.conferida', { n });
+    },
+  });
+const resolverCritica = (id: number, versao: number) => acao.mutate(() => resolverCriticaCnes(id, versao));
+const competenciaTela = (c: string) => `${c.slice(4, 6)}/${c.slice(0, 4)}`;
+const porGravidade = (x: ConferenciaCnesTela) => {
+  const n = { erro: 0, alerta: 0, informacao: 0 };
+  for (const c of x.criticas) if (!c.resolvida) n[c.gravidade]++;
+  return n;
+};
+const ORDEM_GRAVIDADE = { erro: 0, alerta: 1, informacao: 2 } as const;
+const criticasOrdenadas = (x: ConferenciaCnesTela) =>
+  [...x.criticas].sort(
+    (a, b) => ORDEM_GRAVIDADE[a.gravidade] - ORDEM_GRAVIDADE[b.gravidade] || a.sequencia - b.sequencia,
+  );
 
 // Serviço
 const s = reactive({
@@ -704,6 +736,77 @@ const alvoRegra = (x: {
         </tbody>
       </table>
     </div>
+    <!-- Conferência com o cadastro nacional (C3-011) -->
+    <div v-if="aba === 'conferencia'" data-testid="estab-sus-conferencia">
+      <p>{{ k('conferenciaCnes.explicacao') }}</p>
+      <form v-if="podeEditar" class="formulario" data-testid="estab-sus-cnes-form" @submit.prevent="conferir">
+        <label
+          >{{ k('conferenciaCnes.competencia') }}
+          <input v-model="cf.competencia" type="month" required data-testid="estab-sus-cnes-competencia"
+        /></label>
+        <button
+          type="submit"
+          :disabled="!cf.competencia || acao.isPending.value"
+          data-testid="estab-sus-cnes-conferir"
+        >
+          {{ k('conferenciaCnes.conferir') }}
+        </button>
+      </form>
+      <MensagemErro v-if="conferencias.isError.value" :erro="conferencias.error.value" />
+      <p v-if="conferencias.data.value?.length === 0" data-testid="estab-sus-cnes-vazio">
+        {{ k('conferenciaCnes.vazio') }}
+      </p>
+      <section
+        v-for="x in conferencias.data.value ?? []"
+        :key="x.id"
+        class="conferencia"
+        :aria-labelledby="`estab-sus-cnes-rem-${x.id}`"
+        :data-testid="`estab-sus-cnes-remessa-${x.id}`"
+      >
+        <h2 :id="`estab-sus-cnes-rem-${x.id}`">
+          {{
+            t('faturamentoSus.estabelecimento.conferenciaCnes.remessa', {
+              competencia: competenciaTela(x.competencia),
+              numero: x.numeroRemessa,
+            })
+          }}
+        </h2>
+        <p data-testid="estab-sus-cnes-resumo">
+          {{ t('faturamentoSus.estabelecimento.conferenciaCnes.resumoGravidade', porGravidade(x)) }}
+        </p>
+        <p v-if="x.criticas.length === 0">{{ k('conferenciaCnes.semCriticas') }}</p>
+        <table v-else>
+          <thead>
+            <tr>
+              <th scope="col">{{ k('conferenciaCnes.colunas.gravidade') }}</th>
+              <th scope="col">{{ k('conferenciaCnes.colunas.categoria') }}</th>
+              <th scope="col">{{ k('conferenciaCnes.colunas.mensagem') }}</th>
+              <th scope="col">{{ k('conferenciaCnes.colunas.situacao') }}</th>
+              <th scope="col">{{ k('colunas.acoes') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in criticasOrdenadas(x)" :key="c.id" :data-testid="`estab-sus-cnes-critica-${c.id}`">
+              <td>{{ k(`conferenciaCnes.gravidades.${c.gravidade}`) }}</td>
+              <td>{{ c.categoria }}</td>
+              <td>{{ c.mensagem }}</td>
+              <td>{{ k(`conferenciaCnes.${c.resolvida ? 'resolvida' : 'pendente'}`) }}</td>
+              <td>
+                <button
+                  v-if="podeEditar && !c.resolvida"
+                  type="button"
+                  :disabled="acao.isPending.value"
+                  data-testid="estab-sus-cnes-resolver"
+                  @click="resolverCritica(c.id, c.versao)"
+                >
+                  {{ k('conferenciaCnes.resolver') }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
   </section>
 </template>
 
@@ -737,6 +840,10 @@ td {
 .ajuda,
 .largo {
   flex-basis: 100%;
+}
+.conferencia h2 {
+  font-size: 1.1rem;
+  margin-top: var(--sgh-espaco-3);
 }
 .problemas {
   flex-basis: 100%;

@@ -136,3 +136,35 @@ export const incluirRegraServicoSus = (corpo: {
 }) => enviar(`${B}/regras-servico`, corpo, comId, novaChave('sus-regra-servico'));
 export const inativarRegraServicoSus = (id: number, versao: number) =>
   enviar(`${B}/regras-servico/${id}/inativar`, { versao }, comId, novaChave('sus-regra-servico-inativar'));
+
+// Conferência com o cadastro nacional (C3-011): remessa de conferência por competência e críticas por gravidade.
+export const esquemaConferenciasCnes = z.array(
+  z.object({
+    id: z.number(),
+    competencia: z.string(),
+    numeroRemessa: z.number(),
+    situacao: z.string(),
+    geradaEm: z.string().nullable(),
+    quantidadeCriticas: z.number(),
+    criticas: z.array(
+      z.object({
+        id: z.number(),
+        sequencia: z.number(),
+        categoria: z.string(),
+        gravidade: z.enum(['erro', 'alerta', 'informacao']),
+        mensagem: z.string(),
+        resolvida: z.boolean(),
+        versao: z.number(),
+      }),
+    ),
+  }),
+);
+export type ConferenciaCnesTela = z.infer<typeof esquemaConferenciasCnes>[number];
+const esquemaConferido = z
+  .object({ id: z.number(), resumo: z.record(z.string(), z.number()), quantidadeCriticas: z.number() })
+  .passthrough();
+export const lerConferenciasCnes = () => ler(`${B}/cnes/conferencias`, esquemaConferenciasCnes);
+export const conferirComCnes = (competencia: string) =>
+  enviar(`${B}/cnes/conferir`, { competencia }, esquemaConferido, novaChave('sus-cnes-conferir'));
+export const resolverCriticaCnes = (id: number, versao: number) =>
+  enviar(`${B}/cnes/criticas/${id}/resolver`, { versao }, comId, novaChave('sus-cnes-resolver'));
