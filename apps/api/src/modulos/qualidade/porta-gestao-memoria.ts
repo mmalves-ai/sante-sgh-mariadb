@@ -791,6 +791,8 @@ export class PortaGestaoMemoria implements PortaGestao {
         return { versao: m.versao + 1 };
       },
       sortearRevisao: async (x) => {
+        // Divergência intencional: sem a recusa 'competencia-ja-sorteada' da porta própria (contrato de efeito em
+        // porta-propria-comissao-sorteio.int.spec.ts).
         const novo = id();
         s.sorteiosRev.push({
           id: novo,

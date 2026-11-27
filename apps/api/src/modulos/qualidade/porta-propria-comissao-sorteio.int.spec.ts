@@ -8,6 +8,9 @@
 // Divergência intencional da porta de memória (W0-04): a memória não recusa a competência já sorteada
 // ('competencia-ja-sorteada'); a regra de um sorteio ativo por competência e comissão é do banco próprio e se prova aqui.
 // A memória serve à tela e ao E2E, que sorteiam competências diferentes ou cancelam antes.
+// Divergência intencional da porta de memória (W0-04): a memória não recusa a competência já sorteada
+// ('competencia-ja-sorteada'); a regra de um sorteio ativo por competência e comissão é do banco próprio e se prova aqui.
+// A memória serve à tela e ao E2E, que sorteiam competências diferentes ou cancelam antes.
 import { randomInt } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarAbility, regrasDeAcesso } from '@sgh/dominio-acesso';
