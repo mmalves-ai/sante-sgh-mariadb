@@ -142,7 +142,7 @@ hash diferente do listado não é o do pacote homologado.
 | 132 | `06_PEP/99z_registro_migrado_tabelas.sql` | tabelas | `e79e5cfdc22c9cb9c135a6e535c950b0e1f19668502ca3171d322c700745fcb3` | 12 |
 | 133 | `06_PEP/99za_auditoria_ccih_sem_atendimento_tabelas.sql` | tabelas | `77f83962a66273a7b16cf74b7949b4ac1e76d51877f6699cbd1c63bde291ff95` | 2 |
 | 134 | `06_PEP/99zb_principio_cliente_unico_tabelas.sql` | tabelas | `66a3ea1361fa297b34de7f1886963451fca987c90dc3ce008b45fac16ed5120d` | 3 |
-| 135 | `06_PEP/99zc_destino_afericao_tabelas.sql` | tabelas | `dacbb6df9c4657b4668b1a3fe658338654bcee97425181061952f4a12aff522e` | 3 |
+| 135 | `06_PEP/99zc_destino_afericao_tabelas.sql` | tabelas | `9a0a0c22a5f1db24b219101c82fa4379518da5bc13a74e4f6d5f2251473dc4b5` | 4 |
 | 136 | `07_INT/01_tabelas.sql` | tabelas | `1bb2816773f4ffdeca7bbf790f196a9c276a1507431471ea344fd4d872c05f6e` | 45 |
 | 137 | `07_INT/02_tabelas.sql` | tabelas | `e822e3284ee5b28c620179c9b3d98fdc171bbe3b0ce303254a6e1f38f5d2ab67` | 45 |
 | 138 | `07_INT/03_tabelas.sql` | tabelas | `ed9a2de674bf97aeb89921c4937a02efbd14a6c519972ac2b41842d0f23e7ed4` | 31 |
