@@ -4,6 +4,8 @@ export const mensagensRegistros = {
   titulo: 'Diagnósticos e acidente da internação',
   texto:
     'O diagnóstico de entrada vem da admissão. Acrescente o principal, os secundários e a causa externa; o principal novo substitui o vigente, que fica no histórico. Nada é apagado: o lançado por engano é retirado com motivo.',
+  semBanco:
+    'Os diagnósticos e o acidente da internação ficam no banco do cliente e não estão disponíveis nesta fonte de dados.',
   diagnosticos: 'Diagnósticos',
   sequencia: '#',
   tipoCol: 'Tipo',

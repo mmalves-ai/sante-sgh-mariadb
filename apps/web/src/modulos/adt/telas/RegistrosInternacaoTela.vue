@@ -8,6 +8,7 @@ import { SanteBotao, SanteCampoTexto, SanteSelecao } from '@sgh/ui';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { ErroApi, mensagemDoErro } from '../../../casca/erros/problem-details.js';
 import { dataBr } from '../../agenda/formato.js';
 import { buscarCid, novaChave } from '../api-adt.js';
 import {
@@ -37,6 +38,14 @@ const registros = ref<RegistrosInternacao | null>(null);
 const erro = ref<unknown>(null);
 const mensagem = ref<string | null>(null);
 const ocupado = ref(false);
+// Sem o banco do cliente (fonte sintética) a API responde 503 com o tipo "indisponivel": a tela diz isso em vez da
+// mensagem geral (a regra do acidente continua conferida na hora).
+const semBanco = computed(
+  () =>
+    erro.value instanceof ErroApi &&
+    erro.value.status === 503 &&
+    mensagemDoErro(erro.value).tipo === 'indisponivel',
+);
 async function ler(): Promise<void> {
   try {
     registros.value = await lerRegistros(reg.value);
@@ -187,7 +196,10 @@ const gravarAcidente = () =>
     <template v-else>
       <ResumoInternacao :internacao="ficha.data.value" atalhos />
       <p v-if="mensagem" role="status" data-testid="registros-gravado">{{ mensagem }}</p>
-      <ErroAdt v-if="erro" :erro="erro" />
+      <p v-if="semBanco" role="status" class="secundario" data-testid="registros-sem-banco">
+        {{ t('adt.registros.semBanco') }}
+      </p>
+      <ErroAdt v-else-if="erro" :erro="erro" />
 
       <section class="painel" aria-labelledby="registros-diagnosticos">
         <h2 id="registros-diagnosticos">{{ t('adt.registros.diagnosticos') }}</h2>
