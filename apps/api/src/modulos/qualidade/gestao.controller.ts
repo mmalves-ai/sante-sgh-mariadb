@@ -4,6 +4,7 @@
 // `qualidade.gestao` liga as gravações (recolher = só consulta). Rotas:
 //   GET  /api/qualidade/gestao/resumo                         o cabeçalho e os cartões (documentos, riscos, NC, ouvidoria)
 //   GET  /api/qualidade/documentos[/:id[/ciencias]]           documentos (quem não publica vê só os vigentes)
+//   GET  /api/qualidade/documentos/:id/pendentes-ciencia      quem a distribuição obriga a ler e ainda não leu
 //   POST /api/qualidade/documentos                            qualidade.publicarDocumento (primeira ou nova revisão)
 //   POST /api/qualidade/documentos/:id/retirada               qualidade.retirarDocumento
 //   POST /api/qualidade/documentos/:id/ciencia                qualidade.registrarCiencia
@@ -345,6 +346,15 @@ export class GestaoQualidadeController {
     const s = sessaoDe(req);
     const d = await this.documentoOu404(s, idDaRota(id));
     return { itens: await this.porta.cientes(s.porta, d.id) };
+  }
+
+  /** Quem a distribuição obriga a ler a revisão vigente e ainda não registrou a ciência. */
+  @Get('qualidade/documentos/:id/pendentes-ciencia')
+  @Permissao(P.documentoPublicar)
+  async pendentesCiencia(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
+    const s = sessaoDe(req);
+    const d = await this.documentoOu404(s, idDaRota(id));
+    return { itens: await this.porta.pendentesCiencia(s.porta, d.id) };
   }
 
   @Post('qualidade/documentos')

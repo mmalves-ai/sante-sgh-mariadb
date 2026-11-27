@@ -277,6 +277,10 @@ export class PortaGestaoMemoria implements PortaGestao {
         .map((c) => ({ usuario: c.usuario, cienteEm: c.cienteEm })),
     );
   }
+  /** A porta de memória não tem distribuição: ninguém fica pendente (documento aberto). */
+  pendentesCiencia(): Promise<{ usuario: string; nome: string }[]> {
+    return Promise.resolve([]);
+  }
   analises(_c: ContextoGestao, competencia: string) {
     return Promise.resolve(
       this.estado.analises.filter((a) => a.competencia === competencia).map((a) => ({ ...a })),

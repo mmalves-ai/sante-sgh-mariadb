@@ -248,6 +248,10 @@ export class PortaGestaoPropriaCompleta extends PortaGestaoPropria {
     return this.complementoQ2.cientes(c, documento);
   }
 
+  override pendentesCiencia(c: ContextoGestao, documento: number) {
+    return this.complementoQ2.pendentesCiencia(c, documento);
+  }
+
   override historicoAnalises(c: ContextoGestao, indicador: string) {
     return this.complementoQ2.historicoAnalises(c, indicador);
   }

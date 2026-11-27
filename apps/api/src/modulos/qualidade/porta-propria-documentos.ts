@@ -17,6 +17,7 @@
 // Nenhum gatilho: a regra está aqui e no domínio (conferirPublicacao, recusaRetirada, recusaCiencia, na API).
 import { recusa, type TxOperacao } from '@sgh/nucleo';
 import { exigirUsuario, type Linha, n, paraBanco, texto } from './apoio-propria.js';
+import { recusaCienciaPorDistribuicao } from './ciencia-distribuicao.js';
 import type { GravadorGestao } from './porta-gestao.js';
 import { recusaVersaoGestao } from './tipos.js';
 
@@ -261,6 +262,8 @@ export function gravacoesDocumentos(tx: TxOperacao, est: number): GravacoesDocum
       if (!v || texto(v['situacao']) !== 'vigente')
         throw recusa('documento-nao-vigente', 'O documento não está mais vigente: abra a revisão nova.');
       const usuario = await exigirUsuario(tx, c.usuario);
+      if (await recusaCienciaPorDistribuicao(tx, est, n(v['documento']), usuario, c.agora.slice(0, 10)))
+        throw recusa('fora-da-distribuicao', 'Este documento não foi distribuído para você.');
       const colab = await tx.uma<Linha>(
         'SELECT MIN(id) AS id FROM colaborador WHERE usuario_id = ? AND excluido_em IS NULL',
         [usuario],

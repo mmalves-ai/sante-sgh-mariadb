@@ -42,6 +42,7 @@ import {
   textoN,
   verdadeiro,
 } from './apoio-propria.js';
+import { pendentesDeCiencia } from './ciencia-distribuicao.js';
 import type { ContextoGestao } from './porta-gestao.js';
 import type {
   AnaliseIndicadorRegistrada,
@@ -55,6 +56,7 @@ import type {
 export const METODOS_COMPLEMENTO_Q2 = [
   'ciencias',
   'cientes',
+  'pendentesCiencia',
   'comissao',
   'comissoes',
   'contagem',
@@ -306,6 +308,13 @@ export class LeiturasGestaoComplementoQ2 {
           [est, doc],
         )
       ).map((x) => ({ usuario: texto(x['usuario']), cienteEm: instante(x['ciencia_em']) })),
+    );
+  }
+
+  /** Quem a distribuição obriga a ler a revisão vigente e ainda não leu (ver ciencia-distribuicao.ts). */
+  pendentesCiencia(c: ContextoGestao, doc: number): Promise<{ usuario: string; nome: string }[]> {
+    return this.ler(c, async (l, est) =>
+      pendentesDeCiencia(l, est, doc, (await relogioDoEstabelecimento(l, est)).slice(0, 10)),
     );
   }
 

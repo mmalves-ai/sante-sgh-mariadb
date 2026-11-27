@@ -1294,6 +1294,13 @@ export class PortaGestaoPropria implements PortaGestao {
     return this.pendente(PENDENTE.documentos);
   }
   /* eslint-enable @typescript-eslint/no-unused-vars */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  pendentesCiencia(
+    ..._a: Parameters<PortaGestao['pendentesCiencia']>
+  ): ReturnType<PortaGestao['pendentesCiencia']> {
+    return this.pendente(PENDENTE.documentos);
+  }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   analises(..._a: Parameters<PortaGestao['analises']>): ReturnType<PortaGestao['analises']> {
     return this.pendente(PENDENTE.indicadores);

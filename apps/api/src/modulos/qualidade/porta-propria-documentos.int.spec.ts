@@ -110,6 +110,11 @@ describe.skipIf(SEM_BANCO_QUA)(
           ests,
         );
         await e.executar(
+          `DELETE x FROM documento_qualidade_distribuicao x JOIN documento_qualidade d ON d.id = x.documento_qualidade_id
+            WHERE d.estabelecimento_id IN (?, ?)`,
+          ests,
+        );
+        await e.executar(
           'UPDATE documento_qualidade SET documento_qualidade_versao_id = NULL WHERE estabelecimento_id IN (?, ?)',
           ests,
         );
@@ -261,6 +266,50 @@ describe.skipIf(SEM_BANCO_QUA)(
       expect((await leituras.cientes(c, ids.v2)).map((x) => x.usuario)).toEqual([m.login.toUpperCase()]);
       const mapa = await leituras.ciencias(c, [ids.v2], m.login);
       expect(mapa.get(ids.v2)).toMatchObject({ total: 1, sessao: true });
+    });
+
+    it('a ciência segue a distribuição: fora dela ou barrado recusa; a lista de quem deve ler e ainda não leu', async () => {
+      const ficha = Number(
+        (
+          await uma('SELECT documento_qualidade_id AS f FROM documento_qualidade_versao WHERE id = ?', [
+            ids.v2,
+          ])
+        )?.['f'],
+      );
+      // A chave única tem colunas nulas (não barra a repetição): a linha da conta é trocada, nunca duplicada.
+      const distribuir = (usuario: number, negado: boolean) =>
+        m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'distribuicao-documentos' }, async (e) => {
+          await e.executar(
+            'DELETE FROM documento_qualidade_distribuicao WHERE documento_qualidade_id = ? AND usuario_id = ?',
+            [ficha, usuario],
+          );
+          await e.executar(
+            `INSERT INTO documento_qualidade_distribuicao
+               (documento_qualidade_id, tipo_destinatario, usuario_id, acesso_negado, exige_ciencia, criado_em)
+             VALUES (?, 'usuario', ?, ?, TRUE, ?)`,
+            [ficha, usuario, negado, new Date()],
+          );
+        });
+      const cienciaGestor = () =>
+        gravar(c, (g) =>
+          g.registrarCiencia({ documento: ids.v2, agora: '2026-11-12T10:00:00', usuario: m.loginGestor }),
+        );
+      // Distribuído só para quem já leu: o gestor fica de fora e ninguém está pendente.
+      await distribuir(m.usuario, false);
+      expect(await codigoDe(cienciaGestor())).toMatch(/:fora-da-distribuicao$/);
+      expect(await leituras.pendentesCiencia(c, ids.v2)).toEqual([]);
+      // A linha que barra vence a que libera.
+      await distribuir(m.gestor, true);
+      expect(await codigoDe(cienciaGestor())).toMatch(/:fora-da-distribuicao$/);
+      expect(await leituras.pendentesCiencia(c, ids.v2)).toEqual([]);
+      // Liberado: o gestor passa a dever a leitura até registrar a ciência.
+      await distribuir(m.gestor, false);
+      expect((await leituras.pendentesCiencia(c, ids.v2)).map((x) => x.usuario)).toEqual([
+        m.loginGestor.toUpperCase(),
+      ]);
+      await cienciaGestor();
+      expect(await leituras.pendentesCiencia(c, ids.v2)).toEqual([]);
+      expect(await leituras.pendentesCiencia(cOutro, ids.v2)).toEqual([]);
     });
 
     it('retira a revisão vigente com motivo, instante e conta; versão lida conferida; o outro estabelecimento não alcança', async () => {

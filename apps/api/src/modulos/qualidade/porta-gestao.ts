@@ -262,6 +262,8 @@ export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
     usuario: string,
   ): Promise<Map<number, { total: number; sessao: boolean }>>;
   cientes(c: C, documento: number): Promise<{ usuario: string; cienteEm: string }[]>;
+  /** Quem a distribuição obriga a ler a revisão vigente e ainda não registrou a ciência (login e nome). */
+  pendentesCiencia(c: C, documento: number): Promise<{ usuario: string; nome: string }[]>;
   analises(c: C, competencia: string): Promise<AnaliseIndicadorRegistrada[]>;
   historicoAnalises(c: C, indicador: string): Promise<AnaliseIndicadorRegistrada[]>;
   auditorias(c: C, f: Pg): Promise<PaginaGestao<AuditoriaRegistrada>>;
@@ -379,6 +381,7 @@ export const METODOS_PORTA_GESTAO: ReadonlySet<string> = new Set([
   'documentosDoCodigo',
   'ciencias',
   'cientes',
+  'pendentesCiencia',
   'analises',
   'historicoAnalises',
   'auditorias',
