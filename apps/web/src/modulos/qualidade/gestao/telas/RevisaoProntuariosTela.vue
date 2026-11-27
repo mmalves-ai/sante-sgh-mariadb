@@ -285,11 +285,22 @@ const opResultado = RESULTADOS_REVISAO_PRONTUARIO.map((r) => ({
   valor: r.codigo,
   rotulo: R(`resultado.${r.codigo}`),
 }));
+// O item que não aceita "não se aplica" não mostra a opção (a gravação recusaria depois do clique); o peso aparece
+// quando difere de 1, porque o percentual da revisão é ponderado por ele.
+type ItemDoSorteio = (typeof itensDoSorteio.value)[number];
+const aceitaNaoAplicavel = (i: ItemDoSorteio): boolean => i.aceitaNaoAplicavel !== false;
+const opcoesDoItem = (i: ItemDoSorteio) =>
+  aceitaNaoAplicavel(i) ? opResultado : opResultado.filter((o) => o.valor !== 'naoAplicavel');
+const rotuloDoItem = (i: ItemDoSorteio): string =>
+  i.peso !== undefined && i.peso !== 1
+    ? `${i.titulo} (${R('pesoItem', { p: i.peso.toLocaleString('pt-BR') })})`
+    : i.titulo;
 function revisar(p: ProntuarioRevisaoTela): void {
   for (const k of Object.keys(respostas)) Reflect.deleteProperty(respostas, k);
   for (const i of itensDoSorteio.value) {
     const r = p.respostas.find((x) => x.item === i.codigo);
-    respostas[i.codigo] = { resultado: r?.resultado ?? '', observacao: r?.observacao ?? '' };
+    const resultado = r?.resultado === 'naoAplicavel' && !aceitaNaoAplicavel(i) ? '' : (r?.resultado ?? '');
+    respostas[i.codigo] = { resultado, observacao: r?.observacao ?? '' };
   }
   observacaoGeral.value = p.observacao ?? '';
   emRevisao.value = p;
@@ -322,7 +333,13 @@ function revisar(p: ProntuarioRevisaoTela): void {
   );
 }
 const revisaoValida = computed(
-  () => !emRevisao.value || itensDoSorteio.value.every((i) => respostas[i.codigo]?.resultado),
+  () =>
+    !emRevisao.value ||
+    itensDoSorteio.value.every(
+      (i) =>
+        respostas[i.codigo]?.resultado &&
+        (aceitaNaoAplicavel(i) || respostas[i.codigo]?.resultado !== 'naoAplicavel'),
+    ),
 );
 function aval(p: ProntuarioRevisaoTela): void {
   const chave = novaChaveCorrecao('aval');
@@ -788,9 +805,9 @@ const indicador = useQuery({
           class="item-revisao"
           :data-testid="`item-${i.codigo}`"
         >
-          <legend>{{ i.titulo }}</legend>
+          <legend>{{ rotuloDoItem(i) }}</legend>
           <div class="linha-ccih">
-            <label v-for="o in opResultado" :key="o.valor">
+            <label v-for="o in opcoesDoItem(i)" :key="o.valor">
               <input
                 v-model="respostas[i.codigo]!.resultado"
                 type="radio"

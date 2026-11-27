@@ -113,6 +113,7 @@ export const mensagensGestaoQualidade = {
     corrigirTexto:
       'A revisão anterior fica no histórico. Pendências de itens que deixarem de ser não conformes são canceladas.',
     observacaoItem: 'Observação do item {item}',
+    pesoItem: 'peso {p}',
     observacao: 'Observação geral',
     gravarRevisao: 'Gravar revisão',
     revisado: 'Revisão gravada.',

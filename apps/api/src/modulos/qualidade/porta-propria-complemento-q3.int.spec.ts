@@ -268,7 +268,10 @@ describe.skipIf(SEM_BANCO_QUA)(
         [2, 'vigente', 'Nova revisão'],
         [1, 'substituida', null],
       ]);
-      expect(JSON.parse(lista[0]!.itens)).toEqual(JSON.parse(itens));
+      // O item lido traz o peso e o "aceita não se aplica" gravados (padrões do banco: 1 e sim), para a tela validar.
+      expect(JSON.parse(lista[0]!.itens)).toEqual(
+        (JSON.parse(itens) as object[]).map((i) => ({ ...i, peso: 1, aceitaNaoAplicavel: true })),
+      );
       expect(lista[0]!.publicadoPor).toBe(m.login);
       expect(await leituras.checklistsRevisao(cOutro, ids['comissao']!)).toEqual([]);
       expect(await leituras.checklistRevisao(cOutro, checklist.id)).toBeNull();

@@ -62,6 +62,10 @@ export const esquemaItemChecklistRevisao = z
   .object({
     codigo,
     titulo: textoCp1252(160).pipe(z.string().trim().min(3)),
+    /** O peso do item no percentual ponderado (lido do item gravado; ausente pesa 1). */
+    peso: z.number().min(0).max(999).optional(),
+    /** Se o item aceita "não se aplica" (lido do item gravado; ausente aceita). */
+    aceitaNaoAplicavel: z.boolean().optional(),
   })
   .strict();
 export type ItemChecklistRevisao = z.infer<typeof esquemaItemChecklistRevisao>;
@@ -265,6 +269,7 @@ export type RecusaRevisaoProntuario =
   | 'sorteio-com-revisao'
   | 'resposta-incompleta'
   | 'item-fora-do-checklist'
+  | 'nao-aplicavel-nao-aceito'
   | 'revisao-com-aval'
   | 'justificativa-obrigatoria'
   | 'pendencia-aberta'
@@ -289,6 +294,7 @@ export const MENSAGENS_RECUSA_REVISAO: Readonly<Record<RecusaRevisaoProntuario, 
   'sorteio-com-revisao': 'O sorteio já tem prontuário revisado: não se cancela mais.',
   'resposta-incompleta': 'Responda todos os itens do checklist.',
   'item-fora-do-checklist': 'A resposta tem item que não está no checklist do sorteio.',
+  'nao-aplicavel-nao-aceito': 'Há item respondido como "não se aplica" que o checklist não aceita assim.',
   'revisao-com-aval': 'O prontuário já tem o aval da comissão: a revisão não muda mais.',
   'justificativa-obrigatoria': 'Corrigir a revisão já gravada exige a justificativa (10 caracteres ou mais).',
   'pendencia-aberta': 'Há pendência aberta com o profissional: o aval espera a resposta ou o cancelamento.',

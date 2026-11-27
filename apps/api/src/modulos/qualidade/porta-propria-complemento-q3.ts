@@ -115,11 +115,14 @@ export function checklist(r: Linha, itens: string): ChecklistRevisaoRegistrado {
 
 /** Os itens de cada versão (JSON do contrato: código e título, na ordem da sequência). */
 async function itensDas(l: L, ids: readonly number[]): Promise<Map<number, string>> {
-  const porVersao = new Map<number, { codigo: string; titulo: string }[]>();
+  const porVersao = new Map<
+    number,
+    { codigo: string; titulo: string; peso: number; aceitaNaoAplicavel: boolean }[]
+  >();
   for (let i = 0; i < ids.length; i += LOTE_IDS) {
     const lote = ids.slice(i, i + LOTE_IDS);
     const linhas = await l.consultar(
-      `SELECT modelo_checklist_qualidade_versao_id AS v, sequencia, codigo, enunciado
+      `SELECT modelo_checklist_qualidade_versao_id AS v, sequencia, codigo, enunciado, peso, aceita_nao_aplicavel
          FROM modelo_checklist_qualidade_item
         WHERE modelo_checklist_qualidade_versao_id IN (${marcas(lote.length)})
         ORDER BY modelo_checklist_qualidade_versao_id, sequencia`,
@@ -129,7 +132,13 @@ async function itensDas(l: L, ids: readonly number[]): Promise<Map<number, strin
     for (const x of linhas) {
       const k = n(x['v']);
       const lista = porVersao.get(k) ?? [];
-      lista.push({ codigo: texto(x['codigo']) || `item${n(x['sequencia'])}`, titulo: texto(x['enunciado']) });
+      // O peso e o "aceita não se aplica" vão à tela e ao controlador, para a validação antes da gravação.
+      lista.push({
+        codigo: texto(x['codigo']) || `item${n(x['sequencia'])}`,
+        titulo: texto(x['enunciado']),
+        peso: Number(x['peso'] ?? 1),
+        aceitaNaoAplicavel: Boolean(n(x['aceita_nao_aplicavel'] ?? 1)),
+      });
       porVersao.set(k, lista);
     }
   }

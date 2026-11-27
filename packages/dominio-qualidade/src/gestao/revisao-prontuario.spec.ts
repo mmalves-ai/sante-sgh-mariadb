@@ -106,6 +106,23 @@ describe('checklist, revisão e pendência', () => {
     ]);
     expect(ok.ok && ok.avaliacao.situacao).toBe('conforme');
   });
+  it('"não se aplica" só no item que o aceita (a recusa vem antes da gravação, como na porta própria)', () => {
+    const chk = [
+      { codigo: 'evolucao-diaria', titulo: 'Evolução diária', peso: 3, aceitaNaoAplicavel: false },
+      { codigo: 'sumario-alta', titulo: 'Sumário de alta', peso: 1, aceitaNaoAplicavel: true },
+    ];
+    expect(
+      avaliarRevisao(chk, [
+        { item: 'evolucao-diaria', resultado: 'naoAplicavel', observacao: null },
+        { item: 'sumario-alta', resultado: 'conforme', observacao: null },
+      ]),
+    ).toEqual({ ok: false, motivo: 'nao-aplicavel-nao-aceito' });
+    const r = avaliarRevisao(chk, [
+      { item: 'evolucao-diaria', resultado: 'conforme', observacao: null },
+      { item: 'sumario-alta', resultado: 'naoAplicavel', observacao: null },
+    ]);
+    expect(r.ok && r.avaliacao.situacao).toBe('conforme');
+  });
   it('correção só antes do aval e com justificativa; aval só revisado e sem pendência aberta', () => {
     const base = {
       situacaoAtual: 'aRevisar' as const,

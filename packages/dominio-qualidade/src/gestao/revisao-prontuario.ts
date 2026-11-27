@@ -100,7 +100,10 @@ export interface AvaliacaoRevisao {
   }[];
 }
 
-/** A revisão pelo checklist do sorteio: todos os itens, nenhum de fora; não conforme se houver item não conforme. */
+/**
+ * A revisão pelo checklist do sorteio: todos os itens, nenhum de fora, "não se aplica" só no item que o aceita; não
+ * conforme se houver item não conforme.
+ */
 export function avaliarRevisao(
   checklist: readonly ItemChecklistRevisao[],
   respostas: readonly RespostaItemRevisao[],
@@ -108,7 +111,10 @@ export function avaliarRevisao(
   const itens = new Map(checklist.map((i) => [i.codigo, i]));
   const vistos = new Set<string>();
   for (const r of respostas) {
-    if (!itens.has(r.item)) return { ok: false, motivo: 'item-fora-do-checklist' };
+    const item = itens.get(r.item);
+    if (!item) return { ok: false, motivo: 'item-fora-do-checklist' };
+    if (r.resultado === 'naoAplicavel' && item.aceitaNaoAplicavel === false)
+      return { ok: false, motivo: 'nao-aplicavel-nao-aceito' };
     vistos.add(r.item);
   }
   if (vistos.size !== itens.size || respostas.length !== itens.size)
