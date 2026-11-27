@@ -235,9 +235,12 @@ async function lancar() {
           <label for="rf-fixo-fim">{{ k('fimOpcional') }}</label>
           <input id="rf-fixo-fim" v-model="fixo.fim" type="date" data-testid="rf-fixo-fim" />
         </span>
-        <ul v-if="problemasFixo.length" role="status" data-testid="rf-fixo-problemas">
-          <li v-for="p in problemasFixo" :key="p">{{ p }}</li>
-        </ul>
+        <!-- role="status" no invólucro: na própria lista ele tira a semântica de lista (axe listitem). -->
+        <div v-if="problemasFixo.length" role="status">
+          <ul data-testid="rf-fixo-problemas">
+            <li v-for="p in problemasFixo" :key="p">{{ p }}</li>
+          </ul>
+        </div>
         <button type="submit" :disabled="gravando || problemasFixo.length > 0" data-testid="rf-fixo-incluir">
           {{ k('incluir') }}
         </button>
@@ -303,9 +306,12 @@ async function lancar() {
           <label for="rf-min-fim">{{ k('fimOpcional') }}</label>
           <input id="rf-min-fim" v-model="minimo.fim" type="date" data-testid="rf-minimo-fim" />
         </span>
-        <ul v-if="problemasMinimo.length" role="status" data-testid="rf-minimo-problemas">
-          <li v-for="p in problemasMinimo" :key="p">{{ p }}</li>
-        </ul>
+        <!-- role="status" no invólucro: na própria lista ele tira a semântica de lista (axe listitem). -->
+        <div v-if="problemasMinimo.length" role="status">
+          <ul data-testid="rf-minimo-problemas">
+            <li v-for="p in problemasMinimo" :key="p">{{ p }}</li>
+          </ul>
+        </div>
         <button
           type="submit"
           :disabled="gravando || problemasMinimo.length > 0"
