@@ -152,4 +152,5 @@ cada uma com construir, revisão adversarial e correção.
 | esteira-github | 1,5 M | 2 M | cerca de 0,1 M | 1 (dois testes dependentes de tempo; ci-sim com 4 CPUs) |
 | completar-8 (F3/F8) | 42 M | 55 M | cerca de 38,6 M | 50 (~0,77 M cada); 30 cobertas |
 
+| completar-10 (revisão do dono) | 30 M | 39 M | cerca de 38 M | 36 (~1,05 M cada); 13 cobertas, central de integrações (API), e2e --banco |
 - Todas abaixo da estimativa. Consolidações (tipos, prettier, anexos) feitas pelo orquestrador sem agente.
