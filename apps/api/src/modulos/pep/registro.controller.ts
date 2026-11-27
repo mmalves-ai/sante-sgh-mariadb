@@ -39,6 +39,9 @@ import {
   type MotivoAberto,
   type MotivoAcessoProntuario,
   PARAMETRO_MODELOS_LIBERADOS,
+  PARAMETRO_MODELOS_FORA_DA_LIBERACAO,
+  lerModelosForaDaLiberacao,
+  type ModelosForaDaLiberacao,
   type ParteProntuario,
   RECURSOS_M23,
   type RascunhoGravado,
@@ -311,6 +314,7 @@ export class RegistroClinicoController {
 
   private async parametros(s: SessaoCadastro): Promise<{
     liberados: Set<string>;
+    fora: ModelosForaDaLiberacao;
     toleranciaMin: number;
     assinatura: 'nenhuma' | 'eletronica' | 'digital_icp' | undefined;
   }> {
@@ -343,6 +347,8 @@ export class RegistroClinicoController {
           .map((x) => x.trim().toUpperCase())
           .filter(Boolean),
       ),
+      // ADR 0002: os modelos fora da liberação são configuração do cliente (padrão vazio: nenhum).
+      fora: lerModelosForaDaLiberacao(ler(PARAMETRO_MODELOS_FORA_DA_LIBERACAO)),
       toleranciaMin: typeof tol === 'number' && Number.isFinite(tol) ? tol : 15,
       // 03-PEP L91: a assinatura exigida do estabelecimento (o setor sobrepõe na gravação).
       assinatura: ass === 'nenhuma' || ass === 'eletronica' || ass === 'digital_icp' ? ass : undefined,
@@ -404,7 +410,12 @@ export class RegistroClinicoController {
     await this.paciente(s, paciente);
     await this.exigirAcesso(s, paciente, 'pep.evolucao.criar', null);
     const par = await this.parametros(s);
-    const r = await this.servico.modelosParaRegistro(s.porta, await this.profissional(s), par.liberados);
+    const r = await this.servico.modelosParaRegistro(
+      s.porta,
+      await this.profissional(s),
+      par.liberados,
+      par.fora,
+    );
     req.sghAlvo = {
       paciente,
       tabelaAlvo: 'modelo_documento_clinico',
@@ -448,6 +459,7 @@ export class RegistroClinicoController {
       prof,
       {
         liberados: par.liberados,
+        fora: par.fora,
         toleranciaMin: par.toleranciaMin,
         login: s.login,
         ...(q['rascunho'] ? { rascunho: idDaRota(q['rascunho']) } : {}),
@@ -515,6 +527,7 @@ export class RegistroClinicoController {
       e.data,
       await this.profissional(s),
       par.liberados,
+      par.fora,
     );
     try {
       const r = await this.servico.salvarRascunho(s.porta, gravacao, contextoOperacao(s, 'rascunho'));
@@ -547,6 +560,7 @@ export class RegistroClinicoController {
     const supervisao = e.data.preceptor ? await this.preceptorDe(s, e.data.preceptor) : null;
     const m = await this.servico.montarEvolucao(s.porta, e.data, await this.profissional(s), {
       liberados: par.liberados,
+      fora: par.fora,
       toleranciaMin: par.toleranciaMin,
       paciente: pac,
       // ADR 0021 (R1): registrado numa sessão "como", a marca do suporte técnico vai à prova do documento.
@@ -729,7 +743,7 @@ export class RegistroClinicoController {
   @Auditar('pep.admin.consultado')
   async modelosAdmin(@Req() req: RequisicaoAutorizada): Promise<ModeloAdmin[]> {
     const s = sessaoDe(req);
-    const r = await this.servico.modelosAdmin(s.porta);
+    const r = await this.servico.modelosAdmin(s.porta, (await this.parametros(s)).fora);
     req.sghAlvo = { tabelaAlvo: 'modelo_documento_clinico', chaveNaturalAlvo: `parte:modelos;n:${r.length}` };
     return r;
   }
@@ -740,7 +754,7 @@ export class RegistroClinicoController {
   async modeloAdmin(@Param('id') i: string, @Req() req: RequisicaoAutorizada): Promise<ModeloAdminDetalhe> {
     const s = sessaoDe(req);
     const id = idDaRota(i);
-    const r = await this.servico.modeloAdmin(s.porta, id);
+    const r = await this.servico.modeloAdmin(s.porta, id, (await this.parametros(s)).fora);
     req.sghAlvo = {
       tabelaAlvo: 'modelo_documento_clinico',
       idAlvo: String(id),

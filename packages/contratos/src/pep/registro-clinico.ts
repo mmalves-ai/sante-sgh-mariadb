@@ -394,34 +394,44 @@ export const CHAVE_LIBERACAO_REGISTRO = 'pep.evolucao.registro';
 /** Parâmetro com os modelos liberados para registro (códigos separados por vírgula; vazio = nenhum). */
 export const PARAMETRO_MODELOS_LIBERADOS = 'pep.evolucao.modelosLiberados';
 /**
- * Modelos FORA da liberação (POL-3; ficha, seção 11: "modelo fora disso, com estado e motivo"): ficam desligados com
- * o motivo, mesmo que o parâmetro os liste, até a correção ser provada. Conferência cruzada do corretor do M22
- * (docs/marcos/M22/conferencia-pc.md, 2026-10-21): igualdade abaixo da meta de 99,5% em título e valor; e os
- * modelos com componente de alergia ativo, que o novo ainda não grava (D-ALE-1).
+ * Parâmetro com os modelos FORA da liberação (POL-3; ficha, seção 11: "modelo fora disso, com estado e motivo"):
+ * ficam desligados com o motivo, mesmo que a lista de liberados os inclua, até a correção ser provada. É configuração
+ * de cada cliente (ADR 0002: nada engessado para um hospital), no formato `CÓDIGO: motivo; CÓDIGO: motivo`. O padrão
+ * do produto é vazio: o cliente sem configuração não tem modelo especial.
  */
-export const MODELOS_FORA_DA_LIBERACAO: Readonly<Record<string, string>> = {
-  ENF091:
-    'Conferência do formulário abaixo da meta (84,44% de igualdade; meta 99,5%) e componente de alergia que esta versão ainda não grava.',
-  M12: 'Conferência do formulário abaixo da meta (95,81%; meta 99,5%) e componente de alergia que esta versão ainda não grava.',
-  ENF03:
-    'Conferência do formulário abaixo da meta (76,77%; meta 99,5%) e componente de alergia que esta versão ainda não grava.',
-  ENF0411: 'Conferência do formulário abaixo da meta (98,08%; meta 99,5%).',
-  ENF041:
-    'Conferência do formulário abaixo da meta (91,56%; meta 99,5%) e componente de alergia que esta versão ainda não grava.',
-  FISIUTI: 'Conferência do formulário abaixo da meta (99,49%; meta 99,5%).',
-  E08: 'Conferência do formulário abaixo da meta (92,26%; meta 99,5%) e componente de alergia que esta versão ainda não grava.',
-};
+export const PARAMETRO_MODELOS_FORA_DA_LIBERACAO = 'pep.evolucao.modelosForaDaLiberacao';
 
-/** O motivo de o modelo estar fora da liberação (texto de produto), ou nulo. */
-export function modeloForaDaLiberacao(codigo: string | null | undefined): string | null {
-  const m = codigo ? MODELOS_FORA_DA_LIBERACAO[codigo.trim().toUpperCase()] : undefined;
+/** Os modelos fora da liberação do cliente: código (maiúsculo) → motivo. */
+export type ModelosForaDaLiberacao = ReadonlyMap<string, string>;
+
+/** Nenhum modelo fora da liberação (o cliente sem configuração). */
+export const NENHUM_MODELO_FORA: ModelosForaDaLiberacao = new Map();
+
+/**
+ * Lê o valor do parâmetro (`CÓDIGO: motivo; CÓDIGO: motivo`). Entrada sem código é ignorada; código sem motivo fica
+ * fora com o motivo genérico.
+ */
+export function lerModelosForaDaLiberacao(valor: unknown): ModelosForaDaLiberacao {
+  const r = new Map<string, string>();
+  for (const parte of String(valor ?? '').split(';')) {
+    const k = parte.indexOf(':');
+    const codigo = (k < 0 ? parte : parte.slice(0, k)).trim().toUpperCase();
+    const motivo = k < 0 ? '' : parte.slice(k + 1).trim();
+    if (codigo) r.set(codigo, motivo || 'Definido fora da liberação pela comissão de prontuário.');
+  }
+  return r;
+}
+
+/** O motivo de o modelo estar fora da liberação do cliente (texto de produto), ou nulo. */
+export function modeloForaDaLiberacao(
+  codigo: string | null | undefined,
+  fora: ModelosForaDaLiberacao = NENHUM_MODELO_FORA,
+): string | null {
+  const m = codigo ? fora.get(codigo.trim().toUpperCase()) : undefined;
   return m
     ? `Este modelo ainda não está liberado para registro: ${m.charAt(0).toLowerCase()}${m.slice(1)}`
     : null;
 }
-
-/** Os modelos liberados por padrão: os do escopo mínimo que passaram na conferência (100%) e não têm alergia. */
-export const MODELOS_LIBERADOS_PADRAO = ['EVAM', 'M9', 'M10'] as const;
 
 /** Os 10 modelos de maior uso em 2026 (61.642 de 81.124 registros; ficha, seção 1). */
 export const MODELOS_ESCOPO_MINIMO = [

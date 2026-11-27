@@ -12,8 +12,12 @@
 //   - a representação em cache separada por rede.
 import {
   type CampoRegistro,
+  definicaoParametro,
   EVENTOS_AUDITAVEIS,
+  lerModelosForaDaLiberacao,
   modeloForaDaLiberacao,
+  PARAMETRO_MODELOS_FORA_DA_LIBERACAO,
+  PARAMETRO_MODELOS_LIBERADOS,
   type RespostaRegistro,
 } from '@sgh/contratos';
 import { criarAbility, regrasDeAcesso, VinculoSintetico } from '@sgh/dominio-acesso';
@@ -26,6 +30,7 @@ import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
 import {
   chavesIniciaisSinteticas,
   fonteConfiguracaoMemoria,
+  parametrosIniciaisSinteticos,
   prerequisitosIniciaisSinteticos,
 } from '../config/public-api.js';
 import { RegistroClinicoController } from './registro.controller.js';
@@ -84,6 +89,8 @@ function montar(
     fonteConfiguracaoMemoria(t, {
       chavesIniciais: chavesIniciaisSinteticas,
       prerequisitosIniciais: prerequisitosIniciaisSinteticos,
+      // ADR 0002: o produto não traz modelo liberado por padrão; a sessão sintética define a lista.
+      parametrosIniciais: parametrosIniciaisSinteticos,
     }),
     null,
     t,
@@ -419,10 +426,21 @@ describe('profissional com dois CBO', () => {
 });
 
 describe('liberação por modelo e cache da representação', () => {
-  it('fora da liberação: os modelos abaixo da meta, com o motivo; o componente de alergia não desliga (D-ALE-2)', () => {
-    expect(modeloForaDaLiberacao('ENF091')).toMatch(/84,44%/);
-    expect(modeloForaDaLiberacao('fisiuti')).toMatch(/99,49%/);
-    expect(modeloForaDaLiberacao('EVAM')).toBeNull();
+  it('fora da liberação: a configuração do cliente, com o motivo; o componente de alergia não desliga (D-ALE-2)', () => {
+    const fora = lerModelosForaDaLiberacao(
+      'ENF091: Conferência abaixo da meta (84,44%); fisiuti: Abaixo da meta (99,49%); ; X9',
+    );
+    expect([...fora.keys()]).toEqual(['ENF091', 'FISIUTI', 'X9']);
+    expect(modeloForaDaLiberacao('ENF091', fora)).toMatch(/conferência abaixo da meta \(84,44%\)/);
+    expect(modeloForaDaLiberacao('fisiuti', fora)).toMatch(/99,49%/);
+    expect(modeloForaDaLiberacao('X9', fora)).toMatch(/comissão de prontuário/);
+    expect(modeloForaDaLiberacao('EVAM', fora)).toBeNull();
+    // ADR 0002: o cliente sem configuração não tem modelo especial (o padrão do produto é vazio).
+    expect(modeloForaDaLiberacao('ENF091')).toBeNull();
+    expect(
+      lerModelosForaDaLiberacao(definicaoParametro(PARAMETRO_MODELOS_FORA_DA_LIBERACAO)?.padrao).size,
+    ).toBe(0);
+    expect(definicaoParametro(PARAMETRO_MODELOS_LIBERADOS)?.padrao).toBe('');
     const m = {
       id: 1,
       codigo: 'X1',
@@ -436,7 +454,8 @@ describe('liberação por modelo e cache da representação', () => {
     const alergia = { tipo: 'alergias', itens: [] } as unknown as CampoRegistro;
     const secao = { tipo: 'secao', itens: [alergia] } as unknown as CampoRegistro;
     expect(motivoDoFormulario(m, [secao])).toBeNull();
-    expect(motivoDoFormulario({ ...m, codigo: 'ENF091' }, [secao])).toMatch(/84,44%/);
+    expect(motivoDoFormulario({ ...m, codigo: 'ENF091' }, [secao], fora)).toMatch(/84,44%/);
+    expect(motivoDoFormulario({ ...m, codigo: 'ENF091' }, [secao])).toBeNull();
     expect(motivoDoFormulario(m, [])).toBeNull();
   });
 
@@ -448,6 +467,16 @@ describe('liberação por modelo e cache da representação', () => {
     expect(lista.find((x) => x.codigo === 'EVAM')?.situacao).toBe('liberado');
     const fora = await servico.modeloAdmin(C, 61);
     expect(fora).toMatchObject({ situacao: 'liberado', motivo: null });
+    // A configuração do cliente põe o M10 fora da liberação: desligado com o motivo, mesmo listado.
+    const cfg = lerModelosForaDaLiberacao('M10: Conferência do formulário abaixo da meta.');
+    const l2 = await servico.modelosParaRegistro(C, prof, new Set(['EVAM', 'M10']), cfg);
+    expect(l2.find((x) => x.codigo === 'M10')).toMatchObject({
+      situacao: 'desligado',
+      motivo: expect.stringMatching(/conferência do formulário abaixo da meta/),
+    });
+    expect(l2.find((x) => x.codigo === 'EVAM')?.situacao).toBe('liberado');
+    expect(await servico.modeloAdmin(C, 62, cfg)).toMatchObject({ situacao: 'desligado' });
+    expect(await servico.modeloAdmin(C, 62)).toMatchObject({ situacao: 'liberado' });
   });
 
   it('a representação em cache é separada por rede (o mesmo estabelecimento, modelo e selo)', async () => {

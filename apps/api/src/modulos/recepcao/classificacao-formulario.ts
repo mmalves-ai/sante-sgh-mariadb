@@ -9,8 +9,11 @@
 import {
   definicaoParametro,
   MODELO_E08,
+  lerModelosForaDaLiberacao,
   modeloForaDaLiberacao,
+  PARAMETRO_MODELOS_FORA_DA_LIBERACAO,
   PARAMETRO_MODELOS_LIBERADOS,
+  type ModelosForaDaLiberacao,
   type ValorParametro,
 } from '@sgh/contratos';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
@@ -36,7 +39,7 @@ export interface DependenciasFormulario {
 async function parametros(
   s: SessaoCadastro,
   configuracao: FonteConfiguracao | null,
-): Promise<{ liberados: Set<string>; toleranciaMin: number }> {
+): Promise<{ liberados: Set<string>; fora: ModelosForaDaLiberacao; toleranciaMin: number }> {
   let valores: ValorParametro[] = [];
   try {
     valores = configuracao ? await configuracao.valoresParametro(s.rede, s.hospital) : [];
@@ -64,6 +67,7 @@ async function parametros(
         .map((x) => x.trim().toUpperCase())
         .filter(Boolean),
     ),
+    fora: lerModelosForaDaLiberacao(ler(PARAMETRO_MODELOS_FORA_DA_LIBERACAO)),
     toleranciaMin: typeof tol === 'number' && Number.isFinite(tol) ? tol : 15,
   };
 }
@@ -72,11 +76,11 @@ async function parametros(
 export function formularioDaSessao(s: SessaoCadastro, d: DependenciasFormulario): FormularioClassificacao {
   return {
     async estado() {
-      const fora = modeloForaDaLiberacao(MODELO_E08);
+      const p = await parametros(s, d.configuracao);
+      const fora = modeloForaDaLiberacao(MODELO_E08, p.fora);
       if (fora) return { ligado: false, motivo: `${fora} A classificação fica só neste sistema.` };
       const l = await d.liberacaoRegistro(s);
       if (!l.ligada) return { ligado: false, motivo: l.motivo };
-      const p = await parametros(s, d.configuracao);
       if (!p.liberados.has(MODELO_E08))
         return {
           ligado: false,
@@ -135,7 +139,12 @@ export function formularioDaSessao(s: SessaoCadastro, d: DependenciasFormulario)
           respostas: r.respostas,
         },
         prof,
-        { liberados: p.liberados, toleranciaMin: p.toleranciaMin, paciente: { idade: null, sexo: null } },
+        {
+          liberados: p.liberados,
+          fora: p.fora,
+          toleranciaMin: p.toleranciaMin,
+          paciente: { idade: null, sexo: null },
+        },
       );
       const g = await d.registro.registrar(
         s.porta,

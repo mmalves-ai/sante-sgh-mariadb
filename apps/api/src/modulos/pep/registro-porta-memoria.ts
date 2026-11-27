@@ -78,7 +78,7 @@ const MODELOS: Readonly<
     ],
   },
   62: {
-    // Código de um modelo liberado por padrão (o ENF091 real fica fora da liberação: conferência abaixo da meta).
+    // Código sintético de um modelo da lista de liberados da sessão sintética.
     codigo: 'M10',
     nome: `RELATÓRIO DE ENFERMAGEM ${M}`,
     tipo: 'Evolução',

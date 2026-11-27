@@ -14,6 +14,8 @@ import {
   type ModeloImpressao,
   marcaSuporteTecnico,
   modeloForaDaLiberacao,
+  NENHUM_MODELO_FORA,
+  type ModelosForaDaLiberacao,
   type ModeloRegistro,
   type RascunhoResumo,
   type RegistrarEvolucaoEntrada,
@@ -97,6 +99,8 @@ class CacheCurto<T> {
 
 export interface OpcoesFormulario {
   readonly liberados: ReadonlySet<string>;
+  /** Os modelos fora da liberação do cliente (parâmetro pep.evolucao.modelosForaDaLiberacao). */
+  readonly fora?: ModelosForaDaLiberacao;
   readonly toleranciaMin: number;
   readonly login: string;
   readonly rascunho?: number;
@@ -206,7 +210,7 @@ export class ServicoRegistro {
     prof: ProfissionalDoRegistro | null,
     liberados: ReadonlySet<string>,
     ambiguo = false,
-    fora: string | null = modeloForaDaLiberacao(m.codigo),
+    fora: string | null = null,
   ): { situacao: SituacaoModelo; motivo: string | null } {
     let s: SituacaoModelo = 'liberado';
     if (m.aposentado) s = 'descontinuado';
@@ -224,7 +228,7 @@ export class ServicoRegistro {
     prof: ProfissionalDoRegistro | null,
     liberados: ReadonlySet<string>,
     ambiguo = false,
-    fora: string | null = modeloForaDaLiberacao(m.codigo),
+    fora: string | null = null,
   ): ModeloRegistro {
     return {
       id: m.id,
@@ -240,6 +244,7 @@ export class ServicoRegistro {
     c: ContextoRegistro,
     prof: ProfissionalDoRegistro | null,
     liberados: ReadonlySet<string>,
+    fora: ModelosForaDaLiberacao = NENHUM_MODELO_FORA,
   ): Promise<ModeloRegistro[]> {
     const ordem: Record<SituacaoModelo, number> = {
       liberado: 0,
@@ -249,7 +254,10 @@ export class ServicoRegistro {
       descontinuado: 4,
     };
     return (await this.modelos(c))
-      .map((m) => ({ m, r: this.modeloRegistro(m, prof, liberados) }))
+      .map((m) => ({
+        m,
+        r: this.modeloRegistro(m, prof, liberados, false, modeloForaDaLiberacao(m.codigo, fora)),
+      }))
       .sort(
         (a, b) =>
           ordem[a.r.situacao] - ordem[b.r.situacao] || b.m.usoRecente - a.m.usoRecente || a.m.id - b.m.id,
@@ -320,7 +328,7 @@ export class ServicoRegistro {
     const { m, conv } = await this.modeloOu404(c, modelo);
     const campos = camposParaRegistro(conv.representacao);
     const bloqueios = bloqueiosDoModelo(campos);
-    const fora = motivoDoFormulario(m, campos);
+    const fora = motivoDoFormulario(m, campos, o.fora);
     const modeloReg = this.modeloRegistro(m, prof, o.liberados, false, fora);
     const rascunhos = (await this.porta.rascunhosDoPaciente(c, paciente, modelo)).map((r) =>
       this.resumoRascunho(r, prof),
@@ -434,8 +442,9 @@ export class ServicoRegistro {
     prof: ProfissionalDoRegistro,
     liberados: ReadonlySet<string>,
     campos: readonly CampoRegistro[],
+    fora: ModelosForaDaLiberacao = NENHUM_MODELO_FORA,
   ): void {
-    const s = this.situacao(m, prof, liberados, false, motivoDoFormulario(m, campos));
+    const s = this.situacao(m, prof, liberados, false, motivoDoFormulario(m, campos, fora));
     if (s.situacao !== 'liberado')
       throw new ErroProblema(
         'recurso-desligado',
@@ -454,10 +463,11 @@ export class ServicoRegistro {
     e: SalvarRascunhoEntrada,
     prof0: ProfissionalDoRegistro | null,
     liberados: ReadonlySet<string>,
+    fora: ModelosForaDaLiberacao = NENHUM_MODELO_FORA,
   ): Promise<GravacaoRascunho> {
     const prof = this.exigirProfissional(prof0);
     const { m, conv } = await this.modeloOu404(c, e.modelo);
-    this.exigirLiberado(m, prof, liberados, camposParaRegistro(conv.representacao));
+    this.exigirLiberado(m, prof, liberados, camposParaRegistro(conv.representacao), fora);
     let linhas: LinhaGravacao[];
     try {
       linhas = linhasDasRespostas(conv.representacao, e.respostas).linhas.map(paraLinhaGravacao);
@@ -566,6 +576,8 @@ export class ServicoRegistro {
     prof0: ProfissionalDoRegistro | null,
     opcoes: {
       readonly liberados: ReadonlySet<string>;
+      /** Os modelos fora da liberação do cliente (parâmetro pep.evolucao.modelosForaDaLiberacao). */
+      readonly fora?: ModelosForaDaLiberacao;
       readonly toleranciaMin: number;
       readonly paciente: { idade: number | null; sexo: 'F' | 'M' | null };
       /** Sessão "como" do suporte técnico (ADR 0021, R1): a marca vai à prova do documento. */
@@ -578,7 +590,7 @@ export class ServicoRegistro {
   ): Promise<{ gravacao: GravacaoEvolucao; avisos: string[] }> {
     const prof = this.exigirProfissional(prof0);
     const { m, conv } = await this.modeloOu404(c, e.modelo);
-    this.exigirLiberado(m, prof, opcoes.liberados, camposParaRegistro(conv.representacao));
+    this.exigirLiberado(m, prof, opcoes.liberados, camposParaRegistro(conv.representacao), opcoes.fora);
     const rep = conv.representacao;
     // O autor é o do rascunho (o CBO dele, conferido como do profissional); sem rascunho, o CBO do PEP.
     const cbo = e.rascunho ? await this.cboDoRascunho(c, e.rascunho.id, prof, e) : prof.cbo;
@@ -813,6 +825,7 @@ export class ServicoRegistro {
   private async resumoAdmin(
     c: ContextoRegistro,
     m: ModeloDoRegistro,
+    fora: ModelosForaDaLiberacao = NENHUM_MODELO_FORA,
   ): Promise<{ admin: ModeloAdmin; conv: ModeloConvertido | null }> {
     const conv = await this.representacao(c, m.id);
     const rep = conv?.representacao;
@@ -835,22 +848,29 @@ export class ServicoRegistro {
         versoesLayout: rep?.versoesLayout.length ?? 0,
         impressao: rep?.impressaoLayout ?? '',
         usoRecente: uso(m.usoRecente),
-        ...situacaoAdmin(m, campos, amb),
+        ...situacaoAdmin(m, campos, amb, fora),
       },
     };
   }
 
-  async modelosAdmin(c: ContextoRegistro): Promise<ModeloAdmin[]> {
+  async modelosAdmin(
+    c: ContextoRegistro,
+    fora: ModelosForaDaLiberacao = NENHUM_MODELO_FORA,
+  ): Promise<ModeloAdmin[]> {
     const lista = await this.modelos(c);
     const r: ModeloAdmin[] = [];
-    for (const m of lista) r.push((await this.resumoAdmin(c, m)).admin);
+    for (const m of lista) r.push((await this.resumoAdmin(c, m, fora)).admin);
     return r;
   }
 
-  async modeloAdmin(c: ContextoRegistro, id: number): Promise<ModeloAdminDetalhe> {
+  async modeloAdmin(
+    c: ContextoRegistro,
+    id: number,
+    fora: ModelosForaDaLiberacao = NENHUM_MODELO_FORA,
+  ): Promise<ModeloAdminDetalhe> {
     const m = (await this.modelos(c)).find((x) => x.id === id);
     if (!m) throw new ErroProblema('nao-encontrado', 404, 'Modelo não encontrado');
-    const { admin, conv } = await this.resumoAdmin(c, m);
+    const { admin, conv } = await this.resumoAdmin(c, m, fora);
     const rep = conv?.representacao;
     return {
       ...admin,
@@ -873,14 +893,18 @@ export class ServicoRegistro {
 }
 
 /**
- * O modelo fica fora da liberação? Só pelo catálogo (conferência abaixo da meta ou componente que o novo não grava).
+ * O modelo fica fora da liberação? Só pela configuração do cliente (parâmetro pep.evolucao.modelosForaDaLiberacao).
  * O componente de alergia não desliga mais o modelo (D-ALE-2): a alergia informada nele é gravada na hora, pela
  * operação pep.registrarAlergia, ligada ao atendimento do registro, e já vale para a prescrição.
  */
-export function motivoDoFormulario(m: ModeloDoRegistro, campos: readonly CampoRegistro[]): string | null {
+export function motivoDoFormulario(
+  m: ModeloDoRegistro,
+  campos: readonly CampoRegistro[],
+  fora: ModelosForaDaLiberacao = NENHUM_MODELO_FORA,
+): string | null {
   // Os campos ficam na assinatura para a próxima regra por componente; hoje nenhum componente desliga o modelo.
   void campos;
-  return modeloForaDaLiberacao(m.codigo);
+  return modeloForaDaLiberacao(m.codigo, fora);
 }
 
 /** Situação do modelo na administração: o aposentado fica descontinuado; o sem uso recente, não. */
@@ -888,9 +912,10 @@ export function situacaoAdmin(
   m: ModeloDoRegistro,
   campos: readonly CampoRegistro[],
   ambiguas: number,
+  modelosFora: ModelosForaDaLiberacao = NENHUM_MODELO_FORA,
 ): { situacao: SituacaoModelo; motivo: string | null } {
   if (m.aposentado) return { situacao: 'descontinuado', motivo: MOTIVOS_SITUACAO.descontinuado };
-  const fora = campos.length ? motivoDoFormulario(m, campos) : modeloForaDaLiberacao(m.codigo);
+  const fora = motivoDoFormulario(m, campos, modelosFora);
   if (fora) return { situacao: 'desligado', motivo: fora };
   if (ambiguas > 0) return { situacao: 'ambiguo', motivo: MOTIVOS_SITUACAO.ambiguo };
   return { situacao: 'liberado', motivo: null };

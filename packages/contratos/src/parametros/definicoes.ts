@@ -326,14 +326,27 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
     descricao:
       'Modelos de formulário liberados para registro (códigos separados por vírgula; os demais ficam só em consulta)',
     tipo: 'texto',
-    // Corretor do M22: só os do escopo mínimo com a conferência cruzada na meta e sem componente de alergia; os
-    // demais ficam fora da liberação com o motivo (MODELOS_FORA_DA_LIBERACAO, contratos/pep/registro-clinico.ts).
-    padrao: 'EVAM,M9,M10',
+    // ADR 0002: a lista é de cada cliente (a comissão de prontuário libera modelo a modelo); o produto não traz
+    // modelo liberado por padrão.
+    padrao: '',
     niveis: ['usuario', 'unidade', 'estabelecimento', 'rede'],
     critico: true,
     dono: 'comissão de prontuário e responsável técnico',
     origem:
-      'ficha do M22, seções 11 e 12: liberação modelo a modelo; dos 10 de maior uso, os 3 com a conferência cruzada na meta de 99,5% e sem componente de alergia (docs/marcos/M22/conferencia-pc.md); a funcionalidade inteira depende da chave pep.evolucao.registro',
+      'ficha do M22, seções 11 e 12: liberação modelo a modelo, decidida pela comissão de prontuário de cada cliente (ADR 0002); a funcionalidade inteira depende da chave pep.evolucao.registro',
+  },
+  {
+    chave: 'pep.evolucao.modelosForaDaLiberacao',
+    modulo: 'pep',
+    descricao:
+      'Modelos de formulário fora da liberação, com o motivo (formato "CÓDIGO: motivo; CÓDIGO: motivo"): ficam desligados com o motivo mesmo que a lista de liberados os inclua',
+    tipo: 'texto',
+    padrao: '',
+    niveis: ['estabelecimento', 'rede'],
+    critico: true,
+    dono: 'comissão de prontuário e responsável técnico',
+    origem:
+      'ficha do M22, seção 11 ("modelo fora disso, com estado e motivo"): o modelo cuja conferência ficou abaixo da meta fica desligado até a correção ser provada; configuração de cada cliente (ADR 0002)',
   },
   // M24 (ficha, seções 6 e 8): políticas só do novo para a prescrição (POL-1: padrão de mercado como parâmetro;
   // os parâmetros da prescrição do legado continuam só lidos).
