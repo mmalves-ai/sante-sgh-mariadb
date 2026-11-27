@@ -505,10 +505,25 @@ test.describe('portal do médico externo: conta e pedido de cirurgia @W0-10', ()
       await page.goto('/pep/paciente/1001/exames');
       await page.getByTestId('incluir-exame-502').click();
       await page.getByTestId('enviar-pedido').click();
+      // Decisão 60 do dono: a regra fica como está. Se a massa sintética do dia já tem um potássio do 1001 nas últimas
+      // 24 h, o pedido mostra o aviso de exame repetido (não bloqueia) e o médico confirma o aviso, como na rotina.
+      const enviado = page.getByTestId('aba-exames-conteudo').getByText('Pedido enviado.');
+      const avisosPedido = page.getByTestId('avisos-pedido');
+      await expect(enviado.or(avisosPedido)).toBeVisible();
+      if (!(await enviado.isVisible())) {
+        await expect(avisosPedido).toContainText(/POTÁSSIO|repetido|24 horas/i);
+        await page.getByTestId('confirmar-avisos').check();
+        await page.getByTestId('enviar-pedido').click();
+      }
       await expect(page.getByTestId('aba-exames-conteudo')).toContainText('Pedido enviado.');
       await entrar(page, 'SINT.BIOMEDICO');
       await page.goto('/sadt/coleta');
-      const grupo = page.locator('[data-testid^="coleta-grupo-"]').filter({ hasText: 'POTÁSSIO' }).first();
+      // Só um grupo ainda por coletar (com o botão): o potássio anterior da massa, já coletado, fica de fora.
+      const grupo = page
+        .locator('[data-testid^="coleta-grupo-"]')
+        .filter({ hasText: 'POTÁSSIO' })
+        .filter({ has: page.locator('[data-testid^="coleta-coletar-"]') })
+        .first();
       await expect(grupo).toBeVisible();
       const indice = (await grupo.getAttribute('data-testid'))!.replace('coleta-grupo-', '');
       await page.getByTestId(`coleta-pulseira-${indice}`).fill('P1001|A31337');
@@ -516,12 +531,18 @@ test.describe('portal do médico externo: conta e pedido de cirurgia @W0-10', ()
       await page.getByTestId(`coleta-coletar-${indice}`).click();
       await expect(page.getByTestId('coleta-mensagem')).toContainText(/Amostra [0-9A-Z]{10} coletada/);
       await page.goto('/sadt/exames');
-      const linha = page
+      // O pedido deste teste é o mais novo dos potássios ainda selecionáveis (o maior ID): um anterior da massa do dia
+      // não é confundido com ele.
+      const linhas = page
         .locator('[data-testid^="sadt-exame-"]')
         .filter({ hasText: 'POTÁSSIO' })
         .filter({ hasText: 'Pedido do prontuário' })
-        .first();
-      const exame = Number((await linha.getAttribute('data-testid'))!.replace('sadt-exame-', ''));
+        .filter({ has: page.locator('[data-testid^="sadt-selecionar-"]') });
+      await expect(linhas.first()).toBeVisible();
+      const ids = await linhas.evaluateAll((els) =>
+        els.map((el) => Number(el.getAttribute('data-testid')!.replace('sadt-exame-', ''))),
+      );
+      const exame = Math.max(...ids);
       await page.getByTestId(`sadt-selecionar-${exame}`).check();
       await page.getByTestId('sadt-receber').click();
       await expect(page.getByTestId('sadt-mensagem')).toContainText('Pedido recebido');
