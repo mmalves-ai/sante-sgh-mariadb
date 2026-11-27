@@ -217,12 +217,6 @@ export interface AvaliacaoRestricaoExame {
   readonly pedeJustificativa: boolean;
   readonly podeAutorizarExcecao: boolean;
 }
-export const avaliarRestricoesExame = (e: {
-  atendimento: number;
-  exames: readonly number[];
-  confirmado: boolean;
-  justificativa: string | null;
-}) => enviar<AvaliacaoRestricaoExame>('/api/sadt/pedidos/avaliar-prontuario', e, null);
 export const lerResultados = (p: number, b: typeof fetch = fetch) =>
   ler<ResultadosPaciente>(`${pac(p)}/resultados`, b);
 export const darCiencia = (p: number, exame: number, e: CienciaCritico) =>

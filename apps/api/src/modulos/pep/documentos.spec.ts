@@ -205,7 +205,9 @@ describe('prontuário de uso diário (M23)', () => {
       itens: [{ exame: 504 }],
       confirmarAvisos: true,
     });
-    expect(ok.json().gravado).toBe(true);
+    // C2-006: a restrição sintética por sexo do beta HCG pede a justificativa da exceção (decisão de 26/11).
+    expect(ok.statusCode).toBe(422);
+    expect(ok.json().codigo).toBe('restricao-justificativa');
     const inativo = await post(medico, '/api/pep/paciente/1001/exames', {
       atendimento: 10011,
       itens: [{ exame: 506 }],

@@ -14,6 +14,7 @@ import {
   validarCancelamentoObito,
 } from '@sgh/dominio-pep';
 import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
+import { decisaoDoPedido, idadeEmDias, type RegraRestricao, restricoesAcionadas } from '@sgh/dominio-sadt';
 import {
   type CompletudePainelLida,
   type EpisodioLido,
@@ -164,6 +165,47 @@ const EXAMES: readonly ExameCatalogoLido[] = [
     idadeMinima: null,
     idadeMaxima: null,
     material: 1,
+  },
+];
+
+/**
+ * Restrições clínicas SINTÉTICAS fixas do pedido de exame (05-SADT linha 5), aplicadas pela mesma decisaoDoPedido do
+ * banco do cliente: o sódio só até 60 anos, sem exceção (bloqueio: recusa "restricao-bloqueio"); o beta HCG só para o
+ * sexo feminino, com exceção justificada e autorizada (decisão de 26/11: a regra por sexo pede justificativa).
+ */
+const REGRA_SINTETICA = {
+  setor: null,
+  unidade: null,
+  material: null,
+  sexo: null,
+  idadeMinimaDias: null,
+  idadeMaximaDias: null,
+  tipoAtendimento: null,
+  diaSemana: null,
+  horaInicio: null,
+  horaFim: null,
+  intervaloMinimoDias: null,
+  vigenciaInicio: '2020-01-01',
+  vigenciaFim: null,
+} as const;
+const RESTRICOES_EXAME: readonly RegraRestricao[] = [
+  {
+    ...REGRA_SINTETICA,
+    id: 9501,
+    exame: 503,
+    tipo: 'bloqueio',
+    idadeMaximaDias: 60 * 365,
+    permiteExcecao: false,
+    mensagem: `Sódio pela prescrição só até 60 anos ${M}.`,
+  },
+  {
+    ...REGRA_SINTETICA,
+    id: 9502,
+    exame: 504,
+    tipo: 'bloqueio',
+    sexo: 'feminino',
+    permiteExcecao: true,
+    mensagem: `Beta HCG indicado só para o sexo feminino ${M}.`,
   },
 ];
 
@@ -1722,6 +1764,37 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         const inativo = x.itens.find((i) => !EXAMES.find((y) => y.id === i.exame)?.ativo);
         if (inativo)
           throw new ErroOperacao(422, 'exame-inativo', 'Exame inativo', 'Há exame inativo no pedido.');
+        // A restrição clínica do exame (05-SADT linha 5) com as regras sintéticas fixas e a mesma decisão do banco.
+        const pac = PACIENTES[x.paciente] ?? null;
+        const agoraClinico = x.dataHoraClinica;
+        const acionadas = x.itens.flatMap((it) =>
+          restricoesAcionadas(RESTRICOES_EXAME, {
+            exame: it.exame,
+            setor: null,
+            material: EXAMES.find((y) => y.id === it.exame)?.material ?? null,
+            unidade: null,
+            tipoAtendimento: null,
+            sexo: pac ? (pac.sexo === 'F' ? 'feminino' : 'masculino') : null,
+            idadeDias: pac ? idadeEmDias(pac.nascimento, agoraClinico.slice(0, 10)) : null,
+            data: agoraClinico.slice(0, 10),
+            hora: agoraClinico.slice(11, 16),
+            anteriores: e.pedidos
+              .filter((p) => p.paciente === x.paciente && p.exame === it.exame)
+              .map((p) => p.data),
+          }),
+        );
+        const decisao = decisaoDoPedido(acionadas, {
+          confirmado: x.confirmado === true,
+          justificativa: x.justificativa ?? null,
+          podeAutorizarExcecao: x.autorizaExcecao === true,
+        });
+        if (!decisao.segue)
+          throw new ErroOperacao(
+            422,
+            decisao.codigo ?? 'restricao',
+            'Restrição do exame',
+            decisao.motivo ?? 'Pedido recusado pela restrição do exame.',
+          );
         const agrupamento = e.proximo++;
         let primeiro = 0;
         for (const it of x.itens) {

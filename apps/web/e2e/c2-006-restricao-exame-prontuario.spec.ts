@@ -179,6 +179,44 @@ test.describe('Restrição clínica do exame no pedido do prontuário @C2-006 @F
     await semViolacaoAxe(page, '/pep/paciente/1001/exames (alerta)');
   });
 
+  test('sem simulação, a gravação recusa o pedido bloqueado e o que pede justificativa, com o motivo da API', async ({
+    page,
+  }) => {
+    // Sem rota interceptada: a avaliação na hora não tem o banco do cliente na fonte sintética, e a porta em memória do
+    // pedido aplica a mesma decisaoDoPedido com as restrições sintéticas fixas (sódio só até 60 anos, sem exceção;
+    // beta HCG só para o sexo feminino, com exceção). O paciente 1001 é masculino, de 1958.
+    await entrar(page, 'SINT.MEDICO');
+    await page.goto('/pep/paciente/1001/exames');
+    await expect(page.getByTestId('form-pedido')).toBeVisible();
+    await page.getByTestId('incluir-exame-503').click();
+    const bloqueio = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && /\/api\/pep\/paciente\/1001\/exames/.test(r.url()),
+    );
+    await page.getByTestId('enviar-pedido').click();
+    const b = await bloqueio;
+    expect(b.status()).toBe(422);
+    expect(((await b.json()) as { codigo?: string }).codigo).toBe('restricao-bloqueio');
+    await expect(page.getByTestId('mensagem-erro')).toContainText('só até 60 anos');
+
+    // O beta HCG: a regra por sexo aceita exceção, mas pede a justificativa (o aviso do catálogo é confirmado antes).
+    await page.goto('/pep/paciente/1001/exames');
+    await expect(page.getByTestId('form-pedido')).toBeVisible();
+    await page.getByTestId('incluir-exame-504').click();
+    await page.getByTestId('enviar-pedido').click();
+    await page.getByTestId('confirmar-avisos').check();
+    const justificativa = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        /\/api\/pep\/paciente\/1001\/exames/.test(r.url()) &&
+        r.status() === 422,
+    );
+    await page.getByTestId('enviar-pedido').click();
+    const j = await justificativa;
+    expect(((await j.json()) as { codigo?: string }).codigo).toBe('restricao-justificativa');
+    await expect(page.getByTestId('mensagem-erro')).toContainText('Informe a justificativa');
+    await semViolacaoAxe(page, '/pep/paciente/1001/exames (recusa da restrição)');
+  });
+
   test('a tela de exames do setor leva ao pedido de exames, sem lançamento direto', async ({ page }) => {
     // A recepção do setor de exames (o administrador da plataforma não tem permissão clínica nem do setor).
     await entrar(page, 'SINT.RECEPCAO.SADT');
