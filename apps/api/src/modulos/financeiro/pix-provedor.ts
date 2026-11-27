@@ -1,10 +1,12 @@
 // Prestador de serviço de pagamento do Pix (07-FIN linha 90): a API Pix do Banco Central é a mesma em todos os
 // prestadores; o prestador contratado é configuração por cliente e as credenciais ficam no cofre de segredos.
 // - Fora de produção: o simulador (nenhuma rede; QR e devolução sintéticos, marcados como simulados).
-// - Produção: o adaptador da API Pix padronizada (PUT /cob/{txid}, PUT /cobv/{txid}, PATCH para remover e
+// - Produção: pela central de integrações (entrada `pix`), o adaptador da API Pix padronizada (PUT /cob/{txid}, PUT /cobv/{txid}, PATCH para remover e
 //   PUT /pix/{e2eid}/devolucao/{id}), com token OAuth2 (client credentials). O transporte com o certificado do cliente
-//   (TLS mútuo) vem da configuração, como um fetch próprio. Sem configuração, falha fechada: nada é cobrado.
+//   (TLS mútuo) vem do certificado A1 guardado no cofre. Sem configuração, falha fechada: nada é cobrado.
+import { Agent as HttpsAgent, request as httpsRequest } from 'node:https';
 import { montarBrCodePix } from '@sgh/dominio-financeiro';
+import { type ModoDaIntegracao, modoDaIntegracao } from '../integracao/externas/servico.js';
 
 export interface PedidoCobrancaProvedor {
   readonly txid: string;
@@ -22,6 +24,8 @@ export interface CobrancaNoProvedor {
   readonly localizacao: string | null;
   readonly copiaECola: string;
   readonly revisao: number;
+  /** O prestador que atendeu é o simulador (a central decide a cada chamada). */
+  readonly simulado?: boolean;
 }
 export interface DevolucaoNoProvedor {
   readonly fimAFimDevolucao: string | null;
@@ -71,9 +75,15 @@ export interface ConfigApiPix {
   readonly urlToken: string;
   readonly clienteId: string;
   readonly clienteSegredo: string;
-  /** O fetch com o certificado do cliente (TLS mútuo); padrão: o fetch global. */
-  readonly transporte?: typeof fetch;
+  /** O transporte com o certificado do cliente (TLS mútuo); padrão: o fetch global. */
+  readonly transporte?: TransportePix;
 }
+
+/** O mínimo de HTTP que o adaptador usa (o fetch global atende; o TLS mútuo vem de transporteTlsMutuo). */
+export type TransportePix = (
+  url: string,
+  init: { readonly method: string; readonly headers: Record<string, string>; readonly body: string },
+) => Promise<{ readonly ok: boolean; readonly status: number; json(): Promise<unknown> }>;
 
 /** O adaptador da API Pix padronizada do Banco Central. */
 export class ProvedorPixApiBacen implements ProvedorPix {
@@ -81,7 +91,7 @@ export class ProvedorPixApiBacen implements ProvedorPix {
   private token: { valor: string; expira: number } | null = null;
   constructor(private readonly cfg: ConfigApiPix) {}
 
-  private get transporte(): typeof fetch {
+  private get transporte(): TransportePix {
     return this.cfg.transporte ?? fetch;
   }
 
@@ -185,23 +195,105 @@ class ProvedorPixAusente implements ProvedorPix {
   }
 }
 
-/** O prestador do ambiente: o simulador fora de produção; em produção, a API Pix pela configuração do cofre. */
-export function provedorPixDoAmbiente(
-  ambiente: string,
-  segredo: (nome: string) => string | undefined = (n) => process.env[n],
-): ProvedorPix {
-  if (ambiente !== 'producao') return new ProvedorPixSimulado();
-  const [urlBase, urlToken, clienteId, clienteSegredo] = [
-    'PIX_API_URL',
-    'PIX_API_URL_TOKEN',
-    'PIX_API_CLIENTE_ID',
-    'PIX_API_CLIENTE_SEGREDO',
-  ].map((n) => segredo(n)?.trim() ?? '');
-  if (!urlBase || !urlToken || !clienteId || !clienteSegredo) return new ProvedorPixAusente();
-  return new ProvedorPixApiBacen({
-    urlBase: urlBase as string,
-    urlToken: urlToken as string,
-    clienteId: clienteId as string,
-    clienteSegredo: clienteSegredo as string,
-  });
+/** O transporte com o certificado do cliente (TLS mútuo): o PKCS#12 (A1) e a senha, só em memória. */
+export function transporteTlsMutuo(pfx: Buffer, senha: string): TransportePix {
+  const agente = new HttpsAgent({ pfx, passphrase: senha, keepAlive: true });
+  return (url, init) =>
+    new Promise((resolver, rejeitar) => {
+      const req = httpsRequest(
+        url,
+        { method: init.method, headers: { ...init.headers }, agent: agente, timeout: 30_000 },
+        (res) => {
+          const partes: Buffer[] = [];
+          res.on('data', (c: Buffer) => partes.push(c));
+          res.on('end', () => {
+            const texto = Buffer.concat(partes).toString('utf8');
+            const status = res.statusCode ?? 0;
+            resolver({
+              ok: status >= 200 && status < 300,
+              status,
+              json: async () => (texto ? (JSON.parse(texto) as unknown) : {}),
+            });
+          });
+          res.on('error', rejeitar);
+        },
+      );
+      req.on('timeout', () => req.destroy(new Error('O prestador Pix não respondeu a tempo.')));
+      req.on('error', rejeitar);
+      req.end(init.body);
+    });
+}
+
+/** A integração do catálogo da central (decisão 53) que o Pix usa. */
+export const INTEGRACAO_PIX = 'pix';
+
+/**
+ * O prestador pela central de integrações externas (decisão 53, entrada `pix`): a cada chamada pergunta o modo pelo
+ * helper único modoDaIntegracao, nunca o ambiente do processo.
+ * - Fora de produção: o simulador (o real ligado na tela fica neutralizado).
+ * - Produção com o modo Real: a API Pix padronizada com o endereço e o endereço do token dos parâmetros, o client id e
+ *   o client secret do cofre, e o transporte com o certificado A1 do cliente (TLS mútuo, exigido pelo Banco Central).
+ *   A falha do prestador fica registrada na central (a tela mostra "real com falha"), sem segredo nem dado de pessoa.
+ * - Produção sem o Real completo: falha fechada (nada é cobrado nem devolvido; o QR simulado nunca chega ao pagador).
+ */
+export class ProvedorPixDaCentral implements ProvedorPix {
+  private ultimo: { chave: string; provedor: ProvedorPix } | null = null;
+  constructor(
+    private readonly ambiente: string,
+    private readonly consultar: (id: string) => Promise<ModoDaIntegracao> = modoDaIntegracao,
+    private readonly criarTransporte: (pfx: Buffer, senha: string) => TransportePix = transporteTlsMutuo,
+  ) {}
+
+  /** O último prestador resolvido (o resultado da cobrança diz se foi simulado). */
+  get simulado(): boolean {
+    return this.ultimo?.provedor.simulado ?? this.ambiente !== 'producao';
+  }
+
+  private async resolver(): Promise<{ provedor: ProvedorPix; central: ModoDaIntegracao | null }> {
+    if (this.ambiente !== 'producao') return { provedor: new ProvedorPixSimulado(), central: null };
+    const m = await this.consultar(INTEGRACAO_PIX);
+    if (m.modo !== 'real') return { provedor: new ProvedorPixAusente(), central: null };
+    const [clienteId, clienteSegredo, certificado, senhaCertificado] = await Promise.all(
+      ['client-id', 'client-secret', 'certificado', 'senha-certificado'].map((c) => m.credencial(c)),
+    );
+    const urlBase = (m.parametros['endereco'] ?? '').trim();
+    const urlToken = (m.parametros['endereco-token'] ?? '').trim();
+    if (!urlBase || !urlToken || !clienteId || !clienteSegredo || !certificado)
+      return { provedor: new ProvedorPixAusente(), central: m };
+    // O mesmo prestador (e o token OAuth2 dele) enquanto a configuração não muda.
+    const chave = [urlBase, urlToken, clienteId, clienteSegredo.length, certificado.length].join('|');
+    if (this.ultimo?.chave !== chave)
+      this.ultimo = {
+        chave,
+        provedor: new ProvedorPixApiBacen({
+          urlBase,
+          urlToken,
+          clienteId,
+          clienteSegredo,
+          transporte: this.criarTransporte(Buffer.from(certificado, 'base64'), senhaCertificado ?? ''),
+        }),
+      };
+    return { provedor: this.ultimo.provedor, central: m };
+  }
+
+  private async usar<T>(fn: (p: ProvedorPix) => Promise<T>): Promise<T> {
+    const { provedor, central } = await this.resolver();
+    try {
+      return await fn(provedor);
+    } catch (e) {
+      if (central)
+        await central.registrarFalha(e instanceof Error ? e.message.slice(0, 200) : 'falha do prestador');
+      throw e;
+    }
+  }
+
+  async criarCobranca(p: PedidoCobrancaProvedor): Promise<CobrancaNoProvedor> {
+    return this.usar(async (pv) => ({ ...(await pv.criarCobranca(p)), simulado: pv.simulado }));
+  }
+  async removerCobranca(txid: string, modalidade: 'imediata' | 'com_vencimento'): Promise<void> {
+    return this.usar((pv) => pv.removerCobranca(txid, modalidade));
+  }
+  async devolver(fimAFim: string, idDevolucao: string, valor: number, descricao: string) {
+    return this.usar((pv) => pv.devolver(fimAFim, idDevolucao, valor, descricao));
+  }
 }

@@ -143,6 +143,12 @@ export const CATALOGO_INTEGRACOES_EXTERNAS: readonly EntradaIntegracaoExterna[] 
     ],
     parametros: [
       ENDERECO,
+      {
+        id: 'endereco-token',
+        rotulo: 'Endereço do token OAuth2 do provedor',
+        tipo: 'endereco',
+        obrigatorio: true,
+      },
       { id: 'chave-pix', rotulo: 'Chave PIX recebedora', tipo: 'texto', obrigatorio: true },
       { id: 'provedor', rotulo: 'Banco ou provedor', tipo: 'texto', obrigatorio: true },
     ],

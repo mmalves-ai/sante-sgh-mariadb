@@ -9,6 +9,7 @@ import { ligarCentralIntegracoes, modoDaIntegracao, ServicoIntegracoesExternas }
 const C = { hospital: 'H1', login: 'ADM', correlacao: 'c', chaveIdempotencia: 'k' };
 const PIX = {
   endereco: 'https://pix.exemplo.test',
+  'endereco-token': 'https://pix.exemplo.test/oauth',
   'chave-pix': 'chave-sintetica',
   provedor: 'Banco Sintético',
 };

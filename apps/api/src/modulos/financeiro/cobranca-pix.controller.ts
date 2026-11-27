@@ -33,7 +33,7 @@ import {
 } from './cobranca-pix-propria.js';
 import { contasDoEscopo } from './operacoes.js';
 import { NUCLEO_PERIODO_FINANCEIRO } from './periodo.controller.js';
-import { provedorPixDoAmbiente } from './pix-provedor.js';
+import { ProvedorPixDaCentral } from './pix-provedor.js';
 import { resultadoFin } from './servico.js';
 
 const SITUACOES = new Set([
@@ -65,7 +65,7 @@ export class CobrancaPixController {
   ) {
     this.ambiente = (process.env['AMBIENTE'] ?? 'dev').trim() || 'dev';
     this.executor = nucleo ? nucleo.criarExecutor() : null;
-    this.operacoes = operacoesCobrancaPix(provedorPixDoAmbiente(this.ambiente));
+    this.operacoes = operacoesCobrancaPix(new ProvedorPixDaCentral(this.ambiente));
   }
 
   private ler<T>(

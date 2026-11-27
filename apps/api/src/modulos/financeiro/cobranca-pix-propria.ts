@@ -272,7 +272,7 @@ export function operacoesCobrancaPix(provedor: ProvedorPix) {
         revisao: r.revisao,
         situacao: 'ativa',
       });
-      return { cobranca, txid, valor, copiaECola: r.copiaECola, simulado: provedor.simulado };
+      return { cobranca, txid, valor, copiaECola: r.copiaECola, simulado: r.simulado ?? provedor.simulado };
     },
     alvo: (_e, r) => ({ tabela: 'cobranca_pix', id: numero(r['cobranca']) || null }),
     eventos: (e, r) => [
