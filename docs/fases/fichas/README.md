@@ -26,14 +26,14 @@ Situação recontada por script na integrar-1, grupo C (25/11), pelas linhas de 
 | --- | ---: | ---: | ---: | ---: | --- |
 | [01 Administração, segurança e BI](F78-01-administracao.md) | 10 | 1/1/0 | 7/1/0 | 8 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 1 de 1 funções Parciais com E2E verde viraram Coberta |
 | [02 Cadastro, recepção e agenda](F78-02-cadastro-recepcao-agenda.md) | 19 | 2/3/0 | 11/2/1 | 13 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 3 de 4 funções Parciais com E2E verde viraram Coberta |
-| [03 Prontuário](F78-03-prontuario.md) | 23 | 6/2/0 | 15/0/0 | 21 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 2 de 4 funções Parciais com E2E verde viraram Coberta |
-| [04 Internação, centro cirúrgico e hotelaria](F78-04-internacao-cc-hotelaria.md) | 33 | 15/2/0 | 16/0/0 | 31 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 3 de 4 funções Parciais com E2E verde viraram Coberta |
-| [05 Diagnóstico e suprimentos](F78-05-diagnostico-suprimentos.md) | 19 | 8/2/0 | 7/2/0 | 15 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 3 de 5 funções Parciais com E2E verde viraram Coberta |
+| [03 Prontuário](F78-03-prontuario.md) | 23 | 8/0/0 | 15/0/0 | 23 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 2 de 4 funções Parciais com E2E verde viraram Coberta |
+| [04 Internação, centro cirúrgico e hotelaria](F78-04-internacao-cc-hotelaria.md) | 33 | 16/1/0 | 16/0/0 | 32 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 3 de 4 funções Parciais com E2E verde viraram Coberta |
+| [05 Diagnóstico e suprimentos](F78-05-diagnostico-suprimentos.md) | 19 | 9/1/0 | 7/2/0 | 16 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 3 de 5 funções Parciais com E2E verde viraram Coberta |
 | [06 Faturamento](F78-06-faturamento.md) | 24 | 11/4/0 | 7/2/0 | 18 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 0 de 5 funções Parciais com E2E verde viraram Coberta |
-| [07 Financeiro e pessoas](F78-07-financeiro-pessoas.md) | 42 | 23/3/0 | 14/2/0 | 37 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 8 de 10 funções Parciais com E2E verde viraram Coberta |
-| [08 Operadora e integrações](F78-08-operadora-integracoes.md) | 25 | 8/11/0 | 5/1/0 | 13 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 3 de 7 funções Parciais com E2E verde viraram Coberta |
+| [07 Financeiro e pessoas](F78-07-financeiro-pessoas.md) | 42 | 24/2/0 | 14/2/0 | 38 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 8 de 10 funções Parciais com E2E verde viraram Coberta |
+| [08 Operadora e integrações](F78-08-operadora-integracoes.md) | 25 | 14/5/0 | 5/1/0 | 19 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 3 de 7 funções Parciais com E2E verde viraram Coberta |
 | [09 Completude](F78-09-completude.md) | 18 | 4/3/0 | 9/2/0 | 13 | integrar-4 (26/11, E2E dos lotes 1 e 2, commits 1b196ec7 e c1eec038): 1 de 5 funções Parciais com E2E verde viraram Coberta |
-| **Total** | **213** | **78/31/0** | **91/12/1** | **169** | |
+| **Total** | **213** | **89/20/0** | **91/12/1** | **180** | |
 
 ## Integração (24/11)
 
