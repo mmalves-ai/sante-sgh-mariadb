@@ -68,7 +68,11 @@ _FORA = frozenset({"lt", "cr", "progresso", "_tab_atual", "mapa_exec", "plano", 
                    "_esvaziando", "_adiar_linha", "_cab_varrido", "chave_cofre", "prop", "_leit", "_filhos", "_col_dest",
                    "_faixas_so", "_faixa_lim", "_faixa_dts", "_reservar", "pular", "continuar_de", "memoria",
                    "_carregar_existente", "_registrar", "placar", "_placar_envio", "_pl_base", "_parando",
-                   "_salto", "_salto_armado", "_h_salto"})
+                   "_salto", "_salto_armado", "_h_salto",
+                   # avisos anteriores (relidos da base de controle por tabela) e a janela das reemitidas (vazia a
+                   # cada commit; o que a fase 2 ainda usa volta por `_reemitidas_fim`): na tabela "igual" de 6,2
+                   # milhões de linhas eram dezenas de milhões de objetos devolvidos ao coordenador (execução 25)
+                   "_avisos_ant", "_reemitidas"})
 _SO_CACHE = set()  # no gravador: tabelas do plano cujo de-para só foi LIDO do banco (não volta ao coordenador)
 ESTADO_MIN = 20000
 
@@ -107,7 +111,8 @@ def medir(cm):
     except (OSError, ValueError):
         rss = None
     return {"rss_mb": rss, "existente_tabelas": len(ext), "existente_linhas": soma(ext),
-            "vistas_linhas": soma(vistas), "origem_linhas": soma(origem), "pendencias": len(getattr(cm, "pend", ())),
+            "vistas_linhas": soma(vistas), "origem_linhas": soma(origem), "pendencias": len(getattr(cm, "pend", ()))
+            + sum((cm.__dict__.get("pend_dobradas") or {}).values()),
             "compactado_mb": round(comp / 2 ** 20, 1)}
 
 
@@ -575,6 +580,8 @@ def _gravador(cm, con):
     tabela = None
     try:
         _ATIVO[0] = True
+        from . import carga as _carga
+        _carga.EM_GRAVADOR[0] = True  # o gravador não dobra as pendências: devolve a cauda da lista
         cr0 = cm.cr  # a conexão herdada do coordenador nunca é usada nem fechada aqui
         db = cr0.db.decode() if isinstance(cr0.db, bytes) else cr0.db
         cm.cr = pymysql.connect(host=cr0.host, port=cr0.port, user=cr0.user, password=cr0.password,

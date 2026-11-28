@@ -2122,6 +2122,23 @@ class CargaMapa(carga.Carga):
             self._esvaziar()
         return self.cr.cursor()
 
+    # Regras que a fase 2 (`_fase2`, depois de todas as ondas) recalcula para uma linha já processada. A reemitida de
+    # outra regra só é recalculada pela própria linha (`_situacao`, `_readiar_anulaveis`, secundárias), antes do
+    # commit seguinte: no commit ela sai da memória (6,2 milhões de chaves numa tabela "igual" da ProntoCardio).
+    REEMITIDAS_FASE2 = frozenset(("pai_pendente", "pai_inexistente"))
+
+    def _podar_reemitidas(self):
+        """Depois do commit (fim de linha: o laço da tabela, o bloco saltado e a fase 2 só fazem commit entre linhas),
+        a janela das reemitidas guarda só o que a fase 2 ainda pode recalcular."""
+        r = self._reemitidas
+        if not r:
+            return
+        fim = self.__dict__.setdefault("_reemitidas_fim", {})
+        for k, n in r.items():
+            if n and k[2] in self.REEMITIDAS_FASE2:
+                fim[k] = fim.get(k, 0) + n
+        r.clear()
+
     def _commit(self):
         self._esvaziar()
         if self._buf:  # INSERT de várias linhas (o executemany não junta linhas com a função de data no VALUES)
@@ -2130,7 +2147,10 @@ class CargaMapa(carga.Carga):
                                   " gravidade, detalhe, criado_em) VALUES " % self.ctl,
                                "(%d, %%s, %%s, %%s, %%s, %%s, %s)" % (int(self.eid), AGORA), "", self._buf)
             self._buf = []
-        super()._commit()
+        try:
+            super()._commit()
+        finally:  # também na pausa (PausaPedida sai do commit já feito)
+            self._podar_reemitidas()
 
     def _adiavel(self, p):
         """A tabela pode ter linhas adiadas: destinos com `id` autoincremento, nenhum destino agrupado, adotado ou
@@ -2807,6 +2827,12 @@ class CargaMapa(carga.Carga):
         nulas = self._nulas_duas_fases(p)
         self._salto = self._salto_armado = self._preparar_salto(p, ents, blocos, seqs, nulas)
         for linha, ch_sem in self._linhas_mapa(p):
+            if n and n % LOTE_COMMIT == 0:
+                # commit do lote ENTRE linhas, no começo da seguinte: vale também para a linha que sai pelo `continue`
+                # (igual, alterada, filtrada). Antes só a linha gravada chegava ao commit do fim do laço, e a tabela
+                # toda "igual" (execução 25: 6,2 milhões de linhas) segurava a transação, o buffer das pendências
+                # reemitidas e a janela das reemitidas até o fim, sem batimento nem pausa
+                self._commit()
             n += 1
             chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
             for col in seqs:
@@ -3061,8 +3087,6 @@ class CargaMapa(carga.Carga):
                 self.origem.setdefault(ents[0], {})[chave] = prov[2].hex() if prov[2] else "sem_resumo_gravado"
             else:
                 self.prop.registrar(t, chave, self.existente[t][chave][3] or "recusada", "critica")
-            if n % LOTE_COMMIT == 0:
-                self._commit()
         self._atualizar = None
         if self._salto is not None:
             n += self._salto["linhas"]
@@ -3070,6 +3094,8 @@ class CargaMapa(carga.Carga):
         if blocos:
             sincronizar_mod.blocos(self, t, blocos)
         self._commit()
+        if self._faixa_lim is None:  # tabela inteira: os avisos anteriores dela não servem mais (relidos se voltar)
+            self._avisos_ant.pop(t, None)
         seg = time.monotonic() - inicio
         ant = self.por_tabela.get(t) if self._faixa_lim is not None else None
         if ant:  # outra faixa da mesma tabela neste gravador: soma
@@ -3265,6 +3291,7 @@ class CargaMapa(carga.Carga):
                     del lst[j]
                     break
         self._reemitidas.pop(k, None)
+        (self.__dict__.get("_reemitidas_fim") or {}).pop(k, None)
         if segue is not None:
             self._pendencia(t, chave, "pai_pendente", segue)
 
@@ -3333,7 +3360,7 @@ class CargaMapa(carga.Carga):
             self._commit()
             return {"versao_mapa": VERSAO, "entidades": {},
                     "pendencias": carga.resumo_pendencias(self.pend, getattr(self, "pend_repetidas", []),
-                                                          lambda t: t),
+                                                          lambda t: t, self.__dict__.get("pend_dobradas")),
                     "carga": dict(self.cont, por_tabela={}), "sincronizar": sincronizar_mod.resumo(self),
                     "provas": {}}
         for p in self.plano:  # nome da entidade na ordem do plano (como na carga em ordem): a continuação pula
@@ -3510,7 +3537,8 @@ class CargaMapa(carga.Carga):
         if h is not None:  # contagem das pendências herdadas (segundo plano desde o início da carga)
             self.cont["pendencias_repetidas"] = h.esperar(lambda f, n: self.progresso(
                 1.0, "conciliação: pendências herdadas das tabelas já concluídas (%d de %d tabelas)" % (f, n)))
-        pend = carga.resumo_pendencias(self.pend, self.pend_repetidas, lambda t: principal.get(t, "outra"))
+        pend = carga.resumo_pendencias(self.pend, self.pend_repetidas, lambda t: principal.get(t, "outra"),
+                                       self.__dict__.get("pend_dobradas"))
         with self._c() as c:
             for ent, r in res.items():
                 c.execute("INSERT INTO %s.conciliacao (execucao_id, entidade, registros_origem, registros_destino,"

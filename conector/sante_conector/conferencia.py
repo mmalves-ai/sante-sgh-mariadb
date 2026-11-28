@@ -135,6 +135,9 @@ def _comparar(c, res, esperado, erros, rodada, externos=()):
             for tab, _, regra, _, _ in c.pend:
                 if tab == t:
                     obtido[regra] = obtido.get(regra, 0) + 1
+            for (tab, regra, _, _), n in (c.__dict__.get("pend_dobradas") or {}).items():
+                if tab == t:
+                    obtido[regra] = obtido.get(regra, 0) + n
             if obtido != esp.get("pendencias", {}):
                 dif = sorted(set(obtido) | set(esp.get("pendencias", {})))
                 erros.append("%s: pendências de %s diferentes do esperado: %s" % (rodada, t, ", ".join(

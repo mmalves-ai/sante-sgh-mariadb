@@ -162,6 +162,14 @@ TIPOS_PROPRIOS = {
 SENTINELAS = {datetime.date(1899, 12, 30), datetime.date(1900, 1, 1)}
 AGORA = "UTC_TIMESTAMP(3)"
 HASH_ZERO = b"\0" * 16
+# Pendências na memória (importação inteira da ProntoCardio, execução 25, 27/11: o gravador de uma tabela de 6,2 milhões
+# de linhas "iguais" caiu por memória ao devolver as pendências reemitidas). Toda pendência já está gravada na base de
+# controle no commit dela; a lista `pend` existe só para o resumo e para desfazer a linha recusada antes do commit.
+# Passado o limite (CONECTOR_PEND_MEMORIA, padrão 200 mil), o COORDENADOR dobra a lista no commit em contagens
+# (`pend_dobradas`: (tabela, regra, gravidade, detalhe) -> n), que o resumo soma. O gravador nunca dobra (a diferença
+# que ele devolve é a cauda da lista, sobre o tamanho que herdou do coordenador).
+PEND_MEMORIA = 200000
+EM_GRAVADOR = [False]  # paralelo._gravador liga no processo filho
 RECUSADO = "-"
 # erros de restrição do banco que recusam só a linha (o resto, como conexão perdida, derruba a execução)
 ERROS_LINHA = {1048, 1062, 1264, 1292, 1364, 1366, 1406, 1452, 3819, 4025}
@@ -188,11 +196,20 @@ def por_restricao(pend):
     return r
 
 
-def resumo_pendencias(pend, repetidas, entidade):
+def pend_memoria():
+    try:
+        return max(1, int(os.environ.get("CONECTOR_PEND_MEMORIA") or PEND_MEMORIA))
+    except ValueError:
+        return PEND_MEMORIA
+
+
+def resumo_pendencias(pend, repetidas, entidade, dobradas=None):
     """Resumo das pendências da execução: as gravadas por esta (`pend`, tuplas) mais as repetidas de uma execução
-    anterior (`repetidas`, já agregadas no servidor: (tabela, regra, gravidade, detalhe, n)). As repetidas nunca vêm
-    linha a linha para a memória (46 milhões na execução 11 da ProntoCardio: dezenas de GB)."""
+    anterior (`repetidas`, já agregadas no servidor: (tabela, regra, gravidade, detalhe, n)) e as que a carga já dobrou
+    em contagens (`dobradas`: (tabela, regra, gravidade, detalhe) -> n). As repetidas nunca vêm linha a linha para a
+    memória (46 milhões na execução 11 da ProntoCardio: dezenas de GB)."""
     linhas = [(tab, regra, grav, det, 1) for tab, _, regra, grav, det in pend] + list(repetidas)
+    linhas += [(tab, regra, grav, det, n) for (tab, regra, grav, det), n in (dobradas or {}).items()]
     por_regra, restr, total, criticas = {}, {}, 0, 0
     for tab, regra, grav, det, n in linhas:
         k = "%s:%s:%s" % (entidade(tab), regra, grav)
@@ -575,6 +592,7 @@ class Carga:
         self.progresso = Batimento(progresso or (lambda pct, etapa: None))
         self.pend = []                      # (tabela, chave, regra, gravidade): todas, para o resumo
         self.pend_repetidas = []            # (tabela, regra, gravidade, detalhe, n): herdadas da cadeia (sem cópia)
+        self.pend_dobradas = {}             # (tabela, regra, gravidade, detalhe) -> n: `pend` já dobrada (PEND_MEMORIA)
         self._buf = []                      # pendências ainda não gravadas (vão no próximo commit)
         self._diario = []                   # registros em memória desde o último SAVEPOINT (para desfazer)
         self.origem = {}                    # entidade -> {chave: resumo hex da linha, calculado da origem}
@@ -586,6 +604,7 @@ class Carga:
         self.reprocessar = reprocessar_recusadas()  # recusada já vista volta a ser tentada (CONECTOR_REPROCESSAR_...)
         self._avisos_ant = {}               # tabela -> {chave: {(regra, gravidade)}}: abertas de execuções anteriores
         self._reemitidas = {}               # (tabela, chave, regra) -> vezes: reemitidas, ainda não recalculadas
+        self._reemitidas_fim = {}           # idem, das regras que a fase 2 recalcula depois da tabela (CargaMapa)
         self.pre = {}                       # REALTA/RECADATE lidos antes do atendimento
         self.atend_novos = set()            # atendimentos gravados nesta execução
         self.tabelas = []
@@ -597,9 +616,10 @@ class Carga:
     def _pendencia(self, tab, chave, regra, grav, detalhe=None):
         p = (tab, None if chave is None else str(chave)[:500], regra, grav, detalhe)
         k = (tab, p[1], regra)
-        if self._reemitidas.get(k):  # a linha recalculou a mesma pendência que já foi reemitida: conta uma vez só
-            self._reemitidas[k] -= 1
-            return
+        for r in (self._reemitidas, self.__dict__.get("_reemitidas_fim") or {}):
+            if r.get(k):  # a linha recalculou a mesma pendência que já foi reemitida: conta uma vez só
+                r[k] -= 1
+                return
         self.pend.append(p)
         self._buf.append(p)
 
@@ -614,17 +634,34 @@ class Carga:
         self.cr.commit()
         self._placar_commit()
         self._diario = []
+        self._dobrar_pend()
         self._pulsar()
         pl = getattr(self, "placar", None)
         if pl is not None and pl.pausa_pedida and not getattr(self, "_parando", False):
             self._parando = True  # depois do commit: nada pela metade; os commits seguintes (marca) não levantam
             raise PausaPedida()
 
+    def _pend_total(self):
+        """Pendências desta execução na memória: a lista mais as já dobradas em contagens."""
+        return len(self.pend) + sum((self.__dict__.get("pend_dobradas") or {}).values())
+
+    def _dobrar_pend(self):
+        """Depois do commit (as pendências já estão na base de controle e nenhum índice de desfazer está aberto: o
+        diário e o buffer acabaram de esvaziar), o coordenador dobra a lista em contagens quando ela passa do limite.
+        A lista é esvaziada no lugar (a mesma lista: a diferença do gravador é a cauda sobre o tamanho herdado)."""
+        if EM_GRAVADOR[0] or len(self.pend) <= pend_memoria():
+            return
+        d = self.__dict__.setdefault("pend_dobradas", {})
+        for p in self.pend:
+            k = (p[0], p[2], p[3], p[4] if len(p) > 4 else None)
+            d[k] = d.get(k, 0) + 1
+        del self.pend[:]
+
     def _placar_rebase(self):
         """Base do placar no estado atual, sem contar: depois de juntar o estado dos gravadores (paralelo._juntar), que
         já mandaram a diferença deles pelo canal, o próximo commit do coordenador não a conta de novo."""
         vistas = self.vistas if isinstance(getattr(self, "vistas", None), dict) else {}
-        self._pl_base = {"pend": len(self.pend), "pul": int(self.cont.get("puladas_iguais", 0)),
+        self._pl_base = {"pend": self._pend_total(), "pul": int(self.cont.get("puladas_iguais", 0)),
                          "vistas": {t: len(v) for t, v in vistas.items() if hasattr(v, "__len__")}}
 
     def _placar_commit(self):
@@ -657,7 +694,7 @@ class Carga:
             else:
                 a[1] += 1
         t = getattr(self, "_tab_atual", None)
-        pend, pul = len(self.pend), int(self.cont.get("puladas_iguais", 0))
+        pend, pul = self._pend_total(), int(self.cont.get("puladas_iguais", 0))
         bv = dict(b["vistas"])
         if t is not None:
             a = d.setdefault(t, [0, 0, 0, 0, 0])
@@ -824,6 +861,10 @@ class Carga:
                           % self.ctl, (tab, int(self.eid)))
                 for k, r, g in c.fetchall():
                     av.setdefault(k, set()).add((r, g))
+            iguais = {}  # poucas combinações de (regra, gravidade): um objeto só para cada uma (6,2 milhões de chaves)
+            for k, s in av.items():
+                f = frozenset(s)
+                av[k] = iguais.setdefault(f, f)
             self._avisos_ant[tab] = av
         ck = str(chave)[:500]
         for r, g in sorted(self._avisos_ant[tab].get(ck, ())):
@@ -1827,7 +1868,8 @@ class Carga:
                                    "conferido": len(ks) == lidos and so == sd,
                                    "observacao": "de-para guardado; vira campo do estabelecimento"}
         aplicar_limite_recusa(res)
-        pend = resumo_pendencias(self.pend, self.pend_repetidas, lambda t: ENTIDADE_DA_TABELA.get(t, "outra"))
+        pend = resumo_pendencias(self.pend, self.pend_repetidas, lambda t: ENTIDADE_DA_TABELA.get(t, "outra"),
+                                 self.__dict__.get("pend_dobradas"))
         with self._c() as c:
             for ent, r in res.items():
                 c.execute("INSERT INTO %s.conciliacao (execucao_id, entidade, registros_origem, registros_destino,"

@@ -16,6 +16,7 @@ import json
 import os
 import time
 import unittest
+from unittest import mock
 
 from sante_conector import carga_mapa, continuar
 from sante_conector.sintetica_d import exemplo_l9 as ex
@@ -122,6 +123,8 @@ class SaltoDeBlocos(unittest.TestCase):
         regras = {}
         for _, _, regra, _, _ in cm.pend:
             regras[regra] = regras.get(regra, 0) + 1
+        for (_, regra, _, _), n in (cm.__dict__.get("pend_dobradas") or {}).items():
+            regras[regra] = regras.get(regra, 0) + n
         return cm, res, regras, seg
 
     def _x(self, sql, args=()):
@@ -183,6 +186,33 @@ class SaltoDeBlocos(unittest.TestCase):
     def setUp_novo(self):
         self.tearDown()
         self.setUp()
+
+    def test_lote_pequeno_e_pendencias_dobradas_dao_o_mesmo_resultado(self):
+        """Execução 25 da ProntoCardio (27/11): commit do lote também na linha "igual" (antes só a linha gravada
+        chegava ao commit, e a tabela toda igual segurava transação, buffer e janela das reemitidas até o fim) e
+        pendências dobradas em contagens no coordenador. Linha a linha (sem salto), com lote de 7 linhas e dobra a
+        partir de 5 pendências: conciliação, pendências por regra, Sincronizar e destino idênticos ao padrão."""
+        commits = {}
+        original = carga_mapa.CargaMapa._commit
+
+        def contar(cm):
+            commits[cm.eid] = commits.get(cm.eid, 0) + 1
+            return original(cm)
+
+        # um processo só (CONECTOR_GRAVADORES=1): o commit contado no gravador (fork) não voltaria a este processo
+        with mock.patch.object(carga_mapa.CargaMapa, "_commit", contar), _Env(CONECTOR_GRAVADORES="1"):
+            padrao = self._cenario(False)
+            c_padrao = dict(commits)
+            self.setUp_novo()
+            commits.clear()
+            with mock.patch.object(carga_mapa, "LOTE_COMMIT", 7), _Env(CONECTOR_PEND_MEMORIA="5"):
+                pequeno = self._cenario(False)
+        self._comparar(padrao, pequeno)
+        self.assertEqual(padrao["igual"][1], pequeno["igual"][1])
+        # Sincronizar da mesma imagem (execução 2, tudo igual): o lote pequeno faz commit no meio das tabelas
+        iguais = pequeno["igual"][0].get("puladas_iguais", 0)
+        self.assertGreater(iguais, 14)
+        self.assertGreaterEqual(commits[2], c_padrao[2] + iguais // 7 // 2, (commits, c_padrao, iguais))
 
     def _chaves_con(self):
         return sorted(int(k) for (k,) in self._x("SELECT chave_original FROM {b}.conector_origem WHERE"
